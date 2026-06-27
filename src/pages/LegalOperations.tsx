@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { OptionMultiSelect, OptionSelect } from "../components/OptionSelect";
 import { useConfirm } from "../components/Modal";
@@ -248,8 +249,8 @@ export function RoleHoldersPage() {
       <Section title="Audit trail — changes between two dates" count={(auditDiff ?? []).filter((d) => d.op !== "unchanged").length}>
         <div className="card__body">
           <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <Field label="From"><input className="input" type="date" value={auditFrom} onChange={(e) => setAuditFrom(e.target.value)} /></Field>
-            <Field label="To"><input className="input" type="date" value={auditTo} onChange={(e) => setAuditTo(e.target.value)} /></Field>
+            <Field label="From"><DatePicker value={auditFrom} onChange={(value) => setAuditFrom(value)} /></Field>
+            <Field label="To"><DatePicker value={auditTo} onChange={(value) => setAuditTo(value)} /></Field>
           </div>
           {auditFrom && auditTo && (
             <ul style={{ marginTop: 12 }}>
@@ -327,12 +328,8 @@ export function RoleHoldersPage() {
             </div>
             <div className="grid two">
               <Field label="Gender (for document grammar)">
-                <select className="input" value={draft.gender ?? ""} onChange={(e) => setDraft({ ...draft, gender: e.target.value })}>
-                  <option value="">—</option>
-                  <option value="M">Male (he/his)</option>
-                  <option value="F">Female (she/her)</option>
-                  <option value="X">Neutral (they/their)</option>
-                </select>
+                <Select value={draft.gender ?? ""} onChange={(value) => setDraft({ ...draft, gender: value })}
+                  options={[{ value: "", label: "—" }, { value: "M", label: "Male (he/his)" }, { value: "F", label: "Female (she/her)" }, { value: "X", label: "Neutral (they/their)" }]} />
               </Field>
               <Field label="Stated pronouns (override gender)"><input className="input" placeholder="e.g. they/them, xe/xir" value={draft.pronouns ?? ""} onChange={(e) => setDraft({ ...draft, pronouns: e.target.value })} /></Field>
             </div>
@@ -513,7 +510,7 @@ export function RightsLedgerPage() {
           <div className="row" style={{ alignItems: "center", gap: 8 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Reconstruct the register at a past date">
               <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-secondary)" }}>As of</span>
-              <input type="date" className="input" value={asOf} onChange={(e) => setAsOf(e.target.value)} style={{ width: 150 }} />
+              <DatePicker value={asOf} onChange={(value) => setAsOf(value)} style={{ width: 150 }} />
               {asOf && <button className="btn btn--ghost btn--sm" onClick={() => setAsOf("")} title="Back to live">Live</button>}
             </label>
             <button className="btn-action" onClick={() => setTransferDraft({ transferType: corporationWorkspace ? "issuance" : "transfer", status: "draft", priceToOrganizationCurrency: "cad", priceToVendorCurrency: "cad" })}><Plus size={12} /> {corporationWorkspace ? "Issuance" : "Transfer"}</button>
@@ -718,10 +715,8 @@ export function RightsLedgerPage() {
             </div>
             <Field label="Transfer date"><DatePicker value={transferDraft.transferDate ?? ""} onChange={(value) => setTransferDraft({ ...transferDraft, transferDate: value })} /></Field>
             <Field label="Rights class">
-              <select className="input" value={transferDraft.rightsClassId ?? ""} onChange={(e) => setTransferDraft({ ...transferDraft, rightsClassId: e.target.value || undefined })}>
-                <option value="">No class</option>
-                {(data?.classes ?? []).map((row: any) => <option key={row._id} value={row._id}>{row.className}</option>)}
-              </select>
+              <Select value={transferDraft.rightsClassId ?? ""} onChange={(value) => setTransferDraft({ ...transferDraft, rightsClassId: value || undefined })}
+                options={[{ value: "", label: "No class" }, ...(data?.classes ?? []).map((row: any) => ({ value: row._id, label: row.className }))]} />
             </Field>
             <div className="grid two">
               <Field label="Source holder"><input className="input" value={transferDraft.sourceHolderName ?? ""} onChange={(e) => setTransferDraft({ ...transferDraft, sourceHolderName: e.target.value })} /></Field>

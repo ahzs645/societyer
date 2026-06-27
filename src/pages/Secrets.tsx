@@ -6,8 +6,10 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { DatePicker } from "../components/DatePicker";
 import {
   CheckCircle2,
   Copy,
@@ -324,14 +326,18 @@ export function SecretsPage() {
             <Field label="Service"><input className="input" value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Credential type">
-                <select className="input" value={form.credentialType} onChange={(e) => setForm({ ...form, credentialType: e.target.value })}>
-                  {CREDENTIAL_TYPES.map((type) => <option key={type} value={type}>{typeLabel(type)}</option>)}
-                </select>
+                <Select
+                  value={form.credentialType}
+                  onChange={(value) => setForm({ ...form, credentialType: value })}
+                  options={CREDENTIAL_TYPES.map((type) => ({ value: type, label: typeLabel(type) }))}
+                />
               </Field>
               <Field label="Status">
-                <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                  {STATUSES.map((status) => <option key={status}>{statusLabel(status)}</option>)}
-                </select>
+                <Select
+                  value={form.status}
+                  onChange={(value) => setForm({ ...form, status: value })}
+                  options={STATUSES.map((status) => ({ value: statusLabel(status), label: statusLabel(status) }))}
+                />
               </Field>
             </div>
 
@@ -342,10 +348,14 @@ export function SecretsPage() {
               </div>
               <div className="card__body">
                 <Field label="Linked user">
-                  <select className="input" value={form.custodianUserId ?? ""} onChange={(e) => selectCustodian(e.target.value)}>
-                    <option value="">Manual or external person</option>
-                    {people.map((person) => <option key={person.id} value={person.id}>{person.label}</option>)}
-                  </select>
+                  <Select
+                    value={form.custodianUserId ?? ""}
+                    onChange={(value) => selectCustodian(value)}
+                    options={[
+                      { value: "", label: "Manual or external person" },
+                      ...people.map((person) => ({ value: person.id, label: person.label })),
+                    ]}
+                  />
                 </Field>
                 <Field label="Primary custodian"><input className="input" value={form.custodianPersonName ?? ""} onChange={(e) => setForm({ ...form, custodianUserId: "", custodianPersonName: e.target.value })} /></Field>
                 <Field label="Custodian email"><input className="input" type="email" value={form.custodianEmail ?? ""} onChange={(e) => setForm({ ...form, custodianEmail: e.target.value })} /></Field>
@@ -357,9 +367,11 @@ export function SecretsPage() {
 
             <div className="row" style={{ gap: 12 }}>
               <Field label="Storage">
-                <select className="input" value={form.storageMode} onChange={(e) => setForm({ ...form, storageMode: e.target.value })}>
-                  {STORAGE_MODES.map((mode) => <option key={mode} value={mode}>{storageLabel(mode)}</option>)}
-                </select>
+                <Select
+                  value={form.storageMode}
+                  onChange={(value) => setForm({ ...form, storageMode: value })}
+                  options={STORAGE_MODES.map((mode) => ({ value: mode, label: storageLabel(mode) }))}
+                />
               </Field>
               <Field label="Vault record / location"><input className="input" value={form.externalLocation ?? ""} onChange={(e) => setForm({ ...form, externalLocation: e.target.value })} /></Field>
             </div>
@@ -405,9 +417,11 @@ export function SecretsPage() {
                   </>
                 )}
                 <Field label="Reveal access">
-                  <select className="input" value={form.revealPolicy ?? "owner_admin_custodian"} onChange={(e) => setForm({ ...form, revealPolicy: e.target.value })}>
-                    {REVEAL_POLICIES.map((policy) => <option key={policy.value} value={policy.value}>{policy.label}</option>)}
-                  </select>
+                  <Select
+                    value={form.revealPolicy ?? "owner_admin_custodian"}
+                    onChange={(value) => setForm({ ...form, revealPolicy: value })}
+                    options={REVEAL_POLICIES.map((policy) => ({ value: policy.value, label: policy.label }))}
+                  />
                 </Field>
                 <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                   Acting user: {currentUser?.displayName ?? "not selected"}. Save access requires Admin or Owner.
@@ -417,8 +431,8 @@ export function SecretsPage() {
             <Field label="Account username"><input className="input" value={form.username ?? ""} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
             <Field label="Access URL"><input className="input" value={form.accessUrl ?? ""} onChange={(e) => setForm({ ...form, accessUrl: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Last reviewed"><input className="input" type="date" value={form.lastVerifiedAtISO ?? ""} onChange={(e) => setForm({ ...form, lastVerifiedAtISO: e.target.value })} /></Field>
-              <Field label="Next review"><input className="input" type="date" value={form.rotationDueAtISO ?? ""} onChange={(e) => setForm({ ...form, rotationDueAtISO: e.target.value })} /></Field>
+              <Field label="Last reviewed"><DatePicker value={form.lastVerifiedAtISO ?? ""} onChange={(value) => setForm({ ...form, lastVerifiedAtISO: value })} /></Field>
+              <Field label="Next review"><DatePicker value={form.rotationDueAtISO ?? ""} onChange={(value) => setForm({ ...form, rotationDueAtISO: value })} /></Field>
             </div>
             <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
           </div>

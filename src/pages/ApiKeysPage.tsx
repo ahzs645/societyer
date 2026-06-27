@@ -5,6 +5,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field, Button, Banner, SettingsShell } from "../components/ui";
+import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { KeyRound, Plus, Trash2, Copy, Check } from "lucide-react";
@@ -321,11 +322,11 @@ export function ApiKeysPage() {
         }
       >
         <Field label="Client">
-          <select className="input" value={tokenForm.clientId} onChange={(e) => setTokenForm({ ...tokenForm, clientId: e.target.value })}>
-            {(clients ?? []).map((c: any) => (
-              <option key={c._id} value={c._id}>{c.name}</option>
-            ))}
-          </select>
+          <Select
+            value={tokenForm.clientId}
+            onChange={(value) => setTokenForm({ ...tokenForm, clientId: value })}
+            options={(clients ?? []).map((c: any) => ({ value: c._id, label: c.name }))}
+          />
         </Field>
         <Field label="Name">
           <input className="input" value={tokenForm.name} onChange={(e) => setTokenForm({ ...tokenForm, name: e.target.value })} />

@@ -6,7 +6,9 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { DateTimeInput } from "../components/DateTimeInput";
 import { Vote, ArrowLeft, ShieldCheck, CheckCircle2, Lock } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isBetterAuthMode } from "../lib/authMode";
@@ -323,20 +325,19 @@ export function ElectionDetailPage() {
                     />
                   </Field>
                   <Field label="Ballot question">
-                    <select
-                      className="input"
+                    <Select
                       value={nominationDraft.questionId}
-                      onChange={(e) =>
-                        setNominationDraft({ ...nominationDraft, questionId: e.target.value })
+                      onChange={(value) =>
+                        setNominationDraft({ ...nominationDraft, questionId: value })
                       }
-                    >
-                      <option value="">Any ballot question</option>
-                      {electionBundle.questions.map((question: any) => (
-                        <option key={question._id} value={question._id}>
-                          {question.title}
-                        </option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: "", label: "Any ballot question" },
+                        ...electionBundle.questions.map((question: any) => ({
+                          value: question._id,
+                          label: question.title,
+                        })),
+                      ]}
+                    />
                   </Field>
                   <Field label="Candidate statement">
                     <MarkdownEditor
@@ -500,22 +501,18 @@ export function ElectionDetailPage() {
                 </div>
                 <div className="row" style={{ gap: 12 }}>
                   <Field label="Nominations open">
-                    <input
-                      className="input"
-                      type="datetime-local"
+                    <DateTimeInput
                       value={adminDraft.nominationsOpenAtISO}
-                      onChange={(e) =>
-                        setAdminDraft({ ...adminDraft, nominationsOpenAtISO: e.target.value })
+                      onChange={(value) =>
+                        setAdminDraft({ ...adminDraft, nominationsOpenAtISO: value })
                       }
                     />
                   </Field>
                   <Field label="Nominations close">
-                    <input
-                      className="input"
-                      type="datetime-local"
+                    <DateTimeInput
                       value={adminDraft.nominationsCloseAtISO}
-                      onChange={(e) =>
-                        setAdminDraft({ ...adminDraft, nominationsCloseAtISO: e.target.value })
+                      onChange={(value) =>
+                        setAdminDraft({ ...adminDraft, nominationsCloseAtISO: value })
                       }
                     />
                   </Field>
@@ -554,20 +551,19 @@ export function ElectionDetailPage() {
                   />
                 </Field>
                 <Field label="Evidence document">
-                  <select
-                    className="input"
+                  <Select
                     value={adminDraft.evidenceDocumentId}
-                    onChange={(e) =>
-                      setAdminDraft({ ...adminDraft, evidenceDocumentId: e.target.value })
+                    onChange={(value) =>
+                      setAdminDraft({ ...adminDraft, evidenceDocumentId: value })
                     }
-                  >
-                    <option value="">No evidence document</option>
-                    {(documents ?? []).map((document) => (
-                      <option key={document._id} value={document._id}>
-                        {document.title}
-                      </option>
-                    ))}
-                  </select>
+                    options={[
+                      { value: "", label: "No evidence document" },
+                      ...(documents ?? []).map((document) => ({
+                        value: document._id,
+                        label: document.title,
+                      })),
+                    ]}
+                  />
                 </Field>
                 <button className="btn btn--accent" onClick={saveAdminSettings}>
                   Save election settings

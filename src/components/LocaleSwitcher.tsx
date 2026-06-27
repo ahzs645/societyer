@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LOCALES, setLocale, type Locale } from "../i18n";
+import { Select } from "./Select";
 
 export function LocaleSwitcher({ compact = false }: { compact?: boolean }) {
   const { i18n, t } = useTranslation();
@@ -15,19 +16,16 @@ export function LocaleSwitcher({ compact = false }: { compact?: boolean }) {
       title={t("locale.switchTo")}
     >
       {!compact && <span className="muted">{t("locale.switchTo")}</span>}
-      <select
-        className="input"
+      <Select
         value={current}
-        onChange={(e) => setLocale(e.target.value as Locale)}
+        onChange={(value) => setLocale(value as Locale)}
         style={{ minWidth: compact ? 64 : undefined }}
         aria-label={t("locale.switchTo")}
-      >
-        {SUPPORTED_LOCALES.map((locale) => (
-          <option key={locale} value={locale}>
-            {t(`locale.${locale}`)}
-          </option>
-        ))}
-      </select>
+        options={SUPPORTED_LOCALES.map((locale) => ({
+          value: locale,
+          label: t(`locale.${locale}`),
+        }))}
+      />
     </label>
   );
 }

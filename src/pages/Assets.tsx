@@ -24,9 +24,11 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { DatePicker } from "../components/DatePicker";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DataTable } from "../components/DataTable";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { Select as StyledSelect } from "../components/Select";
 import { FilterField } from "../components/FilterBar";
 import { formatDate } from "../lib/format";
 import { useToast } from "../components/Toast";
@@ -517,9 +519,11 @@ export function AssetDetailPage() {
         <section className="panel">
           <div className="panel__head"><h2>QR label</h2><QrCode size={16} /></div>
           <Field label="Label type">
-            <select className="input" value={labelType} onChange={(event) => setLabelType(event.target.value)}>
-              {ASSET_LABEL_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-            </select>
+            <StyledSelect
+              value={labelType}
+              onChange={(value) => setLabelType(value)}
+              options={ASSET_LABEL_TYPES.map((type) => ({ value: type.value, label: type.label }))}
+            />
           </Field>
           <AssetQrLabel assetTag={asset.assetTag} name={asset.name} url={assetUrl(asset._id)} labelType={labelType} />
           <button className="btn btn--sm" onClick={() => window.print()}>Print label</button>
@@ -661,16 +665,24 @@ function ReceiptLineLinkForm({
   return (
     <div className="form-grid">
       <Field label="Receipt document" required>
-        <select className="input" value={form.receiptDocumentId} onChange={(event) => setForm({ ...form, receiptDocumentId: event.target.value })}>
-          <option value="">Choose receipt or invoice</option>
-          {receiptDocuments.map((doc) => <option key={doc._id} value={doc._id}>{doc.title}</option>)}
-        </select>
+        <StyledSelect
+          value={form.receiptDocumentId}
+          onChange={(value) => setForm({ ...form, receiptDocumentId: value })}
+          options={[
+            { value: "", label: "Choose receipt or invoice" },
+            ...receiptDocuments.map((doc) => ({ value: doc._id, label: doc.title })),
+          ]}
+        />
       </Field>
       <Field label="Financial transaction">
-        <select className="input" value={form.financialTransactionId} onChange={(event) => setForm({ ...form, financialTransactionId: event.target.value })}>
-          <option value="">No transaction linked</option>
-          {purchaseTransactions.map((txn) => <option key={txn._id} value={txn._id}>{txn.date} · {txn.description} · {money(Math.abs(txn.amountCents))}</option>)}
-        </select>
+        <StyledSelect
+          value={form.financialTransactionId}
+          onChange={(value) => setForm({ ...form, financialTransactionId: value })}
+          options={[
+            { value: "", label: "No transaction linked" },
+            ...purchaseTransactions.map((txn) => ({ value: txn._id, label: `${txn.date} · ${txn.description} · ${money(Math.abs(txn.amountCents))}` })),
+          ]}
+        />
       </Field>
       <Field label="Receipt line label">
         <input className="input" value={form.receiptLineLabel} onChange={(event) => setForm({ ...form, receiptLineLabel: event.target.value })} />
@@ -714,7 +726,7 @@ function CustodyForm({ form, setForm }: { form: any; setForm: (form: any) => voi
       <Field label="Responsible person"><input className="input" value={form.responsiblePersonName} onChange={(event) => setForm({ ...form, responsiblePersonName: event.target.value })} /></Field>
       <Field label="Location"><input className="input" value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></Field>
       <Field label="Condition"><Select value={form.condition} options={ASSET_CONDITIONS} onChange={(condition) => setForm({ ...form, condition })} /></Field>
-      <Field label="Expected return"><input className="input" type="date" value={form.expectedReturnDate} onChange={(event) => setForm({ ...form, expectedReturnDate: event.target.value })} /></Field>
+      <Field label="Expected return"><DatePicker value={form.expectedReturnDate} onChange={(value) => setForm({ ...form, expectedReturnDate: value })} /></Field>
       <Field label="Acceptance signature"><input className="input" value={form.acceptanceSignature} onChange={(event) => setForm({ ...form, acceptanceSignature: event.target.value })} /></Field>
       <Field label="Notes"><MarkdownEditor rows={4} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
@@ -726,7 +738,7 @@ function MaintenanceForm({ form, setForm }: { form: any; setForm: (form: any) =>
     <div className="form-grid">
       <Field label="Title"><input className="input" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></Field>
       <Field label="Kind"><Select value={form.kind} options={MAINTENANCE_KINDS} onChange={(kind) => setForm({ ...form, kind })} /></Field>
-      <Field label="Due date"><input className="input" type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })} /></Field>
+      <Field label="Due date"><DatePicker value={form.dueDate} onChange={(value) => setForm({ ...form, dueDate: value })} /></Field>
       <Field label="Create task"><label className="checkbox"><input type="checkbox" checked={Boolean(form.createTask)} onChange={(event) => setForm({ ...form, createTask: event.target.checked })} /> Add to Tasks</label></Field>
       <Field label="Notes"><MarkdownEditor rows={4} value={form.notes} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
     </div>
@@ -736,7 +748,7 @@ function MaintenanceForm({ form, setForm }: { form: any; setForm: (form: any) =>
 function DisposalForm({ form, setForm }: { form: any; setForm: (form: any) => void }) {
   return (
     <div className="form-grid">
-      <Field label="Disposed at"><input className="input" type="date" value={form.disposedAt} onChange={(event) => setForm({ ...form, disposedAt: event.target.value })} /></Field>
+      <Field label="Disposed at"><DatePicker value={form.disposedAt} onChange={(value) => setForm({ ...form, disposedAt: value })} /></Field>
       <Field label="Method"><Select value={form.disposalMethod} options={["sold", "donated", "recycled", "destroyed", "lost", "returned to funder"]} onChange={(disposalMethod) => setForm({ ...form, disposalMethod })} /></Field>
       <Field label="Disposal value"><input className="input" value={form.disposalValue} onChange={(event) => setForm({ ...form, disposalValue: event.target.value })} /></Field>
       <Field label="Reason"><MarkdownEditor rows={3} value={form.disposalReason} onChange={(markdown) => setForm({ ...form, disposalReason: markdown })} /></Field>

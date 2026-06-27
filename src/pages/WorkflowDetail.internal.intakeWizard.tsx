@@ -20,6 +20,7 @@ import { useToast } from "../components/Toast";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal } from "../components/Modal";
+import { Select } from "../components/Select";
 import { SeedPrompt } from "./_helpers";
 import {
   ArrowLeft,
@@ -254,19 +255,19 @@ export function IntakeFieldWizardModal({
                   />
                 </Field>
                 <Field label="Type">
-                  <select
-                    className="input"
+                  <Select
                     value={current.type}
-                    onChange={(event) => updateCurrent({ type: event.target.value as IntakeFieldType })}
-                  >
-                    <option value="text">Text</option>
-                    <option value="textarea">Long text</option>
-                    <option value="email">Email</option>
-                    <option value="phone">Phone</option>
-                    <option value="date">Date</option>
-                    <option value="checkbox">Checkbox</option>
-                    <option value="person">Person picker</option>
-                  </select>
+                    onChange={(value) => updateCurrent({ type: value as IntakeFieldType })}
+                    options={[
+                      { value: "text", label: "Text" },
+                      { value: "textarea", label: "Long text" },
+                      { value: "email", label: "Email" },
+                      { value: "phone", label: "Phone" },
+                      { value: "date", label: "Date" },
+                      { value: "checkbox", label: "Checkbox" },
+                      { value: "person", label: "Person picker" },
+                    ]}
+                  />
                 </Field>
                 <Field label="Default value">
                   {current.type === "checkbox" ? (

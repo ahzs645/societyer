@@ -5,6 +5,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
@@ -525,14 +526,13 @@ export function MembershipPage() {
         {feeDraft && (
           <div>
             <Field label="Linked plan">
-              <select
-                className="input"
+              <Select
                 value={feeDraft.planId ?? ""}
-                onChange={(e) => {
-                  const plan = (plans ?? []).find((p) => p._id === e.target.value);
+                onChange={(value) => {
+                  const plan = (plans ?? []).find((p) => p._id === value);
                   setFeeDraft({
                     ...feeDraft,
-                    planId: e.target.value,
+                    planId: value,
                     label: plan?.name ?? feeDraft.label,
                     membershipClass: plan?.membershipClass ?? feeDraft.membershipClass,
                     priceDollars: plan ? centsToDollarInput(plan.priceCents) : feeDraft.priceDollars,
@@ -540,12 +540,11 @@ export function MembershipPage() {
                     interval: plan?.interval ?? feeDraft.interval,
                   });
                 }}
-              >
-                <option value="">Standalone fee period</option>
-                {(plans ?? []).map((plan) => (
-                  <option key={plan._id} value={plan._id}>{plan.name}</option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: "Standalone fee period" },
+                  ...(plans ?? []).map((plan) => ({ value: plan._id, label: plan.name })),
+                ]}
+              />
             </Field>
             <Field label="Fee label">
               <input
@@ -580,19 +579,15 @@ export function MembershipPage() {
             </Field>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="Effective from">
-                <input
-                  className="input"
-                  type="date"
+                <DatePicker
                   value={feeDraft.effectiveFrom}
-                  onChange={(e) => setFeeDraft({ ...feeDraft, effectiveFrom: e.target.value })}
+                  onChange={(value) => setFeeDraft({ ...feeDraft, effectiveFrom: value })}
                 />
               </Field>
               <Field label="Effective to">
-                <input
-                  className="input"
-                  type="date"
+                <DatePicker
                   value={feeDraft.effectiveTo ?? ""}
-                  onChange={(e) => setFeeDraft({ ...feeDraft, effectiveTo: e.target.value })}
+                  onChange={(value) => setFeeDraft({ ...feeDraft, effectiveTo: value })}
                 />
               </Field>
             </div>

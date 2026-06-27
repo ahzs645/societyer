@@ -5,6 +5,8 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { Contact, Plus } from "lucide-react";
+import { DatePicker } from "../components/DatePicker";
+import { Select } from "../components/Select";
 
 /**
  * Cross-tenant people directory. The directory is GLOBAL — its queries take no
@@ -179,24 +181,23 @@ export function PeopleDirectoryPage() {
                   {addedId === p._id ? (
                     <span style={{ color: "var(--accent, green)" }}>Added ✓</span>
                   ) : (
-                    <select
-                      className="input"
-                      defaultValue=""
-                      title="Add to current society as…"
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          addPersonToSociety(p._id, e.target.value);
-                          e.target.value = "";
+                    <Select
+                      value=""
+                      onChange={(value) => {
+                        if (value) {
+                          addPersonToSociety(p._id, value);
                         }
                       }}
+                      options={[
+                        { value: "", label: "Add to society…" },
+                        { value: "director", label: "as Director" },
+                        { value: "officer", label: "as Officer" },
+                        { value: "member", label: "as Member" },
+                        { value: "controller", label: "as Significant individual" },
+                      ]}
+                      aria-label="Add to current society as…"
                       style={{ width: 150 }}
-                    >
-                      <option value="">Add to society…</option>
-                      <option value="director">as Director</option>
-                      <option value="officer">as Officer</option>
-                      <option value="member">as Member</option>
-                      <option value="controller">as Significant individual</option>
-                    </select>
+                    />
                   )}
                 </span>
               </div>
@@ -246,11 +247,9 @@ export function PeopleDirectoryPage() {
               </Field>
             </div>
             <Field label="Date of birth">
-              <input
-                className="input"
-                type="date"
+              <DatePicker
                 value={form.dob}
-                onChange={(e) => setForm({ ...form, dob: e.target.value })}
+                onChange={(value) => setForm({ ...form, dob: value })}
               />
             </Field>
             <div className="row" style={{ gap: 12 }}>
@@ -262,16 +261,16 @@ export function PeopleDirectoryPage() {
                 />
               </Field>
               <Field label="Gender (for document grammar)">
-                <select
-                  className="input"
+                <Select
                   value={form.gender}
-                  onChange={(e) => setForm({ ...form, gender: e.target.value })}
-                >
-                  <option value="">—</option>
-                  <option value="M">Male (he/his)</option>
-                  <option value="F">Female (she/her)</option>
-                  <option value="X">Neutral (they/their)</option>
-                </select>
+                  onChange={(value) => setForm({ ...form, gender: value })}
+                  options={[
+                    { value: "", label: "—" },
+                    { value: "M", label: "Male (he/his)" },
+                    { value: "F", label: "Female (she/her)" },
+                    { value: "X", label: "Neutral (they/their)" },
+                  ]}
+                />
               </Field>
               <Field label="Stated pronouns (override gender)">
                 <input

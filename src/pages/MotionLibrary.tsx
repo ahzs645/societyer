@@ -7,6 +7,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { BookOpen, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Checkbox } from "../components/Controls";
 
@@ -148,19 +149,13 @@ export function MotionLibraryPage() {
             </Field>
             <div className="motion-library__form-row">
               <Field label="Category">
-                <select
-                  className="input"
+                <Select
                   value={form.category}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, category: e.target.value }))
+                  onChange={(value) =>
+                    setForm((f) => ({ ...f, category: value }))
                   }
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {formatCategory(c)}
-                    </option>
-                  ))}
-                </select>
+                  options={CATEGORIES.map((c) => ({ value: c, label: formatCategory(c) }))}
+                />
               </Field>
               <div className="motion-library__checkbox">
                 <Checkbox
@@ -221,18 +216,14 @@ export function MotionLibraryPage() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search templates"
               />
-              <select
-                className="input"
+              <Select
                 value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-              >
-                <option value="all">All categories</option>
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {formatCategory(c)}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setFilter(value)}
+                options={[
+                  { value: "all", label: "All categories" },
+                  ...CATEGORIES.map((c) => ({ value: c, label: formatCategory(c) })),
+                ]}
+              />
             </div>
 
             {(templates ?? []).length === 0 ? (

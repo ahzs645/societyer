@@ -7,6 +7,7 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import {
@@ -360,11 +361,10 @@ export function WorkflowsPage() {
         {form && (
           <>
             <Field label="Recipe">
-              <select
-                className="input"
+              <Select
                 value={form.recipe}
-                onChange={(e) => {
-                  const next = catalog?.find((c: any) => c.key === e.target.value);
+                onChange={(value) => {
+                  const next = catalog?.find((c: any) => c.key === value);
                   const defaultTriggerKind = next?.config?.defaultTriggerKind;
                   const triggerKind =
                     defaultTriggerKind === "date_offset" || defaultTriggerKind === "cron" || defaultTriggerKind === "manual"
@@ -374,7 +374,7 @@ export function WorkflowsPage() {
                         : form.triggerKind;
                   setForm({
                     ...form,
-                    recipe: e.target.value,
+                    recipe: value,
                     name: next?.label ?? form.name,
                     provider: next?.provider ?? "internal",
                     triggerKind,
@@ -383,11 +383,8 @@ export function WorkflowsPage() {
                     anchor: next?.config?.anchor ?? form.anchor,
                   });
                 }}
-              >
-                {(catalog ?? []).map((c) => (
-                  <option key={c.key} value={c.key}>{c.label}</option>
-                ))}
-              </select>
+                options={(catalog ?? []).map((c) => ({ value: c.key, label: c.label }))}
+              />
             </Field>
             {catalog?.find((c) => c.key === form.recipe)?.description && (
               <div className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
@@ -414,15 +411,15 @@ export function WorkflowsPage() {
               <input className="input" value={form.provider ?? "internal"} readOnly />
             </Field>
             <Field label="Trigger">
-              <select
-                className="input"
+              <Select
                 value={form.triggerKind}
-                onChange={(e) => setForm({ ...form, triggerKind: e.target.value as TriggerKind })}
-              >
-                <option value="cron">Scheduled (cron)</option>
-                <option value="date_offset">Days before a date</option>
-                <option value="manual">Manual only</option>
-              </select>
+                onChange={(value) => setForm({ ...form, triggerKind: value as TriggerKind })}
+                options={[
+                  { value: "cron", label: "Scheduled (cron)" },
+                  { value: "date_offset", label: "Days before a date" },
+                  { value: "manual", label: "Manual only" },
+                ]}
+              />
             </Field>
             {form.triggerKind === "cron" && (
               <Field label="Cron expression">
@@ -437,15 +434,15 @@ export function WorkflowsPage() {
             {form.triggerKind === "date_offset" && (
               <>
                 <Field label="Anchor">
-                  <select
-                    className="input"
+                  <Select
                     value={form.anchor}
-                    onChange={(e) => setForm({ ...form, anchor: e.target.value })}
-                  >
-                    <option value="insurancePolicies.renewalDate">Insurance renewal date</option>
-                    <option value="meetings.scheduledAt">Meeting scheduled date</option>
-                    <option value="filings.dueDate">Filing due date</option>
-                  </select>
+                    onChange={(value) => setForm({ ...form, anchor: value })}
+                    options={[
+                      { value: "insurancePolicies.renewalDate", label: "Insurance renewal date" },
+                      { value: "meetings.scheduledAt", label: "Meeting scheduled date" },
+                      { value: "filings.dueDate", label: "Filing due date" },
+                    ]}
+                  />
                 </Field>
                 <Field label="Days before">
                   <input

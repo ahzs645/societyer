@@ -1,4 +1,5 @@
 import { Field } from "./ui";
+import { Select } from "./Select";
 
 export type StructuredAddressValue = {
   street?: string;
@@ -81,15 +82,15 @@ export function StructuredAddressFields({
       </Field>
       <div className="structured-address-fields__region-row">
         <Field label={provinceLabel}>
-          <select
-            className="input"
+          <Select
             value={provinceState}
-            onChange={(event) => set({ provinceState: event.target.value })}
-          >
-            <option value="">Select province/state</option>
-            {hasCustomProvinceState && <option value={provinceState}>{provinceState}</option>}
-            {PROVINCE_STATE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-          </select>
+            onChange={(next) => set({ provinceState: next })}
+            options={[
+              { value: "", label: "Select province/state" },
+              ...(hasCustomProvinceState ? [{ value: provinceState, label: provinceState }] : []),
+              ...PROVINCE_STATE_OPTIONS.map((option) => ({ value: option, label: option })),
+            ]}
+          />
         </Field>
         <Field label={postalLabel}>
           <input className="input" value={value.postalCode ?? ""} onChange={(event) => set({ postalCode: event.target.value })} />

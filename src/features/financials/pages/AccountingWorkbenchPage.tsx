@@ -8,6 +8,8 @@ import { useSociety } from "../../../hooks/useSociety";
 import { useCurrentUserId } from "../../../hooks/useCurrentUser";
 import { useToast } from "../../../components/Toast";
 import { Badge, Drawer, Field } from "../../../components/ui";
+import { Select } from "../../../components/Select";
+import { DatePicker } from "../../../components/DatePicker";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
 import { formatDate, money } from "../../../lib/format";
 
@@ -537,16 +539,16 @@ export function AccountingWorkbenchPage() {
         <div className="col">
           <Field label="Name"><input className="input" value={fundForm.name} onChange={(e) => setFundForm({ ...fundForm, name: e.target.value })} placeholder="e.g. Capital campaign 2026" /></Field>
           <Field label="Purpose"><input className="input" value={fundForm.purpose} onChange={(e) => setFundForm({ ...fundForm, purpose: e.target.value })} placeholder="What the funds are restricted to" /></Field>
-          <Field label="Status"><select className="input" value={fundForm.status} onChange={(e) => setFundForm({ ...fundForm, status: e.target.value })}><option value="active">Active</option><option value="released">Released</option><option value="closed">Closed</option></select></Field>
-          <Field label="Start date"><input className="input" type="date" value={fundForm.startDate} onChange={(e) => setFundForm({ ...fundForm, startDate: e.target.value })} /></Field>
-          <Field label="End date"><input className="input" type="date" value={fundForm.endDate} onChange={(e) => setFundForm({ ...fundForm, endDate: e.target.value })} /></Field>
+          <Field label="Status"><Select value={fundForm.status} onChange={(value) => setFundForm({ ...fundForm, status: value })} options={[{ value: "active", label: "Active" }, { value: "released", label: "Released" }, { value: "closed", label: "Closed" }]} /></Field>
+          <Field label="Start date"><DatePicker value={fundForm.startDate} onChange={(value) => setFundForm({ ...fundForm, startDate: value })} /></Field>
+          <Field label="End date"><DatePicker value={fundForm.endDate} onChange={(value) => setFundForm({ ...fundForm, endDate: value })} /></Field>
         </div>
       </Drawer>
 
       <Drawer open={drawer === "counterparty"} onClose={() => setDrawer(null)} title="Add counterparty" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveCounterparty}>Save</button></>}>
         <div className="col">
           <Field label="Name"><input className="input" value={counterpartyForm.name} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, name: e.target.value })} /></Field>
-          <Field label="Kind"><select className="input" value={counterpartyForm.kind} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, kind: e.target.value })}><option value="vendor">Vendor</option><option value="customer">Customer</option><option value="other">Other</option></select></Field>
+          <Field label="Kind"><Select value={counterpartyForm.kind} onChange={(value) => setCounterpartyForm({ ...counterpartyForm, kind: value })} options={[{ value: "vendor", label: "Vendor" }, { value: "customer", label: "Customer" }, { value: "other", label: "Other" }]} /></Field>
           <Field label="Email"><input className="input" value={counterpartyForm.email} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, email: e.target.value })} /></Field>
           <Field label="Tax identifier"><input className="input" value={counterpartyForm.taxIdentifier} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, taxIdentifier: e.target.value })} /></Field>
         </div>
@@ -556,8 +558,8 @@ export function AccountingWorkbenchPage() {
         <FormGrid>
           <Field label="Fiscal year"><input className="input" value={periodForm.fiscalYear} onChange={(e) => setPeriodForm({ ...periodForm, fiscalYear: e.target.value })} /></Field>
           <Field label="Period label"><input className="input" value={periodForm.periodLabel} onChange={(e) => setPeriodForm({ ...periodForm, periodLabel: e.target.value })} /></Field>
-          <Field label="Start date"><input className="input" type="date" value={periodForm.startDate} onChange={(e) => setPeriodForm({ ...periodForm, startDate: e.target.value })} /></Field>
-          <Field label="End date"><input className="input" type="date" value={periodForm.endDate} onChange={(e) => setPeriodForm({ ...periodForm, endDate: e.target.value })} /></Field>
+          <Field label="Start date"><DatePicker value={periodForm.startDate} onChange={(value) => setPeriodForm({ ...periodForm, startDate: value })} /></Field>
+          <Field label="End date"><DatePicker value={periodForm.endDate} onChange={(value) => setPeriodForm({ ...periodForm, endDate: value })} /></Field>
         </FormGrid>
       </Drawer>
 
@@ -567,7 +569,7 @@ export function AccountingWorkbenchPage() {
 
       <Drawer open={drawer === "journal"} onClose={() => setDrawer(null)} title="Post journal entry" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveJournal}>Post</button></>}>
         <FormGrid>
-          <Field label="Date"><input className="input" type="date" value={journalForm.date} onChange={(e) => setJournalForm({ ...journalForm, date: e.target.value })} /></Field>
+          <Field label="Date"><DatePicker value={journalForm.date} onChange={(value) => setJournalForm({ ...journalForm, date: value })} /></Field>
           <Field label="Fiscal year"><input className="input" value={journalForm.fiscalYear} onChange={(e) => setJournalForm({ ...journalForm, fiscalYear: e.target.value })} /></Field>
           <Field label="Memo"><input className="input" value={journalForm.memo} onChange={(e) => setJournalForm({ ...journalForm, memo: e.target.value })} /></Field>
           <label className="checkbox"><input type="checkbox" checked={journalForm.allowClosed} onChange={(e) => setJournalForm({ ...journalForm, allowClosed: e.target.checked })} /> Closed-period adjustment</label>
@@ -577,10 +579,10 @@ export function AccountingWorkbenchPage() {
 
       <Drawer open={drawer === "candidate"} onClose={() => setDrawer(null)} title="Post transaction candidate" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy || !candidateForm.candidateId} onClick={saveCandidateAllocation}>Post</button></>}>
         <div className="col">
-          <Field label="Candidate"><select className="input" value={candidateForm.candidateId} onChange={(e) => {
-            const candidate = candidates.find((row: any) => row._id === e.target.value);
-            setCandidateForm({ ...candidateForm, candidateId: e.target.value, amount: candidate?.amountCents ? dollarsFromCents(Math.abs(candidate.amountCents)) : candidateForm.amount, description: candidate?.description ?? candidateForm.description });
-          }}><option value="">Select candidate</option>{candidates.map((row: any) => <option key={row._id} value={row._id}>{row.transactionDate} · {row.description}</option>)}</select></Field>
+          <Field label="Candidate"><Select value={candidateForm.candidateId} onChange={(value) => {
+            const candidate = candidates.find((row: any) => row._id === value);
+            setCandidateForm({ ...candidateForm, candidateId: value, amount: candidate?.amountCents ? dollarsFromCents(Math.abs(candidate.amountCents)) : candidateForm.amount, description: candidate?.description ?? candidateForm.description });
+          }} options={[{ value: "", label: "Select candidate" }, ...candidates.map((row: any) => ({ value: row._id, label: `${row.transactionDate} · ${row.description}` }))]} /></Field>
           <Field label="Cash account"><AccountSelect accounts={cashAccounts} value={candidateForm.cashAccountId} onChange={(cashAccountId) => setCandidateForm({ ...candidateForm, cashAccountId })} /></Field>
           <Field label="Offset account"><AccountSelect accounts={accounts ?? []} value={candidateForm.allocationAccountId} onChange={(allocationAccountId) => setCandidateForm({ ...candidateForm, allocationAccountId })} /></Field>
           <Field label="Amount"><input className="input" type="number" value={candidateForm.amount} onChange={(e) => setCandidateForm({ ...candidateForm, amount: e.target.value })} /></Field>
@@ -591,7 +593,7 @@ export function AccountingWorkbenchPage() {
       <Drawer open={drawer === "reconciliation"} onClose={() => setDrawer(null)} title="Create reconciliation run" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveReconciliation}>Create</button></>}>
         <div className="col">
           <Field label="Financial account"><AccountSelect accounts={cashAccounts} value={reconciliationForm.financialAccountId} onChange={(financialAccountId) => setReconciliationForm({ ...reconciliationForm, financialAccountId })} /></Field>
-          <Field label="Statement date"><input className="input" type="date" value={reconciliationForm.statementDate} onChange={(e) => setReconciliationForm({ ...reconciliationForm, statementDate: e.target.value })} /></Field>
+          <Field label="Statement date"><DatePicker value={reconciliationForm.statementDate} onChange={(value) => setReconciliationForm({ ...reconciliationForm, statementDate: value })} /></Field>
           <Field label="Statement balance"><input className="input" type="number" value={reconciliationForm.statementBalance} onChange={(e) => setReconciliationForm({ ...reconciliationForm, statementBalance: e.target.value })} /></Field>
         </div>
       </Drawer>
@@ -609,10 +611,14 @@ function FormGrid({ children }: { children: ReactNode }) {
 
 function AccountSelect({ accounts, value, onChange }: { accounts: any[]; value: string; onChange: (value: string) => void }) {
   return (
-    <select className="input" value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="">Select account</option>
-      {accounts.map((account) => <option key={account._id} value={account._id}>{account.code ? `${account.code} · ` : ""}{account.name}</option>)}
-    </select>
+    <Select
+      value={value}
+      onChange={(next) => onChange(next)}
+      options={[
+        { value: "", label: "Select account" },
+        ...accounts.map((account) => ({ value: account._id, label: (account.code ? `${account.code} · ` : "") + account.name })),
+      ]}
+    />
   );
 }
 
@@ -633,7 +639,7 @@ function AccountingLines({
       {rows.map((row, index) => (
         <div className="accounting-line" key={index}>
           <Field label="Account"><AccountSelect accounts={accounts} value={row.accountId} onChange={(accountId) => update(index, { accountId })} /></Field>
-          <Field label="Side"><select className="input" value={row.side} onChange={(e) => update(index, { side: e.target.value })}><option value="debit">Debit</option><option value="credit">Credit</option></select></Field>
+          <Field label="Side"><Select value={row.side} onChange={(value) => update(index, { side: value })} options={[{ value: "debit", label: "Debit" }, { value: "credit", label: "Credit" }]} /></Field>
           <Field label="Amount"><input className="input" type="number" value={row.amount} onChange={(e) => update(index, { amount: e.target.value })} /></Field>
           {includeDescription && <Field label="Description"><input className="input" value={row.description ?? ""} onChange={(e) => update(index, { description: e.target.value })} /></Field>}
         </div>

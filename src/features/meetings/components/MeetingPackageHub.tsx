@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ClipboardCheck, Download, ExternalLink, FileText, ListChecks, Plus, ShieldCheck, Unlink } from "lucide-react";
 import { Badge } from "../../../components/ui";
+import { Select } from "../../../components/Select";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { Segmented } from "../../../components/primitives";
 import { QuickAddTaskForm } from "../../tasks/QuickAddTaskForm";
@@ -317,19 +318,18 @@ export function MeetingPackageHub({
 
                   <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     {linkableTasks.length > 0 ? (
-                      <select
-                        className="input"
+                      <Select
                         style={{ flex: 1, minWidth: 200 }}
                         value={pickerValue}
-                        onChange={(event) => { void handlePick(event.target.value); }}
-                      >
-                        <option value="">Link existing task…</option>
-                        {linkableTasks.map((task: any) => (
-                          <option key={task._id} value={task._id}>
-                            {task.title}{task.priority ? ` · ${task.priority}` : ""}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(value) => { void handlePick(value); }}
+                        options={[
+                          { value: "", label: "Link existing task…" },
+                          ...linkableTasks.map((task: any) => ({
+                            value: task._id,
+                            label: `${task.title}${task.priority ? ` · ${task.priority}` : ""}`,
+                          })),
+                        ]}
+                      />
                     ) : (
                       <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>No unlinked tasks available.</span>
                     )}

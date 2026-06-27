@@ -8,6 +8,7 @@ import { useBylawRules } from "../hooks/useBylawRules";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { DateTimeInput } from "../components/DateTimeInput";
 import { Vote, Plus, Users, CheckCircle2, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isBetterAuthMode } from "../lib/authMode";
@@ -355,37 +356,29 @@ export function ElectionsPage() {
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Opens">
-                <input
-                  className="input"
-                  type="datetime-local"
+                <DateTimeInput
                   value={form.opensAtISO}
-                  onChange={(e) => setForm({ ...form, opensAtISO: e.target.value })}
+                  onChange={(value) => setForm({ ...form, opensAtISO: value })}
                 />
               </Field>
               <Field label="Closes">
-                <input
-                  className="input"
-                  type="datetime-local"
+                <DateTimeInput
                   value={form.closesAtISO}
-                  onChange={(e) => setForm({ ...form, closesAtISO: e.target.value })}
+                  onChange={(value) => setForm({ ...form, closesAtISO: value })}
                 />
               </Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Nominations open">
-                <input
-                  className="input"
-                  type="datetime-local"
+                <DateTimeInput
                   value={form.nominationsOpenAtISO}
-                  onChange={(e) => setForm({ ...form, nominationsOpenAtISO: e.target.value })}
+                  onChange={(value) => setForm({ ...form, nominationsOpenAtISO: value })}
                 />
               </Field>
               <Field label="Nominations close">
-                <input
-                  className="input"
-                  type="datetime-local"
+                <DateTimeInput
                   value={form.nominationsCloseAtISO}
-                  onChange={(e) => setForm({ ...form, nominationsCloseAtISO: e.target.value })}
+                  onChange={(value) => setForm({ ...form, nominationsCloseAtISO: value })}
                 />
               </Field>
             </div>

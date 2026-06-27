@@ -2,6 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ExternalLink, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge, Field, InspectorNote } from "../../../components/ui";
+import { Select } from "../../../components/Select";
+import { DatePicker } from "../../../components/DatePicker";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { StructuredAddressFields } from "../../../components/StructuredAddressFields";
 import { formatDate, money } from "../../../lib/format";
@@ -245,22 +247,12 @@ export function GrantEditorForm({
       </div>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Opportunity type">
-          <select className="input" value={grantDraft.opportunityType ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, opportunityType: e.target.value })}>
-            <option value="">Unspecified</option>
-            <option>Government</option>
-            <option>Foundation</option>
-            <option>Corporate</option>
-            <option>Internal</option>
-            <option>Other</option>
-          </select>
+          <Select value={grantDraft.opportunityType ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, opportunityType: value })}
+            options={[{ value: "", label: "Unspecified" }, { value: "Government", label: "Government" }, { value: "Foundation", label: "Foundation" }, { value: "Corporate", label: "Corporate" }, { value: "Internal", label: "Internal" }, { value: "Other", label: "Other" }]} />
         </Field>
         <Field label="Priority">
-          <select className="input" value={grantDraft.priority ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, priority: e.target.value })}>
-            <option value="">Unspecified</option>
-            <option>High</option>
-            <option>Medium</option>
-            <option>Low</option>
-          </select>
+          <Select value={grantDraft.priority ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, priority: value })}
+            options={[{ value: "", label: "Unspecified" }, { value: "High", label: "High" }, { value: "Medium", label: "Medium" }, { value: "Low", label: "Low" }]} />
         </Field>
       </div>
       <div className="row" style={{ gap: 12 }}>
@@ -270,21 +262,12 @@ export function GrantEditorForm({
       <Field label="Next action"><input className="input" value={grantDraft.nextAction ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, nextAction: e.target.value })} /></Field>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Status">
-          <select className="input" value={grantDraft.status} onChange={(e) => setGrantDraft({ ...grantDraft, status: e.target.value })}>
-            <option>Prospecting</option>
-            <option>Drafting</option>
-            <option>Submitted</option>
-            <option>Awarded</option>
-            <option>Declined</option>
-            <option>Active</option>
-            <option>Closed</option>
-          </select>
+          <Select value={grantDraft.status} onChange={(value) => setGrantDraft({ ...grantDraft, status: value })}
+            options={[{ value: "Prospecting", label: "Prospecting" }, { value: "Drafting", label: "Drafting" }, { value: "Submitted", label: "Submitted" }, { value: "Awarded", label: "Awarded" }, { value: "Declined", label: "Declined" }, { value: "Active", label: "Active" }, { value: "Closed", label: "Closed" }]} />
         </Field>
         <Field label="Committee">
-          <select className="input" value={grantDraft.committeeId ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, committeeId: e.target.value })}>
-            <option value="">None</option>
-            {committees.map((committee) => <option key={committee._id} value={committee._id}>{committee.name}</option>)}
-          </select>
+          <Select value={grantDraft.committeeId ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, committeeId: value })}
+            options={[{ value: "", label: "None" }, ...committees.map((committee) => ({ value: committee._id, label: committee.name }))]} />
         </Field>
       </div>
       <div className="row" style={{ gap: 12 }}>
@@ -301,24 +284,20 @@ export function GrantEditorForm({
       <Field label="Public description"><MarkdownEditor rows={4} value={grantDraft.publicDescription ?? ""} onChange={(markdown) => setGrantDraft({ ...grantDraft, publicDescription: markdown })} /></Field>
       <Field label="Application instructions"><MarkdownEditor rows={4} value={grantDraft.applicationInstructions ?? ""} onChange={(markdown) => setGrantDraft({ ...grantDraft, applicationInstructions: markdown })} /></Field>
       <div className="row" style={{ gap: 12 }}>
-        <Field label="Application due"><input className="input" type="date" value={grantDraft.applicationDueDate ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, applicationDueDate: e.target.value })} /></Field>
-        <Field label="Next report"><input className="input" type="date" value={grantDraft.nextReportDueAtISO ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, nextReportDueAtISO: e.target.value })} /></Field>
+        <Field label="Application due"><DatePicker value={grantDraft.applicationDueDate ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, applicationDueDate: value })} /></Field>
+        <Field label="Next report"><DatePicker value={grantDraft.nextReportDueAtISO ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, nextReportDueAtISO: value })} /></Field>
       </div>
       <div className="row" style={{ gap: 12 }}>
-        <Field label="Start"><input className="input" type="date" value={grantDraft.startDate ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, startDate: e.target.value })} /></Field>
-        <Field label="End"><input className="input" type="date" value={grantDraft.endDate ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, endDate: e.target.value })} /></Field>
+        <Field label="Start"><DatePicker value={grantDraft.startDate ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, startDate: value })} /></Field>
+        <Field label="End"><DatePicker value={grantDraft.endDate ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, endDate: value })} /></Field>
       </div>
       <Field label="Board owner">
-        <select className="input" value={grantDraft.boardOwnerUserId ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, boardOwnerUserId: e.target.value })}>
-          <option value="">None</option>
-          {users.map((user) => <option key={user._id} value={user._id}>{user.displayName}</option>)}
-        </select>
+        <Select value={grantDraft.boardOwnerUserId ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, boardOwnerUserId: value })}
+          options={[{ value: "", label: "None" }, ...users.map((user) => ({ value: user._id, label: user.displayName }))]} />
       </Field>
       <Field label="Linked financial account">
-        <select className="input" value={grantDraft.linkedFinancialAccountId ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, linkedFinancialAccountId: e.target.value })}>
-          <option value="">None</option>
-          {accounts.map((account) => <option key={account._id} value={account._id}>{account.name}</option>)}
-        </select>
+        <Select value={grantDraft.linkedFinancialAccountId ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, linkedFinancialAccountId: value })}
+          options={[{ value: "", label: "None" }, ...accounts.map((account) => ({ value: account._id, label: account.name }))]} />
       </Field>
       {grantDraft.linkedFinancialAccountId && (
         <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
@@ -331,18 +310,12 @@ export function GrantEditorForm({
       />
       <div className="row" style={{ gap: 12 }}>
         <Field label="Confidence">
-          <select className="input" value={grantDraft.confidence ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, confidence: e.target.value })}>
-            <option value="">Unspecified</option>
-            <option>High</option>
-            <option>Medium</option>
-            <option>Review</option>
-          </select>
+          <Select value={grantDraft.confidence ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, confidence: value })}
+            options={[{ value: "", label: "Unspecified" }, { value: "High", label: "High" }, { value: "Medium", label: "Medium" }, { value: "Review", label: "Review" }]} />
         </Field>
         <Field label="Sensitivity">
-          <select className="input" value={grantDraft.sensitivity ?? ""} onChange={(e) => setGrantDraft({ ...grantDraft, sensitivity: e.target.value })}>
-            <option value="">Standard</option>
-            <option value="restricted">Restricted</option>
-          </select>
+          <Select value={grantDraft.sensitivity ?? ""} onChange={(value) => setGrantDraft({ ...grantDraft, sensitivity: value })}
+            options={[{ value: "", label: "Standard" }, { value: "restricted", label: "Restricted" }]} />
         </Field>
       </div>
       <Field label="Risk flags" hint="Comma-separated review markers.">

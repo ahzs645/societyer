@@ -3,6 +3,8 @@ import { type ReactNode, useEffect, useState } from "react";
 import { ExternalLink, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge, Field, InspectorNote } from "../../../components/ui";
+import { Select } from "../../../components/Select";
+import { DatePicker } from "../../../components/DatePicker";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { StructuredAddressFields } from "../../../components/StructuredAddressFields";
 import { formatDate, money } from "../../../lib/format";
@@ -217,14 +219,18 @@ export function GrantFundedEmployeesPanel({
         )}
         {onLinkEmployee && availableEmployees.length > 0 && canLinkMoreEmployees && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <select className="input" style={{ flex: "1 1 220px" }} value={selectedEmployeeId} onChange={(event) => setSelectedEmployeeId(event.target.value)}>
-              <option value="">Select an employee to link</option>
-              {availableEmployees.map((employee) => (
-                <option key={String(employee._id)} value={String(employee._id)}>
-                  {employee.firstName} {employee.lastName} · {employee.role}
-                </option>
-              ))}
-            </select>
+            <Select
+              style={{ flex: "1 1 220px" }}
+              value={selectedEmployeeId}
+              onChange={(value) => setSelectedEmployeeId(value)}
+              options={[
+                { value: "", label: "Select an employee to link" },
+                ...availableEmployees.map((employee) => ({
+                  value: String(employee._id),
+                  label: `${employee.firstName} ${employee.lastName} · ${employee.role}`,
+                })),
+              ]}
+            />
             <button className="btn btn--accent" type="button" disabled={!selectedEmployeeId} onClick={linkSelected}>
               Link employee
             </button>
@@ -247,7 +253,7 @@ export function GrantFundedEmployeesPanel({
                 <Field label="Email"><input className="input" type="email" value={employeeDraft.email} onChange={(event) => setEmployeeDraft({ ...employeeDraft, email: event.target.value })} /></Field>
                 <div className="row" style={{ gap: 8 }}>
                   <Field label="Phone"><input className="input" inputMode="tel" value={employeeDraft.phone} onChange={(event) => setEmployeeDraft({ ...employeeDraft, phone: event.target.value })} /></Field>
-                  <Field label="Birth date"><input className="input" type="date" value={employeeDraft.birthDate} onChange={(event) => setEmployeeDraft({ ...employeeDraft, birthDate: event.target.value })} /></Field>
+                  <Field label="Birth date"><DatePicker value={employeeDraft.birthDate} onChange={(value) => setEmployeeDraft({ ...employeeDraft, birthDate: value })} /></Field>
                 </div>
                 <StructuredAddressFields
                   value={{
@@ -269,14 +275,17 @@ export function GrantFundedEmployeesPanel({
                   })}
                 />
                 <Field label="SIN vault record" hint="Raw SIN stays in Secrets; this links only the vault metadata record.">
-                  <select className="input" value={employeeDraft.sinSecretVaultItemId} onChange={(event) => setEmployeeDraft({ ...employeeDraft, sinSecretVaultItemId: event.target.value })}>
-                    <option value="">No SIN vault record linked</option>
-                    {secretVaultItems.map((secret) => (
-                      <option key={String(secret._id)} value={String(secret._id)}>
-                        {[secret.name, secret.service, secret.secretPreview].filter(Boolean).join(" · ")}
-                      </option>
-                    ))}
-                  </select>
+                  <Select
+                    value={employeeDraft.sinSecretVaultItemId}
+                    onChange={(value) => setEmployeeDraft({ ...employeeDraft, sinSecretVaultItemId: value })}
+                    options={[
+                      { value: "", label: "No SIN vault record linked" },
+                      ...secretVaultItems.map((secret) => ({
+                        value: String(secret._id),
+                        label: [secret.name, secret.service, secret.secretPreview].filter(Boolean).join(" · "),
+                      })),
+                    ]}
+                  />
                 </Field>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   {onCreateSinVaultRecord && (
@@ -310,22 +319,25 @@ export function GrantFundedEmployeesPanel({
                     <input className="input" readOnly={Boolean(lockedAssignment.role)} value={employeeDraft.role} onChange={(event) => setEmployeeDraft({ ...employeeDraft, role: event.target.value })} />
                   </Field>
                   <Field label="Type" hint={lockedAssignment.employmentType ? "From grant-funded role" : undefined}>
-                    <select className="input" disabled={Boolean(lockedAssignment.employmentType)} value={employeeDraft.employmentType} onChange={(event) => setEmployeeDraft({ ...employeeDraft, employmentType: event.target.value })}>
-                      <option>FullTime</option>
-                      <option>PartTime</option>
-                      <option>Casual</option>
-                      <option>Contractor</option>
-                    </select>
+                    <Select
+                      disabled={Boolean(lockedAssignment.employmentType)}
+                      value={employeeDraft.employmentType}
+                      onChange={(value) => setEmployeeDraft({ ...employeeDraft, employmentType: value })}
+                      options={[
+                        { value: "FullTime", label: "FullTime" },
+                        { value: "PartTime", label: "PartTime" },
+                        { value: "Casual", label: "Casual" },
+                        { value: "Contractor", label: "Contractor" },
+                      ]}
+                    />
                   </Field>
                 </div>
                 <div className="row" style={{ gap: 8 }}>
                   <Field label="Start">
-                    <input
-                      className="input"
-                      type="date"
+                    <DatePicker
                       value={employeeDraft.startDate}
-                      onChange={(event) => {
-                        const startDate = event.target.value;
+                      onChange={(value) => {
+                        const startDate = value;
                         setEmployeeDraft({
                           ...employeeDraft,
                           startDate,
@@ -335,13 +347,11 @@ export function GrantFundedEmployeesPanel({
                     />
                   </Field>
                   <Field label="End" hint={endDateOverridden ? "Manual override" : lockedAssignment.weeks ? `${lockedAssignment.weeks} approved weeks from start` : undefined}>
-                    <input
-                      className="input"
-                      type="date"
+                    <DatePicker
                       value={employeeDraft.endDate}
-                      onChange={(event) => {
+                      onChange={(value) => {
                         setEndDateOverridden(true);
-                        setEmployeeDraft({ ...employeeDraft, endDate: event.target.value });
+                        setEmployeeDraft({ ...employeeDraft, endDate: value });
                       }}
                     />
                   </Field>

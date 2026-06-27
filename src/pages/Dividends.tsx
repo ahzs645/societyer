@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
+import { DatePicker } from "../components/DatePicker";
 import { Plus, Coins, Trash2 } from "lucide-react";
 
 /**
@@ -155,11 +156,9 @@ export function DividendsPage() {
         {form && (
           <div>
             <Field label="Declared on">
-              <input
-                className="input"
-                type="date"
+              <DatePicker
                 value={form.declaredOn}
-                onChange={(e) => setForm({ ...form, declaredOn: e.target.value })}
+                onChange={(value) => setForm({ ...form, declaredOn: value })}
               />
             </Field>
             <Field label="Share class">

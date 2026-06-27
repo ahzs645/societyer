@@ -3,6 +3,8 @@ import { type ReactNode, useEffect, useState } from "react";
 import { ExternalLink, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge, Field, InspectorNote } from "../../../components/ui";
+import { Select } from "../../../components/Select";
+import { DatePicker } from "../../../components/DatePicker";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { StructuredAddressFields } from "../../../components/StructuredAddressFields";
 import { formatDate, money } from "../../../lib/format";
@@ -113,22 +115,12 @@ export function GrantEditorPageLayout({
           </div>
           <div className="grant-edit-grid grant-edit-grid--3">
             <Field label="Opportunity type">
-              <select className="input" value={grantDraft.opportunityType ?? ""} onChange={(e) => update({ opportunityType: e.target.value })}>
-                <option value="">Unspecified</option>
-                <option>Government</option>
-                <option>Foundation</option>
-                <option>Corporate</option>
-                <option>Internal</option>
-                <option>Other</option>
-              </select>
+              <Select value={grantDraft.opportunityType ?? ""} onChange={(value) => update({ opportunityType: value })}
+                options={[{ value: "", label: "Unspecified" }, { value: "Government", label: "Government" }, { value: "Foundation", label: "Foundation" }, { value: "Corporate", label: "Corporate" }, { value: "Internal", label: "Internal" }, { value: "Other", label: "Other" }]} />
             </Field>
             <Field label="Priority">
-              <select className="input" value={grantDraft.priority ?? ""} onChange={(e) => update({ priority: e.target.value })}>
-                <option value="">Unspecified</option>
-                <option>High</option>
-                <option>Medium</option>
-                <option>Low</option>
-              </select>
+              <Select value={grantDraft.priority ?? ""} onChange={(value) => update({ priority: value })}
+                options={[{ value: "", label: "Unspecified" }, { value: "High", label: "High" }, { value: "Medium", label: "Medium" }, { value: "Low", label: "Low" }]} />
             </Field>
             <Field label="Fit score" hint="0 to 100">
               <input className="input" type="number" inputMode="numeric" min="0" max="100" step="1" value={grantDraft.fitScore ?? ""} onChange={(e) => update({ fitScore: e.target.value })} />
@@ -142,21 +134,12 @@ export function GrantEditorPageLayout({
         <EditSection id="grant-edit-status" title="Status & amounts" description="Pipeline stage, committee, and the money that goes with it.">
           <div className="grant-edit-grid grant-edit-grid--2">
             <Field label="Status">
-              <select className="input" value={grantDraft.status} onChange={(e) => update({ status: e.target.value })}>
-                <option>Prospecting</option>
-                <option>Drafting</option>
-                <option>Submitted</option>
-                <option>Awarded</option>
-                <option>Declined</option>
-                <option>Active</option>
-                <option>Closed</option>
-              </select>
+              <Select value={grantDraft.status} onChange={(value) => update({ status: value })}
+                options={[{ value: "Prospecting", label: "Prospecting" }, { value: "Drafting", label: "Drafting" }, { value: "Submitted", label: "Submitted" }, { value: "Awarded", label: "Awarded" }, { value: "Declined", label: "Declined" }, { value: "Active", label: "Active" }, { value: "Closed", label: "Closed" }]} />
             </Field>
             <Field label="Committee">
-              <select className="input" value={grantDraft.committeeId ?? ""} onChange={(e) => update({ committeeId: e.target.value })}>
-                <option value="">None</option>
-                {committees.map((committee) => <option key={committee._id} value={committee._id}>{committee.name}</option>)}
-              </select>
+              <Select value={grantDraft.committeeId ?? ""} onChange={(value) => update({ committeeId: value })}
+                options={[{ value: "", label: "None" }, ...committees.map((committee) => ({ value: committee._id, label: committee.name }))]} />
             </Field>
           </div>
           <div className="grant-edit-grid grant-edit-grid--2">
@@ -198,30 +181,26 @@ export function GrantEditorPageLayout({
         <EditSection id="grant-edit-timeline" title="Timeline & ownership" description="Deadlines, project window, and who's accountable.">
           <div className="grant-edit-grid grant-edit-grid--4">
             <Field label="Application due">
-              <input className="input" type="date" value={grantDraft.applicationDueDate ?? ""} onChange={(e) => update({ applicationDueDate: e.target.value })} />
+              <DatePicker value={grantDraft.applicationDueDate ?? ""} onChange={(value) => update({ applicationDueDate: value })} />
             </Field>
             <Field label="Next report">
-              <input className="input" type="date" value={grantDraft.nextReportDueAtISO ?? ""} onChange={(e) => update({ nextReportDueAtISO: e.target.value })} />
+              <DatePicker value={grantDraft.nextReportDueAtISO ?? ""} onChange={(value) => update({ nextReportDueAtISO: value })} />
             </Field>
             <Field label="Start">
-              <input className="input" type="date" value={grantDraft.startDate ?? ""} onChange={(e) => update({ startDate: e.target.value })} />
+              <DatePicker value={grantDraft.startDate ?? ""} onChange={(value) => update({ startDate: value })} />
             </Field>
             <Field label="End">
-              <input className="input" type="date" value={grantDraft.endDate ?? ""} onChange={(e) => update({ endDate: e.target.value })} />
+              <DatePicker value={grantDraft.endDate ?? ""} onChange={(value) => update({ endDate: value })} />
             </Field>
           </div>
           <div className="grant-edit-grid grant-edit-grid--2">
             <Field label="Board owner">
-              <select className="input" value={grantDraft.boardOwnerUserId ?? ""} onChange={(e) => update({ boardOwnerUserId: e.target.value })}>
-                <option value="">None</option>
-                {users.map((user) => <option key={user._id} value={user._id}>{user.displayName}</option>)}
-              </select>
+              <Select value={grantDraft.boardOwnerUserId ?? ""} onChange={(value) => update({ boardOwnerUserId: value })}
+                options={[{ value: "", label: "None" }, ...users.map((user) => ({ value: user._id, label: user.displayName }))]} />
             </Field>
             <Field label="Linked financial account">
-              <select className="input" value={grantDraft.linkedFinancialAccountId ?? ""} onChange={(e) => update({ linkedFinancialAccountId: e.target.value })}>
-                <option value="">None</option>
-                {accounts.map((account) => <option key={account._id} value={account._id}>{account.name}</option>)}
-              </select>
+              <Select value={grantDraft.linkedFinancialAccountId ?? ""} onChange={(value) => update({ linkedFinancialAccountId: value })}
+                options={[{ value: "", label: "None" }, ...accounts.map((account) => ({ value: account._id, label: account.name }))]} />
             </Field>
           </div>
           {grantDraft.linkedFinancialAccountId && (
@@ -238,18 +217,12 @@ export function GrantEditorPageLayout({
           />
           <div className="grant-edit-grid grant-edit-grid--2">
             <Field label="Confidence">
-              <select className="input" value={grantDraft.confidence ?? ""} onChange={(e) => update({ confidence: e.target.value })}>
-                <option value="">Unspecified</option>
-                <option>High</option>
-                <option>Medium</option>
-                <option>Review</option>
-              </select>
+              <Select value={grantDraft.confidence ?? ""} onChange={(value) => update({ confidence: value })}
+                options={[{ value: "", label: "Unspecified" }, { value: "High", label: "High" }, { value: "Medium", label: "Medium" }, { value: "Review", label: "Review" }]} />
             </Field>
             <Field label="Sensitivity">
-              <select className="input" value={grantDraft.sensitivity ?? ""} onChange={(e) => update({ sensitivity: e.target.value })}>
-                <option value="">Standard</option>
-                <option value="restricted">Restricted</option>
-              </select>
+              <Select value={grantDraft.sensitivity ?? ""} onChange={(value) => update({ sensitivity: value })}
+                options={[{ value: "", label: "Standard" }, { value: "restricted", label: "Restricted" }]} />
             </Field>
           </div>
           <Field label="Risk flags" hint="Comma-separated review markers.">
@@ -376,21 +349,21 @@ export function SourceExternalIdsField({
       <div className="source-external-ids-field">
         {visibleRows.map((row, index) => (
           <div className="source-external-ids-field__row" key={`${index}-${rows.length}`}>
-            <select
-              className="input"
+            <Select
               aria-label={`Source ${index + 1}`}
               value={row.source}
-              onChange={(event) => {
+              onChange={(value) => {
                 const next = [...visibleRows];
-                next[index] = { ...row, source: event.target.value };
+                next[index] = { ...row, source: value };
                 commit(next);
               }}
-            >
-              <option value="gcos">GCOS</option>
-              <option value="paperless">Paperless</option>
-              <option value="local">Local</option>
-              <option value="custom">Other</option>
-            </select>
+              options={[
+                { value: "gcos", label: "GCOS" },
+                { value: "paperless", label: "Paperless" },
+                { value: "local", label: "Local" },
+                { value: "custom", label: "Other" },
+              ]}
+            />
             {row.source === "custom" && (
               <input
                 className="input"
@@ -404,23 +377,23 @@ export function SourceExternalIdsField({
                 }}
               />
             )}
-            <select
-              className="input"
+            <Select
               aria-label={`Source ID type ${index + 1}`}
               value={row.idType}
-              onChange={(event) => {
+              onChange={(value) => {
                 const next = [...visibleRows];
-                next[index] = { ...row, idType: event.target.value };
+                next[index] = { ...row, idType: value };
                 commit(next);
               }}
-            >
-              <option value="project">Project ID</option>
-              <option value="project-number">Project number</option>
-              <option value="document">Document ID</option>
-              <option value="record">Record ID</option>
-              <option value="file">File ID</option>
-              <option value="custom">Other ID</option>
-            </select>
+              options={[
+                { value: "project", label: "Project ID" },
+                { value: "project-number", label: "Project number" },
+                { value: "document", label: "Document ID" },
+                { value: "record", label: "Record ID" },
+                { value: "file", label: "File ID" },
+                { value: "custom", label: "Other ID" },
+              ]}
+            />
             {row.idType === "custom" && (
               <input
                 className="input"

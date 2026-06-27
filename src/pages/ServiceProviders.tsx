@@ -5,6 +5,8 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { Briefcase, Plus } from "lucide-react";
+import { DatePicker } from "../components/DatePicker";
+import { Select } from "../components/Select";
 
 /**
  * External service-provider register — lawyers, accountants, bankers and the
@@ -188,17 +190,11 @@ export function ServiceProvidersPage() {
         {form && (
           <div>
             <Field label="Function">
-              <select
-                className="input"
+              <Select
                 value={form.function}
-                onChange={(e) => setForm({ ...form, function: e.target.value })}
-              >
-                {(catalog ?? []).map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setForm({ ...form, function: value })}
+                options={(catalog ?? []).map((c) => ({ value: c.value, label: c.label }))}
+              />
             </Field>
             <Field label="Firm name">
               <input
@@ -223,19 +219,15 @@ export function ServiceProvidersPage() {
             </Field>
             <div className="row" style={{ display: "flex", gap: 12 }}>
               <Field label="Appointed on">
-                <input
-                  className="input"
-                  type="date"
+                <DatePicker
                   value={form.appointedOn}
-                  onChange={(e) => setForm({ ...form, appointedOn: e.target.value })}
+                  onChange={(value) => setForm({ ...form, appointedOn: value })}
                 />
               </Field>
               <Field label="Removed on">
-                <input
-                  className="input"
-                  type="date"
+                <DatePicker
                   value={form.removedOn}
-                  onChange={(e) => setForm({ ...form, removedOn: e.target.value })}
+                  onChange={(value) => setForm({ ...form, removedOn: value })}
                 />
               </Field>
             </div>

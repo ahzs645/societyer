@@ -5,7 +5,9 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { DataTable } from "../components/DataTable";
+import { DatePicker } from "../components/DatePicker";
 import { FilterField } from "../components/FilterBar";
 import { Plus, Eye, Trash2, Tag } from "lucide-react";
 import { dollarInputToCents, formatDate, money } from "../lib/format";
@@ -128,18 +130,14 @@ export function InspectionsPage() {
               <MarkdownEditor rows={4} value={form.recordsRequested} onChange={(markdown) => setForm({ ...form, recordsRequested: markdown })} />
             </Field>
             <Field label="Related document (optional)">
-              <select className="input" value={form.documentId ?? ""} onChange={(e) => setForm({ ...form, documentId: e.target.value || undefined })}>
-                <option value="">— none —</option>
-                {(documents ?? []).map((d: any) => <option key={d._id} value={d._id}>{d.title}</option>)}
-              </select>
+              <Select value={form.documentId ?? ""} onChange={(value) => setForm({ ...form, documentId: value || undefined })}
+                options={[{ value: "", label: "— none —" }, ...(documents ?? []).map((d: any) => ({ value: d._id, label: d.title }))]} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Date"><input className="input" type="date" value={form.inspectedAtISO} onChange={(e) => setForm({ ...form, inspectedAtISO: e.target.value })} /></Field>
+              <Field label="Date"><DatePicker value={form.inspectedAtISO} onChange={(value) => setForm({ ...form, inspectedAtISO: value })} /></Field>
               <Field label="Delivery">
-                <select className="input" value={form.deliveryMethod} onChange={(e) => setForm({ ...form, deliveryMethod: e.target.value })}>
-                  <option value="in-person">In-person</option>
-                  <option value="electronic">Electronic</option>
-                </select>
+                <Select value={form.deliveryMethod} onChange={(value) => setForm({ ...form, deliveryMethod: value })}
+                  options={[{ value: "in-person", label: "In-person" }, { value: "electronic", label: "Electronic" }]} />
               </Field>
             </div>
             <div className="row" style={{ gap: 12 }}>

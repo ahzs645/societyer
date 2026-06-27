@@ -11,6 +11,8 @@ import { useConfirm } from "../components/Modal";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { DatePicker } from "../components/DatePicker";
+import { Select } from "../components/Select";
 import {
   RecordTable,
   RecordTableScope,
@@ -458,33 +460,45 @@ export function TransparencyPage() {
           <div>
             <Field label="Title"><input className="input" value={publicationDraft.title} onChange={(e) => setPublicationDraft({ ...publicationDraft, title: e.target.value })} /></Field>
             <Field label="Category">
-              <select className="input" value={publicationDraft.category} onChange={(e) => setPublicationDraft({ ...publicationDraft, category: e.target.value })}>
-                <option>AnnualReport</option>
-                <option>Bylaws</option>
-                <option>AGM</option>
-                <option>FinancialSummary</option>
-                <option>Grant</option>
-                <option>InspectionInstructions</option>
-                <option>Policy</option>
-                <option>Notice</option>
-                <option>Resource</option>
-                <option>Custom</option>
-              </select>
+              <Select
+                value={publicationDraft.category}
+                onChange={(value) => setPublicationDraft({ ...publicationDraft, category: value })}
+                options={[
+                  { value: "AnnualReport", label: "AnnualReport" },
+                  { value: "Bylaws", label: "Bylaws" },
+                  { value: "AGM", label: "AGM" },
+                  { value: "FinancialSummary", label: "FinancialSummary" },
+                  { value: "Grant", label: "Grant" },
+                  { value: "InspectionInstructions", label: "InspectionInstructions" },
+                  { value: "Policy", label: "Policy" },
+                  { value: "Notice", label: "Notice" },
+                  { value: "Resource", label: "Resource" },
+                  { value: "Custom", label: "Custom" },
+                ]}
+              />
             </Field>
             <Field label="Document">
-              <select className="input" value={publicationDraft.documentId ?? ""} onChange={(e) => setPublicationDraft({ ...publicationDraft, documentId: e.target.value })}>
-                <option value="">None</option>
-                {(documents ?? []).map((document) => <option key={document._id} value={document._id}>{document.title}</option>)}
-              </select>
+              <Select
+                value={publicationDraft.documentId ?? ""}
+                onChange={(value) => setPublicationDraft({ ...publicationDraft, documentId: value })}
+                options={[
+                  { value: "", label: "None" },
+                  ...(documents ?? []).map((document) => ({ value: document._id, label: document.title })),
+                ]}
+              />
             </Field>
             <Field label="External URL"><input className="input" value={publicationDraft.url ?? ""} onChange={(e) => setPublicationDraft({ ...publicationDraft, url: e.target.value })} /></Field>
-            <Field label="Published on"><input className="input" type="date" value={publicationDraft.publishedAtISO ?? ""} onChange={(e) => setPublicationDraft({ ...publicationDraft, publishedAtISO: e.target.value })} /></Field>
+            <Field label="Published on"><DatePicker value={publicationDraft.publishedAtISO ?? ""} onChange={(value) => setPublicationDraft({ ...publicationDraft, publishedAtISO: value })} /></Field>
             <Field label="Status">
-              <select className="input" value={publicationDraft.status} onChange={(e) => setPublicationDraft({ ...publicationDraft, status: e.target.value })}>
-                <option>Draft</option>
-                <option>Published</option>
-                <option>Archived</option>
-              </select>
+              <Select
+                value={publicationDraft.status}
+                onChange={(value) => setPublicationDraft({ ...publicationDraft, status: value })}
+                options={[
+                  { value: "Draft", label: "Draft" },
+                  { value: "Published", label: "Published" },
+                  { value: "Archived", label: "Archived" },
+                ]}
+              />
             </Field>
             <Field label="Summary"><MarkdownEditor rows={5} value={publicationDraft.summary ?? ""} onChange={(markdown) => setPublicationDraft({ ...publicationDraft, summary: markdown })} /></Field>
           </div>

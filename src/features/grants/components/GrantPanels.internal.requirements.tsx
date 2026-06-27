@@ -3,6 +3,8 @@ import { type ReactNode, useEffect, useState } from "react";
 import { ExternalLink, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge, Field, InspectorNote } from "../../../components/ui";
+import { Select } from "../../../components/Select";
+import { DatePicker } from "../../../components/DatePicker";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
 import { StructuredAddressFields } from "../../../components/StructuredAddressFields";
 import { formatDate, money } from "../../../lib/format";
@@ -131,20 +133,20 @@ export function GrantRequirementsEditor({
             return (
               <div key={item.id} className="grant-requirement-card">
                 <div className="grant-requirement-card__summary">
-                  <select
-                    className="input grant-requirement-card__status"
+                  <Select
+                    className="grant-requirement-card__status"
                     aria-label={`Status for ${item.label}`}
                     value={item.status}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       updateRequirement(index, {
-                        status: event.target.value as GrantRequirementStatus,
+                        status: value as GrantRequirementStatus,
                       })
                     }
-                  >
-                    {REQUIREMENT_STATUSES.map((status) => (
-                      <option key={status}>{status}</option>
-                    ))}
-                  </select>
+                    options={REQUIREMENT_STATUSES.map((status) => ({
+                      value: status,
+                      label: status,
+                    }))}
+                  />
                   <input
                     className="input grant-requirement-card__title"
                     aria-label="Requirement"
@@ -190,11 +192,9 @@ export function GrantRequirementsEditor({
                 {expanded && (
                   <div className="grant-requirement-card__details">
                   <Field label="Due">
-                    <input
-                      className="input"
-                      type="date"
+                    <DatePicker
                       value={item.dueDate ?? ""}
-                      onChange={(event) => updateRequirement(index, { dueDate: event.target.value || undefined })}
+                      onChange={(value) => updateRequirement(index, { dueDate: value || undefined })}
                     />
                   </Field>
                   <div className="grant-requirement-evidence">
@@ -217,18 +217,17 @@ export function GrantRequirementsEditor({
                       </button>
                     </div>
                     {pickerOpen && (
-                      <select
-                        className="input"
+                      <Select
                         value={item.documentId ?? ""}
-                        onChange={(event) => updateRequirement(index, { documentId: event.target.value || undefined })}
-                      >
-                        <option value="">None</option>
-                        {documents.map((document) => (
-                          <option key={document._id} value={document._id}>
-                            {document.title}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(value) => updateRequirement(index, { documentId: value || undefined })}
+                        options={[
+                          { value: "", label: "None" },
+                          ...documents.map((document) => ({
+                            value: document._id,
+                            label: document.title,
+                          })),
+                        ]}
+                      />
                     )}
                   </div>
                   <Field label="Notes">

@@ -10,6 +10,7 @@ import { Plus, Vote, Trash2, Tag } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { DatePicker } from "../components/DatePicker";
 
 const FIELDS: FilterField<any>[] = [
   { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Submitted", "MeetsThreshold", "Rejected", "Included"], match: (r, q) => r.status === q },
@@ -113,7 +114,7 @@ export function MemberProposalsPage() {
             <Field label="Proposal text"><MarkdownEditor rows={4} value={form.text} onChange={(markdown) => setForm({ ...form, text: markdown })} /></Field>
             <Field label="Submitted by"><input className="input" value={form.submittedByName} onChange={(e) => setForm({ ...form, submittedByName: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Submitted on"><input className="input" type="date" value={form.submittedAtISO} onChange={(e) => setForm({ ...form, submittedAtISO: e.target.value })} /></Field>
+              <Field label="Submitted on"><DatePicker value={form.submittedAtISO} onChange={(value) => setForm({ ...form, submittedAtISO: value })} /></Field>
               <Field label="Signature count"><input className="input" type="number" value={form.signatureCount} onChange={(e) => setForm({ ...form, signatureCount: Number(e.target.value) })} /></Field>
               <Field label="Threshold %"><input className="input" type="number" value={form.thresholdPercent} onChange={(e) => setForm({ ...form, thresholdPercent: Number(e.target.value) })} /></Field>
             </div>

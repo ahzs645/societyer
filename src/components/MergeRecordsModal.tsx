@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Modal } from "./Modal";
+import { Select } from "./Select";
 import { Banner, Button } from "./ui";
 
 export type MergeField<T> = {
@@ -72,17 +73,14 @@ export function MergeRecordsModal<T extends { _id: string }>({
 
         <div className="merge-modal__winner-row">
           <span className="muted">Keep record:</span>
-          <select
-            className="input"
+          <Select
             value={keepId}
-            onChange={(e) => setKeepId(e.target.value)}
-          >
-            {rows.map((r, i) => (
-              <option key={r._id} value={r._id}>
-                Record {i + 1}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => setKeepId(value)}
+            options={rows.map((r, i) => ({
+              value: r._id,
+              label: `Record ${i + 1}`,
+            }))}
+          />
         </div>
 
         <table className="table">

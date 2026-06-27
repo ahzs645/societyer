@@ -5,10 +5,12 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
+import { DatePicker } from "../components/DatePicker";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Segmented } from "../components/primitives";
 import { useToast } from "../components/Toast";
 import { ImportWizard } from "../components/ImportWizard";
+import { Select } from "../components/Select";
 import {
   Archive,
   Check,
@@ -626,18 +628,24 @@ export function ImportSessionsPage() {
                 />
                 <div className="import-review-filters">
                   <Segmented value={statusFilter} onChange={setStatusFilter} items={STATUS_ITEMS} />
-                  <select className="input import-review-filter-select" value={kindFilter} onChange={(event) => setKindFilter(event.target.value)}>
-                    <option value="all">All record types</option>
-                    {kinds.map((kind) => (
-                      <option key={kind} value={kind}>{KIND_LABELS[kind] ?? kind}</option>
-                    ))}
-                  </select>
-                  <select className="input import-review-filter-select" value={targetFilter} onChange={(event) => setTargetFilter(event.target.value)}>
-                    <option value="all">All targets</option>
-                    {targets.map((target) => (
-                      <option key={target} value={target}>{target}</option>
-                    ))}
-                  </select>
+                  <Select
+                    className="import-review-filter-select"
+                    value={kindFilter}
+                    onChange={(value) => setKindFilter(value)}
+                    options={[
+                      { value: "all", label: "All record types" },
+                      ...kinds.map((kind) => ({ value: kind, label: KIND_LABELS[kind] ?? kind })),
+                    ]}
+                  />
+                  <Select
+                    className="import-review-filter-select"
+                    value={targetFilter}
+                    onChange={(value) => setTargetFilter(value)}
+                    options={[
+                      { value: "all", label: "All targets" },
+                      ...targets.map((target) => ({ value: target, label: target })),
+                    ]}
+                  />
                   <input
                     className="input import-review-search"
                     value={searchText}
@@ -815,18 +823,26 @@ function RecordDrawer({
         <div className="col" style={{ gap: 12 }}>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Review status">
-              <select className="input" value={form.status} onChange={(event) => onChange({ ...form, status: event.target.value })}>
-                <option value="Pending">Pending</option>
-                <option value="Approved">Approved</option>
-                <option value="Rejected">Rejected</option>
-              </select>
+              <Select
+                value={form.status}
+                onChange={(value) => onChange({ ...form, status: value })}
+                options={[
+                  { value: "Pending", label: "Pending" },
+                  { value: "Approved", label: "Approved" },
+                  { value: "Rejected", label: "Rejected" },
+                ]}
+              />
             </Field>
             <Field label="Confidence">
-              <select className="input" value={form.payload.confidence ?? form.confidence ?? "Review"} onChange={(event) => updatePayload(form, onChange, { confidence: event.target.value })}>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Review">Review</option>
-              </select>
+              <Select
+                value={form.payload.confidence ?? form.confidence ?? "Review"}
+                onChange={(value) => updatePayload(form, onChange, { confidence: value })}
+                options={[
+                  { value: "High", label: "High" },
+                  { value: "Medium", label: "Medium" },
+                  { value: "Review", label: "Review" },
+                ]}
+              />
             </Field>
           </div>
           {renderPayloadEditor(form, onChange)}
@@ -1178,14 +1194,18 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
         <Field label="Title"><input className="input" value={payload.title ?? ""} onChange={(event) => set({ title: event.target.value })} /></Field>
         <div className="row" style={{ gap: 12 }}>
           <Field label="Status">
-            <select className="input" value={payload.status ?? "Draft"} onChange={(event) => set({ status: event.target.value })}>
-              <option>Draft</option>
-              <option>Consultation</option>
-              <option>ResolutionPassed</option>
-              <option>Filed</option>
-              <option>Withdrawn</option>
-              <option>Superseded</option>
-            </select>
+            <Select
+              value={payload.status ?? "Draft"}
+              onChange={(value) => set({ status: value })}
+              options={[
+                { value: "Draft", label: "Draft" },
+                { value: "Consultation", label: "Consultation" },
+                { value: "ResolutionPassed", label: "ResolutionPassed" },
+                { value: "Filed", label: "Filed" },
+                { value: "Withdrawn", label: "Withdrawn" },
+                { value: "Superseded", label: "Superseded" },
+              ]}
+            />
           </Field>
           <Field label="Filed at">
             <input className="input" value={payload.filedAtISO ?? ""} onChange={(event) => set({ filedAtISO: event.target.value })} placeholder="YYYY-MM-DD or ISO date" />
@@ -1216,31 +1236,35 @@ function renderPayloadEditor(form: any, onChange: (form: any) => void) {
         </div>
         <div className="row" style={{ gap: 12 }}>
           <Field label="Status">
-            <select className="input" value={payload.status ?? "Drafting"} onChange={(event) => set({ status: event.target.value })}>
-              <option>Prospecting</option>
-              <option>Drafting</option>
-              <option>Submitted</option>
-              <option>Awarded</option>
-              <option>Declined</option>
-              <option>Active</option>
-              <option>Closed</option>
-              <option>NeedsReview</option>
-            </select>
+            <Select
+              value={payload.status ?? "Drafting"}
+              onChange={(value) => set({ status: value })}
+              options={[
+                { value: "Prospecting", label: "Prospecting" },
+                { value: "Drafting", label: "Drafting" },
+                { value: "Submitted", label: "Submitted" },
+                { value: "Awarded", label: "Awarded" },
+                { value: "Declined", label: "Declined" },
+                { value: "Active", label: "Active" },
+                { value: "Closed", label: "Closed" },
+                { value: "NeedsReview", label: "NeedsReview" },
+              ]}
+            />
           </Field>
           <Field label="Requested cents"><input className="input" type="number" value={payload.amountRequestedCents ?? ""} onChange={(event) => set({ amountRequestedCents: numericInput(event.target.value) })} /></Field>
           <Field label="Awarded cents"><input className="input" type="number" value={payload.amountAwardedCents ?? ""} onChange={(event) => set({ amountAwardedCents: numericInput(event.target.value) })} /></Field>
         </div>
         <div className="row" style={{ gap: 12 }}>
-          <Field label="Application due"><input className="input" type="date" value={payload.applicationDueDate ?? ""} onChange={(event) => set({ applicationDueDate: event.target.value })} /></Field>
-          <Field label="Submitted"><input className="input" type="date" value={payload.submittedAtISO ?? ""} onChange={(event) => set({ submittedAtISO: event.target.value })} /></Field>
+          <Field label="Application due"><DatePicker value={payload.applicationDueDate ?? ""} onChange={(value) => set({ applicationDueDate: value })} /></Field>
+          <Field label="Submitted"><DatePicker value={payload.submittedAtISO ?? ""} onChange={(value) => set({ submittedAtISO: value })} /></Field>
         </div>
         <div className="row" style={{ gap: 12 }}>
-          <Field label="Decision"><input className="input" type="date" value={payload.decisionAtISO ?? ""} onChange={(event) => set({ decisionAtISO: event.target.value })} /></Field>
-          <Field label="Next report"><input className="input" type="date" value={payload.nextReportDueAtISO ?? ""} onChange={(event) => set({ nextReportDueAtISO: event.target.value })} /></Field>
+          <Field label="Decision"><DatePicker value={payload.decisionAtISO ?? ""} onChange={(value) => set({ decisionAtISO: value })} /></Field>
+          <Field label="Next report"><DatePicker value={payload.nextReportDueAtISO ?? ""} onChange={(value) => set({ nextReportDueAtISO: value })} /></Field>
         </div>
         <div className="row" style={{ gap: 12 }}>
-          <Field label="Start"><input className="input" type="date" value={payload.startDate ?? ""} onChange={(event) => set({ startDate: event.target.value })} /></Field>
-          <Field label="End"><input className="input" type="date" value={payload.endDate ?? ""} onChange={(event) => set({ endDate: event.target.value })} /></Field>
+          <Field label="Start"><DatePicker value={payload.startDate ?? ""} onChange={(value) => set({ startDate: value })} /></Field>
+          <Field label="End"><DatePicker value={payload.endDate ?? ""} onChange={(value) => set({ endDate: value })} /></Field>
         </div>
         <Field label="Restricted purpose"><MarkdownEditor rows={3} value={payload.restrictedPurpose ?? ""} onChange={(markdown) => set({ restrictedPurpose: markdown })} /></Field>
         <Field label="Notes"><MarkdownEditor rows={4} value={payload.notes ?? ""} onChange={(markdown) => set({ notes: markdown })} /></Field>

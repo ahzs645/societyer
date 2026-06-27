@@ -52,6 +52,7 @@ type SelectProps<T extends string> = {
   anchorRect?: { top: number; bottom: number; left: number; width: number };
   style?: React.CSSProperties;
   id?: string;
+  "aria-label"?: string;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean;
 };
@@ -74,6 +75,7 @@ export function Select<T extends string>({
   anchorRect,
   style,
   id,
+  "aria-label": ariaLabel,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
 }: SelectProps<T>) {
@@ -237,6 +239,7 @@ export function Select<T extends string>({
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={open ? `${controlId}-menu` : undefined}
+          aria-label={ariaLabel}
           aria-describedby={ariaDescribedBy}
           aria-invalid={ariaInvalid}
           style={style}

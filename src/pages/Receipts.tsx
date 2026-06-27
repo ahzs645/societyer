@@ -14,6 +14,7 @@ import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { StructuredAddressTextFields } from "../components/StructuredAddressFields";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { DatePicker } from "../components/DatePicker";
 
 const FIELDS: FilterField<any>[] = [
   { id: "nonCash", label: "Type", icon: <Tag size={14} />, options: ["Cash", "Non-cash"], match: (r, q) => (r.isNonCash ? "Non-cash" : "Cash") === q },
@@ -179,7 +180,7 @@ export function ReceiptsPage() {
                   onChange={(e) => setForm({ ...form, eligibleAmountDollars: e.target.value })}
                 />
               </Field>
-              <Field label="Received on"><input className="input" type="date" value={form.receivedOnISO} onChange={(e) => setForm({ ...form, receivedOnISO: e.target.value })} /></Field>
+              <Field label="Received on"><DatePicker value={form.receivedOnISO} onChange={(value) => setForm({ ...form, receivedOnISO: value })} /></Field>
             </div>
             <Field label="Location issued"><input className="input" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>
             <label className="checkbox">

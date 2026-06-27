@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
+import { Select } from "../components/Select";
 import { DataTable } from "../components/DataTable";
 import { FilterField } from "../components/FilterBar";
 import { Progress } from "../components/primitives";
@@ -128,13 +129,14 @@ export function WrittenResolutionsPage() {
             <Field label="Resolution text"><MarkdownEditor rows={4} value={form.text} onChange={(markdown) => setForm({ ...form, text: markdown })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Kind">
-                <select className="input" value={form.kind} onChange={(e) => {
-                  const k = e.target.value;
+                <Select value={form.kind} onChange={(value) => {
+                  const k = value;
                   setForm({ ...form, kind: k, requiredCount: k === "Special" ? eligibleVoters : Math.ceil(eligibleVoters / 2) });
-                }}>
-                  <option value="Ordinary">Ordinary (majority)</option>
-                  <option value="Special">Special (unanimous, in lieu of meeting)</option>
-                </select>
+                }}
+                  options={[
+                    { value: "Ordinary", label: "Ordinary (majority)" },
+                    { value: "Special", label: "Special (unanimous, in lieu of meeting)" },
+                  ]} />
               </Field>
               <Field label="Required signatures" hint={`Eligible voting members: ${eligibleVoters}`}>
                 <input className="input" type="number" value={form.requiredCount} onChange={(e) => setForm({ ...form, requiredCount: Number(e.target.value) })} />

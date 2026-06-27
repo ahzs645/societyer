@@ -6,6 +6,7 @@ import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Button, Drawer, Field, SettingsShell } from "../components/ui";
+import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { AlertTriangle, Database, Link2, Plus, Sliders, Trash2 } from "lucide-react";
 import { FIELD_TYPES as RECORD_FIELD_TYPES, RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
@@ -299,18 +300,12 @@ export function CustomFieldsPage() {
         {draft && (
           <div>
             <Field label="Category">
-              <select
-                className="input"
+              <Select
                 value={draft.entityType}
                 disabled={Boolean(draft._id)}
-                onChange={(e) => setDraft({ ...draft, entityType: e.target.value })}
-              >
-                {Object.entries(ENTITY_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setDraft({ ...draft, entityType: value })}
+                options={Object.entries(ENTITY_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+              />
             </Field>
             <Field label="Label">
               <input
@@ -332,17 +327,11 @@ export function CustomFieldsPage() {
               </div>
             </Field>
             <Field label="Kind">
-              <select
-                className="input"
+              <Select
                 value={draft.kind}
-                onChange={(e) => setDraft({ ...draft, kind: e.target.value })}
-              >
-                {FIELD_KINDS.map((k) => (
-                  <option key={k.value} value={k.value}>
-                    {k.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setDraft({ ...draft, kind: value })}
+                options={FIELD_KINDS.map((k) => ({ value: k.value, label: k.label }))}
+              />
             </Field>
             <Field label="Description">
               <MarkdownEditor
