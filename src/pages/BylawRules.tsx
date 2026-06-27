@@ -8,7 +8,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { Toggle } from "../components/Controls";
 import { NameAutocomplete } from "../components/NameAutocomplete";
-import { Info, Plus, RefreshCw, Save, Scale, Trash2, X } from "lucide-react";
+import { ChevronDown, Info, Plus, RefreshCw, Save, Scale, Trash2, X } from "lucide-react";
 import { builtInResolutionTypes, RESOLUTION_BASES } from "../lib/motionGovernance";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
@@ -656,65 +656,30 @@ export function BylawRulesPage() {
           </div>
 
           {(form.resolutionTypes ?? []).map((t: any, i: number) => (
-            <div
+            <CustomTypeRow
               key={i}
-              className="bylaw-rules__field-grid"
-              style={{ borderTop: "1px solid var(--border)", paddingTop: 12, marginTop: 12 }}
-            >
-              <Field label="Name">
-                <input
-                  className="input"
-                  value={t.label ?? ""}
-                  placeholder="e.g. Founder consent"
-                  onChange={(e) => updateCustomType(i, { label: e.target.value })}
-                />
-              </Field>
-              <Field label="Requirement base">
-                <Select
-                  value={t.base ?? "votesCast"}
-                  onChange={(value) => updateCustomType(i, { base: value })}
-                  options={RESOLUTION_BASES}
-                />
-              </Field>
-              <Field label="Threshold (%)">
-                <input
-                  className="input"
-                  type="number"
-                  value={t.thresholdPct ?? 50}
-                  onChange={(e) => updateCustomType(i, { thresholdPct: Number(e.target.value) })}
-                />
-              </Field>
-              <Field label="Required approver(s)">
-                <ApproverPicker
-                  value={t.requiredApprovers ?? []}
-                  onChange={(next) => updateCustomType(i, { requiredApprovers: next })}
-                  options={directorNames}
-                />
-              </Field>
-              <Field label="On a tie">
-                <Select
-                  value={t.tieBreak ?? "fails"}
-                  onChange={(value) => updateCustomType(i, { tieBreak: value })}
-                  options={[
-                    { value: "fails", label: "Motion fails" },
-                    { value: "chairCasts", label: "Chair casts deciding vote" },
-                  ]}
-                />
-              </Field>
-              <div className="row" style={{ alignItems: "flex-end" }}>
-                <button
-                  className="btn-action btn-action--danger"
-                  onClick={() => removeCustomType(i)}
-                >
-                  <Trash2 size={12} /> Remove
-                </button>
-              </div>
-            </div>
+              type={t}
+              options={directorNames}
+              defaultExpanded={i >= (rules?.resolutionTypes ?? []).length}
+              onChange={(patch) => updateCustomType(i, patch)}
+              onRemove={() => removeCustomType(i)}
+            />
           ))}
 
-          <div style={{ marginTop: 12 }}>
-            <button className="btn-action" onClick={addCustomType}>
-              <Plus size={12} /> Add resolution type
+          {/* One new type at a time: "Add" is hidden while an unsaved custom
+              type is in progress (form has more custom types than the saved
+              rule set); it returns after Save creates the next version. Save
+              lives here too so the add → save → add loop doesn't require
+              scrolling back up to the page header. */}
+          <div className="row" style={{ marginTop: 12, gap: 8 }}>
+            {(form.resolutionTypes ?? []).length <=
+              (rules?.resolutionTypes ?? []).length && (
+              <button className="btn-action" onClick={addCustomType}>
+                <Plus size={12} /> Add resolution type
+              </button>
+            )}
+            <button className="btn-action btn-action--primary" onClick={save}>
+              <Save size={12} /> Save new version
             </button>
           </div>
         </div>
@@ -729,6 +694,107 @@ function slugifyResolutionType(label: string, index: number): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return slug || `custom-${index + 1}`;
+}
+
+/** A custom resolution type: collapses to a one-line summary (like the
+ *  built-ins) and expands to the edit fields on click. New (unsaved) types start
+ *  expanded so they can be filled in. */
+function CustomTypeRow({
+  type,
+  options,
+  defaultExpanded,
+  onChange,
+  onRemove,
+}: {
+  type: any;
+  options: string[];
+  defaultExpanded: boolean;
+  onChange: (patch: Record<string, unknown>) => void;
+  onRemove: () => void;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const approverCount = (type.requiredApprovers ?? []).length;
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10, marginTop: 10 }}>
+      <div className="row" style={{ justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          aria-expanded={expanded}
+          className="row"
+          style={{
+            gap: 8,
+            alignItems: "center",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            color: "inherit",
+            padding: 0,
+          }}
+        >
+          <ChevronDown
+            size={14}
+            style={{ transform: expanded ? "none" : "rotate(-90deg)", transition: "transform 120ms" }}
+          />
+          <Badge tone="neutral">Custom</Badge>
+          <strong>{String(type.label ?? "").trim() || "Untitled type"}</strong>
+        </button>
+        <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+          ≥ {type.thresholdPct ?? 50}%
+          {approverCount ? ` · ${approverCount} approver${approverCount > 1 ? "s" : ""}` : ""}
+        </span>
+      </div>
+      {expanded && (
+        <div className="bylaw-rules__field-grid" style={{ marginTop: 10 }}>
+          <Field label="Name">
+            <input
+              className="input"
+              value={type.label ?? ""}
+              placeholder="e.g. Founder consent"
+              onChange={(e) => onChange({ label: e.target.value })}
+            />
+          </Field>
+          <Field label="Requirement base">
+            <Select
+              value={type.base ?? "votesCast"}
+              onChange={(value) => onChange({ base: value })}
+              options={RESOLUTION_BASES}
+            />
+          </Field>
+          <Field label="Threshold (%)">
+            <input
+              className="input"
+              type="number"
+              value={type.thresholdPct ?? 50}
+              onChange={(e) => onChange({ thresholdPct: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Required approver(s)">
+            <ApproverPicker
+              value={type.requiredApprovers ?? []}
+              onChange={(next) => onChange({ requiredApprovers: next })}
+              options={options}
+            />
+          </Field>
+          <Field label="On a tie">
+            <Select
+              value={type.tieBreak ?? "fails"}
+              onChange={(value) => onChange({ tieBreak: value })}
+              options={[
+                { value: "fails", label: "Motion fails" },
+                { value: "chairCasts", label: "Chair casts deciding vote" },
+              ]}
+            />
+          </Field>
+          <div className="row" style={{ alignItems: "flex-end" }}>
+            <button className="btn-action btn-action--danger" onClick={onRemove}>
+              <Trash2 size={12} /> Remove
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Multi-value approver entry: chips for chosen names + a director-aware
