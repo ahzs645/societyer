@@ -80,6 +80,92 @@ export const meetingWorkflowTables = {
     .index("by_agenda", ["agendaId"])
     .index("by_meeting", ["targetMeetingId"]),
 
+  // Standalone first-class motion. Replaces the embedded minutes.motions[] blob
+  // and folds in motionBacklog (one unified lifecycle from capture to vote to
+  // archive). Meetings/agendas/minutes reference a motion by id rather than
+  // duplicating its data. See docs/motions-first-class-object-design.md.
+  motions: defineTable({
+    societyId: v.id("societies"),
+
+    // Identity / content
+    title: v.optional(v.string()),
+    text: v.string(),
+    category: v.optional(v.string()), // governance | finance | membership | operations | bylaws | privacy | other
+
+    // Movers — denormalized display name + optional structured refs
+    movedBy: v.optional(v.string()),
+    movedByMemberId: v.optional(v.id("members")),
+    movedByDirectorId: v.optional(v.id("directors")),
+    secondedBy: v.optional(v.string()),
+    secondedByMemberId: v.optional(v.id("members")),
+    secondedByDirectorId: v.optional(v.id("directors")),
+
+    // Classification → references bylawRuleSet.resolutionTypes by id; label is a
+    // denormalized snapshot so a superseded rule set doesn't orphan old motions.
+    resolutionTypeId: v.optional(v.string()),
+    resolutionTypeLabel: v.optional(v.string()),
+
+    // Explicit lifecycle — overridable, never inferred
+    status: v.string(), // Backlog | Draft | Agenda | Moved | Tabled | Deferred | Withdrawn | Voted | Archived
+    outcome: v.optional(v.string()), // Carried | Defeated (meaningful only when status = Voted)
+    statusIsManual: v.optional(v.boolean()),
+
+    // Votes (model A — current/most-recent tally on the motion itself)
+    votesFor: v.optional(v.number()),
+    votesAgainst: v.optional(v.number()),
+    abstentions: v.optional(v.number()),
+
+    // Backlog columns (folded in from motionBacklog — no separate table)
+    backlogPriority: v.optional(v.string()), // high | normal | low
+    source: v.optional(v.string()), // pipa-setup | manual | imported | minutes-motion | minutes-section
+    seededKey: v.optional(v.string()),
+
+    // Placement / provenance (references, not copies)
+    primaryMeetingId: v.optional(v.id("meetings")), // where it was last considered
+    targetMeetingId: v.optional(v.id("meetings")), // where it's planned to go
+    minutesId: v.optional(v.id("minutes")),
+    // Transitional positional link to minutes.sections[] mirrored from the
+    // embedded motion during dual-write. Superseded by an agenda/section motionId
+    // reference once reads are flipped, but kept so section grouping survives.
+    sectionIndex: v.optional(v.number()),
+    sectionTitle: v.optional(v.string()),
+    agendaId: v.optional(v.id("agendas")),
+    agendaItemId: v.optional(v.id("agendaItems")),
+    motionTemplateId: v.optional(v.id("motionTemplates")),
+    sourceMotionEvidenceId: v.optional(v.id("motionEvidence")),
+    sourceMinutesId: v.optional(v.id("minutes")),
+    sourceMotionIndex: v.optional(v.number()),
+    sourceSectionIndex: v.optional(v.number()),
+    sourceDocumentIds: v.optional(v.array(v.id("documents"))),
+    sourceExternalIds: v.optional(v.array(v.string())),
+
+    // History — append-only consideration / status trail (model A's safety net)
+    history: v.optional(
+      v.array(
+        v.object({
+          at: v.string(),
+          meetingId: v.optional(v.id("meetings")),
+          minutesId: v.optional(v.id("minutes")),
+          status: v.string(),
+          outcome: v.optional(v.string()),
+          votesFor: v.optional(v.number()),
+          votesAgainst: v.optional(v.number()),
+          abstentions: v.optional(v.number()),
+          note: v.optional(v.string()),
+        }),
+      ),
+    ),
+
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_society", ["societyId"])
+    .index("by_society_status", ["societyId", "status"]) // drives the backlog list
+    .index("by_society_seeded", ["societyId", "seededKey"]) // idempotent seeding
+    .index("by_minutes", ["minutesId"])
+    .index("by_meeting", ["primaryMeetingId"])
+    .index("by_target_meeting", ["targetMeetingId"]),
+
   minuteBookItems: defineTable({
     societyId: v.id("societies"),
     title: v.string(),

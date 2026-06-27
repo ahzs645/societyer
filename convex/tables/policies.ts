@@ -101,6 +101,24 @@ export const policyTables = {
     ordinaryResolutionThresholdPct: v.number(),
     specialResolutionThresholdPct: v.number(),
     unanimousWrittenSpecialResolution: v.boolean(),
+    // Society-editable resolution-type catalogue. When absent, the three
+    // statutory built-ins (Majority/Special/Unanimous) are derived from the
+    // *ResolutionThresholdPct fields above (see src/lib/motionGovernance.ts).
+    // `base` selects the denominator ("number of total people"). builtIn rows
+    // cannot be deleted.
+    resolutionTypes: v.optional(
+      v.array(
+        v.object({
+          id: v.string(), // 'ordinary' | 'special' | 'unanimous' | custom slug
+          label: v.string(),
+          builtIn: v.optional(v.boolean()),
+          base: v.string(), // votesCast | eligibleMembers | quorum
+          thresholdPct: v.number(),
+          tieBreak: v.optional(v.string()), // fails | chairCasts
+          order: v.optional(v.number()),
+        }),
+      ),
+    ),
     updatedAtISO: v.string(),
   })
     .index("by_society", ["societyId"])

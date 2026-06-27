@@ -7,7 +7,8 @@ import { Badge, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { Toggle } from "../components/Controls";
-import { Info, RefreshCw, Save, Scale } from "lucide-react";
+import { ChevronDown, Info, Plus, RefreshCw, Save, Scale, Trash2 } from "lucide-react";
+import { builtInResolutionTypes, RESOLUTION_BASES } from "../lib/motionGovernance";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { LegalGuideTrackList } from "../components/LegalGuide";
@@ -109,9 +110,38 @@ export function BylawRulesPage() {
       specialResolutionThresholdPct: Number(form.specialResolutionThresholdPct),
       unanimousWrittenSpecialResolution:
         !!form.unanimousWrittenSpecialResolution,
+      // Persist custom resolution types only (built-ins are derived). Drop
+      // blank rows and normalize id/order/defaults.
+      resolutionTypes: (form.resolutionTypes ?? [])
+        .filter((t: any) => String(t?.label ?? "").trim())
+        .map((t: any, i: number) => ({
+          id: slugifyResolutionType(t.label, i),
+          label: String(t.label).trim(),
+          builtIn: false,
+          base: t.base || "votesCast",
+          thresholdPct: Number(t.thresholdPct) || 50,
+          tieBreak: t.tieBreak || "fails",
+          order: i,
+        })),
     });
     setForm(null);
     toast.success("Bylaw rule set saved");
+  };
+
+  const updateCustomType = (index: number, patch: Record<string, unknown>) => {
+    const next = [...(form.resolutionTypes ?? [])];
+    next[index] = { ...next[index], ...patch };
+    setForm({ ...form, resolutionTypes: next });
+  };
+  const removeCustomType = (index: number) => {
+    const next = [...(form.resolutionTypes ?? [])];
+    next.splice(index, 1);
+    setForm({ ...form, resolutionTypes: next });
+  };
+  const addCustomType = () => {
+    const next = [...(form.resolutionTypes ?? [])];
+    next.push({ label: "", base: "votesCast", thresholdPct: 66.67, order: next.length });
+    setForm({ ...form, resolutionTypes: next });
   };
 
   return (
@@ -571,9 +601,176 @@ export function BylawRulesPage() {
           </div>
         </div>
       </div>
+
+      <div className="card bylaw-rules__card" style={{ marginTop: 16 }}>
+        <div className="card__head">
+          <h2 className="card__title">Resolution types</h2>
+          <span className="card__subtitle">
+            How a motion passes. Ordinary, Special, and Unanimous are built in
+            (their thresholds come from the percentages above). Add your own for
+            cases like a required founder consent or a higher bar.
+          </span>
+        </div>
+        <div className="card__body bylaw-rules__body">
+          <div className="col" style={{ gap: 4 }}>
+            {builtInResolutionTypes(form).map((t) => (
+              <div
+                key={t.id}
+                className="row"
+                style={{
+                  justifyContent: "space-between",
+                  gap: 10,
+                  padding: "8px 0",
+                  borderTop: "1px solid var(--border)",
+                }}
+              >
+                <div className="row" style={{ gap: 8 }}>
+                  <Badge tone="info">Built-in</Badge>
+                  <strong>{t.label}</strong>
+                </div>
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  ≥ {t.thresholdPct}% of votes cast
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {(form.resolutionTypes ?? []).map((t: any, i: number) => (
+            <CustomTypeRow
+              key={i}
+              type={t}
+              defaultExpanded={i >= (rules?.resolutionTypes ?? []).length}
+              onChange={(patch) => updateCustomType(i, patch)}
+              onRemove={() => removeCustomType(i)}
+            />
+          ))}
+
+          {/* One new type at a time: "Add" is hidden while an unsaved custom
+              type is in progress (form has more custom types than the saved
+              rule set); it returns after Save creates the next version. Save
+              lives here too so the add → save → add loop doesn't require
+              scrolling back up to the page header. */}
+          <div className="row" style={{ marginTop: 12, gap: 8 }}>
+            {(form.resolutionTypes ?? []).length <=
+              (rules?.resolutionTypes ?? []).length && (
+              <button className="btn-action" onClick={addCustomType}>
+                <Plus size={12} /> Add resolution type
+              </button>
+            )}
+            <button className="btn-action btn-action--primary" onClick={save}>
+              <Save size={12} /> Save new version
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
+
+function slugifyResolutionType(label: string, index: number): string {
+  const slug = String(label ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || `custom-${index + 1}`;
+}
+
+/** A custom resolution type: collapses to a one-line summary (like the
+ *  built-ins) and expands to the edit fields on click. New (unsaved) types start
+ *  expanded so they can be filled in. */
+function CustomTypeRow({
+  type,
+  defaultExpanded,
+  onChange,
+  onRemove,
+}: {
+  type: any;
+  defaultExpanded: boolean;
+  onChange: (patch: Record<string, unknown>) => void;
+  onRemove: () => void;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const baseLabel =
+    type.base === "eligibleMembers"
+      ? "of eligible members"
+      : type.base === "quorum"
+        ? "of the quorum"
+        : "of votes cast";
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10, marginTop: 10 }}>
+      <div className="row" style={{ justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          aria-expanded={expanded}
+          className="row"
+          style={{
+            gap: 8,
+            alignItems: "center",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            color: "inherit",
+            padding: 0,
+          }}
+        >
+          <ChevronDown
+            size={14}
+            style={{ transform: expanded ? "none" : "rotate(-90deg)", transition: "transform 120ms" }}
+          />
+          <Badge tone="neutral">Custom</Badge>
+          <strong>{String(type.label ?? "").trim() || "Untitled type"}</strong>
+        </button>
+        <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+          ≥ {type.thresholdPct ?? 50}% {baseLabel}
+        </span>
+      </div>
+      {expanded && (
+        <div className="bylaw-rules__field-grid" style={{ marginTop: 10 }}>
+          <Field label="Name">
+            <input
+              className="input"
+              value={type.label ?? ""}
+              placeholder="e.g. Founder consent"
+              onChange={(e) => onChange({ label: e.target.value })}
+            />
+          </Field>
+          <Field label="Requirement base">
+            <Select
+              value={type.base ?? "votesCast"}
+              onChange={(value) => onChange({ base: value })}
+              options={RESOLUTION_BASES}
+            />
+          </Field>
+          <Field label="Threshold (%)">
+            <input
+              className="input"
+              type="number"
+              value={type.thresholdPct ?? 50}
+              onChange={(e) => onChange({ thresholdPct: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="On a tie">
+            <Select
+              value={type.tieBreak ?? "fails"}
+              onChange={(value) => onChange({ tieBreak: value })}
+              options={[
+                { value: "fails", label: "Motion fails" },
+                { value: "chairCasts", label: "Chair casts deciding vote" },
+              ]}
+            />
+          </Field>
+          <div className="row" style={{ alignItems: "flex-end" }}>
+            <button className="btn-action btn-action--danger" onClick={onRemove}>
+              <Trash2 size={12} /> Remove
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function toDateInputValue(value: unknown) {
   if (typeof value !== "string" || !value) return "";

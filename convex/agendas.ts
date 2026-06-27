@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { syncMotionsForMinutes } from "./motions";
 
 export const listForMeeting = query({
   args: { meetingId: v.id("meetings") },
@@ -349,6 +350,12 @@ export const startMinutesFromAgenda = mutation({
     await ctx.db.patch(meeting._id, {
       minutesId: id,
     });
+    await syncMotionsForMinutes(ctx, {
+      societyId: meeting.societyId,
+      minutesId: id,
+      meetingId: meeting._id,
+      motions: minutesPayload.motions as any[],
+    });
     return { minutesId: id, reused: false };
   },
 });
@@ -475,9 +482,16 @@ async function syncMeetingAndMinutesFromAgenda(ctx: any, meeting: any, items: an
     const key = normalizeTitle(motion?.text ?? "");
     return !agendaMotionKeys.has(key);
   });
+  const nextMotions = [...mergedAgendaMotions, ...preservedMotions.map(cleanMotion)];
   await ctx.db.patch(minutes._id, {
     sections: nextSections,
-    motions: [...mergedAgendaMotions, ...preservedMotions.map(cleanMotion)],
+    motions: nextMotions,
+  });
+  await syncMotionsForMinutes(ctx, {
+    societyId: minutes.societyId,
+    minutesId: minutes._id,
+    meetingId: meeting._id,
+    motions: nextMotions,
   });
 }
 
