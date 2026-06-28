@@ -907,6 +907,71 @@ export const summary = query({
   },
 });
 
+// Import bank / credit-card statement rows (parsed from CSV client-side) into an
+// existing account. Wave's public API can't return ledger rows, so CSV import is
+// the documented way to get real history in. Deduped per account by externalId
+// (falling back to a deterministic date+amount+index key) so re-importing the
+// same statement doesn't double-post.
+export const importBankCsvTransactions = mutation({
+  args: {
+    societyId: v.id("societies"),
+    accountId: v.id("financialAccounts"),
+    rows: v.array(
+      v.object({
+        date: v.string(),
+        description: v.string(),
+        amountCents: v.number(),
+        externalId: v.optional(v.string()),
+        category: v.optional(v.string()),
+        counterparty: v.optional(v.string()),
+      }),
+    ),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    await requireRole(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Admin" });
+    const account = await ctx.db.get(args.accountId);
+    if (!account || account.societyId !== args.societyId) {
+      throw new Error("Account must belong to this society.");
+    }
+    const existing = await ctx.db
+      .query("financialTransactions")
+      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+      .collect();
+    const seen = new Set(
+      existing.filter((t) => t.accountId === args.accountId).map((t) => t.externalId),
+    );
+
+    let inserted = 0;
+    let skipped = 0;
+    for (let i = 0; i < args.rows.length; i++) {
+      const row = args.rows[i];
+      const externalId =
+        row.externalId?.trim() ||
+        `csv:${String(args.accountId)}:${row.date}:${row.amountCents}:${i}`;
+      if (seen.has(externalId)) {
+        skipped += 1;
+        continue;
+      }
+      await ctx.db.insert("financialTransactions", {
+        societyId: args.societyId,
+        connectionId: account.connectionId,
+        accountId: args.accountId,
+        externalId,
+        date: row.date,
+        description: row.description,
+        amountCents: row.amountCents,
+        category: row.category,
+        counterparty: row.counterparty,
+      });
+      seen.add(externalId);
+      inserted += 1;
+    }
+    return { inserted, skipped, total: args.rows.length };
+  },
+});
+
 function isDemoFinancialConnection(row: any) {
   return (
     row.demo === true ||

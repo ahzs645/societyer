@@ -87,6 +87,7 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "customFields:deleteDefinition",
   "customFields:setValue",
   "documents:archive",
+  "financialHub:importBankCsvTransactions",
   "elections:addQuestion",
   "elections:castBallot",
   "elections:close",
