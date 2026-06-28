@@ -1515,4 +1515,56 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       ],
     },
   },
+  {
+    nameSingular: "writtenResolution",
+    namePlural: "writtenResolutions",
+    labelSingular: "Written resolution",
+    labelPlural: "Written resolutions",
+    icon: "PenLine",
+    iconColor: "purple",
+    routePath: "/app/written-resolutions",
+    labelIdentifierFieldName: "title",
+    fields: [
+      { name: "title", label: "Title", fieldType: FIELD_TYPES.TEXT, icon: "Tag", isSystem: true },
+      {
+        name: "kind",
+        label: "Kind",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Tag",
+        config: {
+          options: [
+            { value: "Ordinary", label: "Ordinary", color: "gray" },
+            { value: "Special", label: "Special", color: "amber" },
+          ],
+        },
+      },
+      { name: "circulatedAtISO", label: "Circulated", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
+      { name: "signatureCount", label: "Signatures", fieldType: FIELD_TYPES.NUMBER, icon: "PenLine", isReadOnly: true },
+      {
+        name: "status",
+        label: "Status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Activity",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "Draft", label: "Draft", color: "gray" },
+            { value: "Circulating", label: "Circulating", color: "amber" },
+            { value: "Carried", label: "Carried", color: "green" },
+            { value: "Failed", label: "Failed", color: "red" },
+          ],
+        },
+      },
+    ],
+    defaultView: {
+      name: "All written resolutions",
+      columns: [
+        { fieldName: "title", size: 280 },
+        { fieldName: "kind", size: 120 },
+        { fieldName: "circulatedAtISO", size: 120 },
+        { fieldName: "signatureCount", size: 160 },
+        { fieldName: "status", size: 130 },
+      ],
+    },
+  },
 ];
