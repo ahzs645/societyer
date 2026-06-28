@@ -1596,4 +1596,58 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       ],
     },
   },
+  {
+    nameSingular: "meeting",
+    namePlural: "meetings",
+    labelSingular: "Meeting",
+    labelPlural: "Meetings",
+    icon: "Calendar",
+    iconColor: "orange",
+    routePath: "/app/meetings",
+    labelIdentifierFieldName: "title",
+    fields: [
+      { name: "title", label: "Title", fieldType: FIELD_TYPES.TEXT, icon: "Calendar", isSystem: true },
+      {
+        name: "type",
+        label: "Type",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Tag",
+        config: {
+          options: [
+            { value: "Board", label: "Board", color: "blue" },
+            { value: "Committee", label: "Committee", color: "teal" },
+            { value: "AGM", label: "AGM", color: "purple" },
+            { value: "SGM", label: "SGM", color: "amber" },
+          ],
+        },
+      },
+      { name: "scheduledAt", label: "When", fieldType: FIELD_TYPES.DATE_TIME, icon: "Clock" },
+      { name: "location", label: "Location", fieldType: FIELD_TYPES.TEXT, icon: "MapPin" },
+      {
+        name: "status",
+        label: "Status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Activity",
+        config: {
+          options: [
+            { value: "Scheduled", label: "Scheduled", color: "blue" },
+            { value: "Held", label: "Held", color: "green" },
+            { value: "Cancelled", label: "Cancelled", color: "gray" },
+          ],
+        },
+      },
+      { name: "minutes", label: "Minutes", fieldType: FIELD_TYPES.TEXT, icon: "FileText", isReadOnly: true },
+    ],
+    defaultView: {
+      name: "All meetings",
+      columns: [
+        { fieldName: "title", size: 240 },
+        { fieldName: "type", size: 120 },
+        { fieldName: "scheduledAt", size: 180 },
+        { fieldName: "location", size: 180 },
+        { fieldName: "status", size: 120 },
+        { fieldName: "minutes", size: 110 },
+      ],
+    },
+  },
 ];
