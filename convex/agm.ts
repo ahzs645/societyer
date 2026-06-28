@@ -92,7 +92,13 @@ export const noticeDeliveries = query({
       .collect(),
 });
 
-/** Bulk-queue notice deliveries for all voting members — demo stub. */
+/** Bulk-create notice delivery records for all voting members.
+ *  There is no email-sending integration wired here, so email notices are
+ *  recorded as "queued" with NO proof-of-notice rather than a fabricated
+ *  "sent" — proof of notice is legally meaningful for an AGM and must reflect
+ *  an actual delivery. Mail / in-person notices are human-actioned (the
+ *  secretary confirmed sending via that channel), so they are recorded as
+ *  delivered with a manual proof string. */
 export const queueNoticeToAllVotingMembers = mutation({
   args: {
     societyId: v.id("societies"),
@@ -107,6 +113,7 @@ export const queueNoticeToAllVotingMembers = mutation({
       .collect();
     const voting = members.filter((m) => m.votingRights && m.status === "Active");
     const now = new Date().toISOString();
+    const isEmail = channel === "email";
     for (const m of voting) {
       await ctx.db.insert("noticeDeliveries", {
         societyId,
@@ -116,13 +123,18 @@ export const queueNoticeToAllVotingMembers = mutation({
         recipientEmail: m.email,
         memberId: m._id,
         channel,
-        provider: channel === "email" ? "demo" : "manual",
+        provider: isEmail ? "pending" : "manual",
         subject: undefined,
         sentAtISO: now,
-        proofOfNotice: channel === "email" ? `demo:queued:${now}` : `${channel}:${now}`,
-        status: "sent",
+        // No fabricated proof for un-dispatched email notices.
+        proofOfNotice: isEmail ? undefined : `manual:${channel}:${now}`,
+        status: isEmail ? "queued" : "sent",
       });
     }
-    return { queued: voting.length };
+    return {
+      queued: isEmail ? voting.length : 0,
+      recorded: isEmail ? 0 : voting.length,
+      channel,
+    };
   },
 });
