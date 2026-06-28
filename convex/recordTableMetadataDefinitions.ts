@@ -1444,4 +1444,33 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       ],
     },
   },
+  {
+    nameSingular: "donationReceipt",
+    namePlural: "donationReceipts",
+    labelSingular: "Donation receipt",
+    labelPlural: "Donation receipts",
+    icon: "Receipt",
+    iconColor: "pink",
+    routePath: "/app/receipts",
+    labelIdentifierFieldName: "donorName",
+    fields: [
+      { name: "receiptNumber", label: "#", fieldType: FIELD_TYPES.TEXT, icon: "Hash", isReadOnly: true },
+      { name: "donorName", label: "Donor", fieldType: FIELD_TYPES.TEXT, icon: "User", isSystem: true },
+      { name: "receivedOnISO", label: "Received", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
+      { name: "amountCents", label: "Amount", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true },
+      { name: "eligibleAmountCents", label: "Eligible", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true },
+      { name: "status", label: "Status", fieldType: FIELD_TYPES.TEXT, icon: "Activity", isReadOnly: true },
+    ],
+    defaultView: {
+      name: "All receipts",
+      columns: [
+        { fieldName: "receiptNumber", size: 100 },
+        { fieldName: "donorName", size: 220 },
+        { fieldName: "receivedOnISO", size: 120 },
+        { fieldName: "amountCents", size: 130 },
+        { fieldName: "eligibleAmountCents", size: 130 },
+        { fieldName: "status", size: 120 },
+      ],
+    },
+  },
 ];

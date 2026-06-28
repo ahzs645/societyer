@@ -4,9 +4,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
-import { Plus, Receipt, Tag, FileDown } from "lucide-react";
+import { Plus, Receipt, FileDown } from "lucide-react";
 import { dollarInputToCents, formatDate, money } from "../lib/format";
 import { exportWordDocx } from "../lib/docx";
 import { escapeHtml } from "../lib/html";
@@ -15,11 +13,17 @@ import { useToast } from "../components/Toast";
 import { StructuredAddressTextFields } from "../components/StructuredAddressFields";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
-
-const FIELDS: FilterField<any>[] = [
-  { id: "nonCash", label: "Type", icon: <Tag size={14} />, options: ["Cash", "Non-cash"], match: (r, q) => (r.isNonCash ? "Non-cash" : "Cash") === q },
-  { id: "voided", label: "Voided", options: ["Yes", "No"], match: (r, q) => (r.voidedAtISO ? "Yes" : "No") === q },
-];
+import { useMemo } from "react";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export function ReceiptsPage() {
   const society = useSociety();
@@ -30,6 +34,19 @@ export function ReceiptsPage() {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "donationReceipt",
+    viewId: currentViewId,
+  });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const records = useMemo(
+    () => (items ?? []).map((r: any) => ({ ...r, status: r.voidedAtISO ? "Voided" : "Issued" })),
+    [items],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -95,49 +112,66 @@ export function ReceiptsPage() {
         }
       />
 
-      <DataTable
-        label="All receipts"
-        icon={<Receipt size={14} />}
-        data={(items ?? []) as any[]}
-        rowKey={(r) => r._id}
-        filterFields={FIELDS}
-        searchPlaceholder="Search donor, receipt #…"
-        defaultSort={{ columnId: "issuedAtISO", dir: "desc" }}
-        columns={[
-          { id: "receiptNumber", header: "#", sortable: true, accessor: (r) => r.receiptNumber, render: (r) => <span className="mono">{r.receiptNumber}</span> },
-          { id: "donorName", header: "Donor", sortable: true, accessor: (r) => r.donorName, render: (r) => <strong>{r.donorName}</strong> },
-          { id: "receivedOnISO", header: "Received", sortable: true, accessor: (r) => r.receivedOnISO, render: (r) => <span className="mono">{formatDate(r.receivedOnISO)}</span> },
-          { id: "amountCents", header: "Amount", sortable: true, align: "right", accessor: (r) => r.amountCents, render: (r) => <span className="mono">{money(r.amountCents)}</span> },
-          { id: "eligibleAmountCents", header: "Eligible", align: "right", accessor: (r) => r.eligibleAmountCents, render: (r) => <span className="mono">{money(r.eligibleAmountCents)}</span> },
-          { id: "status", header: "Status", render: (r) => r.voidedAtISO ? <Badge tone="danger">Voided</Badge> : <Badge tone="success">Issued</Badge> },
-        ]}
-        renderRowActions={(r) => (
-          <>
-            <button className="btn btn--ghost btn--sm" onClick={() => exportReceipt(r)}>
-              <FileDown size={12} /> Export
-            </button>
-            {!r.voidedAtISO && (
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={async () => {
-                  const reason = await prompt({
-                    title: "Void receipt",
-                    message: "A voided receipt stays on file for the CRA audit trail but is marked as not issued.",
-                    placeholder: "Reason (required)",
-                    confirmLabel: "Void receipt",
-                    required: true,
-                  });
-                  if (!reason) return;
-                  await voidR({ id: r._id, reason });
-                  toast.success("Receipt voided");
-                }}
-              >
-                Void
-              </button>
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="donation receipt" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="receipts"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Receipt size={14} />}
+            label="All receipts"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || items === undefined}
+            renderCell={({ record, field }) => {
+              if (field.name === "receiptNumber") return <span className="mono">{record.receiptNumber}</span>;
+              if (field.name === "receivedOnISO") return <span className="mono">{formatDate(record.receivedOnISO)}</span>;
+              if (field.name === "amountCents") return <span className="mono">{money(record.amountCents)}</span>;
+              if (field.name === "eligibleAmountCents") return <span className="mono">{money(record.eligibleAmountCents)}</span>;
+              if (field.name === "status") return record.voidedAtISO ? <Badge tone="danger">Voided</Badge> : <Badge tone="success">Issued</Badge>;
+              return undefined;
+            }}
+            renderRowActions={(r) => (
+              <>
+                <button className="btn btn--ghost btn--sm" onClick={() => exportReceipt(r)}>
+                  <FileDown size={12} /> Export
+                </button>
+                {!r.voidedAtISO && (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      const reason = await prompt({
+                        title: "Void receipt",
+                        message: "A voided receipt stays on file for the CRA audit trail but is marked as not issued.",
+                        placeholder: "Reason (required)",
+                        confirmLabel: "Void receipt",
+                        required: true,
+                      });
+                      if (!reason) return;
+                      await voidR({ id: r._id, reason });
+                      toast.success("Receipt voided");
+                    }}
+                  >
+                    Void
+                  </button>
+                )}
+              </>
             )}
-          </>
-        )}
-      />
+          />
+        </RecordTableScope>
+      ) : null}
 
       <Drawer
         open={open}
