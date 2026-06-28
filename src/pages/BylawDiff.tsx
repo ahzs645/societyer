@@ -7,6 +7,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field, Badge } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { useConfirm, usePrompt, Modal } from "../components/Modal";
+import { parseBylawSections, alignBylawSections } from "../lib/bylawSections";
 import {
   GitCompare,
   FileDown,
@@ -125,6 +126,15 @@ export function BylawDiffPage() {
   );
 
   const chunks = useMemo(() => diff(tokenize(oldText), tokenize(newText)), [oldText, newText]);
+  // Section-aware change summary: align clauses by normalized heading so a
+  // re-ordered or reformatted section doesn't read as a whole-document rewrite.
+  const sectionChanges = useMemo(() => {
+    const pairs = alignBylawSections(parseBylawSections(oldText), parseBylawSections(newText));
+    return pairs.map((p) => {
+      const status = !p.base ? "added" : !p.next ? "removed" : p.base.body === p.next.body ? "unchanged" : "changed";
+      return { heading: (p.next ?? p.base)!.heading || "Preamble", status };
+    });
+  }, [oldText, newText]);
   const stats = useMemo(() => {
     let adds = 0, dels = 0;
     for (const c of chunks) {
@@ -422,6 +432,31 @@ export function BylawDiffPage() {
               )}
             </div>
           </div>
+
+          {sectionChanges.some((s) => s.status !== "unchanged") && (
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">Section changes</h2>
+                <span className="card__subtitle">
+                  {sectionChanges.filter((s) => s.status === "changed").length} changed ·{" "}
+                  {sectionChanges.filter((s) => s.status === "added").length} added ·{" "}
+                  {sectionChanges.filter((s) => s.status === "removed").length} removed
+                </span>
+              </div>
+              <div className="card__body col" style={{ gap: 4 }}>
+                {sectionChanges.map((s, i) => (
+                  <div key={i} className="row" style={{ gap: 8, justifyContent: "space-between", alignItems: "center" }}>
+                    <span className={s.status === "unchanged" ? "muted" : undefined}>{s.heading}</span>
+                    <Badge
+                      tone={s.status === "added" ? "success" : s.status === "removed" ? "danger" : s.status === "changed" ? "warn" : "neutral"}
+                    >
+                      {s.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {selected && (
             <div className="card">

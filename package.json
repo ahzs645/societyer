@@ -116,7 +116,8 @@
     "export:workspace:files": "tsx scripts/export-workspace-with-files.ts",
     "backup:runtime": "./scripts/backup-runtime-data.sh",
     "test:bank-csv": "tsx scripts/check-bank-csv.ts",
-    "test:motion-governance": "tsx scripts/check-motion-governance.ts"
+    "test:motion-governance": "tsx scripts/check-motion-governance.ts",
+    "test:bylaw-sections": "tsx scripts/check-bylaw-sections.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",
