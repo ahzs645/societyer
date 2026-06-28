@@ -44,6 +44,7 @@ export function PeopleDirectoryPage() {
   const upsert = useMutation(api.peopleDirectory.upsert);
   const addToSociety = useMutation(api.peopleDirectory.addToSociety);
   const [addedId, setAddedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -60,6 +61,7 @@ export function PeopleDirectoryPage() {
   };
 
   const openNew = () => {
+    setEditingId(null);
     setForm({
       fullName: "",
       firstName: "",
@@ -73,8 +75,26 @@ export function PeopleDirectoryPage() {
     setOpen(true);
   };
 
+  const openEdit = (person: { id: string; fullName: string; firstName?: string; lastName?: string; dob?: string; isIndividual?: boolean }) => {
+    setEditingId(person.id);
+    setForm({
+      fullName: person.fullName ?? "",
+      firstName: person.firstName ?? "",
+      lastName: person.lastName ?? "",
+      dob: person.dob ?? "",
+      isIndividual: person.isIndividual ?? true,
+      // Only supplied fields are patched server-side, so leaving these blank
+      // never clears the stored values.
+      defaultAddress: "",
+      gender: "",
+      pronouns: "",
+    });
+    setOpen(true);
+  };
+
   const save = async () => {
     await upsert({
+      id: (editingId ?? undefined) as any,
       fullName: form.fullName,
       firstName: form.firstName || undefined,
       lastName: form.lastName || undefined,
@@ -86,6 +106,7 @@ export function PeopleDirectoryPage() {
       nowISO: new Date().toISOString(),
     });
     setOpen(false);
+    setEditingId(null);
   };
 
   return (
@@ -123,10 +144,15 @@ export function PeopleDirectoryPage() {
                   <div
                     key={m.id}
                     className="row"
-                    style={{ gap: 8, justifyContent: "space-between" }}
+                    style={{ gap: 8, justifyContent: "space-between", alignItems: "center" }}
                   >
                     <span>{m.fullName}</span>
-                    {m.dob && <span style={{ opacity: 0.6 }}>{m.dob}</span>}
+                    <span className="row" style={{ gap: 8, alignItems: "center" }}>
+                      {m.dob && <span style={{ opacity: 0.6 }}>{m.dob}</span>}
+                      <button className="btn btn--ghost" onClick={() => openEdit(m)}>
+                        Edit
+                      </button>
+                    </span>
                   </div>
                 ))}
               </div>
@@ -209,7 +235,7 @@ export function PeopleDirectoryPage() {
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
-        title="New person"
+        title={editingId ? "Edit person" : "New person"}
         footer={
           <>
             <button className="btn" onClick={() => setOpen(false)}>

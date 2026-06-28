@@ -72,7 +72,14 @@ export const upsert = mutation({
       searchName,
     };
     if (args.id) {
-      await ctx.db.patch(args.id, { ...fields, updatedAtISO: args.nowISO });
+      // Patch only the fields actually supplied, so an edit from a partial form
+      // (e.g. the directory search row, which has no gender/pronouns) never
+      // clears stored fields it didn't include.
+      const patch: Record<string, any> = { searchName, updatedAtISO: args.nowISO };
+      for (const [key, value] of Object.entries(fields)) {
+        if (value !== undefined) patch[key] = value;
+      }
+      await ctx.db.patch(args.id, patch);
       return args.id;
     }
     return await ctx.db.insert("peopleDirectory", {
