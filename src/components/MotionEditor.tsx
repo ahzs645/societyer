@@ -823,7 +823,23 @@ function MotionRow({
               onChange={(resolutionType) => onPatch({ resolutionType })}
             />
           </Field>
-          <DecidedByPicker motion={motion} onChange={(decidedBy) => onPatch({ decidedBy })} />
+          <DecidedByPicker
+            motion={motion}
+            onChange={(decidedBy) => {
+              // Adoption by general consent / automatic close carries by
+              // definition — flip a not-yet-decided motion to Carried so the
+              // record isn't left as Pending with no tally to explain it.
+              const patch: Partial<Motion> = { decidedBy };
+              if (
+                isDecidedWithoutVote(decidedBy) &&
+                motion.outcome !== "Carried" &&
+                motion.outcome !== "Defeated"
+              ) {
+                patch.outcome = "Carried";
+              }
+              onPatch(patch);
+            }}
+          />
           {agendaSections.length > 0 && (
             <Field label="Agenda item">
               <Select
