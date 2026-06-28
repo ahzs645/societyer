@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { requireRole } from "./users";
 
 export const list = query({
   args: { societyId: v.id("societies") },
@@ -114,11 +115,17 @@ export const merge = mutation({
       votingRights: v.optional(v.boolean()),
       notes: v.optional(v.string()),
     }),
+    actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { keepId, dropIds, patch }) => {
+  handler: async (ctx, { keepId, dropIds, patch, actingUserId }) => {
     const keep = await ctx.db.get(keepId);
     if (!keep) throw new Error("Member to keep not found.");
+
+    // Merge permanently deletes records and rewires foreign keys — gate it on
+    // Director. (Authorization is still client-asserted until server-side
+    // identity lands; this brings members in line with volunteers/grants.)
+    await requireRole(ctx, { actingUserId, societyId: keep.societyId, required: "Director" });
 
     // Scope guard: never merge members across societies.
     const drops: any[] = [];
