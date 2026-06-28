@@ -6,18 +6,21 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
-import { DataTable } from "../components/DataTable";
 import { DatePicker } from "../components/DatePicker";
-import { FilterField } from "../components/FilterBar";
-import { Plus, Eye, Trash2, Tag } from "lucide-react";
+import { Plus, Eye, Trash2 } from "lucide-react";
 import { dollarInputToCents, formatDate, money } from "../lib/format";
 import { MarkdownEditor } from "../components/MarkdownEditor";
-
-const FIELDS: FilterField<any>[] = [
-  { id: "inspector", label: "Inspector", icon: <Tag size={14} />, match: (r, q) => r.inspectorName.toLowerCase().includes(q.toLowerCase()) },
-  { id: "memberStatus", label: "Inspector type", options: ["Member", "Public"], match: (r, q) => (r.isMember ? "Member" : "Public") === q },
-  { id: "method", label: "Delivery", options: ["in-person", "electronic"], match: (r, q) => r.deliveryMethod === q },
-];
+import { useMemo } from "react";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export function InspectionsPage() {
   const society = useSociety();
@@ -28,6 +31,20 @@ export function InspectionsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [params, setParams] = useSearchParams();
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "inspection",
+    viewId: currentViewId,
+  });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const records = useMemo(() => (items ?? []).map((r: any) => ({
+    ...r,
+    inspectorType: r.isMember ? "Member" : "Public",
+    copies: r.copyPages ? `${r.copyPages} pg · ${money(r.copyFeeCents)}` : "—",
+  })), [items]);
 
   const openNew = () => {
     setForm({
@@ -81,31 +98,43 @@ export function InspectionsPage() {
         }
       />
 
-      <DataTable
-        label="All inspections"
-        icon={<Eye size={14} />}
-        data={(items ?? []) as any[]}
-        rowKey={(r) => r._id}
-        filterFields={FIELDS}
-        searchPlaceholder="Search inspector, records…"
-        defaultSort={{ columnId: "inspectedAtISO", dir: "desc" }}
-        viewsKey="inspections"
-        sharedViewsContext={{ societyId: society._id, nameSingular: "inspection" }}
-        columns={[
-          { id: "inspectedAtISO", header: "Date", sortable: true, accessor: (r) => r.inspectedAtISO, render: (r) => <span className="mono">{formatDate(r.inspectedAtISO)}</span> },
-          { id: "inspectorName", header: "Inspector", sortable: true, accessor: (r) => r.inspectorName, render: (r) => <strong>{r.inspectorName}</strong> },
-          { id: "isMember", header: "Type", sortable: true, accessor: (r) => (r.isMember ? 1 : 0), render: (r) => r.isMember ? <Badge tone="info">Member</Badge> : <Badge>Public</Badge> },
-          { id: "records", header: "Records requested", accessor: (r) => r.recordsRequested, render: (r) => <span className="muted">{r.recordsRequested}</span> },
-          { id: "method", header: "Delivery", sortable: true, accessor: (r) => r.deliveryMethod, render: (r) => <span className="cell-tag">{r.deliveryMethod}</span> },
-          { id: "fee", header: "Inspection fee", sortable: true, align: "right", accessor: (r) => r.feeCents ?? 0, render: (r) => <span className="mono">{money(r.feeCents)}</span> },
-          { id: "copies", header: "Copies", align: "right", render: (r) => r.copyPages ? <span className="mono">{r.copyPages} pg · {money(r.copyFeeCents)}</span> : <span className="muted">—</span> },
-        ]}
-        renderRowActions={(r) => (
-          <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete inspection by ${r.inspectorName}`} onClick={() => remove({ id: r._id })}>
-            <Trash2 size={12} />
-          </button>
-        )}
-      />
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="records inspection" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="inspections"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Eye size={14} />}
+            label="All inspections"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || items === undefined}
+            renderCell={({ record, field }) => {
+              if (field.name === "inspectedAtISO") return <span className="mono">{formatDate(record.inspectedAtISO)}</span>;
+              if (field.name === "inspectorType") return record.isMember ? <Badge tone="info">Member</Badge> : <Badge>Public</Badge>;
+              if (field.name === "feeCents") return <span className="mono">{money(record.feeCents)}</span>;
+              return undefined;
+            }}
+            renderRowActions={(r) => (
+              <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete inspection by ${r.inspectorName}`} onClick={() => remove({ id: r._id })}>
+                <Trash2 size={12} />
+              </button>
+            )}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <Drawer
         open={open}

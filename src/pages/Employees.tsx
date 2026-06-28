@@ -7,11 +7,20 @@ import { Badge, Drawer, Field, InspectorNote, RecordChip } from "../components/u
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
-import { Plus, Users, Trash2, Tag } from "lucide-react";
+import { Plus, Users, Trash2 } from "lucide-react";
 import { dollarInputToCents, formatDate, money, initials } from "../lib/format";
 import { StructuredAddressFields } from "../components/StructuredAddressFields";
+import { useMemo } from "react";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
   FullTime: "Full-time",
@@ -20,11 +29,6 @@ const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
   Contractor: "Contractor",
 };
 
-const FIELDS: FilterField<any>[] = [
-  { id: "type", label: "Type", icon: <Tag size={14} />, options: ["FullTime", "PartTime", "Casual", "Contractor"], match: (r, q) => r.employmentType === q },
-  { id: "active", label: "Active", options: ["Yes", "No"], match: (r, q) => (r.endDate ? "No" : "Yes") === q },
-];
-
 export function EmployeesPage() {
   const society = useSociety();
   const items = useQuery(api.employees.list, society ? { societyId: society._id } : "skip");
@@ -32,6 +36,21 @@ export function EmployeesPage() {
   const remove = useMutation(api.employees.remove);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "employee",
+    viewId: currentViewId,
+  });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const records = useMemo(() => (items ?? []).map((e: any) => ({
+    ...e,
+    name: `${e.firstName} ${e.lastName}`,
+    status: e.endDate ? formatDate(e.endDate) : "Active",
+    compensation: e.annualSalaryCents ? money(e.annualSalaryCents) : e.hourlyWageCents ? `${money(e.hourlyWageCents)}/hr` : "—",
+  })), [items]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -73,37 +92,50 @@ export function EmployeesPage() {
         }
       />
 
-      <DataTable
-        label="All employees"
-        icon={<Users size={14} />}
-        data={(items ?? []) as any[]}
-        rowKey={(r) => r._id}
-        filterFields={FIELDS}
-        searchPlaceholder="Search name, role…"
-        defaultSort={{ columnId: "lastName", dir: "asc" }}
-        columns={[
-          {
-            id: "lastName", header: "Name", sortable: true, accessor: (r) => `${r.firstName} ${r.lastName}`,
-            render: (r) => (
-              <RecordChip
-                tone="blue"
-                avatar={initials(r.firstName, r.lastName)}
-                label={`${r.firstName} ${r.lastName}`}
-              />
-            ),
-          },
-          { id: "role", header: "Role", sortable: true, accessor: (r) => r.role, render: (r) => <span className="cell-tag">{r.role}</span> },
-          { id: "employmentType", header: "Type", sortable: true, accessor: (r) => r.employmentType, render: (r) => <Badge>{EMPLOYMENT_TYPE_LABELS[r.employmentType] ?? r.employmentType}</Badge> },
-          { id: "startDate", header: "Start", sortable: true, accessor: (r) => r.startDate, render: (r) => <span className="mono">{formatDate(r.startDate)}</span> },
-          { id: "endDate", header: "Status", sortable: true, accessor: (r) => r.endDate ?? "", render: (r) => r.endDate ? <span className="mono">{formatDate(r.endDate)}</span> : <Badge tone="success">Active</Badge> },
-          { id: "annualSalaryCents", header: "Salary (annual)", sortable: true, align: "right", accessor: (r) => r.annualSalaryCents ?? 0, render: (r) => r.annualSalaryCents ? <span className="mono">{money(r.annualSalaryCents)}</span> : r.hourlyWageCents ? <span className="mono">{money(r.hourlyWageCents)}/hr</span> : <span className="muted">—</span> },
-        ]}
-        renderRowActions={(r) => (
-          <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete employee ${r.name}`} onClick={() => remove({ id: r._id })}>
-            <Trash2 size={12} />
-          </button>
-        )}
-      />
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="employee" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="employees"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Users size={14} />}
+            label="All employees"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || items === undefined}
+            renderCell={({ record, field }) => {
+              if (field.name === "name") {
+                return <RecordChip tone="blue" avatar={initials(record.firstName, record.lastName)} label={record.name} />;
+              }
+              if (field.name === "startDate") return <span className="mono">{formatDate(record.startDate)}</span>;
+              if (field.name === "status") {
+                return record.endDate ? <span className="mono">{formatDate(record.endDate)}</span> : <Badge tone="success">Active</Badge>;
+              }
+              if (field.name === "employmentType") {
+                return <Badge>{EMPLOYMENT_TYPE_LABELS[record.employmentType] ?? record.employmentType}</Badge>;
+              }
+              return undefined;
+            }}
+            renderRowActions={(r) => (
+              <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete employee ${r.name}`} onClick={() => remove({ id: r._id })}>
+                <Trash2 size={12} />
+              </button>
+            )}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <Drawer
         open={open}

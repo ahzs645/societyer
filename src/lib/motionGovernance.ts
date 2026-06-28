@@ -261,3 +261,28 @@ export function isAdjournmentMotion(motion: {
   const text = `${motion.text ?? ""} ${motion.sectionTitle ?? ""} ${motion.resolutionType ?? ""}`.toLowerCase();
   return /\badjourn(?:ment|ed|s)?\b/.test(text);
 }
+
+/** A motion that approves/adopts the previous meeting's minutes — procedural
+ *  bookkeeping that, like adjournment, clutters the master list. */
+export function isPreviousMinutesMotion(motion: {
+  text?: string;
+  sectionTitle?: string;
+}): boolean {
+  const text = `${motion.text ?? ""} ${motion.sectionTitle ?? ""}`.toLowerCase();
+  return /\b(approve|adopt|accept|confirm)\b.*\bminutes\b/.test(text);
+}
+
+/** Routine motions are hidden by the master list's default view (the user can
+ *  switch to "All"). A motion counts as routine if it is an adjournment or a
+ *  previous-minutes motion, or carries an explicit routine label/tag. */
+export const ROUTINE_MOTION_TAGS = ["adjournment", "previous-minutes", "routine"];
+export function isRoutineMotion(motion: {
+  text?: string;
+  sectionTitle?: string;
+  resolutionType?: string;
+  tags?: string[];
+}): boolean {
+  const tags = (motion.tags ?? []).map((t) => String(t).trim().toLowerCase());
+  if (tags.some((t) => ROUTINE_MOTION_TAGS.includes(t))) return true;
+  return isAdjournmentMotion(motion) || isPreviousMinutesMotion(motion);
+}

@@ -5,19 +5,23 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
 import { Progress } from "../components/primitives";
-import { Plus, PenLine, Trash2, Tag } from "lucide-react";
+import { Plus, PenLine, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { usePrompt } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { MarkdownEditor } from "../components/MarkdownEditor";
-
-const FIELDS: FilterField<any>[] = [
-  { id: "kind", label: "Kind", icon: <Tag size={14} />, options: ["Ordinary", "Special"], match: (r, q) => r.kind === q },
-  { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Circulating", "Carried", "Failed", "Draft"], match: (r, q) => r.status === q },
-];
+import { useMemo } from "react";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export function WrittenResolutionsPage() {
   const society = useSociety();
@@ -31,6 +35,19 @@ export function WrittenResolutionsPage() {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "writtenResolution",
+    viewId: currentViewId,
+  });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const records = useMemo(
+    () => (items ?? []).map((r: any) => ({ ...r, signatureCount: r.signatures?.length ?? 0 })),
+    [items],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -65,57 +82,74 @@ export function WrittenResolutionsPage() {
         }
       />
 
-      <DataTable
-        label="All written resolutions"
-        icon={<PenLine size={14} />}
-        data={(items ?? []) as any[]}
-        rowKey={(r) => r._id}
-        filterFields={FIELDS}
-        searchPlaceholder="Search resolutions…"
-        defaultSort={{ columnId: "circulatedAtISO", dir: "desc" }}
-        columns={[
-          { id: "title", header: "Title", sortable: true, accessor: (r) => r.title, render: (r) => <strong>{r.title}</strong> },
-          { id: "kind", header: "Kind", sortable: true, accessor: (r) => r.kind, render: (r) => <Badge tone={r.kind === "Special" ? "warn" : "neutral"}>{r.kind}</Badge> },
-          { id: "circulatedAtISO", header: "Circulated", sortable: true, accessor: (r) => r.circulatedAtISO, render: (r) => <span className="mono">{formatDate(r.circulatedAtISO)}</span> },
-          {
-            id: "signatures", header: "Signatures", sortable: true, accessor: (r) => r.signatures.length,
-            render: (r) => (
-              <div style={{ minWidth: 140 }}>
-                <Progress value={Math.min(100, (r.signatures.length / Math.max(1, r.requiredCount)) * 100)} tone={r.signatures.length >= r.requiredCount ? "success" : undefined} />
-                <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 2 }}>{r.signatures.length} / {r.requiredCount}</div>
-              </div>
-            ),
-          },
-          { id: "status", header: "Status", sortable: true, accessor: (r) => r.status, render: (r) => <Badge tone={r.status === "Carried" ? "success" : r.status === "Failed" ? "danger" : "warn"}>{r.status}</Badge> },
-        ]}
-        renderRowActions={(r) => (
-          <>
-            {r.status === "Circulating" && (
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={async () => {
-                  const name = await prompt({
-                    title: "Sign resolution",
-                    message: "Enter the name of the signer as it will appear on the record.",
-                    placeholder: "Full name",
-                    confirmLabel: "Sign",
-                    required: true,
-                  });
-                  if (!name) return;
-                  await sign({ id: r._id, signerName: name });
-                  toast.success(`Signed by ${name}`);
-                }}
-              >
-                <PenLine size={12} /> Sign
-              </button>
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="written resolution" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="writtenResolutions"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<PenLine size={14} />}
+            label="All written resolutions"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || items === undefined}
+            renderCell={({ record, field }) => {
+              if (field.name === "kind") return <Badge tone={record.kind === "Special" ? "warn" : "neutral"}>{record.kind}</Badge>;
+              if (field.name === "circulatedAtISO") return <span className="mono">{formatDate(record.circulatedAtISO)}</span>;
+              if (field.name === "signatureCount") {
+                const count = record.signatures?.length ?? 0;
+                return (
+                  <div style={{ minWidth: 140 }}>
+                    <Progress value={Math.min(100, (count / Math.max(1, record.requiredCount)) * 100)} tone={count >= record.requiredCount ? "success" : undefined} />
+                    <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 2 }}>{count} / {record.requiredCount}</div>
+                  </div>
+                );
+              }
+              if (field.name === "status") return <Badge tone={record.status === "Carried" ? "success" : record.status === "Failed" ? "danger" : "warn"}>{record.status}</Badge>;
+              return undefined;
+            }}
+            renderRowActions={(r) => (
+              <>
+                {r.status === "Circulating" && (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      const name = await prompt({
+                        title: "Sign resolution",
+                        message: "Enter the name of the signer as it will appear on the record.",
+                        placeholder: "Full name",
+                        confirmLabel: "Sign",
+                        required: true,
+                      });
+                      if (!name) return;
+                      await sign({ id: r._id, signerName: name });
+                      toast.success(`Signed by ${name}`);
+                    }}
+                  >
+                    <PenLine size={12} /> Sign
+                  </button>
+                )}
+                {r.status === "Circulating" && (
+                  <button className="btn btn--ghost btn--sm" onClick={() => markFailed({ id: r._id })}>Mark failed</button>
+                )}
+                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete written resolution ${r.title}`} onClick={() => remove({ id: r._id })}><Trash2 size={12} /></button>
+              </>
             )}
-            {r.status === "Circulating" && (
-              <button className="btn btn--ghost btn--sm" onClick={() => markFailed({ id: r._id })}>Mark failed</button>
-            )}
-            <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete written resolution ${r.title}`} onClick={() => remove({ id: r._id })}><Trash2 size={12} /></button>
-          </>
-        )}
-      />
+          />
+        </RecordTableScope>
+      ) : null}
 
       <Drawer
         open={open}

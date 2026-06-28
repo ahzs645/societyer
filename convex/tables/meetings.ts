@@ -118,7 +118,7 @@ export const meetingTables = {
           discussion: v.optional(v.string()),
           motionText: v.optional(v.string()),
           motionTemplateId: v.optional(v.id("motionTemplates")),
-          motionBacklogId: v.optional(v.id("motionBacklog")),
+          motionId: v.optional(v.id("motions")),
           reportSubmitted: v.optional(v.boolean()),
           decisions: v.optional(v.array(v.string())),
           actionItems: v.optional(
@@ -159,9 +159,36 @@ export const meetingTables = {
         sectionIndex: v.optional(v.number()),
         sectionTitle: v.optional(v.string()),
         motionTemplateId: v.optional(v.id("motionTemplates")),
-        motionBacklogId: v.optional(v.id("motionBacklog")),
+        motionId: v.optional(v.id("motions")),
       }),
     ),
+    // Immutable snapshot of motions[] frozen when the minutes are approved, so
+    // later edits to the (now first-class) motions never rewrite the approved
+    // legal record. See docs/motions-first-class-object-design.md.
+    motionSnapshots: v.optional(
+      v.array(
+        v.object({
+          name: v.optional(v.string()),
+          text: v.string(),
+          movedBy: v.optional(v.string()),
+          movedByMemberId: v.optional(v.id("members")),
+          movedByDirectorId: v.optional(v.id("directors")),
+          secondedBy: v.optional(v.string()),
+          secondedByMemberId: v.optional(v.id("members")),
+          secondedByDirectorId: v.optional(v.id("directors")),
+          outcome: v.string(),
+          votesFor: v.optional(v.number()),
+          votesAgainst: v.optional(v.number()),
+          abstentions: v.optional(v.number()),
+          resolutionType: v.optional(v.string()),
+          sectionIndex: v.optional(v.number()),
+          sectionTitle: v.optional(v.string()),
+          motionTemplateId: v.optional(v.id("motionTemplates")),
+          motionId: v.optional(v.id("motions")),
+        }),
+      ),
+    ),
+    motionSnapshotAtISO: v.optional(v.string()),
     decisions: v.array(v.string()),
     actionItems: v.array(
       v.object({

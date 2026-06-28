@@ -31,7 +31,7 @@ export const meetingWorkflowTables = {
     presenter: v.optional(v.string()),
     timeAllottedMinutes: v.optional(v.number()),
     motionTemplateId: v.optional(v.id("motionTemplates")),
-    motionBacklogId: v.optional(v.id("motionBacklog")),
+    motionId: v.optional(v.id("motions")),
     motionText: v.optional(v.string()),
     outcome: v.optional(v.string()), // Pending | Carried | Defeated | Tabled | Deferred (see src/lib/motionGovernance)
     resolutionId: v.optional(v.id("writtenResolutions")),
@@ -53,32 +53,6 @@ export const meetingWorkflowTables = {
   })
     .index("by_society", ["societyId"])
     .index("by_society_category", ["societyId", "category"]),
-
-  motionBacklog: defineTable({
-    societyId: v.id("societies"),
-    title: v.string(),
-    motionText: v.string(),
-    category: v.string(), // privacy | governance | finance | membership | operations | bylaws | other
-    status: v.string(), // Backlog | Agenda | MinutesDraft | Adopted | Deferred | Archived
-    priority: v.optional(v.string()), // high | normal | low
-    source: v.optional(v.string()), // pipa-setup | manual | imported
-    seededKey: v.optional(v.string()),
-    notes: v.optional(v.string()),
-    targetMeetingId: v.optional(v.id("meetings")),
-    agendaId: v.optional(v.id("agendas")),
-    agendaItemId: v.optional(v.id("agendaItems")),
-    minutesId: v.optional(v.id("minutes")),
-    sourceMinutesId: v.optional(v.id("minutes")),
-    sourceMotionIndex: v.optional(v.number()),
-    sourceSectionIndex: v.optional(v.number()),
-    createdAtISO: v.string(),
-    updatedAtISO: v.string(),
-  })
-    .index("by_society", ["societyId"])
-    .index("by_society_status", ["societyId", "status"])
-    .index("by_society_seeded", ["societyId", "seededKey"])
-    .index("by_agenda", ["agendaId"])
-    .index("by_meeting", ["targetMeetingId"]),
 
   // Standalone first-class motion. Replaces the embedded minutes.motions[] blob
   // and folds in motionBacklog (one unified lifecycle from capture to vote to
@@ -119,6 +93,13 @@ export const meetingWorkflowTables = {
     backlogPriority: v.optional(v.string()), // high | normal | low
     source: v.optional(v.string()), // pipa-setup | manual | imported | minutes-motion | minutes-section
     seededKey: v.optional(v.string()),
+    // Free-form note carried over from the folded-in motionBacklog (threshold,
+    // attachment, or setup hint). Display-only.
+    notes: v.optional(v.string()),
+
+    // Free-form labels for the master list filter (e.g. "adjournment",
+    // "previous-minutes", "finance"). Routine labels are hidden by default.
+    tags: v.optional(v.array(v.string())),
 
     // Placement / provenance (references, not copies)
     primaryMeetingId: v.optional(v.id("meetings")), // where it was last considered

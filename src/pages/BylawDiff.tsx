@@ -7,6 +7,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field, Badge } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { useConfirm, usePrompt, Modal } from "../components/Modal";
+import { parseBylawSections, alignBylawSections } from "../lib/bylawSections";
 import {
   GitCompare,
   FileDown,
@@ -98,6 +99,8 @@ export function BylawDiffPage() {
   const markResolutionPassed = useMutation(api.bylawAmendments.markResolutionPassed);
   const markFiled = useMutation(api.bylawAmendments.markFiled);
   const withdraw = useMutation(api.bylawAmendments.withdraw);
+  const supersede = useMutation(api.bylawAmendments.supersede);
+  const materializeSections = useMutation(api.bylawAmendments.materializeSections);
   const remove = useMutation(api.bylawAmendments.remove);
 
   const [selectedId, setSelectedId] = useState<Id<"bylawAmendments"> | null>(null);
@@ -124,6 +127,19 @@ export function BylawDiffPage() {
   );
 
   const chunks = useMemo(() => diff(tokenize(oldText), tokenize(newText)), [oldText, newText]);
+  // Section-aware change summary: align clauses by normalized heading so a
+  // re-ordered or reformatted section doesn't read as a whole-document rewrite.
+  const storedSections = useQuery(
+    api.bylawAmendments.sectionsForAmendment,
+    selectedId ? { amendmentId: selectedId } : "skip",
+  );
+  const sectionChanges = useMemo(() => {
+    const pairs = alignBylawSections(parseBylawSections(oldText), parseBylawSections(newText));
+    return pairs.map((p) => {
+      const status = !p.base ? "added" : !p.next ? "removed" : p.base.body === p.next.body ? "unchanged" : "changed";
+      return { heading: (p.next ?? p.base)!.heading || "Preamble", status };
+    });
+  }, [oldText, newText]);
   const stats = useMemo(() => {
     let adds = 0, dels = 0;
     for (const c of chunks) {
@@ -312,6 +328,24 @@ export function BylawDiffPage() {
                       <Undo2 size={12} /> Withdraw
                     </button>
                   )}
+                  {status !== "Draft" && status !== "Withdrawn" && status !== "Superseded" && (
+                    <button
+                      className="btn-action"
+                      onClick={async () => {
+                        const reason = await prompt({
+                          title: "Supersede amendment",
+                          message: "Mark this amendment as superseded by a newer version.",
+                          placeholder: "e.g. Replaced by the 2026 revised bylaws",
+                          confirmLabel: "Supersede",
+                        });
+                        if (reason === null) return;
+                        await supersede({ id: selected._id, reason: reason || undefined });
+                        toast.info("Superseded");
+                      }}
+                    >
+                      <Undo2 size={12} /> Supersede
+                    </button>
+                  )}
                   {status === "Draft" && (
                     <button
                       className="btn-action"
@@ -403,6 +437,50 @@ export function BylawDiffPage() {
               )}
             </div>
           </div>
+
+          {sectionChanges.some((s) => s.status !== "unchanged") && (
+            <div className="card">
+              <div className="card__head">
+                <h2 className="card__title">Section changes</h2>
+                <span className="card__subtitle">
+                  {sectionChanges.filter((s) => s.status === "changed").length} changed ·{" "}
+                  {sectionChanges.filter((s) => s.status === "added").length} added ·{" "}
+                  {sectionChanges.filter((s) => s.status === "removed").length} removed
+                  {storedSections ? ` · ${storedSections.length} stored` : ""}
+                </span>
+                {selected && (
+                  <button
+                    className="btn-action"
+                    style={{ marginLeft: "auto" }}
+                    onClick={async () => {
+                      const secs = parseBylawSections(newText).map((s) => ({
+                        heading: s.heading,
+                        key: s.key,
+                        level: s.level,
+                        body: s.body,
+                      }));
+                      const r = await materializeSections({ amendmentId: selected._id, sections: secs });
+                      toast.success(`Saved ${r.stored} section${r.stored === 1 ? "" : "s"} as records`);
+                    }}
+                  >
+                    Save as sections
+                  </button>
+                )}
+              </div>
+              <div className="card__body col" style={{ gap: 4 }}>
+                {sectionChanges.map((s, i) => (
+                  <div key={i} className="row" style={{ gap: 8, justifyContent: "space-between", alignItems: "center" }}>
+                    <span className={s.status === "unchanged" ? "muted" : undefined}>{s.heading}</span>
+                    <Badge
+                      tone={s.status === "added" ? "success" : s.status === "removed" ? "danger" : s.status === "changed" ? "warn" : "neutral"}
+                    >
+                      {s.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {selected && (
             <div className="card">

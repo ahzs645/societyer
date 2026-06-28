@@ -167,7 +167,6 @@ export const EXPORTABLE_TABLES = [
   "agendaItems",
   "meetingTemplates",
   "motionTemplates",
-  "motionBacklog",
   "recordsLocation",
   "sourceEvidence",
   "secretVaultItems",

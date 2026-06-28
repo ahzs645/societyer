@@ -14,6 +14,16 @@ import { useConfirm } from "../components/Modal";
 import { formatDateTime } from "../lib/format";
 import { StructuredAddressTextFields } from "../components/StructuredAddressFields";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 type AudiencePreset =
   | "all_members"
@@ -217,12 +227,55 @@ export function CommunicationsPage() {
   const [segmentDraft, setSegmentDraft] = useState<any | null>(null);
   const [prefDraft, setPrefDraft] = useState<any | null>(null);
   const [sendDraft, setSendDraft] = useState<any | null>(null);
+  const [templatesViewId, setTemplatesViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [templatesFilterOpen, setTemplatesFilterOpen] = useState(false);
+  const [segmentsViewId, setSegmentsViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [segmentsFilterOpen, setSegmentsFilterOpen] = useState(false);
+  const [campaignsViewId, setCampaignsViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [campaignsFilterOpen, setCampaignsFilterOpen] = useState(false);
+  const [deliveriesViewId, setDeliveriesViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [deliveriesFilterOpen, setDeliveriesFilterOpen] = useState(false);
   const committeeDetail = useQuery(
     api.committees.detail,
     society && sendDraft?.audiencePreset === "committee" && sendDraft.audienceTarget
       ? { id: sendDraft.audienceTarget as any }
       : "skip",
   );
+
+  const templatesTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "communicationTemplate", viewId: templatesViewId });
+  const segmentsTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "communicationSegment", viewId: segmentsViewId });
+  const campaignsTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "communicationCampaign", viewId: campaignsViewId });
+  const deliveriesTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "communicationDelivery", viewId: deliveriesViewId });
+
+  const templateRecords = useMemo(() => (templates ?? []) as any[], [templates]);
+  const segmentRecords = useMemo(
+    () =>
+      (segments ?? []).map((row: any) => ({
+        ...row,
+        filters:
+          [
+            row.memberStatus ? `status=${row.memberStatus}` : "",
+            row.membershipClass ? `class=${row.membershipClass}` : "",
+            row.volunteerStatus ? `volunteer=${row.volunteerStatus}` : "",
+            row.votingRightsOnly ? "voting only" : "",
+            row.hasEmail ? "has email" : "",
+            row.hasPhone ? "has phone" : "",
+          ]
+            .filter(Boolean)
+            .join(" · ") || "No extra filters",
+      })),
+    [segments],
+  );
+  const campaignRecords = useMemo(
+    () =>
+      (campaigns ?? []).map((row: any) => ({
+        ...row,
+        counts: `${row.deliveredCount}/${row.memberCount} sent${row.bouncedCount ? ` · ${row.bouncedCount} issues` : ""}`,
+        sentAtISO: row.sentAtISO ?? row.createdAtISO,
+      })),
+    [campaigns],
+  );
+  const deliveryRecords = useMemo(() => (deliveries ?? []) as any[], [deliveries]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -390,149 +443,189 @@ export function CommunicationsPage() {
         <Stat label="Issues" value={String(issueCount + suppressedCount)} tone={issueCount > 0 ? "danger" : "ok"} />
       </div>
 
-      <DataTable
-        label="Templates"
-        icon={<Mail size={14} />}
-        data={(templates ?? []) as any[]}
-        rowKey={(row) => String(row._id)}
-        searchPlaceholder="Search templates…"
-        defaultSort={{ columnId: "name", dir: "asc" }}
-        columns={[
-          { id: "name", header: "Name", sortable: true, accessor: (row) => row.name, render: (row) => <strong>{row.name}</strong> },
-          { id: "kind", header: "Kind", sortable: true, accessor: (row) => row.kind, render: (row) => <Badge>{row.kind}</Badge> },
-          { id: "channel", header: "Channel", sortable: true, accessor: (row) => row.channel, render: (row) => <span className="cell-tag">{row.channel}</span> },
-          { id: "audience", header: "Audience", sortable: true, accessor: (row) => row.audience },
-          { id: "updatedAtISO", header: "Updated", sortable: true, accessor: (row) => row.updatedAtISO, render: (row) => <span className="mono">{formatDateTime(row.updatedAtISO)}</span> },
-        ]}
-        renderRowActions={(row) => (
-          <button className="btn btn--ghost btn--sm" onClick={() => setTemplateDraft({ ...row, id: row._id })}>
-            Edit
-          </button>
-        )}
-      />
+      {!templatesTable.loading && !templatesTable.objectMetadata ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="template" />
+      ) : templatesTable.objectMetadata ? (
+        <RecordTableScope
+          tableId="communicationTemplates"
+          objectMetadata={templatesTable.objectMetadata}
+          hydratedView={templatesTable.hydratedView}
+          records={templateRecords}
+          onRecordClick={(_recordId, record) => setTemplateDraft({ ...record, id: record._id })}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={templatesTable.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Mail size={14} />}
+            label="Templates"
+            views={templatesTable.views}
+            currentViewId={templatesViewId ?? templatesTable.views[0]?._id ?? null}
+            onChangeView={(viewId) => setTemplatesViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setTemplatesFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={templatesFilterOpen} onClose={() => setTemplatesFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={templatesTable.loading || templates === undefined}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "name") return <strong>{row.name}</strong>;
+              if (field.name === "kind") return <Badge>{row.kind}</Badge>;
+              if (field.name === "channel") return <span className="cell-tag">{row.channel}</span>;
+              if (field.name === "audience") return <span>{row.audience}</span>;
+              if (field.name === "updatedAtISO") return <span className="mono">{formatDateTime(row.updatedAtISO)}</span>;
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setTemplateDraft({ ...row, id: row._id }); }}>
+                Edit
+              </button>
+            )}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <div className="spacer-6" />
 
-      <DataTable
-        label="Saved segments"
-        icon={<Mail size={14} />}
-        data={(segments ?? []) as any[]}
-        rowKey={(row) => String(row._id)}
-        searchPlaceholder="Search saved segments…"
-        defaultSort={{ columnId: "name", dir: "asc" }}
-        columns={[
-          { id: "name", header: "Name", sortable: true, accessor: (row) => row.name, render: (row) => <strong>{row.name}</strong> },
-          { id: "includeAudience", header: "Base audience", sortable: true, accessor: (row) => row.includeAudience, render: (row) => <Badge>{row.includeAudience}</Badge> },
-          { id: "filters", header: "Filters", accessor: (row) => `${row.memberStatus ?? ""} ${row.membershipClass ?? ""} ${row.volunteerStatus ?? ""}`, render: (row) => (
-            <span className="muted">
-              {[
-                row.memberStatus ? `status=${row.memberStatus}` : "",
-                row.membershipClass ? `class=${row.membershipClass}` : "",
-                row.volunteerStatus ? `volunteer=${row.volunteerStatus}` : "",
-                row.votingRightsOnly ? "voting only" : "",
-                row.hasEmail ? "has email" : "",
-                row.hasPhone ? "has phone" : "",
-              ].filter(Boolean).join(" · ") || "No extra filters"}
-            </span>
-          ) },
-          { id: "updatedAtISO", header: "Updated", sortable: true, accessor: (row) => row.updatedAtISO, render: (row) => <span className="mono">{formatDateTime(row.updatedAtISO)}</span> },
-        ]}
-        renderRowActions={(row) => (
-          <>
-            <button className="btn btn--ghost btn--sm" onClick={() => setSegmentDraft({ ...row, id: row._id })}>
-              Edit
-            </button>
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={async () => {
-                await removeSegment({ id: row._id });
-                toast.success("Segment removed");
-              }}
-            >
-              Delete
-            </button>
-          </>
-        )}
-      />
+      {!segmentsTable.loading && !segmentsTable.objectMetadata ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="saved segment" />
+      ) : segmentsTable.objectMetadata ? (
+        <RecordTableScope
+          tableId="communicationSegments"
+          objectMetadata={segmentsTable.objectMetadata}
+          hydratedView={segmentsTable.hydratedView}
+          records={segmentRecords}
+          onRecordClick={(_recordId, record) => setSegmentDraft({ ...record, id: record._id })}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={segmentsTable.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Mail size={14} />}
+            label="Saved segments"
+            views={segmentsTable.views}
+            currentViewId={segmentsViewId ?? segmentsTable.views[0]?._id ?? null}
+            onChangeView={(viewId) => setSegmentsViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setSegmentsFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={segmentsFilterOpen} onClose={() => setSegmentsFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={segmentsTable.loading || segments === undefined}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "name") return <strong>{row.name}</strong>;
+              if (field.name === "includeAudience") return <Badge>{row.includeAudience}</Badge>;
+              if (field.name === "filters") return <span className="muted">{row.filters}</span>;
+              if (field.name === "updatedAtISO") return <span className="mono">{formatDateTime(row.updatedAtISO)}</span>;
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <>
+                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setSegmentDraft({ ...row, id: row._id }); }}>
+                  Edit
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await removeSegment({ id: row._id });
+                    toast.success("Segment removed");
+                  }}
+                >
+                  Delete
+                </button>
+              </>
+            )}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <div className="spacer-6" />
 
-      <DataTable
-        label="Campaign history"
-        icon={<Send size={14} />}
-        data={(campaigns ?? []) as any[]}
-        rowKey={(row) => String(row._id)}
-        searchPlaceholder="Search subject or audience…"
-        defaultSort={{ columnId: "createdAtISO", dir: "desc" }}
-        columns={[
-          { id: "subject", header: "Subject", sortable: true, accessor: (row) => row.subject, render: (row) => <strong>{row.subject}</strong> },
-          { id: "audience", header: "Audience", sortable: true, accessor: (row) => row.audience },
-          { id: "channel", header: "Channel", sortable: true, accessor: (row) => row.channel, render: (row) => <Badge>{row.channel}</Badge> },
-          {
-            id: "status",
-            header: "Status",
-            sortable: true,
-            accessor: (row) => row.status,
-            render: (row) => (
-              <Badge tone={row.status === "sent" ? "success" : row.status === "partial" ? "warn" : row.status === "failed" ? "danger" : "info"}>
-                {row.status}
-              </Badge>
-            ),
-          },
-          {
-            id: "counts",
-            header: "Results",
-            accessor: (row) => row.deliveredCount,
-            render: (row) => (
-              <span className="mono">
-                {row.deliveredCount}/{row.memberCount} sent
-                {row.bouncedCount ? ` · ${row.bouncedCount} issues` : ""}
-              </span>
-            ),
-          },
-          { id: "sentAtISO", header: "Sent", sortable: true, accessor: (row) => row.sentAtISO ?? row.createdAtISO, render: (row) => <span className="mono">{formatDateTime(row.sentAtISO ?? row.createdAtISO)}</span> },
-        ]}
-      />
+      {!campaignsTable.loading && !campaignsTable.objectMetadata ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="campaign" />
+      ) : campaignsTable.objectMetadata ? (
+        <RecordTableScope
+          tableId="communicationCampaigns"
+          objectMetadata={campaignsTable.objectMetadata}
+          hydratedView={campaignsTable.hydratedView}
+          records={campaignRecords}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={campaignsTable.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Send size={14} />}
+            label="Campaign history"
+            views={campaignsTable.views}
+            currentViewId={campaignsViewId ?? campaignsTable.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCampaignsViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setCampaignsFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={campaignsFilterOpen} onClose={() => setCampaignsFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={campaignsTable.loading || campaigns === undefined}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "subject") return <strong>{row.subject}</strong>;
+              if (field.name === "audience") return <span>{row.audience}</span>;
+              if (field.name === "channel") return <Badge>{row.channel}</Badge>;
+              if (field.name === "status") return (
+                <Badge tone={row.status === "sent" ? "success" : row.status === "partial" ? "warn" : row.status === "failed" ? "danger" : "info"}>
+                  {row.status}
+                </Badge>
+              );
+              if (field.name === "counts") return <span className="mono">{row.counts}</span>;
+              if (field.name === "sentAtISO") return <span className="mono">{formatDateTime(row.sentAtISO)}</span>;
+              return undefined;
+            }}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <div className="spacer-6" />
 
-      <DataTable
-        label="Delivery log"
-        icon={<Send size={14} />}
-        data={(deliveries ?? []) as any[]}
-        rowKey={(row) => String(row._id)}
-        searchPlaceholder="Search recipient or subject…"
-        defaultSort={{ columnId: "sentAtISO", dir: "desc" }}
-        columns={[
-          {
-            id: "recipientName",
-            header: "Recipient",
-            sortable: true,
-            accessor: (row) => row.recipientName,
-            render: (row) => (
-              <div>
-                <strong>{row.recipientName}</strong>
-                <div className="muted mono" style={{ fontSize: 11 }}>{row.recipientEmail || row.recipientPhone || "No contact data"}</div>
-              </div>
-            ),
-          },
-          { id: "channel", header: "Channel", sortable: true, accessor: (row) => row.channel, render: (row) => <span className="cell-tag">{row.channel}</span> },
-          { id: "provider", header: "Provider", sortable: true, accessor: (row) => row.provider, render: (row) => <span className="cell-tag">{row.provider}</span> },
-          {
-            id: "status",
-            header: "Status",
-            sortable: true,
-            accessor: (row) => row.status,
-            render: (row) => (
-              <Badge tone={row.status === "sent" || row.status === "opened" ? "success" : row.status === "skipped" ? "warn" : row.status === "unsubscribed" ? "info" : "danger"}>
-                {row.status}
-              </Badge>
-            ),
-          },
-          { id: "subject", header: "Subject", sortable: true, accessor: (row) => row.subject, render: (row) => <span>{row.subject || "—"}</span> },
-          { id: "proofOfNotice", header: "Proof", sortable: true, accessor: (row) => row.proofOfNotice, render: (row) => <span className="mono">{row.proofOfNotice || "—"}</span> },
-        ]}
-      />
+      {!deliveriesTable.loading && !deliveriesTable.objectMetadata ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="delivery" />
+      ) : deliveriesTable.objectMetadata ? (
+        <RecordTableScope
+          tableId="communicationDeliveries"
+          objectMetadata={deliveriesTable.objectMetadata}
+          hydratedView={deliveriesTable.hydratedView}
+          records={deliveryRecords}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={deliveriesTable.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Send size={14} />}
+            label="Delivery log"
+            views={deliveriesTable.views}
+            currentViewId={deliveriesViewId ?? deliveriesTable.views[0]?._id ?? null}
+            onChangeView={(viewId) => setDeliveriesViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setDeliveriesFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={deliveriesFilterOpen} onClose={() => setDeliveriesFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={deliveriesTable.loading || deliveries === undefined}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "recipientName") return (
+                <div>
+                  <strong>{row.recipientName}</strong>
+                  <div className="muted mono" style={{ fontSize: 11 }}>{row.recipientEmail || row.recipientPhone || "No contact data"}</div>
+                </div>
+              );
+              if (field.name === "channel") return <span className="cell-tag">{row.channel}</span>;
+              if (field.name === "provider") return <span className="cell-tag">{row.provider}</span>;
+              if (field.name === "status") return (
+                <Badge tone={row.status === "sent" || row.status === "opened" ? "success" : row.status === "skipped" ? "warn" : row.status === "unsubscribed" ? "info" : "danger"}>
+                  {row.status}
+                </Badge>
+              );
+              if (field.name === "subject") return <span>{row.subject || "—"}</span>;
+              if (field.name === "proofOfNotice") return <span className="mono">{row.proofOfNotice || "—"}</span>;
+              return undefined;
+            }}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <div className="spacer-6" />
 

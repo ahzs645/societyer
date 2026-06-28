@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
@@ -33,6 +34,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 
 export function MembersPage() {
   const society = useSociety();
+  const actingUserId = useCurrentUserId() ?? undefined;
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.members.create);
   const update = useMutation(api.members.update).withOptimisticUpdate(
@@ -264,6 +266,7 @@ export function MembersPage() {
             keepId: keepId as any,
             dropIds: dropIds as any,
             patch: merged,
+            actingUserId: actingUserId ?? undefined,
           });
           toast.success(`Merged ${dropIds.length + 1} members`);
           setMergeRows(null);

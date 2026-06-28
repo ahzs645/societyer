@@ -182,6 +182,110 @@ function DateInput({ value, onCommit, onCancel, field }: FieldInputProps) {
   );
 }
 
+/** ARRAY inline editor — comma-separated text in, string[] out. */
+function ArrayInput({ value, onCommit, onCancel, field }: FieldInputProps) {
+  const initial = Array.isArray(value) ? value.join(", ") : value == null ? "" : String(value);
+  const [draft, setDraft] = useState(initial);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+  const commit = () => {
+    const parts = draft.split(",").map((s) => s.trim()).filter(Boolean);
+    onCommit(parts.length === 0 && field.isNullable ? null : parts);
+  };
+  return (
+    <input
+      ref={ref}
+      className="record-cell__input"
+      value={draft}
+      placeholder="comma, separated, values"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+    />
+  );
+}
+
+/** MULTI_SELECT inline editor — a checkbox menu anchored to the cell that
+ *  commits an array of selected option values. */
+function MultiSelectInput({ value, onCommit, onCancel, field }: FieldInputProps) {
+  const config = field.config as SelectFieldConfig;
+  const options = config?.options ?? [];
+  const initial = Array.isArray(value)
+    ? value.map(String)
+    : value == null
+      ? []
+      : [String(value)];
+  const [selected, setSelected] = useState<string[]>(initial);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const cell = anchorRef.current?.closest("[data-record-cell-editor-anchor], td");
+    if (!cell) return;
+    const r = cell.getBoundingClientRect();
+    setRect({ top: r.bottom, left: r.left, width: r.width });
+  }, []);
+
+  const toggle = (v: string) =>
+    setSelected((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]));
+  const commit = () => onCommit(selected.length === 0 && field.isNullable ? null : selected);
+
+  return (
+    <span ref={anchorRef} className="record-cell__select-anchor" style={{ display: "inline-block", minHeight: 20 }}>
+      {rect && (
+        <div
+          className="record-cell__multiselect"
+          style={{
+            position: "fixed",
+            top: rect.top,
+            left: rect.left,
+            minWidth: rect.width,
+            zIndex: 1000,
+            background: "var(--bg)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            padding: 6,
+            boxShadow: "var(--shadow-md)",
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              onCancel();
+            }
+          }}
+        >
+          {options.length === 0 && <div className="muted" style={{ padding: 4 }}>No options configured.</div>}
+          {options.map((o) => (
+            <label key={o.value} className="row" style={{ gap: 6, alignItems: "center", padding: "2px 4px", cursor: "pointer" }}>
+              <input type="checkbox" checked={selected.includes(o.value)} onChange={() => toggle(o.value)} />
+              <span>{o.label}</span>
+            </label>
+          ))}
+          <div className="row" style={{ gap: 6, justifyContent: "flex-end", marginTop: 4 }}>
+            <button className="btn btn--ghost" onMouseDown={(e) => { e.preventDefault(); onCancel(); }}>
+              Cancel
+            </button>
+            <button className="btn btn--accent" onMouseDown={(e) => { e.preventDefault(); commit(); }}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
 function BooleanInput({ value, onCommit }: FieldInputProps) {
   // Boolean "edit" is an immediate toggle — no popover needed.
   const current = value === true || value === "true" || value === 1 || value === "1";
@@ -202,6 +306,8 @@ const INPUT_BY_TYPE: Partial<Record<FieldMetadata["fieldType"], InputComponent>>
   [FIELD_TYPES.CURRENCY]: NumberInput,
   [FIELD_TYPES.RATING]: NumberInput,
   [FIELD_TYPES.SELECT]: SelectInput,
+  [FIELD_TYPES.MULTI_SELECT]: MultiSelectInput,
+  [FIELD_TYPES.ARRAY]: ArrayInput,
   [FIELD_TYPES.DATE]: DateInput,
   [FIELD_TYPES.DATE_TIME]: DateInput,
   [FIELD_TYPES.BOOLEAN]: BooleanInput,
@@ -224,7 +330,7 @@ export function isFieldEditable(field: FieldMetadata): boolean {
   if (field.isReadOnly) return false;
   const input = INPUT_BY_TYPE[field.fieldType];
   if (!input) return false;
-  if (field.fieldType === "SELECT") {
+  if (field.fieldType === "SELECT" || field.fieldType === "MULTI_SELECT") {
     const options = (field.config as SelectFieldConfig)?.options;
     if (!options || options.length === 0) return false;
   }

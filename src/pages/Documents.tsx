@@ -6,12 +6,20 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, Tag, History, BookOpen, ClipboardCheck, MessageSquare } from "lucide-react";
+import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, History, BookOpen, ClipboardCheck, MessageSquare } from "lucide-react";
 import { formatDate, formatDateTime } from "../lib/format";
 import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
@@ -26,14 +34,6 @@ const CAT_LABELS: Record<string, string> = {
   FinancialStatement: "Financial Statement",
   WorkflowGenerated: "Workflow Generated",
 };
-
-const DOC_FIELDS: FilterField<any>[] = [
-  { id: "title", label: "Title", icon: <Tag size={14} />, match: (d, q) => d.title.toLowerCase().includes(q.toLowerCase()) },
-  { id: "category", label: "Category", icon: <Tag size={14} />, options: [...CATS], match: (d, q) => d.category === q },
-  { id: "tag", label: "Tag", icon: <Tag size={14} />, match: (d, q) => d.tags.some((t: string) => t.toLowerCase().includes(q.toLowerCase())) },
-  { id: "flagged", label: "Flagged for deletion", options: ["Yes", "No"], match: (d, q) => (d.flaggedForDeletion ? "Yes" : "No") === q },
-  { id: "hasFile", label: "Attachment", options: ["Uploaded", "Metadata only"], match: (d, q) => ((d.storageId || d.fileName) ? "Uploaded" : "Metadata only") === q },
-];
 
 export function DocumentsPage() {
   const society = useSociety();
@@ -59,7 +59,24 @@ export function DocumentsPage() {
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const nativeStorage = isNativeFileStorageEnabled();
-  const visibleDocs = useMemo(() => (docs ?? []).filter((doc: any) => !isInternalDocumentRecord(doc)), [docs]);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "document",
+    viewId: currentViewId,
+  });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const records = useMemo(
+    () => (docs ?? [])
+      .filter((doc: any) => !isInternalDocumentRecord(doc))
+      .map((doc: any) => ({
+        ...doc,
+        flagged: doc.flaggedForDeletion ? "Purge" : "",
+      })),
+    [docs],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -219,97 +236,92 @@ export function DocumentsPage() {
         </div>
       )}
 
-      <DataTable
-        label="All documents"
-        icon={<FolderOpen size={14} />}
-        data={visibleDocs as any[]}
-        rowKey={(r) => r._id}
-        filterFields={DOC_FIELDS}
-        searchPlaceholder="Search title, tag, file name…"
-        searchExtraFields={[(r) => r.fileName, (r) => r.tags.join(" ")]}
-        defaultSort={{ columnId: "createdAtISO", dir: "desc" }}
-        columns={[
-          {
-            id: "title", header: "Title", sortable: true,
-            accessor: (r) => r.title,
-            render: (r) => (
-              <div>
-                <strong>{r.title}</strong>
-                {r.fileName && <div className="mono muted" style={{ fontSize: 11 }}>{r.fileName}</div>}
-              </div>
-            ),
-          },
-          {
-            id: "category", header: "Category", sortable: true,
-            accessor: (r) => r.category,
-            render: (r) => <Badge tone={catTone(r.category)}>{CAT_LABELS[r.category] ?? r.category}</Badge>,
-          },
-          {
-            id: "createdAtISO", header: "Created", sortable: true,
-            accessor: (r) => r.createdAtISO,
-            render: (r) => <span className="mono">{formatDate(r.createdAtISO)}</span>,
-          },
-          {
-            id: "retentionYears", header: "Retention", sortable: true,
-            accessor: (r) => r.retentionYears ?? 0,
-            render: (r) => <span className="muted">{r.retentionYears ? `${r.retentionYears}y` : "—"}</span>,
-          },
-          {
-            id: "tags", header: "Tags",
-            render: (r) => (
-              <div className="tag-list">
-                {uniqueTags(r.tags).map((t: string) => <Badge key={t}>{t}</Badge>)}
-              </div>
-            ),
-          },
-          {
-            id: "flagged", header: "Flags",
-            render: (r) => r.flaggedForDeletion ? <Badge tone="danger"><FlagIcon size={11} /> Purge</Badge> : null,
-          },
-        ]}
-        renderRowActions={(r) => (
-          <>
-            {(r.storageId || r.fileName) && (
-              <CurrentDocumentDownload documentId={r._id} legacyStorageId={r.storageId} />
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="document" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="documents"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<FolderOpen size={14} />}
+            label="All documents"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || docs === undefined}
+            renderCell={({ record: r, field }) => {
+              if (field.name === "title") return (
+                <div>
+                  <strong>{r.title}</strong>
+                  {r.fileName && <div className="mono muted" style={{ fontSize: 11 }}>{r.fileName}</div>}
+                </div>
+              );
+              if (field.name === "category") return <Badge tone={catTone(r.category)}>{CAT_LABELS[r.category] ?? r.category}</Badge>;
+              if (field.name === "createdAtISO") return <span className="mono">{formatDate(r.createdAtISO)}</span>;
+              if (field.name === "retentionYears") return <span className="muted">{r.retentionYears ? `${r.retentionYears}y` : "—"}</span>;
+              if (field.name === "tags") return (
+                <div className="tag-list">
+                  {uniqueTags(r.tags).map((t: string) => <Badge key={t}>{t}</Badge>)}
+                </div>
+              );
+              if (field.name === "flagged") return r.flaggedForDeletion ? <Badge tone="danger"><FlagIcon size={11} /> Purge</Badge> : null;
+              return undefined;
+            }}
+            renderRowActions={(r) => (
+              <>
+                {(r.storageId || r.fileName) && (
+                  <CurrentDocumentDownload documentId={r._id} legacyStorageId={r.storageId} />
+                )}
+                <Link className="btn btn--ghost btn--sm" to={`/app/documents/${r._id}`}>
+                  <ClipboardCheck size={12} /> Review
+                </Link>
+                <PaperlessDocumentAction
+                  societyId={society._id}
+                  documentId={r._id}
+                  disabled={!r.storageId && !r.fileName}
+                />
+                <button
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => setVersionsFor({ id: r._id, title: r.title })}
+                  title="Version history"
+                >
+                  <History size={12} /> Versions
+                </button>
+                <button className="btn btn--ghost btn--sm" onClick={() => flag({ id: r._id, flagged: !r.flaggedForDeletion })}>
+                  {r.flaggedForDeletion ? "Unflag" : "Flag"}
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Delete ${r.title}`}
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: "Delete document?",
+                      message: `"${r.title}" will be permanently removed${(r.storageId || r.fileName) ? ", including its attached file metadata" : ""}.`,
+                      confirmLabel: "Delete",
+                      tone: "danger",
+                    });
+                    if (!ok) return;
+                    await remove({ id: r._id });
+                    toast.success("Document deleted");
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
             )}
-            <Link className="btn btn--ghost btn--sm" to={`/app/documents/${r._id}`}>
-              <ClipboardCheck size={12} /> Review
-            </Link>
-            <PaperlessDocumentAction
-              societyId={society._id}
-              documentId={r._id}
-              disabled={!r.storageId && !r.fileName}
-            />
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={() => setVersionsFor({ id: r._id, title: r.title })}
-              title="Version history"
-            >
-              <History size={12} /> Versions
-            </button>
-            <button className="btn btn--ghost btn--sm" onClick={() => flag({ id: r._id, flagged: !r.flaggedForDeletion })}>
-              {r.flaggedForDeletion ? "Unflag" : "Flag"}
-            </button>
-            <button
-              className="btn btn--ghost btn--sm btn--icon"
-              aria-label={`Delete ${r.title}`}
-              onClick={async () => {
-                const ok = await confirm({
-                  title: "Delete document?",
-                  message: `"${r.title}" will be permanently removed${(r.storageId || r.fileName) ? ", including its attached file metadata" : ""}.`,
-                  confirmLabel: "Delete",
-                  tone: "danger",
-                });
-                if (!ok) return;
-                await remove({ id: r._id });
-                toast.success("Document deleted");
-              }}
-            >
-              <Trash2 size={12} />
-            </button>
-          </>
-        )}
-      />
+          />
+        </RecordTableScope>
+      ) : null}
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title="Add document"

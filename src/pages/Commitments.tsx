@@ -6,10 +6,18 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
-import { DataTable } from "../components/DataTable";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
-import { FilterField } from "../components/FilterBar";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import {
@@ -31,18 +39,6 @@ const CADENCES = ["Once", "Monthly", "Quarterly", "Annual", "Every 2 years", "Cu
 const STATUSES = ["Active", "Watching", "Paused", "Closed"] as const;
 const REVIEW_STATUSES = ["NeedsReview", "Verified", "Rejected"] as const;
 const EVIDENCE_STATUSES = ["NeedsReview", "Verified", "Rejected"] as const;
-
-const COMMITMENT_FIELDS: FilterField<any>[] = [
-  { id: "title", label: "Title", icon: <ClipboardList size={14} />, match: (c, q) => c.title.toLowerCase().includes(q.toLowerCase()) },
-  { id: "category", label: "Category", icon: <FileText size={14} />, options: [...CATEGORIES], match: (c, q) => c.category === q },
-  { id: "cadence", label: "Cadence", icon: <CalendarClock size={14} />, options: [...CADENCES], match: (c, q) => c.cadence === q },
-  { id: "status", label: "Status", icon: <CheckCircle2 size={14} />, options: [...STATUSES], match: (c, q) => c.status === q },
-  { id: "reviewStatus", label: "Review", icon: <AlertTriangle size={14} />, options: [...REVIEW_STATUSES], match: (c, q) => (c.reviewStatus ?? "NeedsReview") === q },
-  { id: "overdue", label: "Overdue", icon: <CalendarClock size={14} />, options: ["Yes", "No"], match: (c, q) => {
-    const overdue = c.status !== "Closed" && c.status !== "Paused" && c.nextDueDate && new Date(c.nextDueDate).getTime() < Date.now();
-    return q === (overdue ? "Yes" : "No");
-  } },
-];
 
 type CommitmentForm = {
   _id?: string;
@@ -94,6 +90,22 @@ export function CommitmentsPage() {
   const toast = useToast();
   const [form, setForm] = useState<CommitmentForm | null>(null);
   const [eventForm, setEventForm] = useState<EventForm | null>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "commitment",
+    viewId: currentViewId,
+  });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const records = useMemo(
+    () => (commitments ?? []).map((row: any) => ({
+      ...row,
+      source: row.counterparty ?? row.sourceLabel ?? "",
+    })),
+    [commitments],
+  );
 
   const documentsById = useMemo<Map<string, any>>(() => new Map((documents ?? []).map((doc: any) => [String(doc._id), doc])), [documents]);
   const meetingsById = useMemo<Map<string, any>>(() => new Map((meetings ?? []).map((meeting: any) => [String(meeting._id), meeting])), [meetings]);
@@ -299,189 +311,142 @@ export function CommitmentsPage() {
         />
       )}
 
-      <DataTable
-        label="All commitments"
-        icon={<ClipboardList size={14} />}
-        data={rows}
-        loading={commitments === undefined}
-        rowKey={(row) => String(row._id)}
-        filterFields={COMMITMENT_FIELDS}
-        searchPlaceholder="Search requirement, source, counterparty..."
-        searchExtraFields={[
-          (row) => row.requirement,
-          (row) => row.sourceExcerpt,
-          (row) => row.counterparty,
-          (row) => row.sourceLabel,
-          (row) => row.dueDateBasis,
-          (row) => row.uncertaintyNote,
-          (row) => documentsById.get(String(row.sourceDocumentId))?.title,
-        ]}
-        defaultSort={{ columnId: "nextDueDate", dir: "asc" }}
-        onRowClick={openEdit}
-        rowActionLabel={(row) => `Edit ${row.title}`}
-        viewsKey="commitments"
-        sharedViewsContext={{ societyId: society._id, nameSingular: "commitment" }}
-        columns={[
-          {
-            id: "title",
-            header: "Requirement",
-            sortable: true,
-            accessor: (row) => row.title,
-            render: (row) => (
-              <div>
-                <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                  <strong>{row.title}</strong>
-                  <Badge tone={reviewStatusTone(row.reviewStatus)}>{reviewStatusLabel(row.reviewStatus)}</Badge>
-                  {typeof row.confidence === "number" && <Badge tone="neutral">{formatConfidence(row.confidence)}</Badge>}
-                </div>
-                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.requirement}</div>
-                {row.sourceExcerpt && (
-                  <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>
-                    "{truncate(row.sourceExcerpt, 120)}"
-                  </div>
-                )}
-                {row.sourceDocumentId && (
-                  <div className="row" style={{ gap: 6, marginTop: 4 }}>
-                    <LinkIcon size={12} />
-                    <Link
-                      to={`/app/documents/${row.sourceDocumentId}`}
-                      className="muted"
-                      style={{ fontSize: "var(--fs-sm)" }}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      {documentsById.get(String(row.sourceDocumentId))?.title ?? "Source document"}
-                    </Link>
-                  </div>
-                )}
-              </div>
-            ),
-          },
-          {
-            id: "category",
-            header: "Category",
-            sortable: true,
-            accessor: (row) => row.category,
-            render: (row) => <Badge tone={categoryTone(row.category)}>{row.category}</Badge>,
-          },
-          {
-            id: "counterparty",
-            header: "Source",
-            sortable: true,
-            accessor: (row) => row.counterparty ?? row.sourceLabel ?? "",
-            render: (row) => (
-              <div>
-                {row.counterparty && <div>{row.counterparty}</div>}
-                {row.sourceLabel && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.sourceLabel}</div>}
-                {row.dueDateBasis && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{row.dueDateBasis}</div>}
-                {!row.counterparty && !row.sourceLabel && <span className="muted">No source label</span>}
-              </div>
-            ),
-          },
-          {
-            id: "review",
-            header: "Review",
-            sortable: true,
-            accessor: (row) => row.reviewStatus ?? "NeedsReview",
-            render: (row) => (
-              <div>
-                <Badge tone={reviewStatusTone(row.reviewStatus)}>{reviewStatusLabel(row.reviewStatus)}</Badge>
-                {typeof row.confidence === "number" && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{formatConfidence(row.confidence)}</div>}
-                {row.uncertaintyNote && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{truncate(row.uncertaintyNote, 90)}</div>}
-              </div>
-            ),
-          },
-          {
-            id: "cadence",
-            header: "Cadence",
-            sortable: true,
-            accessor: (row) => row.cadence,
-            render: (row) => <span className="muted">{row.cadence}</span>,
-          },
-          {
-            id: "nextDueDate",
-            header: "Next due",
-            sortable: true,
-            accessor: (row) => row.nextDueDate ?? "",
-            render: (row) => <DueBadge row={row} />,
-          },
-          {
-            id: "lastCompletedAtISO",
-            header: "Last done",
-            sortable: true,
-            accessor: (row) => row.lastCompletedAtISO ?? "",
-            render: (row) => {
-              const latestEvent = eventsByCommitment.get(String(row._id))?.[0];
-              return (
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="commitment" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="commitments"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onRecordClick={(_recordId, record) => openEdit(record)}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<ClipboardList size={14} />}
+            label="All commitments"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || commitments === undefined}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "title") return (
                 <div>
-                  <span className="mono">{formatDate(row.lastCompletedAtISO)}</span>
-                  {latestEvent?.evidenceStatus && (
-                    <div style={{ marginTop: 4 }}>
-                      <Badge tone={evidenceStatusTone(latestEvent.evidenceStatus)}>{reviewStatusLabel(latestEvent.evidenceStatus)}</Badge>
+                  <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                    <strong>{row.title}</strong>
+                    <Badge tone={reviewStatusTone(row.reviewStatus)}>{reviewStatusLabel(row.reviewStatus)}</Badge>
+                    {typeof row.confidence === "number" && <Badge tone="neutral">{formatConfidence(row.confidence)}</Badge>}
+                  </div>
+                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.requirement}</div>
+                  {row.sourceExcerpt && (
+                    <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>
+                      "{truncate(row.sourceExcerpt, 120)}"
                     </div>
                   )}
-                  {row.lastCompletionSummary && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.lastCompletionSummary}</div>}
+                  {row.sourceDocumentId && (
+                    <div className="row" style={{ gap: 6, marginTop: 4 }}>
+                      <LinkIcon size={12} />
+                      <Link
+                        to={`/app/documents/${row.sourceDocumentId}`}
+                        className="muted"
+                        style={{ fontSize: "var(--fs-sm)" }}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {documentsById.get(String(row.sourceDocumentId))?.title ?? "Source document"}
+                      </Link>
+                    </div>
+                  )}
                 </div>
               );
-            },
-          },
-          {
-            id: "tasks",
-            header: "Tasks",
-            accessor: (row) => openTasksByCommitment.get(String(row._id))?.length ?? 0,
-            render: (row) => {
-              const openTasks = openTasksByCommitment.get(String(row._id)) ?? [];
-              if (openTasks.length === 0) return <span className="muted">No open task</span>;
-              return (
-                <div className="tag-list">
-                  {openTasks.slice(0, 2).map((task) => (
-                    <Link key={task._id} className="badge badge--info" to="/app/tasks" onClick={(event) => event.stopPropagation()}>
-                      {task.title}
-                    </Link>
-                  ))}
-                  {openTasks.length > 2 && <Badge tone="neutral">+{openTasks.length - 2}</Badge>}
+              if (field.name === "category") return <Badge tone={categoryTone(row.category)}>{row.category}</Badge>;
+              if (field.name === "source") return (
+                <div>
+                  {row.counterparty && <div>{row.counterparty}</div>}
+                  {row.sourceLabel && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.sourceLabel}</div>}
+                  {row.dueDateBasis && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{row.dueDateBasis}</div>}
+                  {!row.counterparty && !row.sourceLabel && <span className="muted">No source label</span>}
                 </div>
               );
-            },
-          },
-          {
-            id: "status",
-            header: "Status",
-            sortable: true,
-            accessor: (row) => row.status,
-            render: (row) => <Badge tone={statusTone(row.status)}>{row.status}</Badge>,
-          },
-        ]}
-        renderRowActions={(row) => (
-          <>
-            <button className="btn btn--ghost btn--sm" onClick={() => openRecord(row)}>
-              <CheckCircle2 size={12} /> Record
-            </button>
-            <button className="btn btn--ghost btn--sm" onClick={() => createPreparationTask(row)}>
-              <ListTodo size={12} /> Task
-            </button>
-            <button className="btn btn--ghost btn--sm" onClick={() => openEdit(row)}>
-              Edit
-            </button>
-            <button
-              className="btn btn--ghost btn--sm btn--icon"
-              aria-label={`Delete commitment ${row.title}`}
-              onClick={async () => {
-                const ok = await confirm({
-                  title: "Delete commitment?",
-                  message: `"${row.title}" and ${eventsByCommitment.get(String(row._id))?.length ?? 0} completion record(s) will be removed.`,
-                  confirmLabel: "Delete",
-                  tone: "danger",
-                });
-                if (!ok) return;
-                await remove({ id: row._id });
-                toast.success("Commitment deleted");
-              }}
-            >
-              <Trash2 size={12} />
-            </button>
-          </>
-        )}
-      />
+              if (field.name === "reviewStatus") return (
+                <div>
+                  <Badge tone={reviewStatusTone(row.reviewStatus)}>{reviewStatusLabel(row.reviewStatus)}</Badge>
+                  {typeof row.confidence === "number" && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{formatConfidence(row.confidence)}</div>}
+                  {row.uncertaintyNote && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{truncate(row.uncertaintyNote, 90)}</div>}
+                </div>
+              );
+              if (field.name === "cadence") return <span className="muted">{row.cadence}</span>;
+              if (field.name === "nextDueDate") return <DueBadge row={row} />;
+              if (field.name === "lastCompletedAtISO") {
+                const latestEvent = eventsByCommitment.get(String(row._id))?.[0];
+                return (
+                  <div>
+                    <span className="mono">{formatDate(row.lastCompletedAtISO)}</span>
+                    {latestEvent?.evidenceStatus && (
+                      <div style={{ marginTop: 4 }}>
+                        <Badge tone={evidenceStatusTone(latestEvent.evidenceStatus)}>{reviewStatusLabel(latestEvent.evidenceStatus)}</Badge>
+                      </div>
+                    )}
+                    {row.lastCompletionSummary && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{row.lastCompletionSummary}</div>}
+                  </div>
+                );
+              }
+              if (field.name === "tasks") {
+                const openTasks = openTasksByCommitment.get(String(row._id)) ?? [];
+                if (openTasks.length === 0) return <span className="muted">No open task</span>;
+                return (
+                  <div className="tag-list">
+                    {openTasks.slice(0, 2).map((task) => (
+                      <Link key={task._id} className="badge badge--info" to="/app/tasks" onClick={(event) => event.stopPropagation()}>
+                        {task.title}
+                      </Link>
+                    ))}
+                    {openTasks.length > 2 && <Badge tone="neutral">+{openTasks.length - 2}</Badge>}
+                  </div>
+                );
+              }
+              if (field.name === "status") return <Badge tone={statusTone(row.status)}>{row.status}</Badge>;
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <>
+                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openRecord(row); }}>
+                  <CheckCircle2 size={12} /> Record
+                </button>
+                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); createPreparationTask(row); }}>
+                  <ListTodo size={12} /> Task
+                </button>
+                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>
+                  Edit
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Delete commitment ${row.title}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const ok = await confirm({
+                      title: "Delete commitment?",
+                      message: `"${row.title}" and ${eventsByCommitment.get(String(row._id))?.length ?? 0} completion record(s) will be removed.`,
+                      confirmLabel: "Delete",
+                      tone: "danger",
+                    });
+                    if (!ok) return;
+                    await remove({ id: row._id });
+                    toast.success("Commitment deleted");
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <div className="card" style={{ marginTop: 16 }}>
         <div className="card__head">

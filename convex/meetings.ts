@@ -212,6 +212,133 @@ export const create = mutation({
   },
 });
 
+// Apply (or re-apply) a meeting template's agenda + minutes scaffolding onto an
+// EXISTING meeting. create() only materializes a template at creation time, so a
+// meeting made without one — or one that needs a different template — could
+// never get the standardized agenda/section scaffolding. Safe by default:
+// refuses to overwrite existing agenda items unless `replace` is set, and only
+// fills minutes sections/motions when they are still empty (never clobbers
+// recorded minutes) unless `replace` is set.
+export const applyTemplate = mutation({
+  args: {
+    meetingId: v.id("meetings"),
+    meetingTemplateId: v.id("meetingTemplates"),
+    replace: v.optional(v.boolean()),
+  },
+  returns: v.any(),
+  handler: async (ctx, { meetingId, meetingTemplateId, replace }) => {
+    const meeting = await ctx.db.get(meetingId);
+    if (!meeting) throw new Error("Meeting not found.");
+    const template = await ctx.db.get(meetingTemplateId);
+    if (!template) throw new Error("Meeting template not found.");
+    if (template.societyId !== meeting.societyId) {
+      throw new Error("Meeting template belongs to a different society.");
+    }
+
+    const templateItems = normalizeTemplateItems(template.items);
+    if (templateItems.length === 0) {
+      throw new Error("This template has no agenda items to apply.");
+    }
+    const templateContext = await buildTemplateContext(ctx, meeting.societyId, meeting.scheduledAt);
+    const templateMotions = await buildTemplateMotions(ctx, templateItems, templateContext);
+    const now = new Date().toISOString();
+
+    // Resolve (or create) the meeting's agenda.
+    const agendas = await ctx.db
+      .query("agendas")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
+      .collect();
+    agendas.sort((a, b) => String(a.createdAtISO).localeCompare(String(b.createdAtISO)));
+    let agendaId = agendas[0]?._id;
+    if (!agendaId) {
+      agendaId = await ctx.db.insert("agendas", {
+        societyId: meeting.societyId,
+        meetingId,
+        title: `${meeting.title} agenda`,
+        status: "Draft",
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    }
+
+    // Guard existing agenda items.
+    const existingItems = await ctx.db
+      .query("agendaItems")
+      .withIndex("by_agenda", (q) => q.eq("agendaId", agendaId))
+      .collect();
+    if (existingItems.length > 0) {
+      if (!replace) {
+        throw new Error(
+          "This meeting already has agenda items. Re-apply with replace to overwrite them.",
+        );
+      }
+      for (const it of existingItems) await ctx.db.delete(it._id);
+    }
+
+    const resolvedItems = templateItems.map((item) => ({
+      title: resolveTemplateText(item.title, templateContext),
+      depth: item.depth,
+      type: item.sectionType ?? inferAgendaSectionType(item.title),
+      details: item.details ? resolveTemplateText(item.details, templateContext) : undefined,
+      presenter: item.presenter || undefined,
+      motionTemplateId: item.motionTemplateId,
+      motionText: item.motionText ? resolveTemplateText(item.motionText, templateContext) : undefined,
+    }));
+    for (let order = 0; order < resolvedItems.length; order++) {
+      const item = resolvedItems[order];
+      await ctx.db.insert("agendaItems", {
+        societyId: meeting.societyId,
+        agendaId,
+        order,
+        type: item.type,
+        title: item.title,
+        depth: item.depth,
+        details: item.details,
+        presenter: item.presenter,
+        motionTemplateId: item.motionTemplateId,
+        motionText: item.motionText,
+        createdAtISO: now,
+      });
+    }
+
+    // Scaffold minutes sections/motions, but never clobber recorded minutes
+    // unless the caller explicitly asked to replace.
+    let minutesScaffolded = false;
+    if (meeting.minutesId) {
+      const minutes = await ctx.db.get(meeting.minutesId);
+      const hasSections = Array.isArray(minutes?.sections) && minutes.sections.length > 0;
+      const hasMotions = Array.isArray(minutes?.motions) && minutes.motions.length > 0;
+      if (minutes && (replace || (!hasSections && !hasMotions))) {
+        await ctx.db.patch(meeting.minutesId, {
+          sections: templateItems.map((item) => ({
+            title: resolveTemplateText(item.title, templateContext),
+            type: item.sectionType ?? inferAgendaSectionType(item.title),
+            presenter: item.presenter || undefined,
+            discussion: item.details ? resolveTemplateText(item.details, templateContext) : "",
+            decisions: [],
+            actionItems: [],
+            depth: item.depth,
+          })),
+          motions: templateMotions,
+        });
+        minutesScaffolded = true;
+      }
+    }
+
+    const templateSnapshotJson = JSON.stringify({
+      templateId: template._id,
+      name: template.name,
+      description: template.description,
+      meetingType: template.meetingType,
+      items: templateItems,
+      capturedAtISO: now,
+    });
+    await ctx.db.patch(meetingId, { meetingTemplateId, templateSnapshotJson });
+
+    return { agendaId, items: resolvedItems.length, minutesScaffolded };
+  },
+});
+
 export const update = mutation({
   args: {
     id: v.id("meetings"),

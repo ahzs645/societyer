@@ -4,18 +4,21 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
-import { Plus, Vote, Trash2, Tag } from "lucide-react";
+import { Plus, Vote, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
-
-const FIELDS: FilterField<any>[] = [
-  { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Submitted", "MeetsThreshold", "Rejected", "Included"], match: (r, q) => r.status === q },
-  { id: "included", label: "In agenda", options: ["Yes", "No"], match: (r, q) => (r.includedInAgenda ? "Yes" : "No") === q },
-];
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export function MemberProposalsPage() {
   const society = useSociety();
@@ -27,6 +30,15 @@ export function MemberProposalsPage() {
   const remove = useMutation(api.memberProposals.remove);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "memberProposal",
+    viewId: currentViewId,
+  });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -64,43 +76,57 @@ export function MemberProposalsPage() {
         }
       />
 
-      <DataTable
-        label="All proposals"
-        icon={<Vote size={14} />}
-        data={(items ?? []) as any[]}
-        rowKey={(r) => r._id}
-        filterFields={FIELDS}
-        searchPlaceholder="Search proposals…"
-        defaultSort={{ columnId: "submittedAtISO", dir: "desc" }}
-        columns={[
-          { id: "title", header: "Title", sortable: true, accessor: (r) => r.title, render: (r) => <strong>{r.title}</strong> },
-          { id: "submittedByName", header: "Submitted by", sortable: true, accessor: (r) => r.submittedByName },
-          { id: "submittedAtISO", header: "Date", sortable: true, accessor: (r) => r.submittedAtISO, render: (r) => <span className="mono">{formatDate(r.submittedAtISO)}</span> },
-          {
-            id: "signatures", header: "Signatures", sortable: true, accessor: (r) => r.signatureCount,
-            render: (r) => {
-              const req = Math.max(
-                rules?.memberProposalMinSignatures ?? 1,
-                Math.ceil((r.eligibleVotersAtSubmission ?? 0) * (r.thresholdPercent / 100)),
-              );
-              return <span><strong>{r.signatureCount}</strong><span className="muted"> / {req} req ({r.thresholdPercent}%)</span></span>;
-            },
-          },
-          { id: "status", header: "Status", sortable: true, accessor: (r) => r.status, render: (r) => <Badge tone={r.status === "MeetsThreshold" || r.status === "Included" ? "success" : r.status === "Rejected" ? "danger" : "warn"}>{r.status}</Badge> },
-          { id: "includedInAgenda", header: "Agenda", render: (r) => r.includedInAgenda ? <Badge tone="success">Yes</Badge> : <Badge>No</Badge> },
-        ]}
-        renderRowActions={(r) => (
-          <>
-            {!r.includedInAgenda && r.status === "MeetsThreshold" && (
-              <button className="btn btn--ghost btn--sm" onClick={() => update({ id: r._id, patch: { includedInAgenda: true, status: "Included" } })}>Include</button>
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="member proposal" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="memberProposals"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={(items ?? []) as any[]}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Vote size={14} />}
+            label="All proposals"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || items === undefined}
+            renderCell={({ record, field }) => {
+              if (field.name === "submittedAtISO") return <span className="mono">{formatDate(record.submittedAtISO)}</span>;
+              if (field.name === "signatureCount") {
+                const req = Math.max(
+                  rules?.memberProposalMinSignatures ?? 1,
+                  Math.ceil((record.eligibleVotersAtSubmission ?? 0) * (record.thresholdPercent / 100)),
+                );
+                return <span><strong>{record.signatureCount}</strong><span className="muted"> / {req} req ({record.thresholdPercent}%)</span></span>;
+              }
+              if (field.name === "status") {
+                return <Badge tone={record.status === "MeetsThreshold" || record.status === "Included" ? "success" : record.status === "Rejected" ? "danger" : "warn"}>{record.status}</Badge>;
+              }
+              return undefined;
+            }}
+            renderRowActions={(r) => (
+              <>
+                {!r.includedInAgenda && r.status === "MeetsThreshold" && (
+                  <button className="btn btn--ghost btn--sm" onClick={() => update({ id: r._id, patch: { includedInAgenda: true, status: "Included" } })}>Include</button>
+                )}
+                {r.status !== "Rejected" && (
+                  <button className="btn btn--ghost btn--sm" onClick={() => update({ id: r._id, patch: { status: "Rejected" } })}>Reject</button>
+                )}
+                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete proposal ${r.title}`} onClick={() => remove({ id: r._id })}><Trash2 size={12} /></button>
+              </>
             )}
-            {r.status !== "Rejected" && (
-              <button className="btn btn--ghost btn--sm" onClick={() => update({ id: r._id, patch: { status: "Rejected" } })}>Reject</button>
-            )}
-            <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete proposal ${r.title}`} onClick={() => remove({ id: r._id })}><Trash2 size={12} /></button>
-          </>
-        )}
-      />
+          />
+        </RecordTableScope>
+      ) : null}
 
       <Drawer
         open={open}

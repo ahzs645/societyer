@@ -5,8 +5,15 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, EmptyState, Field, Pill } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
 import { Select } from "../components/Select";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { Toggle } from "../components/Controls";
@@ -42,15 +49,6 @@ function computeConflicts(meetings: Doc<"meetings">[]): Map<string, string[]> {
   }
   return out;
 }
-
-const MEETING_FIELDS: FilterField<Doc<"meetings">>[] = [
-  { id: "title", label: "Title", icon: <Tag size={14} />, match: (m, q) => m.title.toLowerCase().includes(q.toLowerCase()) },
-  { id: "type", label: "Type", icon: <Tag size={14} />, options: ["Board", "Committee", "AGM", "SGM"], match: (m, q) => m.type === q },
-  { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Scheduled", "Held", "Cancelled"], match: (m, q) => m.status === q },
-  { id: "electronic", label: "Electronic", options: ["Yes", "No"], match: (m, q) => (m.electronic ? "Yes" : "No") === q },
-  { id: "location", label: "Location", icon: <Tag size={14} />, match: (m, q) => (m.location ?? "").toLowerCase().includes(q.toLowerCase()) },
-  { id: "year", label: "Scheduled in year", icon: <Calendar size={14} />, match: (m, q) => (m.scheduledAt ?? "").startsWith(q) },
-];
 
 type MeetingDraft = {
   type: string;
@@ -93,6 +91,14 @@ export function MeetingsPage() {
   const [contextMenu, setContextMenu] = useState<
     { x: number; y: number; meeting: Doc<"meetings"> } | null
   >(null);
+  const [currentViewId, setCurrentViewId] = useState<Doc<"views">["_id"] | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "meeting",
+    viewId: currentViewId,
+  });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
   const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
   const effectiveRules = formRules ?? rules;
@@ -317,146 +323,100 @@ export function MeetingsPage() {
           </div>
         </div>
       ) : (
-        <DataTable
-          label="All meetings"
-          icon={<Calendar size={14} />}
-          data={meetings ?? []}
-          loading={meetings === undefined}
-          rowKey={(r) => r._id}
-          filterFields={MEETING_FIELDS}
-          searchPlaceholder="Search meetings…"
-          defaultSort={{ columnId: "scheduledAt", dir: "desc" }}
-          viewsKey="meetings"
-          sharedViewsContext={{ societyId: society._id, nameSingular: "meeting" }}
-          onRowClick={(row) => openEdit(row)}
-          onPrimaryCellClick={(row) => navigate(`/app/meetings/${row._id}`)}
-          onRowContextMenu={(event, row) => {
-            event.preventDefault();
-            setContextMenu({ x: event.clientX, y: event.clientY, meeting: row });
-          }}
-          renderRowActions={(row) => (
-            <Menu
-              align="right"
-              minWidth={180}
-              sections={meetingMenuSections(row)}
-              trigger={
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm btn--icon"
-                  aria-label={`Actions for ${row.title}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal size={14} />
-                </button>
-              }
+        showMetadataWarning ? (
+          <RecordTableMetadataEmpty societyId={society?._id} objectLabel="meeting" />
+        ) : tableData.objectMetadata ? (
+          <RecordTableScope
+            tableId="meetings"
+            objectMetadata={tableData.objectMetadata}
+            hydratedView={tableData.hydratedView}
+            records={meetings ?? []}
+            onRecordClick={(_recordId, record) => openEdit(record)}
+            onUpdate={async ({ recordId, fieldName, value }) => {
+              if (fieldName === "minutes") return;
+              await updateMeeting({ id: recordId as Doc<"meetings">["_id"], patch: { [fieldName]: value } as any });
+            }}
+          >
+            <RecordTableViewToolbar
+              societyId={society._id}
+              objectMetadataId={tableData.objectMetadata._id as Doc<"objectMetadata">["_id"]}
+              icon={<Calendar size={14} />}
+              label="All meetings"
+              views={tableData.views}
+              currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+              onChangeView={(viewId) => setCurrentViewId(viewId as Doc<"views">["_id"])}
+              onOpenFilter={() => setFilterOpen((x) => !x)}
             />
-          )}
-          emptyMessage={
-            <EmptyState
-              icon={<Calendar size={18} />}
-              title="No meetings scheduled yet"
-              description="Schedule a board, committee, or general meeting to start tracking agendas, attendees, and minutes."
-              action={
-                <button className="btn btn--accent" type="button" onClick={() => openNew()}>
-                  <Plus size={12} /> Schedule meeting
-                </button>
+            <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+            <RecordTableFilterChips />
+            <RecordTable
+              loading={tableData.loading || meetings === undefined}
+              emptyState={
+                <EmptyState
+                  icon={<Calendar size={18} />}
+                  title="No meetings scheduled yet"
+                  description="Schedule a board, committee, or general meeting to start tracking agendas, attendees, and minutes."
+                  action={
+                    <button className="btn btn--accent" type="button" onClick={() => openNew()}>
+                      <Plus size={12} /> Schedule meeting
+                    </button>
+                  }
+                />
               }
+              renderCell={({ record, field }) => {
+                if (field.name === "scheduledAt") {
+                  const overlap = conflicts.get(record._id);
+                  return (
+                    <span>
+                      <span className="mono">{formatDateTime(record.scheduledAt)}</span>
+                      {overlap && (
+                        <Tooltip content={`Overlaps with: ${overlap.join(", ")}`}>
+                          <span
+                            aria-label={`${overlap.length} concurrent meeting${overlap.length === 1 ? "" : "s"}: ${overlap.join(", ")}`}
+                            style={{ marginLeft: 6, display: "inline-flex", alignItems: "center", color: "var(--warn, #c78b00)" }}
+                          >
+                            <AlertTriangle size={12} />
+                          </span>
+                        </Tooltip>
+                      )}
+                    </span>
+                  );
+                }
+                if (field.name === "location") {
+                  const hasLocation = !!record.location;
+                  if (!hasLocation && !record.electronic) return <span className="muted">—</span>;
+                  return (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      {record.electronic && (
+                        <Tooltip content="Electronic participation permitted">
+                          <span aria-label="Electronic participation permitted" style={{ display: "inline-flex", alignItems: "center", color: "var(--info, #3b82f6)" }}>
+                            <Monitor size={14} />
+                          </span>
+                        </Tooltip>
+                      )}
+                      <span>{hasLocation ? record.location : <span className="muted">Online</span>}</span>
+                    </span>
+                  );
+                }
+                if (field.name === "status") return <Badge tone={meetingStatusTone(record.status)}>{record.status}</Badge>;
+                if (field.name === "minutes") return record.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>;
+                return undefined;
+              }}
+              renderRowActions={(row) => (
+                <Menu
+                  align="right"
+                  minWidth={180}
+                  sections={meetingMenuSections(row)}
+                  trigger={
+                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for ${row.title}`} onClick={(e) => e.stopPropagation()}>
+                      <MoreHorizontal size={14} />
+                    </button>
+                  }
+                />
+              )}
             />
-          }
-          columns={[
-            { id: "title", header: "Title", sortable: true, accessor: (r) => r.title, render: (r) => <strong>{r.title}</strong> },
-            {
-              id: "type", header: "Type", sortable: true,
-              accessor: (r) => r.type,
-              render: (r) => <Badge tone={r.type === "AGM" ? "accent" : r.type === "SGM" ? "warn" : "info"}>{r.type}</Badge>,
-              editable: {
-                type: "select",
-                options: ["Board", "Committee", "AGM", "SGM"],
-                getValue: (r) => r.type,
-                onCommit: async (r, v) => {
-                  await updateMeeting({ id: r._id, patch: { type: v } });
-                },
-              },
-            },
-            {
-              id: "scheduledAt", header: "When", sortable: true,
-              accessor: (r) => r.scheduledAt,
-              render: (r) => {
-                const overlap = conflicts.get(r._id);
-                return (
-                  <span>
-                    <span className="mono">{formatDateTime(r.scheduledAt)}</span>
-                    {overlap && (
-                      <Tooltip content={`Overlaps with: ${overlap.join(", ")}`}>
-                        <span
-                          aria-label={`${overlap.length} concurrent meeting${overlap.length === 1 ? "" : "s"}: ${overlap.join(", ")}`}
-                          style={{
-                            marginLeft: 6,
-                            display: "inline-flex",
-                            alignItems: "center",
-                            color: "var(--warn, #c78b00)",
-                          }}
-                        >
-                          <AlertTriangle size={12} />
-                        </span>
-                      </Tooltip>
-                    )}
-                  </span>
-                );
-              },
-            },
-            {
-              id: "location", header: "Location", sortable: true,
-              accessor: (r) => r.location ?? "",
-              render: (r) => {
-                const hasLocation = !!r.location;
-                if (!hasLocation && !r.electronic) return <span className="muted">—</span>;
-                return (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    {r.electronic && (
-                      <Tooltip content="Electronic participation permitted">
-                        <span
-                          aria-label="Electronic participation permitted"
-                          style={{ display: "inline-flex", alignItems: "center", color: "var(--info, #3b82f6)" }}
-                        >
-                          <Monitor size={14} />
-                        </span>
-                      </Tooltip>
-                    )}
-                    <span>{hasLocation ? r.location : <span className="muted">Online</span>}</span>
-                  </span>
-                );
-              },
-              editable: {
-                type: "autocomplete",
-                getValue: (r) => r.location ?? "",
-                options: recentLocations,
-                onRemoveOption: hideLocationSuggestion,
-                placeholder: "Venue or join link",
-                onCommit: async (r, v) => {
-                  await updateMeeting({ id: r._id, patch: { location: v } });
-                },
-              },
-            },
-            {
-              id: "status", header: "Status", sortable: true,
-              accessor: (r) => r.status,
-              render: (r) => <Badge tone={meetingStatusTone(r.status)}>{r.status}</Badge>,
-              editable: {
-                type: "select",
-                options: ["Scheduled", "Held", "Cancelled"],
-                getValue: (r) => r.status,
-                onCommit: async (r, v) => {
-                  await updateMeeting({ id: r._id, patch: { status: v } });
-                },
-              },
-            },
-            {
-              id: "minutes", header: "Minutes",
-              render: (r) => r.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>,
-            },
-          ]}
-        />
+          </RecordTableScope>
+        ) : null
       )}
 
       <Drawer

@@ -4,13 +4,13 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag } from "../components/ui";
-import { DataTable } from "../components/DataTable";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { formatDateTime, money } from "../lib/format";
 import { isDemoMode } from "../lib/demoMode";
+import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
 import { Database, Link2, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -34,6 +34,16 @@ import {
   type WaveAccountView,
   isBrowserBackedWaveConnection,
 } from "../features/financials/lib/waveResources";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export function FinancialsPage() {
   const society = useSociety();
@@ -100,6 +110,8 @@ export function FinancialsPage() {
   const [waveSearch, setWaveSearch] = useState("");
   const [selectedWaveResourceId, setSelectedWaveResourceId] = useState<string | null>(null);
   const [hideZeroWaveAccounts, setHideZeroWaveAccounts] = useState(false);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
   const waveResources = useQuery(
     api.waveCache.resources,
     society
@@ -136,6 +148,20 @@ export function FinancialsPage() {
     }
     return map;
   }, [inventoryLinks]);
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "financialTransaction",
+    viewId: currentViewId,
+  });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const records = useMemo(
+    () => (transactions ?? []).map((t: any) => ({
+      ...t,
+      account: (accounts ?? []).find((a) => a._id === t.accountId)?.name ?? "",
+      items: linksByTransactionId.get(t._id)?.length ?? 0,
+    })),
+    [transactions, accounts, linksByTransactionId],
+  );
   const saveInventoryLink = async () => {
     if (!linkTxn || !linkItemId) {
       toast.error("Choose an inventory item to link.");
@@ -320,6 +346,14 @@ export function FinancialsPage() {
           )
         }
       />
+
+      {(accounts ?? []).length > 0 && (
+        <BankCsvImportCard
+          societyId={society._id}
+          accounts={accounts ?? []}
+          actingUserId={actingUserId}
+        />
+      )}
 
       {!activeConnection && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -556,50 +590,65 @@ export function FinancialsPage() {
       )}
 
       {activeConnection && transactions && transactions.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <DataTable
-            label="Recent transactions"
-            data={transactions as any[]}
-            rowKey={(t) => t._id}
-            viewsKey="financial-transactions"
-            searchPlaceholder="Search transactions, linked items…"
-            searchExtraFields={[(t) => (linksByTransactionId.get(t._id) ?? []).map((l: any) => l.inventoryItem?.name ?? l.asset?.name).join(" ")]}
-            columns={[
-              { id: "date", header: "Date", sortable: true, accessor: (t) => t.date, render: (t) => <span className="mono">{t.date}</span> },
-              { id: "description", header: "Description", sortable: true, accessor: (t) => t.description },
-              { id: "account", header: "Account", accessor: (t) => (accounts ?? []).find((a) => a._id === t.accountId)?.name ?? "", render: (t) => <span className="muted">{(accounts ?? []).find((a) => a._id === t.accountId)?.name ?? "—"}</span> },
-              { id: "category", header: "Category", accessor: (t) => t.category ?? "", render: (t) => <Badge>{t.category ?? "uncategorized"}</Badge> },
-              { id: "amount", header: "Amount", align: "right", sortable: true, accessor: (t) => t.amountCents, render: (t) => <span className="mono" style={{ color: t.amountCents < 0 ? "var(--danger)" : "var(--success)" }}>{money(t.amountCents)}</span> },
-              {
-                id: "items",
-                header: "Inventory items",
-                accessor: (t) => linksByTransactionId.get(t._id)?.length ?? 0,
-                render: (t) => {
-                  const links = linksByTransactionId.get(t._id) ?? [];
-                  return (
-                    <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                      {links.map((link: any) => (
-                        <span key={link._id} className="row" style={{ gap: 4, alignItems: "center" }}>
-                          <Link to="/app/inventory">{link.inventoryItem?.name ?? link.asset?.name ?? link.receiptLineLabel ?? "Linked item"}</Link>
-                          <button
-                            className="btn btn--ghost btn--sm btn--icon"
-                            aria-label="Unlink item"
-                            onClick={async () => { await unlinkInventoryReceipt({ id: link._id }); toast.success("Item unlinked"); }}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </span>
-                      ))}
-                      <button className="btn btn--ghost btn--sm" onClick={() => { setLinkTxn(t); setLinkItemId(""); }}>
-                        <Link2 size={12} /> Link item
-                      </button>
-                    </div>
-                  );
-                },
-              },
-            ]}
-          />
-        </div>
+        showMetadataWarning ? (
+          <div style={{ marginBottom: 16 }}>
+            <RecordTableMetadataEmpty societyId={society?._id} objectLabel="financial transaction" />
+          </div>
+        ) : tableData.objectMetadata ? (
+          <div style={{ marginBottom: 16 }}>
+            <RecordTableScope
+              tableId="financialTransactions"
+              objectMetadata={tableData.objectMetadata}
+              hydratedView={tableData.hydratedView}
+              records={records}
+            >
+              <RecordTableViewToolbar
+                societyId={society._id}
+                objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+                icon={<PiggyBank size={14} />}
+                label="Recent transactions"
+                views={tableData.views}
+                currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+                onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+                onOpenFilter={() => setFilterOpen((x) => !x)}
+              />
+              <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+              <RecordTableFilterChips />
+              <RecordTable
+                loading={tableData.loading || transactions === undefined}
+                renderCell={({ record: t, field }) => {
+                  if (field.name === "date") return <span className="mono">{t.date}</span>;
+                  if (field.name === "account") return <span className="muted">{t.account || "—"}</span>;
+                  if (field.name === "category") return <Badge>{t.category ?? "uncategorized"}</Badge>;
+                  if (field.name === "amountCents") return <span className="mono" style={{ color: t.amountCents < 0 ? "var(--danger)" : "var(--success)" }}>{money(t.amountCents)}</span>;
+                  if (field.name === "items") {
+                    const links = linksByTransactionId.get(t._id) ?? [];
+                    return (
+                      <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        {links.map((link: any) => (
+                          <span key={link._id} className="row" style={{ gap: 4, alignItems: "center" }}>
+                            <Link to="/app/inventory" onClick={(e) => e.stopPropagation()}>{link.inventoryItem?.name ?? link.asset?.name ?? link.receiptLineLabel ?? "Linked item"}</Link>
+                            <button
+                              className="btn btn--ghost btn--sm btn--icon"
+                              aria-label="Unlink item"
+                              onClick={async (e) => { e.stopPropagation(); await unlinkInventoryReceipt({ id: link._id }); toast.success("Item unlinked"); }}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </span>
+                        ))}
+                        <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setLinkTxn(t); setLinkItemId(""); }}>
+                          <Link2 size={12} /> Link item
+                        </button>
+                      </div>
+                    );
+                  }
+                  return undefined;
+                }}
+              />
+            </RecordTableScope>
+          </div>
+        ) : null
       )}
 
       {importedBudgetReviewCount > 0 && (
@@ -792,6 +841,95 @@ export function FinancialsPage() {
           </div>
         )}
       </Drawer>
+    </div>
+  );
+}
+
+function BankCsvImportCard({
+  societyId,
+  accounts,
+  actingUserId,
+}: {
+  societyId: any;
+  accounts: any[];
+  actingUserId: any;
+}) {
+  const importCsv = useMutation(api.financialHub.importBankCsvTransactions);
+  const toast = useToast();
+  const [accountId, setAccountId] = useState("");
+  const [parsed, setParsed] = useState<ParsedCsvRow[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const onFile = async (file: File) => {
+    try {
+      const rows = parseBankCsv(await file.text());
+      setParsed(rows);
+      if (rows.length === 0) {
+        toast.warn("No rows parsed — the CSV needs date, description, and amount (or debit/credit) columns.");
+      }
+    } catch (err: any) {
+      setParsed(null);
+      toast.error(err?.message ?? "Could not parse CSV");
+    }
+  };
+
+  const doImport = async () => {
+    if (!accountId) {
+      toast.info("Choose an account to import into.");
+      return;
+    }
+    if (!parsed?.length) {
+      toast.info("Choose a CSV file first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await importCsv({ societyId, accountId: accountId as any, rows: parsed, actingUserId });
+      toast.success(
+        `Imported ${result.inserted} transaction${result.inserted === 1 ? "" : "s"}${
+          result.skipped ? `, skipped ${result.skipped} duplicate${result.skipped === 1 ? "" : "s"}` : ""
+        }.`,
+      );
+      setParsed(null);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Import failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card__head">
+        <h2 className="card__title">Import bank / credit-card CSV</h2>
+        <span className="card__subtitle">
+          Get real statement history in (Wave's API can't export ledger rows). Deduped per account.
+        </span>
+      </div>
+      <div className="card__body row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <Select
+          value={accountId}
+          onChange={setAccountId}
+          options={[
+            { value: "", label: "Choose account…" },
+            ...accounts.map((a: any) => ({ value: a._id, label: a.name })),
+          ]}
+          className="input"
+          style={{ flex: "1 1 200px", minWidth: 0 }}
+        />
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void onFile(file);
+          }}
+        />
+        {parsed && <span className="muted">{parsed.length} row{parsed.length === 1 ? "" : "s"} ready</span>}
+        <button className="btn btn--accent" disabled={busy || !accountId || !parsed?.length} onClick={doImport}>
+          Import
+        </button>
+      </div>
     </div>
   );
 }

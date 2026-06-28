@@ -810,21 +810,70 @@ export const _markSyncError = internalMutation({
   },
 });
 
+/** A debit-normal account (Bank/Asset/Expense) increases on debit; everything
+ *  else (Credit/Liability/Income/Equity) increases on credit. Used to sign
+ *  journal lines when no explicit normalBalance is stored on the account. */
+function defaultNormalBalance(accountType?: string): "debit" | "credit" {
+  return ["Bank", "Asset", "Expense"].includes(String(accountType ?? "")) ? "debit" : "credit";
+}
+
+/** Derive each account's balance from POSTED journal lines (double-entry: a
+ *  line moves the balance up when its side matches the account's normal
+ *  balance, down otherwise). Returns a per-account posted balance plus whether
+ *  the account had any posted lines at all, so callers can prefer the ledger
+ *  where it exists and fall back to the imported balance otherwise. */
+function computeLedgerBalances(accounts: any[], entries: any[], lines: any[]) {
+  const postedEntryIds = new Set(
+    entries.filter((e) => e.status === "posted").map((e) => String(e._id)),
+  );
+  const normalByAccount = new Map<string, "debit" | "credit">(
+    accounts.map((a) => [
+      String(a._id),
+      (a.normalBalance === "debit" || a.normalBalance === "credit"
+        ? a.normalBalance
+        : defaultNormalBalance(a.accountType)) as "debit" | "credit",
+    ]),
+  );
+  const result = new Map<string, { postedBalanceCents: number; hasPostedLines: boolean }>();
+  for (const line of lines) {
+    if (!postedEntryIds.has(String(line.journalEntryId))) continue;
+    const acctId = String(line.accountId);
+    const normal = normalByAccount.get(acctId) ?? "debit";
+    const signed = line.side === normal ? line.amountCents : -line.amountCents;
+    const cur = result.get(acctId) ?? { postedBalanceCents: 0, hasPostedLines: false };
+    cur.postedBalanceCents += signed;
+    cur.hasPostedLines = true;
+    result.set(acctId, cur);
+  }
+  return result;
+}
+
 // A small derived query for the dashboard — balances by purpose/category.
+// Prefers balances computed from posted journal lines (the durable double-entry
+// ledger) where an account has any, falling back to the imported balanceCents.
 export const summary = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
-    const [accounts, transactions, budgets] = await Promise.all([
+    const [accounts, transactions, budgets, journalEntries, journalLines] = await Promise.all([
       ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
       ctx.db.query("financialTransactions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
       ctx.db.query("budgets").withIndex("by_society_fy", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("journalEntries").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("journalLines").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ]);
 
+    const ledger = computeLedgerBalances(accounts, journalEntries, journalLines);
+    const effectiveBalance = (a: any) => {
+      const entry = ledger.get(String(a._id));
+      return entry && entry.hasPostedLines ? entry.postedBalanceCents : a.balanceCents;
+    };
+    const isLedgerBacked = (a: any) => ledger.get(String(a._id))?.hasPostedLines === true;
+
     const bank = accounts.filter((a) => a.accountType === "Bank" || a.accountType === "Credit");
-    const totalBalance = bank.reduce((sum, a) => sum + a.balanceCents, 0);
+    const totalBalance = bank.reduce((sum, a) => sum + effectiveBalance(a), 0);
     const restricted = bank.filter((a) => a.isRestricted);
-    const unrestricted = totalBalance - restricted.reduce((sum, a) => sum + a.balanceCents, 0);
+    const unrestricted = totalBalance - restricted.reduce((sum, a) => sum + effectiveBalance(a), 0);
 
     const actualsByCategory: Record<string, number> = {};
     for (const t of transactions) {
@@ -840,16 +889,86 @@ export const summary = query({
     return {
       totalBalance,
       unrestricted,
+      // How many bank/credit accounts are now reading from the posted ledger
+      // vs the imported balance — lets the UI show ledger coverage.
+      ledgerBackedAccounts: bank.filter(isLedgerBacked).length,
+      bankAccountCount: bank.length,
       restrictedAccounts: restricted.map((a) => ({
         name: a.name,
-        balanceCents: a.balanceCents,
+        balanceCents: effectiveBalance(a),
         purpose: a.restrictedPurpose,
+        ledgerBacked: isLedgerBacked(a),
       })),
       budgetRows,
       recentTransactions: transactions
         .sort((a, b) => b.date.localeCompare(a.date))
         .slice(0, 10),
     };
+  },
+});
+
+// Import bank / credit-card statement rows (parsed from CSV client-side) into an
+// existing account. Wave's public API can't return ledger rows, so CSV import is
+// the documented way to get real history in. Deduped per account by externalId
+// (falling back to a deterministic date+amount+index key) so re-importing the
+// same statement doesn't double-post.
+export const importBankCsvTransactions = mutation({
+  args: {
+    societyId: v.id("societies"),
+    accountId: v.id("financialAccounts"),
+    rows: v.array(
+      v.object({
+        date: v.string(),
+        description: v.string(),
+        amountCents: v.number(),
+        externalId: v.optional(v.string()),
+        category: v.optional(v.string()),
+        counterparty: v.optional(v.string()),
+      }),
+    ),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    await requireRole(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Admin" });
+    const account = await ctx.db.get(args.accountId);
+    if (!account || account.societyId !== args.societyId) {
+      throw new Error("Account must belong to this society.");
+    }
+    const existing = await ctx.db
+      .query("financialTransactions")
+      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+      .collect();
+    const seen = new Set(
+      existing.filter((t) => t.accountId === args.accountId).map((t) => t.externalId),
+    );
+
+    let inserted = 0;
+    let skipped = 0;
+    for (let i = 0; i < args.rows.length; i++) {
+      const row = args.rows[i];
+      const externalId =
+        row.externalId?.trim() ||
+        `csv:${String(args.accountId)}:${row.date}:${row.amountCents}:${i}`;
+      if (seen.has(externalId)) {
+        skipped += 1;
+        continue;
+      }
+      await ctx.db.insert("financialTransactions", {
+        societyId: args.societyId,
+        connectionId: account.connectionId,
+        accountId: args.accountId,
+        externalId,
+        date: row.date,
+        description: row.description,
+        amountCents: row.amountCents,
+        category: row.category,
+        counterparty: row.counterparty,
+      });
+      seen.add(externalId);
+      inserted += 1;
+    }
+    return { inserted, skipped, total: args.rows.length };
   },
 });
 

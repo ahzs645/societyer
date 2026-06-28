@@ -21,6 +21,8 @@
 // storage upload URLs, and seed/backfill maintenance the demo data already
 // reflects. These return null (a deliberate no-op) with no error.
 export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
+  // Fetches an external RSS/JSON grant feed — no network in the offline runtime.
+  "grantSources:discoverFromSource",
   "apiPlatform:revokeToken",
   "apiPlatform:setWebhookSubscriptionStatus",
   // The outbound iCalendar feed needs the live Convex http server, so enabling
@@ -75,9 +77,11 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "aiChat:deleteThread",
   "aiChat:renameThread",
   "attestations:sign",
+  "bylawAmendments:materializeSections",
   "bylawAmendments:markFiled",
   "bylawAmendments:markResolutionPassed",
   "bylawAmendments:startConsultation",
+  "bylawAmendments:supersede",
   "bylawAmendments:withdraw",
   "bylawRules:resetToDefault",
   "committees:addMember",
@@ -86,6 +90,7 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "customFields:deleteDefinition",
   "customFields:setValue",
   "documents:archive",
+  "financialHub:importBankCsvTransactions",
   "elections:addQuestion",
   "elections:castBallot",
   "elections:close",
@@ -97,12 +102,17 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "evidenceRegisters:promoteBoardRoleToDirector",
   "filings:markFiled",
   "goals:toggleMilestone",
+  "grantSources:setCandidateStatus",
   "grants:convertApplication",
   "grants:reviewApplication",
   "grants:submitApplication",
+  "inventoryHub:promoteCandidateToMovement",
+  "inventoryHub:setCandidateStatus",
   "invitations:revoke",
   "meetingTemplates:duplicate",
+  "meetings:applyTemplate",
   "members:merge",
+  "motions:setTags",
   "motionBacklog:carryForwardToMeeting",
   "notifications:dismiss",
   "notifications:dismissAll",

@@ -1,4 +1,4 @@
-import { mutation, query } from "./lib/untypedServer";
+import { internalMutation, mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 
 // Standalone first-class motion store. See
@@ -27,6 +27,7 @@ const motionContent = {
   backlogPriority: v.optional(v.string()),
   source: v.optional(v.string()),
   seededKey: v.optional(v.string()),
+  tags: v.optional(v.array(v.string())),
   primaryMeetingId: v.optional(v.id("meetings")),
   targetMeetingId: v.optional(v.id("meetings")),
   minutesId: v.optional(v.id("minutes")),
@@ -170,6 +171,58 @@ export async function syncMotionsForMinutes(
   }
 }
 
+// ----- Phase 2 backfill -----------------------------------------------------
+
+/** One-off Phase 2 migration: populate the first-class motions table from the
+ *  legacy embedded minutes.motions[] blobs (the motionBacklog table has been
+ *  retired — its rows ARE motions now, so there is nothing left to migrate).
+ *
+ *  Idempotent: minutes are mirrored via syncMotionsForMinutes (delete-by-minutes
+ *  + reinsert), so re-running re-mirrors cleanly.
+ *
+ *  Scope to one society with `societyId`, or omit to backfill all. Pass
+ *  `dryRun: true` to count without writing. */
+export const backfillFromLegacy = internalMutation({
+  args: {
+    societyId: v.optional(v.id("societies")),
+    dryRun: v.optional(v.boolean()),
+  },
+  returns: v.any(),
+  handler: async (ctx: any, { societyId, dryRun }: any) => {
+    // --- Minutes embedded motions[] ---
+    const minutesRows = societyId
+      ? await ctx.db
+          .query("minutes")
+          .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+          .collect()
+      : await ctx.db.query("minutes").collect();
+
+    let minutesProcessed = 0;
+    let minutesMotions = 0;
+    for (const minutes of minutesRows) {
+      const motions = Array.isArray(minutes.motions) ? minutes.motions : [];
+      if (motions.length === 0) continue;
+      minutesProcessed += 1;
+      minutesMotions += motions.length;
+      if (!dryRun) {
+        await syncMotionsForMinutes(ctx, {
+          societyId: minutes.societyId,
+          minutesId: minutes._id,
+          meetingId: minutes.meetingId,
+          motions,
+        });
+      }
+    }
+
+    return {
+      dryRun: dryRun === true,
+      societyScope: societyId ? String(societyId) : "all",
+      minutesProcessed,
+      minutesMotions,
+    };
+  },
+});
+
 // ----- queries --------------------------------------------------------------
 
 export const list = query({
@@ -282,6 +335,24 @@ export const setStatus = mutation({
       }),
     );
     return motionId;
+  },
+});
+
+/** Replace a motion's tag/label set (normalized: trimmed, lowercased, deduped).
+ *  Drives the master-list filtering, including the default-hidden routine
+ *  labels (adjournment, previous-minutes). */
+export const setTags = mutation({
+  args: { motionId: v.id("motions"), tags: v.array(v.string()) },
+  returns: v.any(),
+  handler: async (ctx: any, { motionId, tags }: any) => {
+    const normalized = Array.from(
+      new Set(
+        (tags ?? [])
+          .map((t: string) => String(t ?? "").trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+    return patchMotion(ctx, motionId, { tags: normalized });
   },
 });
 

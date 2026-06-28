@@ -660,6 +660,96 @@ export const upsertCandidate = mutation({
   },
 });
 
+// Review queue for imported inventory candidates (the gate before a candidate
+// becomes a real stock movement). Optionally filtered by status.
+export const candidates = query({
+  args: { societyId: v.id("societies"), status: v.optional(v.string()) },
+  returns: v.any(),
+  handler: async (ctx, { societyId, status }) => {
+    const rows = await ctx.db
+      .query("inventoryCandidates")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .collect();
+    const filtered = status ? rows.filter((r: any) => r.status === status) : rows;
+    return filtered.sort((a: any, b: any) =>
+      String(b.occurredAtISO ?? b.createdAtISO).localeCompare(String(a.occurredAtISO ?? a.createdAtISO)),
+    );
+  },
+});
+
+// Mark a candidate ignored / needs_review / matched without posting it.
+export const setCandidateStatus = mutation({
+  args: { candidateId: v.id("inventoryCandidates"), status: v.string() },
+  returns: v.any(),
+  handler: async (ctx, { candidateId, status }) => {
+    await ctx.db.patch(candidateId, { status, updatedAtISO: new Date().toISOString() });
+    return candidateId;
+  },
+});
+
+// Promote a reviewed `movement` candidate into a real posted stock movement and
+// mark the candidate posted (linking the movement). The destination item must
+// be resolved (suggested or overridden); a destination location is required for
+// the default "receive".
+export const promoteCandidateToMovement = mutation({
+  args: {
+    candidateId: v.id("inventoryCandidates"),
+    inventoryItemId: v.optional(v.id("inventoryItems")),
+    toLocationId: v.optional(v.id("inventoryLocations")),
+    fromLocationId: v.optional(v.id("inventoryLocations")),
+    movementType: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const candidate = await ctx.db.get(args.candidateId);
+    if (!candidate) throw new Error("Candidate not found.");
+    if (candidate.status === "posted") throw new Error("Candidate has already been posted.");
+
+    const itemId = args.inventoryItemId ?? candidate.suggestedInventoryItemId;
+    if (!itemId) throw new Error("Resolve an inventory item before posting this candidate.");
+    const item = await ctx.db.get(itemId);
+    if (!item || item.societyId !== candidate.societyId) {
+      throw new Error("Inventory item must belong to this society.");
+    }
+    const toLocationId = args.toLocationId ?? candidate.suggestedLocationId;
+    if (!toLocationId && !args.fromLocationId) {
+      throw new Error("Choose a destination (or source) location for the movement.");
+    }
+    const quantity = Math.abs(candidate.quantity ?? 0);
+    if (quantity <= 0) throw new Error("Candidate has no positive quantity to post.");
+
+    const now = new Date().toISOString();
+    const movementId = await ctx.db.insert("stockMovements", {
+      societyId: candidate.societyId,
+      connectionId: candidate.connectionId,
+      movementDate: candidate.occurredAtISO ?? now,
+      movementType: args.movementType ?? "receive",
+      status: "posted",
+      inventoryItemId: itemId,
+      fromLocationId: args.fromLocationId,
+      toLocationId,
+      quantity,
+      unitOfMeasure: candidate.unitOfMeasure ?? item.unitOfMeasure ?? "unit",
+      reason: candidate.notes,
+      sourceExternalId: candidate.sourceExternalId,
+      sourceSystem: candidate.sourceSystem ?? "import",
+      documentIds: [],
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    const movement = await ctx.db.get(movementId);
+    await postMovementEffects(ctx, movement);
+    await ctx.db.patch(args.candidateId, {
+      status: "posted",
+      postedMovementId: movementId,
+      suggestedInventoryItemId: itemId,
+      suggestedLocationId: toLocationId,
+      updatedAtISO: now,
+    });
+    return { movementId };
+  },
+});
+
 export const linkReceipt = mutation({
   args: {
     id: v.optional(v.id("assetReceiptLinks")),

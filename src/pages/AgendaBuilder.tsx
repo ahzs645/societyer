@@ -22,7 +22,7 @@ type AgendaDraftItem = {
   details: string;
   timeAllottedMinutes: string;
   motionTemplateId: string;
-  motionBacklogId: string;
+  motionId: string;
   motionText: string;
 };
 
@@ -42,6 +42,10 @@ export function AgendaBuilderPage() {
     api.motionTemplates.list,
     society ? { societyId: society._id } : "skip",
   );
+  const meetingTemplates = useQuery(
+    api.meetingTemplates.list,
+    society ? { societyId: society._id } : "skip",
+  );
   const backlog = useQuery(
     api.motionBacklog.list,
     society ? { societyId: society._id } : "skip",
@@ -52,6 +56,8 @@ export function AgendaBuilderPage() {
   const [newTitle, setNewTitle] = useState("");
   const [draftStatus, setDraftStatus] = useState<string>("Draft");
   const [draftItems, setDraftItems] = useState<AgendaDraftItem[]>([]);
+  const [applyTemplateId, setApplyTemplateId] = useState<string>("");
+  const [replaceExisting, setReplaceExisting] = useState(false);
 
   const selected = useQuery(
     api.agendas.get,
@@ -61,6 +67,7 @@ export function AgendaBuilderPage() {
   const createAgenda = useMutation(api.agendas.create);
   const syncAgenda = useMutation(api.agendas.syncForMeeting);
   const startMinutesFromAgenda = useMutation(api.agendas.startMinutesFromAgenda);
+  const applyMeetingTemplate = useMutation(api.meetings.applyTemplate);
 
   const meetingById = useMemo(() => {
     const map = new Map<string, any>();
@@ -79,7 +86,7 @@ export function AgendaBuilderPage() {
       details: item.details ?? "",
       timeAllottedMinutes: item.timeAllottedMinutes == null ? "" : String(item.timeAllottedMinutes),
       motionTemplateId: item.motionTemplateId ? String(item.motionTemplateId) : "",
-      motionBacklogId: item.motionBacklogId ? String(item.motionBacklogId) : "",
+      motionId: item.motionId ? String(item.motionId) : "",
       motionText: item.motionText ?? "",
     })));
   }, [selected?.agenda?._id, selected?.agenda?.updatedAtISO, selected?.items?.length]);
@@ -103,10 +110,28 @@ export function AgendaBuilderPage() {
     toast.success("Agenda created");
   };
 
+  const handleApplyTemplate = async () => {
+    if (!newMeetingId || !applyTemplateId) {
+      toast.info("Pick a meeting and a template to apply.");
+      return;
+    }
+    try {
+      const result = await applyMeetingTemplate({
+        meetingId: newMeetingId as Id<"meetings">,
+        meetingTemplateId: applyTemplateId as Id<"meetingTemplates">,
+        replace: replaceExisting,
+      });
+      if (result?.agendaId) setSelectedAgendaId(result.agendaId as Id<"agendas">);
+      toast.success(`Applied template — ${result?.items ?? 0} agenda items added.`);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not apply template.");
+    }
+  };
+
   const handleAddItem = (type: string, extra: Partial<{
     title: string;
     motionTemplateId: Id<"motionTemplates">;
-    motionBacklogId: Id<"motionBacklog">;
+    motionId: Id<"motions">;
     motionText: string;
   }> = {}) => {
     setDraftItems((current) => [...current, {
@@ -117,7 +142,7 @@ export function AgendaBuilderPage() {
       details: "",
       timeAllottedMinutes: "",
       motionTemplateId: extra.motionTemplateId ? String(extra.motionTemplateId) : "",
-      motionBacklogId: extra.motionBacklogId ? String(extra.motionBacklogId) : "",
+      motionId: extra.motionId ? String(extra.motionId) : "",
       motionText: extra.motionText ?? "",
     }]);
   };
@@ -149,7 +174,7 @@ export function AgendaBuilderPage() {
         details: item.details.trim() || undefined,
         timeAllottedMinutes: item.timeAllottedMinutes ? Number(item.timeAllottedMinutes) : undefined,
         motionTemplateId: item.motionTemplateId ? item.motionTemplateId as Id<"motionTemplates"> : undefined,
-        motionBacklogId: item.motionBacklogId ? item.motionBacklogId as Id<"motionBacklog"> : undefined,
+        motionId: item.motionId ? item.motionId as Id<"motions"> : undefined,
         motionText: item.motionText.trim() || undefined,
       }))
       .filter((item) => item.title);
@@ -203,6 +228,23 @@ export function AgendaBuilderPage() {
           />
           <button className="btn btn--accent" onClick={handleCreate}>
             <Plus size={14} /> Create
+          </button>
+        </div>
+        <div className="card__body row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", borderTop: "1px solid var(--border)" }}>
+          <span className="muted" style={{ flex: "0 0 auto" }}>Or scaffold from a meeting template:</span>
+          <Select value={applyTemplateId} onChange={value => setApplyTemplateId(value)} options={[{
+  value: "",
+  label: "Select meeting template…"
+}, ...(meetingTemplates ?? []).map((t: any) => ({
+  value: t._id,
+  label: t.name
+}))]} className="input" style={{ flex: "1 1 220px", minWidth: 0 }} />
+          <label className="row muted" style={{ gap: 4, flex: "0 0 auto", alignItems: "center" }}>
+            <input type="checkbox" checked={replaceExisting} onChange={(e) => setReplaceExisting(e.target.checked)} />
+            Replace existing items
+          </label>
+          <button className="btn" onClick={handleApplyTemplate} disabled={!newMeetingId || !applyTemplateId}>
+            <ClipboardList size={14} /> Apply to meeting
           </button>
         </div>
       </div>
@@ -299,7 +341,7 @@ export function AgendaBuilderPage() {
                   const item = (backlog ?? []).find((row: any) => row._id === backlogId);
                   handleAddItem("motion", {
                     title: item?.title ?? "Backlog motion",
-                    motionBacklogId: backlogId as Id<"motionBacklog">,
+                    motionId: backlogId as Id<"motions">,
                     motionText: item?.motionText ?? item?.text ?? "",
                   });
                 }}

@@ -38,6 +38,19 @@ import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
 import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
 import { STATIC_OFFLINE_NOOP_WRITES } from "./staticConvexParity";
+import {
+  byId,
+  staticCsvRows,
+  dateOnlyStatic,
+  inStaticYear,
+  addStaticDays,
+  staticMonthlyEstimateCents,
+  staticAgendaItemType,
+  normalizeStaticCategoryLabel,
+  cycleItem,
+  filingMatchesStaticYear,
+  reportStaticWriteGap,
+} from "./staticConvexUtils";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
 const FUNCTION_NAME = Symbol.for("functionName");
@@ -135,7 +148,7 @@ import {
   aiMessages,
   aiToolDrafts,
   aiProviderSettings,
-  motionBacklog,
+  motions,
   tables,
   director,
   member,
@@ -259,20 +272,7 @@ function functionName(ref: any) {
 // production so a shipped demo/desktop build degrades instead of crashing. The
 // CI parity gate (scripts/check-static-convex-parity.ts) is the real backstop
 // that keeps this from ever firing in a correctly-maintained build.
-function reportStaticWriteGap(name: string): null {
-  const message =
-    `[staticConvex] No offline handler for write "${name}". ` +
-    `This action does not persist in offline/desktop mode. ` +
-    `Add a handler in staticConvex.ts (or list it in staticConvexParity.ts).`;
-  const isDev = Boolean((import.meta as any)?.env?.DEV);
-  if (isDev) throw new Error(message);
-  if (typeof console !== "undefined") console.warn(message);
-  return null;
-}
 
-function byId(rows: any[], id: string | undefined) {
-  return rows.find((row) => row._id === id) ?? null;
-}
 
 // Mirror of convex/lib/permissions ROLE_MATRIX for the offline/demo runtime so
 // usePermissions() shows an accurate role + permission set without a backend.
@@ -455,16 +455,7 @@ function staticAccountingSeed(store?: StaticDemoDexieStore | null, args?: Static
   };
 }
 
-function staticCsvRows(rows: unknown[][]) {
-  return rows.map((row) => row.map((value) => {
-    const text = String(value ?? "");
-    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-  }).join(",")).join("\n");
-}
 
-function normalizeStaticCategoryLabel(value?: string) {
-  return String(value ?? "").trim().toLowerCase();
-}
 
 function scopedRows(rows: any[], args: StaticArgs) {
   if (!args?.societyId) return rows;
@@ -714,28 +705,10 @@ function annualCycleSummary(args: StaticArgs) {
   };
 }
 
-function cycleItem(id: string, phase: string, title: string, detail: string, status: string, evidence: string[], dueDate: string | undefined, to: string, actionLabel: string) {
-  return { id, phase, title, detail, status, evidence, dueDate, to, actionLabel };
-}
 
-function dateOnlyStatic(value?: string | null) {
-  return String(value ?? "").slice(0, 10);
-}
 
-function inStaticYear(value: unknown, year: number) {
-  return typeof value === "string" && value.slice(0, 4) === String(year);
-}
 
-function filingMatchesStaticYear(filing: any, year: number) {
-  return String(filing.periodLabel ?? filing.title ?? "").includes(String(year)) || inStaticYear(filing.dueDate, year) || inStaticYear(filing.filedAt, year);
-}
 
-function addStaticDays(date: string, days: number) {
-  if (!date) return "";
-  const parsed = new Date(`${date}T00:00:00.000Z`);
-  parsed.setUTCDate(parsed.getUTCDate() + days);
-  return parsed.toISOString().slice(0, 10);
-}
 
 function financialSummary() {
   return {
@@ -760,13 +733,6 @@ function financialSummary() {
   };
 }
 
-function staticMonthlyEstimateCents(amountCents: number, interval: string) {
-  if (interval === "semester") return Math.round((amountCents * 2) / 12);
-  if (interval === "week") return Math.round((amountCents * 52) / 12);
-  if (interval === "quarter") return Math.round(amountCents / 3);
-  if (interval === "year") return Math.round(amountCents / 12);
-  return amountCents;
-}
 
 function profitAndLoss(args: StaticArgs) {
   const from = args?.from ?? "2026-01-01";
@@ -996,14 +962,6 @@ function staticAgendaTitlesForMeeting(meetingId: string | undefined) {
   return staticAgendaItemsForMeeting(meetingId).map((entry) => entry.title);
 }
 
-function staticAgendaItemType(title: string) {
-  const lower = title.toLowerCase();
-  if (lower.includes("motion") || lower.includes("adopt") || lower.includes("approve")) return "motion";
-  if (lower.includes("report") || lower.includes("financial")) return "report";
-  if (lower.includes("break")) return "break";
-  if (lower.includes("camera") || lower.includes("closed") || lower.includes("executive")) return "executive_session";
-  return "discussion";
-}
 
 function staticFundingSourcesList() {
   return fundingSources.map((source) => {
@@ -1399,7 +1357,6 @@ const STATIC_EXPORT_TABLES = [
   "agendaItems",
   "meetingTemplates",
   "motionTemplates",
-  "motionBacklog",
   "recordsLocation",
   "sourceEvidence",
   "secretVaultItems",
@@ -2406,6 +2363,16 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       .sort((a: any, b: any) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
   }
   if (moduleName === "partyPortals" && exportName === "center") return null;
+  // motionBacklog.list = motions with an early lifecycle status, mapped back to
+  // the backlog-item shape the frontend reads (status/priority/motionText).
+  if (moduleName === "motionBacklog" && exportName === "list") {
+    const backlogStatuses = new Set(["Backlog", "Tabled", "Deferred", "Agenda"]);
+    const rows = store?.listRows("motions", { societyId: args?.societyId })
+      ?? scopedRows(tables.motions ?? [], args);
+    return rows
+      .filter((row: any) => backlogStatuses.has(String(row.status ?? "Backlog")))
+      .map((row: any) => ({ ...row, motionText: row.text ?? "", priority: row.backlogPriority }));
+  }
   if (moduleName === "firm" && exportName === "search") {
     const q = String(args?.query ?? "").trim().toLowerCase();
     if (q.length < 2) return [];
@@ -3237,10 +3204,53 @@ function mutCasesPaperless5(name: string, args: StaticArgs, store?: StaticDemoDe
       tags: ["societyer", "demo"],
     };
   }
+  // motionBacklog.* now reads/writes the first-class motions store (the table
+  // was retired). A "backlog item" is a motions row with an early status plus
+  // the folded-in backlog columns (text/backlogPriority/source/seededKey/notes).
+  if (name === "motionBacklog:create") {
+    const id = staticLocalId("motionBacklog", "create");
+    const now = new Date().toISOString();
+    store?.upsertRow("motions", {
+      _id: id,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      title: args?.title,
+      text: args?.motionText ?? "",
+      category: args?.category ?? "governance",
+      status: "Backlog",
+      backlogPriority: args?.priority ?? "normal",
+      source: args?.source ?? "manual",
+      notes: args?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    return id;
+  }
+  if (name === "motionBacklog:update") {
+    const existing = store?.getRow("motions", args?.backlogId) ?? {};
+    const patch: Record<string, any> = { ...existing, updatedAtISO: new Date().toISOString() };
+    if (args?.title !== undefined) patch.title = args.title;
+    if (args?.motionText !== undefined) patch.text = args.motionText;
+    if (args?.category !== undefined) patch.category = args.category;
+    if (args?.status !== undefined) patch.status = args.status;
+    if (args?.priority !== undefined) patch.backlogPriority = args.priority;
+    if (args?.notes !== undefined) patch.notes = args.notes;
+    store?.upsertRow("motions", patch);
+    return args?.backlogId ?? null;
+  }
+  if (name === "motionBacklog:remove") {
+    store?.removeRow("motions", args?.backlogId);
+    return null;
+  }
   if (name === "motionBacklog:seedPipaSetup") {
-    return { inserted: 0, existing: motionBacklog.length };
+    const rows = store?.listRows("motions", { societyId: args?.societyId }) ?? motions;
+    const existing = rows.filter((r: any) => r.source === "pipa-setup").length;
+    return { inserted: 0, existing };
   }
   if (name === "motionBacklog:addToAgenda") {
+    if (args?.backlogId) {
+      const existing = store?.getRow("motions", args.backlogId);
+      if (existing) store?.upsertRow("motions", { ...existing, status: "Agenda", updatedAtISO: new Date().toISOString() });
+    }
     return { agendaItemId: "static_agenda_item_motion_backlog", reused: false };
   }
   if (name === "motionBacklog:seedToMinutes") {
@@ -5691,6 +5701,9 @@ class StaticDemoDexieStore {
 
 function staticTableNameForModule(moduleName: string) {
   if (moduleName === "society") return "societies";
+  // motionBacklog has been retired into the first-class motions table; the
+  // api.motionBacklog.* surface is preserved but reads/writes the motions store.
+  if (moduleName === "motionBacklog") return "motions";
   return moduleName;
 }
 

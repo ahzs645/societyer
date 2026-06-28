@@ -148,6 +148,25 @@ export const recordUploadedVersion = mutation({
       createdAtISO: new Date().toISOString(),
     });
 
+    // Honor the connection's "auto-upload new versions" toggle: mirror the new
+    // version to Paperless-ngx after local storage succeeds. Best-effort and
+    // scheduled (the sync is an HTTP action) so it never blocks the upload.
+    const connection = (
+      await ctx.db
+        .query("paperlessConnections")
+        .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+        .collect()
+    )
+      .sort((a, b) => String(b.connectedAtISO).localeCompare(String(a.connectedAtISO)))[0];
+    if (connection && connection.autoUpload && connection.status === "connected") {
+      await ctx.scheduler.runAfter(0, api.paperless.syncDocument, {
+        societyId: args.societyId,
+        documentId: args.documentId,
+        versionId: id,
+        actingUserId: args.actingUserId,
+      });
+    }
+
     return id;
   },
 });

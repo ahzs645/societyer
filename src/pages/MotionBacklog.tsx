@@ -274,8 +274,8 @@ function formatLabel(value: string) {
 }
 
 function statusTone(status: string): "success" | "warn" | "info" | "neutral" {
-  if (status === "Adopted") return "success";
-  if (status === "Agenda" || status === "MinutesDraft") return "info";
-  if (status === "Deferred") return "warn";
+  if (status === "Voted") return "success";
+  if (status === "Agenda" || status === "Draft") return "info";
+  if (status === "Deferred" || status === "Tabled") return "warn";
   return "neutral";
 }

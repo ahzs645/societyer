@@ -120,7 +120,7 @@ export const addItem = mutation({
     depth: v.optional(v.union(v.literal(0), v.literal(1))),
     timeAllottedMinutes: v.optional(v.number()),
     motionTemplateId: v.optional(v.id("motionTemplates")),
-    motionBacklogId: v.optional(v.id("motionBacklog")),
+    motionId: v.optional(v.id("motions")),
     motionText: v.optional(v.string()),
   },
   returns: v.any(),
@@ -157,7 +157,7 @@ export const addItem = mutation({
       depth: args.depth,
       timeAllottedMinutes: args.timeAllottedMinutes,
       motionTemplateId: args.motionTemplateId,
-      motionBacklogId: args.motionBacklogId,
+      motionId: args.motionId,
       motionText,
       createdAtISO: now,
     });
@@ -198,7 +198,7 @@ export const syncForMeeting = mutation({
       presenter: v.optional(v.string()),
       timeAllottedMinutes: v.optional(v.number()),
       motionTemplateId: v.optional(v.id("motionTemplates")),
-      motionBacklogId: v.optional(v.id("motionBacklog")),
+      motionId: v.optional(v.id("motions")),
       motionText: v.optional(v.string()),
     })),
   },
@@ -272,7 +272,7 @@ export const syncForMeeting = mutation({
       if (item.presenter !== undefined) payload.presenter = item.presenter;
       if (item.timeAllottedMinutes !== undefined) payload.timeAllottedMinutes = item.timeAllottedMinutes;
       if (item.motionTemplateId !== undefined) payload.motionTemplateId = item.motionTemplateId;
-      if (item.motionBacklogId !== undefined) payload.motionBacklogId = item.motionBacklogId;
+      if (item.motionId !== undefined) payload.motionId = item.motionId;
       if (motionText !== undefined) payload.motionText = motionText;
 
       if (match) {
@@ -386,7 +386,7 @@ function sectionFromAgendaItem(item: any) {
   if (item.presenter !== undefined) section.presenter = item.presenter;
   if (item.motionText !== undefined) section.motionText = item.motionText;
   if (item.motionTemplateId !== undefined) section.motionTemplateId = item.motionTemplateId;
-  if (item.motionBacklogId !== undefined) section.motionBacklogId = item.motionBacklogId;
+  if (item.motionId !== undefined) section.motionId = item.motionId;
   return section;
 }
 
@@ -401,7 +401,7 @@ function motionsFromAgendaItems(items: any[]) {
         sectionTitle: item.title,
       };
       if (item.motionTemplateId !== undefined) motion.motionTemplateId = item.motionTemplateId;
-      if (item.motionBacklogId !== undefined) motion.motionBacklogId = item.motionBacklogId;
+      if (item.motionId !== undefined) motion.motionId = item.motionId;
       return motion;
     })
     .filter((motion) => motion.text);
@@ -451,8 +451,8 @@ async function syncMeetingAndMinutesFromAgenda(ctx: any, meeting: any, items: an
     else if (existing.motionText !== undefined) merged.motionText = existing.motionText;
     if (item.motionTemplateId !== undefined) merged.motionTemplateId = item.motionTemplateId;
     else if (existing.motionTemplateId !== undefined) merged.motionTemplateId = existing.motionTemplateId;
-    if (item.motionBacklogId !== undefined) merged.motionBacklogId = item.motionBacklogId;
-    else if (existing.motionBacklogId !== undefined) merged.motionBacklogId = existing.motionBacklogId;
+    if (item.motionId !== undefined) merged.motionId = item.motionId;
+    else if (existing.motionId !== undefined) merged.motionId = existing.motionId;
     // Editor-managed flag, never derived from agenda metadata. Preserve it so
     // saving a section with publicVisible:false isn't immediately reverted by
     // the agenda re-sync that runs from saveMinuteSections.
@@ -505,7 +505,7 @@ function cleanMinutesSection(section: any) {
   if (section?.discussion !== undefined) clean.discussion = section.discussion;
   if (section?.motionText !== undefined) clean.motionText = section.motionText;
   if (section?.motionTemplateId !== undefined) clean.motionTemplateId = section.motionTemplateId;
-  if (section?.motionBacklogId !== undefined) clean.motionBacklogId = section.motionBacklogId;
+  if (section?.motionId !== undefined) clean.motionId = section.motionId;
   if (section?.reportSubmitted !== undefined) clean.reportSubmitted = section.reportSubmitted;
   if (Array.isArray(section?.decisions)) clean.decisions = section.decisions.map(String);
   if (Array.isArray(section?.actionItems)) clean.actionItems = section.actionItems.map(cleanActionItem);
@@ -542,7 +542,7 @@ function cleanMotion(motion: any) {
   if (motion?.sectionIndex !== undefined) clean.sectionIndex = motion.sectionIndex;
   if (motion?.sectionTitle !== undefined) clean.sectionTitle = motion.sectionTitle;
   if (motion?.motionTemplateId !== undefined) clean.motionTemplateId = motion.motionTemplateId;
-  if (motion?.motionBacklogId !== undefined) clean.motionBacklogId = motion.motionBacklogId;
+  if (motion?.motionId !== undefined) clean.motionId = motion.motionId;
   return clean;
 }
 
@@ -562,8 +562,8 @@ export const removeItem = mutation({
   handler: async (ctx, { itemId }) => {
     const item = await ctx.db.get(itemId);
     if (!item) return;
-    if (item.motionBacklogId) {
-      await ctx.db.patch(item.motionBacklogId, {
+    if (item.motionId) {
+      await ctx.db.patch(item.motionId, {
         status: "Backlog",
         updatedAtISO: new Date().toISOString(),
       });

@@ -231,6 +231,19 @@ export const update = mutation({
       await assertMotionPersonLinksBelongToSociety(ctx, minutes.societyId, patch.motions);
     }
     await ctx.db.patch(id, patch);
+
+    // Snapshot-on-approval: the first time minutes become approved, freeze the
+    // motion set so later edits to live motions never rewrite the approved legal
+    // record. Skipped if a snapshot already exists (idempotent).
+    const newlyApproved = !!patch.approvedAt && !minutes.approvedAt;
+    if (newlyApproved && !minutes.motionSnapshots) {
+      const frozen = patch.motions ?? minutes.motions ?? [];
+      await ctx.db.patch(id, {
+        motionSnapshots: frozen,
+        motionSnapshotAtISO: new Date().toISOString(),
+      });
+    }
+
     // Dual-write: re-mirror only when the motions array was part of this patch.
     if (patch.motions) {
       await syncMotionsForMinutes(ctx, {

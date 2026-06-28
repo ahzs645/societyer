@@ -272,6 +272,10 @@ export function TreasurerPage() {
     api.expenseReports.list,
     society ? { societyId: society._id } : "skip",
   );
+  const financialAccounts = useQuery(
+    api.financialHub.accounts,
+    society ? { societyId: society._id } : "skip",
+  );
   const documents = useQuery(
     api.documents.list,
     society ? { societyId: society._id } : "skip",
@@ -289,6 +293,7 @@ export function TreasurerPage() {
   const removeExpenseReport = useMutation(api.expenseReports.remove);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const [payingReport, setPayingReport] = useState<{ report: any; expenseAccountId: string; bankAccountId: string } | null>(null);
   const [sourceDraft, setSourceDraft] = useState<any>(null);
   const [eventDraft, setEventDraft] = useState<any>(null);
   const [expenseDraft, setExpenseDraft] = useState<any>(null);
@@ -480,7 +485,11 @@ export function TreasurerPage() {
                         <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Approved", actingUserId })}>Approve</button>
                       )}
                       {report.status === "Approved" && (
-                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Paid", actingUserId })}>Mark paid</button>
+                        (financialAccounts ?? []).length > 0 ? (
+                          <button className="btn btn--ghost btn--sm" onClick={() => setPayingReport({ report, expenseAccountId: "", bankAccountId: "" })}>Mark paid</button>
+                        ) : (
+                          <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Paid", actingUserId })}>Mark paid</button>
+                        )
                       )}
                       <button
                         className="btn btn--ghost btn--sm btn--icon"
@@ -1109,6 +1118,74 @@ export function TreasurerPage() {
             </div>
             <Field label="Notes">
               <MarkdownEditor rows={4} value={expenseDraft.notes ?? ""} onChange={(markdown) => setExpenseDraft({ ...expenseDraft, notes: markdown })} />
+            </Field>
+          </div>
+        )}
+      </Drawer>
+
+      <Drawer
+        open={!!payingReport}
+        onClose={() => setPayingReport(null)}
+        title={payingReport ? `Mark paid: ${payingReport.report.title}` : "Mark paid"}
+        footer={
+          payingReport && (
+            <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+              <button
+                className="btn btn--ghost"
+                onClick={async () => {
+                  await setExpenseStatus({ id: payingReport.report._id, status: "Paid", actingUserId });
+                  setPayingReport(null);
+                  toast.success("Marked paid");
+                }}
+              >
+                Mark paid without posting
+              </button>
+              <button
+                className="btn btn--accent"
+                disabled={!payingReport.expenseAccountId || !payingReport.bankAccountId}
+                onClick={async () => {
+                  await setExpenseStatus({
+                    id: payingReport.report._id,
+                    status: "Paid",
+                    actingUserId,
+                    expenseAccountId: payingReport.expenseAccountId as any,
+                    bankAccountId: payingReport.bankAccountId as any,
+                  });
+                  setPayingReport(null);
+                  toast.success("Paid and posted to the ledger");
+                }}
+              >
+                Post to ledger &amp; mark paid
+              </button>
+            </div>
+          )
+        }
+      >
+        {payingReport && (
+          <div className="col" style={{ gap: 12 }}>
+            <p className="muted">
+              Optionally post this reimbursement to the double-entry ledger: debit the expense
+              account, credit the bank/cash account it was paid from.
+            </p>
+            <Field label="Expense account (debit)">
+              <Select
+                value={payingReport.expenseAccountId}
+                onChange={(v) => setPayingReport({ ...payingReport, expenseAccountId: v })}
+                options={[
+                  { value: "", label: "Choose account…" },
+                  ...(financialAccounts ?? []).map((a: any) => ({ value: a._id, label: a.name })),
+                ]}
+              />
+            </Field>
+            <Field label="Paid from (credit)">
+              <Select
+                value={payingReport.bankAccountId}
+                onChange={(v) => setPayingReport({ ...payingReport, bankAccountId: v })}
+                options={[
+                  { value: "", label: "Choose account…" },
+                  ...(financialAccounts ?? []).map((a: any) => ({ value: a._id, label: a.name })),
+                ]}
+              />
             </Field>
           </div>
         )}

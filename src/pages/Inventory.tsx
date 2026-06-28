@@ -63,6 +63,7 @@ export function InventoryPage() {
   const lots = useQuery(api.inventoryHub.lots, society ? { societyId: society._id } : "skip");
   const counts = useQuery(api.inventoryHub.counts, society ? { societyId: society._id } : "skip");
   const receiptLinks = useQuery(api.inventoryHub.receiptLinks, society ? { societyId: society._id } : "skip");
+  const pendingCandidates = useQuery(api.inventoryHub.candidates, society ? { societyId: society._id, status: "new" } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const transactions = useQuery(api.financialHub.transactions, society ? { societyId: society._id, limit: 200 } : "skip");
   const postMovement = useMutation(api.inventoryHub.postStockMovement);
@@ -81,6 +82,8 @@ export function InventoryPage() {
   const voidCount = useMutation(api.inventoryHub.voidCount);
   const linkReceipt = useMutation(api.inventoryHub.linkReceipt);
   const unlinkReceipt = useMutation(api.inventoryHub.unlinkReceipt);
+  const promoteCandidate = useMutation(api.inventoryHub.promoteCandidateToMovement);
+  const setCandidateStatus = useMutation(api.inventoryHub.setCandidateStatus);
 
   const [tab, setTab] = useState<TabKey>("stock");
   const [drawer, setDrawer] = useState<
@@ -577,6 +580,61 @@ export function InventoryPage() {
           >
             Post adjustments
           </button>
+        </div>
+      )}
+
+      {(pendingCandidates ?? []).filter((c: any) => c.candidateType === "movement").length > 0 && (
+        <div className="card" style={{ marginBottom: 8 }}>
+          <div className="card__head">
+            <h2 className="card__title">Pending imports</h2>
+            <span className="card__subtitle">
+              {(pendingCandidates ?? []).filter((c: any) => c.candidateType === "movement").length} movement candidate(s) awaiting review
+            </span>
+          </div>
+          <div className="card__body col" style={{ gap: 6 }}>
+            {(pendingCandidates ?? [])
+              .filter((c: any) => c.candidateType === "movement")
+              .map((c: any) => {
+                const resolved = !!c.suggestedInventoryItemId && !!c.suggestedLocationId;
+                return (
+                  <div key={c._id} className="row" style={{ gap: 8, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
+                    <span>
+                      <strong>{c.itemName ?? c.sku ?? "Item"}</strong>
+                      <span className="muted">
+                        {" "}· qty {c.quantity ?? 0}{c.locationName ? ` → ${c.locationName}` : ""}{c.sourceSystem ? ` · ${c.sourceSystem}` : ""}
+                      </span>
+                      {!resolved && <span className="muted"> · needs item/location match</span>}
+                    </span>
+                    <span className="row" style={{ gap: 6 }}>
+                      <button
+                        className="btn btn--sm"
+                        disabled={!resolved}
+                        title={resolved ? "Post as a stock movement" : "Match an inventory item and location first"}
+                        onClick={async () => {
+                          try {
+                            await promoteCandidate({ candidateId: c._id });
+                            toast.success("Posted candidate as a stock movement");
+                          } catch (err: any) {
+                            toast.error(err?.message ?? "Could not post candidate");
+                          }
+                        }}
+                      >
+                        Post movement
+                      </button>
+                      <button
+                        className="btn btn--sm btn--ghost"
+                        onClick={async () => {
+                          await setCandidateStatus({ candidateId: c._id, status: "ignored" });
+                          toast.info("Candidate ignored");
+                        }}
+                      >
+                        Ignore
+                      </button>
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
         </div>
       )}
 

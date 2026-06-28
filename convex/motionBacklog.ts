@@ -1,5 +1,18 @@
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
+import { insertMotion, patchMotion } from "./motions";
+
+// The `motionBacklog` table has been retired (see
+// docs/motions-first-class-object-design.md). A "backlog item" is now just a
+// row in the first-class `motions` table with an early lifecycle status
+// (Backlog / Tabled / Deferred) plus the folded-in backlog columns
+// (backlogPriority / source / seededKey / targetMeetingId / notes). The
+// public api.motionBacklog.* surface is kept (same export names + arg
+// signatures) so the frontend keeps working; each handler now reads/writes the
+// motions table directly. The "backlog list" is the by_society_status query.
+
+// Lifecycle statuses that make a motion show up in the backlog UI.
+const BACKLOG_STATUSES = new Set(["Backlog", "Tabled", "Deferred", "Agenda"]);
 
 const PIPA_SETUP_MOTIONS = [
   {
@@ -40,15 +53,29 @@ const PIPA_SETUP_MOTIONS = [
   },
 ];
 
+// Shape a motions row into the backlog-item shape the frontend still reads
+// (status / priority / motionText / notes), so the api.motionBacklog.list
+// contract is preserved after the table merge.
+function toBacklogItem(motion: any) {
+  return {
+    ...motion,
+    motionText: motion.text ?? "",
+    priority: motion.backlogPriority,
+  };
+}
+
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const rows = await ctx.db
-      .query("motionBacklog")
+      .query("motions")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect();
-    return rows.sort(compareBacklogItems);
+    return rows
+      .filter((row) => BACKLOG_STATUSES.has(String(row.status ?? "Backlog")))
+      .map(toBacklogItem)
+      .sort(compareBacklogItems);
   },
 });
 
@@ -63,26 +90,22 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const now = new Date().toISOString();
-    return await ctx.db.insert("motionBacklog", {
+  handler: async (ctx, args) =>
+    insertMotion(ctx, {
       societyId: args.societyId,
       title: args.title,
-      motionText: args.motionText,
+      text: args.motionText,
       category: args.category ?? "governance",
       status: "Backlog",
-      priority: args.priority ?? "normal",
+      backlogPriority: args.priority ?? "normal",
       source: args.source ?? "manual",
       notes: args.notes,
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-  },
+    }),
 });
 
 export const update = mutation({
   args: {
-    backlogId: v.id("motionBacklog"),
+    backlogId: v.id("motions"),
     title: v.optional(v.string()),
     motionText: v.optional(v.string()),
     category: v.optional(v.string()),
@@ -91,16 +114,17 @@ export const update = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { backlogId, ...patch }) => {
-    const clean: Record<string, unknown> = { updatedAtISO: new Date().toISOString() };
-    for (const [key, value] of Object.entries(patch)) if (value !== undefined) clean[key] = value;
-    await ctx.db.patch(backlogId, clean);
+  handler: async (ctx, { backlogId, motionText, priority, ...rest }) => {
+    const patch: Record<string, unknown> = { ...rest };
+    if (motionText !== undefined) patch.text = motionText;
+    if (priority !== undefined) patch.backlogPriority = priority;
+    await patchMotion(ctx, backlogId, patch);
     return backlogId;
   },
 });
 
 export const remove = mutation({
-  args: { backlogId: v.id("motionBacklog") },
+  args: { backlogId: v.id("motions") },
   returns: v.any(),
   handler: async (ctx, { backlogId }) => {
     await ctx.db.delete(backlogId);
@@ -124,7 +148,7 @@ export const createFromMinutesMotion = mutation({
     if (!motion?.text) throw new Error("Motion not found.");
 
     const existing = await ctx.db
-      .query("motionBacklog")
+      .query("motions")
       .withIndex("by_society", (q) => q.eq("societyId", minutes.societyId))
       .collect();
     const duplicate = existing.find((item) =>
@@ -134,25 +158,21 @@ export const createFromMinutesMotion = mutation({
     if (duplicate) return { backlogId: duplicate._id, reused: true };
 
     const meeting = await ctx.db.get(minutes.meetingId);
-    const now = new Date().toISOString();
-    const backlogId = await ctx.db.insert("motionBacklog", {
+    const backlogId = await insertMotion(ctx, {
       societyId: minutes.societyId,
       title: args.title?.trim() || summarizeMotionTitle(motion.text),
-      motionText: motion.text,
+      text: motion.text,
       category: args.category ?? "governance",
       status: "Deferred",
-      priority: args.priority ?? "normal",
+      backlogPriority: args.priority ?? "normal",
       source: "minutes-motion",
       notes: [
         meeting ? `Carried forward from ${meeting.title}.` : "Carried forward from meeting minutes.",
         motion.outcome ? `Recorded outcome: ${motion.outcome}.` : "",
         args.notes,
       ].filter(Boolean).join(" "),
-      minutesId: args.minutesId,
       sourceMinutesId: args.minutesId,
       sourceMotionIndex: args.motionIndex,
-      createdAtISO: now,
-      updatedAtISO: now,
     });
     return { backlogId, reused: false };
   },
@@ -176,7 +196,7 @@ export const createFromMinutesSection = mutation({
     if (!section?.title) throw new Error("Minutes section not found.");
 
     const existing = await ctx.db
-      .query("motionBacklog")
+      .query("motions")
       .withIndex("by_society", (q) => q.eq("societyId", minutes.societyId))
       .collect();
     const duplicate = existing.find((item) =>
@@ -186,31 +206,27 @@ export const createFromMinutesSection = mutation({
     if (duplicate) return { backlogId: duplicate._id, reused: true };
 
     const meeting = await ctx.db.get(minutes.meetingId);
-    const now = new Date().toISOString();
     const sectionNotes = [
       section.discussion,
       ...(section.decisions ?? []).map((decision: string) => `Decision: ${decision}`),
       ...(section.actionItems ?? []).map((item: any) => `Action: ${item.assignee ? `${item.assignee}: ` : ""}${item.text}`),
     ].filter(Boolean).join(" ");
     const title = args.title?.trim() || section.title;
-    const backlogId = await ctx.db.insert("motionBacklog", {
+    const backlogId = await insertMotion(ctx, {
       societyId: minutes.societyId,
       title,
-      motionText: args.motionText?.trim() || `Discuss and decide next steps for ${title}.`,
+      text: args.motionText?.trim() || `Discuss and decide next steps for ${title}.`,
       category: args.category ?? "governance",
       status: "Deferred",
-      priority: args.priority ?? "normal",
+      backlogPriority: args.priority ?? "normal",
       source: "minutes-section",
       notes: [
         meeting ? `Carried forward from ${meeting.title}.` : "Carried forward from meeting minutes.",
         sectionNotes,
         args.notes,
       ].filter(Boolean).join(" "),
-      minutesId: args.minutesId,
       sourceMinutesId: args.minutesId,
       sourceSectionIndex: args.sectionIndex,
-      createdAtISO: now,
-      updatedAtISO: now,
     });
     return { backlogId, reused: false };
   },
@@ -221,26 +237,23 @@ export const seedPipaSetup = mutation({
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
     const existing = await ctx.db
-      .query("motionBacklog")
+      .query("motions")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect();
     const existingKeys = new Set(existing.map((row) => row.seededKey).filter(Boolean));
-    const now = new Date().toISOString();
     let inserted = 0;
     for (const motion of PIPA_SETUP_MOTIONS) {
       if (existingKeys.has(motion.seededKey)) continue;
-      await ctx.db.insert("motionBacklog", {
+      await insertMotion(ctx, {
         societyId,
         title: motion.title,
-        motionText: motion.motionText,
+        text: motion.motionText,
         category: motion.category,
         status: "Backlog",
-        priority: motion.priority,
+        backlogPriority: motion.priority,
         source: "pipa-setup",
         seededKey: motion.seededKey,
         notes: motion.notes,
-        createdAtISO: now,
-        updatedAtISO: now,
       });
       inserted++;
     }
@@ -250,7 +263,7 @@ export const seedPipaSetup = mutation({
 
 export const addToAgenda = mutation({
   args: {
-    backlogId: v.id("motionBacklog"),
+    backlogId: v.id("motions"),
     agendaId: v.id("agendas"),
   },
   returns: v.any(),
@@ -269,14 +282,13 @@ export const addToAgenda = mutation({
       .query("agendaItems")
       .withIndex("by_agenda", (q) => q.eq("agendaId", agendaId))
       .collect();
-    const duplicate = existingItems.find((item) => String(item.motionBacklogId ?? "") === String(backlogId));
+    const duplicate = existingItems.find((item) => String(item.motionId ?? "") === String(backlogId));
     if (duplicate) {
-      await ctx.db.patch(backlogId, {
+      await patchMotion(ctx, backlogId, {
         status: "Agenda",
         targetMeetingId: agenda.meetingId,
         agendaId,
         agendaItemId: duplicate._id,
-        updatedAtISO: new Date().toISOString(),
       });
       return { agendaItemId: duplicate._id, reused: true };
     }
@@ -289,26 +301,25 @@ export const addToAgenda = mutation({
       type: "motion",
       title: backlogItem.title,
       details: backlogItem.notes,
-      motionBacklogId: backlogId,
-      motionText: backlogItem.motionText,
+      motionId: backlogId,
+      motionText: backlogItem.text,
       createdAtISO: now,
     });
-    await ctx.db.patch(backlogId, {
+    await patchMotion(ctx, backlogId, {
       status: "Agenda",
       targetMeetingId: agenda.meetingId,
       agendaId,
       agendaItemId,
-      updatedAtISO: now,
     });
     return { agendaItemId, reused: false };
   },
 });
 
-// Create backlog records for a set of (deferred/tabled) motions in a source
+// Create backlog motions for a set of (deferred/tabled) motions in a source
 // meeting's minutes and link them onto a target meeting's agenda in one shot.
-// Used by "Schedule next meeting" so unfinished business becomes tracked
-// backlog records AND agenda items on the new meeting. Idempotent: deduped by
-// source minutes+motion index (backlog) and by motionBacklogId (agenda item).
+// Used by "Schedule next meeting" so unfinished business becomes tracked motion
+// rows AND agenda items on the new meeting. Idempotent: deduped by source
+// minutes+motion index (motion row) and by motionId (agenda item).
 export const carryForwardToMeeting = mutation({
   args: {
     meetingId: v.id("meetings"),
@@ -346,7 +357,7 @@ export const carryForwardToMeeting = mutation({
     }
 
     const existingBacklog = await ctx.db
-      .query("motionBacklog")
+      .query("motions")
       .withIndex("by_society", (q) => q.eq("societyId", minutes.societyId))
       .collect();
     // Track agenda items for this agenda so order/dedupe stay correct as we add.
@@ -354,8 +365,8 @@ export const carryForwardToMeeting = mutation({
       .query("agendaItems")
       .withIndex("by_agenda", (q) => q.eq("agendaId", agendaId))
       .collect();
-    const linkedBacklogIds = new Set(
-      agendaItems.map((item) => String(item.motionBacklogId ?? "")).filter(Boolean),
+    const linkedMotionIds = new Set(
+      agendaItems.map((item) => String(item.motionId ?? "")).filter(Boolean),
     );
     let order = agendaItems.length;
 
@@ -366,7 +377,7 @@ export const carryForwardToMeeting = mutation({
       const motion = motions[motionIndex];
       if (!motion?.text) continue;
 
-      // 1. Backlog record — dedupe by source minutes + motion index.
+      // 1. Motion row — dedupe by source minutes + motion index.
       const existing = existingBacklog.find((item) =>
         String(item.sourceMinutesId ?? "") === String(sourceMinutesId) &&
         item.sourceMotionIndex === motionIndex
@@ -374,30 +385,27 @@ export const carryForwardToMeeting = mutation({
       const title = existing?.title || summarizeMotionTitle(motion.text);
       let backlogId = existing?._id;
       if (!backlogId) {
-        backlogId = await ctx.db.insert("motionBacklog", {
+        backlogId = await insertMotion(ctx, {
           societyId: minutes.societyId,
           title,
-          motionText: motion.text,
+          text: motion.text,
           category: "governance",
           status: "Deferred",
-          priority: "normal",
+          backlogPriority: "normal",
           source: "minutes-motion",
           notes: [
             sourceMeeting ? `Carried forward from ${sourceMeeting.title}.` : "Carried forward from meeting minutes.",
             motion.outcome ? `Recorded outcome: ${motion.outcome}.` : "",
           ].filter(Boolean).join(" "),
-          minutesId: sourceMinutesId,
           sourceMinutesId,
           sourceMotionIndex: motionIndex,
-          createdAtISO: now,
-          updatedAtISO: now,
         });
       }
 
-      // 2. Link it onto the target agenda — dedupe by motionBacklogId.
+      // 2. Link it onto the target agenda — dedupe by motionId.
       let agendaItemId: any;
-      if (linkedBacklogIds.has(String(backlogId))) {
-        const dup = agendaItems.find((item) => String(item.motionBacklogId ?? "") === String(backlogId));
+      if (linkedMotionIds.has(String(backlogId))) {
+        const dup = agendaItems.find((item) => String(item.motionId ?? "") === String(backlogId));
         agendaItemId = dup?._id;
         reused += 1;
       } else {
@@ -407,21 +415,20 @@ export const carryForwardToMeeting = mutation({
           order,
           type: "motion",
           title,
-          motionBacklogId: backlogId,
+          motionId: backlogId,
           motionText: motion.text,
           createdAtISO: now,
         });
         order += 1;
-        linkedBacklogIds.add(String(backlogId));
+        linkedMotionIds.add(String(backlogId));
         created += 1;
       }
 
-      await ctx.db.patch(backlogId, {
+      await patchMotion(ctx, backlogId, {
         status: "Agenda",
         targetMeetingId: meetingId,
         agendaId,
         agendaItemId,
-        updatedAtISO: now,
       });
     }
 
@@ -453,7 +460,7 @@ export const seedToMinutes = mutation({
     );
     const agendaItems = agendaItemsByAgenda
       .flat()
-      .filter((item) => item.type === "motion" && item.motionBacklogId && item.motionText);
+      .filter((item) => item.type === "motion" && item.motionId && item.motionText);
 
     const existingMotions = Array.isArray(minutes.motions) ? minutes.motions : [];
     const existingTexts = new Set(existingMotions.map((motion: any) => comparableMotionText(motion.text)));
@@ -470,12 +477,12 @@ export const seedToMinutes = mutation({
       });
     }
 
-    const now = new Date().toISOString();
     for (const item of agendaItems) {
-      await ctx.db.patch(item.motionBacklogId!, {
-        status: "MinutesDraft",
+      // Seeded into a minutes draft but not yet voted — the closest unified
+      // lifecycle stage is Draft.
+      await patchMotion(ctx, item.motionId!, {
+        status: "Draft",
         minutesId: minutes._id,
-        updatedAtISO: now,
       });
     }
 
@@ -493,7 +500,7 @@ function compareBacklogItems(a: any, b: any) {
 }
 
 function statusRank(status: string | undefined) {
-  const index = ["Backlog", "Agenda", "MinutesDraft", "Deferred", "Adopted", "Archived"].indexOf(status ?? "Backlog");
+  const index = ["Backlog", "Agenda", "Draft", "Tabled", "Deferred", "Voted", "Archived"].indexOf(status ?? "Backlog");
   return index === -1 ? 99 : index;
 }
 

@@ -79,7 +79,26 @@ export const update = mutation({
   },
   returns: v.any(),
   handler: async (ctx, { id, patch }) => {
+    const before = await ctx.db.get(id);
     await ctx.db.patch(id, patch);
+
+    // Re-evaluate the signature threshold when the count or electorate changes,
+    // but only while the proposal is in an auto-managed state — never override a
+    // manual status set in this patch, nor a terminal status like Rejected.
+    const autoManaged = before?.status === "Submitted" || before?.status === "MeetsThreshold";
+    if (before && patch.status === undefined && autoManaged) {
+      const merged = { ...before, ...patch };
+      const rules = await getActiveBylawRuleSet(ctx, before.societyId);
+      const thresholdPercent = merged.thresholdPercent ?? rules.memberProposalThresholdPct;
+      const eligibleVoters = merged.eligibleVotersAtSubmission ?? 0;
+      const signatureThresholdCount =
+        eligibleVoters > 0 ? Math.ceil(eligibleVoters * (thresholdPercent / 100)) : 0;
+      const required = Math.max(rules.memberProposalMinSignatures, signatureThresholdCount);
+      const recomputed = (merged.signatureCount ?? 0) >= required ? "MeetsThreshold" : "Submitted";
+      if (recomputed !== before.status) {
+        await ctx.db.patch(id, { status: recomputed });
+      }
+    }
   },
 });
 

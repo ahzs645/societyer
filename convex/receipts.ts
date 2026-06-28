@@ -58,6 +58,15 @@ export const remove = mutation({
   args: { id: v.id("donationReceipts") },
   returns: v.any(),
   handler: async (ctx, { id }) => {
+    // Receipt numbers are serial (next = count + 1). Deleting a receipt would
+    // make a future issue reuse a number, breaking the CRA audit-trail
+    // invariant — void it instead (voidReceipt) to preserve the sequence.
+    const receipt = await ctx.db.get(id);
+    if (receipt?.receiptNumber) {
+      throw new Error(
+        "Issued donation receipts cannot be deleted — void the receipt instead to preserve serial numbering.",
+      );
+    }
     await ctx.db.delete(id);
   },
 });
