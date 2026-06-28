@@ -28,7 +28,9 @@ import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { money } from "../lib/format";
 import {
+  CONNECTION_STATUSES,
   EXPIRY_SOON_DAYS,
+  INVENTORY_PROVIDERS,
   ITEM_TYPES,
   LOCATION_TYPES,
   LOT_STATUSES,
@@ -37,6 +39,7 @@ import {
   centsToDollars,
   daysUntil,
   dollarsToCents,
+  emptyConnectionForm,
   emptyCountForm,
   emptyItemForm,
   emptyLinkForm,
@@ -44,6 +47,8 @@ import {
   emptyLotForm,
   emptyMovementForm,
   formatQuantity,
+  providerLabel,
+  relativeSince,
   todayDate,
 } from "./inventory/helpers";
 import { CountEntry, Stat, TabButton } from "./inventory/components";
@@ -56,6 +61,7 @@ export function InventoryPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const actingUserId = useCurrentUserId() ?? undefined;
+  const connections = useQuery(api.inventoryHub.connections, society ? { societyId: society._id } : "skip");
   const items = useQuery(api.inventoryHub.items, society ? { societyId: society._id } : "skip");
   const locations = useQuery(api.inventoryHub.locations, society ? { societyId: society._id } : "skip");
   const balances = useQuery(api.inventoryHub.balances, society ? { societyId: society._id } : "skip");
@@ -84,11 +90,16 @@ export function InventoryPage() {
   const unlinkReceipt = useMutation(api.inventoryHub.unlinkReceipt);
   const promoteCandidate = useMutation(api.inventoryHub.promoteCandidateToMovement);
   const setCandidateStatus = useMutation(api.inventoryHub.setCandidateStatus);
+  const upsertConnection = useMutation(api.inventoryHub.upsertConnection);
+  const deleteConnection = useMutation(api.inventoryHub.deleteConnection);
 
   const [tab, setTab] = useState<TabKey>("stock");
   const [drawer, setDrawer] = useState<
-    "movement" | "openboxes" | "item" | "location" | "link" | "lot" | "count-start" | "count-entry" | "location-detail" | null
+    "movement" | "openboxes" | "item" | "location" | "link" | "lot" | "count-start" | "count-entry" | "location-detail" | "connection" | null
   >(null);
+  const [connectionForm, setConnectionForm] = useState(emptyConnectionForm);
+  const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
+  const [syncConnectionId, setSyncConnectionId] = useState<string | null>(null);
   const [itemForm, setItemForm] = useState(emptyItemForm);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [locationForm, setLocationForm] = useState(emptyLocationForm);
@@ -501,11 +512,72 @@ export function InventoryPage() {
   const runOpenBoxesImport = async () => {
     try {
       const parsed = JSON.parse(openBoxesJson);
-      const result = await importOpenBoxes({ societyId: society._id, ...parsed });
+      const result = await importOpenBoxes({
+        societyId: society._id,
+        ...(syncConnectionId ? { connectionId: syncConnectionId as any } : {}),
+        ...parsed,
+      });
       toast.success(`OpenBoxes import: ${result.itemsUpserted ?? 0} items, ${result.movementsPosted ?? 0} movements`);
       setDrawer(null);
+      setSyncConnectionId(null);
     } catch (error: any) {
       toast.error(error?.message ?? "OpenBoxes import failed.");
+    }
+  };
+
+  const openNewConnection = () => {
+    setEditingConnectionId(null);
+    setConnectionForm(emptyConnectionForm());
+    setDrawer("connection");
+  };
+
+  const openEditConnection = (connection: any) => {
+    setEditingConnectionId(connection._id);
+    setConnectionForm({
+      provider: connection.provider ?? "manual",
+      displayName: connection.displayName ?? "",
+      status: connection.status ?? "active",
+      externalOrganizationId: connection.externalOrganizationId ?? "",
+      baseUrl: connection.baseUrl ?? "",
+    });
+    setDrawer("connection");
+  };
+
+  const saveConnection = async () => {
+    if (!connectionForm.displayName.trim()) {
+      toast.error("Give the library a name.");
+      return;
+    }
+    try {
+      await upsertConnection({
+        id: editingConnectionId ? (editingConnectionId as any) : undefined,
+        societyId: society._id,
+        provider: connectionForm.provider,
+        displayName: connectionForm.displayName.trim(),
+        status: connectionForm.status,
+        externalOrganizationId: connectionForm.externalOrganizationId.trim() || undefined,
+        baseUrl: connectionForm.baseUrl.trim() || undefined,
+      });
+      toast.success(editingConnectionId ? "Library updated" : "Library added");
+      setDrawer(null);
+    } catch (error: any) {
+      toast.error("Could not save library", error?.message);
+    }
+  };
+
+  const removeConnection = async (connection: any) => {
+    const ok = await confirm({
+      title: "Remove library?",
+      message: `Remove "${connection.displayName}"? Items it imported are kept but will no longer be linked to a library.`,
+      confirmLabel: "Remove",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await deleteConnection({ id: connection._id });
+      toast.success("Library removed");
+    } catch (error: any) {
+      toast.error("Could not remove library", error?.message);
     }
   };
 
@@ -522,8 +594,9 @@ export function InventoryPage() {
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <MoreActionsMenu
               items={[
+                { id: "add-library", label: "Add library", icon: <Boxes size={14} />, onSelect: openNewConnection },
                 { id: "backfill-assets", label: "Backfill assets", icon: <RefreshCw size={14} />, onSelect: runBackfill },
-                { id: "openboxes-import", label: "OpenBoxes import", icon: <Boxes size={14} />, onSelect: () => setDrawer("openboxes") },
+                { id: "openboxes-import", label: "OpenBoxes import", icon: <Boxes size={14} />, onSelect: () => { setSyncConnectionId(null); setDrawer("openboxes"); } },
                 { id: "new-movement", label: "New movement", icon: <Plus size={14} />, onSelect: () => { setMovementForm(emptyMovementForm()); setDrawer("movement"); } },
                 { id: "assets", label: "Assets", icon: <ArrowLeft size={14} />, onSelect: () => navigate("/app/assets") },
               ]}
@@ -638,6 +711,52 @@ export function InventoryPage() {
         </div>
       )}
 
+      <div className="card" style={{ marginBottom: 8 }}>
+        <div className="card__head">
+          <h2 className="card__title">Libraries &amp; sync</h2>
+          <span className="card__subtitle">
+            {(connections ?? []).length
+              ? `${(connections ?? []).length} connected ${connections!.length === 1 ? "library" : "libraries"}`
+              : "Connect a library to source and sync inventory"}
+          </span>
+          <button className="btn btn--sm btn--accent" style={{ marginLeft: "auto" }} onClick={openNewConnection}>
+            <Plus size={12} /> Add library
+          </button>
+        </div>
+        <div className="card__body col" style={{ gap: 6 }}>
+          {connections === undefined ? (
+            <span className="muted">Loading…</span>
+          ) : connections.length === 0 ? (
+            <span className="muted">
+              No libraries yet. Add one to set up an inventory source (OpenBoxes, a CSV file, or a manual collection) that this register stays in sync with.
+            </span>
+          ) : (
+            connections.map((connection: any) => (
+              <div key={connection._id} className="row" style={{ gap: 8, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
+                <span>
+                  <strong>{connection.displayName}</strong>
+                  <span className="muted"> · {providerLabel(connection.provider)} · {relativeSince(connection.lastSyncedAtISO)}</span>
+                </span>
+                <span className="row" style={{ gap: 6, alignItems: "center" }}>
+                  <Badge tone={connection.status === "active" ? "success" : connection.status === "disabled" ? "neutral" : "warn"}>
+                    {connection.status === "needs_attention" ? "needs attention" : connection.status}
+                  </Badge>
+                  {connection.provider === "openboxes" && (
+                    <button className="btn btn--sm" onClick={() => { setSyncConnectionId(connection._id); setDrawer("openboxes"); }} title="Import an OpenBoxes snapshot into this library">
+                      <RefreshCw size={12} /> Sync
+                    </button>
+                  )}
+                  <button className="btn btn--sm btn--ghost" onClick={() => openEditConnection(connection)}>Edit</button>
+                  <button className="btn btn--sm btn--ghost btn--icon" aria-label={`Remove ${connection.displayName}`} onClick={() => removeConnection(connection)}>
+                    <Trash2 size={12} />
+                  </button>
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
       <div className="tab-bar" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "8px 0 4px", alignItems: "center" }}>
         <TabButton active={tab === "stock"} onClick={() => setTab("stock")} icon={<Package size={13} />} label="Stock & items" />
         <TabButton active={tab === "locations"} onClick={() => setTab("locations")} icon={<MapPin size={13} />} label={`Locations & bins (${(locations ?? []).length})`} />
@@ -744,11 +863,53 @@ export function InventoryPage() {
       </Drawer>
 
       <Drawer
-        open={drawer === "openboxes"}
+        open={drawer === "connection"}
         onClose={() => setDrawer(null)}
-        title="Import OpenBoxes snapshot"
+        title={editingConnectionId ? "Edit library" : "Add library"}
+        footer={
+          <>
+            <button className="btn" onClick={() => setDrawer(null)}>Cancel</button>
+            <button className="btn btn--accent" onClick={saveConnection}>{editingConnectionId ? "Save library" : "Add library"}</button>
+          </>
+        }
+      >
+        <div className="form-grid">
+          <Field label="Name" required hint="A label for this inventory source, e.g. “Main warehouse” or “OpenBoxes clinic”.">
+            <input className="input" value={connectionForm.displayName} onChange={(e) => setConnectionForm({ ...connectionForm, displayName: e.target.value })} />
+          </Field>
+          <Field label="Type">
+            <Select
+              value={connectionForm.provider}
+              onChange={(provider) => setConnectionForm({ ...connectionForm, provider })}
+              options={INVENTORY_PROVIDERS.map((p) => ({ value: p, label: providerLabel(p) }))}
+            />
+          </Field>
+          <Field label="Status">
+            <Select
+              value={connectionForm.status}
+              onChange={(status) => setConnectionForm({ ...connectionForm, status })}
+              options={CONNECTION_STATUSES.map((s) => ({ value: s, label: s === "needs_attention" ? "needs attention" : s }))}
+            />
+          </Field>
+          <Field label="Base URL" hint="API or web address of the external system (optional).">
+            <input className="input" value={connectionForm.baseUrl} placeholder="https://…" onChange={(e) => setConnectionForm({ ...connectionForm, baseUrl: e.target.value })} />
+          </Field>
+          <Field label="External organization ID" hint="Identifier for your org in the external system (optional).">
+            <input className="input" value={connectionForm.externalOrganizationId} onChange={(e) => setConnectionForm({ ...connectionForm, externalOrganizationId: e.target.value })} />
+          </Field>
+        </div>
+        <p className="muted">
+          OpenBoxes libraries can pull a snapshot from the <strong>Sync</strong> action in the libraries list. CSV and manual
+          libraries are kept up to date through imports and the item editor.
+        </p>
+      </Drawer>
+
+      <Drawer
+        open={drawer === "openboxes"}
+        onClose={() => { setDrawer(null); setSyncConnectionId(null); }}
+        title={syncConnectionId ? "Sync OpenBoxes library" : "Import OpenBoxes snapshot"}
         size="wide"
-        footer={<button className="btn-action btn-action--primary" onClick={runOpenBoxesImport}>Import snapshot</button>}
+        footer={<button className="btn-action btn-action--primary" onClick={runOpenBoxesImport}>{syncConnectionId ? "Sync snapshot" : "Import snapshot"}</button>}
       >
         <Field label="Normalized OpenBoxes JSON">
           <textarea

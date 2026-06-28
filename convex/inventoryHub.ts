@@ -292,6 +292,24 @@ export const upsertConnection = mutation({
   },
 });
 
+export const deleteConnection = mutation({
+  args: { id: v.id("inventoryConnections") },
+  returns: v.any(),
+  handler: async (ctx, { id }) => {
+    // Detach any items/locations/movements that referenced this connection so
+    // their imported records remain but stop pointing at a deleted library.
+    const items = await ctx.db
+      .query("inventoryItems")
+      .withIndex("by_connection_external", (q: any) => q.eq("connectionId", id))
+      .collect();
+    for (const item of items) {
+      await ctx.db.patch(item._id, { connectionId: undefined, updatedAtISO: new Date().toISOString() });
+    }
+    await ctx.db.delete(id);
+    return null;
+  },
+});
+
 export const upsertItem = mutation({
   args: {
     id: v.optional(v.id("inventoryItems")),
