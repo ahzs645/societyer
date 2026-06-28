@@ -1,29 +1,20 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { BookOpen, Pencil, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { BookOpen, Pencil, Plus, Sparkles, Tag, Trash2, X } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Checkbox } from "../components/Controls";
 
-const CATEGORIES = [
-  "governance",
-  "finance",
-  "membership",
-  "operations",
-  "bylaws",
-  "other",
-];
-
 type FormState = {
   title: string;
   body: string;
-  category: string;
+  tags: string[];
   requiresSpecialResolution: boolean;
   notes: string;
 };
@@ -31,10 +22,17 @@ type FormState = {
 const EMPTY_FORM: FormState = {
   title: "",
   body: "",
-  category: "governance",
+  tags: [],
   requiresSpecialResolution: false,
   notes: "",
 };
+
+// Back-compat: read a template's tags, falling back to its legacy single
+// `category` for rows written before the tag system.
+function templateTags(t: any): string[] {
+  if (Array.isArray(t.tags) && t.tags.length) return t.tags.map((x: string) => String(x));
+  return t.category ? [String(t.category)] : [];
+}
 
 export function MotionLibraryPage() {
   const society = useSociety();
@@ -45,6 +43,7 @@ export function MotionLibraryPage() {
   );
   const [filter, setFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
+  const [tagDraft, setTagDraft] = useState("");
 
   const templates = useQuery(
     api.motionTemplates.list,
@@ -76,25 +75,44 @@ export function MotionLibraryPage() {
 
   const edit = (t: any) => {
     setEditingId(t._id);
+    setTagDraft("");
     setForm({
       title: t.title,
       body: t.body,
-      category: t.category,
+      tags: templateTags(t),
       requiresSpecialResolution: t.requiresSpecialResolution ?? false,
       notes: t.notes ?? "",
     });
   };
 
+  const addFormTag = (raw: string) => {
+    const value = raw.trim().toLowerCase();
+    if (!value) return;
+    setForm((f) => (f.tags.includes(value) ? f : { ...f, tags: [...f.tags, value] }));
+    setTagDraft("");
+  };
+
+  const removeFormTag = (tag: string) => {
+    setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }));
+  };
+
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    (templates ?? []).forEach((t: any) => templateTags(t).forEach((tag) => set.add(tag)));
+    return Array.from(set).sort();
+  }, [templates]);
+
   const filtered = (templates ?? []).filter((t: any) => {
-    const matchesCategory = filter === "all" || t.category === filter;
+    const tags = templateTags(t);
+    const matchesTag = filter === "all" || tags.includes(filter);
     const q = query.trim().toLowerCase();
     const matchesQuery =
       !q ||
-      [t.title, t.body, t.category, t.notes ?? ""]
+      [t.title, t.body, ...tags, t.notes ?? ""]
         .join(" ")
         .toLowerCase()
         .includes(q);
-    return matchesCategory && matchesQuery;
+    return matchesTag && matchesQuery;
   });
 
   return (
@@ -147,28 +165,59 @@ export function MotionLibraryPage() {
                 }
               />
             </Field>
-            <div className="motion-library__form-row">
-              <Field label="Category">
-                <Select
-                  value={form.category}
-                  onChange={(value) =>
-                    setForm((f) => ({ ...f, category: value }))
-                  }
-                  options={CATEGORIES.map((c) => ({ value: c, label: formatCategory(c) }))}
+            <Field label="Tags">
+              <div className="row" style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+                {form.tags.map((tag) => (
+                  <span key={tag} className="pill pill--sm">
+                    <span className="row" style={{ gap: 2, alignItems: "center" }}>
+                      <Tag size={10} /> {tag}
+                      <button
+                        className="btn btn--ghost btn--icon"
+                        style={{ padding: 0, height: 14 }}
+                        aria-label={`Remove tag ${tag}`}
+                        onClick={() => removeFormTag(tag)}
+                      >
+                        <X size={10} />
+                      </button>
+                    </span>
+                  </span>
+                ))}
+                <input
+                  className="input"
+                  style={{ width: 120, height: 28, fontSize: 13 }}
+                  value={tagDraft}
+                  onChange={(e) => setTagDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addFormTag(tagDraft);
+                    }
+                  }}
+                  list="motion-library-tag-suggestions"
+                  placeholder="+ tag"
+                  aria-label="Add tag"
                 />
-              </Field>
-              <div className="motion-library__checkbox">
-                <Checkbox
-                  checked={form.requiresSpecialResolution}
-                  onChange={(checked) =>
-                    setForm((f) => ({
-                      ...f,
-                      requiresSpecialResolution: checked,
-                    }))
-                  }
-                  label="Special resolution"
-                />
+                <datalist id="motion-library-tag-suggestions">
+                  {allTags.map((tag) => (
+                    <option key={tag} value={tag} />
+                  ))}
+                </datalist>
+                <button className="btn btn--ghost btn--icon" aria-label="Add tag" onClick={() => addFormTag(tagDraft)}>
+                  <Plus size={12} />
+                </button>
               </div>
+            </Field>
+            <div className="motion-library__checkbox">
+              <Checkbox
+                checked={form.requiresSpecialResolution}
+                onChange={(checked) =>
+                  setForm((f) => ({
+                    ...f,
+                    requiresSpecialResolution: checked,
+                  }))
+                }
+                label="Special resolution"
+              />
             </div>
             <Field label="Notes">
               <input
@@ -220,8 +269,8 @@ export function MotionLibraryPage() {
                 value={filter}
                 onChange={(value) => setFilter(value)}
                 options={[
-                  { value: "all", label: "All categories" },
-                  ...CATEGORIES.map((c) => ({ value: c, label: formatCategory(c) })),
+                  { value: "all", label: "All tags" },
+                  ...allTags.map((c) => ({ value: c, label: c })),
                 ]}
               />
             </div>
@@ -252,9 +301,11 @@ export function MotionLibraryPage() {
                       <div className="motion-library__template-head">
                         <strong>{t.title}</strong>
                         <div className="motion-library__meta">
-                          <span className="pill pill--sm">
-                            {formatCategory(t.category)}
-                          </span>
+                          {templateTags(t).map((tag: string) => (
+                            <span key={tag} className="pill pill--sm">
+                              {tag}
+                            </span>
+                          ))}
                           {t.requiresSpecialResolution && (
                             <span className="pill pill--sm pill--warn">
                               Special
@@ -301,10 +352,4 @@ export function MotionLibraryPage() {
       </div>
     </div>
   );
-}
-
-function formatCategory(category: string) {
-  return category
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
 }

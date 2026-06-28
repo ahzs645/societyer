@@ -44,7 +44,12 @@ export const meetingWorkflowTables = {
     societyId: v.id("societies"),
     title: v.string(),
     body: v.string(),
-    category: v.string(), // governance | finance | membership | operations | bylaws | other
+    // Deprecated single classifier — superseded by `tags`. Kept optional for
+    // back-compat with rows written before the tag system; no longer written.
+    category: v.optional(v.string()),
+    // Free-form labels for filtering the library (e.g. "governance", "finance",
+    // or a routine procedural tag like "adjournment"). Mirrors motions.tags.
+    tags: v.optional(v.array(v.string())),
     requiresSpecialResolution: v.boolean(),
     notes: v.optional(v.string()),
     usageCount: v.optional(v.number()),
