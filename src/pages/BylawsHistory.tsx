@@ -26,41 +26,9 @@ import {
 import { formatDateTime, formatDate, relative } from "../lib/format";
 import { exportWordDocx } from "../lib/docx";
 import { escapeHtml } from "../lib/html";
-
-// Word-level diff reused from BylawDiff (inline so we don't couple the pages)
-type Chunk = { kind: "same" | "add" | "del"; text: string };
-const MAX_EXACT_DIFF_CELLS = 2_500_000;
-
-function tokenize(s: string): string[] {
-  return s.match(/(\s+|[\wÀ-ÿ]+|[^\s\w])/g) ?? [];
-}
-
-function diff(oldTokens: string[], newTokens: string[]): Chunk[] {
-  const n = oldTokens.length;
-  const m = newTokens.length;
-  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
-  for (let i = n - 1; i >= 0; i--) {
-    for (let j = m - 1; j >= 0; j--) {
-      dp[i][j] = oldTokens[i] === newTokens[j]
-        ? dp[i + 1][j + 1] + 1
-        : Math.max(dp[i + 1][j], dp[i][j + 1]);
-    }
-  }
-  const chunks: Chunk[] = [];
-  let i = 0, j = 0;
-  while (i < n && j < m) {
-    if (oldTokens[i] === newTokens[j]) { chunks.push({ kind: "same", text: oldTokens[i] }); i++; j++; }
-    else if (dp[i + 1][j] >= dp[i][j + 1]) { chunks.push({ kind: "del", text: oldTokens[i] }); i++; }
-    else { chunks.push({ kind: "add", text: newTokens[j] }); j++; }
-  }
-  while (i < n) chunks.push({ kind: "del", text: oldTokens[i++] });
-  while (j < m) chunks.push({ kind: "add", text: newTokens[j++] });
-  return chunks;
-}
-
-function wordCount(text: string): number {
-  return text.match(/[\wÀ-ÿ]+/g)?.length ?? 0;
-}
+import { wordCount } from "../lib/wordDiff";
+import { diffBylawSections } from "../lib/bylawSections";
+import { SectionRedline } from "../components/SectionRedline";
 
 function textChangeSummary(oldText: string, newText: string): string {
   const oldWords = wordCount(oldText);
@@ -70,76 +38,35 @@ function textChangeSummary(oldText: string, newText: string): string {
   return `${newWords.toLocaleString()} words (${delta > 0 ? "+" : ""}${delta.toLocaleString()})`;
 }
 
+// Section-aware redline for a filed amendment. Aligning by heading means a
+// re-added cover page or relocated mission statement shows as "moved,
+// unchanged" rather than inflating the diff. Each section word-diffs
+// independently, so the per-section LCS stays small even for big documents.
 function DiffView({ oldText, newText }: { oldText: string; newText: string }) {
-  const diffState = useMemo(() => {
-    const oldTokens = tokenize(oldText);
-    const newTokens = tokenize(newText);
-    if (oldTokens.length * newTokens.length > MAX_EXACT_DIFF_CELLS) {
-      return { tooLarge: true as const, oldWords: wordCount(oldText), newWords: wordCount(newText), chunks: [], adds: 0, dels: 0 };
+  const diffs = useMemo(() => diffBylawSections(oldText, newText), [oldText, newText]);
+  const summary = useMemo(() => {
+    let adds = 0, dels = 0, changed = 0, added = 0, removed = 0, moved = 0;
+    for (const d of diffs) {
+      adds += d.adds;
+      dels += d.dels;
+      if (d.status === "changed") changed += 1;
+      if (d.status === "added") added += 1;
+      if (d.status === "removed") removed += 1;
+      if (d.status === "moved") moved += 1;
     }
-    const chunks = diff(oldTokens, newTokens);
-    let adds = 0, dels = 0;
-    for (const c of chunks) {
-      if (c.kind === "add") adds += c.text.trim() ? 1 : 0;
-      if (c.kind === "del") dels += c.text.trim() ? 1 : 0;
-    }
-    return { tooLarge: false as const, oldWords: 0, newWords: 0, chunks, adds, dels };
-  }, [oldText, newText]);
+    return { adds, dels, changed, added, removed, moved };
+  }, [diffs]);
 
-  if (diffState.tooLarge) {
-    return (
-      <div className="col" style={{ gap: 12 }}>
-        <Banner tone="warn" title="Exact redline skipped">
-          This bylaws version is too large for the in-browser word diff. Use the current text export or split the amendment into smaller sections to review the exact redline.
-        </Banner>
-        <div className="row" style={{ gap: 12, alignItems: "stretch", flexWrap: "wrap" }}>
-          <TextSnapshot title={`Before (${diffState.oldWords.toLocaleString()} words)`} text={oldText} />
-          <TextSnapshot title={`After (${diffState.newWords.toLocaleString()} words)`} text={newText} />
-        </div>
-      </div>
-    );
-  }
-
-  const chunks = diffState.chunks;
   return (
     <>
       <div className="muted" style={{ marginBottom: 8, fontSize: "var(--fs-sm)" }}>
-        <span style={{ color: "var(--success)" }}>+{diffState.adds}</span>{" "}
-        <span style={{ color: "var(--danger)" }}>−{diffState.dels}</span>{" "}
-        words changed
+        <span style={{ color: "var(--success)" }}>+{summary.adds}</span>{" "}
+        <span style={{ color: "var(--danger)" }}>−{summary.dels}</span> words changed ·{" "}
+        {summary.changed} changed · {summary.added} added · {summary.removed} removed
+        {summary.moved > 0 ? ` · ${summary.moved} moved` : ""}
       </div>
-      <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, fontSize: "var(--fs-md)" }}>
-        {chunks.map((c, i) => {
-          if (c.kind === "same") return <span key={i}>{c.text}</span>;
-          if (c.kind === "add") return <span key={i} style={{ background: "#d4f4dd", color: "#0a5e32" }}>{c.text}</span>;
-          return <span key={i} style={{ background: "#fde1e6", color: "#9b1c3a", textDecoration: "line-through" }}>{c.text}</span>;
-        })}
-      </div>
+      <SectionRedline diffs={diffs} />
     </>
-  );
-}
-
-function TextSnapshot({ title, text }: { title: string; text: string }) {
-  return (
-    <div style={{ flex: "1 1 320px", minWidth: 0 }}>
-      <div className="muted" style={{ marginBottom: 6, fontSize: "var(--fs-sm)" }}>{title}</div>
-      <pre
-        style={{
-          margin: 0,
-          maxHeight: 420,
-          overflow: "auto",
-          whiteSpace: "pre-wrap",
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--fs-sm)",
-          background: "var(--bg-subtle)",
-          padding: 12,
-          borderRadius: 6,
-          lineHeight: 1.5,
-        }}
-      >
-        {text}
-      </pre>
-    </div>
   );
 }
 

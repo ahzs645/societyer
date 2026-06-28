@@ -7,7 +7,8 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field, Badge } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { useConfirm, usePrompt, Modal } from "../components/Modal";
-import { parseBylawSections, alignBylawSections } from "../lib/bylawSections";
+import { parseBylawSections, diffBylawSections } from "../lib/bylawSections";
+import { SectionRedline } from "../components/SectionRedline";
 import {
   GitCompare,
   FileDown,
@@ -25,39 +26,6 @@ import {
 import { exportWordDocx } from "../lib/docx";
 import { escapeHtml } from "../lib/html";
 import { formatDateTime, relative } from "../lib/format";
-
-// ============================================================================
-// Word-level diff — same as before, but extracted so we can reuse on timeline.
-// ============================================================================
-
-type Chunk = { kind: "same" | "add" | "del"; text: string };
-
-function tokenize(s: string): string[] {
-  return s.match(/(\s+|[\wÀ-ÿ]+|[^\s\w])/g) ?? [];
-}
-
-function diff(oldTokens: string[], newTokens: string[]): Chunk[] {
-  const n = oldTokens.length;
-  const m = newTokens.length;
-  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
-  for (let i = n - 1; i >= 0; i--) {
-    for (let j = m - 1; j >= 0; j--) {
-      dp[i][j] = oldTokens[i] === newTokens[j]
-        ? dp[i + 1][j + 1] + 1
-        : Math.max(dp[i + 1][j], dp[i][j + 1]);
-    }
-  }
-  const chunks: Chunk[] = [];
-  let i = 0, j = 0;
-  while (i < n && j < m) {
-    if (oldTokens[i] === newTokens[j]) { chunks.push({ kind: "same", text: oldTokens[i] }); i++; j++; }
-    else if (dp[i + 1][j] >= dp[i][j + 1]) { chunks.push({ kind: "del", text: oldTokens[i] }); i++; }
-    else { chunks.push({ kind: "add", text: newTokens[j] }); j++; }
-  }
-  while (i < n) chunks.push({ kind: "del", text: oldTokens[i++] });
-  while (j < m) chunks.push({ kind: "add", text: newTokens[j++] });
-  return chunks;
-}
 
 // ============================================================================
 // Page
@@ -126,28 +94,27 @@ export function BylawDiffPage() {
     [amendments, selectedId],
   );
 
-  const chunks = useMemo(() => diff(tokenize(oldText), tokenize(newText)), [oldText, newText]);
-  // Section-aware change summary: align clauses by normalized heading so a
-  // re-ordered or reformatted section doesn't read as a whole-document rewrite.
+  // Section-aware redline: align clauses by normalized heading and word-diff
+  // each matched pair independently, so re-ordering or re-OCRing a page reads as
+  // "moved, unchanged" rather than a whole-document rewrite.
+  const sectionDiffs = useMemo(() => diffBylawSections(oldText, newText), [oldText, newText]);
   const storedSections = useQuery(
     api.bylawAmendments.sectionsForAmendment,
     selectedId ? { amendmentId: selectedId } : "skip",
   );
-  const sectionChanges = useMemo(() => {
-    const pairs = alignBylawSections(parseBylawSections(oldText), parseBylawSections(newText));
-    return pairs.map((p) => {
-      const status = !p.base ? "added" : !p.next ? "removed" : p.base.body === p.next.body ? "unchanged" : "changed";
-      return { heading: (p.next ?? p.base)!.heading || "Preamble", status };
-    });
-  }, [oldText, newText]);
-  const stats = useMemo(() => {
-    let adds = 0, dels = 0;
-    for (const c of chunks) {
-      if (c.kind === "add") adds += c.text.trim() ? 1 : 0;
-      if (c.kind === "del") dels += c.text.trim() ? 1 : 0;
+  const sectionStats = useMemo(() => {
+    let adds = 0, dels = 0, changed = 0, added = 0, removed = 0, moved = 0;
+    for (const d of sectionDiffs) {
+      adds += d.adds;
+      dels += d.dels;
+      if (d.status === "changed") changed += 1;
+      if (d.status === "added") added += 1;
+      if (d.status === "removed") removed += 1;
+      if (d.status === "moved") moved += 1;
     }
-    return { adds, dels };
-  }, [chunks]);
+    return { adds, dels, changed, added, removed, moved };
+  }, [sectionDiffs]);
+  const hasChanges = sectionDiffs.some((d) => d.status !== "unchanged");
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -187,15 +154,27 @@ export function BylawDiffPage() {
   };
 
   const exportRedline = () => {
+    const sectionsHtml = sectionDiffs
+      .filter((d) => d.status !== "unchanged")
+      .map((d) => {
+        const heading = `<h2>${escapeHtml(d.heading)} <em>(${d.status === "moved" ? "moved, unchanged" : d.status})</em></h2>`;
+        if (d.status === "moved") return `${heading}<p class="meta">Relocated without textual changes.</p>`;
+        if (d.tooLarge) return `${heading}<p class="meta">Section too large for an inline redline.</p>`;
+        const body = d.chunks
+          .map((c) => {
+            const t = escapeHtml(c.text);
+            if (c.kind === "add") return `<span style="background:#d4f4dd;">${t}</span>`;
+            if (c.kind === "del") return `<span style="background:#fde1e6; text-decoration:line-through;">${t}</span>`;
+            return t;
+          })
+          .join("");
+        return `${heading}<p>${body}</p>`;
+      })
+      .join("");
     const bodyHtml = `
       <h1>Bylaw redline${title ? ` — ${escapeHtml(title)}` : ""}</h1>
       <p class="meta">Generated ${escapeHtml(new Date().toLocaleString())}</p>
-      <p>${chunks.map((c) => {
-        const t = escapeHtml(c.text);
-        if (c.kind === "add") return `<span style="background:#d4f4dd;">${t}</span>`;
-        if (c.kind === "del") return `<span style="background:#fde1e6; text-decoration:line-through;">${t}</span>`;
-        return t;
-      }).join("")}</p>
+      ${sectionsHtml || "<p>No section-level changes.</p>"}
     `;
     void exportWordDocx({ filename: `bylaw-redline${title ? `-${title.replace(/\W+/g, "-")}` : ""}.docx`, title: "Bylaw redline", bodyHtml });
   };
@@ -418,69 +397,51 @@ export function BylawDiffPage() {
             <div className="card__head">
               <h2 className="card__title">Redline</h2>
               <span className="card__subtitle">
-                <Badge tone="success">+{stats.adds} additions</Badge>{" "}
-                <Badge tone="danger">−{stats.dels} deletions</Badge>
+                <Badge tone="success">+{sectionStats.adds} additions</Badge>{" "}
+                <Badge tone="danger">−{sectionStats.dels} deletions</Badge>
+                {sectionStats.moved > 0 && (
+                  <>
+                    {" "}
+                    <Badge tone="accent">{sectionStats.moved} moved</Badge>
+                  </>
+                )}
               </span>
+              {selected && hasChanges && (
+                <button
+                  className="btn-action"
+                  style={{ marginLeft: "auto" }}
+                  onClick={async () => {
+                    const secs = parseBylawSections(newText).map((s) => ({
+                      heading: s.heading,
+                      key: s.key,
+                      level: s.level,
+                      body: s.body,
+                    }));
+                    const r = await materializeSections({ amendmentId: selected._id, sections: secs });
+                    toast.success(`Saved ${r.stored} section${r.stored === 1 ? "" : "s"} as records`);
+                  }}
+                >
+                  Save as sections
+                </button>
+              )}
             </div>
             <div className="card__body">
-              {chunks.length === 0 ? (
+              {!oldText && !newText ? (
                 <div className="muted">Paste text into both columns to see the diff.</div>
+              ) : !hasChanges ? (
+                <div className="muted">No section-level changes.</div>
               ) : (
-                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, fontSize: "var(--fs-md)" }}>
-                  {chunks.map((c, i) => {
-                    if (c.kind === "same") return <span key={i}>{c.text}</span>;
-                    if (c.kind === "add")
-                      return <span key={i} style={{ background: "#d4f4dd", color: "#0a5e32" }}>{c.text}</span>;
-                    return <span key={i} style={{ background: "#fde1e6", color: "#9b1c3a", textDecoration: "line-through" }}>{c.text}</span>;
-                  })}
-                </div>
+                <>
+                  <div className="muted" style={{ marginBottom: 10, fontSize: "var(--fs-sm)" }}>
+                    {sectionStats.changed} changed · {sectionStats.added} added · {sectionStats.removed} removed ·{" "}
+                    {sectionStats.moved} moved
+                    {storedSections ? ` · ${storedSections.length} stored` : ""}
+                  </div>
+                  <SectionRedline diffs={sectionDiffs} />
+                </>
               )}
             </div>
           </div>
-
-          {sectionChanges.some((s) => s.status !== "unchanged") && (
-            <div className="card">
-              <div className="card__head">
-                <h2 className="card__title">Section changes</h2>
-                <span className="card__subtitle">
-                  {sectionChanges.filter((s) => s.status === "changed").length} changed ·{" "}
-                  {sectionChanges.filter((s) => s.status === "added").length} added ·{" "}
-                  {sectionChanges.filter((s) => s.status === "removed").length} removed
-                  {storedSections ? ` · ${storedSections.length} stored` : ""}
-                </span>
-                {selected && (
-                  <button
-                    className="btn-action"
-                    style={{ marginLeft: "auto" }}
-                    onClick={async () => {
-                      const secs = parseBylawSections(newText).map((s) => ({
-                        heading: s.heading,
-                        key: s.key,
-                        level: s.level,
-                        body: s.body,
-                      }));
-                      const r = await materializeSections({ amendmentId: selected._id, sections: secs });
-                      toast.success(`Saved ${r.stored} section${r.stored === 1 ? "" : "s"} as records`);
-                    }}
-                  >
-                    Save as sections
-                  </button>
-                )}
-              </div>
-              <div className="card__body col" style={{ gap: 4 }}>
-                {sectionChanges.map((s, i) => (
-                  <div key={i} className="row" style={{ gap: 8, justifyContent: "space-between", alignItems: "center" }}>
-                    <span className={s.status === "unchanged" ? "muted" : undefined}>{s.heading}</span>
-                    <Badge
-                      tone={s.status === "added" ? "success" : s.status === "removed" ? "danger" : s.status === "changed" ? "warn" : "neutral"}
-                    >
-                      {s.status}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {selected && (
             <div className="card">

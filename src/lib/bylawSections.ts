@@ -5,9 +5,11 @@
  * single page (e.g. a mission-statement / abstract page) then aligns to that
  * section rather than showing the whole document as changed.
  *
- * Pure and dependency-free so it can be unit-tested in plain Node and reused by
- * both the diff UI and any future structured-storage migration.
+ * Pure so it can be unit-tested in plain Node and reused by both bylaw redline
+ * surfaces and any future structured-storage migration.
  */
+
+import { type Chunk, tokenize, diffTokens, countChunkEdits } from "./wordDiff";
 
 export type BylawSection = {
   /** Section heading text (empty for the leading preamble). */
@@ -90,25 +92,130 @@ export function parseBylawSections(text: string): BylawSection[] {
   return sections;
 }
 
+export type AlignedSectionPair = {
+  key: string;
+  base?: BylawSection;
+  next?: BylawSection;
+  /** Position of the section in the base version (undefined if added). */
+  baseIndex?: number;
+  /** Position of the section in the next version (undefined if removed). */
+  nextIndex?: number;
+};
+
 /** Align two section lists by key for a section-aware diff: returns pairs where
  *  either side may be undefined (added / removed sections). Order follows the
- *  "next" version, with removed sections appended in their original order. */
+ *  "next" version, with removed sections appended in their original order. Each
+ *  pair carries its base/next index so a reordered section can be detected. */
 export function alignBylawSections(
   base: BylawSection[],
   next: BylawSection[],
-): { key: string; base?: BylawSection; next?: BylawSection }[] {
+): AlignedSectionPair[] {
   const baseByKey = new Map<string, BylawSection>();
-  for (const s of base) if (!baseByKey.has(s.key)) baseByKey.set(s.key, s);
+  const baseIndexByKey = new Map<string, number>();
+  base.forEach((s, idx) => {
+    if (!baseByKey.has(s.key)) {
+      baseByKey.set(s.key, s);
+      baseIndexByKey.set(s.key, idx);
+    }
+  });
 
-  const pairs: { key: string; base?: BylawSection; next?: BylawSection }[] = [];
+  const pairs: AlignedSectionPair[] = [];
   const usedBaseKeys = new Set<string>();
-  for (const s of next) {
+  next.forEach((s, idx) => {
     const match = baseByKey.get(s.key);
     if (match) usedBaseKeys.add(s.key);
-    pairs.push({ key: s.key, base: match, next: s });
-  }
-  for (const s of base) {
-    if (!usedBaseKeys.has(s.key)) pairs.push({ key: s.key, base: s, next: undefined });
-  }
+    pairs.push({
+      key: s.key,
+      base: match,
+      next: s,
+      baseIndex: match ? baseIndexByKey.get(s.key) : undefined,
+      nextIndex: idx,
+    });
+  });
+  base.forEach((s, idx) => {
+    if (!usedBaseKeys.has(s.key)) {
+      pairs.push({ key: s.key, base: s, next: undefined, baseIndex: idx, nextIndex: undefined });
+    }
+  });
   return pairs;
+}
+
+export type SectionStatus = "added" | "removed" | "moved" | "changed" | "unchanged";
+
+export type SectionDiff = {
+  key: string;
+  /** Display heading (the next version's, falling back to the base's). */
+  heading: string;
+  status: SectionStatus;
+  /** Word-level redline of the body. Empty for moved / unchanged sections (and
+   *  when the body is too large — see `tooLarge`). */
+  chunks: Chunk[];
+  /** The per-section LCS exceeded the cell budget; render a plain snapshot. */
+  tooLarge: boolean;
+  adds: number;
+  dels: number;
+};
+
+/** Longest common subsequence of two key sequences (keys are unique here). */
+function lcsKeys(a: string[], b: string[]): string[] {
+  const n = a.length, m = b.length;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const out: string[] = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { out.push(a[i]); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+    else j++;
+  }
+  return out;
+}
+
+/** Section-aware diff: align clauses by normalized heading, then word-diff each
+ *  matched pair's body independently. This is the wiring that makes re-adding a
+ *  cover page or relocating the mission statement read as "moved, unchanged"
+ *  instead of a whole-document rewrite.
+ *
+ *  Moved detection: among matched sections whose body is unchanged, the ones
+ *  whose relative order changed (not part of the LCS of the shared key order)
+ *  are flagged `moved`. Pure insertions/removals elsewhere don't shift the rest
+ *  into "moved". A section whose body actually changed is `changed`, never
+ *  `moved` — the substantive signal wins. */
+export function diffBylawSections(
+  oldText: string,
+  newText: string,
+  opts?: { maxCells?: number },
+): SectionDiff[] {
+  const maxCells = opts?.maxCells ?? 2_500_000;
+  const pairs = alignBylawSections(parseBylawSections(oldText), parseBylawSections(newText));
+
+  const stable = pairs.filter((p) => p.base && p.next && p.base.body === p.next.body);
+  const byBase = stable.slice().sort((a, b) => (a.baseIndex ?? 0) - (b.baseIndex ?? 0)).map((p) => p.key);
+  const byNext = stable.slice().sort((a, b) => (a.nextIndex ?? 0) - (b.nextIndex ?? 0)).map((p) => p.key);
+  const keptInOrder = new Set(lcsKeys(byBase, byNext));
+  const movedKeys = new Set(stable.map((p) => p.key).filter((k) => !keptInOrder.has(k)));
+
+  return pairs.map((p) => {
+    const heading = (p.next ?? p.base)!.heading || "Preamble";
+    let status: SectionStatus;
+    if (!p.base) status = "added";
+    else if (!p.next) status = "removed";
+    else if (p.base.body === p.next.body) status = movedKeys.has(p.key) ? "moved" : "unchanged";
+    else status = "changed";
+
+    let chunks: Chunk[] = [];
+    let tooLarge = false;
+    if (status === "added" || status === "removed" || status === "changed") {
+      const oldTokens = tokenize(p.base?.body ?? "");
+      const newTokens = tokenize(p.next?.body ?? "");
+      if (oldTokens.length * newTokens.length > maxCells) tooLarge = true;
+      else chunks = diffTokens(oldTokens, newTokens);
+    }
+    const { adds, dels } = countChunkEdits(chunks);
+    return { key: p.key, heading, status, chunks, tooLarge, adds, dels };
+  });
 }
