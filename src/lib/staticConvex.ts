@@ -46,6 +46,10 @@ import {
   addStaticDays,
   staticMonthlyEstimateCents,
   staticAgendaItemType,
+  normalizeStaticCategoryLabel,
+  cycleItem,
+  filingMatchesStaticYear,
+  reportStaticWriteGap,
 } from "./staticConvexUtils";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
@@ -268,16 +272,6 @@ function functionName(ref: any) {
 // production so a shipped demo/desktop build degrades instead of crashing. The
 // CI parity gate (scripts/check-static-convex-parity.ts) is the real backstop
 // that keeps this from ever firing in a correctly-maintained build.
-function reportStaticWriteGap(name: string): null {
-  const message =
-    `[staticConvex] No offline handler for write "${name}". ` +
-    `This action does not persist in offline/desktop mode. ` +
-    `Add a handler in staticConvex.ts (or list it in staticConvexParity.ts).`;
-  const isDev = Boolean((import.meta as any)?.env?.DEV);
-  if (isDev) throw new Error(message);
-  if (typeof console !== "undefined") console.warn(message);
-  return null;
-}
 
 
 // Mirror of convex/lib/permissions ROLE_MATRIX for the offline/demo runtime so
@@ -462,9 +456,6 @@ function staticAccountingSeed(store?: StaticDemoDexieStore | null, args?: Static
 }
 
 
-function normalizeStaticCategoryLabel(value?: string) {
-  return String(value ?? "").trim().toLowerCase();
-}
 
 function scopedRows(rows: any[], args: StaticArgs) {
   if (!args?.societyId) return rows;
@@ -714,15 +705,9 @@ function annualCycleSummary(args: StaticArgs) {
   };
 }
 
-function cycleItem(id: string, phase: string, title: string, detail: string, status: string, evidence: string[], dueDate: string | undefined, to: string, actionLabel: string) {
-  return { id, phase, title, detail, status, evidence, dueDate, to, actionLabel };
-}
 
 
 
-function filingMatchesStaticYear(filing: any, year: number) {
-  return String(filing.periodLabel ?? filing.title ?? "").includes(String(year)) || inStaticYear(filing.dueDate, year) || inStaticYear(filing.filedAt, year);
-}
 
 
 function financialSummary() {

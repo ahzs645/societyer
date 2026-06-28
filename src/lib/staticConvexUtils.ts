@@ -51,6 +51,47 @@ export function staticMonthlyEstimateCents(amountCents: number, interval: string
   return amountCents;
 }
 
+/** Lowercase/trim a category label for comparison. */
+export function normalizeStaticCategoryLabel(value?: string) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+/** Construct a normalized annual-cycle item object. */
+export function cycleItem(
+  id: string,
+  phase: string,
+  title: string,
+  detail: string,
+  status: string,
+  evidence: string[],
+  dueDate: string | undefined,
+  to: string,
+  actionLabel: string,
+) {
+  return { id, phase, title, detail, status, evidence, dueDate, to, actionLabel };
+}
+
+/** Whether a filing belongs to the given calendar year (by label or dates). */
+export function filingMatchesStaticYear(filing: any, year: number) {
+  return (
+    String(filing.periodLabel ?? filing.title ?? "").includes(String(year)) ||
+    inStaticYear(filing.dueDate, year) ||
+    inStaticYear(filing.filedAt, year)
+  );
+}
+
+/** Report (dev: throw, prod: warn) that an offline write has no static handler. */
+export function reportStaticWriteGap(name: string): null {
+  const message =
+    `[staticConvex] No offline handler for write "${name}". ` +
+    `This action does not persist in offline/desktop mode. ` +
+    `Add a handler in staticConvex.ts (or list it in staticConvexParity.ts).`;
+  const isDev = Boolean((import.meta as any)?.env?.DEV);
+  if (isDev) throw new Error(message);
+  if (typeof console !== "undefined") console.warn(message);
+  return null;
+}
+
 /** Infer an agenda item type from its title. */
 export function staticAgendaItemType(title: string) {
   const lower = title.toLowerCase();
