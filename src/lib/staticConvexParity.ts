@@ -101,6 +101,8 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "grants:convertApplication",
   "grants:reviewApplication",
   "grants:submitApplication",
+  "inventoryHub:promoteCandidateToMovement",
+  "inventoryHub:setCandidateStatus",
   "invitations:revoke",
   "meetingTemplates:duplicate",
   "meetings:applyTemplate",
