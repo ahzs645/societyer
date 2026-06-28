@@ -6,13 +6,22 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, InspectorNote } from "../components/ui";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
-import { DataTable } from "../components/DataTable";
 import { Select } from "../components/Select";
 import { HandHeart, Plus, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export function VolunteersPage() {
   const society = useSociety();
@@ -54,20 +63,41 @@ export function VolunteersPage() {
   const toast = useToast();
   const [volunteerDraft, setVolunteerDraft] = useState<any | null>(null);
   const [screeningDraft, setScreeningDraft] = useState<any | null>(null);
+  const [applicationsViewId, setApplicationsViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [applicationsFilterOpen, setApplicationsFilterOpen] = useState(false);
+  const [rosterViewId, setRosterViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [rosterFilterOpen, setRosterFilterOpen] = useState(false);
+  const [screeningViewId, setScreeningViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [screeningFilterOpen, setScreeningFilterOpen] = useState(false);
 
-  if (society === undefined) return <PageLoading />;
-  if (society === null) return <SeedPrompt />;
+  const applicationsTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "volunteerApplication", viewId: applicationsViewId });
+  const rosterTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "volunteer", viewId: rosterViewId });
+  const screeningTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "volunteerScreening", viewId: screeningViewId });
 
-  const committeeById = new Map<string, any>(
-    (committees ?? []).map((committee) => [String(committee._id), committee]),
+  const committeeById = useMemo(
+    () => new Map<string, any>((committees ?? []).map((committee) => [String(committee._id), committee])),
+    [committees],
   );
-  const volunteerById = new Map<string, any>(
-    (volunteers ?? []).map((volunteer) => [String(volunteer._id), volunteer]),
+  const volunteerById = useMemo(
+    () => new Map<string, any>((volunteers ?? []).map((volunteer) => [String(volunteer._id), volunteer])),
+    [volunteers],
   );
 
+  const applicationRecords = useMemo(
+    () => (applications ?? []).map((row: any) => ({ ...row, applicant: `${row.firstName} ${row.lastName}` })),
+    [applications],
+  );
+  const rosterRecords = useMemo(
+    () => (volunteers ?? []).map((row: any) => ({
+      ...row,
+      name: `${row.firstName} ${row.lastName}`,
+      committee: committeeById.get(String(row.committeeId))?.name ?? "",
+    })),
+    [volunteers, committeeById],
+  );
   const screeningRows = useMemo(
     () =>
-      (screenings ?? []).map((screening) => ({
+      (screenings ?? []).map((screening: any) => ({
         ...screening,
         volunteerName: volunteerById.get(String(screening.volunteerId))
           ? `${volunteerById.get(String(screening.volunteerId))?.firstName} ${volunteerById.get(String(screening.volunteerId))?.lastName}`
@@ -75,6 +105,9 @@ export function VolunteersPage() {
       })),
     [screenings, volunteerById],
   );
+
+  if (society === undefined) return <PageLoading />;
+  if (society === null) return <SeedPrompt />;
 
   return (
     <div className="page">
@@ -135,205 +168,206 @@ export function VolunteersPage() {
         <Stat label="Expiring checks" value={String(summary?.expiringChecks ?? 0)} tone={(summary?.overdueChecks ?? 0) > 0 ? "danger" : undefined} />
       </div>
 
-      <DataTable
-        label="Applications"
-        icon={<UserPlus size={14} />}
-        data={(applications ?? []) as any[]}
-        rowKey={(row) => String(row._id)}
-        searchPlaceholder="Search applications…"
-        defaultSort={{ columnId: "submittedAtISO", dir: "desc" }}
-        columns={[
-          {
-            id: "name",
-            header: "Applicant",
-            sortable: true,
-            accessor: (row) => `${row.lastName}, ${row.firstName}`,
-            render: (row) => (
-              <div>
-                <strong>{row.firstName} {row.lastName}</strong>
-                <div className="muted mono" style={{ fontSize: 11 }}>{row.email}</div>
-              </div>
-            ),
-          },
-          { id: "roleWanted", header: "Role", accessor: (row) => row.roleWanted ?? "", render: (row) => <span>{row.roleWanted ?? "—"}</span> },
-          {
-            id: "status",
-            header: "Status",
-            sortable: true,
-            accessor: (row) => row.status,
-            render: (row) => <Badge tone={row.status === "Converted" ? "success" : row.status === "Declined" ? "danger" : "warn"}>{row.status}</Badge>,
-          },
-          { id: "source", header: "Source", sortable: true, accessor: (row) => row.source, render: (row) => <span className="cell-tag">{row.source}</span> },
-          { id: "submittedAtISO", header: "Submitted", sortable: true, accessor: (row) => row.submittedAtISO, render: (row) => <span className="mono">{formatDate(row.submittedAtISO)}</span> },
-        ]}
-        renderRowActions={(row) => (
-          <>
-            {row.status === "Submitted" && (
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={async () => {
-                  await reviewApplication({ id: row._id, status: "Reviewing", actingUserId });
-                  toast.success("Application moved to review");
-                }}
-              >
-                Review
-              </button>
+      {!applicationsTable.loading && !applicationsTable.objectMetadata ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="volunteer application" />
+      ) : applicationsTable.objectMetadata ? (
+        <RecordTableScope
+          tableId="volunteerApplications"
+          objectMetadata={applicationsTable.objectMetadata}
+          hydratedView={applicationsTable.hydratedView}
+          records={applicationRecords}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={applicationsTable.objectMetadata._id as Id<"objectMetadata">}
+            icon={<UserPlus size={14} />}
+            label="Applications"
+            views={applicationsTable.views}
+            currentViewId={applicationsViewId ?? applicationsTable.views[0]?._id ?? null}
+            onChangeView={(viewId) => setApplicationsViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setApplicationsFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={applicationsFilterOpen} onClose={() => setApplicationsFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={applicationsTable.loading || applications === undefined}
+            renderCell={({ record, field }) => {
+              if (field.name === "applicant") return (
+                <div>
+                  <strong>{record.firstName} {record.lastName}</strong>
+                  <div className="muted mono" style={{ fontSize: 11 }}>{record.email}</div>
+                </div>
+              );
+              if (field.name === "roleWanted") return <span>{record.roleWanted ?? "—"}</span>;
+              if (field.name === "status") return <Badge tone={record.status === "Converted" ? "success" : record.status === "Declined" ? "danger" : "warn"}>{record.status}</Badge>;
+              if (field.name === "source") return <span className="cell-tag">{record.source}</span>;
+              if (field.name === "submittedAtISO") return <span className="mono">{formatDate(record.submittedAtISO)}</span>;
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <>
+                {row.status === "Submitted" && (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      await reviewApplication({ id: row._id, status: "Reviewing", actingUserId });
+                      toast.success("Application moved to review");
+                    }}
+                  >
+                    Review
+                  </button>
+                )}
+                {!["Converted", "Declined"].includes(row.status) && (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      await convertApplication({
+                        id: row._id,
+                        committeeId: undefined,
+                        screeningRequired: true,
+                        actingUserId,
+                      });
+                      toast.success("Application converted into volunteer record");
+                    }}
+                  >
+                    Convert
+                  </button>
+                )}
+                {row.status !== "Declined" && (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      await reviewApplication({ id: row._id, status: "Declined", actingUserId });
+                      toast.success("Application declined");
+                    }}
+                  >
+                    Decline
+                  </button>
+                )}
+              </>
             )}
-            {!["Converted", "Declined"].includes(row.status) && (
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={async () => {
-                  await convertApplication({
-                    id: row._id,
-                    committeeId: undefined,
-                    screeningRequired: true,
-                    actingUserId,
-                  });
-                  toast.success("Application converted into volunteer record");
-                }}
-              >
-                Convert
-              </button>
-            )}
-            {row.status !== "Declined" && (
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={async () => {
-                  await reviewApplication({ id: row._id, status: "Declined", actingUserId });
-                  toast.success("Application declined");
-                }}
-              >
-                Decline
-              </button>
-            )}
-          </>
-        )}
-      />
+          />
+        </RecordTableScope>
+      ) : null}
 
       <div className="spacer-6" />
 
-      <DataTable
-        label="Volunteer roster"
-        icon={<HandHeart size={14} />}
-        data={(volunteers ?? []) as any[]}
-        rowKey={(row) => String(row._id)}
-        searchPlaceholder="Search volunteers…"
-        defaultSort={{ columnId: "lastName", dir: "asc" }}
-        columns={[
-          {
-            id: "name",
-            header: "Volunteer",
-            sortable: true,
-            accessor: (row) => `${row.lastName}, ${row.firstName}`,
-            render: (row) => (
-              <div>
-                <strong>{row.firstName} {row.lastName}</strong>
-                <div className="muted mono" style={{ fontSize: 11 }}>{row.email ?? "No email on file"}</div>
-              </div>
-            ),
-          },
-          {
-            id: "status",
-            header: "Status",
-            sortable: true,
-            accessor: (row) => row.status,
-            render: (row) => <Badge tone={row.status === "Active" ? "success" : row.status === "Applied" ? "warn" : "info"}>{row.status}</Badge>,
-          },
-          {
-            id: "committeeId",
-            header: "Committee",
-            sortable: true,
-            accessor: (row) => committeeById.get(String(row.committeeId))?.name ?? "",
-            render: (row) => <span>{committeeById.get(String(row.committeeId))?.name ?? "—"}</span>,
-          },
-          {
-            id: "trainingStatus",
-            header: "Training",
-            sortable: true,
-            accessor: (row) => row.trainingStatus ?? "",
-            render: (row) => <Badge tone={row.trainingStatus === "Complete" ? "success" : "warn"}>{row.trainingStatus ?? "Pending"}</Badge>,
-          },
-          {
-            id: "screeningRequired",
-            header: "Screening",
-            sortable: true,
-            accessor: (row) => (row.screeningRequired ? 1 : 0),
-            render: (row) => <Badge tone={row.screeningRequired ? "warn" : "info"}>{row.screeningRequired ? "Required" : "Not required"}</Badge>,
-          },
-          {
-            id: "renewalDueAtISO",
-            header: "Renewal due",
-            sortable: true,
-            accessor: (row) => row.renewalDueAtISO ?? "",
-            render: (row) => <span className="mono">{row.renewalDueAtISO ? formatDate(row.renewalDueAtISO) : "—"}</span>,
-          },
-        ]}
-        renderRowActions={(row) => (
-          <>
-            <button className="btn btn--ghost btn--sm" onClick={() => setVolunteerDraft({ ...row, id: row._id })}>
-              Edit
-            </button>
-            <button
-              className="btn btn--ghost btn--sm btn--icon"
-              aria-label={`Delete volunteer ${row.firstName} ${row.lastName}`}
-              onClick={async () => {
-                await removeVolunteer({ id: row._id, actingUserId });
-                toast.success("Volunteer removed");
-              }}
-            >
-              <Trash2 size={12} />
-            </button>
-          </>
-        )}
-      />
+      {!rosterTable.loading && !rosterTable.objectMetadata ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="volunteer" />
+      ) : rosterTable.objectMetadata ? (
+        <RecordTableScope
+          tableId="volunteers"
+          objectMetadata={rosterTable.objectMetadata}
+          hydratedView={rosterTable.hydratedView}
+          records={rosterRecords}
+          onRecordClick={(_recordId, record) => setVolunteerDraft({ ...record, id: record._id })}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={rosterTable.objectMetadata._id as Id<"objectMetadata">}
+            icon={<HandHeart size={14} />}
+            label="Volunteer roster"
+            views={rosterTable.views}
+            currentViewId={rosterViewId ?? rosterTable.views[0]?._id ?? null}
+            onChangeView={(viewId) => setRosterViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setRosterFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={rosterFilterOpen} onClose={() => setRosterFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={rosterTable.loading || volunteers === undefined}
+            renderCell={({ record, field }) => {
+              if (field.name === "name") return (
+                <div>
+                  <strong>{record.firstName} {record.lastName}</strong>
+                  <div className="muted mono" style={{ fontSize: 11 }}>{record.email ?? "No email on file"}</div>
+                </div>
+              );
+              if (field.name === "status") return <Badge tone={record.status === "Active" ? "success" : record.status === "Applied" ? "warn" : "info"}>{record.status}</Badge>;
+              if (field.name === "committee") return <span>{record.committee || "—"}</span>;
+              if (field.name === "trainingStatus") return <Badge tone={record.trainingStatus === "Complete" ? "success" : "warn"}>{record.trainingStatus ?? "Pending"}</Badge>;
+              if (field.name === "screeningRequired") return <Badge tone={record.screeningRequired ? "warn" : "info"}>{record.screeningRequired ? "Required" : "Not required"}</Badge>;
+              if (field.name === "renewalDueAtISO") return <span className="mono">{record.renewalDueAtISO ? formatDate(record.renewalDueAtISO) : "—"}</span>;
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <>
+                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setVolunteerDraft({ ...row, id: row._id }); }}>
+                  Edit
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Delete volunteer ${row.firstName} ${row.lastName}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await removeVolunteer({ id: row._id, actingUserId });
+                    toast.success("Volunteer removed");
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <div className="spacer-6" />
 
-      <DataTable
-        label="Screening checks"
-        icon={<ShieldCheck size={14} />}
-        data={screeningRows as any[]}
-        rowKey={(row) => String(row._id)}
-        searchPlaceholder="Search checks…"
-        defaultSort={{ columnId: "expiresAtISO", dir: "asc" }}
-        columns={[
-          { id: "volunteerName", header: "Volunteer", sortable: true, accessor: (row) => row.volunteerName, render: (row) => <strong>{row.volunteerName}</strong> },
-          { id: "kind", header: "Check", sortable: true, accessor: (row) => row.kind, render: (row) => <span className="cell-tag">{row.kind}</span> },
-          {
-            id: "provider",
-            header: "Provider",
-            sortable: true,
-            accessor: (row) => row.provider ?? "",
-            render: (row) => <span className="muted">{row.provider ?? "Manual"}</span>,
-          },
-          {
-            id: "status",
-            header: "Status",
-            sortable: true,
-            accessor: (row) => row.status,
-            render: (row) => <Badge tone={row.status === "clear" ? "success" : row.status === "expired" || row.status === "failed" ? "danger" : "warn"}>{row.status}</Badge>,
-          },
-          { id: "requestedAtISO", header: "Requested", sortable: true, accessor: (row) => row.requestedAtISO ?? "", render: (row) => <span className="mono">{row.requestedAtISO ? formatDate(row.requestedAtISO) : "—"}</span> },
-          { id: "expiresAtISO", header: "Expires", sortable: true, accessor: (row) => row.expiresAtISO ?? "", render: (row) => <span className="mono">{row.expiresAtISO ? formatDate(row.expiresAtISO) : "—"}</span> },
-        ]}
-        renderRowActions={(row) => (
-          <>
-            <button className="btn btn--ghost btn--sm" onClick={() => setScreeningDraft({ ...row, id: row._id })}>
-              Edit
-            </button>
-            <button
-              className="btn btn--ghost btn--sm btn--icon"
-              aria-label={`Delete screening check for ${row.volunteerName}`}
-              onClick={async () => {
-                await removeScreening({ id: row._id, actingUserId });
-                toast.success("Screening removed");
-              }}
-            >
-              <Trash2 size={12} />
-            </button>
-          </>
-        )}
-      />
+      {!screeningTable.loading && !screeningTable.objectMetadata ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="screening check" />
+      ) : screeningTable.objectMetadata ? (
+        <RecordTableScope
+          tableId="volunteerScreenings"
+          objectMetadata={screeningTable.objectMetadata}
+          hydratedView={screeningTable.hydratedView}
+          records={screeningRows}
+          onRecordClick={(_recordId, record) => setScreeningDraft({ ...record, id: record._id })}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={screeningTable.objectMetadata._id as Id<"objectMetadata">}
+            icon={<ShieldCheck size={14} />}
+            label="Screening checks"
+            views={screeningTable.views}
+            currentViewId={screeningViewId ?? screeningTable.views[0]?._id ?? null}
+            onChangeView={(viewId) => setScreeningViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setScreeningFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={screeningFilterOpen} onClose={() => setScreeningFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={screeningTable.loading || screenings === undefined}
+            renderCell={({ record, field }) => {
+              if (field.name === "volunteerName") return <strong>{record.volunteerName}</strong>;
+              if (field.name === "kind") return <span className="cell-tag">{record.kind}</span>;
+              if (field.name === "provider") return <span className="muted">{record.provider ?? "Manual"}</span>;
+              if (field.name === "status") return <Badge tone={record.status === "clear" ? "success" : record.status === "expired" || record.status === "failed" ? "danger" : "warn"}>{record.status}</Badge>;
+              if (field.name === "requestedAtISO") return <span className="mono">{record.requestedAtISO ? formatDate(record.requestedAtISO) : "—"}</span>;
+              if (field.name === "expiresAtISO") return <span className="mono">{record.expiresAtISO ? formatDate(record.expiresAtISO) : "—"}</span>;
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <>
+                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setScreeningDraft({ ...row, id: row._id }); }}>
+                  Edit
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Delete screening check for ${row.volunteerName}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await removeScreening({ id: row._id, actingUserId });
+                    toast.success("Screening removed");
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <Drawer
         open={!!volunteerDraft}
