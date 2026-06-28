@@ -93,13 +93,28 @@ async function seedSociety(ctx: any, societyId: any) {
       });
     }
 
+    // Remove orphaned SYSTEM fields dropped from the definition (and their view
+    // columns). Only isSystem fields are touched — user-created custom fields
+    // (isSystem false, never in the definition) must survive a reseed.
+    const definedNames = new Set(obj.fields.map((f) => f.name));
+    for (const existing of existingFields) {
+      if (existing.isSystem && !definedNames.has(existing.name)) {
+        const orphanViewFields = await ctx.db
+          .query("viewFields")
+          .withIndex("by_field", (q) => q.eq("fieldMetadataId", existing._id))
+          .collect();
+        for (const vf of orphanViewFields) await ctx.db.delete(vf._id);
+        await ctx.db.delete(existing._id);
+      }
+    }
+
     // Seed the default view (and its columns) if missing.
     const existingViews = await ctx.db
       .query("views")
       .withIndex("by_object", (q) => q.eq("objectMetadataId", objectRow._id))
       .collect();
-    const hasSystemView = existingViews.some((v) => v.isSystem);
-    if (!hasSystemView) {
+    const systemView = existingViews.find((v) => v.isSystem);
+    if (!systemView) {
       const viewId = await ctx.db.insert("views", {
         societyId,
         objectMetadataId: objectRow._id,
@@ -132,6 +147,43 @@ async function seedSociety(ctx: any, societyId: any) {
           createdAtISO: now,
           updatedAtISO: now,
         });
+      }
+    } else {
+      // Reconcile the existing system view: add a column for any definition
+      // column that doesn't have one yet, and drop columns whose field no
+      // longer exists (orphaned, e.g. after a field was removed above). Columns
+      // for still-existing fields are left untouched so user reordering/resizing
+      // of the system view survives a reseed.
+      const allFields = (await ctx.db
+        .query("fieldMetadata")
+        .withIndex("by_object", (q) => q.eq("objectMetadataId", objectRow._id))
+        .collect()) as Doc<"fieldMetadata">[];
+      const byName = new Map(allFields.map((f) => [f.name, f]));
+      const liveFieldIds = new Set(allFields.map((f) => String(f._id)));
+      const currentColumns = await ctx.db
+        .query("viewFields")
+        .withIndex("by_view", (q) => q.eq("viewId", systemView._id))
+        .collect();
+      const columnFieldIds = new Set(currentColumns.map((vf) => String(vf.fieldMetadataId)));
+      let nextPosition = currentColumns.reduce((max, vf) => Math.max(max, vf.position ?? 0), -1) + 1;
+      for (let i = 0; i < obj.defaultView.columns.length; i++) {
+        const col = obj.defaultView.columns[i];
+        const field = byName.get(col.fieldName);
+        if (!field || columnFieldIds.has(String(field._id))) continue;
+        await ctx.db.insert("viewFields", {
+          societyId,
+          viewId: systemView._id,
+          fieldMetadataId: field._id,
+          isVisible: true,
+          position: nextPosition++,
+          size: col.size ?? 160,
+          createdAtISO: now,
+          updatedAtISO: now,
+        });
+      }
+      // Drop dangling columns (field deleted) to avoid stale view columns.
+      for (const vf of currentColumns) {
+        if (!liveFieldIds.has(String(vf.fieldMetadataId))) await ctx.db.delete(vf._id);
       }
     }
   }
