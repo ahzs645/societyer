@@ -156,6 +156,41 @@ export const withdraw = mutation({
   },
 });
 
+/** Mark an amendment Superseded — the status the UI already renders but that no
+ *  mutation produced. Used when a fresh draft replaces a non-draft amendment
+ *  (e.g. a revised version supersedes one in consultation), optionally linking
+ *  the superseding amendment. Withdrawn amendments are terminal. */
+export const supersede = mutation({
+  args: {
+    id: v.id("bylawAmendments"),
+    supersededByAmendmentId: v.optional(v.id("bylawAmendments")),
+    actor: v.optional(v.string()),
+    reason: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, { id, supersededByAmendmentId, actor, reason }) => {
+    const row = await ctx.db.get(id);
+    if (!row) return;
+    if (row.status === "Withdrawn") {
+      throw new Error("Withdrawn amendments cannot be superseded.");
+    }
+    if (supersededByAmendmentId) {
+      const replacement = await ctx.db.get(supersededByAmendmentId);
+      if (!replacement || replacement.societyId !== row.societyId) {
+        throw new Error("Superseding amendment must belong to the same society.");
+      }
+    }
+    const now = new Date().toISOString();
+    await ctx.db.patch(id, {
+      status: "Superseded",
+      supersededAtISO: now,
+      supersededByAmendmentId,
+      updatedAtISO: now,
+      history: [...row.history, nowEvent(actor ?? "You", "superseded", reason)],
+    });
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("bylawAmendments") },
   returns: v.any(),

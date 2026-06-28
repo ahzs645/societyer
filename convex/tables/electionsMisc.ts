@@ -404,6 +404,8 @@ export const electionsMiscTables = {
     abstentions: v.optional(v.number()),
     filingId: v.optional(v.id("filings")),
     filedAtISO: v.optional(v.string()),
+    supersededAtISO: v.optional(v.string()),
+    supersededByAmendmentId: v.optional(v.id("bylawAmendments")),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     sourceExternalIds: v.optional(v.array(v.string())),
     importedFrom: v.optional(v.string()),

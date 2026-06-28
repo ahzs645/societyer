@@ -78,6 +78,7 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "bylawAmendments:markFiled",
   "bylawAmendments:markResolutionPassed",
   "bylawAmendments:startConsultation",
+  "bylawAmendments:supersede",
   "bylawAmendments:withdraw",
   "bylawRules:resetToDefault",
   "committees:addMember",

@@ -98,6 +98,7 @@ export function BylawDiffPage() {
   const markResolutionPassed = useMutation(api.bylawAmendments.markResolutionPassed);
   const markFiled = useMutation(api.bylawAmendments.markFiled);
   const withdraw = useMutation(api.bylawAmendments.withdraw);
+  const supersede = useMutation(api.bylawAmendments.supersede);
   const remove = useMutation(api.bylawAmendments.remove);
 
   const [selectedId, setSelectedId] = useState<Id<"bylawAmendments"> | null>(null);
@@ -310,6 +311,24 @@ export function BylawDiffPage() {
                       }}
                     >
                       <Undo2 size={12} /> Withdraw
+                    </button>
+                  )}
+                  {status !== "Draft" && status !== "Withdrawn" && status !== "Superseded" && (
+                    <button
+                      className="btn-action"
+                      onClick={async () => {
+                        const reason = await prompt({
+                          title: "Supersede amendment",
+                          message: "Mark this amendment as superseded by a newer version.",
+                          placeholder: "e.g. Replaced by the 2026 revised bylaws",
+                          confirmLabel: "Supersede",
+                        });
+                        if (reason === null) return;
+                        await supersede({ id: selected._id, reason: reason || undefined });
+                        toast.info("Superseded");
+                      }}
+                    >
+                      <Undo2 size={12} /> Supersede
                     </button>
                   )}
                   {status === "Draft" && (
