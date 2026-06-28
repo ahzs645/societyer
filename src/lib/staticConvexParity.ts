@@ -99,6 +99,7 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "evidenceRegisters:promoteBoardRoleToDirector",
   "filings:markFiled",
   "goals:toggleMilestone",
+  "grantSources:setCandidateStatus",
   "grants:convertApplication",
   "grants:reviewApplication",
   "grants:submitApplication",

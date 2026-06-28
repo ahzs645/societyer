@@ -223,6 +223,54 @@ export const candidates = query({
   },
 });
 
+// Manually add a grant opportunity to the review queue. The automated scraping
+// engine (grantSourceProfiles) is a separate, larger effort; this lets a user
+// populate and triage candidates by hand so the queue is functional today.
+export const createCandidate = mutation({
+  args: {
+    societyId: v.id("societies"),
+    sourceId: v.optional(v.id("grantSources")),
+    title: v.string(),
+    funder: v.optional(v.string()),
+    program: v.optional(v.string()),
+    opportunityUrl: v.optional(v.string()),
+    applicationDueDate: v.optional(v.string()),
+    amountText: v.optional(v.string()),
+    eligibilityText: v.optional(v.string()),
+    description: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => {
+    const now = new Date().toISOString();
+    return await ctx.db.insert("grantOpportunityCandidates", {
+      societyId: args.societyId,
+      sourceId: args.sourceId,
+      title: args.title.trim(),
+      funder: cleanText(args.funder),
+      program: cleanText(args.program),
+      opportunityUrl: cleanText(args.opportunityUrl),
+      applicationDueDate: cleanText(args.applicationDueDate),
+      amountText: cleanText(args.amountText),
+      eligibilityText: cleanText(args.eligibilityText),
+      description: cleanText(args.description),
+      confidence: "high", // manual entry
+      status: "New",
+      sourceExternalIds: [],
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+  },
+});
+
+export const setCandidateStatus = mutation({
+  args: { candidateId: v.id("grantOpportunityCandidates"), status: v.string() },
+  returns: v.any(),
+  handler: async (ctx, { candidateId, status }) => {
+    await ctx.db.patch(candidateId, { status, updatedAtISO: new Date().toISOString() });
+    return candidateId;
+  },
+});
+
 function cleanText(value: unknown) {
   const text = typeof value === "string" ? value.trim() : "";
   return text || undefined;
