@@ -1402,4 +1402,46 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       ],
     },
   },
+  {
+    nameSingular: "employee",
+    namePlural: "employees",
+    labelSingular: "Employee",
+    labelPlural: "Employees",
+    icon: "Users",
+    iconColor: "blue",
+    routePath: "/app/employees",
+    labelIdentifierFieldName: "name",
+    fields: [
+      { name: "name", label: "Name", fieldType: FIELD_TYPES.TEXT, icon: "User", isReadOnly: true },
+      { name: "role", label: "Role", fieldType: FIELD_TYPES.TEXT, icon: "Briefcase" },
+      {
+        name: "employmentType",
+        label: "Type",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Tag",
+        config: {
+          options: [
+            { value: "FullTime", label: "Full-time", color: "blue" },
+            { value: "PartTime", label: "Part-time", color: "teal" },
+            { value: "Casual", label: "Casual", color: "amber" },
+            { value: "Contractor", label: "Contractor", color: "purple" },
+          ],
+        },
+      },
+      { name: "startDate", label: "Start", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
+      { name: "status", label: "Status", fieldType: FIELD_TYPES.TEXT, icon: "Activity", isReadOnly: true },
+      { name: "compensation", label: "Compensation", fieldType: FIELD_TYPES.TEXT, icon: "DollarSign", isReadOnly: true },
+    ],
+    defaultView: {
+      name: "All employees",
+      columns: [
+        { fieldName: "name", size: 220 },
+        { fieldName: "role", size: 180 },
+        { fieldName: "employmentType", size: 130 },
+        { fieldName: "startDate", size: 120 },
+        { fieldName: "status", size: 130 },
+        { fieldName: "compensation", size: 160 },
+      ],
+    },
+  },
 ];
