@@ -79,6 +79,52 @@ export const list = query({
   },
 });
 
+// Tabled / deferred / unscheduled motions worth pulling onto a meeting's
+// agenda as "unfinished business". Motions already planned for THIS meeting
+// (targetMeetingId) rank first; motions already linked to one of this meeting's
+// agendas are excluded so a suggestion never duplicates what's on the agenda.
+const SUGGESTIBLE_STATUSES = new Set(["Backlog", "Tabled", "Deferred"]);
+export const suggestForMeeting = query({
+  args: { meetingId: v.id("meetings") },
+  returns: v.any(),
+  handler: async (ctx, { meetingId }) => {
+    const meeting = await ctx.db.get(meetingId);
+    if (!meeting) return [];
+
+    const agendas = await ctx.db
+      .query("agendas")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
+      .collect();
+    const linkedMotionIds = new Set<string>();
+    for (const agenda of agendas) {
+      const items = await ctx.db
+        .query("agendaItems")
+        .withIndex("by_agenda", (q) => q.eq("agendaId", agenda._id))
+        .collect();
+      items.forEach((item) => {
+        if (item.motionId) linkedMotionIds.add(String(item.motionId));
+      });
+    }
+
+    const rows = await ctx.db
+      .query("motions")
+      .withIndex("by_society", (q) => q.eq("societyId", meeting.societyId))
+      .collect();
+    return rows
+      .filter((row) => SUGGESTIBLE_STATUSES.has(String(row.status ?? "Backlog")))
+      .filter((row) => !linkedMotionIds.has(String(row._id)))
+      .map((row) => ({
+        ...toBacklogItem(row),
+        isPlanned: String(row.targetMeetingId ?? "") === String(meetingId),
+      }))
+      .sort(
+        (a, b) =>
+          (a.isPlanned === b.isPlanned ? 0 : a.isPlanned ? -1 : 1) ||
+          compareBacklogItems(a, b),
+      );
+  },
+});
+
 export const create = mutation({
   args: {
     societyId: v.id("societies"),

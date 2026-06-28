@@ -2373,6 +2373,36 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       .filter((row: any) => backlogStatuses.has(String(row.status ?? "Backlog")))
       .map((row: any) => ({ ...row, motionText: row.text ?? "", priority: row.backlogPriority }));
   }
+  // motionBacklog.suggestForMeeting = tabled/deferred/backlog motions not yet on
+  // this meeting's agenda, planned-for-this-meeting first. Mirrors the server.
+  if (moduleName === "motionBacklog" && exportName === "suggestForMeeting") {
+    const meetingId = args?.meetingId;
+    const meeting = store?.getRow("meetings", meetingId) ?? byId(tables.meetings ?? [], meetingId);
+    if (!meeting) return [];
+    const suggestible = new Set(["Backlog", "Tabled", "Deferred"]);
+    const agendaIds = new Set(
+      (store?.listRows("agendas", {}) ?? tables.agendas ?? [])
+        .filter((a: any) => String(a.meetingId) === String(meetingId))
+        .map((a: any) => String(a._id)),
+    );
+    const linked = new Set(
+      (store?.listRows("agendaItems", {}) ?? tables.agendaItems ?? [])
+        .filter((it: any) => agendaIds.has(String(it.agendaId)) && it.motionId)
+        .map((it: any) => String(it.motionId)),
+    );
+    const rows = store?.listRows("motions", { societyId: meeting.societyId })
+      ?? scopedRows(tables.motions ?? [], { societyId: meeting.societyId });
+    return rows
+      .filter((row: any) => suggestible.has(String(row.status ?? "Backlog")))
+      .filter((row: any) => !linked.has(String(row._id)))
+      .map((row: any) => ({
+        ...row,
+        motionText: row.text ?? "",
+        priority: row.backlogPriority,
+        isPlanned: String(row.targetMeetingId ?? "") === String(meetingId),
+      }))
+      .sort((a: any, b: any) => (a.isPlanned === b.isPlanned ? 0 : a.isPlanned ? -1 : 1));
+  }
   if (moduleName === "firm" && exportName === "search") {
     const q = String(args?.query ?? "").trim().toLowerCase();
     if (q.length < 2) return [];
@@ -3247,9 +3277,41 @@ function mutCasesPaperless5(name: string, args: StaticArgs, store?: StaticDemoDe
     return { inserted: 0, existing };
   }
   if (name === "motionBacklog:addToAgenda") {
-    if (args?.backlogId) {
+    if (args?.backlogId && args?.agendaId) {
+      const now = new Date().toISOString();
+      const agenda = store?.getRow("agendas", args.agendaId);
       const existing = store?.getRow("motions", args.backlogId);
-      if (existing) store?.upsertRow("motions", { ...existing, status: "Agenda", updatedAtISO: new Date().toISOString() });
+      const items = (store?.listRows("agendaItems", {}) ?? []).filter(
+        (it: any) => String(it.agendaId) === String(args.agendaId),
+      );
+      const dup = items.find((it: any) => String(it.motionId ?? "") === String(args.backlogId));
+      let agendaItemId = dup?._id;
+      if (!agendaItemId) {
+        agendaItemId = staticLocalId("agendaItem", "motionBacklog");
+        store?.upsertRow("agendaItems", {
+          _id: agendaItemId,
+          societyId: agenda?.societyId ?? existing?.societyId,
+          agendaId: args.agendaId,
+          order: items.length,
+          type: "motion",
+          title: existing?.title,
+          details: existing?.notes,
+          motionId: args.backlogId,
+          motionText: existing?.text,
+          createdAtISO: now,
+        });
+      }
+      if (existing) {
+        store?.upsertRow("motions", {
+          ...existing,
+          status: "Agenda",
+          targetMeetingId: agenda?.meetingId,
+          agendaId: args.agendaId,
+          agendaItemId,
+          updatedAtISO: now,
+        });
+      }
+      return { agendaItemId, reused: Boolean(dup) };
     }
     return { agendaItemId: "static_agenda_item_motion_backlog", reused: false };
   }
