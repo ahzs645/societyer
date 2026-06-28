@@ -1203,6 +1203,10 @@ export const run = action({
       ? wf.nodePreview
       : nodePreviewForRecipe(wf.recipe as RecipeKey);
     try {
+      // Steps that only describe an action they cannot perform internally (e.g.
+      // "dispatch the AGM notice") are reported honestly: the step is marked
+      // "skip" and the run ends "manual_required" rather than a false "success".
+      const manualSteps: string[] = [];
       for (let i = 0; i < steps.length; i++) {
         await ctx.runMutation(internal.workflows._updateStep, {
           id: runId,
@@ -1211,32 +1215,41 @@ export const run = action({
         });
         await sleep(400);
         const result = await handleStep(ctx, wf, i, rawIntake, nodes[i], args.actingUserId);
+        const manualRequired = typeof result === "object" && result?.manualRequired === true;
+        const note = typeof result === "string" ? result : result?.note;
+        if (manualRequired) manualSteps.push(note ?? steps[i]?.label ?? `Step ${i + 1}`);
         await ctx.runMutation(internal.workflows._updateStep, {
           id: runId,
           stepIndex: i,
-          status: "ok",
-          note: typeof result === "string" ? result : result?.note,
+          status: manualRequired ? "skip" : "ok",
+          note,
           output: typeof result === "string" ? undefined : result?.output,
         });
       }
 
+      const needsManual = manualSteps.length > 0;
       await ctx.runMutation(internal.workflows._completeRun, {
         id: runId,
-        status: "success",
-        output: { intake: rawIntake, fieldValues: rawIntake },
+        status: needsManual ? "manual_required" : "success",
+        output: { intake: rawIntake, fieldValues: rawIntake, manualSteps },
       });
       await ctx.runMutation(internal.workflows._touchSchedule, {
         id: args.workflowId,
       });
+      const recipeLabel = RECIPE_LABELS[wf.recipe as RecipeKey] ?? wf.recipe;
       await ctx.runMutation(api.notifications.create, {
         societyId: args.societyId,
         kind: "bot",
-        severity: "success",
-        title: `Workflow finished: ${wf.name}`,
-        body: `Recipe ${RECIPE_LABELS[wf.recipe as RecipeKey] ?? wf.recipe} completed ${steps.length} steps.`,
+        severity: needsManual ? "info" : "success",
+        title: needsManual
+          ? `Workflow needs manual action: ${wf.name}`
+          : `Workflow finished: ${wf.name}`,
+        body: needsManual
+          ? `Recipe ${recipeLabel} prepared ${steps.length} steps; ${manualSteps.length} require manual action: ${manualSteps.join(" ")}`
+          : `Recipe ${recipeLabel} completed ${steps.length} steps.`,
         linkHref: "/app/workflow-runs",
       });
-      return { runId, status: "success" };
+      return { runId, status: needsManual ? "manual_required" : "success" };
     } catch (err: any) {
       await ctx.runMutation(internal.workflows._completeRun, {
         id: runId,

@@ -764,7 +764,7 @@ async function handleStep(
   intake: Record<string, any> = {},
   node?: NodePreview,
   actingUserId?: any,
-): Promise<string | { note?: string; output?: any } | undefined> {
+): Promise<string | { note?: string; output?: any; manualRequired?: boolean } | undefined> {
   if (wf.recipe === "workspace_onboarding") {
     const notes = [
       "Created the society profile.",
@@ -821,10 +821,20 @@ async function handleStep(
       : "No policies renewing in the next 60 days";
   }
   if (wf.recipe === "agm_prep" && stepIndex === 2) {
-    return "Would dispatch notice via Communications (demo: skipped send).";
+    // No internal-provider integration actually dispatches the notice. Report
+    // honestly as a manual step rather than completing the run as "success".
+    return {
+      manualRequired: true,
+      note:
+        "Notice NOT sent automatically. Dispatch the AGM notice via Communications, then record proof of notice.",
+    };
   }
   if (wf.recipe === "annual_report_filing" && stepIndex === 1) {
-    return "Would invoke filingBot.run for the open AnnualReport filing.";
+    return {
+      manualRequired: true,
+      note:
+        "Annual report NOT filed automatically. Run the Filing Bot (or file in Societies Online), then record the confirmation number in Filings.",
+    };
   }
   if (wf.recipe === "ote_keycard_access_request") {
     if (stepIndex === 0) {
