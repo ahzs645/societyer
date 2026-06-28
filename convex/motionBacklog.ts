@@ -1,5 +1,6 @@
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
+import { syncMotionForBacklog } from "./motions";
 
 const PIPA_SETUP_MOTIONS = [
   {
@@ -65,7 +66,7 @@ export const create = mutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
-    return await ctx.db.insert("motionBacklog", {
+    const backlogId = await ctx.db.insert("motionBacklog", {
       societyId: args.societyId,
       title: args.title,
       motionText: args.motionText,
@@ -77,6 +78,8 @@ export const create = mutation({
       createdAtISO: now,
       updatedAtISO: now,
     });
+    await syncMotionForBacklog(ctx, await ctx.db.get(backlogId));
+    return backlogId;
   },
 });
 
@@ -95,6 +98,7 @@ export const update = mutation({
     const clean: Record<string, unknown> = { updatedAtISO: new Date().toISOString() };
     for (const [key, value] of Object.entries(patch)) if (value !== undefined) clean[key] = value;
     await ctx.db.patch(backlogId, clean);
+    await syncMotionForBacklog(ctx, await ctx.db.get(backlogId));
     return backlogId;
   },
 });
@@ -154,6 +158,7 @@ export const createFromMinutesMotion = mutation({
       createdAtISO: now,
       updatedAtISO: now,
     });
+    await syncMotionForBacklog(ctx, await ctx.db.get(backlogId));
     return { backlogId, reused: false };
   },
 });
@@ -212,6 +217,7 @@ export const createFromMinutesSection = mutation({
       createdAtISO: now,
       updatedAtISO: now,
     });
+    await syncMotionForBacklog(ctx, await ctx.db.get(backlogId));
     return { backlogId, reused: false };
   },
 });
@@ -229,7 +235,7 @@ export const seedPipaSetup = mutation({
     let inserted = 0;
     for (const motion of PIPA_SETUP_MOTIONS) {
       if (existingKeys.has(motion.seededKey)) continue;
-      await ctx.db.insert("motionBacklog", {
+      const backlogId = await ctx.db.insert("motionBacklog", {
         societyId,
         title: motion.title,
         motionText: motion.motionText,
@@ -242,6 +248,7 @@ export const seedPipaSetup = mutation({
         createdAtISO: now,
         updatedAtISO: now,
       });
+      await syncMotionForBacklog(ctx, await ctx.db.get(backlogId));
       inserted++;
     }
     return { inserted, existing: PIPA_SETUP_MOTIONS.length - inserted };

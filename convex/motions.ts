@@ -171,6 +171,49 @@ export async function syncMotionsForMinutes(
   }
 }
 
+/** Mirror one motionBacklog row into the first-class motions table, keyed by the
+ *  same `motionBacklog:<id>` external id the Phase-2 backfill uses (so the two
+ *  never duplicate). Upserts: updates the existing mirror if present, else
+ *  inserts. Best-effort — a mirror failure must never roll back the backlog
+ *  write that triggered it. */
+export async function syncMotionForBacklog(ctx: any, row: any) {
+  if (!row) return;
+  try {
+    const externalId = `motionBacklog:${String(row._id)}`;
+    const existing = (
+      await ctx.db
+        .query("motions")
+        .withIndex("by_society", (q: any) => q.eq("societyId", row.societyId))
+        .collect()
+    ).find(
+      (m: any) => Array.isArray(m.sourceExternalIds) && m.sourceExternalIds.includes(externalId),
+    );
+    const { status, outcome } = statusFromBacklogStatus(row.status);
+    const fields = stripUndefined({
+      societyId: row.societyId,
+      title: row.title,
+      text: row.motionText ?? "",
+      category: row.category,
+      status,
+      outcome,
+      backlogPriority: row.priority,
+      source: row.source ?? "manual",
+      seededKey: row.seededKey,
+      targetMeetingId: row.targetMeetingId,
+      agendaId: row.agendaId,
+      agendaItemId: row.agendaItemId,
+      sourceMinutesId: row.sourceMinutesId ?? row.minutesId,
+      sourceMotionIndex: row.sourceMotionIndex,
+      sourceSectionIndex: row.sourceSectionIndex,
+      sourceExternalIds: [externalId],
+    });
+    if (existing) await patchMotion(ctx, existing._id, fields);
+    else await insertMotion(ctx, fields);
+  } catch (err) {
+    console.warn(`[motions] backlog mirror failed for ${String(row?._id)}: ${String(err)}`);
+  }
+}
+
 // ----- Phase 2 backfill -----------------------------------------------------
 
 /** Map a legacy motionBacklog.status onto the unified motion lifecycle.
