@@ -47,6 +47,7 @@ export const governanceTables = {
     paidAtISO: v.optional(v.string()),
     receiptDocumentId: v.optional(v.id("documents")),
     paymentReference: v.optional(v.string()),
+    journalEntryId: v.optional(v.id("journalEntries")),
     notes: v.optional(v.string()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),

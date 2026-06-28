@@ -84,9 +84,14 @@ export const setStatus = mutation({
     status: v.string(),
     actingUserId: v.optional(v.id("users")),
     paymentReference: v.optional(v.string()),
+    // When marking Paid, supplying both accounts posts the reimbursement to the
+    // double-entry ledger (debit expense, credit the bank/cash account it was
+    // paid from). Omit them to just record the payment without a journal entry.
+    expenseAccountId: v.optional(v.id("financialAccounts")),
+    bankAccountId: v.optional(v.id("financialAccounts")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, status, actingUserId, paymentReference }) => {
+  handler: async (ctx, { id, status, actingUserId, paymentReference, expenseAccountId, bankAccountId }) => {
     const report = await ctx.db.get(id);
     if (!report) return;
     const nowISO = new Date().toISOString();
@@ -102,6 +107,39 @@ export const setStatus = mutation({
     if (status === "Paid") {
       patch.paidAtISO = nowISO;
       patch.paymentReference = paymentReference ?? report.paymentReference;
+
+      // Post to the ledger once, only when both accounts are explicitly chosen
+      // (never guess accounts for a money posting).
+      if (expenseAccountId && bankAccountId && !report.journalEntryId) {
+        const [expenseAccount, bankAccount] = await Promise.all([
+          ctx.db.get(expenseAccountId),
+          ctx.db.get(bankAccountId),
+        ]);
+        if (
+          expenseAccount?.societyId === report.societyId &&
+          bankAccount?.societyId === report.societyId
+        ) {
+          const amount = Math.abs(report.amountCents ?? 0);
+          if (amount > 0) {
+            const entryId = await ctx.db.insert("journalEntries", {
+              societyId: report.societyId,
+              date: nowISO.slice(0, 10),
+              memo: `Reimbursement: ${report.title} (${report.claimantName})`,
+              source: "expenseReport",
+              status: "posted",
+              createdByUserId: actingUserId,
+              postedAtISO: nowISO,
+              sourceDocumentIds: report.receiptDocumentId ? [report.receiptDocumentId] : undefined,
+              createdAtISO: nowISO,
+              updatedAtISO: nowISO,
+            });
+            const common = { societyId: report.societyId, journalEntryId: entryId, amountCents: amount, createdAtISO: nowISO, updatedAtISO: nowISO };
+            await ctx.db.insert("journalLines", { ...common, accountId: expenseAccountId, lineOrder: 0, side: "debit", description: report.title });
+            await ctx.db.insert("journalLines", { ...common, accountId: bankAccountId, lineOrder: 1, side: "credit", description: report.paymentReference ?? "Reimbursement payment" });
+            patch.journalEntryId = entryId;
+          }
+        }
+      }
     }
     await ctx.db.patch(id, patch);
   },
