@@ -6,27 +6,24 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
-import { DataTable } from "../components/DataTable";
 import { DatePicker } from "../components/DatePicker";
-import { FilterField } from "../components/FilterBar";
-import { ArrowLeft, FileSearch, Pencil, Plus, Shield, ShieldAlert, Tag, Trash2 } from "lucide-react";
+import { ArrowLeft, FileSearch, Pencil, Plus, Shield, Trash2 } from "lucide-react";
 import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../lib/format";
 import { CitationBadge } from "../components/CitationTooltip";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 const KINDS = ["DirectorsOfficers", "GeneralLiability", "PropertyCasualty", "CyberLiability", "Other"];
 const STATUSES = ["NeedsReview", "Active", "Lapsed", "Cancelled"];
-
-const FIELDS: FilterField<any>[] = [
-  { id: "kind", label: "Kind", icon: <Tag size={14} />, options: KINDS, match: (r, q) => r.kind === q },
-  { id: "status", label: "Status", icon: <Tag size={14} />, options: STATUSES, match: (r, q) => r.status === q },
-  { id: "risk", label: "Risk flags", icon: <ShieldAlert size={14} />, options: ["restricted", "needs review", "cleanup"], match: (r, q) => riskFlagsForPolicy(r).includes(q) },
-  { id: "renewal", label: "Renewal within 60 days", options: ["Yes", "No"], match: (r, q) => {
-    const days = daysUntil(r.renewalDate);
-    const dueSoon = days != null && days <= 60 && days >= 0;
-    return q === "Yes" ? dueSoon : !dueSoon;
-  } },
-];
 
 export function InsurancePage() {
   const society = useSociety();
@@ -39,9 +36,25 @@ export function InsurancePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [drawerMode, setDrawerMode] = useState<"view" | "edit" | "new">("view");
   const [form, setForm] = useState<any>(null);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "insurancePolicy",
+    viewId: currentViewId,
+  });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   const rows = (items ?? []) as any[];
   const summary = useMemo(() => summarizePolicies(rows), [rows]);
+  const records = useMemo(
+    () => rows.map((r) => ({
+      ...r,
+      period: `${formatDate(r.startDate)} to ${formatDate(r.endDate)}`,
+    })),
+    [rows],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -164,54 +177,53 @@ export function InsurancePage() {
         <Stat label="Restricted" value={summary.restricted} sub="restricted-risk flagged" tone={summary.restricted > 0 ? "danger" : undefined} />
       </div>
 
-      <DataTable
-        label="Insurance policies"
-        icon={<Shield size={14} />}
-        data={rows}
-        rowKey={(r) => r._id}
-        filterFields={FIELDS}
-        searchPlaceholder="Search insurer, policy #, source ID..."
-        searchExtraFields={[
-          (r) => r.broker,
-          (r) => r.coverageSummary,
-          (r) => searchableStructuredPolicyText(r),
-          (r) => r.notes,
-          (r) => (r.sourceExternalIds ?? []).join(" "),
-          (r) => riskFlagsForPolicy(r).join(" "),
-        ]}
-        defaultSort={{ columnId: "renewalDate", dir: "asc" }}
-        emptyMessage="No insurance policies yet."
-        onRowClick={(row) => navigate(`/app/insurance/${row._id}`)}
-        rowActionLabel={(r) => `Open insurance policy ${r.policyNumber ?? r.insurer}`}
-        columns={[
-          { id: "kind", header: "Kind", sortable: true, accessor: (r) => r.kind, render: (r) => <span className="cell-tag">{kindLabel(r.kind)}</span> },
-          {
-            id: "insurer",
-            header: "Insurer",
-            sortable: true,
-            accessor: (r) => r.insurer,
-            render: (r) => <PolicyCell row={r} />,
-          },
-          { id: "policyNumber", header: "Policy #", accessor: (r) => r.policyNumber, render: (r) => <span className="mono">{r.policyNumber}</span> },
-          { id: "coverage", header: "Coverage", sortable: true, align: "right", accessor: (r) => r.coverageCents, render: (r) => <span className="mono">{money(r.coverageCents)}</span> },
-          { id: "premium", header: "Premium", sortable: true, align: "right", accessor: (r) => r.premiumCents, render: (r) => <span className="mono">{money(r.premiumCents)}</span> },
-          { id: "period", header: "Coverage dates", accessor: (r) => `${r.startDate ?? ""} ${r.endDate ?? ""}`, render: (r) => <span className="mono">{formatDate(r.startDate)} to {formatDate(r.endDate)}</span> },
-          {
-            id: "renewalDate", header: "Renewal", sortable: true, accessor: (r) => r.renewalDate,
-            render: (r) => <RenewalCell date={r.renewalDate} />,
-          },
-        ]}
-        renderRowActions={(r) => (
-          <>
-            <button className="btn btn--ghost btn--sm" onClick={() => openEdit(r)}>
-              <Pencil size={12} /> Edit
-            </button>
-            <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete insurance policy ${r.policyNumber ?? r.insurer}`} onClick={() => remove({ id: r._id })}>
-              <Trash2 size={12} />
-            </button>
-          </>
-        )}
-      />
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="insurance policy" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="insurancePolicies"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onRecordClick={(recordId) => navigate(`/app/insurance/${recordId}`)}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Shield size={14} />}
+            label="Insurance policies"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || items === undefined}
+            renderCell={({ record, field }) => {
+              if (field.name === "kind") return <span className="cell-tag">{kindLabel(record.kind)}</span>;
+              if (field.name === "insurer") return <PolicyCell row={record} />;
+              if (field.name === "policyNumber") return <span className="mono">{record.policyNumber}</span>;
+              if (field.name === "coverageCents") return <span className="mono">{money(record.coverageCents)}</span>;
+              if (field.name === "premiumCents") return <span className="mono">{money(record.premiumCents)}</span>;
+              if (field.name === "period") return <span className="mono">{formatDate(record.startDate)} to {formatDate(record.endDate)}</span>;
+              if (field.name === "renewalDate") return <RenewalCell date={record.renewalDate} />;
+              return undefined;
+            }}
+            renderRowActions={(r) => (
+              <>
+                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
+                  <Pencil size={12} /> Edit
+                </button>
+                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete insurance policy ${r.policyNumber ?? r.insurer}`} onClick={(e) => { e.stopPropagation(); remove({ id: r._id }); }}>
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <Drawer
         open={open}
