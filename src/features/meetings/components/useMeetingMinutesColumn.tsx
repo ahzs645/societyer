@@ -952,7 +952,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     const next = [...sections];
     // Build the section explicitly rather than spreading `existing` so we don't
     // pass through fields the `update` mutation validator doesn't accept
-    // (motionText/motionTemplateId/motionBacklogId etc. live on storage but not
+    // (motionText/motionTemplateId/motionId etc. live on storage but not
     // on the mutation arg). `depth` and `reportSubmitted` are the only legacy
     // fields we need to preserve.
     next[sectionEditIndex] = {

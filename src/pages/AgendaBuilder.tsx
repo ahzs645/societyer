@@ -22,7 +22,7 @@ type AgendaDraftItem = {
   details: string;
   timeAllottedMinutes: string;
   motionTemplateId: string;
-  motionBacklogId: string;
+  motionId: string;
   motionText: string;
 };
 
@@ -86,7 +86,7 @@ export function AgendaBuilderPage() {
       details: item.details ?? "",
       timeAllottedMinutes: item.timeAllottedMinutes == null ? "" : String(item.timeAllottedMinutes),
       motionTemplateId: item.motionTemplateId ? String(item.motionTemplateId) : "",
-      motionBacklogId: item.motionBacklogId ? String(item.motionBacklogId) : "",
+      motionId: item.motionId ? String(item.motionId) : "",
       motionText: item.motionText ?? "",
     })));
   }, [selected?.agenda?._id, selected?.agenda?.updatedAtISO, selected?.items?.length]);
@@ -131,7 +131,7 @@ export function AgendaBuilderPage() {
   const handleAddItem = (type: string, extra: Partial<{
     title: string;
     motionTemplateId: Id<"motionTemplates">;
-    motionBacklogId: Id<"motionBacklog">;
+    motionId: Id<"motions">;
     motionText: string;
   }> = {}) => {
     setDraftItems((current) => [...current, {
@@ -142,7 +142,7 @@ export function AgendaBuilderPage() {
       details: "",
       timeAllottedMinutes: "",
       motionTemplateId: extra.motionTemplateId ? String(extra.motionTemplateId) : "",
-      motionBacklogId: extra.motionBacklogId ? String(extra.motionBacklogId) : "",
+      motionId: extra.motionId ? String(extra.motionId) : "",
       motionText: extra.motionText ?? "",
     }]);
   };
@@ -174,7 +174,7 @@ export function AgendaBuilderPage() {
         details: item.details.trim() || undefined,
         timeAllottedMinutes: item.timeAllottedMinutes ? Number(item.timeAllottedMinutes) : undefined,
         motionTemplateId: item.motionTemplateId ? item.motionTemplateId as Id<"motionTemplates"> : undefined,
-        motionBacklogId: item.motionBacklogId ? item.motionBacklogId as Id<"motionBacklog"> : undefined,
+        motionId: item.motionId ? item.motionId as Id<"motions"> : undefined,
         motionText: item.motionText.trim() || undefined,
       }))
       .filter((item) => item.title);
@@ -341,7 +341,7 @@ export function AgendaBuilderPage() {
                   const item = (backlog ?? []).find((row: any) => row._id === backlogId);
                   handleAddItem("motion", {
                     title: item?.title ?? "Backlog motion",
-                    motionBacklogId: backlogId as Id<"motionBacklog">,
+                    motionId: backlogId as Id<"motions">,
                     motionText: item?.motionText ?? item?.text ?? "",
                   });
                 }}

@@ -119,7 +119,7 @@ export function agendaItemsFromRecord(record: any): Array<MeetingAgendaItemEntry
   details?: string;
   timeAllottedMinutes?: number;
   motionTemplateId?: any;
-  motionBacklogId?: any;
+  motionId?: any;
   motionText?: string;
 }> | null {
   if (!record?.items?.length) return null;
@@ -129,7 +129,7 @@ export function agendaItemsFromRecord(record: any): Array<MeetingAgendaItemEntry
     details?: string;
     timeAllottedMinutes?: number;
     motionTemplateId?: any;
-    motionBacklogId?: any;
+    motionId?: any;
     motionText?: string;
   }> = [];
   let hasRoot = false;
@@ -145,7 +145,7 @@ export function agendaItemsFromRecord(record: any): Array<MeetingAgendaItemEntry
       details: item.details,
       timeAllottedMinutes: item.timeAllottedMinutes,
       motionTemplateId: item.motionTemplateId,
-      motionBacklogId: item.motionBacklogId,
+      motionId: item.motionId,
       motionText: item.motionText,
     });
     if (depth === 0) hasRoot = true;

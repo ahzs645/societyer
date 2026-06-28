@@ -1105,7 +1105,7 @@ export function MeetingDetailPage() {
         details: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.details,
         timeAllottedMinutes: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.timeAllottedMinutes,
         motionTemplateId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionTemplateId,
-        motionBacklogId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionBacklogId,
+        motionId: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionId,
         motionText: canonicalAgendaItems?.find((item) => item.title.trim().toLowerCase() === entry.title.trim().toLowerCase())?.motionText,
       })),
     });

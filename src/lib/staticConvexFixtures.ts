@@ -2196,16 +2196,19 @@ const aiMessages: any[] = [];
 const aiToolDrafts: any[] = [];
 const aiProviderSettings: any[] = [];
 
-const motionBacklog = [
+// The motionBacklog table has been retired — a "backlog item" is now a row in
+// the first-class motions table with an early status plus the folded-in backlog
+// columns (backlogPriority / source / seededKey / notes). See
+// docs/motions-first-class-object-design.md.
+const motions = [
   {
     _id: "static_motion_backlog_pipa_policy",
     societyId: SOCIETY_ID,
     title: "Adopt PIPA privacy policy and complaint process",
-    motionText:
-      "BE IT RESOLVED THAT the Society adopt the PIPA privacy policy, privacy practices, access and correction process, complaint process, safeguards, and retention approach presented to the meeting, effective [date], and authorize the privacy officer to maintain the working copy and evidence record.",
+    text: "BE IT RESOLVED THAT the Society adopt the PIPA privacy policy, privacy practices, access and correction process, complaint process, safeguards, and retention approach presented to the meeting, effective [date], and authorize the privacy officer to maintain the working copy and evidence record.",
     category: "privacy",
     status: "Backlog",
-    priority: "high",
+    backlogPriority: "high",
     source: "pipa-setup",
     seededKey: "pipa-adopt-privacy-policy",
     notes: "Use after the draft policy has been reviewed and is ready for approval.",
@@ -2216,11 +2219,10 @@ const motionBacklog = [
     _id: "static_motion_backlog_pipa_data_gap",
     societyId: SOCIETY_ID,
     title: "Approve member-data access gap memo",
-    motionText:
-      "BE IT RESOLVED THAT the Society approve the member-data access gap memo presented to the meeting, recording which member or eligibility records are controlled by the Society, which records are held by the university or other institution, and how privacy and records requests will be handled.",
+    text: "BE IT RESOLVED THAT the Society approve the member-data access gap memo presented to the meeting, recording which member or eligibility records are controlled by the Society, which records are held by the university or other institution, and how privacy and records requests will be handled.",
     category: "privacy",
     status: "Backlog",
-    priority: "normal",
+    backlogPriority: "normal",
     source: "pipa-setup",
     seededKey: "pipa-member-data-gap-memo",
     notes: "Useful where an institution does not share the full member list.",
@@ -2273,7 +2275,7 @@ const tables: Record<string, any[]> = {
   journalLines,
   reconciliationRuns,
   reconciliationRunLines,
-  motionBacklog,
+  motions,
   pendingEmails: [
     {
       _id: "static_pending_email_unbc",
@@ -3328,7 +3330,7 @@ export {
   aiMessages,
   aiToolDrafts,
   aiProviderSettings,
-  motionBacklog,
+  motions,
   tables,
   director,
   member,

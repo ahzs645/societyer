@@ -171,83 +171,14 @@ export async function syncMotionsForMinutes(
   }
 }
 
-/** Mirror one motionBacklog row into the first-class motions table, keyed by the
- *  same `motionBacklog:<id>` external id the Phase-2 backfill uses (so the two
- *  never duplicate). Upserts: updates the existing mirror if present, else
- *  inserts. Best-effort — a mirror failure must never roll back the backlog
- *  write that triggered it. */
-export async function syncMotionForBacklog(ctx: any, row: any) {
-  if (!row) return;
-  try {
-    const externalId = `motionBacklog:${String(row._id)}`;
-    const existing = (
-      await ctx.db
-        .query("motions")
-        .withIndex("by_society", (q: any) => q.eq("societyId", row.societyId))
-        .collect()
-    ).find(
-      (m: any) => Array.isArray(m.sourceExternalIds) && m.sourceExternalIds.includes(externalId),
-    );
-    const { status, outcome } = statusFromBacklogStatus(row.status);
-    const fields = stripUndefined({
-      societyId: row.societyId,
-      title: row.title,
-      text: row.motionText ?? "",
-      category: row.category,
-      status,
-      outcome,
-      backlogPriority: row.priority,
-      source: row.source ?? "manual",
-      seededKey: row.seededKey,
-      targetMeetingId: row.targetMeetingId,
-      agendaId: row.agendaId,
-      agendaItemId: row.agendaItemId,
-      sourceMinutesId: row.sourceMinutesId ?? row.minutesId,
-      sourceMotionIndex: row.sourceMotionIndex,
-      sourceSectionIndex: row.sourceSectionIndex,
-      sourceExternalIds: [externalId],
-    });
-    if (existing) await patchMotion(ctx, existing._id, fields);
-    else await insertMotion(ctx, fields);
-  } catch (err) {
-    console.warn(`[motions] backlog mirror failed for ${String(row?._id)}: ${String(err)}`);
-  }
-}
-
 // ----- Phase 2 backfill -----------------------------------------------------
 
-/** Map a legacy motionBacklog.status onto the unified motion lifecycle.
- *  See the status table in docs/motions-first-class-object-design.md. */
-function statusFromBacklogStatus(raw?: string): { status: string; outcome?: string } {
-  switch (String(raw ?? "").trim()) {
-    case "Agenda":
-      return { status: "Agenda" };
-    case "MinutesDraft":
-      // Seeded into a minutes draft but not yet voted — closest unified state.
-      return { status: "Agenda" };
-    case "Deferred":
-      return { status: "Deferred" };
-    case "Adopted":
-      return { status: "Voted", outcome: "Carried" };
-    case "Archived":
-      return { status: "Archived" };
-    case "Backlog":
-    default:
-      return { status: "Backlog" };
-  }
-}
-
 /** One-off Phase 2 migration: populate the first-class motions table from the
- *  two legacy stores that the dual-write hooks do NOT cover historically —
- *  (1) every existing minutes.motions[] blob, and (2) every motionBacklog row.
+ *  legacy embedded minutes.motions[] blobs (the motionBacklog table has been
+ *  retired — its rows ARE motions now, so there is nothing left to migrate).
  *
- *  Idempotent:
- *   - Minutes are mirrored via syncMotionsForMinutes (delete-by-minutes +
- *     reinsert), so re-running re-mirrors cleanly.
- *   - Backlog rows are tagged with sourceExternalIds=["motionBacklog:<id>"] and
- *     skipped on re-run. Backlog-derived motions deliberately leave minutesId
- *     unset (using sourceMinutesId for provenance) so the minutes mirror, keyed
- *     by minutesId, never deletes them.
+ *  Idempotent: minutes are mirrored via syncMotionsForMinutes (delete-by-minutes
+ *  + reinsert), so re-running re-mirrors cleanly.
  *
  *  Scope to one society with `societyId`, or omit to backfill all. Pass
  *  `dryRun: true` to count without writing. */
@@ -258,7 +189,7 @@ export const backfillFromLegacy = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx: any, { societyId, dryRun }: any) => {
-    // --- 1. Minutes embedded motions[] ---
+    // --- Minutes embedded motions[] ---
     const minutesRows = societyId
       ? await ctx.db
           .query("minutes")
@@ -283,70 +214,11 @@ export const backfillFromLegacy = internalMutation({
       }
     }
 
-    // --- 2. motionBacklog rows ---
-    const backlogRows = societyId
-      ? await ctx.db
-          .query("motionBacklog")
-          .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-          .collect()
-      : await ctx.db.query("motionBacklog").collect();
-
-    let backlogCreated = 0;
-    let backlogSkipped = 0;
-    for (const item of backlogRows) {
-      const externalId = `motionBacklog:${String(item._id)}`;
-      const existing = await ctx.db
-        .query("motions")
-        .withIndex("by_society", (q: any) => q.eq("societyId", item.societyId))
-        .collect();
-      const already = existing.some((m: any) =>
-        Array.isArray(m.sourceExternalIds) && m.sourceExternalIds.includes(externalId),
-      );
-      if (already) {
-        backlogSkipped += 1;
-        continue;
-      }
-      const { status, outcome } = statusFromBacklogStatus(item.status);
-      backlogCreated += 1;
-      if (dryRun) continue;
-      const now = new Date().toISOString();
-      await ctx.db.insert(
-        "motions",
-        stripUndefined({
-          societyId: item.societyId,
-          title: item.title,
-          text: item.motionText ?? "",
-          category: item.category,
-          status,
-          outcome,
-          backlogPriority: item.priority,
-          source: item.source ?? "imported",
-          seededKey: item.seededKey,
-          targetMeetingId: item.targetMeetingId,
-          agendaId: item.agendaId,
-          agendaItemId: item.agendaItemId,
-          // provenance only — NOT minutesId, so the minutes mirror won't reap it
-          sourceMinutesId: item.sourceMinutesId ?? item.minutesId,
-          sourceMotionIndex: item.sourceMotionIndex,
-          sourceSectionIndex: item.sourceSectionIndex,
-          sourceExternalIds: [externalId],
-          history: [
-            stripUndefined({ at: now, status, outcome, note: "backfilled from motionBacklog" }),
-          ],
-          createdAtISO: item.createdAtISO ?? now,
-          updatedAtISO: now,
-        }),
-      );
-    }
-
     return {
       dryRun: dryRun === true,
       societyScope: societyId ? String(societyId) : "all",
       minutesProcessed,
       minutesMotions,
-      backlogRows: backlogRows.length,
-      backlogCreated,
-      backlogSkipped,
     };
   },
 });

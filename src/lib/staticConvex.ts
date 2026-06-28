@@ -148,7 +148,7 @@ import {
   aiMessages,
   aiToolDrafts,
   aiProviderSettings,
-  motionBacklog,
+  motions,
   tables,
   director,
   member,
@@ -1357,7 +1357,6 @@ const STATIC_EXPORT_TABLES = [
   "agendaItems",
   "meetingTemplates",
   "motionTemplates",
-  "motionBacklog",
   "recordsLocation",
   "sourceEvidence",
   "secretVaultItems",
@@ -2364,6 +2363,16 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       .sort((a: any, b: any) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
   }
   if (moduleName === "partyPortals" && exportName === "center") return null;
+  // motionBacklog.list = motions with an early lifecycle status, mapped back to
+  // the backlog-item shape the frontend reads (status/priority/motionText).
+  if (moduleName === "motionBacklog" && exportName === "list") {
+    const backlogStatuses = new Set(["Backlog", "Tabled", "Deferred", "Agenda"]);
+    const rows = store?.listRows("motions", { societyId: args?.societyId })
+      ?? scopedRows(tables.motions ?? [], args);
+    return rows
+      .filter((row: any) => backlogStatuses.has(String(row.status ?? "Backlog")))
+      .map((row: any) => ({ ...row, motionText: row.text ?? "", priority: row.backlogPriority }));
+  }
   if (moduleName === "firm" && exportName === "search") {
     const q = String(args?.query ?? "").trim().toLowerCase();
     if (q.length < 2) return [];
@@ -3195,10 +3204,53 @@ function mutCasesPaperless5(name: string, args: StaticArgs, store?: StaticDemoDe
       tags: ["societyer", "demo"],
     };
   }
+  // motionBacklog.* now reads/writes the first-class motions store (the table
+  // was retired). A "backlog item" is a motions row with an early status plus
+  // the folded-in backlog columns (text/backlogPriority/source/seededKey/notes).
+  if (name === "motionBacklog:create") {
+    const id = staticLocalId("motionBacklog", "create");
+    const now = new Date().toISOString();
+    store?.upsertRow("motions", {
+      _id: id,
+      societyId: args?.societyId ?? SOCIETY_ID,
+      title: args?.title,
+      text: args?.motionText ?? "",
+      category: args?.category ?? "governance",
+      status: "Backlog",
+      backlogPriority: args?.priority ?? "normal",
+      source: args?.source ?? "manual",
+      notes: args?.notes,
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    return id;
+  }
+  if (name === "motionBacklog:update") {
+    const existing = store?.getRow("motions", args?.backlogId) ?? {};
+    const patch: Record<string, any> = { ...existing, updatedAtISO: new Date().toISOString() };
+    if (args?.title !== undefined) patch.title = args.title;
+    if (args?.motionText !== undefined) patch.text = args.motionText;
+    if (args?.category !== undefined) patch.category = args.category;
+    if (args?.status !== undefined) patch.status = args.status;
+    if (args?.priority !== undefined) patch.backlogPriority = args.priority;
+    if (args?.notes !== undefined) patch.notes = args.notes;
+    store?.upsertRow("motions", patch);
+    return args?.backlogId ?? null;
+  }
+  if (name === "motionBacklog:remove") {
+    store?.removeRow("motions", args?.backlogId);
+    return null;
+  }
   if (name === "motionBacklog:seedPipaSetup") {
-    return { inserted: 0, existing: motionBacklog.length };
+    const rows = store?.listRows("motions", { societyId: args?.societyId }) ?? motions;
+    const existing = rows.filter((r: any) => r.source === "pipa-setup").length;
+    return { inserted: 0, existing };
   }
   if (name === "motionBacklog:addToAgenda") {
+    if (args?.backlogId) {
+      const existing = store?.getRow("motions", args.backlogId);
+      if (existing) store?.upsertRow("motions", { ...existing, status: "Agenda", updatedAtISO: new Date().toISOString() });
+    }
     return { agendaItemId: "static_agenda_item_motion_backlog", reused: false };
   }
   if (name === "motionBacklog:seedToMinutes") {
@@ -5649,6 +5701,9 @@ class StaticDemoDexieStore {
 
 function staticTableNameForModule(moduleName: string) {
   if (moduleName === "society") return "societies";
+  // motionBacklog has been retired into the first-class motions table; the
+  // api.motionBacklog.* surface is preserved but reads/writes the motions store.
+  if (moduleName === "motionBacklog") return "motions";
   return moduleName;
 }
 

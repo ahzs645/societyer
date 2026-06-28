@@ -118,7 +118,7 @@ export const meetingTables = {
           discussion: v.optional(v.string()),
           motionText: v.optional(v.string()),
           motionTemplateId: v.optional(v.id("motionTemplates")),
-          motionBacklogId: v.optional(v.id("motionBacklog")),
+          motionId: v.optional(v.id("motions")),
           reportSubmitted: v.optional(v.boolean()),
           decisions: v.optional(v.array(v.string())),
           actionItems: v.optional(
@@ -159,7 +159,7 @@ export const meetingTables = {
         sectionIndex: v.optional(v.number()),
         sectionTitle: v.optional(v.string()),
         motionTemplateId: v.optional(v.id("motionTemplates")),
-        motionBacklogId: v.optional(v.id("motionBacklog")),
+        motionId: v.optional(v.id("motions")),
       }),
     ),
     // Immutable snapshot of motions[] frozen when the minutes are approved, so
@@ -184,7 +184,7 @@ export const meetingTables = {
           sectionIndex: v.optional(v.number()),
           sectionTitle: v.optional(v.string()),
           motionTemplateId: v.optional(v.id("motionTemplates")),
-          motionBacklogId: v.optional(v.id("motionBacklog")),
+          motionId: v.optional(v.id("motions")),
         }),
       ),
     ),
