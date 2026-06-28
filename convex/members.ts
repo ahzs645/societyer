@@ -138,8 +138,11 @@ export const merge = mutation({
     let rewired = 0;
     for (const drop of drops) {
       for (const [table, field] of MEMBER_FK_REFS) {
+        // Rare admin-triggered merge; a scan over the FK column is acceptable
+        // and there is no shared index across these heterogeneous tables.
         const rows = await (ctx.db as any)
           .query(table)
+          // eslint-disable-next-line @convex-dev/no-filter-in-query
           .filter((q: any) => q.eq(q.field(field), drop._id))
           .collect();
         for (const row of rows) {
