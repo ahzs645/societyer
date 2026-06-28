@@ -44,7 +44,12 @@ export const meetingWorkflowTables = {
     societyId: v.id("societies"),
     title: v.string(),
     body: v.string(),
-    category: v.string(), // governance | finance | membership | operations | bylaws | other
+    // Deprecated single classifier — superseded by `tags`. Kept optional for
+    // back-compat with rows written before the tag system; no longer written.
+    category: v.optional(v.string()),
+    // Free-form labels for filtering the library (e.g. "governance", "finance",
+    // or a routine procedural tag like "adjournment"). Mirrors motions.tags.
+    tags: v.optional(v.array(v.string())),
     requiresSpecialResolution: v.boolean(),
     notes: v.optional(v.string()),
     usageCount: v.optional(v.number()),
@@ -83,6 +88,19 @@ export const meetingWorkflowTables = {
     status: v.string(), // Backlog | Draft | Agenda | Moved | Tabled | Deferred | Withdrawn | Voted | Archived
     outcome: v.optional(v.string()), // Carried | Defeated (meaningful only when status = Voted)
     statusIsManual: v.optional(v.boolean()),
+
+    // How the motion was decided, orthogonal to its threshold:
+    //   vote      — a counted ballot (the tally is judged against the threshold)
+    //   consent   — adopted by unanimous/general consent ("no objection"); no tally
+    //   automatic — meeting closed without a motion (agenda done / time / emergency)
+    // Most procedural motions (adjournment, approve-minutes) are decided by
+    // consent, so they carry without a recorded tally. See
+    // shared/proceduralMotions.ts.
+    decidedBy: v.optional(v.string()),
+    // Stored procedural-kind slug (adjournment | previous-minutes | …) so the
+    // master list can classify/hide by an explicit label instead of re-matching
+    // the wording. Null for ordinary substantive motions.
+    proceduralKind: v.optional(v.string()),
 
     // Votes (model A — current/most-recent tally on the motion itself)
     votesFor: v.optional(v.number()),

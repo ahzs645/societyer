@@ -10,6 +10,7 @@ import { useToast } from "../components/Toast";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { formatDate } from "../lib/format";
 import { Select } from "../components/Select";
+import { Badge } from "../components/ui";
 
 const ITEM_TYPES = ["discussion", "motion", "report", "break", "executive_session"] as const;
 const STATUS_OPTIONS = ["Draft", "Published", "Finalized"] as const;
@@ -46,10 +47,6 @@ export function AgendaBuilderPage() {
     api.meetingTemplates.list,
     society ? { societyId: society._id } : "skip",
   );
-  const backlog = useQuery(
-    api.motionBacklog.list,
-    society ? { societyId: society._id } : "skip",
-  );
 
   const [selectedAgendaId, setSelectedAgendaId] = useState<Id<"agendas"> | null>(null);
   const [newMeetingId, setNewMeetingId] = useState<string>("");
@@ -64,10 +61,19 @@ export function AgendaBuilderPage() {
     selectedAgendaId ? { agendaId: selectedAgendaId } : "skip",
   );
 
+  // Tabled / deferred motions to pull onto THIS meeting's agenda as unfinished
+  // business. Excludes motions already on the agenda; planned-for-this-meeting
+  // motions rank first.
+  const suggestions = useQuery(
+    api.motionBacklog.suggestForMeeting,
+    selected ? { meetingId: selected.agenda.meetingId } : "skip",
+  );
+
   const createAgenda = useMutation(api.agendas.create);
   const syncAgenda = useMutation(api.agendas.syncForMeeting);
   const startMinutesFromAgenda = useMutation(api.agendas.startMinutesFromAgenda);
   const applyMeetingTemplate = useMutation(api.meetings.applyTemplate);
+  const addBacklogToAgenda = useMutation(api.motionBacklog.addToAgenda);
 
   const meetingById = useMemo(() => {
     const map = new Map<string, any>();
@@ -161,6 +167,21 @@ export function AgendaBuilderPage() {
 
   const removeDraftItem = (index: number) => {
     setDraftItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  // Pull a tabled/deferred motion straight onto this agenda. Uses the
+  // status-transitioning addToAgenda mutation (Tabled → Agenda, links the
+  // agenda item, sets targetMeetingId) rather than the in-memory draft path, so
+  // the motion's lifecycle stays correct. The agenda requery re-hydrates the
+  // editor with the new item.
+  const handleAddSuggestion = async (row: any) => {
+    if (!selected) return;
+    try {
+      await addBacklogToAgenda({ backlogId: row._id, agendaId: selected.agenda._id });
+      toast.success(`Added "${row.title || "motion"}" to the agenda`);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not add motion to agenda");
+    }
   };
 
   const saveSelectedAgenda = async () => {
@@ -333,28 +354,47 @@ export function AgendaBuilderPage() {
                 ]}
                 className="input"
               />
-              <Select
-                value=""
-                onChange={(value) => {
-                  const backlogId = value;
-                  if (!backlogId) return;
-                  const item = (backlog ?? []).find((row: any) => row._id === backlogId);
-                  handleAddItem("motion", {
-                    title: item?.title ?? "Backlog motion",
-                    motionId: backlogId as Id<"motions">,
-                    motionText: item?.motionText ?? item?.text ?? "",
-                  });
-                }}
-                disabled={finalized}
-                options={[
-                  { value: "", label: "Add from motion backlog..." },
-                  ...(backlog ?? [])
-                    .filter((item: any) => item.status !== "Archived" && item.status !== "Adopted")
-                    .map((item: any) => ({ value: item._id, label: `${item.title} (${item.status})` })),
-                ]}
-                className="input"
-              />
             </div>
+
+            {(suggestions ?? []).length > 0 && (
+              <div
+                className="card"
+                style={{ padding: 12, border: "1px solid var(--border)", background: "var(--bg-subtle)" }}
+              >
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                  <strong>Unfinished business</strong>
+                  <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                    Tabled &amp; deferred motions you can carry onto this agenda
+                  </span>
+                </div>
+                <div className="col" style={{ gap: 6, marginTop: 8 }}>
+                  {(suggestions ?? []).map((row: any) => (
+                    <div
+                      key={row._id}
+                      className="row"
+                      style={{ gap: 8, alignItems: "center", justifyContent: "space-between" }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 600 }}>{row.title || truncateText(row.motionText, 70)}</span>
+                          <Badge tone="warn">{row.status}</Badge>
+                          {row.isPlanned && <Badge tone="info">Planned for this meeting</Badge>}
+                          {row.priority === "high" && <Badge tone="neutral">High priority</Badge>}
+                        </div>
+                        {row.title && (
+                          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                            {truncateText(row.motionText, 110)}
+                          </div>
+                        )}
+                      </div>
+                      <button className="btn" onClick={() => handleAddSuggestion(row)} disabled={finalized}>
+                        <Plus size={12} /> Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="col" style={{ gap: 8 }}>
               {draftItems.length === 0 && (
@@ -467,6 +507,11 @@ export function AgendaBuilderPage() {
       </div>
     </div>
   );
+}
+
+function truncateText(value: string | undefined, max: number): string {
+  const text = String(value ?? "").trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 function defaultTitleForType(type: string): string {

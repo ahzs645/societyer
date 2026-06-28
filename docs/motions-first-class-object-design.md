@@ -205,6 +205,14 @@ This also makes the public-copy export deterministic and removes the read-time d
 
 - **Backlog: folded into `motions`** (2026-06-27). `motionBacklog` is migrated into `motions` and dropped — no separate table, no view. A backlogged item is a motion with `status in (Backlog, Tabled, Deferred)` plus `backlogPriority`/`source`/`seededKey`/`targetMeetingId`. The seeding path (`seededKey`, `source: pipa-setup`) is preserved via the `by_society_seeded` index so idempotent seeds (e.g. PIPA setup) still de-dupe.
 
+- **Procedural motions + the `decidedBy` axis** (2026-06-28). The old model encoded adjournment as `resolutionType: "Procedural"`, which `motionCarriesForRules` treated as "no vote". That is wrong under Robert's Rules: a motion to adjourn is a *privileged* motion that **carries by a majority** (it is just undebatable), and it *must* pass for the meeting to legally close. In practice it — like approving the previous minutes, approving the agenda, and receiving reports — is adopted by **general consent** with no tally, not exempt from the vote.
+
+  The fix separates two axes that were conflated:
+  - **`decidedBy: "vote" | "consent" | "automatic"`** (new optional field on `motions`, the embedded `minutes.motions[]`, the snapshot, and the minutes mutation args). `consent`/`automatic` mean "carried, no tally to judge" → `motionCarriesForRules` returns `null` (no threshold verdict) instead of a false "would not carry". A procedural motion that *is* put to a real ballot is now judged by a simple majority (a 5–5 tie loses) rather than skipped.
+  - **A shared procedural-motion catalogue** (`shared/proceduralMotions.ts`) is the single source of truth for both the frontend (`src/lib/motionGovernance.ts`) and the Convex dual-write layer (`convex/motions.ts`). Each kind carries its parliamentary class, debatable/amendable flags, threshold, default `decidedBy`, a routine flag, a detection regex, and an **RONR citation**. `syncMotionsForMinutes` classifies each mirrored motion, stamps `proceduralKind`, **auto-applies the kind's tag** (so the master-list "hide routine" filter keys off a *stored label* instead of regex-matching the wording every render), and defaults `decidedBy` from the catalogue.
+
+  Kinds shipped: `adjournment`, `previous-minutes`, `approve-agenda`, `recess`, `receive-reports`. The MotionEditor renders a "Decided by" picker for recognised procedural motions (with the citation in a tooltip) and the auto-adjournment record is stamped `decidedBy: "consent"`. Covered by `scripts/check-motion-governance.ts` + `scripts/check-meeting-governance.ts`.
+
 ## Open Questions
 
 - **Are movers intrinsic to the motion or to the consideration?** Model A puts them on the motion. If a re-raise can have a different mover, they move into `history[]`. Defaulting to on-the-motion.
@@ -214,5 +222,7 @@ This also makes the public-copy export deterministic and removes the read-time d
 
 - **status**: `Backlog | Draft | Agenda | Moved | Tabled | Deferred | Withdrawn | Voted | Archived` (explicit, settable; unified across the old motion + backlog lifecycles). `Backlog` = captured, unscheduled; `Agenda` = placed on an agenda; `Moved` = formally moved, awaiting vote; `Archived` = closed without action.
 - **outcome**: `Carried | Defeated` (set only when `status = Voted`).
+- **decidedBy**: `vote | consent | automatic`. `vote` = a counted ballot judged against the threshold; `consent` = adopted by unanimous/general consent, no tally; `automatic` = meeting closed without a motion (agenda done / time reached / emergency — adjournment only). A `consent`/`automatic` motion carries by definition, so the threshold check returns no verdict.
+- **proceduralKind**: stored slug from the shared catalogue — `adjournment | previous-minutes | approve-agenda | recess | receive-reports`. Null for ordinary substantive motions. Drives auto-labeling + the routine-hide filter.
 - **resolution type base**: `votesCast | eligibleMembers | quorum`.
 - **built-in resolution type ids**: `ordinary` (Majority), `special`, `unanimous` — non-deletable; custom ids are slugged from the label.

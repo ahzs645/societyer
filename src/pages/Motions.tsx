@@ -197,7 +197,7 @@ export function MotionsPage() {
                         <td className="muted">
                           {m.votesFor != null || m.votesAgainst != null
                             ? `${m.votesFor ?? 0}/${m.votesAgainst ?? 0}/${m.abstentions ?? 0}`
-                            : "—"}
+                            : decidedByLabel(m.decidedBy)}
                         </td>
                         <td className="muted">
                           {m.movedBy || "—"}
@@ -259,6 +259,14 @@ export function MotionsPage() {
 function truncate(value: string | undefined, max: number) {
   const text = String(value ?? "").trim();
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+// A motion with no tally was either decided by general consent (the common case
+// for adjournment / approving the previous minutes) or closed automatically.
+function decidedByLabel(decidedBy: string | undefined): string {
+  if (decidedBy === "consent") return "By consent";
+  if (decidedBy === "automatic") return "Automatic";
+  return "—";
 }
 
 function statusTone(status: string): "success" | "warn" | "info" | "neutral" {

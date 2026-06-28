@@ -3,6 +3,7 @@ import {
   parseBylawSections,
   bylawSectionKey,
   alignBylawSections,
+  diffBylawSections,
 } from "../src/lib/bylawSections";
 
 // --- bylawSectionKey ---
@@ -51,5 +52,55 @@ const removedPair = alignBylawSections(
 );
 assert.ok(removedPair.find((p) => p.key === "kept" && p.next && !p.base), "added section");
 assert.ok(removedPair.find((p) => p.key === "gone" && p.base && !p.next), "removed section");
+
+// --- diffBylawSections: a relocated, textually-unchanged section is "moved" ---
+// Re-adding a cover page / moving the mission statement must NOT read as a
+// whole-document rewrite — the section that only moved carries no edits.
+const movedDiff = diffBylawSections(
+  ["## Abstract", "Our mission.", "## Part 1", "Members.", "## Part 2", "Meetings."].join("\n"),
+  ["## Part 1", "Members.", "## Part 2", "Meetings.", "## Abstract", "Our mission."].join("\n"),
+);
+const abstractDiff = movedDiff.find((d) => d.key === "abstract");
+assert.equal(abstractDiff?.status, "moved", "relocated unchanged section is 'moved'");
+assert.equal(abstractDiff?.chunks.length, 0, "moved section has no redline chunks");
+assert.equal(abstractDiff?.adds, 0, "moved section has no additions");
+// The sections that stayed put are unchanged, not moved.
+assert.equal(movedDiff.find((d) => d.key === "part 1")?.status, "unchanged", "stationary section unchanged");
+
+// --- diffBylawSections: a body edit is "changed" (not "moved") with a redline ---
+const changedDiff = diffBylawSections(
+  ["## Quorum", "Quorum is five members."].join("\n"),
+  ["## Quorum", "Quorum is seven members."].join("\n"),
+);
+const quorum = changedDiff.find((d) => d.key === "quorum");
+assert.equal(quorum?.status, "changed", "edited section is 'changed'");
+assert.ok(quorum && (quorum.adds > 0 || quorum.dels > 0), "changed section has a redline");
+
+// --- diffBylawSections: a moved AND edited section is "changed", not "moved" ---
+const movedAndEdited = diffBylawSections(
+  ["## Abstract", "Old mission.", "## Part 1", "Members."].join("\n"),
+  ["## Part 1", "Members.", "## Abstract", "New mission."].join("\n"),
+);
+assert.equal(
+  movedAndEdited.find((d) => d.key === "abstract")?.status,
+  "changed",
+  "a relocated section whose body also changed is 'changed' (substance wins)",
+);
+
+// --- diffBylawSections: added / removed sections ---
+const addedRemoved = diffBylawSections("## Gone\nremoved.", "## Kept\nkept.");
+assert.equal(addedRemoved.find((d) => d.key === "kept")?.status, "added", "new section added");
+assert.equal(addedRemoved.find((d) => d.key === "gone")?.status, "removed", "dropped section removed");
+
+// --- diffBylawSections: per-section guard trips only the oversized section ---
+const big = "word ".repeat(2400);
+const guarded = diffBylawSections(
+  ["## Big", big, "## Small", "before."].join("\n"),
+  ["## Big", `${big}extra`, "## Small", "after."].join("\n"),
+  { maxCells: 1000 },
+);
+assert.equal(guarded.find((d) => d.key === "big")?.tooLarge, true, "oversized section flagged tooLarge");
+assert.equal(guarded.find((d) => d.key === "small")?.tooLarge, false, "small sibling still diffs");
+assert.ok((guarded.find((d) => d.key === "small")?.chunks.length ?? 0) > 0, "small sibling has a redline");
 
 console.log("bylaw section parser checks passed");

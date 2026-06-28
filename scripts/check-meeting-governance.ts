@@ -185,10 +185,30 @@ assert.equal(
   true,
   "a motion tagged with a custom type is evaluated against that type",
 );
+// A motion adopted by general consent / automatic close carries by definition —
+// there is no tally to weigh, so the threshold check returns null (no judgement),
+// not a fail. This is the adjournment / approve-previous-minutes case.
+assert.equal(
+  motionCarriesForRules({ decidedBy: "consent", text: "Adjourn the meeting" }, withCustom),
+  null,
+  "consent-adopted motions have no tally to judge",
+);
+assert.equal(
+  motionCarriesForRules({ decidedBy: "automatic", text: "Adjourn the meeting" }, withCustom),
+  null,
+  "automatic close has no tally to judge",
+);
+// But a procedural motion that IS put to an actual ballot is judged by a simple
+// majority (RONR) rather than being exempted from the math — a 5–5 tie loses.
 assert.equal(
   motionCarriesForRules({ votesFor: 5, votesAgainst: 5, resolutionType: "Procedural" }, withCustom),
-  null,
-  "procedural motions don't carry a vote",
+  false,
+  "a contested procedural motion is judged by majority — a tie does not carry",
+);
+assert.equal(
+  motionCarriesForRules({ votesFor: 6, votesAgainst: 5, resolutionType: "Procedural" }, withCustom),
+  true,
+  "a procedural motion with a majority in favour carries",
 );
 
 // ---------------------------------------------------------------------------

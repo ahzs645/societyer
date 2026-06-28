@@ -1,5 +1,10 @@
 import { internalMutation, mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
+import {
+  applyProceduralTags,
+  classifyProceduralMotion,
+  defaultDecidedByFor,
+} from "../shared/proceduralMotions";
 
 // Standalone first-class motion store. See
 // docs/motions-first-class-object-design.md. During the dual-write phase the
@@ -21,6 +26,8 @@ const motionContent = {
   resolutionTypeId: v.optional(v.string()),
   resolutionTypeLabel: v.optional(v.string()),
   outcome: v.optional(v.string()),
+  decidedBy: v.optional(v.string()),
+  proceduralKind: v.optional(v.string()),
   votesFor: v.optional(v.number()),
   votesAgainst: v.optional(v.number()),
   abstentions: v.optional(v.number()),
@@ -52,13 +59,36 @@ function stripUndefined(obj: Record<string, any>) {
 
 // ----- shared write helpers (reused by the dual-write hooks) ----------------
 
+/** Stamp a motion's procedural classification onto an input record without
+ *  overwriting values the caller set explicitly: the `proceduralKind` slug, the
+ *  auto-applied kind tag, and the default `decidedBy`. Applied to every direct
+ *  insert so backlog / import / AI-transcript creation paths label recurring
+ *  procedural motions (adjournment, approve-minutes, …) the same way the
+ *  minutes→motions mirror does. Substantive motions are left untouched. */
+export function classifyMotionInput(input: Record<string, any>) {
+  const subject = {
+    text: input.text,
+    sectionTitle: input.sectionTitle,
+    resolutionType: input.resolutionType ?? input.resolutionTypeLabel,
+  };
+  const kind = classifyProceduralMotion(subject);
+  if (!kind) return input;
+  return {
+    ...input,
+    proceduralKind: input.proceduralKind ?? kind.key,
+    tags: applyProceduralTags(input.tags, subject),
+    decidedBy: input.decidedBy ?? kind.defaultDecidedBy,
+  };
+}
+
 /** Insert a motion row, defaulting status to Draft and stamping timestamps.
  *  Returns the new id. */
 export async function insertMotion(ctx: any, input: Record<string, any>) {
   const now = new Date().toISOString();
+  const classified = classifyMotionInput(input);
   return await ctx.db.insert("motions", {
-    ...stripUndefined(input),
-    status: input.status ?? "Draft",
+    ...stripUndefined(classified),
+    status: classified.status ?? "Draft",
     createdAtISO: now,
     updatedAtISO: now,
   });
@@ -122,6 +152,24 @@ export async function syncMotionsForMinutes(
       const note = KNOWN_EMBEDDED_OUTCOMES.has(String(m.outcome ?? "").trim().toLowerCase())
         ? undefined
         : `legacy outcome: ${m.outcome}`;
+      // Classify recurring procedural motions (adjournment, approve-minutes,
+      // approve-agenda, recess, receive-reports) from their wording and stamp
+      // the first-class record with an explicit kind + label, so the master
+      // list filters by a stored tag instead of regex-matching every render.
+      // Default the "decided by" axis from the catalogue (most procedural
+      // motions pass by general consent, carrying without a recorded tally).
+      const kind = classifyProceduralMotion({
+        text: m.text,
+        sectionTitle: m.sectionTitle,
+        resolutionType: m.resolutionType,
+      });
+      const tags = applyProceduralTags(m.tags, {
+        text: m.text,
+        sectionTitle: m.sectionTitle,
+      });
+      const decidedBy =
+        m.decidedBy ??
+        defaultDecidedByFor({ text: m.text, sectionTitle: m.sectionTitle });
       await ctx.db.insert(
         "motions",
         stripUndefined({
@@ -139,6 +187,9 @@ export async function syncMotionsForMinutes(
           resolutionTypeLabel: m.resolutionType,
           status,
           outcome,
+          decidedBy,
+          proceduralKind: kind?.key,
+          tags: tags.length ? tags : undefined,
           votesFor: m.votesFor,
           votesAgainst: m.votesAgainst,
           abstentions: m.abstentions,
@@ -219,6 +270,59 @@ export const backfillFromLegacy = internalMutation({
       societyScope: societyId ? String(societyId) : "all",
       minutesProcessed,
       minutesMotions,
+    };
+  },
+});
+
+/** Backfill procedural classification onto motions created before the
+ *  shared/proceduralMotions catalogue existed. Unlike `backfillFromLegacy`
+ *  (which only re-mirrors minutes-derived rows), this stamps EVERY motion —
+ *  including backlog / imported / AI-extracted rows — with `proceduralKind`,
+ *  the auto-applied kind tag, and a default `decidedBy`, when the wording is
+ *  recognised as a recurring procedural motion. Idempotent: only patches rows
+ *  that are missing the derived values. Pass `dryRun: true` to count first. */
+export const backfillProceduralClassification = internalMutation({
+  args: {
+    societyId: v.optional(v.id("societies")),
+    dryRun: v.optional(v.boolean()),
+  },
+  returns: v.any(),
+  handler: async (ctx: any, { societyId, dryRun }: any) => {
+    const rows = societyId
+      ? await ctx.db
+          .query("motions")
+          .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+          .collect()
+      : await ctx.db.query("motions").collect();
+
+    let scanned = 0;
+    let updated = 0;
+    const now = new Date().toISOString();
+    for (const m of rows) {
+      scanned += 1;
+      const subject = {
+        text: m.text,
+        sectionTitle: m.sectionTitle,
+        resolutionType: m.resolutionTypeLabel,
+      };
+      const kind = classifyProceduralMotion(subject);
+      if (!kind) continue; // substantive motion — nothing to stamp
+
+      const patch: Record<string, any> = {};
+      if (m.proceduralKind !== kind.key) patch.proceduralKind = kind.key;
+      if (!(m.tags ?? []).includes(kind.key)) patch.tags = applyProceduralTags(m.tags, subject);
+      if (m.decidedBy == null) patch.decidedBy = kind.defaultDecidedBy;
+
+      if (Object.keys(patch).length === 0) continue;
+      updated += 1;
+      if (!dryRun) await ctx.db.patch(m._id, { ...patch, updatedAtISO: now });
+    }
+
+    return {
+      dryRun: dryRun === true,
+      societyScope: societyId ? String(societyId) : "all",
+      scanned,
+      updated,
     };
   },
 });
