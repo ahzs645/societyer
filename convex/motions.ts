@@ -27,6 +27,7 @@ const motionContent = {
   backlogPriority: v.optional(v.string()),
   source: v.optional(v.string()),
   seededKey: v.optional(v.string()),
+  tags: v.optional(v.array(v.string())),
   primaryMeetingId: v.optional(v.id("meetings")),
   targetMeetingId: v.optional(v.id("meetings")),
   minutesId: v.optional(v.id("minutes")),
@@ -419,6 +420,24 @@ export const setStatus = mutation({
       }),
     );
     return motionId;
+  },
+});
+
+/** Replace a motion's tag/label set (normalized: trimmed, lowercased, deduped).
+ *  Drives the master-list filtering, including the default-hidden routine
+ *  labels (adjournment, previous-minutes). */
+export const setTags = mutation({
+  args: { motionId: v.id("motions"), tags: v.array(v.string()) },
+  returns: v.any(),
+  handler: async (ctx: any, { motionId, tags }: any) => {
+    const normalized = Array.from(
+      new Set(
+        (tags ?? [])
+          .map((t: string) => String(t ?? "").trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+    return patchMotion(ctx, motionId, { tags: normalized });
   },
 });
 

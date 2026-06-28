@@ -104,6 +104,7 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "meetingTemplates:duplicate",
   "meetings:applyTemplate",
   "members:merge",
+  "motions:setTags",
   "motionBacklog:carryForwardToMeeting",
   "notifications:dismiss",
   "notifications:dismissAll",

@@ -120,6 +120,10 @@ export const meetingWorkflowTables = {
     source: v.optional(v.string()), // pipa-setup | manual | imported | minutes-motion | minutes-section
     seededKey: v.optional(v.string()),
 
+    // Free-form labels for the master list filter (e.g. "adjournment",
+    // "previous-minutes", "finance"). Routine labels are hidden by default.
+    tags: v.optional(v.array(v.string())),
+
     // Placement / provenance (references, not copies)
     primaryMeetingId: v.optional(v.id("meetings")), // where it was last considered
     targetMeetingId: v.optional(v.id("meetings")), // where it's planned to go
