@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -7,8 +7,17 @@ import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
-import { DataTable } from "../components/DataTable";
 import { Select } from "../components/Select";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 import { ArrowLeft, BadgeDollarSign, ExternalLink, FileText, Pencil, Plus, Save, Trash2, Inbox, Upload } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { centsToDollarInput, formatDate, money } from "../lib/format";
@@ -42,6 +51,14 @@ export function GrantsPage() {
   const [txnDraft, setTxnDraft] = useState<any | null>(null);
   const [loadLowerSections, setLoadLowerSections] = useState(false);
   const [loadSupportData, setLoadSupportData] = useState(false);
+  const [applicationsViewId, setApplicationsViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [applicationsFilterOpen, setApplicationsFilterOpen] = useState(false);
+  const [pipelineViewId, setPipelineViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [pipelineFilterOpen, setPipelineFilterOpen] = useState(false);
+  const [ledgerViewId, setLedgerViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [ledgerFilterOpen, setLedgerFilterOpen] = useState(false);
+  const [reportsViewId, setReportsViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [reportsFilterOpen, setReportsFilterOpen] = useState(false);
   const societyId = society?._id;
   const supportDataNeeded = loadSupportData || !!selectedGrant || !!grantDraft || !!txnDraft || !!reportDraft;
   const grantDetailDataNeeded = !!selectedGrant;
@@ -121,6 +138,50 @@ export function GrantsPage() {
   const removeReport = useMutation(api.grants.removeReport);
   const upsertTransaction = useMutation(api.grants.upsertTransaction);
   const removeTransaction = useMutation(api.grants.removeTransaction);
+
+  const applicationsTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "grantApplication", viewId: applicationsViewId });
+  const pipelineTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "grant", viewId: pipelineViewId });
+  const ledgerTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "grantTransaction", viewId: ledgerViewId });
+  const reportsTable = useObjectRecordTableData({ societyId: society?._id, nameSingular: "grantReport", viewId: reportsViewId });
+
+  const committeeById = useMemo(
+    () => new Map<string, any>((committees ?? []).map((row) => [String(row._id), row])),
+    [committees],
+  );
+  const grantById = useMemo(
+    () => new Map<string, any>((grants ?? []).map((row) => [String(row._id), row])),
+    [grants],
+  );
+  const accountById = useMemo(
+    () => new Map<string, any>((accounts ?? []).map((row) => [String(row._id), row])),
+    [accounts],
+  );
+
+  const reportRows = useMemo(
+    () =>
+      (reports ?? []).map((report) => ({
+        ...report,
+        grantTitle: grantById.get(String(report.grantId))?.title ?? "Unknown grant",
+      })),
+    [reports, grantById],
+  );
+  const ledgerRows = useMemo(
+    () =>
+      (ledger ?? []).map((row: any) => ({
+        ...row,
+        grantTitle: grantById.get(String(row.grantId))?.title ?? "Unknown grant",
+      })),
+    [ledger, grantById],
+  );
+  const applicationRows = useMemo(
+    () =>
+      (applications ?? []).map((row: any) => ({
+        ...row,
+        program: grantById.get(String(row.grantId))?.title ?? "General",
+      })),
+    [applications, grantById],
+  );
+
   const importGcosGrantFile = async (file: File | undefined) => {
     if (!file) return;
     const controller = new AbortController();
@@ -153,15 +214,6 @@ export function GrantsPage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-
-  const committeeById = new Map<string, any>((committees ?? []).map((row) => [String(row._id), row]));
-  const grantById = new Map<string, any>((grants ?? []).map((row) => [String(row._id), row]));
-  const accountById = new Map<string, any>((accounts ?? []).map((row) => [String(row._id), row]));
-
-  const reportRows = (reports ?? []).map((report) => ({
-    ...report,
-    grantTitle: grantById.get(String(report.grantId))?.title ?? "Unknown grant",
-  }));
 
   return (
     <div className="page">
@@ -243,299 +295,292 @@ export function GrantsPage() {
 
       <GrantSummaryStats summary={summary} />
 
-      <DataTable
-        label="Applications"
-        icon={<Inbox size={14} />}
-        data={(applications ?? []) as any[]}
-        loading={applications === undefined}
-        rowKey={(row) => String(row._id)}
-        searchPlaceholder="Search grant applications…"
-        defaultSort={{ columnId: "submittedAtISO", dir: "desc" }}
-        columns={[
-          {
-            id: "projectTitle",
-            header: "Request",
-            sortable: true,
-            accessor: (row) => row.projectTitle,
-            render: (row) => (
-              <div>
-                <strong>{row.projectTitle}</strong>
-                <div className="muted" style={{ fontSize: 12 }}>{row.applicantName}</div>
-              </div>
-            ),
-          },
-          { id: "grantId", header: "Program", accessor: (row) => grantById.get(String(row.grantId))?.title ?? "", render: (row) => <span>{grantById.get(String(row.grantId))?.title ?? "General"}</span> },
-          { id: "amountRequestedCents", header: "Requested", align: "right", accessor: (row) => row.amountRequestedCents ?? 0, render: (row) => <span className="mono">{money(row.amountRequestedCents)}</span> },
-          { id: "status", header: "Status", sortable: true, accessor: (row) => row.status, render: (row) => <Badge tone={row.status === "Converted" ? "success" : row.status === "Declined" ? "danger" : "warn"}>{row.status}</Badge> },
-          { id: "submittedAtISO", header: "Submitted", sortable: true, accessor: (row) => row.submittedAtISO, render: (row) => <span className="mono">{formatDate(row.submittedAtISO)}</span> },
-        ]}
-        renderRowActions={(row) => (
-          <>
-            {row.status === "Submitted" && (
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={async () => {
-                  await reviewApplication({ id: row._id, status: "Reviewing", actingUserId });
-                  toast.success("Application moved to review");
-                }}
-              >
-                Review
-              </button>
+      {!applicationsTable.loading && !applicationsTable.objectMetadata ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="grant application" />
+      ) : applicationsTable.objectMetadata ? (
+        <RecordTableScope
+          tableId="grantApplications"
+          objectMetadata={applicationsTable.objectMetadata}
+          hydratedView={applicationsTable.hydratedView}
+          records={applicationRows}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={applicationsTable.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Inbox size={14} />}
+            label="Applications"
+            views={applicationsTable.views}
+            currentViewId={applicationsViewId ?? applicationsTable.views[0]?._id ?? null}
+            onChangeView={(viewId) => setApplicationsViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setApplicationsFilterOpen((v) => !v)}
+          />
+          <RecordTableFilterPopover open={applicationsFilterOpen} onClose={() => setApplicationsFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={applicationsTable.loading || applications === undefined}
+            renderCell={({ record, field }) => {
+              if (field.name === "projectTitle") return (
+                <div>
+                  <strong>{record.projectTitle}</strong>
+                  <div className="muted" style={{ fontSize: 12 }}>{record.applicantName}</div>
+                </div>
+              );
+              if (field.name === "program") return <span>{record.program}</span>;
+              if (field.name === "amountRequestedCents") return <span className="mono">{money(record.amountRequestedCents)}</span>;
+              if (field.name === "status") return <Badge tone={record.status === "Converted" ? "success" : record.status === "Declined" ? "danger" : "warn"}>{record.status}</Badge>;
+              if (field.name === "submittedAtISO") return <span className="mono">{formatDate(record.submittedAtISO)}</span>;
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <>
+                {row.status === "Submitted" && (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      await reviewApplication({ id: row._id, status: "Reviewing", actingUserId });
+                      toast.success("Application moved to review");
+                    }}
+                  >
+                    Review
+                  </button>
+                )}
+                {!["Converted", "Declined"].includes(row.status) && (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      await convertApplication({
+                        id: row._id,
+                        funder: grantById.get(String(row.grantId))?.funder ?? "Public intake",
+                        program: grantById.get(String(row.grantId))?.program ?? undefined,
+                        actingUserId,
+                      });
+                      toast.success("Application converted into grant pipeline item");
+                    }}
+                  >
+                    Convert
+                  </button>
+                )}
+                {row.status !== "Declined" && (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={async () => {
+                      await reviewApplication({ id: row._id, status: "Declined", actingUserId });
+                      toast.success("Application declined");
+                    }}
+                  >
+                    Decline
+                  </button>
+                )}
+              </>
             )}
-            {!["Converted", "Declined"].includes(row.status) && (
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={async () => {
-                  await convertApplication({
-                    id: row._id,
-                    funder: grantById.get(String(row.grantId))?.funder ?? "Public intake",
-                    program: grantById.get(String(row.grantId))?.program ?? undefined,
-                    actingUserId,
-                  });
-                  toast.success("Application converted into grant pipeline item");
-                }}
-              >
-                Convert
-              </button>
-            )}
-            {row.status !== "Declined" && (
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={async () => {
-                  await reviewApplication({ id: row._id, status: "Declined", actingUserId });
-                  toast.success("Application declined");
-                }}
-              >
-                Decline
-              </button>
-            )}
-          </>
-        )}
-      />
+          />
+        </RecordTableScope>
+      ) : null}
 
       <div className="spacer-6" />
 
-      <DataTable
-        label="Grant pipeline"
-        icon={<BadgeDollarSign size={14} />}
-        data={(grants ?? []) as any[]}
-        loading={grants === undefined}
-        rowKey={(row) => String(row._id)}
-        searchPlaceholder="Search grants…"
-        searchExtraFields={[
-          (row) => (row.sourceExternalIds ?? []).join(" "),
-          (row) => (row.riskFlags ?? []).join(" "),
-          (row) => (row.nextSteps ?? []).map((step: any) => [step.label, step.status, step.reason].filter(Boolean).join(" ")).join(" "),
-          (row) => row.nextAction,
-          (row) => row.sourceNotes,
-        ]}
-        defaultSort={{ columnId: "createdAtISO", dir: "desc" }}
-        onRowClick={(row) => setSelectedGrant(row)}
-        rowActionLabel={(row) => `Open grant ${row.title}`}
-        columns={[
-          {
-            id: "title",
-            header: "Grant",
-            sortable: true,
-            accessor: (row) => row.title,
-            render: (row) => (
-              <div>
-                <strong>{row.title}</strong>
-                <div className="muted" style={{ fontSize: 12 }}>{row.funder}{row.program ? ` · ${row.program}` : ""}</div>
-              </div>
-            ),
-          },
-          {
-            id: "status",
-            header: "Status",
-            sortable: true,
-            accessor: (row) => row.status,
-            render: (row) => <Badge tone={row.status === "Active" || row.status === "Awarded" ? "success" : row.status === "Declined" ? "danger" : "warn"}>{row.status}</Badge>,
-          },
-          {
-            id: "readiness",
-            header: "Readiness",
-            sortable: true,
-            accessor: (row) => requirementSummary(row.requirements).percent,
-            render: (row) => {
-              const readiness = requirementSummary(row.requirements);
-              return readiness.total > 0 ? (
+      {!pipelineTable.loading && !pipelineTable.objectMetadata ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="grant" />
+      ) : pipelineTable.objectMetadata ? (
+        <RecordTableScope
+          tableId="grants"
+          objectMetadata={pipelineTable.objectMetadata}
+          hydratedView={pipelineTable.hydratedView}
+          records={(grants ?? []) as any[]}
+          onRecordClick={(_recordId, record) => setSelectedGrant(record)}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={pipelineTable.objectMetadata._id as Id<"objectMetadata">}
+            icon={<BadgeDollarSign size={14} />}
+            label="Grant pipeline"
+            views={pipelineTable.views}
+            currentViewId={pipelineViewId ?? pipelineTable.views[0]?._id ?? null}
+            onChangeView={(viewId) => setPipelineViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setPipelineFilterOpen((v) => !v)}
+          />
+          <RecordTableFilterPopover open={pipelineFilterOpen} onClose={() => setPipelineFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={pipelineTable.loading || grants === undefined}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "title") return (
                 <div>
-                  <Badge tone={readiness.percent === 100 ? "success" : readiness.percent >= 50 ? "warn" : "info"}>
-                    {readiness.percent}%
-                  </Badge>
-                  <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                    {readiness.complete}/{readiness.total} ready
-                  </div>
+                  <strong>{row.title}</strong>
+                  <div className="muted" style={{ fontSize: 12 }}>{row.funder}{row.program ? ` · ${row.program}` : ""}</div>
                 </div>
-              ) : (
-                <Badge tone="info">Not set</Badge>
               );
-            },
-          },
-          {
-            id: "amountAwardedCents",
-            header: "Awarded",
-            sortable: true,
-            align: "right",
-            accessor: (row) => row.amountAwardedCents ?? 0,
-            render: (row) => <span className="mono">{money(row.amountAwardedCents)}</span>,
-          },
-          {
-            id: "nextAction",
-            header: "Next action",
-            sortable: true,
-            accessor: (row) => row.nextAction ?? "",
-            render: (row) => row.nextAction ? <span>{row.nextAction}</span> : <span className="muted">—</span>,
-          },
-          {
-            id: "applicationDueDate",
-            header: "Application due",
-            sortable: true,
-            accessor: (row) => row.applicationDueDate ?? "",
-            render: (row) => <span className="mono">{row.applicationDueDate ? formatDate(row.applicationDueDate) : "—"}</span>,
-          },
-          {
-            id: "sources",
-            header: "Sources",
-            sortable: true,
-            align: "right",
-            accessor: (row) => (row.sourceExternalIds ?? []).length,
-            render: (row) =>
-              row.sourceExternalIds?.length ? (
+              if (field.name === "status") return <Badge tone={row.status === "Active" || row.status === "Awarded" ? "success" : row.status === "Declined" ? "danger" : "warn"}>{row.status}</Badge>;
+              if (field.name === "readiness") {
+                const readiness = requirementSummary(row.requirements);
+                return readiness.total > 0 ? (
+                  <div>
+                    <Badge tone={readiness.percent === 100 ? "success" : readiness.percent >= 50 ? "warn" : "info"}>
+                      {readiness.percent}%
+                    </Badge>
+                    <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                      {readiness.complete}/{readiness.total} ready
+                    </div>
+                  </div>
+                ) : (
+                  <Badge tone="info">Not set</Badge>
+                );
+              }
+              if (field.name === "amountAwardedCents") return <span className="mono">{money(row.amountAwardedCents)}</span>;
+              if (field.name === "nextAction") return row.nextAction ? <span>{row.nextAction}</span> : <span className="muted">—</span>;
+              if (field.name === "applicationDueDate") return <span className="mono">{row.applicationDueDate ? formatDate(row.applicationDueDate) : "—"}</span>;
+              if (field.name === "sources") return row.sourceExternalIds?.length ? (
                 <Link to="/app/grants/sources" onClick={(e) => e.stopPropagation()}>
                   <Badge tone="info">{row.sourceExternalIds.length}</Badge>
                 </Link>
               ) : (
-                "—"
-              ),
-          },
-          {
-            id: "publicIntake",
-            header: "Public intake",
-            sortable: true,
-            accessor: (row) => (row.allowPublicApplications ? 1 : 0),
-            render: (row) => <Badge tone={row.allowPublicApplications ? "success" : "info"}>{row.allowPublicApplications ? "Open" : "Internal"}</Badge>,
-          },
-          {
-            id: "committeeId",
-            header: "Committee",
-            sortable: true,
-            accessor: (row) => committeeById.get(String(row.committeeId))?.name ?? "",
-            render: (row) => {
-              const committee = committeeById.get(String(row.committeeId));
-              return committee ? (
-                <Link to={`/app/committees/${row.committeeId}`} onClick={(e) => e.stopPropagation()}>
-                  {committee.name}
-                </Link>
-              ) : (
-                "—"
+                <>—</>
               );
-            },
-          },
-        ]}
-        renderRowActions={(row) => (
-          <>
-            <Link
-              className="btn btn--ghost btn--sm"
-              to={`/app/grants/${row._id}/edit`}
-            >
-              Edit
-            </Link>
-            <button
-              className="btn btn--ghost btn--sm btn--icon"
-              aria-label={`Delete grant ${row.title}`}
-              onClick={async () => {
-                await removeGrant({ id: row._id, actingUserId });
-                toast.success("Grant removed");
-              }}
-            >
-              <Trash2 size={12} />
-            </button>
-          </>
-        )}
-      />
+              if (field.name === "publicIntake") return <Badge tone={row.allowPublicApplications ? "success" : "info"}>{row.allowPublicApplications ? "Open" : "Internal"}</Badge>;
+              if (field.name === "committee") {
+                const committee = committeeById.get(String(row.committeeId));
+                return committee ? (
+                  <Link to={`/app/committees/${row.committeeId}`} onClick={(e) => e.stopPropagation()}>
+                    {committee.name}
+                  </Link>
+                ) : (
+                  <>—</>
+                );
+              }
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <>
+                <Link
+                  className="btn btn--ghost btn--sm"
+                  to={`/app/grants/${row._id}/edit`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Edit
+                </Link>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Delete grant ${row.title}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await removeGrant({ id: row._id, actingUserId });
+                    toast.success("Grant removed");
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <div className="spacer-6" />
 
-      <DataTable
-        label="Restricted-fund ledger"
-        icon={<FileText size={14} />}
-        data={(ledger ?? []) as any[]}
-        loading={ledger === undefined}
-        rowKey={(row) => String(row._id)}
-        searchPlaceholder="Search ledger…"
-        defaultSort={{ columnId: "date", dir: "desc" }}
-        columns={[
-          { id: "grantId", header: "Grant", accessor: (row) => grantById.get(String(row.grantId))?.title ?? "", render: (row) => <strong>{grantById.get(String(row.grantId))?.title ?? "Unknown grant"}</strong> },
-          { id: "date", header: "Date", sortable: true, accessor: (row) => row.date, render: (row) => <span className="mono">{formatDate(row.date)}</span> },
-          { id: "direction", header: "Direction", sortable: true, accessor: (row) => row.direction, render: (row) => <span className="cell-tag">{row.direction}</span> },
-          { id: "description", header: "Description", sortable: true, accessor: (row) => row.description },
-          { id: "amountCents", header: "Amount", align: "right", sortable: true, accessor: (row) => row.amountCents, render: (row) => <span className="mono">{money(row.amountCents)}</span> },
-        ]}
-        renderRowActions={(row) => (
-          <>
-            <button className="btn btn--ghost btn--sm" onClick={() => setTxnDraft({ ...row, id: row._id, amountDollars: centsToDollarInput(row.amountCents) })}>
-              Edit
-            </button>
-            <button
-              className="btn btn--ghost btn--sm btn--icon"
-              aria-label={`Delete ledger entry for ${row.description}`}
-              onClick={async () => {
-                await removeTransaction({ id: row._id, actingUserId });
-                toast.success("Ledger entry removed");
-              }}
-            >
-              <Trash2 size={12} />
-            </button>
-          </>
-        )}
-      />
+      {!ledgerTable.loading && !ledgerTable.objectMetadata ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="ledger entry" />
+      ) : ledgerTable.objectMetadata ? (
+        <RecordTableScope
+          tableId="grantTransactions"
+          objectMetadata={ledgerTable.objectMetadata}
+          hydratedView={ledgerTable.hydratedView}
+          records={ledgerRows}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={ledgerTable.objectMetadata._id as Id<"objectMetadata">}
+            icon={<FileText size={14} />}
+            label="Restricted-fund ledger"
+            views={ledgerTable.views}
+            currentViewId={ledgerViewId ?? ledgerTable.views[0]?._id ?? null}
+            onChangeView={(viewId) => setLedgerViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setLedgerFilterOpen((v) => !v)}
+          />
+          <RecordTableFilterPopover open={ledgerFilterOpen} onClose={() => setLedgerFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={ledgerTable.loading || ledger === undefined}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "grantTitle") return <strong>{row.grantTitle}</strong>;
+              if (field.name === "date") return <span className="mono">{formatDate(row.date)}</span>;
+              if (field.name === "direction") return <span className="cell-tag">{row.direction}</span>;
+              if (field.name === "amountCents") return <span className="mono">{money(row.amountCents)}</span>;
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <>
+                <button className="btn btn--ghost btn--sm" onClick={() => setTxnDraft({ ...row, id: row._id, amountDollars: centsToDollarInput(row.amountCents) })}>
+                  Edit
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Delete ledger entry for ${row.description}`}
+                  onClick={async () => {
+                    await removeTransaction({ id: row._id, actingUserId });
+                    toast.success("Ledger entry removed");
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <div className="spacer-6" />
 
-      <DataTable
-        label="Grant reports"
-        icon={<FileText size={14} />}
-        data={reportRows as any[]}
-        loading={loadLowerSections && reports === undefined}
-        rowKey={(row) => String(row._id)}
-        searchPlaceholder="Search grant reports…"
-        defaultSort={{ columnId: "dueAtISO", dir: "asc" }}
-        viewsKey="grant-reports"
-        sharedViewsContext={{ societyId: society._id, nameSingular: "grant" }}
-        columns={[
-          { id: "grantTitle", header: "Grant", sortable: true, accessor: (row) => row.grantTitle, render: (row) => <strong>{row.grantTitle}</strong> },
-          { id: "title", header: "Report", sortable: true, accessor: (row) => row.title },
-          {
-            id: "status",
-            header: "Status",
-            sortable: true,
-            accessor: (row) => row.status,
-            render: (row) => <Badge tone={row.status === "Submitted" ? "success" : row.status === "Overdue" ? "danger" : "warn"}>{row.status}</Badge>,
-          },
-          { id: "dueAtISO", header: "Due", sortable: true, accessor: (row) => row.dueAtISO, render: (row) => <span className="mono">{formatDate(row.dueAtISO)}</span> },
-          { id: "submittedAtISO", header: "Submitted", sortable: true, accessor: (row) => row.submittedAtISO ?? "", render: (row) => <span className="mono">{row.submittedAtISO ? formatDate(row.submittedAtISO) : "—"}</span> },
-          { id: "spendingToDateCents", header: "Spend", sortable: true, align: "right", accessor: (row) => row.spendingToDateCents ?? 0, render: (row) => <span className="mono">{money(row.spendingToDateCents)}</span> },
-        ]}
-        renderRowActions={(row) => (
-          <>
-            <button className="btn btn--ghost btn--sm" onClick={() => setReportDraft({ ...row, id: row._id, spendingToDateDollars: centsToDollarInput(row.spendingToDateCents) })}>
-              Edit
-            </button>
-            <button
-              className="btn btn--ghost btn--sm btn--icon"
-              aria-label={`Delete report ${row.title}`}
-              onClick={async () => {
-                await removeReport({ id: row._id, actingUserId });
-                toast.success("Report removed");
-              }}
-            >
-              <Trash2 size={12} />
-            </button>
-          </>
-        )}
-      />
+      {!reportsTable.loading && !reportsTable.objectMetadata ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="grant report" />
+      ) : reportsTable.objectMetadata ? (
+        <RecordTableScope
+          tableId="grantReports"
+          objectMetadata={reportsTable.objectMetadata}
+          hydratedView={reportsTable.hydratedView}
+          records={reportRows}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={reportsTable.objectMetadata._id as Id<"objectMetadata">}
+            icon={<FileText size={14} />}
+            label="Grant reports"
+            views={reportsTable.views}
+            currentViewId={reportsViewId ?? reportsTable.views[0]?._id ?? null}
+            onChangeView={(viewId) => setReportsViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setReportsFilterOpen((v) => !v)}
+          />
+          <RecordTableFilterPopover open={reportsFilterOpen} onClose={() => setReportsFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={reportsTable.loading || (loadLowerSections && reports === undefined)}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "grantTitle") return <strong>{row.grantTitle}</strong>;
+              if (field.name === "status") return <Badge tone={row.status === "Submitted" ? "success" : row.status === "Overdue" ? "danger" : "warn"}>{row.status}</Badge>;
+              if (field.name === "dueAtISO") return <span className="mono">{formatDate(row.dueAtISO)}</span>;
+              if (field.name === "submittedAtISO") return <span className="mono">{row.submittedAtISO ? formatDate(row.submittedAtISO) : "—"}</span>;
+              if (field.name === "spendingToDateCents") return <span className="mono">{money(row.spendingToDateCents)}</span>;
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <>
+                <button className="btn btn--ghost btn--sm" onClick={() => setReportDraft({ ...row, id: row._id, spendingToDateDollars: centsToDollarInput(row.spendingToDateCents) })}>
+                  Edit
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Delete report ${row.title}`}
+                  onClick={async () => {
+                    await removeReport({ id: row._id, actingUserId });
+                    toast.success("Report removed");
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
+            )}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <Drawer
         open={!!selectedGrant}
