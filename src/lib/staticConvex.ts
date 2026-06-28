@@ -38,6 +38,15 @@ import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
 import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
 import { STATIC_OFFLINE_NOOP_WRITES } from "./staticConvexParity";
+import {
+  byId,
+  staticCsvRows,
+  dateOnlyStatic,
+  inStaticYear,
+  addStaticDays,
+  staticMonthlyEstimateCents,
+  staticAgendaItemType,
+} from "./staticConvexUtils";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
 const FUNCTION_NAME = Symbol.for("functionName");
@@ -270,9 +279,6 @@ function reportStaticWriteGap(name: string): null {
   return null;
 }
 
-function byId(rows: any[], id: string | undefined) {
-  return rows.find((row) => row._id === id) ?? null;
-}
 
 // Mirror of convex/lib/permissions ROLE_MATRIX for the offline/demo runtime so
 // usePermissions() shows an accurate role + permission set without a backend.
@@ -455,12 +461,6 @@ function staticAccountingSeed(store?: StaticDemoDexieStore | null, args?: Static
   };
 }
 
-function staticCsvRows(rows: unknown[][]) {
-  return rows.map((row) => row.map((value) => {
-    const text = String(value ?? "");
-    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-  }).join(",")).join("\n");
-}
 
 function normalizeStaticCategoryLabel(value?: string) {
   return String(value ?? "").trim().toLowerCase();
@@ -718,24 +718,12 @@ function cycleItem(id: string, phase: string, title: string, detail: string, sta
   return { id, phase, title, detail, status, evidence, dueDate, to, actionLabel };
 }
 
-function dateOnlyStatic(value?: string | null) {
-  return String(value ?? "").slice(0, 10);
-}
 
-function inStaticYear(value: unknown, year: number) {
-  return typeof value === "string" && value.slice(0, 4) === String(year);
-}
 
 function filingMatchesStaticYear(filing: any, year: number) {
   return String(filing.periodLabel ?? filing.title ?? "").includes(String(year)) || inStaticYear(filing.dueDate, year) || inStaticYear(filing.filedAt, year);
 }
 
-function addStaticDays(date: string, days: number) {
-  if (!date) return "";
-  const parsed = new Date(`${date}T00:00:00.000Z`);
-  parsed.setUTCDate(parsed.getUTCDate() + days);
-  return parsed.toISOString().slice(0, 10);
-}
 
 function financialSummary() {
   return {
@@ -760,13 +748,6 @@ function financialSummary() {
   };
 }
 
-function staticMonthlyEstimateCents(amountCents: number, interval: string) {
-  if (interval === "semester") return Math.round((amountCents * 2) / 12);
-  if (interval === "week") return Math.round((amountCents * 52) / 12);
-  if (interval === "quarter") return Math.round(amountCents / 3);
-  if (interval === "year") return Math.round(amountCents / 12);
-  return amountCents;
-}
 
 function profitAndLoss(args: StaticArgs) {
   const from = args?.from ?? "2026-01-01";
@@ -996,14 +977,6 @@ function staticAgendaTitlesForMeeting(meetingId: string | undefined) {
   return staticAgendaItemsForMeeting(meetingId).map((entry) => entry.title);
 }
 
-function staticAgendaItemType(title: string) {
-  const lower = title.toLowerCase();
-  if (lower.includes("motion") || lower.includes("adopt") || lower.includes("approve")) return "motion";
-  if (lower.includes("report") || lower.includes("financial")) return "report";
-  if (lower.includes("break")) return "break";
-  if (lower.includes("camera") || lower.includes("closed") || lower.includes("executive")) return "executive_session";
-  return "discussion";
-}
 
 function staticFundingSourcesList() {
   return fundingSources.map((source) => {
