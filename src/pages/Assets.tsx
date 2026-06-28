@@ -29,7 +29,16 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DataTable } from "../components/DataTable";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Select as StyledSelect } from "../components/Select";
-import { FilterField } from "../components/FilterBar";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 import { formatDate } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { AssetQrLabel } from "../features/assets/AssetQrLabel";
@@ -60,14 +69,6 @@ import {
   todayDate,
 } from "../features/assets/assetUtils";
 
-const FIELDS: FilterField<any>[] = [
-  { id: "status", label: "Status", icon: <PackageCheck size={14} />, options: ASSET_STATUSES, match: (row, value) => row.status === value },
-  { id: "category", label: "Category", icon: <Package size={14} />, options: ASSET_CATEGORIES, match: (row, value) => row.category === value },
-  { id: "condition", label: "Condition", options: ASSET_CONDITIONS, match: (row, value) => row.condition === value },
-  { id: "due", label: "Maintenance due", options: ["Yes", "No"], match: (row, value) => value === "Yes" ? isDue(row.nextMaintenanceDate, 30) : !isDue(row.nextMaintenanceDate, 30) },
-  { id: "grant", label: "Grant-funded", options: ["Yes", "No"], match: (row, value) => value === "Yes" ? Boolean(row.fundingSource || row.grantRestrictions) : !row.fundingSource && !row.grantRestrictions },
-];
-
 export function AssetsPage() {
   const society = useSociety();
   const navigate = useNavigate();
@@ -93,9 +94,27 @@ export function AssetsPage() {
   const [form, setForm] = useState<AssetFormValue | null>(null);
   const [csvInput, setCsvInput] = useState("");
   const [verificationTitle, setVerificationTitle] = useState(`Physical inventory ${todayDate()}`);
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "asset",
+    viewId: currentViewId,
+  });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   const rows = (assets ?? []) as any[];
   const stats = useMemo(() => summarizeAssets(rows, (maintenance ?? []) as any[], (verificationRuns ?? []) as any[]), [rows, maintenance, verificationRuns]);
+  const records = useMemo(
+    () => rows.map((row) => ({
+      ...row,
+      custodian: row.custodianName ?? "",
+      value: row.bookValueCents ?? row.purchaseValueCents ?? 0,
+      purchaseEvidence: row.receiptDocumentId || row.purchaseTransactionId ? "linked" : "",
+    })),
+    [rows],
+  );
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -247,59 +266,63 @@ export function AssetsPage() {
         </div>
       )}
 
-      <DataTable
-        label="All inventory"
-        icon={<Package size={14} />}
-        data={rows}
-        rowKey={(row) => row._id as string}
-        loading={assets === undefined}
-        filterFields={FIELDS}
-        viewsKey="assets"
-        searchPlaceholder="Search asset tag, serial, custodian, funding source..."
-        searchExtraFields={[
-          (row) => row.serialNumber,
-          (row) => row.supplier,
-          (row) => row.custodianName,
-          (row) => row.responsiblePersonName,
-          (row) => row.fundingSource,
-          (row) => row.grantRestrictions,
-          (row) => row.insuranceNotes,
-          (row) => row.notes,
-        ]}
-        defaultSort={{ columnId: "assetTag", dir: "asc" }}
-        emptyMessage="No assets yet."
-        onRowClick={(row) => navigate(`/app/assets/${row._id}`)}
-        rowActionLabel={(row) => `Open ${row.assetTag}`}
-        columns={[
-          { id: "assetTag", header: "Tag", sortable: true, accessor: (row) => row.assetTag, render: (row) => <span className="mono">{row.assetTag}</span> },
-          { id: "name", header: "Asset", sortable: true, accessor: (row) => row.name, render: (row) => <AssetCell row={row} /> },
-          { id: "status", header: "Status", sortable: true, accessor: (row) => row.status, render: (row) => <StatusBadge status={row.status} /> },
-          { id: "custodian", header: "Custody", accessor: (row) => row.custodianName, render: (row) => <CustodyCell row={row} /> },
-          { id: "location", header: "Location", sortable: true, accessor: (row) => row.location },
-          { id: "quantity", header: "On hand", sortable: true, align: "right", accessor: (row) => row.quantityOnHand ?? 0, render: (row) => row.category === "Consumable" ? <span className="mono">{formatQuantity(row.quantityOnHand, row.quantityUnit)}</span> : <span className="muted">—</span> },
-          { id: "value", header: "Value", sortable: true, align: "right", accessor: (row) => row.bookValueCents ?? row.purchaseValueCents ?? 0, render: (row) => <span className="mono">{money(row.bookValueCents ?? row.purchaseValueCents, row.currency)}</span> },
-          { id: "maintenance", header: "Maintenance", sortable: true, accessor: (row) => row.nextMaintenanceDate, render: (row) => <DueDate date={row.nextMaintenanceDate} /> },
-          { id: "purchaseEvidence", header: "Purchase evidence", accessor: (row) => row.receiptDocumentId || row.purchaseTransactionId, render: (row) => <EvidenceCell row={row} documents={documents ?? []} transactions={transactions ?? []} /> },
-        ]}
-        renderRowActions={(row) => (
-          <>
-            {row.category === "Consumable" && society.consumableIntakeCountPromptEnabled && (
-              <button className="btn btn--ghost btn--sm" onClick={() => openStockIntake(row)}>
-                <ClipboardList size={12} /> Add stock
-              </button>
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="asset" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="assets"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onRecordClick={(recordId) => navigate(`/app/assets/${recordId}`)}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Package size={14} />}
+            label="All inventory"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || assets === undefined}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "assetTag") return <span className="mono">{row.assetTag}</span>;
+              if (field.name === "name") return <AssetCell row={row} />;
+              if (field.name === "status") return <StatusBadge status={row.status} />;
+              if (field.name === "custodian") return <CustodyCell row={row} />;
+              if (field.name === "location") return <span>{row.location}</span>;
+              if (field.name === "quantityOnHand") return row.category === "Consumable" ? <span className="mono">{formatQuantity(row.quantityOnHand, row.quantityUnit)}</span> : <span className="muted">—</span>;
+              if (field.name === "value") return <span className="mono">{money(row.bookValueCents ?? row.purchaseValueCents, row.currency)}</span>;
+              if (field.name === "nextMaintenanceDate") return <DueDate date={row.nextMaintenanceDate} />;
+              if (field.name === "purchaseEvidence") return <EvidenceCell row={row} documents={documents ?? []} transactions={transactions ?? []} />;
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <>
+                {row.category === "Consumable" && society.consumableIntakeCountPromptEnabled && (
+                  <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openStockIntake(row); }}>
+                    <ClipboardList size={12} /> Add stock
+                  </button>
+                )}
+                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openReceiptLineLink(row); }}>
+                  <Link2 size={12} /> Link receipt item
+                </button>
+                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>
+                  <Pencil size={12} /> Edit
+                </button>
+                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete ${row.assetTag}`} onClick={(e) => { e.stopPropagation(); remove({ id: row._id }); }}>
+                  <Trash2 size={12} />
+                </button>
+              </>
             )}
-            <button className="btn btn--ghost btn--sm" onClick={() => openReceiptLineLink(row)}>
-              <Link2 size={12} /> Link receipt item
-            </button>
-            <button className="btn btn--ghost btn--sm" onClick={() => openEdit(row)}>
-              <Pencil size={12} /> Edit
-            </button>
-            <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete ${row.assetTag}`} onClick={() => remove({ id: row._id })}>
-              <Trash2 size={12} />
-            </button>
-          </>
-        )}
-      />
+          />
+        </RecordTableScope>
+      ) : null}
 
       <Drawer
         open={drawer === "edit"}
