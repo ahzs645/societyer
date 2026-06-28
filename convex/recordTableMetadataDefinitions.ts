@@ -1359,4 +1359,47 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       ],
     },
   },
+  {
+    nameSingular: "memberProposal",
+    namePlural: "memberProposals",
+    labelSingular: "Member proposal",
+    labelPlural: "Member proposals",
+    icon: "Vote",
+    iconColor: "purple",
+    routePath: "/app/proposals",
+    labelIdentifierFieldName: "title",
+    fields: [
+      { name: "title", label: "Title", fieldType: FIELD_TYPES.TEXT, icon: "Tag", isSystem: true },
+      { name: "submittedByName", label: "Submitted by", fieldType: FIELD_TYPES.TEXT, icon: "User" },
+      { name: "submittedAtISO", label: "Date", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
+      { name: "signatureCount", label: "Signatures", fieldType: FIELD_TYPES.NUMBER, icon: "PenLine" },
+      {
+        name: "status",
+        label: "Status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Activity",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "Submitted", label: "Submitted", color: "amber" },
+            { value: "MeetsThreshold", label: "Meets threshold", color: "green" },
+            { value: "Included", label: "Included", color: "blue" },
+            { value: "Rejected", label: "Rejected", color: "red" },
+          ],
+        },
+      },
+      { name: "includedInAgenda", label: "Agenda", fieldType: FIELD_TYPES.BOOLEAN, icon: "ListChecks", isReadOnly: true },
+    ],
+    defaultView: {
+      name: "All proposals",
+      columns: [
+        { fieldName: "title", size: 260 },
+        { fieldName: "submittedByName", size: 180 },
+        { fieldName: "submittedAtISO", size: 120 },
+        { fieldName: "signatureCount", size: 160 },
+        { fieldName: "status", size: 150 },
+        { fieldName: "includedInAgenda", size: 110 },
+      ],
+    },
+  },
 ];
