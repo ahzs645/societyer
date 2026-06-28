@@ -202,7 +202,9 @@
    * only covered `.card > .table` and `.card__body > table`; tables rendered
    * directly on the page or inside generic divs would overflow the viewport. */
   .page table,
-  .card table {
+  .card table,
+  .drawer__body table,
+  .modal__body table {
     display: block;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;

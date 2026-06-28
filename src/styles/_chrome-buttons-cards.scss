@@ -167,6 +167,22 @@
   width: 28px;
   justify-content: center;
 }
+
+/* Touch devices: compact desktop buttons (28px / 24px) are below the ~44px
+ * comfortable tap target, and row-action clusters pack several together.
+ * Raise the minimum hit area without changing the desktop look. */
+@media (hover: none), (pointer: coarse) {
+  .btn,
+  .btn-action {
+    min-height: 36px;
+  }
+  .btn--sm {
+    min-height: 32px;
+  }
+  .btn--icon {
+    min-width: 36px;
+  }
+}
 .btn svg {
   width: 14px;
   height: 14px;
