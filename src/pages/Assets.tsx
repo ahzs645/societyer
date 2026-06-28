@@ -16,6 +16,7 @@ import {
   Plus,
   QrCode,
   Repeat2,
+  ScanLine,
   Trash2,
   Upload,
   Wrench,
@@ -43,6 +44,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { formatDate } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { AssetQrLabel } from "../features/assets/AssetQrLabel";
+import { AssetScanner } from "../features/assets/AssetScanner";
 import { openGlobalAssetCreate } from "../components/GlobalAssetCreate";
 import {
   AssetFormFields,
@@ -88,6 +90,12 @@ export function AssetsPage() {
   const startVerificationRun = useMutation(api.assets.startVerificationRun);
   const [drawer, setDrawer] = useState<"new" | "edit" | "import" | "verify" | "stock" | "receiptLine" | null>(null);
   const [saving, setSaving] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanCode, setScanCode] = useState<string | null>(null);
+  const scanResult = useQuery(
+    api.assets.resolveScan,
+    society && scanCode ? { societyId: society._id, code: scanCode } : "skip",
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [stockAsset, setStockAsset] = useState<any>(null);
   const [stockForm, setStockForm] = useState({ observedQuantityBefore: "", quantityAdded: "", notes: "" });
@@ -118,6 +126,18 @@ export function AssetsPage() {
     })),
     [rows],
   );
+
+  useEffect(() => {
+    if (!scanCode || scanResult === undefined) return;
+    if (scanResult) {
+      setScanOpen(false);
+      setScanCode(null);
+      navigate(`/app/assets/${scanResult._id}`);
+    } else {
+      toast.error("No asset found for that code", scanCode);
+      setScanCode(null);
+    }
+  }, [scanResult, scanCode, navigate, toast]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -308,6 +328,9 @@ export function AssetsPage() {
                 { id: "verify", label: "Start verification", icon: <ClipboardCheck size={14} />, onSelect: () => setDrawer("verify") },
               ]}
             />
+            <button className="btn-action" onClick={() => setScanOpen(true)}>
+              <ScanLine size={12} /> Scan
+            </button>
             <button className="btn-action btn-action--primary" onClick={openGlobalAssetCreate}>
               <Plus size={12} /> New asset
             </button>
@@ -493,6 +516,14 @@ export function AssetsPage() {
         </Field>
         <p className="muted">This creates a verification checklist for every current asset in the register.</p>
       </Drawer>
+
+      <AssetScanner
+        open={scanOpen}
+        onClose={() => { setScanOpen(false); setScanCode(null); }}
+        onDetected={(code) => setScanCode(code)}
+        title="Scan an asset"
+        hint="Point the camera at an asset's QR code or barcode to open its record."
+      />
     </div>
   );
 }
@@ -718,9 +749,43 @@ export function AssetVerificationPage() {
   const verifyAsset = useMutation(api.assets.verifyAsset);
   const completeRun = useMutation(api.assets.completeVerificationRun);
   const verifierName = currentUser?.displayName || "Treasurer";
+  const toast = useToast();
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanCode, setScanCode] = useState<string | null>(null);
+  const scanResult = useQuery(
+    api.assets.resolveScan,
+    society && scanCode ? { societyId: society._id, code: scanCode } : "skip",
+  );
   const assetById = new Map(((assets ?? []) as any[]).map((asset) => [asset._id, asset]));
   const rows = ((items ?? []) as any[]).map((item) => ({ ...item, asset: assetById.get(item.assetId) }));
   const pending = rows.filter((row) => row.status === "pending").length;
+
+  useEffect(() => {
+    if (!scanCode || scanResult === undefined) return;
+    const code = scanCode;
+    setScanCode(null);
+    if (!scanResult) {
+      toast.error("No asset found for that code", code);
+      return;
+    }
+    const item = rows.find((row) => row.assetId === scanResult._id);
+    if (!item) {
+      toast.error("Not in this run", `${scanResult.assetTag} — ${scanResult.name}`);
+      return;
+    }
+    if (item.status === "verified") {
+      toast.info("Already verified", `${scanResult.assetTag} — ${scanResult.name}`);
+      return;
+    }
+    void verifyAsset({
+      itemId: item._id,
+      status: "verified",
+      verifiedByName: verifierName,
+      observedLocation: scanResult.location,
+      observedCondition: scanResult.condition,
+    }).then(() => toast.success("Verified by scan", `${scanResult.assetTag} — ${scanResult.name}`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanResult, scanCode]);
 
   return (
     <div className="page">
@@ -728,7 +793,7 @@ export function AssetVerificationPage() {
         title="Physical inventory"
         routeKey="/app/assets"
         subtitle={`${pending} asset${pending === 1 ? "" : "s"} still pending.`}
-        actions={<><Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link><button className="btn-action btn-action--primary" onClick={async () => { await completeRun({ id: runId as any }); navigate("/app/assets"); }}><CheckCircle2 size={12} /> Complete run</button></>}
+        actions={<><Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link><button className="btn-action" onClick={() => setScanOpen(true)}><ScanLine size={12} /> Scan to verify</button><button className="btn-action btn-action--primary" onClick={async () => { await completeRun({ id: runId as any }); navigate("/app/assets"); }}><CheckCircle2 size={12} /> Complete run</button></>}
       />
       <DataTable
         label="Verification checklist"
@@ -753,6 +818,15 @@ export function AssetVerificationPage() {
             </button>
           </>
         )}
+      />
+
+      <AssetScanner
+        open={scanOpen}
+        onClose={() => { setScanOpen(false); setScanCode(null); }}
+        onDetected={(code) => setScanCode(code)}
+        continuous
+        title="Scan to verify"
+        hint="Scan each asset's code to mark it verified. Keep scanning to work through the shelf."
       />
     </div>
   );

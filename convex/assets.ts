@@ -214,6 +214,34 @@ export const get = query({
   handler: async (ctx, { id }) => ctx.db.get(id),
 });
 
+// Resolve a scanned code to an asset. QR/2D labels encode the asset page URL
+// (which contains the asset _id); 1D barcodes encode the plain asset tag. The
+// caller extracts the candidate token and we match by id first, then by tag.
+export const resolveScan = query({
+  args: { societyId: v.id("societies"), code: v.string() },
+  returns: v.any(),
+  handler: async (ctx, { societyId, code }) => {
+    const raw = code.trim();
+    if (!raw) return null;
+    // Pull an /app/assets/<id> id out of a URL if present, else use the raw text.
+    const urlMatch = raw.match(/assets\/([a-z0-9]+)/i);
+    const candidateId = urlMatch ? urlMatch[1] : raw;
+    // Try a direct document lookup (works for QR URLs encoding the _id).
+    try {
+      const byId = await ctx.db.get(candidateId as any);
+      if (byId && (byId as any).societyId === societyId) return byId;
+    } catch {
+      // Not a valid id — fall through to tag lookup.
+    }
+    // Try the asset tag (1D barcodes, or a tag typed/pasted in).
+    const byTag = await ctx.db
+      .query("assets")
+      .withIndex("by_society_tag", (q: any) => q.eq("societyId", societyId).eq("assetTag", raw))
+      .first();
+    return byTag ?? null;
+  },
+});
+
 export const bundle = query({
   args: { id: v.id("assets") },
   returns: v.any(),
