@@ -567,10 +567,22 @@ export const markDeliveryOpened = mutation({
   args: { id: v.id("communicationDeliveries") },
   returns: v.any(),
   handler: async (ctx, { id }) => {
+    const delivery = await ctx.db.get(id);
+    const alreadyOpened = delivery?.status === "opened";
     await ctx.db.patch(id, {
       status: "opened",
       openedAtISO: new Date().toISOString(),
     });
+    // Roll the open up to the parent campaign so the campaign-level open rate is
+    // not stuck at 0. Only count the first open of each delivery.
+    if (delivery?.campaignId && !alreadyOpened) {
+      const campaign = await ctx.db.get(delivery.campaignId);
+      if (campaign) {
+        await ctx.db.patch(delivery.campaignId, {
+          openedCount: (campaign.openedCount ?? 0) + 1,
+        });
+      }
+    }
   },
 });
 
