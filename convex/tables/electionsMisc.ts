@@ -421,5 +421,24 @@ export const electionsMiscTables = {
     ),
   }).index("by_society", ["societyId"]),
 
+  // Structured sections of a bylaw amendment's proposed text — one row per
+  // clause (Part / Section / numbered heading), so bylaws move from a single
+  // text blob toward per-section records that can be diffed and (later) amended
+  // independently. Materialized from proposedText; `key` is the normalized
+  // heading used to align a section across versions.
+  bylawSections: defineTable({
+    societyId: v.id("societies"),
+    amendmentId: v.id("bylawAmendments"),
+    order: v.number(),
+    heading: v.string(),
+    key: v.string(),
+    level: v.number(),
+    body: v.string(),
+    createdAtISO: v.string(),
+    updatedAtISO: v.string(),
+  })
+    .index("by_amendment", ["amendmentId"])
+    .index("by_society", ["societyId"]),
+
   // ========== Board meeting workflow — extracted to convex/tables/meetingWorkflow.ts ==========
 };

@@ -100,6 +100,7 @@ export function BylawDiffPage() {
   const markFiled = useMutation(api.bylawAmendments.markFiled);
   const withdraw = useMutation(api.bylawAmendments.withdraw);
   const supersede = useMutation(api.bylawAmendments.supersede);
+  const materializeSections = useMutation(api.bylawAmendments.materializeSections);
   const remove = useMutation(api.bylawAmendments.remove);
 
   const [selectedId, setSelectedId] = useState<Id<"bylawAmendments"> | null>(null);
@@ -128,6 +129,10 @@ export function BylawDiffPage() {
   const chunks = useMemo(() => diff(tokenize(oldText), tokenize(newText)), [oldText, newText]);
   // Section-aware change summary: align clauses by normalized heading so a
   // re-ordered or reformatted section doesn't read as a whole-document rewrite.
+  const storedSections = useQuery(
+    api.bylawAmendments.sectionsForAmendment,
+    selectedId ? { amendmentId: selectedId } : "skip",
+  );
   const sectionChanges = useMemo(() => {
     const pairs = alignBylawSections(parseBylawSections(oldText), parseBylawSections(newText));
     return pairs.map((p) => {
@@ -441,7 +446,26 @@ export function BylawDiffPage() {
                   {sectionChanges.filter((s) => s.status === "changed").length} changed ·{" "}
                   {sectionChanges.filter((s) => s.status === "added").length} added ·{" "}
                   {sectionChanges.filter((s) => s.status === "removed").length} removed
+                  {storedSections ? ` · ${storedSections.length} stored` : ""}
                 </span>
+                {selected && (
+                  <button
+                    className="btn-action"
+                    style={{ marginLeft: "auto" }}
+                    onClick={async () => {
+                      const secs = parseBylawSections(newText).map((s) => ({
+                        heading: s.heading,
+                        key: s.key,
+                        level: s.level,
+                        body: s.body,
+                      }));
+                      const r = await materializeSections({ amendmentId: selected._id, sections: secs });
+                      toast.success(`Saved ${r.stored} section${r.stored === 1 ? "" : "s"} as records`);
+                    }}
+                  >
+                    Save as sections
+                  </button>
+                )}
               </div>
               <div className="card__body col" style={{ gap: 4 }}>
                 {sectionChanges.map((s, i) => (

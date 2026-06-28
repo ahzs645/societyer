@@ -191,10 +191,72 @@ export const supersede = mutation({
   },
 });
 
+// Persist an amendment's proposed text as structured section records (replacing
+// any prior set for that amendment). The client parses the text with
+// shared/bylawSections so the section model is identical to the diff view.
+export const materializeSections = mutation({
+  args: {
+    amendmentId: v.id("bylawAmendments"),
+    sections: v.array(
+      v.object({
+        heading: v.string(),
+        key: v.string(),
+        level: v.number(),
+        body: v.string(),
+      }),
+    ),
+  },
+  returns: v.any(),
+  handler: async (ctx, { amendmentId, sections }) => {
+    const amendment = await ctx.db.get(amendmentId);
+    if (!amendment) throw new Error("Amendment not found.");
+    const existing = await ctx.db
+      .query("bylawSections")
+      .withIndex("by_amendment", (q) => q.eq("amendmentId", amendmentId))
+      .collect();
+    for (const row of existing) await ctx.db.delete(row._id);
+
+    const now = new Date().toISOString();
+    for (let i = 0; i < sections.length; i++) {
+      const s = sections[i];
+      await ctx.db.insert("bylawSections", {
+        societyId: amendment.societyId,
+        amendmentId,
+        order: i,
+        heading: s.heading,
+        key: s.key,
+        level: s.level,
+        body: s.body,
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+    }
+    return { stored: sections.length };
+  },
+});
+
+export const sectionsForAmendment = query({
+  args: { amendmentId: v.id("bylawAmendments") },
+  returns: v.any(),
+  handler: async (ctx, { amendmentId }) => {
+    const rows = await ctx.db
+      .query("bylawSections")
+      .withIndex("by_amendment", (q) => q.eq("amendmentId", amendmentId))
+      .collect();
+    return rows.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("bylawAmendments") },
   returns: v.any(),
   handler: async (ctx, { id }) => {
+    // Clean up materialized section records when the amendment is deleted.
+    const sections = await ctx.db
+      .query("bylawSections")
+      .withIndex("by_amendment", (q) => q.eq("amendmentId", id))
+      .collect();
+    for (const row of sections) await ctx.db.delete(row._id);
     await ctx.db.delete(id);
   },
 });

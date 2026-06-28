@@ -77,6 +77,7 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "aiChat:deleteThread",
   "aiChat:renameThread",
   "attestations:sign",
+  "bylawAmendments:materializeSections",
   "bylawAmendments:markFiled",
   "bylawAmendments:markResolutionPassed",
   "bylawAmendments:startConsultation",
