@@ -1567,4 +1567,33 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       ],
     },
   },
+  {
+    nameSingular: "minute",
+    namePlural: "minutes",
+    labelSingular: "Minutes",
+    labelPlural: "Minutes",
+    icon: "FileText",
+    iconColor: "turquoise",
+    routePath: "/app/minutes",
+    labelIdentifierFieldName: "meeting",
+    fields: [
+      { name: "meeting", label: "Meeting", fieldType: FIELD_TYPES.TEXT, icon: "FileText", isReadOnly: true },
+      { name: "heldAt", label: "Held", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
+      { name: "quorum", label: "Quorum", fieldType: FIELD_TYPES.TEXT, icon: "CheckCircle", isReadOnly: true },
+      { name: "motionCount", label: "Motions", fieldType: FIELD_TYPES.NUMBER, icon: "Gavel", isReadOnly: true },
+      { name: "actions", label: "Actions", fieldType: FIELD_TYPES.TEXT, icon: "ListTodo", isReadOnly: true },
+      { name: "approved", label: "Approved", fieldType: FIELD_TYPES.TEXT, icon: "ClipboardCheck", isReadOnly: true },
+    ],
+    defaultView: {
+      name: "All minutes",
+      columns: [
+        { fieldName: "meeting", size: 280 },
+        { fieldName: "heldAt", size: 120 },
+        { fieldName: "quorum", size: 110 },
+        { fieldName: "motionCount", size: 100 },
+        { fieldName: "actions", size: 130 },
+        { fieldName: "approved", size: 130 },
+      ],
+    },
+  },
 ];
