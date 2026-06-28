@@ -1109,6 +1109,12 @@ export const createReconciliationRun = mutation({
         societyId: args.societyId,
         reconciliationRunId: runId,
         journalLineId: line._id,
+        // Bridge to the legacy per-transaction reconciliation system: when the
+        // posted journal line originated from a financial transaction, link it
+        // so both reconciliation surfaces reference the same source row.
+        ...(line.financialTransactionId
+          ? { financialTransactionId: line.financialTransactionId }
+          : {}),
         status: "included",
         amountCents: line.side === "debit" ? line.amountCents : -line.amountCents,
         createdAtISO: now,
