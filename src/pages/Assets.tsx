@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { useCurrentUser } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
@@ -73,6 +74,7 @@ export function AssetsPage() {
   const society = useSociety();
   const navigate = useNavigate();
   const toast = useToast();
+  const currentUser = useCurrentUser();
   const assets = useQuery(api.assets.list, society ? { societyId: society._id } : "skip");
   const maintenance = useQuery(api.assets.maintenance, society ? { societyId: society._id } : "skip");
   const verificationRuns = useQuery(api.assets.verificationRuns, society ? { societyId: society._id } : "skip");
@@ -85,6 +87,7 @@ export function AssetsPage() {
   const remove = useMutation(api.assets.remove);
   const startVerificationRun = useMutation(api.assets.startVerificationRun);
   const [drawer, setDrawer] = useState<"new" | "edit" | "import" | "verify" | "stock" | "receiptLine" | null>(null);
+  const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [stockAsset, setStockAsset] = useState<any>(null);
   const [stockForm, setStockForm] = useState({ observedQuantityBefore: "", quantityAdded: "", notes: "" });
@@ -126,36 +129,70 @@ export function AssetsPage() {
   };
 
   const save = async () => {
-    if (!form || !editingId) return;
+    if (!form || !editingId || saving) return;
     const payload = normalizeAssetForm(form);
     if (!payload.assetTag || !payload.name) {
       toast.error("Asset tag and name are required.");
       return;
     }
-    await update({ id: editingId as any, patch: payload as any });
-    toast.success("Asset updated");
-    setDrawer(null);
+    setSaving(true);
+    try {
+      await update({ id: editingId as any, patch: payload as any });
+      toast.success("Asset updated");
+      setDrawer(null);
+    } catch (error: any) {
+      toast.error("Could not update asset", error?.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const importRows = async () => {
+    if (saving) return;
     const parsed = parseAssetCsv(csvInput).filter((row) => row.assetTag && row.name);
-    for (const row of parsed) {
-      await create({ societyId: society._id, ...row, sourceDocumentIds: [] } as any);
+    if (!parsed.length) {
+      toast.error("No valid rows found. Each row needs an assetTag and name.");
+      return;
     }
-    toast.success(`${parsed.length} asset${parsed.length === 1 ? "" : "s"} imported`);
-    setCsvInput("");
-    setDrawer(null);
+    setSaving(true);
+    let imported = 0;
+    const failures: string[] = [];
+    for (const row of parsed) {
+      try {
+        await create({ societyId: society._id, ...row, sourceDocumentIds: [] } as any);
+        imported += 1;
+      } catch (error: any) {
+        failures.push(`${row.assetTag}: ${error?.message ?? "failed"}`);
+      }
+    }
+    setSaving(false);
+    if (imported) toast.success(`${imported} asset${imported === 1 ? "" : "s"} imported`);
+    if (failures.length) {
+      toast.error(`${failures.length} row${failures.length === 1 ? "" : "s"} skipped`, failures.slice(0, 3).join("; "));
+    }
+    if (imported) {
+      setCsvInput("");
+      setDrawer(null);
+    }
   };
 
   const startVerification = async () => {
-    const id = await startVerificationRun({
-      societyId: society._id,
-      title: verificationTitle || `Physical inventory ${todayDate()}`,
-      reviewerName: "Treasurer",
-    });
-    toast.success("Verification run started");
-    setDrawer(null);
-    if (id) navigate(`/app/assets/verification/${id}`);
+    if (saving) return;
+    setSaving(true);
+    try {
+      const id = await startVerificationRun({
+        societyId: society._id,
+        title: verificationTitle || `Physical inventory ${todayDate()}`,
+        reviewerName: currentUser?.displayName || "Treasurer",
+      });
+      toast.success("Verification run started");
+      setDrawer(null);
+      if (id) navigate(`/app/assets/verification/${id}`);
+    } catch (error: any) {
+      toast.error("Could not start verification", error?.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openStockIntake = (row: any) => {
@@ -165,22 +202,29 @@ export function AssetsPage() {
   };
 
   const saveStockIntake = async () => {
-    if (!stockAsset) return;
+    if (!stockAsset || saving) return;
     const observedQuantityBefore = Number(stockForm.observedQuantityBefore);
     const quantityAdded = Number(stockForm.quantityAdded);
     if (!Number.isFinite(observedQuantityBefore) || observedQuantityBefore < 0 || !Number.isFinite(quantityAdded) || quantityAdded < 0) {
       toast.error("Enter non-negative counts for remaining and added quantities.");
       return;
     }
-    await addConsumableStock({
-      assetId: stockAsset._id,
-      observedQuantityBefore,
-      quantityAdded,
-      notes: stockForm.notes || undefined,
-    });
-    toast.success(`Stock updated to ${observedQuantityBefore + quantityAdded}`);
-    setDrawer(null);
-    setStockAsset(null);
+    setSaving(true);
+    try {
+      await addConsumableStock({
+        assetId: stockAsset._id,
+        observedQuantityBefore,
+        quantityAdded,
+        notes: stockForm.notes || undefined,
+      });
+      toast.success(`Stock updated to ${observedQuantityBefore + quantityAdded}`);
+      setDrawer(null);
+      setStockAsset(null);
+    } catch (error: any) {
+      toast.error("Could not update stock", error?.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openReceiptLineLink = (row: any) => {
@@ -202,29 +246,52 @@ export function AssetsPage() {
   };
 
   const saveReceiptLineLink = async () => {
-    if (!receiptLinkAsset) return;
+    if (!receiptLinkAsset || saving) return;
     if (!receiptLinkForm.receiptDocumentId) {
       toast.error("Choose a receipt document to link.");
       return;
     }
-    await linkReceiptLine({
-      societyId: society._id,
-      assetId: receiptLinkAsset._id,
-      receiptDocumentId: receiptLinkForm.receiptDocumentId as any,
-      financialTransactionId: receiptLinkForm.financialTransactionId ? receiptLinkForm.financialTransactionId as any : undefined,
-      receiptLineLabel: receiptLinkForm.receiptLineLabel || undefined,
-      receiptLineIndex: receiptLinkForm.receiptLineIndex ? Number(receiptLinkForm.receiptLineIndex) : undefined,
-      quantity: receiptLinkForm.quantity ? Number(receiptLinkForm.quantity) : undefined,
-      unitOfMeasure: receiptLinkForm.unitOfMeasure || undefined,
-      unitCostCents: inputToCents(receiptLinkForm.unitCost),
-      totalCostCents: inputToCents(receiptLinkForm.totalCost),
-      sourceText: receiptLinkForm.sourceText || undefined,
-      notes: receiptLinkForm.notes || undefined,
-      createInventoryItem: receiptLinkForm.createInventoryItem,
-    } as any);
-    toast.success("Receipt line linked");
-    setDrawer(null);
-    setReceiptLinkAsset(null);
+    setSaving(true);
+    try {
+      await linkReceiptLine({
+        societyId: society._id,
+        assetId: receiptLinkAsset._id,
+        receiptDocumentId: receiptLinkForm.receiptDocumentId as any,
+        financialTransactionId: receiptLinkForm.financialTransactionId ? receiptLinkForm.financialTransactionId as any : undefined,
+        receiptLineLabel: receiptLinkForm.receiptLineLabel || undefined,
+        receiptLineIndex: receiptLinkForm.receiptLineIndex ? Number(receiptLinkForm.receiptLineIndex) : undefined,
+        quantity: receiptLinkForm.quantity ? Number(receiptLinkForm.quantity) : undefined,
+        unitOfMeasure: receiptLinkForm.unitOfMeasure || undefined,
+        unitCostCents: inputToCents(receiptLinkForm.unitCost),
+        totalCostCents: inputToCents(receiptLinkForm.totalCost),
+        sourceText: receiptLinkForm.sourceText || undefined,
+        notes: receiptLinkForm.notes || undefined,
+        createInventoryItem: receiptLinkForm.createInventoryItem,
+      } as any);
+      toast.success("Receipt line linked");
+      setDrawer(null);
+      setReceiptLinkAsset(null);
+    } catch (error: any) {
+      toast.error("Could not link receipt line", error?.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeAsset = async (row: any) => {
+    if (saving) return;
+    if (!window.confirm(`Delete asset ${row.assetTag} — ${row.name}? This also removes its custody, maintenance, verification, and receipt-link history. This cannot be undone.`)) {
+      return;
+    }
+    setSaving(true);
+    try {
+      await remove({ id: row._id });
+      toast.success("Asset deleted", `${row.assetTag} — ${row.name}`);
+    } catch (error: any) {
+      toast.error("Could not delete asset", error?.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -315,7 +382,7 @@ export function AssetsPage() {
                 <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>
                   <Pencil size={12} /> Edit
                 </button>
-                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete ${row.assetTag}`} onClick={(e) => { e.stopPropagation(); remove({ id: row._id }); }}>
+                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete ${row.assetTag}`} onClick={(e) => { e.stopPropagation(); removeAsset(row); }}>
                   <Trash2 size={12} />
                 </button>
               </>
@@ -331,8 +398,8 @@ export function AssetsPage() {
         size="wide"
         footer={
           <>
-            <button className="btn" onClick={() => setDrawer(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Save asset</button>
+            <button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button>
+            <button className="btn btn--accent" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save asset"}</button>
           </>
         }
       >
@@ -352,8 +419,8 @@ export function AssetsPage() {
         title={stockAsset ? `Add stock: ${stockAsset.name}` : "Add consumable stock"}
         footer={
           <>
-            <button className="btn" onClick={() => setDrawer(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveStockIntake}>Update stock</button>
+            <button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button>
+            <button className="btn btn--accent" onClick={saveStockIntake} disabled={saving}>{saving ? "Saving…" : "Update stock"}</button>
           </>
         }
       >
@@ -380,8 +447,8 @@ export function AssetsPage() {
         size="wide"
         footer={
           <>
-            <button className="btn" onClick={() => setDrawer(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveReceiptLineLink}>Link item</button>
+            <button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button>
+            <button className="btn btn--accent" onClick={saveReceiptLineLink} disabled={saving}>{saving ? "Saving…" : "Link item"}</button>
           </>
         }
       >
@@ -400,8 +467,8 @@ export function AssetsPage() {
         size="wide"
         footer={
           <>
-            <button className="btn" onClick={() => setDrawer(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={importRows}><FileSpreadsheet size={14} /> Import</button>
+            <button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button>
+            <button className="btn btn--accent" onClick={importRows} disabled={saving}><FileSpreadsheet size={14} /> {saving ? "Importing…" : "Import"}</button>
           </>
         }
       >
@@ -416,8 +483,8 @@ export function AssetsPage() {
         title="Start physical inventory"
         footer={
           <>
-            <button className="btn" onClick={() => setDrawer(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={startVerification}><ClipboardCheck size={14} /> Start</button>
+            <button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button>
+            <button className="btn btn--accent" onClick={startVerification} disabled={saving}><ClipboardCheck size={14} /> {saving ? "Starting…" : "Start"}</button>
           </>
         }
       >
@@ -445,6 +512,7 @@ export function AssetDetailPage() {
   const completeMaintenance = useMutation(api.assets.completeMaintenance);
   const dispose = useMutation(api.assets.dispose);
   const [drawer, setDrawer] = useState<"edit" | "custody" | "maintenance" | "disposal" | null>(null);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<AssetFormValue | null>(null);
   const [eventForm, setEventForm] = useState<any>({ eventType: "checkout", toCustodianType: "member", toCustodianName: "", responsiblePersonName: "", location: "", condition: "Good", expectedReturnDate: "", acceptanceSignature: "", notes: "" });
   const [maintenanceForm, setMaintenanceForm] = useState<any>({ title: "Asset maintenance", kind: "maintenance", dueDate: todayDate(), createTask: true, notes: "" });
@@ -466,36 +534,46 @@ export function AssetDetailPage() {
     setDrawer("edit");
   };
 
+  const runSave = async (label: string, fn: () => Promise<unknown>, success: string) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await fn();
+      toast.success(success);
+      setDrawer(null);
+    } catch (error: any) {
+      toast.error(label, error?.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveEdit = async () => {
     if (!form) return;
-    await update({ id: asset._id, patch: normalizeAssetForm(form) as any });
-    toast.success("Asset updated");
-    setDrawer(null);
+    await runSave("Could not update asset", () => update({ id: asset._id, patch: normalizeAssetForm(form) as any }), "Asset updated");
   };
 
   const saveEvent = async () => {
-    await recordEvent({ assetId: asset._id, event: cleanEvent(eventForm) });
-    toast.success("Custody event recorded");
-    setDrawer(null);
+    await runSave("Could not record custody event", () => recordEvent({ assetId: asset._id, event: cleanEvent(eventForm) }), "Custody event recorded");
   };
 
   const saveMaintenance = async () => {
-    await scheduleMaintenance({ assetId: asset._id, ...maintenanceForm });
-    toast.success("Maintenance scheduled");
-    setDrawer(null);
+    await runSave("Could not schedule maintenance", () => scheduleMaintenance({ assetId: asset._id, ...maintenanceForm }), "Maintenance scheduled");
   };
 
   const saveDisposal = async () => {
-    await dispose({
-      assetId: asset._id,
-      disposedAt: disposalForm.disposedAt,
-      disposalMethod: disposalForm.disposalMethod,
-      disposalReason: disposalForm.disposalReason,
-      disposalValueCents: inputToCents(disposalForm.disposalValue),
-      notes: disposalForm.notes,
-    });
-    toast.success("Asset disposed");
-    setDrawer(null);
+    await runSave(
+      "Could not dispose asset",
+      () => dispose({
+        assetId: asset._id,
+        disposedAt: disposalForm.disposedAt,
+        disposalMethod: disposalForm.disposalMethod,
+        disposalReason: disposalForm.disposalReason,
+        disposalValueCents: inputToCents(disposalForm.disposalValue),
+        notes: disposalForm.notes,
+      }),
+      "Asset disposed",
+    );
   };
 
   return (
@@ -533,6 +611,8 @@ export function AssetDetailPage() {
             <div><dt>Location</dt><dd>{asset.location || "—"}</dd></div>
             <div><dt>Responsible person</dt><dd>{asset.responsiblePersonName || "—"}</dd></div>
             <div><dt>Custodian</dt><dd>{asset.custodianName || "—"}</dd></div>
+            <div><dt>Supplier</dt><dd>{asset.supplier || "—"}</dd></div>
+            <div><dt>Purchase date</dt><dd>{formatDate(asset.purchaseDate)}</dd></div>
             <div><dt>Purchase value</dt><dd>{money(asset.purchaseValueCents, asset.currency)}</dd></div>
             <div><dt>Book value</dt><dd>{money(asset.bookValueCents, asset.currency)}</dd></div>
             <div><dt>Receipt</dt><dd>{receiptDocument ? <Link to={`/app/documents/${receiptDocument._id}`}>{receiptDocument.title}</Link> : "—"}</dd></div>
@@ -550,6 +630,14 @@ export function AssetDetailPage() {
           </Field>
           <AssetQrLabel assetTag={asset.assetTag} name={asset.name} url={assetUrl(asset._id)} labelType={labelType} />
           <button className="btn btn--sm" onClick={() => window.print()}>Print label</button>
+        </section>
+        <section className="panel">
+          <div className="panel__head"><h2>Maintenance and warranty</h2><Wrench size={16} /></div>
+          <dl className="record-kv">
+            <div><dt>Warranty expires</dt><dd>{asset.warrantyExpiresAt ? <DueDate date={asset.warrantyExpiresAt} /> : "—"}</dd></div>
+            <div><dt>Next maintenance</dt><dd>{asset.nextMaintenanceDate ? <DueDate date={asset.nextMaintenanceDate} /> : "—"}</dd></div>
+            <div><dt>Next verification</dt><dd>{asset.nextVerificationDate ? <DueDate date={asset.nextVerificationDate} /> : "—"}</dd></div>
+          </dl>
         </section>
         <section className="panel">
           <div className="panel__head"><h2>Grant and compliance</h2></div>
@@ -597,7 +685,7 @@ export function AssetDetailPage() {
         ]}
       />
 
-      <Drawer open={drawer === "edit"} onClose={() => setDrawer(null)} title="Edit asset" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" onClick={saveEdit}>Save</button></>}>
+      <Drawer open={drawer === "edit"} onClose={() => setDrawer(null)} title="Edit asset" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveEdit} disabled={saving}>{saving ? "Saving…" : "Save"}</button></>}>
         {form && (
           <AssetFormFields
             value={form}
@@ -607,13 +695,13 @@ export function AssetDetailPage() {
           />
         )}
       </Drawer>
-      <Drawer open={drawer === "custody"} onClose={() => setDrawer(null)} title="Record custody event" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" onClick={saveEvent}>Record</button></>}>
+      <Drawer open={drawer === "custody"} onClose={() => setDrawer(null)} title="Record custody event" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveEvent} disabled={saving}>{saving ? "Saving…" : "Record"}</button></>}>
         <CustodyForm form={eventForm} setForm={setEventForm} />
       </Drawer>
-      <Drawer open={drawer === "maintenance"} onClose={() => setDrawer(null)} title="Schedule maintenance" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" onClick={saveMaintenance}>Schedule</button></>}>
+      <Drawer open={drawer === "maintenance"} onClose={() => setDrawer(null)} title="Schedule maintenance" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveMaintenance} disabled={saving}>{saving ? "Saving…" : "Schedule"}</button></>}>
         <MaintenanceForm form={maintenanceForm} setForm={setMaintenanceForm} />
       </Drawer>
-      <Drawer open={drawer === "disposal"} onClose={() => setDrawer(null)} title="Dispose asset" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--danger" onClick={saveDisposal}>Dispose</button></>}>
+      <Drawer open={drawer === "disposal"} onClose={() => setDrawer(null)} title="Dispose asset" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--danger" onClick={saveDisposal} disabled={saving}>{saving ? "Disposing…" : "Dispose"}</button></>}>
         <DisposalForm form={disposalForm} setForm={setDisposalForm} />
       </Drawer>
     </div>
@@ -624,10 +712,12 @@ export function AssetVerificationPage() {
   const { runId } = useParams();
   const navigate = useNavigate();
   const society = useSociety();
+  const currentUser = useCurrentUser();
   const items = useQuery(api.assets.verificationItems, runId ? { runId: runId as any } : "skip");
   const assets = useQuery(api.assets.list, society ? { societyId: society._id } : "skip");
   const verifyAsset = useMutation(api.assets.verifyAsset);
   const completeRun = useMutation(api.assets.completeVerificationRun);
+  const verifierName = currentUser?.displayName || "Treasurer";
   const assetById = new Map(((assets ?? []) as any[]).map((asset) => [asset._id, asset]));
   const rows = ((items ?? []) as any[]).map((item) => ({ ...item, asset: assetById.get(item.assetId) }));
   const pending = rows.filter((row) => row.status === "pending").length;
@@ -655,10 +745,10 @@ export function AssetVerificationPage() {
         ]}
         renderRowActions={(row) => (
           <>
-            <button className="btn btn--ghost btn--sm" onClick={() => verifyAsset({ itemId: row._id, status: "verified", verifiedByName: "Treasurer", observedLocation: row.asset?.location, observedCondition: row.asset?.condition })}>
+            <button className="btn btn--ghost btn--sm" onClick={() => verifyAsset({ itemId: row._id, status: "verified", verifiedByName: verifierName, observedLocation: row.asset?.location, observedCondition: row.asset?.condition })}>
               <CheckCircle2 size={12} /> Verified
             </button>
-            <button className="btn btn--ghost btn--sm" onClick={() => verifyAsset({ itemId: row._id, status: "missing", verifiedByName: "Treasurer" })}>
+            <button className="btn btn--ghost btn--sm" onClick={() => verifyAsset({ itemId: row._id, status: "missing", verifiedByName: verifierName })}>
               Missing
             </button>
           </>

@@ -4,6 +4,7 @@ export const ASSET_CATEGORIES = ["IT", "Program equipment", "Consumable", "Furni
 export const ASSET_CONDITIONS = ["New", "Good", "Fair", "Needs repair", "Damaged", "Lost"];
 export const ASSET_STATUSES = ["Available", "Checked out", "In maintenance", "Needs review", "Disposed", "Lost"];
 export const CUSTODIAN_TYPES = ["member", "director", "employee", "volunteer", "committee", "location", "other"];
+export const ASSET_CURRENCIES = ["CAD", "USD", "EUR", "GBP", "AUD", "NZD", "JPY", "CHF"];
 export const MAINTENANCE_KINDS = ["maintenance", "calibration", "insurance", "warranty", "inspection"];
 export const ASSET_LABEL_TYPES = [
   { value: "qr", label: "QR code", payload: "Asset page URL" },
@@ -159,7 +160,11 @@ export function normalizeAssetForm(form: any) {
     imageUrl: form.image?.imageUrl || undefined,
     clearImage: !form.image?.imageStorageId && !form.image?.imageUrl,
     purchaseTransactionId: clean(form.purchaseTransactionId),
+    // An empty linked-record selection must actively unset the stored id —
+    // Convex patch ignores undefined, so signal the clear explicitly.
+    clearPurchaseTransaction: !clean(form.purchaseTransactionId),
     receiptDocumentId: clean(form.receiptDocumentId),
+    clearReceiptDocument: !clean(form.receiptDocumentId),
     warrantyExpiresAt: clean(form.warrantyExpiresAt),
     nextMaintenanceDate: clean(form.nextMaintenanceDate),
     nextVerificationDate: clean(form.nextVerificationDate),

@@ -36,7 +36,9 @@ const assetPatch = v.object({
   imageUrl: v.optional(v.string()),
   clearImage: v.optional(v.boolean()),
   purchaseTransactionId: v.optional(v.id("financialTransactions")),
+  clearPurchaseTransaction: v.optional(v.boolean()),
   receiptDocumentId: v.optional(v.id("documents")),
+  clearReceiptDocument: v.optional(v.boolean()),
   sourceDocumentIds: v.optional(v.array(v.id("documents"))),
   warrantyExpiresAt: v.optional(v.string()),
   nextMaintenanceDate: v.optional(v.string()),
@@ -335,7 +337,9 @@ export const create = mutation({
     imageUrl: v.optional(v.string()),
     clearImage: v.optional(v.boolean()),
     purchaseTransactionId: v.optional(v.id("financialTransactions")),
+    clearPurchaseTransaction: v.optional(v.boolean()),
     receiptDocumentId: v.optional(v.id("documents")),
+    clearReceiptDocument: v.optional(v.boolean()),
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
     warrantyExpiresAt: v.optional(v.string()),
     nextMaintenanceDate: v.optional(v.string()),
@@ -345,7 +349,21 @@ export const create = mutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     const now = new Date().toISOString();
-    const { clearImage: _clearImage, ...insertArgs } = args;
+    const tag = args.assetTag.trim();
+    if (!tag) throw new Error("Asset tag is required.");
+    const existing = await ctx.db
+      .query("assets")
+      .withIndex("by_society_tag", (q: any) => q.eq("societyId", args.societyId).eq("assetTag", tag))
+      .first();
+    if (existing) {
+      throw new Error(`Asset tag "${tag}" is already used by ${existing.name}. Choose a unique tag.`);
+    }
+    const {
+      clearImage: _clearImage,
+      clearReceiptDocument: _clearReceipt,
+      clearPurchaseTransaction: _clearTxn,
+      ...insertArgs
+    } = args;
     const id = await ctx.db.insert("assets", {
       ...insertArgs,
       currency: args.currency ?? "CAD",
@@ -387,12 +405,28 @@ export const update = mutation({
   args: { id: v.id("assets"), patch: assetPatch },
   returns: v.any(),
   handler: async (ctx, { id, patch }) => {
-    const { clearImage, ...rest } = patch as any;
+    const { clearImage, clearReceiptDocument, clearPurchaseTransaction, ...rest } = patch as any;
     const next: any = { ...rest, updatedAtISO: new Date().toISOString() };
-    // Convex patch ignores undefined args, so clearing an image needs an explicit signal.
+    // Convex patch ignores undefined args, so clearing a linked record needs an explicit signal.
     if (clearImage) {
       next.imageStorageId = undefined;
       next.imageUrl = undefined;
+    }
+    if (clearReceiptDocument) next.receiptDocumentId = undefined;
+    if (clearPurchaseTransaction) next.purchaseTransactionId = undefined;
+    if (typeof next.assetTag === "string") {
+      const tag = next.assetTag.trim();
+      const current = await ctx.db.get(id);
+      if (current && tag && tag !== current.assetTag) {
+        const clash = await ctx.db
+          .query("assets")
+          .withIndex("by_society_tag", (q: any) => q.eq("societyId", current.societyId).eq("assetTag", tag))
+          .first();
+        if (clash && clash._id !== id) {
+          throw new Error(`Asset tag "${tag}" is already used by ${clash.name}. Choose a unique tag.`);
+        }
+      }
+      next.assetTag = tag;
     }
     await ctx.db.patch(id, next);
     return id;
@@ -765,10 +799,15 @@ export const verifyAsset = mutation({
       notes: `${args.status}${args.notes ? ` — ${args.notes}` : ""}`,
       createdAtISO: now,
     });
+    // A missing/damaged verification result flags the asset register so it
+    // doesn't keep showing as "Available" after a failed physical check.
+    const statusFromVerification =
+      args.status === "missing" ? "Lost" : args.status === "damaged" || args.status === "location_mismatch" ? "Needs review" : undefined;
     await ctx.db.patch(item.assetId, {
       nextVerificationDate: undefined,
       ...(args.observedLocation ? { location: args.observedLocation } : {}),
       ...(args.observedCondition ? { condition: args.observedCondition } : {}),
+      ...(statusFromVerification ? { status: statusFromVerification } : {}),
       updatedAtISO: now,
     });
     const asset = await ctx.db.get(item.assetId);
@@ -874,6 +913,20 @@ export const remove = mutation({
   args: { id: v.id("assets") },
   returns: v.any(),
   handler: async (ctx, { id }) => {
+    // Remove dependent records so deleting an asset never leaves orphaned
+    // events, maintenance, verification items, or receipt links behind.
+    const [events, maintenanceRows, verificationItems, links] = await Promise.all([
+      ctx.db.query("assetEvents").withIndex("by_asset", (q: any) => q.eq("assetId", id)).collect(),
+      ctx.db.query("assetMaintenance").withIndex("by_asset", (q: any) => q.eq("assetId", id)).collect(),
+      ctx.db.query("assetVerificationItems").withIndex("by_asset", (q: any) => q.eq("assetId", id)).collect(),
+      ctx.db.query("assetReceiptLinks").withIndex("by_asset", (q: any) => q.eq("assetId", id)).collect(),
+    ]);
+    await Promise.all([
+      ...events.map((row: any) => ctx.db.delete(row._id)),
+      ...maintenanceRows.map((row: any) => ctx.db.delete(row._id)),
+      ...verificationItems.map((row: any) => ctx.db.delete(row._id)),
+      ...links.map((row: any) => ctx.db.delete(row._id)),
+    ]);
     await ctx.db.delete(id);
     return null;
   },
