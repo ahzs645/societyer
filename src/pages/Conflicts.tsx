@@ -5,25 +5,23 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
-import { DataTable } from "../components/DataTable";
-import { FilterField } from "../components/FilterBar";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
-import { Plus, AlertTriangle, Tag, CheckCircle2 } from "lucide-react";
+import { Plus, AlertTriangle } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { MarkdownEditor } from "../components/MarkdownEditor";
-
-type Augmented = any & { _directorName: string };
-
-const CONFLICT_FIELDS: FilterField<Augmented>[] = [
-  { id: "director", label: "Director", icon: <Tag size={14} />, match: (c, q) => c._directorName.toLowerCase().includes(q.toLowerCase()) },
-  { id: "matter", label: "Contract / matter", icon: <Tag size={14} />, match: (c, q) => c.contractOrMatter.toLowerCase().includes(q.toLowerCase()) },
-  { id: "abstained", label: "Abstained", icon: <CheckCircle2 size={14} />, options: ["Yes", "No"], match: (c, q) => (c.abstainedFromVote ? "Yes" : "No") === q },
-  { id: "leftRoom", label: "Left room", icon: <CheckCircle2 size={14} />, options: ["Yes", "No"], match: (c, q) => (c.leftRoom ? "Yes" : "No") === q },
-  { id: "status", label: "Status", icon: <Tag size={14} />, options: ["Open", "Resolved"], match: (c, q) => (c.resolvedAt ? "Resolved" : "Open") === q },
-];
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export function ConflictsPage() {
   const society = useSociety();
@@ -35,12 +33,27 @@ export function ConflictsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [params, setParams] = useSearchParams();
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "conflict",
+    viewId: currentViewId,
+  });
 
   const dirMap = useMemo(() => new Map<string, any>((directors ?? []).map((d: any) => [d._id, d])), [directors]);
-  const augmented: Augmented[] = useMemo(() => (conflicts ?? []).map((c: any) => {
+  // Augment records with the derived `director` name and `status` so the record
+  // table renders them as plain columns.
+  const records: any[] = useMemo(() => (conflicts ?? []).map((c: any) => {
     const d = dirMap.get(c.directorId);
-    return { ...c, _directorName: d ? `${d.firstName} ${d.lastName}` : "Unknown" };
+    return {
+      ...c,
+      director: d ? `${d.firstName} ${d.lastName}` : "Unknown",
+      status: c.resolvedAt ? "Resolved" : "Open",
+    };
   }), [conflicts, dirMap]);
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   const openNew = () => {
     if (!directors || directors.length === 0) {
@@ -87,30 +100,44 @@ export function ConflictsPage() {
         }
       />
 
-      <DataTable<Augmented>
-        label="All disclosures"
-        icon={<AlertTriangle size={14} />}
-        data={augmented}
-        rowKey={(r) => r._id}
-        filterFields={CONFLICT_FIELDS}
-        searchPlaceholder="Search director, contract, nature…"
-        searchExtraFields={[(r) => r.natureOfInterest]}
-        defaultSort={{ columnId: "declaredAt", dir: "desc" }}
-        viewsKey="conflicts"
-        sharedViewsContext={{ societyId: society._id, nameSingular: "conflict" }}
-        columns={[
-          { id: "director", header: "Director", sortable: true, accessor: (r) => r._directorName, render: (r) => <strong>{r._directorName}</strong> },
-          { id: "declaredAt", header: "Declared", sortable: true, accessor: (r) => r.declaredAt, render: (r) => <span className="mono">{formatDate(r.declaredAt)}</span> },
-          { id: "contractOrMatter", header: "Contract / matter", sortable: true, accessor: (r) => r.contractOrMatter },
-          { id: "natureOfInterest", header: "Nature of interest", render: (r) => <span className="muted">{r.natureOfInterest}</span> },
-          { id: "abstained", header: "Abstained", sortable: true, accessor: (r) => (r.abstainedFromVote ? 1 : 0), render: (r) => r.abstainedFromVote ? <Badge tone="success">Yes</Badge> : <Badge tone="danger">No</Badge> },
-          { id: "leftRoom", header: "Left room", sortable: true, accessor: (r) => (r.leftRoom ? 1 : 0), render: (r) => r.leftRoom ? <Badge tone="success">Yes</Badge> : <Badge tone="warn">No</Badge> },
-          { id: "status", header: "Status", sortable: true, accessor: (r) => (r.resolvedAt ? "Resolved" : "Open"), render: (r) => r.resolvedAt ? <Badge tone="success">Resolved {formatDate(r.resolvedAt)}</Badge> : <Badge tone="warn">Open</Badge> },
-        ]}
-        renderRowActions={(r) => !r.resolvedAt ? (
-          <button className="btn btn--sm" onClick={() => resolve({ id: r._id, resolvedAt: new Date().toISOString().slice(0, 10) })}>Resolve</button>
-        ) : null}
-      />
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="conflict disclosure" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="conflicts"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<AlertTriangle size={14} />}
+            label="All disclosures"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || conflicts === undefined}
+            renderCell={({ record, field }) => {
+              if (field.name === "status") {
+                return record.resolvedAt
+                  ? <Badge tone="success">Resolved {formatDate(record.resolvedAt)}</Badge>
+                  : <Badge tone="warn">Open</Badge>;
+              }
+              if (field.name === "director") return <strong>{record.director}</strong>;
+              return undefined;
+            }}
+            renderRowActions={(r) => !r.resolvedAt ? (
+              <button className="btn btn--sm" onClick={() => resolve({ id: r._id, resolvedAt: new Date().toISOString().slice(0, 10) })}>Resolve</button>
+            ) : null}
+          />
+        </RecordTableScope>
+      ) : null}
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title="Record disclosure"

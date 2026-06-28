@@ -1317,4 +1317,46 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       ],
     },
   },
+  {
+    nameSingular: "conflict",
+    namePlural: "conflicts",
+    labelSingular: "Conflict disclosure",
+    labelPlural: "Conflicts of interest",
+    icon: "AlertTriangle",
+    iconColor: "red",
+    routePath: "/app/conflicts",
+    labelIdentifierFieldName: "contractOrMatter",
+    fields: [
+      { name: "director", label: "Director", fieldType: FIELD_TYPES.TEXT, icon: "User", isReadOnly: true },
+      { name: "declaredAt", label: "Declared", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
+      { name: "contractOrMatter", label: "Contract / matter", fieldType: FIELD_TYPES.TEXT, icon: "FileText", isSystem: true },
+      { name: "natureOfInterest", label: "Nature of interest", fieldType: FIELD_TYPES.TEXT, icon: "StickyNote" },
+      { name: "abstainedFromVote", label: "Abstained", fieldType: FIELD_TYPES.BOOLEAN, icon: "CheckCircle" },
+      { name: "leftRoom", label: "Left room", fieldType: FIELD_TYPES.BOOLEAN, icon: "DoorOpen" },
+      {
+        name: "status",
+        label: "Status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Activity",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "Open", label: "Open", color: "amber" },
+            { value: "Resolved", label: "Resolved", color: "green" },
+          ],
+        },
+      },
+    ],
+    defaultView: {
+      name: "All disclosures",
+      columns: [
+        { fieldName: "director", size: 180 },
+        { fieldName: "declaredAt", size: 120 },
+        { fieldName: "contractOrMatter", size: 240 },
+        { fieldName: "abstainedFromVote", size: 110 },
+        { fieldName: "leftRoom", size: 110 },
+        { fieldName: "status", size: 140 },
+      ],
+    },
+  },
 ];
