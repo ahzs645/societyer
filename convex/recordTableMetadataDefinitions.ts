@@ -1473,4 +1473,46 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       ],
     },
   },
+  {
+    nameSingular: "inspection",
+    namePlural: "inspections",
+    labelSingular: "Records inspection",
+    labelPlural: "Records inspections",
+    icon: "Eye",
+    iconColor: "gray",
+    routePath: "/app/inspections",
+    labelIdentifierFieldName: "inspectorName",
+    fields: [
+      { name: "inspectedAtISO", label: "Date", fieldType: FIELD_TYPES.DATE, icon: "Calendar" },
+      { name: "inspectorName", label: "Inspector", fieldType: FIELD_TYPES.TEXT, icon: "User", isSystem: true },
+      { name: "inspectorType", label: "Type", fieldType: FIELD_TYPES.TEXT, icon: "Tag", isReadOnly: true },
+      { name: "recordsRequested", label: "Records requested", fieldType: FIELD_TYPES.TEXT, icon: "FileText" },
+      {
+        name: "deliveryMethod",
+        label: "Delivery",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Send",
+        config: {
+          options: [
+            { value: "in-person", label: "In-person", color: "blue" },
+            { value: "electronic", label: "Electronic", color: "teal" },
+          ],
+        },
+      },
+      { name: "feeCents", label: "Inspection fee", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", isReadOnly: true },
+      { name: "copies", label: "Copies", fieldType: FIELD_TYPES.TEXT, icon: "Copy", isReadOnly: true },
+    ],
+    defaultView: {
+      name: "All inspections",
+      columns: [
+        { fieldName: "inspectedAtISO", size: 120 },
+        { fieldName: "inspectorName", size: 180 },
+        { fieldName: "inspectorType", size: 100 },
+        { fieldName: "recordsRequested", size: 240 },
+        { fieldName: "deliveryMethod", size: 120 },
+        { fieldName: "feeCents", size: 130 },
+        { fieldName: "copies", size: 140 },
+      ],
+    },
+  },
 ];
