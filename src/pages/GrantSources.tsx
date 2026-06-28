@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
-import { ArrowLeft, BadgeDollarSign, Globe2, Plus } from "lucide-react";
+import { ArrowLeft, BadgeDollarSign, Globe2, Plus, RefreshCw } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { GrantSourceLibrarySection } from "../features/grants/components/GrantSourceLibrary";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
@@ -62,10 +62,30 @@ const CANDIDATE_TONES: Record<string, "neutral" | "info" | "success" | "danger">
 function GrantOpportunityQueue({ societyId }: { societyId: any }) {
   const toast = useToast();
   const candidates = useQuery(api.grantSources.candidates, { societyId });
+  const sources = useQuery(api.grantSources.list, { societyId });
   const createCandidate = useMutation(api.grantSources.createCandidate);
   const setStatus = useMutation(api.grantSources.setCandidateStatus);
+  const discover = useAction(api.grantSources.discoverFromSource);
   const [adding, setAdding] = useState(false);
+  const [discoverSourceId, setDiscoverSourceId] = useState("");
+  const [discovering, setDiscovering] = useState(false);
   const [form, setForm] = useState({ title: "", funder: "", opportunityUrl: "", applicationDueDate: "", amountText: "" });
+
+  const runDiscover = async () => {
+    if (!discoverSourceId) {
+      toast.info("Choose a source to discover from.");
+      return;
+    }
+    setDiscovering(true);
+    try {
+      const result = await discover({ societyId, sourceId: discoverSourceId as any });
+      toast.success(`Discovered ${result.inserted} new opportunit${result.inserted === 1 ? "y" : "ies"} (${result.found} in feed).`);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Discovery failed");
+    } finally {
+      setDiscovering(false);
+    }
+  };
 
   const active = (candidates ?? []).filter((c: any) => c.status !== "Rejected" && c.status !== "Duplicate");
 
@@ -92,9 +112,24 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
       <div className="card__head">
         <h2 className="card__title">Opportunity queue</h2>
         <span className="card__subtitle">{active.length} open · triage discovered or manually-added grant opportunities</span>
-        <button className="btn-action btn-action--primary" style={{ marginLeft: "auto" }} onClick={() => setAdding((v) => !v)}>
-          <Plus size={12} /> {adding ? "Close" : "Add opportunity"}
-        </button>
+        <div className="row" style={{ gap: 6, marginLeft: "auto", alignItems: "center" }}>
+          {(sources ?? []).length > 0 && (
+            <>
+              <select className="input" value={discoverSourceId} onChange={(e) => setDiscoverSourceId(e.target.value)} style={{ maxWidth: 200 }}>
+                <option value="">Discover from source…</option>
+                {(sources ?? []).map((s: any) => (
+                  <option key={s._id} value={s._id}>{s.name}</option>
+                ))}
+              </select>
+              <button className="btn-action" disabled={discovering || !discoverSourceId} onClick={runDiscover}>
+                <RefreshCw size={12} /> Discover
+              </button>
+            </>
+          )}
+          <button className="btn-action btn-action--primary" onClick={() => setAdding((v) => !v)}>
+            <Plus size={12} /> {adding ? "Close" : "Add opportunity"}
+          </button>
+        </div>
       </div>
       <div className="card__body col" style={{ gap: 10 }}>
         {adding && (

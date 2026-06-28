@@ -21,6 +21,8 @@
 // storage upload URLs, and seed/backfill maintenance the demo data already
 // reflects. These return null (a deliberate no-op) with no error.
 export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
+  // Fetches an external RSS/JSON grant feed — no network in the offline runtime.
+  "grantSources:discoverFromSource",
   "apiPlatform:revokeToken",
   "apiPlatform:setWebhookSubscriptionStatus",
   // The outbound iCalendar feed needs the live Convex http server, so enabling

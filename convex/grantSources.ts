@@ -1,7 +1,13 @@
 import { v } from "convex/values";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../shared/grantSourceLibrary";
-import { mutation, query } from "./lib/untypedServer";
+import { action, internalMutation, mutation, query } from "./lib/untypedServer";
+import { api, internal } from "./_generated/api";
 import { requireRole } from "./users";
+import {
+  parseRssOpportunities,
+  parseJsonFeedOpportunities,
+  type DiscoveredOpportunity,
+} from "../shared/grantFeedParsers";
 
 function isoNow() {
   return new Date().toISOString();
@@ -204,6 +210,22 @@ export const addFromLibrary = mutation({
   },
 });
 
+export const getSource = query({
+  args: { sourceId: v.id("grantSources") },
+  returns: v.any(),
+  handler: async (ctx, { sourceId }) => {
+    const source = await ctx.db.get(sourceId);
+    if (!source) return null;
+    const profile = (
+      await ctx.db
+        .query("grantSourceProfiles")
+        .withIndex("by_source", (q: any) => q.eq("sourceId", sourceId))
+        .collect()
+    )[0];
+    return { ...source, profile };
+  },
+});
+
 export const candidates = query({
   args: { societyId: v.id("societies"), sourceId: v.optional(v.id("grantSources")) },
   returns: v.any(),
@@ -268,6 +290,100 @@ export const setCandidateStatus = mutation({
   handler: async (ctx, { candidateId, status }) => {
     await ctx.db.patch(candidateId, { status, updatedAtISO: new Date().toISOString() });
     return candidateId;
+  },
+});
+
+// Persist discovered opportunities into the queue, deduping by sourceExternalId
+// within the source, and stamp the source's lastScrapedAtISO.
+export const _recordDiscoveredCandidates = internalMutation({
+  args: {
+    societyId: v.id("societies"),
+    sourceId: v.optional(v.id("grantSources")),
+    items: v.array(v.any()),
+  },
+  returns: v.any(),
+  handler: async (ctx, { societyId, sourceId, items }) => {
+    const existing = sourceId
+      ? await ctx.db.query("grantOpportunityCandidates").withIndex("by_source", (q: any) => q.eq("sourceId", sourceId)).collect()
+      : await ctx.db.query("grantOpportunityCandidates").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+    const seen = new Set<string>();
+    for (const row of existing) for (const id of row.sourceExternalIds ?? []) seen.add(id);
+
+    const now = new Date().toISOString();
+    let inserted = 0;
+    for (const item of items as DiscoveredOpportunity[]) {
+      if (seen.has(item.externalId)) continue;
+      seen.add(item.externalId);
+      await ctx.db.insert("grantOpportunityCandidates", {
+        societyId,
+        sourceId,
+        title: item.title,
+        funder: item.funder,
+        program: item.program,
+        opportunityUrl: item.opportunityUrl,
+        applicationDueDate: item.applicationDueDate,
+        amountText: item.amountText,
+        eligibilityText: item.eligibilityText,
+        description: item.description,
+        confidence: "medium",
+        status: "New",
+        sourceExternalIds: [item.externalId],
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      inserted += 1;
+    }
+    if (sourceId) await ctx.db.patch(sourceId, { lastScrapedAtISO: now, updatedAtISO: now });
+    return { inserted, found: items.length };
+  },
+});
+
+// Discover opportunities from a saved source's RSS or JSON feed and queue new
+// ones. HTML-selector scraping needs a DOM engine that isn't available
+// server-side — those sources report clearly and should use a feed or manual
+// entry instead.
+export const discoverFromSource = action({
+  args: { societyId: v.id("societies"), sourceId: v.id("grantSources"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
+  handler: async (ctx: any, { societyId, sourceId }: any) => {
+    const source = await ctx.runQuery(api.grantSources.getSource, { sourceId });
+    if (!source || source.societyId !== societyId) throw new Error("Grant source not found.");
+    const profile = source.profile;
+    const kind = profile?.profileKind ?? (source.sourceType === "rss" ? "rss" : undefined);
+
+    let res: Response;
+    try {
+      res = await fetch(source.url, { headers: { "user-agent": "societyer-grant-discovery/1.0" } });
+    } catch (err: any) {
+      throw new Error(`Could not fetch ${source.url}: ${String(err?.message ?? err)}`);
+    }
+    if (!res.ok) throw new Error(`Fetching ${source.url} returned ${res.status}.`);
+    const body = await res.text();
+
+    let items: DiscoveredOpportunity[];
+    if (kind === "json_feed") {
+      let json: any;
+      try {
+        json = JSON.parse(body);
+      } catch {
+        throw new Error("Source is configured as a JSON feed but did not return valid JSON.");
+      }
+      items = parseJsonFeedOpportunities(json, profile?.fieldMappings, profile?.listSelector);
+    } else if (kind === "rss" || /<rss\b|<feed\b/i.test(body)) {
+      items = parseRssOpportunities(body);
+    } else {
+      throw new Error(
+        "This source needs HTML/CSS-selector scraping, which isn't supported server-side. " +
+          "Point it at an RSS or JSON feed, or add opportunities manually.",
+      );
+    }
+
+    const result = await ctx.runMutation(internal.grantSources._recordDiscoveredCandidates, {
+      societyId,
+      sourceId,
+      items,
+    });
+    return result;
   },
 });
 
