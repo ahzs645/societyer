@@ -155,7 +155,11 @@ export const meetingTables = {
         votesFor: v.optional(v.number()),
         votesAgainst: v.optional(v.number()),
         abstentions: v.optional(v.number()),
-        resolutionType: v.optional(v.string()), // Ordinary | Special | Unanimous
+        resolutionType: v.optional(v.string()), // Ordinary | Special | Unanimous | Procedural
+        // How the motion was decided: vote | consent | automatic. Procedural
+        // motions (adjournment, approve-minutes) default to consent — carried
+        // without a recorded tally. See shared/proceduralMotions.ts.
+        decidedBy: v.optional(v.string()),
         sectionIndex: v.optional(v.number()),
         sectionTitle: v.optional(v.string()),
         motionTemplateId: v.optional(v.id("motionTemplates")),
@@ -181,6 +185,7 @@ export const meetingTables = {
           votesAgainst: v.optional(v.number()),
           abstentions: v.optional(v.number()),
           resolutionType: v.optional(v.string()),
+          decidedBy: v.optional(v.string()),
           sectionIndex: v.optional(v.number()),
           sectionTitle: v.optional(v.string()),
           motionTemplateId: v.optional(v.id("motionTemplates")),

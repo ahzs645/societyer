@@ -84,6 +84,19 @@ export const meetingWorkflowTables = {
     outcome: v.optional(v.string()), // Carried | Defeated (meaningful only when status = Voted)
     statusIsManual: v.optional(v.boolean()),
 
+    // How the motion was decided, orthogonal to its threshold:
+    //   vote      — a counted ballot (the tally is judged against the threshold)
+    //   consent   — adopted by unanimous/general consent ("no objection"); no tally
+    //   automatic — meeting closed without a motion (agenda done / time / emergency)
+    // Most procedural motions (adjournment, approve-minutes) are decided by
+    // consent, so they carry without a recorded tally. See
+    // shared/proceduralMotions.ts.
+    decidedBy: v.optional(v.string()),
+    // Stored procedural-kind slug (adjournment | previous-minutes | …) so the
+    // master list can classify/hide by an explicit label instead of re-matching
+    // the wording. Null for ordinary substantive motions.
+    proceduralKind: v.optional(v.string()),
+
     // Votes (model A — current/most-recent tally on the motion itself)
     votesFor: v.optional(v.number()),
     votesAgainst: v.optional(v.number()),

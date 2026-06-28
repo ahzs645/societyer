@@ -5,6 +5,34 @@
 // assertion script (`scripts/check-meeting-governance.ts`) without a DOM or a
 // React runtime. MotionEditor re-exports them for backward compatibility.
 
+import {
+  classifyProceduralMotion,
+  isDecidedWithoutVote,
+  isRoutineMotion as sharedIsRoutineMotion,
+  ROUTINE_MOTION_TAGS as SHARED_ROUTINE_MOTION_TAGS,
+  type ClassifiableMotion,
+} from "../../shared/proceduralMotions";
+
+// Re-export the shared procedural-motion catalogue + helpers so existing
+// importers can keep pulling them from this module (the historical home of the
+// governance helpers). The catalogue itself lives in shared/ so the Convex
+// dual-write layer can apply the same classification/auto-labeling.
+export {
+  classifyProceduralMotion,
+  defaultDecidedByFor,
+  applyProceduralTags,
+  isDecidedWithoutVote,
+  proceduralKindByKey,
+  PROCEDURAL_MOTION_KINDS,
+  PROCEDURAL_MOTION_KEYS,
+  DECIDED_BY_VALUES,
+  DECIDED_BY_LABELS,
+  type DecidedBy,
+  type ProceduralMotionKind,
+  type ParliamentaryClass,
+  type ClassifiableMotion,
+} from "../../shared/proceduralMotions";
+
 /** Canonical motion outcome vocabulary. Capitalized, single source of truth.
  *  - Pending  : recorded but not yet voted on
  *  - Carried  : passed
@@ -241,48 +269,55 @@ export function motionCarriesByType(
 }
 
 /** Resolve a motion's configured type from the society's rules and report
- *  whether it currently carries. Procedural motions don't carry a vote. */
+ *  whether its recorded tally currently carries.
+ *
+ *  Returns null (no judgement) when the motion was decided WITHOUT a counted
+ *  vote — adopted by general consent or an automatic close — since there is no
+ *  tally to weigh. A motion adopted by consent carries by definition; that fact
+ *  lives on `outcome`, not on a threshold check. When a procedural motion *is*
+ *  put to an actual ballot (e.g. a contested adjournment), it is judged by a
+ *  simple majority per RONR rather than being exempted from the math. */
 export function motionCarriesForRules(
-  m: { votesFor?: number; votesAgainst?: number; resolutionType?: string },
+  m: {
+    votesFor?: number;
+    votesAgainst?: number;
+    resolutionType?: string;
+    decidedBy?: string;
+    tags?: string[];
+    sectionTitle?: string;
+  },
   rules?: ResolutionRulesLike | null,
 ): boolean | null {
-  if ((m.resolutionType ?? "") === "Procedural") return null;
-  const type = findResolutionType(resolveResolutionTypes(rules), m.resolutionType);
+  if (isDecidedWithoutVote(m.decidedBy)) return null;
+  const types = resolveResolutionTypes(rules);
+  // A procedural motion (or the legacy "Procedural" resolution type) with no
+  // configured threshold carries by simple majority when actually voted on.
+  const proc = classifyProceduralMotion(m as ClassifiableMotion);
+  const useMajority =
+    (m.resolutionType ?? "") === "Procedural" || (proc != null && !m.resolutionType);
+  const type = useMajority
+    ? types.find((t) => t.id === "ordinary") ?? types[0]
+    : findResolutionType(types, m.resolutionType);
   return motionCarriesByType(m, type);
 }
 
-/** Heuristic: does this motion represent adjourning the meeting? Adjournment
- *  is recorded as a procedural motion and handled separately in the UI. */
-export function isAdjournmentMotion(motion: {
-  text?: string;
-  sectionTitle?: string;
-  resolutionType?: string;
-}): boolean {
-  const text = `${motion.text ?? ""} ${motion.sectionTitle ?? ""} ${motion.resolutionType ?? ""}`.toLowerCase();
-  return /\badjourn(?:ment|ed|s)?\b/.test(text);
+/** Does this motion represent adjourning the meeting? Backed by the shared
+ *  procedural-motion catalogue. The MotionEditor uses this to peel the
+ *  adjournment record out into its own block. */
+export function isAdjournmentMotion(motion: ClassifiableMotion): boolean {
+  return classifyProceduralMotion(motion)?.key === "adjournment";
 }
 
 /** A motion that approves/adopts the previous meeting's minutes — procedural
  *  bookkeeping that, like adjournment, clutters the master list. */
-export function isPreviousMinutesMotion(motion: {
-  text?: string;
-  sectionTitle?: string;
-}): boolean {
-  const text = `${motion.text ?? ""} ${motion.sectionTitle ?? ""}`.toLowerCase();
-  return /\b(approve|adopt|accept|confirm)\b.*\bminutes\b/.test(text);
+export function isPreviousMinutesMotion(motion: ClassifiableMotion): boolean {
+  return classifyProceduralMotion(motion)?.key === "previous-minutes";
 }
 
 /** Routine motions are hidden by the master list's default view (the user can
- *  switch to "All"). A motion counts as routine if it is an adjournment or a
- *  previous-minutes motion, or carries an explicit routine label/tag. */
-export const ROUTINE_MOTION_TAGS = ["adjournment", "previous-minutes", "routine"];
-export function isRoutineMotion(motion: {
-  text?: string;
-  sectionTitle?: string;
-  resolutionType?: string;
-  tags?: string[];
-}): boolean {
-  const tags = (motion.tags ?? []).map((t) => String(t).trim().toLowerCase());
-  if (tags.some((t) => ROUTINE_MOTION_TAGS.includes(t))) return true;
-  return isAdjournmentMotion(motion) || isPreviousMinutesMotion(motion);
+ *  switch to "All"). Backed by the shared catalogue: an explicit routine tag,
+ *  or a routine procedural kind. */
+export const ROUTINE_MOTION_TAGS = SHARED_ROUTINE_MOTION_TAGS;
+export function isRoutineMotion(motion: ClassifiableMotion): boolean {
+  return sharedIsRoutineMotion(motion);
 }

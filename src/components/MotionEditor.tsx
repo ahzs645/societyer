@@ -8,6 +8,11 @@ import {
   motionMeetsThreshold,
   motionCarriesForRules,
   resolveResolutionTypes,
+  classifyProceduralMotion,
+  isDecidedWithoutVote,
+  DECIDED_BY_VALUES,
+  DECIDED_BY_LABELS,
+  type DecidedBy,
 } from "../lib/motionGovernance";
 import { useBylawRules } from "../hooks/useBylawRules";
 // Re-export the pure governance helpers so existing importers can keep pulling
@@ -53,6 +58,9 @@ export type Motion = {
   votesAgainst?: number;
   abstentions?: number;
   resolutionType?: "Ordinary" | "Special" | "Unanimous" | string;
+  /** How the motion was decided. Procedural motions (adjournment,
+   *  approve-minutes) default to "consent" — carried without a recorded tally. */
+  decidedBy?: DecidedBy;
   sectionIndex?: number;
   sectionTitle?: string;
 };
@@ -194,7 +202,11 @@ function VoteProgress({ motion }: { motion: Motion }) {
       </div>
       <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 2 }}>
         {total === 0
-          ? "No votes recorded yet"
+          ? isDecidedWithoutVote(motion.decidedBy)
+            ? motion.decidedBy === "automatic"
+              ? "Closed automatically — no tally required"
+              : "Adopted by general consent — no tally recorded"
+            : "No votes recorded yet"
           : `For ${f} · Against ${a} · Abstain ${s} · (${total} voting)`}
         {carries !== null && (
           <span
@@ -209,6 +221,37 @@ function VoteProgress({ motion }: { motion: Motion }) {
         )}
       </div>
     </div>
+  );
+}
+
+/** "Decided by" control for procedural motions — lets the recorder mark a
+ *  motion as carried by general consent (the common case for adjournment and
+ *  approving the previous minutes) instead of forcing a vote tally, or record an
+ *  actual ballot / automatic close. Surfaced only for motions the catalogue
+ *  recognises as procedural; substantive motions always take a recorded vote. */
+function DecidedByPicker({
+  motion,
+  onChange,
+}: {
+  motion: Motion;
+  onChange: (decidedBy: DecidedBy) => void;
+}) {
+  const kind = classifyProceduralMotion(motion);
+  if (!kind) return null;
+  const value: DecidedBy = (motion.decidedBy as DecidedBy) ?? kind.defaultDecidedBy;
+  return (
+    <Field label="Decided by">
+      <div className="row" style={{ gap: 6, alignItems: "center" }}>
+        <Select
+          value={value}
+          onChange={(v) => onChange(v as DecidedBy)}
+          options={DECIDED_BY_VALUES.map((id) => ({ value: id, label: DECIDED_BY_LABELS[id] }))}
+        />
+        <Tooltip content={kind.citation}>
+          <Badge tone="neutral">{kind.label}</Badge>
+        </Tooltip>
+      </div>
+    </Field>
   );
 }
 
@@ -359,6 +402,10 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
         text: "Adjourn the meeting",
         outcome: "Carried",
         resolutionType: "Procedural",
+        // Adjournment is privileged and carries by majority, but in practice is
+        // adopted by general consent — recorded as carried with no tally. See
+        // shared/proceduralMotions.ts.
+        decidedBy: "consent",
         ...sectionPatchForScope(),
         sectionTitle: scopedSectionTitle || "Adjournment",
       },
@@ -776,6 +823,7 @@ function MotionRow({
               onChange={(resolutionType) => onPatch({ resolutionType })}
             />
           </Field>
+          <DecidedByPicker motion={motion} onChange={(decidedBy) => onPatch({ decidedBy })} />
           {agendaSections.length > 0 && (
             <Field label="Agenda item">
               <Select

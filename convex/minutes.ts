@@ -20,6 +20,10 @@ const motion = v.object({
   votesAgainst: v.optional(v.number()),
   abstentions: v.optional(v.number()),
   resolutionType: v.optional(v.string()),
+  // How the motion was decided: vote | consent | automatic. Procedural motions
+  // (adjournment, approve-minutes) default to consent. See
+  // shared/proceduralMotions.ts.
+  decidedBy: v.optional(v.string()),
   sectionIndex: v.optional(v.number()),
   sectionTitle: v.optional(v.string()),
 });

@@ -1,5 +1,10 @@
 import { internalMutation, mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
+import {
+  applyProceduralTags,
+  classifyProceduralMotion,
+  defaultDecidedByFor,
+} from "../shared/proceduralMotions";
 
 // Standalone first-class motion store. See
 // docs/motions-first-class-object-design.md. During the dual-write phase the
@@ -21,6 +26,8 @@ const motionContent = {
   resolutionTypeId: v.optional(v.string()),
   resolutionTypeLabel: v.optional(v.string()),
   outcome: v.optional(v.string()),
+  decidedBy: v.optional(v.string()),
+  proceduralKind: v.optional(v.string()),
   votesFor: v.optional(v.number()),
   votesAgainst: v.optional(v.number()),
   abstentions: v.optional(v.number()),
@@ -122,6 +129,24 @@ export async function syncMotionsForMinutes(
       const note = KNOWN_EMBEDDED_OUTCOMES.has(String(m.outcome ?? "").trim().toLowerCase())
         ? undefined
         : `legacy outcome: ${m.outcome}`;
+      // Classify recurring procedural motions (adjournment, approve-minutes,
+      // approve-agenda, recess, receive-reports) from their wording and stamp
+      // the first-class record with an explicit kind + label, so the master
+      // list filters by a stored tag instead of regex-matching every render.
+      // Default the "decided by" axis from the catalogue (most procedural
+      // motions pass by general consent, carrying without a recorded tally).
+      const kind = classifyProceduralMotion({
+        text: m.text,
+        sectionTitle: m.sectionTitle,
+        resolutionType: m.resolutionType,
+      });
+      const tags = applyProceduralTags(m.tags, {
+        text: m.text,
+        sectionTitle: m.sectionTitle,
+      });
+      const decidedBy =
+        m.decidedBy ??
+        defaultDecidedByFor({ text: m.text, sectionTitle: m.sectionTitle });
       await ctx.db.insert(
         "motions",
         stripUndefined({
@@ -139,6 +164,9 @@ export async function syncMotionsForMinutes(
           resolutionTypeLabel: m.resolutionType,
           status,
           outcome,
+          decidedBy,
+          proceduralKind: kind?.key,
+          tags: tags.length ? tags : undefined,
           votesFor: m.votesFor,
           votesAgainst: m.votesAgainst,
           abstentions: m.abstentions,
