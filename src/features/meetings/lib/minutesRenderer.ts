@@ -585,7 +585,7 @@ function renderNumberedAgendaMinutes({
 
   return `
     <h1>${eh(minutesTitleForSampleStyle(society.name, meeting))}</h1>
-    <p><strong>Date:</strong> ${eh(date)} &nbsp;&nbsp; <strong>Time:</strong> ${eh(timeRange)} &nbsp;&nbsp; <strong>Location:</strong> ${eh(location)}</p>
+    <p><strong>Date:</strong> ${eh(date)} · <strong>Time:</strong> ${eh(timeRange)} · <strong>Location:</strong> ${eh(location)}</p>
 
     <h2>Attendees:</h2>
     <p><strong>Present:</strong> ${eh(presentLine)}</p>
@@ -842,7 +842,7 @@ function renderOfficialLine(minutes: MinutesRenderArgs["minutes"], options: Requ
     minutes.recorderName ? `Recorder: ${minutes.recorderName}` : "",
   ].filter(Boolean);
   if (!officers.length) return options.includePlaceholders ? `<p class="muted">[chair, secretary, and recorder not recorded]</p>` : "";
-  return `<p>${officers.map(escapeHtml).join(" &nbsp;&nbsp; ")}</p>`;
+  return `<p>${officers.map(escapeHtml).join(" · ")}</p>`;
 }
 
 function minutesTitleForSampleStyle(societyName: string, meeting: MinutesRenderArgs["meeting"]) {
@@ -1129,16 +1129,20 @@ function renderAppendices(appendices: MinutesRenderArgs["minutes"]["appendices"]
   if (!rows.length) return "";
   return renderOptionalSection(
     "Appendices",
-    `<table>
-      <tr><th>Title</th><th>Type</th><th>Reference</th><th>Notes</th></tr>
-      ${rows.map((row) => `
-        <tr>
-          <td>${escapeHtml(row.title)}</td>
-          <td>${escapeHtml(row.type ? humanizeLabel(row.type) : "—")}</td>
-          <td>${escapeHtml(row.reference ?? "—")}</td>
-          <td>${escapeHtml(row.notes ?? "—")}</td>
-        </tr>
-      `).join("")}
+    `<table data-variant="statement">
+      <thead>
+        <tr><th data-rule="header" style="width:38%">Title</th><th data-rule="header" style="width:22%">Type</th><th data-rule="header" style="width:25%">Reference</th><th data-rule="header" style="width:15%">Notes</th></tr>
+      </thead>
+      <tbody>
+        ${rows.map((row) => `
+          <tr>
+            <td>${escapeHtml(row.title)}</td>
+            <td>${escapeHtml(row.type ? humanizeLabel(row.type) : "—")}</td>
+            <td>${escapeHtml(row.reference ?? "—")}</td>
+            <td>${escapeHtml(row.notes ?? "—")}</td>
+          </tr>
+        `).join("")}
+      </tbody>
     </table>`,
     true,
     options,

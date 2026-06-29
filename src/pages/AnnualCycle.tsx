@@ -10,6 +10,7 @@ import {
   Clock,
   FileCheck2,
   Gavel,
+  Info,
   ListChecks,
   ShieldCheck,
 } from "lucide-react";
@@ -179,19 +180,38 @@ export function AnnualCyclePage() {
         })}
       </div>
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="card__head">
-          <h2 className="card__title">Caveats</h2>
-          <span className="card__subtitle">Rules are evidence checks, not legal conclusions</span>
-        </div>
-        <div className="card__body">
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
+      {(data.caveats ?? []).length > 0 && (
+        <details
+          className="muted"
+          style={{
+            marginTop: 24,
+            paddingTop: 12,
+            borderTop: "1px solid var(--border)",
+            fontSize: "var(--fs-sm)",
+            lineHeight: 1.5,
+          }}
+        >
+          <summary
+            style={{
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              listStyle: "none",
+              userSelect: "none",
+            }}
+          >
+            <Info size={13} />
+            <strong style={{ fontWeight: 600 }}>Caveats</strong>
+            <span>· Rules are evidence checks, not legal conclusions</span>
+          </summary>
+          <ul style={{ margin: "8px 0 0", paddingLeft: 24 }}>
             {(data.caveats ?? []).map((caveat: string) => (
-              <li key={caveat}>{caveat}</li>
+              <li key={caveat} style={{ margin: "2px 0" }}>{caveat}</li>
             ))}
           </ul>
-        </div>
-      </div>
+        </details>
+      )}
     </div>
   );
 }

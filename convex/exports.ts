@@ -121,6 +121,7 @@ export const EXPORTABLE_TABLES = [
   "grantSources",
   "grantSourceProfiles",
   "grantOpportunityCandidates",
+  "programStatements",
   "deadlines",
   "commitments",
   "commitmentEvents",
@@ -193,6 +194,11 @@ export const EXPORTABLE_TABLES = [
   "dividends",
   "significantIndividualSteps",
   "shareCertificates",
+  // Previously unregistered society-data tables (coverage gaps).
+  "motions",
+  "bylawSections",
+  "orgChartAssignmentRevisions",
+  "partyPortals",
 ] as const;
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);

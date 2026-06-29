@@ -264,6 +264,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
 
   // ---- Finance ----
   "/app/financials": { icon: PiggyBank, group: "finance", label: "Financials" },
+  "/app/financials/year-end": { icon: CalendarCheck, group: "finance", label: "Year-end reports" },
   "/app/finance-imports": { icon: ArrowDownToLine, group: "finance", label: "Finance imports" },
   "/app/treasurer": { icon: Landmark, group: "finance", label: "Treasurer" },
   "/app/assets": { icon: Package, group: "finance", label: "Assets", module: "assets" },

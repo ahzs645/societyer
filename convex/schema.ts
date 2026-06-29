@@ -19,6 +19,7 @@ import { accountingTables } from "./tables/accounting";
 import { aiTables } from "./tables/ai";
 import { peopleTables } from "./tables/people";
 import { grantTables } from "./tables/grants";
+import { yearEndTables } from "./tables/yearEnd";
 import { documentTables } from "./tables/documents";
 import { assetTables } from "./tables/assets";
 import { treasuryTables } from "./tables/treasury";
@@ -423,6 +424,7 @@ export default defineSchema({
   ...filingTables,
 
   ...grantTables,
+  ...yearEndTables,
 
   // compliance — extracted to convex/tables/compliance.ts
   ...complianceTables,

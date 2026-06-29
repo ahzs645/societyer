@@ -126,6 +126,7 @@ const ROUTE_KEYWORDS: Record<string, string[]> = {
   "/app/exports": ["download", "backup", "csv"],
   "/app/society": ["organization", "org"],
   "/app/financials": ["money", "accounting", "budget"],
+  "/app/financials/year-end": ["year end", "annual report", "actuals", "budget", "gaming grant", "restricted funds", "financial statement"],
   "/app/members": ["people", "contacts", "roster"],
   "/app/meetings": ["agm", "sgm", "board meeting", "gathering"],
 };

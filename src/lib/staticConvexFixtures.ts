@@ -19,6 +19,7 @@ import {
   corporationPacketDocxMimeType,
 } from "../../shared/corporationPacketDocx";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
+import { riversideGamingProgramStatement } from "../../shared/programStatement";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
@@ -822,28 +823,96 @@ const minutes = [
     quorumRuleEffectiveFromISO: "2025-06-25T00:00:00.000Z",
     quorumSourceLabel: "Bylaw rules v1, effective 2025-06-25",
     quorumComputedAtISO: "2025-06-19T18:30:00.000Z",
-    discussion: "Members reviewed the annual report, financial statements, and director slate.",
+    discussion:
+      "The chair welcomed members and confirmed quorum. Members reviewed the prior-year minutes, the annual report, the 2025 financial statements, the appointment of the reviewer, and the director slate. There was a short discussion on program reach and the renewed Community Gaming Grant before the elections.",
+    remoteParticipation: {
+      platform: "Zoom",
+      url: "https://example.zoom.us/j/9876543210",
+      meetingId: "987 654 3210",
+      passcode: "riverside",
+      instructions: "Hybrid meeting. Remote members were admitted from the waiting room and votes were taken by roll call.",
+    },
     sections: [
+      {
+        title: "Call to order and adoption of the agenda",
+        type: "general",
+        presenter: "Mina Patel",
+        discussion: "The chair called the meeting to order at 6:32 p.m. and confirmed notice was sent in accordance with the bylaws.",
+        depth: 0,
+      },
+      {
+        title: "Adoption of the 2024 AGM minutes",
+        type: "general",
+        presenter: "Jordan Lee",
+        discussion: "The minutes of the June 2024 annual general meeting were circulated in advance and taken as read.",
+        depth: 0,
+      },
       {
         title: "Annual report",
         type: "report",
         presenter: "Mina Patel",
-        discussion: "Members reviewed the annual report and program highlights.",
+        discussion: "Members reviewed the annual report and program highlights, including youth programming and community dinners.",
         reportSubmitted: true,
+        depth: 0,
       },
       {
         title: "Financial statements",
         type: "report",
         presenter: "Jordan Lee",
-        discussion: "The 2025 financial statements were presented and discussed.",
+        discussion: "The 2025 financial statements were presented and discussed, including the restricted Community Gaming Grant fund.",
         reportSubmitted: true,
+        depth: 0,
+      },
+      {
+        title: "Appointment of the reviewer",
+        type: "report",
+        presenter: "Jordan Lee",
+        discussion: "The board recommended re-appointing Maple Leaf CPA LLP to conduct the FY2026 review engagement.",
+        depth: 0,
+      },
+      {
+        title: "Director elections",
+        type: "election",
+        presenter: "Devon Clarke",
+        discussion: "Three nominations were received for three open board seats. Each nominee confirmed their consent to act.",
+        depth: 0,
+      },
+      {
+        title: "New business",
+        type: "general",
+        presenter: "Mina Patel",
+        discussion: "A member asked about volunteer recruitment for the fall season; the board agreed to bring a plan to the next meeting.",
+        depth: 0,
       },
     ],
     appendices: [
+      { title: "Notice of meeting", type: "notice", reference: "Sent 2025-05-28", notes: "Emailed to all voting members" },
       { title: "Annual report package", type: "report", reference: "Source documents" },
+      { title: "2025 financial statements", type: "financial_statement", reference: "Review engagement", notes: "Maple Leaf CPA LLP" },
+      { title: "Proxy register", type: "register", reference: "AGM package", notes: "2 proxies received" },
       { title: "Director slate", type: "election_roster", reference: "AGM package" },
     ],
     motions: [
+      {
+        text: "Adopt the agenda as circulated.",
+        movedBy: "Devon Clarke",
+        secondedBy: "Avery Santos",
+        outcome: "Carried",
+        votesFor: 4,
+        votesAgainst: 0,
+        abstentions: 0,
+        sectionIndex: 0,
+      },
+      {
+        text: "Approve the minutes of the 2024 annual general meeting as circulated.",
+        movedBy: "Jordan Lee",
+        secondedBy: "Devon Clarke",
+        outcome: "Carried",
+        votesFor: 4,
+        votesAgainst: 0,
+        abstentions: 0,
+        sectionIndex: 1,
+      },
       {
         text: "Approve the 2025 financial statements as presented.",
         movedBy: "Jordan Lee",
@@ -852,10 +921,44 @@ const minutes = [
         votesFor: 4,
         votesAgainst: 0,
         abstentions: 0,
+        sectionIndex: 3,
+      },
+      {
+        text: "Appoint Maple Leaf CPA LLP to conduct the FY2026 review engagement.",
+        movedBy: "Mina Patel",
+        secondedBy: "Jordan Lee",
+        outcome: "Carried",
+        votesFor: 4,
+        votesAgainst: 0,
+        abstentions: 0,
+        sectionIndex: 4,
+      },
+      {
+        text: "Elect Mina Patel, Jordan Lee, and Devon Clarke to the board for the 2025-2026 term.",
+        movedBy: "Avery Santos",
+        secondedBy: "Jordan Lee",
+        outcome: "Carried",
+        votesFor: 3,
+        votesAgainst: 0,
+        abstentions: 1,
+        sectionIndex: 5,
       },
     ],
-    decisions: ["Approved annual report filing package."],
-    actionItems: [{ text: "File annual report package", assignee: "Mina Patel", dueDate: "2025-07-19", done: true }],
+    decisions: [
+      "Adopted the agenda and the 2024 AGM minutes.",
+      "Approved the 2025 financial statements as presented.",
+      "Re-appointed Maple Leaf CPA LLP as reviewer for FY2026.",
+      "Elected the 2025-2026 board of directors.",
+    ],
+    actionItems: [
+      { text: "File annual report package with BC Registries", assignee: "Mina Patel", dueDate: "2025-07-19", done: true },
+      { text: "Publish the approved AGM minutes to the transparency centre", assignee: "Jordan Lee", dueDate: "2025-07-24", done: false },
+      { text: "Send the engagement letter to Maple Leaf CPA LLP", assignee: "Mina Patel", dueDate: "2025-07-31", done: false },
+      { text: "Update the director register with the new term dates", assignee: "Avery Santos", dueDate: "2025-07-15", done: true },
+      { text: "Bring a fall volunteer recruitment plan to the next board meeting", assignee: "Devon Clarke", dueDate: "2025-09-10", done: false },
+    ],
+    draftTranscript:
+      "Chair: I call the meeting to order at 6:32. We have quorum with four directors present and one regret.\nChair: Can I have a motion to adopt the agenda?\nDevon: So moved.\nAvery: Seconded.\nChair: All in favour? Carried.\nJordan: I'll walk through the 2025 financial statements...\nChair: Thank you. Motion to approve the statements as presented?\nJordan: So moved.\nMina: Seconded.\nChair: Carried, four in favour.",
     nextMeetingAt: "2025-07-10T18:30:00.000Z",
     nextMeetingLocation: "Riverside Community Hall",
     sourceReviewStatus: "source_reviewed",
@@ -864,11 +967,12 @@ const minutes = [
     sourceReviewedByUserId: USER_SECRETARY_ID,
     agmDetails: {
       financialStatementsPresented: true,
-      financialStatementsNotes: "The 2025 financial statements were presented to the members.",
-      directorElectionNotes: "The director slate was reviewed and accepted.",
+      financialStatementsNotes: "The 2025 financial statements were presented to the members and approved.",
+      directorElectionNotes: "Three directors were elected to the 2025-2026 board by a vote of 3 in favour with 1 abstention.",
       directorAppointments: [
         { name: "Mina Patel", roleTitle: "Director", term: "2025-2026", consentRecorded: true, elected: true, status: "Confirmed" },
         { name: "Jordan Lee", roleTitle: "Director", term: "2025-2026", consentRecorded: true, elected: true, status: "Confirmed" },
+        { name: "Devon Clarke", roleTitle: "Director", term: "2025-2026", consentRecorded: true, elected: true, status: "Confirmed" },
       ],
     },
   },
@@ -1814,7 +1918,7 @@ const financialAccounts = [
   { _id: ACCOUNT_EQUIPMENT_EXPENSE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "equipment", code: "5500", name: "Equipment and technology", currency: "CAD", accountType: "Expense", subtype: "equipment", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
 ];
 
-const financialTransactions = [
+const financialTransactions: Array<Record<string, any>> = [
   {
     _id: "static_tx_grant",
     societyId: SOCIETY_ID,
@@ -1860,6 +1964,35 @@ const financialTransactions = [
     counterpartyExternalId: "vendor_harbour_office",
     counterpartyResourceType: "vendor",
   },
+  // FY2024-2025 operating ledger — categorized so the year-end Organization
+  // Revenue & Expense statement (General Fund vs Restricted Funds) derives from
+  // real finance data. General Fund lines post to the operating account;
+  // restricted lines post to the restricted "Neighbourhood grant fund" account.
+  ...[
+    ["org_member", "Membership dues", 180000, "Membership fees", CASH_ACCOUNT_ID, "2025-06-30"],
+    ["org_registration", "Program registration fees", 1500000, "Registration fees", CASH_ACCOUNT_ID, "2025-09-15"],
+    ["org_donations", "Year-end donations", 250000, "Donations", CASH_ACCOUNT_ID, "2025-12-20"],
+    ["org_fundraising", "Fall fundraiser", 320000, "Fundraising", CASH_ACCOUNT_ID, "2025-11-01"],
+    ["org_interest", "Bank interest", 12500, "Interest & other", CASH_ACCOUNT_ID, "2026-03-31"],
+    ["org_wages", "Staff wages", -1300000, "Wages & benefits", CASH_ACCOUNT_ID, "2025-07-15"],
+    ["org_rent", "Hall rent", -400000, "Rent", CASH_ACCOUNT_ID, "2025-05-01"],
+    ["org_insurance", "Liability insurance", -150000, "Insurance", CASH_ACCOUNT_ID, "2025-04-15"],
+    ["org_office", "Office supplies", -120000, "Office supplies", CASH_ACCOUNT_ID, "2025-10-10"],
+    ["org_advertising", "Program advertising", -75000, "Advertising", CASH_ACCOUNT_ID, "2025-08-20"],
+    ["org_utilities", "Utilities", -90000, "Utilities", CASH_ACCOUNT_ID, "2026-01-31"],
+    ["org_restricted_grant", "Restricted program grant received", 500000, "Program grant", GRANT_ACCOUNT_ID, "2025-05-15"],
+    ["org_restricted_delivery", "Restricted program delivery", -380000, "Program delivery", GRANT_ACCOUNT_ID, "2026-02-28"],
+  ].map(([key, description, amountCents, category, accountId, date]) => ({
+    _id: `static_tx_${key}`,
+    societyId: SOCIETY_ID,
+    connectionId: FINANCIAL_CONNECTION_ID,
+    accountId,
+    externalId: String(key),
+    date,
+    description,
+    amountCents,
+    category,
+  })),
 ];
 
 const accountingFiscalPeriods = [
@@ -2481,6 +2614,26 @@ const tables: Record<string, any[]> = {
         },
       ],
     },
+    {
+      _id: "static_grant_gaming",
+      societyId: SOCIETY_ID,
+      title: "Community Gaming Grant — Community Hall Programs",
+      funder: "BC Community Gaming Grants",
+      funderName: "BC Community Gaming Grants",
+      program: "Community Hall Programs",
+      status: "Active",
+      amountRequestedCents: 500000,
+      amountAwardedCents: 400000,
+      restrictedPurpose: "Community Hall programming (gaming grant eligible costs)",
+      nextAction: "File program actuals & budget with the renewal application",
+      startDate: "2024-04-01",
+      endDate: "2025-03-31",
+      nextReportDueAtISO: "2026-06-30",
+      useOfFunds: [
+        { label: "Advertising", amountCents: 1140000, notes: "Program promotion and outreach." },
+        { label: "Equipment Rentals", amountCents: 220000 },
+      ],
+    },
   ],
   grantApplications: [
     {
@@ -2503,7 +2656,39 @@ const tables: Record<string, any[]> = {
       status: "Draft",
     },
   ],
-  grantTransactions: [],
+  grantTransactions: [
+    {
+      _id: "static_grant_txn_gaming_inflow",
+      societyId: SOCIETY_ID,
+      grantId: "static_grant_gaming",
+      date: "2024-05-15",
+      direction: "inflow",
+      amountCents: 400000,
+      description: "Community Gaming Grant payment received",
+    },
+    {
+      _id: "static_grant_txn_gaming_outflow",
+      societyId: SOCIETY_ID,
+      grantId: "static_grant_gaming",
+      date: "2025-02-28",
+      direction: "outflow",
+      amountCents: 380000,
+      description: "Program advertising and equipment rentals",
+    },
+  ],
+  programStatements: [
+    {
+      _id: "static_program_statement_gaming",
+      ...riversideGamingProgramStatement({
+        societyId: SOCIETY_ID,
+        grantId: "static_grant_gaming",
+        priorFiscalYearLabel: "2024-2025",
+        currentFiscalYearLabel: "2025-2026",
+      }),
+      createdAtISO: "2026-05-01T00:00:00.000Z",
+      updatedAtISO: "2026-05-01T00:00:00.000Z",
+    },
+  ],
   grantSources: [
     {
       _id: "static_grant_source_cihr_researchnet",

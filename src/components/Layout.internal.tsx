@@ -388,6 +388,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Finance",
     items: [
       navItem("/app/financials"),
+      navItem("/app/financials/year-end"),
       navItem("/app/finance-imports"),
       navItem("/app/treasurer"),
       navItem("/app/assets"),
@@ -625,6 +626,7 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   "Access custody": "nav.accessCustody",
   "Public transparency": "nav.transparency",
   Financials: "nav.financials",
+  "Year-end reports": "nav.yearEndReports",
   Treasurer: "nav.treasurer",
   Assets: "nav.assets",
   Grants: "nav.grants",
