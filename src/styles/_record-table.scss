@@ -771,10 +771,17 @@ select.record-table__menu-select,
 }
 
 .record-table__header-cell-label {
+  // `min-width: 0` lets this flex child shrink below its text width so the
+  // ellipsis can kick in when the column is genuinely too narrow. The chevron
+  // menu reservation lives on `.record-table__header-cell-button` (the flex
+  // container) — repeating `calc(100% - 24px)` here subtracts that gap a second
+  // time off a button that has already shrink-wrapped to the label, which
+  // clipped every header by ~24px and collapsed short labels to a single
+  // letter + ellipsis ("TYPE" → "T…").
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: calc(100% - 24px);
 }
 
 .record-table__resize-handle {
