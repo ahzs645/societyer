@@ -1,15 +1,62 @@
 @use "tokens" as *;
 @use "mixins" as *;
 
-.asset-detail-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+/* Tabbed asset detail: a stack of the active tab's panel(s)/tables. */
+.asset-detail {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   margin-bottom: 16px;
 }
 
-.asset-detail-grid > .panel:nth-child(3) {
-  grid-column: 1 / -1;
+/* Cap static key/value panels for readability so a full-width 2-col grid
+ * doesn't fling labels and values to opposite edges. Tables stay full width
+ * (they aren't .panel). */
+.asset-detail .panel {
+  max-width: 880px;
+}
+
+/* Consistent title row: heading left, trailing badge/icon aligned right
+ * instead of wrapping underneath. */
+.asset-detail .panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.asset-detail .panel__head h2 {
+  margin: 0;
+}
+
+/* Asset photo: a framed figure with a fixed aspect ratio so portrait and
+ * landscape photos both read as a deliberate hero, with the live status shown
+ * as a chip on the image rather than floating above it. */
+.asset-hero {
+  position: relative;
+  margin: 0 0 14px;
+  max-width: 480px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid token('border');
+  background: token('bg-subtle');
+  aspect-ratio: 16 / 10;
+}
+
+.asset-hero img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.asset-hero__status {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
 .record-kv {
@@ -126,14 +173,15 @@
 }
 
 @media (max-width: 760px) {
-  .asset-detail-grid,
-  .form-grid,
-  .record-kv {
+  .form-grid {
     grid-template-columns: 1fr;
   }
 
-  .asset-detail-grid > .panel:nth-child(3) {
-    grid-column: auto;
+  /* Keep the register fields two-up on phones (each label is short) so the
+   * panel isn't an extremely long one-field-per-row scroll. Tighten the gap
+   * and let long values wrap within their column. */
+  .record-kv {
+    gap: 10px 12px;
   }
 
   .asset-label {

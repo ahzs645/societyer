@@ -15,6 +15,37 @@ export const LOCATION_TYPES = ["facility", "room", "shelf", "bin", "custody", "i
 export const LOT_STATUSES = ["active", "depleted", "expired", "disposed", "needs_review"];
 export const EXPIRY_SOON_DAYS = 60;
 
+// Inventory "libraries" — external systems (or manual collections) that the
+// society's inventory is sourced from / kept in sync with.
+export const INVENTORY_PROVIDERS = ["manual", "openboxes", "odoo", "erpnext", "snipeit", "csv", "receipt", "demo"];
+export const CONNECTION_STATUSES = ["active", "needs_attention", "disabled"];
+
+export function providerLabel(provider: string) {
+  const labels: Record<string, string> = {
+    manual: "Manual collection",
+    openboxes: "OpenBoxes",
+    odoo: "Odoo",
+    erpnext: "ERPNext",
+    snipeit: "Snipe-IT",
+    csv: "CSV file",
+    receipt: "Receipts",
+    demo: "Demo data",
+  };
+  return labels[provider] ?? provider;
+}
+
+export function relativeSince(iso?: string | null) {
+  if (!iso) return "Never synced";
+  const days = daysUntil(iso);
+  if (days == null) return "Never synced";
+  const ago = -days;
+  if (ago <= 0) return "Synced today";
+  if (ago === 1) return "Synced yesterday";
+  if (ago < 30) return `Synced ${ago} days ago`;
+  if (ago < 60) return "Synced last month";
+  return `Synced ${Math.round(ago / 30)} months ago`;
+}
+
 export function formatQuantity(value?: number | null, unit?: string | null) {
   if (value == null) return "-";
   return `${new Intl.NumberFormat("en-CA", { maximumFractionDigits: 2 }).format(value)} ${unit ?? "each"}`;
@@ -124,4 +155,8 @@ export function emptyMovementForm() {
 
 export function emptyCountForm() {
   return { title: "", scopeType: "all", locationId: "", itemType: "", reviewerName: "", notes: "" };
+}
+
+export function emptyConnectionForm() {
+  return { provider: "manual", displayName: "", status: "active", externalOrganizationId: "", baseUrl: "" };
 }

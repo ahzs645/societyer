@@ -24,6 +24,7 @@ import { Tabs } from "../../components/primitives";
 import {
   ASSET_CATEGORIES,
   ASSET_CONDITIONS,
+  ASSET_CURRENCIES,
   ASSET_LABEL_TYPES,
   ASSET_STATUSES,
   CUSTODIAN_TYPES,
@@ -40,6 +41,8 @@ export type AssetFormValue = {
   supplier: string;
   purchaseDate: string;
   purchaseValue: string;
+  quantityOnHand: string;
+  quantityUnit: string;
   currency: string;
   fundingSource: string;
   grantRestrictions: string;
@@ -81,6 +84,8 @@ export function makeAssetFormDefaults(
     supplier: initial?.supplier ?? "",
     purchaseDate: initial?.purchaseDate ?? "",
     purchaseValue: initial?.purchaseValue ?? "",
+    quantityOnHand: initial?.quantityOnHand ?? "",
+    quantityUnit: initial?.quantityUnit ?? "",
     currency: initial?.currency ?? "CAD",
     fundingSource: initial?.fundingSource ?? "",
     grantRestrictions: initial?.grantRestrictions ?? "",
@@ -266,6 +271,35 @@ export function AssetFormFields({
           onChange={(e) => onChange({ purchaseValue: e.target.value })}
         />
       </Field>
+      <Field label="Currency">
+        <Select
+          value={value.currency || "CAD"}
+          onChange={(v) => onChange({ currency: v })}
+          options={ASSET_CURRENCIES.map((c) => ({ value: c, label: c }))}
+        />
+      </Field>
+      {value.category === "Consumable" && (
+        <>
+          <Field label="Quantity on hand" hint="Starting count for this consumable.">
+            <input
+              className="input"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={value.quantityOnHand}
+              onChange={(e) => onChange({ quantityOnHand: e.target.value })}
+            />
+          </Field>
+          <Field label="Unit" hint="e.g. box, each, litre.">
+            <input
+              className="input"
+              value={value.quantityUnit}
+              onChange={(e) => onChange({ quantityUnit: e.target.value })}
+            />
+          </Field>
+        </>
+      )}
       <Field label="Book value">
         <input
           className="input"
