@@ -177,14 +177,6 @@ function pdfSafeText(text: string): string {
     );
 }
 
-function textWidth(font: PDFFont, text: string, fontSize: number): number {
-  try {
-    return font.widthOfTextAtSize(text, fontSize);
-  } catch {
-    return font.widthOfTextAtSize(pdfSafeText(text).replace(/[^\x20-\x7e]/g, "?"), fontSize);
-  }
-}
-
 function lineWidthPt(value: string, scale: number): number {
   const px = cssNumber(value);
   if (px <= 0) return 0;
@@ -259,44 +251,6 @@ function drawElementBackgroundAndBorder(
   }
 }
 
-function splitTextAcrossRects(
-  text: string,
-  rects: DOMRect[],
-  font: PDFFont,
-  fontSize: number,
-  scaleX: number,
-): string[] {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return rects.map(() => "");
-  const lines: string[] = [];
-  let index = 0;
-
-  for (let rectIndex = 0; rectIndex < rects.length; rectIndex += 1) {
-    if (rectIndex === rects.length - 1) {
-      lines.push(words.slice(index).join(" "));
-      break;
-    }
-
-    const maxWidth = rects[rectIndex].width * scaleX + 1;
-    const lineWords: string[] = [];
-    while (index < words.length) {
-      const candidate = [...lineWords, words[index]].join(" ");
-      if (
-        lineWords.length > 0 &&
-        textWidth(font, candidate, fontSize) > maxWidth
-      ) {
-        break;
-      }
-      lineWords.push(words[index]);
-      index += 1;
-    }
-    lines.push(lineWords.join(" "));
-  }
-
-  while (lines.length < rects.length) lines.push("");
-  return lines;
-}
-
 function drawTextNode(
   page: PDFPage,
   textNode: Text,
@@ -313,56 +267,88 @@ function drawTextNode(
   const font = chooseFont(style, fonts);
   const fontSize = Math.max(1, cssNumber(style.fontSize) * geometry.scaleY);
 
-  const range = document.createRange();
-  range.selectNodeContents(textNode);
-  const rects = Array.from(range.getClientRects()).filter((rect) => (
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.bottom >= geometry.rect.top &&
-    rect.top <= geometry.rect.bottom
-  ));
-  range.detach();
-  if (rects.length === 0) return;
-
-  const text = pdfSafeText(rawText.replace(/\s+/g, " "));
-  const lines = rects.length === 1
-    ? [text]
-    : splitTextAcrossRects(text, rects, font, fontSize, geometry.scaleX);
-
-  rects.forEach((rect, index) => {
-    const line = lines[index];
-    if (!line?.trim()) return;
-    const box = rectToPdf(rect, geometry);
-    try {
-      page.drawText(line, {
-        x: box.x,
-        y: box.y + fontSize * 0.18,
-        size: fontSize,
-        font,
-        color,
-      });
-    } catch {
-      page.drawText(line.replace(/[^\x20-\x7e]/g, "?"), {
-        x: box.x,
-        y: box.y + fontSize * 0.18,
-        size: fontSize,
-        font,
-        color,
-      });
+  const underline = style.textDecorationLine.includes("underline");
+  for (const { text, rect } of renderedTextLines(textNode)) {
+    if (!text.trim()) continue;
+    if (
+      rect.width <= 0 ||
+      rect.height <= 0 ||
+      rect.bottom < geometry.rect.top ||
+      rect.top > geometry.rect.bottom
+    ) {
+      continue;
     }
-
-    if (style.textDecorationLine.includes("underline")) {
+    const box = rectToPdf(rect, geometry);
+    const safe = pdfSafeText(text);
+    try {
+      page.drawText(safe, { x: box.x, y: box.y + fontSize * 0.18, size: fontSize, font, color });
+    } catch {
+      page.drawText(safe.replace(/[^\x20-\x7e]/g, "?"), { x: box.x, y: box.y + fontSize * 0.18, size: fontSize, font, color });
+    }
+    if (underline) {
       page.drawLine({
         start: { x: box.x, y: box.y + fontSize * 0.08 },
-        end: {
-          x: box.x + Math.min(textWidth(font, line, fontSize), box.width),
-          y: box.y + fontSize * 0.08,
-        },
+        end: { x: box.x + box.width, y: box.y + fontSize * 0.08 },
         thickness: Math.max(0.35, fontSize * 0.045),
         color,
       });
     }
-  });
+  }
+}
+
+/**
+ * Return the text laid out on each visual line of a text node, using the
+ * browser's actual line breaking. A single-line node takes the fast path; a
+ * wrapped node groups characters by their vertical position so each emitted line
+ * is exactly what the browser rendered — no re-flow guessing (which mis-placed
+ * words past the margin and dropped the space at wrap points).
+ */
+function renderedTextLines(textNode: Text): Array<{ text: string; rect: DOMRect }> {
+  const value = textNode.nodeValue ?? "";
+  const range = document.createRange();
+  range.selectNodeContents(textNode);
+  const lineRects = Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
+  if (lineRects.length <= 1) {
+    range.detach();
+    const rect = lineRects[0];
+    // Collapse runs of whitespace but DON'T trim: a leading/trailing space is
+    // significant when this node sits inline next to another (e.g. the space in
+    // "<strong>Date:</strong> Thursday").
+    return rect ? [{ text: value.replace(/\s+/g, " "), rect }] : [];
+  }
+
+  const TOL = 2;
+  type Acc = { chars: string[]; top: number; bottom: number; left: number; right: number };
+  const lines: Acc[] = [];
+  let current: Acc | null = null;
+  for (let i = 0; i < value.length; i += 1) {
+    range.setStart(textNode, i);
+    range.setEnd(textNode, i + 1);
+    const r = range.getBoundingClientRect();
+    const ch = value[i];
+    if (r.width === 0 && r.height === 0) {
+      if (current) current.chars.push(ch);
+      continue;
+    }
+    if (!current || Math.abs(r.top - current.top) > TOL) {
+      if (current) lines.push(current);
+      current = { chars: [ch], top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+    } else {
+      current.chars.push(ch);
+      current.left = Math.min(current.left, r.left);
+      current.right = Math.max(current.right, r.right);
+      current.bottom = Math.max(current.bottom, r.bottom);
+    }
+  }
+  if (current) lines.push(current);
+  range.detach();
+  // Collapse whitespace per line but keep significant leading/trailing spaces;
+  // the browser already consumed the space at each wrap point into the line it
+  // ended, so wrapped continuation lines don't start with a stray space.
+  return lines.map((l) => ({
+    text: l.chars.join("").replace(/\s+/g, " "),
+    rect: new DOMRect(l.left, l.top, l.right - l.left, l.bottom - l.top),
+  }));
 }
 
 async function svgDataUrlToPngBytes(src: string): Promise<ArrayBuffer | null> {
