@@ -212,6 +212,35 @@ export function StockTab({
   );
 }
 
+// Order locations as a depth-first tree (parent immediately followed by its
+// children) and record each row's depth so the name cell can indent. Locations
+// whose parent is missing/filtered are treated as roots so nothing disappears.
+function orderLocationTree(locations: any[]) {
+  const byId = new Map(locations.map((row) => [String(row._id), row]));
+  const children = new Map<string, any[]>();
+  const roots: any[] = [];
+  for (const row of locations) {
+    const parentId = row.parentLocationId ? String(row.parentLocationId) : "";
+    if (parentId && byId.has(parentId)) {
+      const list = children.get(parentId) ?? [];
+      list.push(row);
+      children.set(parentId, list);
+    } else {
+      roots.push(row);
+    }
+  }
+  const sortByName = (a: any, b: any) => String(a.name ?? "").localeCompare(String(b.name ?? ""));
+  const ordered: any[] = [];
+  const depthById = new Map<string, number>();
+  const visit = (row: any, depth: number) => {
+    depthById.set(String(row._id), depth);
+    ordered.push(row);
+    for (const child of (children.get(String(row._id)) ?? []).sort(sortByName)) visit(child, depth + 1);
+  };
+  for (const root of roots.sort(sortByName)) visit(root, 0);
+  return { ordered, depthById };
+}
+
 export function LocationsTab({
   locations,
   loading,
@@ -219,6 +248,7 @@ export function LocationsTab({
   onWhatsHere,
   onEdit,
   onDelete,
+  onLabel,
 }: {
   locations: any[];
   loading: boolean;
@@ -226,13 +256,22 @@ export function LocationsTab({
   onWhatsHere: (location: any) => void;
   onEdit: (location: any) => void;
   onDelete: (location: any) => void;
+  onLabel: (location: any) => void;
 }) {
   const { locationById, balancesByLocationId } = maps;
+  const { ordered, depthById } = orderLocationTree(locations);
+  // Roll child contents up into ancestors so a facility/room shows everything
+  // stored beneath it, not just items placed directly on it.
+  const rollupQty = (row: any): number => {
+    const direct = (balancesByLocationId.get(row._id) ?? []).reduce((sum, b) => sum + (b.quantityOnHand ?? 0), 0);
+    const kids = ordered.filter((loc) => String(loc.parentLocationId) === String(row._id));
+    return direct + kids.reduce((sum, kid) => sum + rollupQty(kid), 0);
+  };
   return (
     <DataTable
       label="Locations & bins"
       icon={<MapPin size={14} />}
-      data={locations}
+      data={ordered}
       rowKey={(row) => row._id}
       loading={loading}
       viewsKey="inventory-locations"
@@ -245,27 +284,35 @@ export function LocationsTab({
           header: "Location",
           sortable: true,
           accessor: (row) => row.name ?? "",
-          render: (row) => (
-            <div className="row" style={{ gap: 8, alignItems: "center" }}>
-              <LocationGlyph type={row.locationType} />
-              <div>
-                <strong>{row.name}</strong>{!row.active && <Badge tone="neutral">inactive</Badge>}
-                {row.parentLocationId && <div className="muted">in {locationById.get(row.parentLocationId)?.name ?? "—"}</div>}
+          render: (row) => {
+            const depth = depthById.get(String(row._id)) ?? 0;
+            const hasChildren = ordered.some((loc) => String(loc.parentLocationId) === String(row._id));
+            return (
+              <div className="row" style={{ gap: 8, alignItems: "center", paddingLeft: depth * 18 }}>
+                {depth > 0 && <span aria-hidden className="muted" style={{ marginLeft: -12 }}>└</span>}
+                <LocationGlyph type={row.locationType} />
+                <div>
+                  <strong>{row.name}</strong>{!row.active && <Badge tone="neutral">inactive</Badge>}
+                  {hasChildren && <span className="muted"> · contains sub-locations</span>}
+                </div>
               </div>
-            </div>
-          ),
+            );
+          },
         },
         { id: "code", header: "Bin code", sortable: true, accessor: (row) => row.code ?? "", render: (row) => row.code ? <span className="row" style={{ gap: 4 }}><QrCode size={12} /> <span className="mono">{row.code}</span></span> : <span className="muted">-</span> },
         { id: "type", header: "Type", sortable: true, accessor: (row) => row.locationType ?? "", render: (row) => <Badge tone="info">{row.locationType}</Badge> },
+        { id: "custodian", header: "Custodian", accessor: (row) => row.custodianName ?? "", render: (row) => row.custodianName ? <span>{row.custodianName}</span> : <span className="muted">-</span> },
         {
           id: "contents",
           header: "Contents",
           align: "right",
-          accessor: (row) => (balancesByLocationId.get(row._id) ?? []).reduce((sum, b) => sum + (b.quantityOnHand ?? 0), 0),
+          accessor: (row) => rollupQty(row),
           render: (row) => {
             const rows = balancesByLocationId.get(row._id) ?? [];
             const qty = rows.reduce((sum, b) => sum + (b.quantityOnHand ?? 0), 0);
-            return rows.length ? <span className="mono">{rows.length} item{rows.length === 1 ? "" : "s"} · {qty}</span> : <span className="muted">empty</span>;
+            const total = rollupQty(row);
+            if (!rows.length && total === 0) return <span className="muted">empty</span>;
+            return <span className="mono">{rows.length} item{rows.length === 1 ? "" : "s"} · {qty}{total !== qty ? ` (${total} incl. sub)` : ""}</span>;
           },
         },
         { id: "address", header: "Address / notes", accessor: (row) => `${row.address ?? ""} ${row.notes ?? ""}`, render: (row) => <span className="muted">{row.address || row.notes || "-"}</span> },
@@ -273,6 +320,7 @@ export function LocationsTab({
       renderRowActions={(row) => (
         <>
           <button className="btn btn--ghost btn--sm" onClick={() => onWhatsHere(row)}><Boxes size={12} /> What's here</button>
+          {row.code && <button className="btn btn--ghost btn--sm" onClick={() => onLabel(row)} title="Show printable QR label"><QrCode size={12} /> Label</button>}
           <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)}><Pencil size={12} /> Edit</button>
           <button className="btn btn--ghost btn--sm" onClick={() => onDelete(row)}><Trash2 size={12} /></button>
         </>

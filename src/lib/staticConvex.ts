@@ -3936,6 +3936,8 @@ function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDe
       address: args?.address ?? existing.address,
       notes: args?.notes ?? existing.notes,
       active: args?.active ?? existing.active ?? true,
+      custodianName: args?.custodianName ?? existing.custodianName,
+      custodianMemberId: args?.custodianMemberId ?? existing.custodianMemberId,
       sourceSystem: args?.sourceSystem ?? existing.sourceSystem ?? "manual",
       createdAtISO: existing.createdAtISO ?? now,
       updatedAtISO: now,

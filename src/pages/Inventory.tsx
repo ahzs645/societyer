@@ -13,8 +13,11 @@ import {
   Package,
   Plus,
   RefreshCw,
+  ScanLine,
   Trash2,
 } from "lucide-react";
+import { AssetScanner } from "../features/assets/AssetScanner";
+import { AssetQrLabel } from "../features/assets/AssetQrLabel";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
@@ -71,6 +74,7 @@ export function InventoryPage() {
   const receiptLinks = useQuery(api.inventoryHub.receiptLinks, society ? { societyId: society._id } : "skip");
   const pendingCandidates = useQuery(api.inventoryHub.candidates, society ? { societyId: society._id, status: "new" } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
+  const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const transactions = useQuery(api.financialHub.transactions, society ? { societyId: society._id, limit: 200 } : "skip");
   const postMovement = useMutation(api.inventoryHub.postStockMovement);
   const backfillAssets = useMutation(api.inventoryHub.backfillAssets);
@@ -95,7 +99,7 @@ export function InventoryPage() {
 
   const [tab, setTab] = useState<TabKey>("stock");
   const [drawer, setDrawer] = useState<
-    "movement" | "openboxes" | "item" | "location" | "link" | "lot" | "count-start" | "count-entry" | "location-detail" | "connection" | null
+    "movement" | "openboxes" | "item" | "location" | "link" | "lot" | "count-start" | "count-entry" | "location-detail" | "location-label" | "connection" | null
   >(null);
   const [connectionForm, setConnectionForm] = useState(emptyConnectionForm);
   const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
@@ -112,6 +116,8 @@ export function InventoryPage() {
   const [countForm, setCountForm] = useState(emptyCountForm);
   const [activeCountId, setActiveCountId] = useState<string | null>(null);
   const [detailLocationId, setDetailLocationId] = useState<string | null>(null);
+  const [labelLocationId, setLabelLocationId] = useState<string | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
   const [openBoxesJson, setOpenBoxesJson] = useState(JSON.stringify({
     products: [
       { id: "demo-product-bandages", productCode: "MED-001", name: "First aid bandages", category: "Program supplies", unitOfMeasure: "boxes" },
@@ -189,6 +195,26 @@ export function InventoryPage() {
   );
   const activeCount = countRows.find((c) => c._id === activeCountId) ?? null;
   const detailLocation = detailLocationId ? locationById.get(detailLocationId) : null;
+  const labelLocation = labelLocationId ? locationById.get(labelLocationId) : null;
+
+  const findLocationByCode = (code: string) => {
+    const needle = code.trim().toLowerCase();
+    if (!needle) return null;
+    return ((locations ?? []) as any[]).find(
+      (loc) => String(loc.code ?? "").toLowerCase() === needle || String(loc.name ?? "").toLowerCase() === needle,
+    ) ?? null;
+  };
+
+  const onScanDetected = (code: string) => {
+    const match = findLocationByCode(code);
+    if (match) {
+      setScanOpen(false);
+      setDetailLocationId(match._id);
+      setDrawer("location-detail");
+    } else {
+      toast.error("No bin matches that code", code);
+    }
+  };
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -338,6 +364,8 @@ export function InventoryPage() {
       address: location.address ?? "",
       notes: location.notes ?? "",
       active: location.active ?? true,
+      custodianName: location.custodianName ?? "",
+      custodianMemberId: location.custodianMemberId ?? "",
     });
     setDrawer("location");
   };
@@ -357,6 +385,8 @@ export function InventoryPage() {
       address: locationForm.address.trim() || undefined,
       notes: locationForm.notes.trim() || undefined,
       active: locationForm.active,
+      custodianName: locationForm.locationType === "custody" ? (locationForm.custodianName.trim() || undefined) : undefined,
+      custodianMemberId: locationForm.locationType === "custody" && locationForm.custodianMemberId ? (locationForm.custodianMemberId as any) : undefined,
       sourceSystem: "societyer_manual",
     } as any);
     toast.success(editingLocationId ? "Location updated" : "Location created");
@@ -711,50 +741,43 @@ export function InventoryPage() {
         </div>
       )}
 
-      <div className="card" style={{ marginBottom: 8 }}>
-        <div className="card__head">
-          <h2 className="card__title">Libraries &amp; sync</h2>
-          <span className="card__subtitle">
-            {(connections ?? []).length
-              ? `${(connections ?? []).length} connected ${connections!.length === 1 ? "library" : "libraries"}`
-              : "Connect a library to source and sync inventory"}
-          </span>
-          <button className="btn btn--sm btn--accent" style={{ marginLeft: "auto" }} onClick={openNewConnection}>
-            <Plus size={12} /> Add library
-          </button>
-        </div>
-        <div className="card__body col" style={{ gap: 6 }}>
-          {connections === undefined ? (
-            <span className="muted">Loading…</span>
-          ) : connections.length === 0 ? (
-            <span className="muted">
-              No libraries yet. Add one to set up an inventory source (OpenBoxes, a CSV file, or a manual collection) that this register stays in sync with.
+      <div className="row inv-libraries-bar" style={{ gap: 8, alignItems: "center", flexWrap: "wrap", margin: "0 0 8px", fontSize: 13 }}>
+        <span className="row" style={{ gap: 6, alignItems: "center", color: "var(--text-tertiary)" }}>
+          <Boxes size={13} /> <span style={{ fontWeight: 500 }}>Libraries</span>
+        </span>
+        {connections === undefined ? (
+          <span className="muted">Loading…</span>
+        ) : connections.length === 0 ? (
+          <span className="muted">None connected — add a source (OpenBoxes, CSV, or manual) to keep this register in sync.</span>
+        ) : (
+          connections.map((connection: any) => (
+            <span
+              key={connection._id}
+              className="row inv-library-chip"
+              style={{ gap: 6, alignItems: "center", padding: "2px 6px 2px 8px", border: "1px solid var(--border)", borderRadius: 999 }}
+              title={`${providerLabel(connection.provider)} · synced ${relativeSince(connection.lastSyncedAtISO)}`}
+            >
+              <span
+                aria-hidden
+                style={{ width: 7, height: 7, borderRadius: 999, background: connection.status === "active" ? "var(--success)" : connection.status === "disabled" ? "var(--text-tertiary)" : "var(--warning, orange)" }}
+              />
+              <button className="btn btn--ghost btn--sm" style={{ padding: "0 2px" }} onClick={() => openEditConnection(connection)} title="Edit library">
+                {connection.displayName}
+              </button>
+              {connection.provider === "openboxes" && (
+                <button className="btn btn--ghost btn--sm btn--icon" onClick={() => { setSyncConnectionId(connection._id); setDrawer("openboxes"); }} aria-label={`Sync ${connection.displayName}`} title="Import an OpenBoxes snapshot">
+                  <RefreshCw size={12} />
+                </button>
+              )}
+              <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Remove ${connection.displayName}`} title="Remove library" onClick={() => removeConnection(connection)}>
+                <Trash2 size={12} />
+              </button>
             </span>
-          ) : (
-            connections.map((connection: any) => (
-              <div key={connection._id} className="row" style={{ gap: 8, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
-                <span>
-                  <strong>{connection.displayName}</strong>
-                  <span className="muted"> · {providerLabel(connection.provider)} · {relativeSince(connection.lastSyncedAtISO)}</span>
-                </span>
-                <span className="row" style={{ gap: 6, alignItems: "center" }}>
-                  <Badge tone={connection.status === "active" ? "success" : connection.status === "disabled" ? "neutral" : "warn"}>
-                    {connection.status === "needs_attention" ? "needs attention" : connection.status}
-                  </Badge>
-                  {connection.provider === "openboxes" && (
-                    <button className="btn btn--sm" onClick={() => { setSyncConnectionId(connection._id); setDrawer("openboxes"); }} title="Import an OpenBoxes snapshot into this library">
-                      <RefreshCw size={12} /> Sync
-                    </button>
-                  )}
-                  <button className="btn btn--sm btn--ghost" onClick={() => openEditConnection(connection)}>Edit</button>
-                  <button className="btn btn--sm btn--ghost btn--icon" aria-label={`Remove ${connection.displayName}`} onClick={() => removeConnection(connection)}>
-                    <Trash2 size={12} />
-                  </button>
-                </span>
-              </div>
-            ))
-          )}
-        </div>
+          ))
+        )}
+        <button className="btn btn--sm btn--ghost" style={{ marginLeft: "auto" }} onClick={openNewConnection}>
+          <Plus size={12} /> Add library
+        </button>
       </div>
 
       <div className="tab-bar" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "8px 0 4px", alignItems: "center" }}>
@@ -763,6 +786,7 @@ export function InventoryPage() {
         <TabButton active={tab === "lots"} onClick={() => setTab("lots")} icon={<Layers size={13} />} label={`Lots & serials (${lotRows.length})`} />
         <TabButton active={tab === "counts"} onClick={() => setTab("counts")} icon={<ClipboardList size={13} />} label={`Physical counts (${openCounts.length})`} />
         <div style={{ flex: 1 }} />
+        {tab === "locations" && <button className="btn btn--sm" onClick={() => setScanOpen(true)}><ScanLine size={12} /> Scan bin</button>}
         {tab === "locations" && <button className="btn btn--sm btn--accent" onClick={openNewLocation}><Plus size={12} /> New location</button>}
         {tab === "lots" && <button className="btn btn--sm btn--accent" onClick={() => openNewLot()}><Plus size={12} /> New lot / serial</button>}
         {tab === "counts" && <button className="btn btn--sm btn--accent" onClick={() => { setCountForm(emptyCountForm()); setDrawer("count-start"); }}><Plus size={12} /> Start count</button>}
@@ -792,6 +816,7 @@ export function InventoryPage() {
           onWhatsHere={(location) => { setDetailLocationId(location._id); setDrawer("location-detail"); }}
           onEdit={openEditLocation}
           onDelete={removeLocation}
+          onLabel={(location) => { setLabelLocationId(location._id); setDrawer("location-label"); }}
         />
       )}
 
@@ -1000,6 +1025,29 @@ export function InventoryPage() {
           <Field label="Active">
             <label className="row" style={{ gap: 6 }}><input type="checkbox" checked={locationForm.active} onChange={(e) => setLocationForm({ ...locationForm, active: e.target.checked })} /> Available for new movements</label>
           </Field>
+          {locationForm.locationType === "custody" && (
+            <Field label="Custodian" hint="Who holds the items in custody. Links to the asset register's custodian.">
+              <Select
+                value={locationForm.custodianMemberId}
+                onChange={(value) => {
+                  const member = ((members ?? []) as any[]).find((m) => m._id === value);
+                  setLocationForm({
+                    ...locationForm,
+                    custodianMemberId: value,
+                    custodianName: member ? `${member.firstName} ${member.lastName}`.trim() : locationForm.custodianName,
+                  });
+                }}
+                options={[{ value: "", label: "Not a member / enter name below" }, ...((members ?? []) as any[]).map((m) => ({ value: m._id, label: `${m.firstName} ${m.lastName}`.trim() }))]}
+              />
+              <input
+                className="input"
+                style={{ marginTop: 6 }}
+                placeholder="Custodian name"
+                value={locationForm.custodianName}
+                onChange={(e) => setLocationForm({ ...locationForm, custodianName: e.target.value })}
+              />
+            </Field>
+          )}
         </div>
       </Drawer>
 
@@ -1014,6 +1062,7 @@ export function InventoryPage() {
             <div className="muted">
               {detailLocation.code ? <span className="mono">{detailLocation.code}</span> : null} {detailLocation.locationType}
               {detailLocation.parentLocationId ? ` · inside ${locationById.get(detailLocation.parentLocationId)?.name ?? "—"}` : ""}
+              {detailLocation.custodianName ? ` · custodian: ${detailLocation.custodianName}` : ""}
             </div>
             <table className="table">
               <thead><tr><th>Item</th><th>SKU</th><th style={{ textAlign: "right" }}>On hand</th><th style={{ textAlign: "right" }}>Available</th></tr></thead>
@@ -1037,6 +1086,34 @@ export function InventoryPage() {
           </div>
         )}
       </Drawer>
+
+      <Drawer
+        open={drawer === "location-label"}
+        onClose={() => { setDrawer(null); setLabelLocationId(null); }}
+        title={labelLocation ? `Label — ${labelLocation.name}` : "Bin label"}
+      >
+        {labelLocation && (
+          <div className="stack" style={{ gap: 12 }}>
+            {labelLocation.code ? (
+              <>
+                <AssetQrLabel assetTag={labelLocation.code} name={labelLocation.name} url={labelLocation.code} labelType="qr" />
+                <p className="muted">Print and stick this on the bin. Scanning it with <strong>Scan bin</strong> opens this location.</p>
+                <button className="btn-action" onClick={() => window.print()}>Print label</button>
+              </>
+            ) : (
+              <p className="muted">Add a bin code to this location to generate a scannable label.</p>
+            )}
+          </div>
+        )}
+      </Drawer>
+
+      <AssetScanner
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onDetected={onScanDetected}
+        title="Scan bin"
+        hint="Point the camera at a bin's QR code, or type its code below."
+      />
 
       <Drawer
         open={drawer === "lot"}
