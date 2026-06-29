@@ -6111,6 +6111,7 @@ function staticMutationTableName(moduleName: string, exportName: string) {
   if (moduleName === "fundingSources") return "fundingSources";
   if (moduleName === "financialHub" && exportName.includes("Budget")) return "budgets";
   if (moduleName === "financialHub" && exportName.includes("OperatingSubscription")) return "operatingSubscriptions";
+  if (moduleName === "financialHub" && exportName.includes("Transaction")) return "financialTransactions";
   if (moduleName === "transparency") return "transparency";
   return staticTableNameForModule(moduleName);
 }

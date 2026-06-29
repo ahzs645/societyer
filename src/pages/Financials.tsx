@@ -91,6 +91,7 @@ export function FinancialsPage() {
   const removeBudget = useMutation(api.financialHub.removeBudget);
   const upsertOperatingSubscription = useMutation(api.financialHub.upsertOperatingSubscription);
   const removeOperatingSubscription = useMutation(api.financialHub.removeOperatingSubscription);
+  const updateTransaction = useMutation(api.financialHub.updateTransaction);
   const inventoryItems = useQuery(api.inventoryHub.items, society ? { societyId: society._id } : "skip");
   const inventoryLinks = useQuery(api.inventoryHub.receiptLinks, society ? { societyId: society._id } : "skip");
   const linkInventoryReceipt = useMutation(api.inventoryHub.linkReceipt);
@@ -623,6 +624,13 @@ export function FinancialsPage() {
               objectMetadata={tableData.objectMetadata}
               hydratedView={tableData.hydratedView}
               records={records}
+              onUpdate={async ({ recordId, fieldName, value }) => {
+                await updateTransaction({
+                  id: recordId as Id<"financialTransactions">,
+                  patch: { [fieldName]: value } as any,
+                  actingUserId: actingUserId as any,
+                });
+              }}
             >
               <RecordTableViewToolbar
                 societyId={society._id}
