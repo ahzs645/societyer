@@ -1,26 +1,17 @@
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
-
-/** Normalize a tag list the same way motions.setTags does: trim, lowercase,
- *  drop blanks, dedupe. Keeps the library filter and the motions filter using
- *  the same vocabulary. */
-function normalizeTags(tags?: string[]): string[] {
-  return Array.from(
-    new Set((tags ?? []).map((t) => String(t ?? "").trim().toLowerCase()).filter(Boolean)),
-  );
-}
+import {
+  listPortable,
+  createPortable,
+  updatePortable,
+  removePortable,
+} from "../shared/functions/motionTemplates";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const rows = await ctx.db
-      .query("motionTemplates")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    rows.sort((a, b) => a.title.localeCompare(b.title));
-    return rows;
-  },
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -33,20 +24,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const now = new Date().toISOString();
-    return await ctx.db.insert("motionTemplates", {
-      societyId: args.societyId,
-      title: args.title,
-      body: args.body,
-      tags: normalizeTags(args.tags),
-      requiresSpecialResolution: args.requiresSpecialResolution ?? false,
-      notes: args.notes,
-      usageCount: 0,
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-  },
+  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -59,21 +37,13 @@ export const update = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { templateId, tags, ...patch }) => {
-    const clean: Record<string, unknown> = { updatedAtISO: new Date().toISOString() };
-    for (const [k, v] of Object.entries(patch)) if (v !== undefined) clean[k] = v;
-    if (tags !== undefined) clean.tags = normalizeTags(tags);
-    await ctx.db.patch(templateId, clean);
-    return templateId;
-  },
+  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { templateId: v.id("motionTemplates") },
   returns: v.any(),
-  handler: async (ctx, { templateId }) => {
-    await ctx.db.delete(templateId);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });
 
 const SEED_MOTIONS: Array<{
