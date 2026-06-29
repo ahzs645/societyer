@@ -1,14 +1,12 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
+import { employeesList, employeeCreate, employeeUpdate, employeeRemove } from "../shared/functions/employees";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("employees")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => employeesList(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -38,7 +36,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => ctx.db.insert("employees", args),
+  handler: (ctx, args) => employeeCreate(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -70,15 +68,11 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    await ctx.db.patch(id, patch);
-  },
+  handler: (ctx, args) => employeeUpdate(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("employees") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => employeeRemove(toPortableMutationCtx(ctx), args),
 });

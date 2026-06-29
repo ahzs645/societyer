@@ -1,5 +1,12 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  notesListForRecordPortable,
+  noteCreatePortable,
+  noteUpdatePortable,
+  noteRemovePortable,
+} from "../shared/functions/notes";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const listForRecord = query({
   args: {
@@ -8,15 +15,7 @@ export const listForRecord = query({
     entityId: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, entityType, entityId }) => {
-    return ctx.db
-      .query("notes")
-      .withIndex("by_entity", (q) =>
-        q.eq("societyId", societyId).eq("entityType", entityType).eq("entityId", entityId),
-      )
-      .order("desc")
-      .take(200);
-  },
+  handler: (ctx, args) => notesListForRecordPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -28,31 +27,17 @@ export const create = mutation({
     body: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    if (!args.body.trim()) throw new Error("Note body is required");
-    return ctx.db.insert("notes", {
-      ...args,
-      createdAtISO: new Date().toISOString(),
-    });
-  },
+  handler: (ctx, args) => noteCreatePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
   args: { id: v.id("notes"), body: v.string() },
   returns: v.any(),
-  handler: async (ctx, { id, body }) => {
-    if (!body.trim()) throw new Error("Note body is required");
-    await ctx.db.patch(id, {
-      body,
-      updatedAtISO: new Date().toISOString(),
-    });
-  },
+  handler: (ctx, args) => noteUpdatePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("notes") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => noteRemovePortable(toPortableMutationCtx(ctx), args),
 });
