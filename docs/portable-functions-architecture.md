@@ -1,8 +1,10 @@
 # Portable Functions + `ctx.db` Repository Contract
 
-> Status: **Phase 0 landed** (foundation + first slice). This document is the
-> design record and the migration plan. It realizes — and supersedes the
-> "keep & expand the static mirror" parts of — [`electron-local-first-plan.md`](./electron-local-first-plan.md).
+> Status: **Phases 0–2 landed** — foundation, the live local async runtime, and
+> `convex-test` as a conformance oracle, with the first query (`votingPower`) and
+> first mutation (`upsertRightsClass`) ported. This document is the design record
+> and the migration plan. It realizes — and supersedes the "keep & expand the
+> static mirror" parts of — [`electron-local-first-plan.md`](./electron-local-first-plan.md).
 
 ## Why
 
@@ -80,15 +82,20 @@ static mirror) that both marshalled the same inputs into the shared
    `LocalStoreDb` and asserts identical output, equal to the marshaller and to the
    pinned invariants.
 
-### The sync boundary (why the mirror isn't fully deleted yet)
+### The sync boundary (resolved in Phase 1)
 
 The live static client's reactive recompute (`watchQuery`) is **synchronous** and
 feeds 435 `useQuery` sites; a portable handler on the contract is **async**.
-Rewiring the local reactive core to async is **Phase 1** — until then the static
-mirror keeps a thin synchronous row-load that calls the shared marshaller, so the
-duplicated *logic* is gone even though the async portable handler isn't yet the
-live local executor. The Convex side already runs the portable handler in
-production.
+Phase 1 bridges this in `StaticConvexClient`: a registered portable query runs
+the **real async handler** against the Dexie-backed `ctx.db` on mount and on every
+store change (`watchPortableQuery`), caching its result synchronously so
+`useQuery`'s synchronous `localQueryResult()` sees it. Until the first async
+result resolves, the existing synchronous mirror path supplies an instant value,
+so there is **no loading flash** for ported queries. `query()` and `mutation()`
+route registered portable functions through the runtime directly (mutations run
+inside `db.transaction` → atomic). The static-mirror case for a ported query is
+now just an instant-paint fallback; it is deletable once a loading state is
+acceptable for that query.
 
 ## Atomic local writes (correctness fix)
 
@@ -131,15 +138,19 @@ the concrete providers. Budget the SDK extraction as a separate investment
 
 - **Phase 0 — landed.** Contract + adapters + capabilities + ids + atomic
   `commitBatch`; `votingPower` ported and de-duplicated; differential harness.
-- **Phase 1.** Make the local reactive path async (async executor + synchronous
-  last-result cache for React); route the live local runtime through
-  `PortableRuntime` over `LocalStoreDb`. Convert `providers/*` call-sites to
-  injected `ctx.capabilities`.
-- **Phase 2.** Adopt `convex-test` as a third conformance engine in the harness
-  (highest-fidelity oracle; runs the registered Convex functions). It is an
+- **Phase 1 — landed.** The live local runtime executes the real async portable
+  handler via `PortableRuntime` over `LocalStoreDb` (async executor + synchronous
+  last-result cache in `StaticConvexClient.watchPortableQuery`). `query`/
+  `mutation`/`watchQuery` route registered portable functions through it.
+- **Phase 2 — landed.** `convex-test` adopted as a third conformance engine
+  (`scripts/check-portable-convex-oracle.ts`): runs the ported functions on a
+  **real** Convex `ctx.db` + schema and diffs against the local engines. It is an
   **oracle, not the production engine** (it depends on `node:async_hooks`).
-- **Phase 3.** Port handlers domain-by-domain; delete each mirror case as its
-  differential test goes green; move ledger entries to capability tiers.
+- **Phase 3 — in progress.** Two handlers ported (`votingPower` query,
+  `upsertRightsClass` mutation); ~150 modules remain. Port domain-by-domain;
+  delete each mirror case as its conformance test goes green; move ledger entries
+  to capability tiers. Clean-up: move the dependency-free `convex/lib/orgHubOptions`
+  allowlist under `shared/` so ported handlers don't import upward into `convex/`.
 - **Phase 4.** Electron native-filesystem document provider + packaging
   (per `electron-local-first-plan.md`). No embedded Convex backend.
 
@@ -158,7 +169,9 @@ the concrete providers. Budget the SDK extraction as a separate investment
 ## Run it
 
 ```bash
-npm run test:portable-runtime   # differential conformance (this architecture)
-npm run test:voting-power       # the shared kernel (unchanged)
-npm run test:static-parity      # the mirror gate (still green during migration)
+npm run test:portable-runtime         # Phase 0: differential conformance (MemoryDb vs LocalStoreDb)
+npm run test:portable-live-runtime    # Phase 1: the real StaticConvexClient runs portable handlers live
+npm run test:portable-convex-oracle   # Phase 2: convex-test (real Convex ctx.db) == local engines
+npm run test:voting-power             # the shared kernel (unchanged)
+npm run test:static-parity            # the mirror gate (still green during migration)
 ```

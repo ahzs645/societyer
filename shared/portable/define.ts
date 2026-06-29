@@ -82,6 +82,11 @@ export class PortableRuntime {
     return this.registry.has(name);
   }
 
+  /** The kind of a registered function, or undefined if not registered. */
+  kind(name: string): "query" | "mutation" | undefined {
+    return this.registry.get(name)?.kind;
+  }
+
   private queryCtx(): PortableQueryCtx {
     return {
       db: this.db,

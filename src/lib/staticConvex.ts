@@ -21,6 +21,10 @@ import {
   type StoredRevision,
 } from "../../shared/roleHolderHistory";
 import { summarizeVotingPower, transfersAsOf } from "../../shared/functions/votingPower";
+import { PortableRuntime } from "../../shared/portable/define";
+import { LocalStoreDb } from "../../shared/portable/localRowStore";
+import { makeCapabilities } from "../../shared/portable/capabilities";
+import { PORTABLE_FUNCTIONS } from "../../shared/functions/registry";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../shared/societyDocumentPackets";
 import {
   ycnQueryResult,
@@ -5840,6 +5844,11 @@ class StaticDemoDexieStore {
     return this.rowsStore.onUpdate(listener);
   }
 
+  /** The underlying row store — the LocalRowStore the portable ctx.db runs on. */
+  get rowStore(): LocalDexieRowStore {
+    return this.rowsStore;
+  }
+
   queryResult(name: string, args: StaticArgs) {
     switch (name) {
       case "agendas:getForMeeting":
@@ -6194,10 +6203,20 @@ function staticModel(
 export class StaticConvexClient {
   private store: StaticDemoDexieStore;
   private clientUrl: string;
+  // Phase 1: the live local runtime. Functions registered here run as the REAL
+  // portable handler (shared/functions/*) against the Dexie-backed ctx.db,
+  // instead of the hand-written mirror case. See docs/portable-functions-architecture.md.
+  private portable: PortableRuntime;
 
   constructor(options?: { databaseName?: string; seed?: StaticDemoSeed; url?: string }) {
     this.store = new StaticDemoDexieStore(options?.seed ?? STATIC_DEMO_SEED, options);
     this.clientUrl = options?.url ?? "static://societyer-demo";
+    this.portable = new PortableRuntime({
+      db: new LocalStoreDb(this.store.rowStore),
+      // Local workspaces have no server-only services wired by default; calling
+      // one throws a structured CAPABILITY_UNAVAILABLE rather than silently no-op.
+      capabilities: makeCapabilities({}, (cap) => `This local workspace has no ${cap} service connected.`),
+    }).registerAll(PORTABLE_FUNCTIONS);
   }
 
   get url() {
@@ -6206,9 +6225,63 @@ export class StaticConvexClient {
 
   watchQuery(query: any, args?: StaticArgs) {
     const name = functionName(query);
+    if (this.portable.kind(name) === "query") return this.watchPortableQuery(name, args);
     return {
       onUpdate: (callback: () => void) => this.store.onUpdate(callback),
       localQueryResult: () => mutableQueryResult(name, args, this.store),
+      journal: () => undefined,
+    };
+  }
+
+  /**
+   * Async-executor + synchronous-last-result bridge for a portable query.
+   *
+   * The real async portable handler runs against the Dexie-backed ctx.db on
+   * mount and on every store change; its result is cached synchronously so
+   * React's useQuery (which reads `localQueryResult()` synchronously) sees it.
+   * Until the first async result resolves, the existing synchronous mirror path
+   * supplies an instant value, so there is no loading flash for ported queries.
+   */
+  private watchPortableQuery(name: string, args?: StaticArgs) {
+    const store = this.store;
+    const portable = this.portable;
+    let asyncResult: any;
+    let hasAsync = false;
+    let disposed = false;
+    let unsubStore: (() => void) | null = null;
+    const subscribers = new Set<() => void>();
+
+    const recompute = () => {
+      portable
+        .runQuery(name, args ?? {})
+        .then((next) => {
+          if (disposed) return;
+          hasAsync = true;
+          if (JSON.stringify(next) !== JSON.stringify(asyncResult)) {
+            asyncResult = next;
+            for (const callback of subscribers) callback();
+          }
+        })
+        .catch((error) => {
+          console.warn(`[societyer-local] portable query ${name} failed`, error);
+        });
+    };
+    recompute();
+
+    return {
+      onUpdate: (callback: () => void) => {
+        subscribers.add(callback);
+        if (!unsubStore) unsubStore = store.onUpdate(() => recompute());
+        return () => {
+          subscribers.delete(callback);
+          if (subscribers.size === 0 && unsubStore) {
+            unsubStore();
+            unsubStore = null;
+            disposed = true;
+          }
+        };
+      },
+      localQueryResult: () => (hasAsync ? asyncResult : mutableQueryResult(name, args, store)),
       journal: () => undefined,
     };
   }
@@ -6226,11 +6299,15 @@ export class StaticConvexClient {
   }
 
   query(query: any, args?: StaticArgs) {
-    return Promise.resolve(mutableQueryResult(functionName(query), args, this.store));
+    const name = functionName(query);
+    if (this.portable.kind(name) === "query") return this.portable.runQuery(name, args ?? {});
+    return Promise.resolve(mutableQueryResult(name, args, this.store));
   }
 
   mutation(mutation: any, args?: StaticArgs) {
-    return Promise.resolve(mutationResult(functionName(mutation), args, this.store));
+    const name = functionName(mutation);
+    if (this.portable.kind(name) === "mutation") return this.portable.runMutation(name, args ?? {});
+    return Promise.resolve(mutationResult(name, args, this.store));
   }
 
   action(action: any, args?: StaticArgs) {

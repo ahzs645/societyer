@@ -46,7 +46,8 @@ import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
 import { buildAnnualResolutionContext } from "../shared/annualResolution";
 import { buildDividendResolutionContext } from "../shared/dividendResolution";
 import { votingPowerPortable } from "../shared/functions/votingPower";
-import { toPortableQueryCtx } from "./lib/portable";
+import { upsertRightsClassPortable } from "../shared/functions/rightsClasses";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 /** Keep transfers on/before an as-of date (date-only compare, inclusive). */
 function transfersAsOf(transfers: any[], asOf?: string): any[] {
@@ -303,36 +304,9 @@ export const upsertRightsClass = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { id, ...args }) => {
-    assertAllowedOption("rightsClassTypes", args.classType, "Rights class type", false);
-    assertAllowedOption("rightsClassStatuses", args.status, "Rights class status");
-    const now = new Date().toISOString();
-    const payload = {
-      societyId: args.societyId,
-      className: cleanText(args.className) || "Unnamed class",
-      classType: cleanText(args.classType) || "membership",
-      status: cleanText(args.status) || "active",
-      idPrefix: cleanText(args.idPrefix),
-      highestAssignedNumber: args.highestAssignedNumber,
-      votingRights: cleanText(args.votingRights),
-      votesPerShare: args.votesPerShare,
-      startDate: cleanText(args.startDate),
-      endDate: cleanText(args.endDate),
-      conditionsToHold: cleanText(args.conditionsToHold),
-      conditionsToTransfer: cleanText(args.conditionsToTransfer),
-      conditionsForRemoval: cleanText(args.conditionsForRemoval),
-      otherProvisions: cleanText(args.otherProvisions),
-      sourceDocumentIds: args.sourceDocumentIds ?? [],
-      sourceExternalIds: cleanList(args.sourceExternalIds),
-      notes: cleanText(args.notes),
-      updatedAtISO: now,
-    };
-    if (id) {
-      await ctx.db.patch(id, payload);
-      return id;
-    }
-    return await ctx.db.insert("rightsClasses", { ...payload, createdAtISO: now });
-  },
+  // Portable handler: the same insert/patch runs on the local runtime and the
+  // convex-test oracle. See shared/functions/rightsClasses.ts.
+  handler: (ctx, args) => upsertRightsClassPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsertRightsholdingTransfer = mutation({
