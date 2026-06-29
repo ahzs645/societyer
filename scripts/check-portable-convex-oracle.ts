@@ -28,6 +28,7 @@ import {
 } from "../shared/portable/index";
 import { votingPowerPortable } from "../shared/functions/votingPower";
 import { upsertRightsClassPortable } from "../shared/functions/rightsClasses";
+import { memberCreate, memberUpdate, memberRemove, membersList } from "../shared/functions/members";
 import { buildConvexCapabilities } from "../convex/providers/capabilities";
 
 // convex-test resolves api.legalOperations.* from this module map (we only invoke
@@ -37,6 +38,7 @@ const modules = {
   "./_generated/api.js": () => import("../convex/_generated/api.js"),
   "./_generated/server.js": () => import("../convex/_generated/server.js"),
   "./legalOperations.js": () => import("../convex/legalOperations"),
+  "./members.js": () => import("../convex/members"),
 };
 
 const t = convexTest(schema, modules as any);
@@ -176,6 +178,39 @@ await assert.rejects(
   "local runtime should reject the same invalid classType",
 );
 console.log("✓ upsertRightsClass mutation: real Convex == MemoryDb == LocalStoreDb (create, update, validation)");
+
+// === MEMBERS CRUD across all three engines (create / list / update / remove) ==
+const memberArgs = { firstName: "Dana", lastName: "Lee", membershipClass: "Regular", status: "Active", joinedAt: "2026-01-01", votingRights: true };
+
+// Real Convex stack.
+const cMemberId = await t.mutation(api.members.create, { societyId: seeded.societyId, ...memberArgs });
+let cList: any[] = await t.query(api.members.list, { societyId: seeded.societyId });
+assert.equal(cList.length, 1, "Convex member created");
+assert.equal(cList[0].firstName, "Dana");
+await t.mutation(api.members.update, { id: cMemberId, patch: { status: "Lapsed" } });
+const cMember = await t.run(async (ctx: any) => ctx.db.get(cMemberId));
+assert.equal(cMember.status, "Lapsed", "Convex member patched");
+await t.mutation(api.members.remove, { id: cMemberId });
+cList = await t.query(api.members.list, { societyId: seeded.societyId });
+assert.equal(cList.length, 0, "Convex member removed");
+
+// Local engines: the same CRUD sequence, identical observable behavior.
+async function localMembersCrud(db: TransactionalDb) {
+  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}) })
+    .register(definePortableMutation({ name: "members:create", handler: memberCreate }))
+    .register(definePortableMutation({ name: "members:update", handler: memberUpdate }))
+    .register(definePortableMutation({ name: "members:remove", handler: memberRemove }))
+    .register(definePortableQuery({ name: "members:list", handler: membersList }));
+  const id = await rt.runMutation<string>("members:create", { societyId: "soc_local", ...memberArgs });
+  assert.equal((await rt.runQuery<any[]>("members:list", { societyId: "soc_local" })).length, 1);
+  await rt.runMutation("members:update", { id, patch: { status: "Lapsed" } });
+  assert.equal((await db.get(id))?.status, "Lapsed");
+  await rt.runMutation("members:remove", { id });
+  assert.equal((await rt.runQuery<any[]>("members:list", { societyId: "soc_local" })).length, 0);
+}
+await localMembersCrud(new MemoryDb());
+await localMembersCrud(new LocalStoreDb(new MemoryRowStore()));
+console.log("✓ members CRUD: real Convex == MemoryDb == LocalStoreDb (create/list/update/remove)");
 
 // === CAPABILITY bag: the converted notifications.sendDigest call-site ==========
 {

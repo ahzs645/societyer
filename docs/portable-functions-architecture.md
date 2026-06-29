@@ -147,17 +147,21 @@ the concrete providers. Budget the SDK extraction as a separate investment
   **real** Convex `ctx.db` + schema and diffs against the local engines. It is an
   **oracle, not the production engine** (it depends on `node:async_hooks`).
 - **Phase 3 — in progress.** Ported so far: `votingPower` (query),
-  `upsertRightsClass` (mutation), and the cap-table transfer domain
+  `upsertRightsClass` (mutation), the cap-table transfer domain
   (`upsertRightsholdingTransfer` + `syncRightsHoldings`, `removeRightsholdingTransfer`,
-  `removeRightsClass`) — the latter exercises the **multi-row** atomic write
-  (`scripts/check-portable-captable.ts`). ~150 modules remain. Port
-  domain-by-domain; delete each mirror case as its conformance test goes green.
-  Clean-up **done**: the dependency-free option allowlist moved to
-  `shared/orgHubOptions.ts` (re-exported from `convex/lib/orgHubOptions` for
-  existing Convex importers), so ported handlers no longer import upward into
-  `convex/`. Note: the transfer mutations are Convex-production + conformance-proven
-  but **not yet in the live local registry** — `syncRightsHoldings` rewrites derived
-  holdings, so the live swap waits on a demo-fixture review.
+  `removeRightsClass`) — the **multi-row** atomic write
+  (`scripts/check-portable-captable.ts`) — and the **members** CRUD domain
+  (`list`/`get`/`create`/`update`/`remove`; `merge` deferred — it rewires FKs
+  across ~20 tables behind a Director role). All are live in the registry. ~145
+  modules remain; port domain-by-domain, deleting each mirror case as its
+  conformance test goes green. Clean-up **done**: the option allowlist moved to
+  `shared/orgHubOptions.ts` (re-exported from `convex/lib/orgHubOptions`).
+  Demo-fixture review **done**: the demo seed has no rights-ledger rows, so
+  `syncRightsHoldings` has nothing to rewrite — the transfer mutations are now in
+  the live registry (verified by `check-portable-live-runtime.ts`).
+- **CI:** `.github/workflows/portable-conformance.yml` runs the four
+  `test:portable-*` suites + the parity gate + domain regressions on every push/PR,
+  so a port that breaks cross-runtime agreement fails CI.
 - **Phase 4 — partly present.** The Electron native-filesystem document provider
   already exists (`electron/documents.ts` native read/write + `src/lib/documentStorage.ts`
   adapter + preload bridge) and passes `npm run desktop:typecheck`. The local

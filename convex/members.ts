@@ -1,21 +1,19 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireRole } from "./users";
+import { membersList, memberGet, memberCreate, memberUpdate, memberRemove } from "../shared/functions/members";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("members")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => membersList(toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("members") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => memberGet(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -34,7 +32,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => ctx.db.insert("members", args),
+  handler: (ctx, args) => memberCreate(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -56,17 +54,13 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    await ctx.db.patch(id, patch);
-  },
+  handler: (ctx, args) => memberUpdate(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("members") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => memberRemove(toPortableMutationCtx(ctx), args),
 });
 
 // Tables/columns that reference members by id. Only top-level scalar FK columns

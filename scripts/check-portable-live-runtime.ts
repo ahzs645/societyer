@@ -104,5 +104,43 @@ const watch = client.watchQuery("legalOperations:votingPower", { societyId });
   console.log("✓ client.mutation() runs the portable upsertRightsClass live (create + update persist)");
 }
 
+// === 5. members CRUD through the live client ==================================
+{
+  const created: any = await client.mutation("members:create", {
+    societyId, firstName: "Dana", lastName: "Lee", membershipClass: "Regular", status: "Active", joinedAt: "2026-01-01", votingRights: true,
+  });
+  assert.ok(created, "member create returns id");
+  const list: any[] = await client.query("members:list", { societyId });
+  assert.ok(list.some((m) => m._id === created && m.firstName === "Dana"), "member appears in the live list");
+
+  await client.mutation("members:update", { id: created, patch: { status: "Lapsed" } });
+  const got: any = await client.query("members:get", { id: created });
+  assert.equal(got?.status, "Lapsed", "member update persisted");
+
+  await client.mutation("members:remove", { id: created });
+  const after: any[] = await client.query("members:list", { societyId });
+  assert.ok(!after.some((m) => m._id === created), "member removed from the live store");
+  console.log("✓ members CRUD runs through the live client (create/list/update/get/remove)");
+}
+
+// === 6. a promoted transfer mutation derives holdings live (multi-row sync) ====
+{
+  const fresh = new StaticConvexClient({ seed: {}, databaseName: "portable-transfer-live" });
+  const soc = "soc_xfer_live";
+  const classId: any = await fresh.mutation("legalOperations:upsertRightsClass", {
+    societyId: soc, className: "Common", classType: "share", status: "active", votesPerShare: 1,
+  });
+  await fresh.mutation("legalOperations:upsertRightsholdingTransfer", {
+    societyId: soc, transferType: "issuance", status: "posted", rightsClassId: classId, destinationRoleHolderId: "rh_x", quantity: 40, transferDate: "2026-02-01",
+  });
+  // rightsLedger is the (non-portable) mirror query — it reads the same store the
+  // portable transfer wrote its derived holdings to.
+  const ledger: any = await fresh.query("legalOperations:rightsLedger", { societyId: soc });
+  assert.equal(ledger.holdings.length, 1, "issuing a transfer derives exactly one holding");
+  assert.equal(ledger.holdings[0].quantity, 40, "derived holding quantity");
+  await fresh.close();
+  console.log("✓ live transfer: upsertRightsholdingTransfer runs syncRightsHoldings live (40-share holding derived)");
+}
+
 await client.close();
 console.log("\nAll portable LIVE-runtime checks passed.");

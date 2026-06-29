@@ -1,0 +1,45 @@
+name: Portable conformance
+
+# Guards every future handler port: the portable ctx.db contract, the live local
+# runtime, the convex-test oracle, and the multi-row cap-table write must all stay
+# in agreement. See docs/portable-functions-architecture.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Portable conformance suites
+        run: |
+          npm run test:portable-runtime
+          npm run test:portable-live-runtime
+          npm run test:portable-convex-oracle
+          npm run test:portable-captable
+
+      - name: Static-mirror parity gate
+        run: npm run test:static-parity
+
+      - name: Domain regressions
+        run: |
+          npm run test:voting-power
+          npm run test:corporation-equity
