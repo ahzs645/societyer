@@ -19,6 +19,7 @@ import {
   corporationPacketDocxMimeType,
 } from "../../shared/corporationPacketDocx";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
+import { riversideGamingProgramStatement } from "../../shared/programStatement";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
@@ -2481,6 +2482,26 @@ const tables: Record<string, any[]> = {
         },
       ],
     },
+    {
+      _id: "static_grant_gaming",
+      societyId: SOCIETY_ID,
+      title: "Community Gaming Grant — Community Hall Programs",
+      funder: "BC Community Gaming Grants",
+      funderName: "BC Community Gaming Grants",
+      program: "Community Hall Programs",
+      status: "Active",
+      amountRequestedCents: 500000,
+      amountAwardedCents: 400000,
+      restrictedPurpose: "Community Hall programming (gaming grant eligible costs)",
+      nextAction: "File program actuals & budget with the renewal application",
+      startDate: "2024-04-01",
+      endDate: "2025-03-31",
+      nextReportDueAtISO: "2026-06-30",
+      useOfFunds: [
+        { label: "Advertising", amountCents: 1140000, notes: "Program promotion and outreach." },
+        { label: "Equipment Rentals", amountCents: 220000 },
+      ],
+    },
   ],
   grantApplications: [
     {
@@ -2503,7 +2524,39 @@ const tables: Record<string, any[]> = {
       status: "Draft",
     },
   ],
-  grantTransactions: [],
+  grantTransactions: [
+    {
+      _id: "static_grant_txn_gaming_inflow",
+      societyId: SOCIETY_ID,
+      grantId: "static_grant_gaming",
+      date: "2024-05-15",
+      direction: "inflow",
+      amountCents: 400000,
+      description: "Community Gaming Grant payment received",
+    },
+    {
+      _id: "static_grant_txn_gaming_outflow",
+      societyId: SOCIETY_ID,
+      grantId: "static_grant_gaming",
+      date: "2025-02-28",
+      direction: "outflow",
+      amountCents: 380000,
+      description: "Program advertising and equipment rentals",
+    },
+  ],
+  programStatements: [
+    {
+      _id: "static_program_statement_gaming",
+      ...riversideGamingProgramStatement({
+        societyId: SOCIETY_ID,
+        grantId: "static_grant_gaming",
+        priorFiscalYearLabel: "2024-2025",
+        currentFiscalYearLabel: "2025-2026",
+      }),
+      createdAtISO: "2026-05-01T00:00:00.000Z",
+      updatedAtISO: "2026-05-01T00:00:00.000Z",
+    },
+  ],
   grantSources: [
     {
       _id: "static_grant_source_cihr_researchnet",

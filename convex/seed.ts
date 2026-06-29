@@ -1,6 +1,7 @@
 import { mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { assertMaintenanceToken, serviceTokenValidator } from "./lib/serviceAuth";
+import { riversideGamingProgramStatement } from "../shared/programStatement";
 
 // Seed the demo society "Riverside Community Society".
 // Idempotent-ish: if a society already exists, it wipes everything first.
@@ -605,6 +606,59 @@ export const run = mutation({
         { role: "Executive Director", amountCents: 9200000 },
         { role: "Programs Manager", amountCents: 7800000 },
       ],
+    });
+
+    // Community Gaming Grant + its program actuals & budget statement. Mirrors
+    // the BC Community Gaming Grants supporting-document example so the year-end
+    // reports (and their Word/PDF exports) have real data to render.
+    const nowISO = new Date().toISOString();
+    const gamingGrantId = await ctx.db.insert("grants", {
+      societyId,
+      title: "Community Gaming Grant — Community Hall Programs",
+      funder: "BC Community Gaming Grants",
+      program: "Community Hall Programs",
+      status: "Active",
+      amountRequestedCents: 500000,
+      amountAwardedCents: 400000,
+      restrictedPurpose: "Community Hall programming (gaming grant eligible costs)",
+      nextAction: "File program actuals & budget with the renewal application",
+      startDate: "2024-04-01",
+      endDate: "2025-03-31",
+      nextReportDueAtISO: "2026-06-30",
+      useOfFunds: [
+        { label: "Advertising", amountCents: 1140000, notes: "Program promotion and outreach." },
+        { label: "Equipment Rentals", amountCents: 220000 },
+      ],
+      createdAtISO: nowISO,
+      updatedAtISO: nowISO,
+    });
+    await ctx.db.insert("grantTransactions", {
+      societyId,
+      grantId: gamingGrantId,
+      date: "2024-05-15",
+      direction: "inflow",
+      amountCents: 400000,
+      description: "Community Gaming Grant payment received",
+    });
+    await ctx.db.insert("grantTransactions", {
+      societyId,
+      grantId: gamingGrantId,
+      date: "2025-02-28",
+      direction: "outflow",
+      amountCents: 380000,
+      description: "Program advertising and equipment rentals",
+    });
+    await ctx.db.insert("programStatements", {
+      ...riversideGamingProgramStatement({
+        societyId,
+        grantId: gamingGrantId,
+        priorFiscalYearLabel: "2024-2025",
+        currentFiscalYearLabel: "2025-2026",
+      }),
+      societyId,
+      grantId: gamingGrantId,
+      createdAtISO: nowISO,
+      updatedAtISO: nowISO,
     });
 
     // Committees

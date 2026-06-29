@@ -802,6 +802,179 @@ function restrictedFunds() {
   ];
 }
 
+function staticAnnualStatement(args: StaticArgs, store?: StaticDemoDexieStore | null) {
+  const fiscalYear = args?.fiscalYear;
+  const finRows = store?.listRows("financials", args) ?? scopedRows(financials, args);
+  const financial =
+    finRows
+      .filter((row: any) => row.fiscalYear === fiscalYear)
+      .sort((a: any, b: any) => String(b.periodEnd ?? "").localeCompare(String(a.periodEnd ?? "")))[0] ?? null;
+  const budgetRows = (store?.listRows("budgets", args) ?? scopedRows(budgets, args)).filter(
+    (b: any) => b.fiscalYear === fiscalYear,
+  );
+  const txns = store?.listRows("financialTransactions", args) ?? scopedRows(financialTransactions, args);
+
+  const incomeByCategory = new Map<string, number>();
+  const expenseByCategory = new Map<string, number>();
+  const actualByCategory = new Map<string, number>();
+  for (const txn of txns) {
+    const cat = txn.category ?? "Uncategorized";
+    const cents = Math.abs(txn.amountCents ?? 0);
+    actualByCategory.set(cat, (actualByCategory.get(cat) ?? 0) + cents);
+    if ((txn.amountCents ?? 0) > 0) incomeByCategory.set(cat, (incomeByCategory.get(cat) ?? 0) + cents);
+    else expenseByCategory.set(cat, (expenseByCategory.get(cat) ?? 0) + cents);
+  }
+  const revenueCents = financial?.revenueCents ?? Array.from(incomeByCategory.values()).reduce((a, b) => a + b, 0);
+  const expensesCents = financial?.expensesCents ?? Array.from(expenseByCategory.values()).reduce((a, b) => a + b, 0);
+
+  return {
+    fiscalYear,
+    financial,
+    revenueCents,
+    expensesCents,
+    surplusCents: revenueCents - expensesCents,
+    netAssetsCents: financial?.netAssetsCents ?? null,
+    restrictedFundsCents: financial?.restrictedFundsCents ?? null,
+    auditStatus: financial?.auditStatus ?? null,
+    auditorName: financial?.auditorName ?? null,
+    approvedByBoardAt: financial?.approvedByBoardAt ?? null,
+    remunerationDisclosures: financial?.remunerationDisclosures ?? [],
+    presentedAtMeeting: financial?.presentedAtMeetingId ? byId(meetings, financial.presentedAtMeetingId) : null,
+    budgets: budgetRows.map((b: any) => ({
+      category: b.category,
+      plannedCents: b.plannedCents,
+      actualCents: actualByCategory.get(b.category) ?? 0,
+      varianceCents: (actualByCategory.get(b.category) ?? 0) - b.plannedCents,
+      notes: b.notes,
+    })),
+    incomeByCategory: Array.from(incomeByCategory, ([category, cents]) => ({ category, cents })),
+    expenseByCategory: Array.from(expenseByCategory, ([category, cents]) => ({ category, cents })),
+  };
+}
+
+function staticRestrictedFundStatement(args: StaticArgs, store?: StaticDemoDexieStore | null) {
+  const grantsRows = store?.listRows("grants", args) ?? scopedRows(tables.grants, args);
+  const txnsAll = store?.listRows("grantTransactions", args) ?? scopedRows(tables.grantTransactions, args);
+  const restricted = grantsRows.filter(
+    (g: any) => g.restrictedPurpose && ["Awarded", "Active", "Closed"].includes(g.status),
+  );
+  const funds = restricted.map((grant: any) => {
+    const txns = txnsAll.filter((t: any) => String(t.grantId) === String(grant._id));
+    let receiptsCents = 0;
+    let disbursementsCents = 0;
+    for (const t of txns) {
+      if (t.direction === "inflow") receiptsCents += Math.abs(t.amountCents ?? 0);
+      else if (t.direction === "outflow") disbursementsCents += Math.abs(t.amountCents ?? 0);
+    }
+    const openingCents = 0;
+    return {
+      grantId: grant._id,
+      title: grant.title,
+      funder: grant.funder,
+      purpose: grant.restrictedPurpose,
+      awardedCents: grant.amountAwardedCents ?? 0,
+      openingCents,
+      receiptsCents,
+      disbursementsCents,
+      closingCents: openingCents + receiptsCents - disbursementsCents,
+      status: grant.status,
+    };
+  });
+  const totals = funds.reduce(
+    (acc: any, f: any) => ({
+      openingCents: acc.openingCents + f.openingCents,
+      receiptsCents: acc.receiptsCents + f.receiptsCents,
+      disbursementsCents: acc.disbursementsCents + f.disbursementsCents,
+      closingCents: acc.closingCents + f.closingCents,
+    }),
+    { openingCents: 0, receiptsCents: 0, disbursementsCents: 0, closingCents: 0 },
+  );
+  return { funds, totals };
+}
+
+function staticYearEndReadiness(args: StaticArgs, store?: StaticDemoDexieStore | null) {
+  const fiscalYear = args?.fiscalYear;
+  const financial = (store?.listRows("financials", args) ?? scopedRows(financials, args)).find(
+    (row: any) => row.fiscalYear === fiscalYear,
+  ) ?? null;
+  const filingsRows = store?.listRows("filings", args) ?? scopedRows(filings, args);
+  const isFiled = (pred: (kind: string) => boolean) =>
+    filingsRows.some(
+      (f: any) => pred(String(f.kind ?? "").toLowerCase()) && /filed|complete|submitted/i.test(String(f.status ?? "")),
+    );
+  const meetingsRows = store?.listRows("meetings", args) ?? scopedRows(meetings, args);
+  const agmHeld = meetingsRows.some(
+    (m: any) =>
+      /agm|annual/i.test(String(m.type ?? "")) && /held|complete|past|done|true/i.test(String(m.status ?? m.heldAt ?? "")),
+  );
+  const grantReportsRows = store?.listRows("grantReports", args) ?? scopedRows(tables.grantReports, args);
+  const outstanding = grantReportsRows.filter((r: any) => !/submitted|complete/i.test(String(r.status ?? "")));
+  const statementsRows = store?.listRows("programStatements", args) ?? scopedRows(tables.programStatements, args);
+
+  const item = (
+    key: string,
+    label: string,
+    ok: boolean,
+    detail: string,
+    href: string,
+    tone: "complete" | "attention" | "upcoming" = ok ? "complete" : "attention",
+  ) => ({ key, label, status: tone, ok, detail, href });
+
+  const items = [
+    item(
+      "financialsApproved",
+      "Year-end financial statements approved by the board",
+      Boolean(financial?.approvedByBoardAt),
+      financial?.approvedByBoardAt ? `Approved ${financial.approvedByBoardAt}.` : "No board approval date recorded.",
+      "/app/financials",
+    ),
+    item(
+      "financialsPresented",
+      "Financial statements presented to members at the AGM",
+      Boolean(financial?.presentedAtMeetingId),
+      financial?.presentedAtMeetingId ? "Linked to an AGM meeting record." : "Not yet linked to an AGM.",
+      "/app/financials",
+    ),
+    item(
+      "annualReport",
+      "BC annual report filed",
+      isFiled((k) => k.includes("annual")),
+      isFiled((k) => k.includes("annual")) ? "Annual report marked filed." : "Annual report not marked filed.",
+      "/app/filings",
+    ),
+    ...(society?.isCharity
+      ? [
+          item(
+            "t3010",
+            "CRA T3010 charity return filed",
+            isFiled((k) => k.includes("t3010") || k.includes("charity")),
+            isFiled((k) => k.includes("t3010") || k.includes("charity")) ? "T3010 marked filed." : "T3010 not marked filed.",
+            "/app/filings",
+          ),
+        ]
+      : []),
+    item("agm", "Annual general meeting held", agmHeld, agmHeld ? "An AGM is recorded as held." : "No held AGM found.", "/app/meetings"),
+    item(
+      "grantReports",
+      "Grant reports submitted",
+      outstanding.length === 0,
+      outstanding.length === 0 ? "All grant reports submitted." : `${outstanding.length} grant report(s) outstanding.`,
+      "/app/grants",
+      outstanding.length === 0 ? "complete" : "attention",
+    ),
+    item(
+      "programStatements",
+      "Program actuals & budget statements prepared",
+      statementsRows.length > 0,
+      statementsRows.length > 0 ? `${statementsRows.length} program statement(s) prepared.` : "No program statements prepared yet.",
+      "/app/financials/year-end",
+      statementsRows.length > 0 ? "complete" : "upcoming",
+    ),
+  ];
+  const completed = items.filter((i) => i.ok).length;
+  return { fiscalYear, items, completed, total: items.length, ready: items.every((i) => i.ok) };
+}
+
 function staticDocumentReviewQueues() {
   const taskCounts = new Map<string, number>();
   for (const task of tasks.filter((task) => task.status !== "Done" && task.documentId)) {
@@ -2136,6 +2309,12 @@ function queryCasesTransparency8(name: string, args: StaticArgs, store?: StaticD
       return profitAndLoss(args);
     case "treasury:restrictedFunds":
       return restrictedFunds();
+    case "yearEnd:annualStatement":
+      return staticAnnualStatement(args, store);
+    case "yearEnd:restrictedFundStatement":
+      return staticRestrictedFundStatement(args, store);
+    case "yearEnd:readiness":
+      return staticYearEndReadiness(args, store);
     case "orgChartAssignments:list":
       return tables.orgChartAssignments;
     case "users:get":
