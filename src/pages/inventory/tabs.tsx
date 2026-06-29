@@ -241,7 +241,7 @@ export function StockTab({
 // Order locations as a depth-first tree (parent immediately followed by its
 // children) and record each row's depth so the name cell can indent. Locations
 // whose parent is missing/filtered are treated as roots so nothing disappears.
-function orderLocationTree(locations: any[], collapsedIds?: Set<string>) {
+function orderLocationTree(locations: any[], collapsedIds?: Set<string>, protectedRootIds?: Set<string>) {
   const byId = new Map(locations.map((row) => [String(row._id), row]));
   const children = new Map<string, any[]>();
   const roots: any[] = [];
@@ -255,12 +255,25 @@ function orderLocationTree(locations: any[], collapsedIds?: Set<string>) {
       roots.push(row);
     }
   }
+  // When a single overarching location contains everything, it's just a wrapper —
+  // infer it and show its children at the top level instead of nesting the whole
+  // register under one row. Guarded: never hide a root that itself holds stock.
+  let topLevel = roots;
+  let inferredRoot: any = null;
+  if (roots.length === 1) {
+    const sole = roots[0];
+    const kids = children.get(String(sole._id)) ?? [];
+    if (kids.length > 0 && !protectedRootIds?.has(String(sole._id))) {
+      topLevel = kids;
+      inferredRoot = sole;
+    }
+  }
   const sortByName = (a: any, b: any) => String(a.name ?? "").localeCompare(String(b.name ?? ""));
   const ordered: any[] = [];
   const depthById = new Map<string, number>();
   const childCountById = new Map<string, number>();
   const visit = (row: any, depth: number) => {
-    const kids = (children.get(String(row._id)) ?? []).sort(sortByName);
+    const kids = (children.get(String(row._id)) ?? []).slice().sort(sortByName);
     depthById.set(String(row._id), depth);
     childCountById.set(String(row._id), kids.length);
     ordered.push(row);
@@ -268,8 +281,8 @@ function orderLocationTree(locations: any[], collapsedIds?: Set<string>) {
     if (collapsedIds?.has(String(row._id))) return;
     for (const child of kids) visit(child, depth + 1);
   };
-  for (const root of roots.sort(sortByName)) visit(root, 0);
-  return { ordered, depthById, childCountById };
+  for (const root of topLevel.slice().sort(sortByName)) visit(root, 0);
+  return { ordered, depthById, childCountById, inferredRoot };
 }
 
 export function LocationsTab({
@@ -294,7 +307,13 @@ export function LocationsTab({
   onToggleCollapse: (id: string) => void;
 }) {
   const { balancesByLocationId } = maps;
-  const { ordered, depthById, childCountById } = orderLocationTree(locations, collapsedIds);
+  // Locations that hold stock directly — a sole overarching root is only inferred
+  // away when it isn't itself storing anything.
+  const locationsWithDirectStock = new Set<string>();
+  for (const [locId, rows] of balancesByLocationId) {
+    if ((rows ?? []).some((b) => (b.quantityOnHand ?? 0) > 0)) locationsWithDirectStock.add(String(locId));
+  }
+  const { ordered, depthById, childCountById, inferredRoot } = orderLocationTree(locations, collapsedIds, locationsWithDirectStock);
   // Roll child contents up into ancestors so a facility/room shows everything
   // stored beneath it, not just items placed directly on it. Walk the full
   // location set (not the collapse-filtered `ordered`) so totals stay correct.
@@ -311,6 +330,13 @@ export function LocationsTab({
     return direct + kids.reduce((sum, kid) => sum + rollupQty(kid), 0);
   };
   return (
+    <>
+    {inferredRoot && (
+      <div className="muted" style={{ display: "flex", gap: 6, alignItems: "center", margin: "0 0 6px", fontSize: 13 }}>
+        <MapPin size={12} /> Within <strong style={{ color: "var(--text-secondary)" }}>{inferredRoot.name}</strong>
+        <button className="btn btn--ghost btn--sm" style={{ padding: "0 4px" }} onClick={() => onEdit(inferredRoot)}><Pencil size={12} /> edit</button>
+      </div>
+    )}
     <DataTable
       label="Locations & bins"
       icon={<MapPin size={14} />}
@@ -383,6 +409,7 @@ export function LocationsTab({
         </>
       )}
     />
+    </>
   );
 }
 
