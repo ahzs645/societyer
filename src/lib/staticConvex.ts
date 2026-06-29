@@ -711,34 +711,48 @@ function annualCycleSummary(args: StaticArgs) {
 
 
 
-function financialSummary() {
+// Reads that should reflect writes (e.g. CSV-imported rows) prefer the local
+// store when one is active, falling back to the module fixtures for non-store
+// contexts (SSR, tests). financialTransactions/financialAccounts are seeded into
+// the store, so listRows returns the full set including anything imported.
+function storeFinancialTransactions(store?: StaticDemoDexieStore | null, args?: StaticArgs) {
+  return scopedRows(store?.listRows("financialTransactions", args) ?? financialTransactions, args);
+}
+function storeFinancialAccounts(store?: StaticDemoDexieStore | null, args?: StaticArgs) {
+  return scopedRows(store?.listRows("financialAccounts", args) ?? financialAccounts, args);
+}
+
+function financialSummary(store?: StaticDemoDexieStore | null, args?: StaticArgs) {
+  const accounts = storeFinancialAccounts(store, args);
+  const transactions = storeFinancialTransactions(store, args);
+  const budgetRows = scopedRows(store?.listRows("budgets", args) ?? budgets, args);
   return {
-    totalBalance: financialAccounts.reduce((sum, account) => sum + account.balanceCents, 0),
-    unrestricted: financialAccounts
+    totalBalance: accounts.reduce((sum, account) => sum + account.balanceCents, 0),
+    unrestricted: accounts
       .filter((account) => !account.isRestricted)
       .reduce((sum, account) => sum + account.balanceCents, 0),
-    restrictedAccounts: financialAccounts
+    restrictedAccounts: accounts
       .filter((account) => account.isRestricted)
       .map((account) => ({
         name: account.name,
         balanceCents: account.balanceCents,
         purpose: account.restrictedPurpose,
       })),
-    budgetRows: budgets.map((budget) => ({
+    budgetRows: budgetRows.map((budget) => ({
       ...budget,
-      actualCents: financialTransactions
+      actualCents: transactions
         .filter((transaction) => transaction.category === budget.category)
         .reduce((sum, transaction) => sum + Math.abs(transaction.amountCents), 0),
     })),
-    recentTransactions: financialTransactions,
+    recentTransactions: transactions,
   };
 }
 
 
-function profitAndLoss(args: StaticArgs) {
+function profitAndLoss(args: StaticArgs, store?: StaticDemoDexieStore | null) {
   const from = args?.from ?? "2026-01-01";
   const to = args?.to ?? "2026-12-31";
-  const rows = financialTransactions.filter((transaction) => transaction.date >= from && transaction.date <= to);
+  const rows = storeFinancialTransactions(store, args).filter((transaction) => transaction.date >= from && transaction.date <= to);
   const incomeByCategoryMap = new Map<string, number>();
   const expenseByCategoryMap = new Map<string, number>();
   let totalIncomeCents = 0;
@@ -769,9 +783,10 @@ function profitAndLoss(args: StaticArgs) {
   };
 }
 
-function budgetVariance() {
-  return budgets.map((budget) => {
-    const actualCents = financialTransactions
+function budgetVariance(store?: StaticDemoDexieStore | null, args?: StaticArgs) {
+  const transactions = storeFinancialTransactions(store, args);
+  return (scopedRows(store?.listRows("budgets", args) ?? budgets, args)).map((budget) => {
+    const actualCents = transactions
       .filter((transaction) => transaction.category === budget.category)
       .reduce((sum, transaction) => sum + Math.abs(transaction.amountCents), 0);
 
@@ -2101,7 +2116,7 @@ function queryCasesAccounting5(name: string, args: StaticArgs, store?: StaticDem
     case "accounting:boardAuditorPackage":
       return staticBoardAuditorPackage(staticAccountingSeed(store, args), args);
     case "financialHub:accounts":
-      return financialAccounts;
+      return storeFinancialAccounts(store, args);
     case "financialHub:connections":
       return financialConnections;
     case "financialHub:getConnection":
@@ -2109,13 +2124,16 @@ function queryCasesAccounting5(name: string, args: StaticArgs, store?: StaticDem
     case "financialHub:oauthUrl":
       return { provider: "wave", live: false, demoAvailable: true };
     case "financialHub:summary":
-      return financialSummary();
-    case "financialHub:transactions":
-      return financialTransactions.slice(0, args?.limit ?? financialTransactions.length);
+      return financialSummary(store, args);
+    case "financialHub:transactions": {
+      const rows = storeFinancialTransactions(store, args).slice().sort((a, b) => b.date.localeCompare(a.date));
+      return rows.slice(0, args?.limit ?? rows.length);
+    }
     case "financialHub:transactionsForAccountExternalId": {
-      const account = financialAccounts.find((row) => row.externalId === args?.externalId) ?? null;
+      const accounts = storeFinancialAccounts(store, args);
+      const account = accounts.find((row) => row.externalId === args?.externalId) ?? null;
       const rows = account
-        ? financialTransactions
+        ? storeFinancialTransactions(store, args)
             .filter((row) => row.accountId === account._id)
             .sort((a, b) => b.date.localeCompare(a.date))
         : [];
@@ -2126,13 +2144,14 @@ function queryCasesAccounting5(name: string, args: StaticArgs, store?: StaticDem
       };
     }
     case "financialHub:transactionsForCounterpartyExternalId": {
-      const rows = financialTransactions
+      const accounts = storeFinancialAccounts(store, args);
+      const rows = storeFinancialTransactions(store, args)
         .filter((row) => row.counterpartyExternalId === args?.externalId)
         .filter((row) => !args?.resourceType || row.counterpartyResourceType === args.resourceType)
         .sort((a, b) => b.date.localeCompare(a.date));
       return {
         transactions: rows.slice(0, args?.limit ?? 500).map((row) => {
-          const account = financialAccounts.find((candidate) => candidate._id === row.accountId) ?? null;
+          const account = accounts.find((candidate) => candidate._id === row.accountId) ?? null;
           const accountResource = account
             ? waveCacheResources.find((resource) => resource.resourceType === "account" && resource.externalId === account.externalId) ?? null
             : null;
@@ -2144,7 +2163,8 @@ function queryCasesAccounting5(name: string, args: StaticArgs, store?: StaticDem
     }
     case "financialHub:transactionsForCategoryAccountExternalId": {
       const normalizedLabel = normalizeStaticCategoryLabel(args?.label);
-      const rows = financialTransactions
+      const accounts = storeFinancialAccounts(store, args);
+      const rows = storeFinancialTransactions(store, args)
         .filter((row) => {
           if (row.categoryAccountExternalId === args?.externalId) return true;
           return Boolean(!row.categoryAccountExternalId && normalizedLabel && normalizeStaticCategoryLabel(row.category) === normalizedLabel);
@@ -2152,7 +2172,7 @@ function queryCasesAccounting5(name: string, args: StaticArgs, store?: StaticDem
         .sort((a, b) => b.date.localeCompare(a.date));
       return {
         transactions: rows.slice(0, args?.limit ?? 500).map((row) => {
-          const account = financialAccounts.find((candidate) => candidate._id === row.accountId) ?? null;
+          const account = accounts.find((candidate) => candidate._id === row.accountId) ?? null;
           const accountResource = account
             ? waveCacheResources.find((resource) => resource.resourceType === "account" && resource.externalId === account.externalId) ?? null
             : null;
@@ -2322,9 +2342,9 @@ function queryCasesTransparency8(name: string, args: StaticArgs, store?: StaticD
     case "transparency:publicCenter":
       return publicCenter(args);
     case "treasury:budgetVariance":
-      return budgetVariance();
+      return budgetVariance(store, args);
     case "treasury:profitAndLoss":
-      return profitAndLoss(args);
+      return profitAndLoss(args, store);
     case "treasury:restrictedFunds":
       return restrictedFunds();
     case "yearEnd:annualStatement":
@@ -3398,6 +3418,46 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
       posted += 1;
     }
     return { scanned, posted, skipped, needsMapping };
+  }
+  if (name === "financialHub:importBankCsvTransactions") {
+    const account =
+      store?.getRow("financialAccounts", args?.accountId) ?? byId(financialAccounts, args?.accountId);
+    if (!account || (args?.societyId && account.societyId !== args.societyId)) {
+      throw new Error("Account must belong to this society.");
+    }
+    const accountId = args?.accountId;
+    const existing = scopedRows(store?.listRows("financialTransactions", args) ?? financialTransactions, args);
+    const seen = new Set(
+      existing.filter((t: any) => t.accountId === accountId).map((t: any) => t.externalId),
+    );
+    const rows = (args?.rows ?? []) as any[];
+    let inserted = 0;
+    let skipped = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const externalId =
+        (typeof row.externalId === "string" && row.externalId.trim()) ||
+        `csv:${String(accountId)}:${row.date}:${row.amountCents}:${i}`;
+      if (seen.has(externalId)) {
+        skipped += 1;
+        continue;
+      }
+      store?.upsertRow("financialTransactions", {
+        _id: `static_tx_${externalId.replace(/[^a-zA-Z0-9]+/g, "_")}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        connectionId: account.connectionId,
+        accountId,
+        externalId,
+        date: row.date,
+        description: row.description,
+        amountCents: row.amountCents,
+        category: row.category,
+        counterparty: row.counterparty,
+      });
+      seen.add(externalId);
+      inserted += 1;
+    }
+    return { inserted, skipped, total: rows.length };
   }
   if (name === "seed:run") {
     void store?.reseed();
