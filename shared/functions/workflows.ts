@@ -161,3 +161,73 @@ export async function addNodePortable(
   await ctx.db.patch(id, { nodePreview: next });
   return { key: newKey };
 }
+
+export async function removePortable(
+  ctx: PortableMutationCtx,
+  { id, actingUserId }: { id: string; actingUserId?: string },
+) {
+  const wf = await ctx.db.get(id);
+  if (!wf) return;
+  await requireRolePortable(ctx, {
+    actingUserId,
+    societyId: String(wf.societyId),
+    required: "Director",
+  });
+  await ctx.db.delete(id);
+}
+
+export async function updateNodeConfigPortable(
+  ctx: PortableMutationCtx,
+  {
+    id,
+    key,
+    config,
+    label,
+    description,
+    actingUserId,
+  }: {
+    id: string;
+    key: string;
+    config: Record<string, any>;
+    label?: string;
+    description?: string;
+    actingUserId?: string;
+  },
+) {
+  const wf = await ctx.db.get(id);
+  if (!wf) throw new Error("Workflow not found");
+  await requireRolePortable(ctx, {
+    actingUserId,
+    societyId: String(wf.societyId),
+    required: "Director",
+  });
+  const existing: Record<string, any>[] = Array.isArray(wf.nodePreview) ? wf.nodePreview : [];
+  const idx = existing.findIndex((n) => n.key === key);
+  if (idx === -1) throw new Error(`Node ${key} not found on workflow ${id}`);
+  const prev = existing[idx];
+  const next = [...existing];
+  next[idx] = {
+    ...prev,
+    config: { ...(prev.config ?? {}), ...(config ?? {}) },
+    label: label ?? prev.label,
+    description: description ?? prev.description,
+  };
+  await ctx.db.patch(id, { nodePreview: next });
+}
+
+export async function removeNodePortable(
+  ctx: PortableMutationCtx,
+  { id, key, actingUserId }: { id: string; key: string; actingUserId?: string },
+) {
+  const wf = await ctx.db.get(id);
+  if (!wf) throw new Error("Workflow not found");
+  await requireRolePortable(ctx, {
+    actingUserId,
+    societyId: String(wf.societyId),
+    required: "Director",
+  });
+  const existing: Record<string, any>[] = Array.isArray(wf.nodePreview) ? wf.nodePreview : [];
+  const next = existing.filter((n) => n.key !== key);
+  if (next.length === existing.length) return;
+  await ctx.db.patch(id, { nodePreview: next });
+}

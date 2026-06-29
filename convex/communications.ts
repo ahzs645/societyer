@@ -17,6 +17,7 @@ import {
   removeSegmentPortable,
   upsertMemberPrefPortable,
   markDeliveryOpenedPortable,
+  markDeliveryBouncedPortable,
 } from "../shared/functions/communications";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -517,13 +518,7 @@ export const markDeliveryOpened = mutation({
 export const markDeliveryBounced = mutation({
   args: { id: v.id("communicationDeliveries"), errorMessage: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { id, errorMessage }) => {
-    await ctx.db.patch(id, {
-      status: "bounced",
-      bouncedAtISO: new Date().toISOString(),
-      errorMessage,
-    });
-  },
+  handler: (ctx, args) => markDeliveryBouncedPortable(toPortableMutationCtx(ctx), args),
 });
 
 async function recordManualDelivery(

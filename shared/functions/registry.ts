@@ -130,6 +130,9 @@ import * as transcriptsFns from "./transcripts";
 import * as waveCacheFns from "./waveCache";
 import * as workflowsFns from "./workflows";
 
+import * as filingBotFns from "./filingBot";
+import * as legalRecordsFns from "./legalRecords";
+
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }),
   definePortableMutation({ name: "legalOperations:upsertRightsClass", handler: upsertRightsClassPortable }),
@@ -1090,6 +1093,57 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "bylawAmendments:withdraw", handler: bylawAmendmentsFns.withdrawPortable }),
   definePortableMutation({ name: "bylawAmendments:supersede", handler: bylawAmendmentsFns.supersedePortable }),
   definePortableMutation({ name: "bylawAmendments:materializeSections", handler: bylawAmendmentsFns.materializeSectionsPortable }),
+
+
+  // legalOperations
+  definePortableMutation({ name: "legalOperations:upsertLegalTemplate", handler: legalRecordsFns.upsertLegalTemplatePortable }),
+  definePortableMutation({ name: "legalOperations:upsertLegalPrecedent", handler: legalRecordsFns.upsertLegalPrecedentPortable }),
+  definePortableMutation({ name: "legalOperations:upsertLegalPrecedentRun", handler: legalRecordsFns.upsertLegalPrecedentRunPortable }),
+  definePortableMutation({ name: "legalOperations:upsertGeneratedLegalDocument", handler: legalRecordsFns.upsertGeneratedLegalDocumentPortable }),
+  definePortableMutation({ name: "legalOperations:upsertLegalSigner", handler: legalRecordsFns.upsertLegalSignerPortable }),
+  definePortableMutation({ name: "legalOperations:removeLegalTemplate", handler: legalRecordsFns.removeLegalTemplatePortable }),
+  definePortableMutation({ name: "legalOperations:removeLegalPrecedent", handler: legalRecordsFns.removeLegalPrecedentPortable }),
+  definePortableMutation({ name: "legalOperations:removeLegalPrecedentRun", handler: legalRecordsFns.removeLegalPrecedentRunPortable }),
+  definePortableMutation({ name: "legalOperations:removeGeneratedLegalDocument", handler: legalRecordsFns.removeGeneratedLegalDocumentPortable }),
+  definePortableMutation({ name: "legalOperations:removeLegalSigner", handler: legalRecordsFns.removeLegalSignerPortable }),
+  definePortableQuery({ name: "legalOperations:formationMaintenance", handler: legalRecordsFns.formationMaintenancePortable }),
+  definePortableMutation({ name: "legalOperations:upsertFormationRecord", handler: legalRecordsFns.upsertFormationRecordPortable }),
+  definePortableMutation({ name: "legalOperations:upsertNameSearchItem", handler: legalRecordsFns.upsertNameSearchItemPortable }),
+  definePortableMutation({ name: "legalOperations:upsertEntityAmendment", handler: legalRecordsFns.upsertEntityAmendmentPortable }),
+  definePortableMutation({ name: "legalOperations:upsertAnnualMaintenanceRecord", handler: legalRecordsFns.upsertAnnualMaintenanceRecordPortable }),
+  definePortableMutation({ name: "legalOperations:upsertJurisdictionMetadata", handler: legalRecordsFns.upsertJurisdictionMetadataPortable }),
+  definePortableMutation({ name: "legalOperations:upsertSupportLog", handler: legalRecordsFns.upsertSupportLogPortable }),
+  definePortableMutation({ name: "legalOperations:removeFormationRecord", handler: legalRecordsFns.removeFormationRecordPortable }),
+  definePortableMutation({ name: "legalOperations:removeNameSearchItem", handler: legalRecordsFns.removeNameSearchItemPortable }),
+  definePortableMutation({ name: "legalOperations:removeEntityAmendment", handler: legalRecordsFns.removeEntityAmendmentPortable }),
+  definePortableMutation({ name: "legalOperations:removeAnnualMaintenanceRecord", handler: legalRecordsFns.removeAnnualMaintenanceRecordPortable }),
+  definePortableMutation({ name: "legalOperations:removeJurisdictionMetadata", handler: legalRecordsFns.removeJurisdictionMetadataPortable }),
+  definePortableMutation({ name: "legalOperations:removeSupportLog", handler: legalRecordsFns.removeSupportLogPortable }),
+
+  // filingBot
+  definePortableQuery({ name: "filingBot:listRuns", handler: filingBotFns.listRunsPortable }),
+  definePortableQuery({ name: "filingBot:runsForFiling", handler: filingBotFns.runsForFilingPortable }),
+  definePortableQuery({ name: "filingBot:getRun", handler: filingBotFns.getRunPortable }),
+
+  // financialHub
+  definePortableMutation({ name: "financialHub:updateTransaction", handler: financialHubFns.updateTransactionPortable }),
+  definePortableQuery({ name: "financialHub:getConnection", handler: financialHubFns.getConnectionPortable }),
+  definePortableQuery({ name: "financialHub:summary", handler: financialHubFns.summaryPortable }),
+
+  // communications
+  definePortableMutation({ name: "communications:markDeliveryBounced", handler: communicationsFns.markDeliveryBouncedPortable }),
+
+  // workflows
+  definePortableMutation({ name: "workflows:remove", handler: workflowsFns.removePortable }),
+  definePortableMutation({ name: "workflows:updateNodeConfig", handler: workflowsFns.updateNodeConfigPortable }),
+  definePortableMutation({ name: "workflows:removeNode", handler: workflowsFns.removeNodePortable }),
+
+  // grantSources
+  definePortableMutation({ name: "grantSources:addFromLibrary", handler: grantSourcesFns.addFromLibraryPortable }),
+
+  // importSessions
+  definePortableMutation({ name: "importSessions:applyApprovedDocuments", handler: importSessionsFns.applyApprovedDocumentsPortable }),
+  definePortableMutation({ name: "importSessions:applyApprovedSectionRecords", handler: importSessionsFns.applyApprovedSectionRecordsPortable }),
 
 ];
 

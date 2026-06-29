@@ -30,6 +30,9 @@ import {
   setStatusPortable,
   updatePortable,
   addNodePortable,
+  removePortable,
+  updateNodeConfigPortable,
+  removeNodePortable,
 } from "../shared/functions/workflows";
 
 import {
@@ -536,16 +539,7 @@ export const updateProviderLink = mutation({
 export const remove = mutation({
   args: { id: v.id("workflows"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { id, actingUserId }) => {
-    const wf = await ctx.db.get(id);
-    if (!wf) return;
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: wf.societyId,
-      required: "Director",
-    });
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });
 
 // Append (or insert) a node into the workflow's preview graph. For now this
@@ -580,27 +574,7 @@ export const updateNodeConfig = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, key, config, label, description, actingUserId }) => {
-    const wf = await ctx.db.get(id);
-    if (!wf) throw new Error("Workflow not found");
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: wf.societyId,
-      required: "Director",
-    });
-    const existing: NodePreview[] = Array.isArray(wf.nodePreview) ? wf.nodePreview : [];
-    const idx = existing.findIndex((n) => n.key === key);
-    if (idx === -1) throw new Error(`Node ${key} not found on workflow ${id}`);
-    const prev = existing[idx];
-    const next = [...existing];
-    next[idx] = {
-      ...prev,
-      config: { ...(prev.config ?? {}), ...(config ?? {}) },
-      label: label ?? prev.label,
-      description: description ?? prev.description,
-    };
-    await ctx.db.patch(id, { nodePreview: next });
-  },
+  handler: (ctx, args) => updateNodeConfigPortable(toPortableMutationCtx(ctx), args),
 });
 
 
@@ -611,19 +585,7 @@ export const removeNode = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, key, actingUserId }) => {
-    const wf = await ctx.db.get(id);
-    if (!wf) throw new Error("Workflow not found");
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: wf.societyId,
-      required: "Director",
-    });
-    const existing: NodePreview[] = Array.isArray(wf.nodePreview) ? wf.nodePreview : [];
-    const next = existing.filter((n) => n.key !== key);
-    if (next.length === existing.length) return;
-    await ctx.db.patch(id, { nodePreview: next });
-  },
+  handler: (ctx, args) => removeNodePortable(toPortableMutationCtx(ctx), args),
 });
 
 

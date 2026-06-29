@@ -16,6 +16,7 @@ import {
   candidatesPortable,
   createCandidatePortable,
   setCandidateStatusPortable,
+  addFromLibraryPortable,
 } from "../shared/functions/grantSources";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -105,69 +106,7 @@ export const addFromLibrary = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, libraryKey, actingUserId }) => {
-    await requireRole(ctx, { actingUserId, societyId, required: "Director" });
-    const source = BUILT_IN_SOURCES.find((item) => item.libraryKey === libraryKey);
-    if (!source) throw new Error("Grant source is not in the built-in library.");
-    const profile = BUILT_IN_PROFILES.find((item) => item.libraryKey === libraryKey);
-    const existing = await ctx.db
-      .query("grantSources")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect()
-      .then((rows: any[]) => rows.find((row) => row.libraryKey === libraryKey));
-    const now = isoNow();
-    const sourcePayload = {
-      societyId,
-      libraryKey: source.libraryKey,
-      name: source.name,
-      url: source.url,
-      sourceType: source.sourceType,
-      jurisdiction: source.jurisdiction,
-      funderType: source.funderType,
-      eligibilityTags: [...source.eligibilityTags],
-      topicTags: [...source.topicTags],
-      scrapeCadence: source.scrapeCadence,
-      trustLevel: source.trustLevel,
-      status: source.status,
-      notes: source.notes,
-      createdByUserId: actingUserId,
-      updatedAtISO: now,
-    };
-    const sourceId = existing
-      ? (await ctx.db.patch(existing._id, sourcePayload), existing._id)
-      : await ctx.db.insert("grantSources", { ...sourcePayload, createdAtISO: now });
-
-    if (profile) {
-      const existingProfiles = await ctx.db
-        .query("grantSourceProfiles")
-        .withIndex("by_source", (q) => q.eq("sourceId", sourceId))
-        .collect();
-      const profilePayload = {
-        societyId,
-        sourceId,
-        libraryKey,
-        profileKind: profile.profileKind,
-        listSelector: profile.listSelector,
-        itemSelector: profile.itemSelector,
-        detailUrlPattern: profile.detailUrlPattern,
-        fieldMappings: profile.fieldMappings,
-        detailFieldMappings: profile.detailFieldMappings,
-        dateFormat: profile.dateFormat,
-        currency: profile.currency,
-        pagination: profile.pagination,
-        requiresAuth: profile.requiresAuth,
-        connectorId: profile.connectorId,
-        notes: profile.notes,
-        updatedAtISO: now,
-      };
-      if (existingProfiles[0]) {
-        await ctx.db.patch(existingProfiles[0]._id, profilePayload);
-      } else {
-        await ctx.db.insert("grantSourceProfiles", { ...profilePayload, createdAtISO: now });
-      }
-    }
-    return { sourceId, installed: !existing };
-  },
+  handler: (ctx, args) => addFromLibraryPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const getSource = query({

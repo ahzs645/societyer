@@ -15,6 +15,7 @@
 
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../grantSourceLibrary";
 import { cleanText } from "./text";
+import { requireRolePortable } from "./access";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 
 const BUILT_IN_SOURCES = BUILT_IN_GRANT_SOURCES;
@@ -151,4 +152,71 @@ export async function setCandidateStatusPortable(
 ) {
   await ctx.db.patch(candidateId, { status, updatedAtISO: new Date().toISOString() });
   return candidateId;
+}
+
+export async function addFromLibraryPortable(
+  ctx: PortableMutationCtx,
+  { societyId, libraryKey, actingUserId }: { societyId: string; libraryKey: string; actingUserId?: string },
+) {
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
+  const source = BUILT_IN_SOURCES.find((item) => item.libraryKey === libraryKey);
+  if (!source) throw new Error("Grant source is not in the built-in library.");
+  const profile = BUILT_IN_PROFILES.find((item) => item.libraryKey === libraryKey);
+  const existing = await ctx.db
+    .query("grantSources")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect()
+    .then((rows: any[]) => rows.find((row) => row.libraryKey === libraryKey));
+  const now = new Date().toISOString();
+  const sourcePayload = {
+    societyId,
+    libraryKey: source.libraryKey,
+    name: source.name,
+    url: source.url,
+    sourceType: source.sourceType,
+    jurisdiction: source.jurisdiction,
+    funderType: source.funderType,
+    eligibilityTags: [...source.eligibilityTags],
+    topicTags: [...source.topicTags],
+    scrapeCadence: source.scrapeCadence,
+    trustLevel: source.trustLevel,
+    status: source.status,
+    notes: source.notes,
+    createdByUserId: actingUserId,
+    updatedAtISO: now,
+  };
+  const sourceId = existing
+    ? (await ctx.db.patch(existing._id, sourcePayload), existing._id)
+    : await ctx.db.insert("grantSources", { ...sourcePayload, createdAtISO: now });
+
+  if (profile) {
+    const existingProfiles = await ctx.db
+      .query("grantSourceProfiles")
+      .withIndex("by_source", (q) => q.eq("sourceId", sourceId))
+      .collect();
+    const profilePayload = {
+      societyId,
+      sourceId,
+      libraryKey,
+      profileKind: profile.profileKind,
+      listSelector: profile.listSelector,
+      itemSelector: profile.itemSelector,
+      detailUrlPattern: profile.detailUrlPattern,
+      fieldMappings: profile.fieldMappings,
+      detailFieldMappings: profile.detailFieldMappings,
+      dateFormat: profile.dateFormat,
+      currency: profile.currency,
+      pagination: profile.pagination,
+      requiresAuth: profile.requiresAuth,
+      connectorId: profile.connectorId,
+      notes: profile.notes,
+      updatedAtISO: now,
+    };
+    if (existingProfiles[0]) {
+      await ctx.db.patch(existingProfiles[0]._id, profilePayload);
+    } else {
+      await ctx.db.insert("grantSourceProfiles", { ...profilePayload, createdAtISO: now });
+    }
+  }
+  return { sourceId, installed: !existing };
 }

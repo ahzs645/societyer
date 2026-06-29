@@ -169,6 +169,17 @@ export async function upsertMemberPrefPortable(
   return await ctx.db.insert("memberCommunicationPrefs", payload);
 }
 
+export async function markDeliveryBouncedPortable(
+  ctx: PortableMutationCtx,
+  { id, errorMessage }: { id: string; errorMessage?: string },
+) {
+  await ctx.db.patch(id, {
+    status: "bounced",
+    bouncedAtISO: new Date().toISOString(),
+    errorMessage,
+  });
+}
+
 export async function markDeliveryOpenedPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   const delivery = await ctx.db.get(id);
   const alreadyOpened = delivery?.status === "opened";

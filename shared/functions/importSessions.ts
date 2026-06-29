@@ -5,9 +5,6 @@
  * (plus the pure import-session helpers under ./importSessionHelpers) and run
  * unchanged on hosted Convex, the local Dexie runtime, and the convex-test
  * oracle.
- *
- * Handlers that depend on a convex-only capability stay on Convex:
- *   - applyApprovedDocuments / applyApprovedSectionRecords are NOT ported here.
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
@@ -17,9 +14,19 @@ import {
   SESSION_CATEGORY,
   RECORD_CATEGORY,
   HISTORY_KINDS,
+  SECTION_RECORD_KINDS,
   mergeExistingMeetingImport,
   minutesMotionFromPayload,
   ensureMeetingSourceDocuments,
+  ensureImportSourceDocuments,
+  insertSectionRecord,
+  patchRecordPromotionBlocked,
+  importPromotionIssues,
+  insertSourceEvidenceForAppliedRecord,
+  importedLibrarySection,
+  sourceSystemFromExternalId,
+  sourceSystemLabel,
+  sourceSystemTag,
   findExistingMeetingImport,
   importedMeetingAgenda,
   setMeetingAgendaItems,
@@ -589,4 +596,122 @@ export async function backfillApprovedMeetingReferencesPortable(ctx: PortableMut
 
   await patchSessionUpdatedAt(ctx, sessionId);
   return { meetings, minutes, documents };
+}
+
+export async function applyApprovedDocumentsPortable(
+  ctx: PortableMutationCtx,
+  { sessionId }: { sessionId: string },
+) {
+  const session = await ctx.db.get(sessionId);
+  if (!isImportSession(session)) return { documents: 0 };
+  const societyId = String(session.societyId);
+  const records = await sessionRecords(ctx, societyId, sessionId);
+  const candidates = records.filter(
+    (record: any) =>
+      record.recordKind === "documentCandidate" &&
+      record.status === "Approved" &&
+      !record.importedTargets?.documents,
+  );
+
+  let documents = 0;
+  for (const record of candidates) {
+    const payload = record.payload ?? {};
+    const sourceExternalIds = unique([
+      ...(record.sourceExternalIds ?? []),
+      ...(payload.sourceExternalIds ?? []),
+      payload.externalId,
+      payload.id != null ? `paperless:${payload.id}` : undefined,
+    ]);
+    const externalId = sourceExternalIds[0];
+    const externalSystem = cleanText(payload.externalSystem) || sourceSystemFromExternalId(externalId);
+    const paperlessId = externalSystem === "paperless" && externalId ? externalId : undefined;
+    const sections = Array.isArray(payload.sections) ? payload.sections.map(String) : [];
+    const sourceTags = Array.isArray(payload.tags) ? payload.tags.map(String) : [];
+    const docId = await ctx.db.insert("documents", {
+      societyId,
+      title: cleanText(payload.title) || record.title || externalId || "Imported document candidate",
+      category: cleanText(record.targetModule) || cleanText(sections[0]) || "Imported Document",
+      fileName: cleanText(payload.fileName),
+      mimeType: cleanText(payload.mimeType),
+      fileSizeBytes: numberOrUndefined(payload.fileSizeBytes),
+      content: JSON.stringify({
+        importedFrom: `${sourceSystemLabel(externalSystem)} import session`,
+        importSessionId: sessionId,
+        externalSystem,
+        externalId,
+        sourceExternalIds,
+        paperlessId,
+        localPath: cleanText(payload.localPath),
+        sha256: cleanText(payload.sha256),
+        sections,
+        confidence: payload.confidence,
+        why: payload.why,
+        created: payload.created,
+        tags: sourceTags,
+        note: `Metadata-only import. Review the original ${sourceSystemLabel(externalSystem)} source before relying on OCR or publishing content.`,
+      }),
+      createdAtISO: new Date().toISOString(),
+      reviewStatus: "in_review",
+      librarySection: importedLibrarySection(record.targetModule, sections),
+      flaggedForDeletion: false,
+      tags: unique([
+        `${sourceSystemTag(externalSystem)}-import`,
+        "import-candidate",
+        externalId,
+        ...sections.map(tagValue),
+        ...sourceTags.map(tagValue).slice(0, 8),
+      ]),
+    });
+    await patchRecordImportTarget(ctx, record, "documents", docId);
+    documents += 1;
+  }
+
+  await patchSessionUpdatedAt(ctx, sessionId);
+  return { documents };
+}
+
+export async function applyApprovedSectionRecordsPortable(
+  ctx: PortableMutationCtx,
+  { sessionId }: { sessionId: string },
+) {
+  const session = await ctx.db.get(sessionId);
+  if (!isImportSession(session)) return { total: 0, byKind: {} };
+  const societyId = String(session.societyId);
+  const records = await sessionRecords(ctx, societyId, sessionId);
+  const sourceCatalog = sourceCatalogForRecords(records);
+  const sectionRecords = records.filter(
+    (record: any) =>
+      SECTION_RECORD_KINDS.includes(record.recordKind) &&
+      record.status === "Approved" &&
+      !record.importedTargets?.sections,
+  );
+
+  const byKind: Record<string, number> = {};
+  let total = 0;
+  for (const record of sectionRecords) {
+    const sourceDocumentIds = await ensureImportSourceDocuments(
+      ctx,
+      societyId,
+      unique([...(record.sourceExternalIds ?? []), ...(record.payload?.sourceExternalIds ?? [])]),
+      "Imported Source",
+      `Source placeholder created while applying ${record.recordKind} from ${hydrateSession(session).name}. Pull or review the original source document before publishing content.`,
+      sourceCatalog,
+    );
+    const promotionIssues = await importPromotionIssues(ctx, societyId, record);
+    if (promotionIssues.length > 0) {
+      await patchRecordPromotionBlocked(ctx, record, promotionIssues);
+      byKind[`${record.recordKind}:blocked`] = (byKind[`${record.recordKind}:blocked`] ?? 0) + 1;
+      continue;
+    }
+    const target = await insertSectionRecord(ctx, societyId, record, sourceDocumentIds);
+    if (record.recordKind !== "sourceEvidence") {
+      await insertSourceEvidenceForAppliedRecord(ctx, societyId, record, target, sourceDocumentIds);
+    }
+    await patchRecordImportTarget(ctx, record, "sections", target);
+    byKind[record.recordKind] = (byKind[record.recordKind] ?? 0) + 1;
+    total += 1;
+  }
+
+  await patchSessionUpdatedAt(ctx, sessionId);
+  return { total, byKind };
 }

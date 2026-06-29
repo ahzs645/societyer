@@ -4,6 +4,12 @@ import { query, internalMutation, mutation, action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { requireRole } from "./users";
+import { toPortableQueryCtx } from "./lib/portable";
+import {
+  listRunsPortable,
+  runsForFilingPortable,
+  getRunPortable,
+} from "../shared/functions/filingBot";
 
 const STEP_DEFINITIONS: Record<string, { label: string; note?: string }[]> = {
   AnnualReport: [
@@ -32,29 +38,19 @@ const STEP_DEFINITIONS: Record<string, { label: string; note?: string }[]> = {
 export const listRuns = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, limit }) =>
-    ctx.db
-      .query("filingBotRuns")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .order("desc")
-      .take(limit ?? 20),
+  handler: (ctx, args) => listRunsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const runsForFiling = query({
   args: { filingId: v.id("filings") },
   returns: v.any(),
-  handler: async (ctx, { filingId }) =>
-    ctx.db
-      .query("filingBotRuns")
-      .withIndex("by_filing", (q) => q.eq("filingId", filingId))
-      .order("desc")
-      .collect(),
+  handler: (ctx, args) => runsForFilingPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const getRun = query({
   args: { id: v.id("filingBotRuns") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => getRunPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const _createRun = internalMutation({
