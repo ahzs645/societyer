@@ -20,7 +20,6 @@ import {
 } from "../../shared/corporationPacketDocx";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { riversideGamingProgramStatement } from "../../shared/programStatement";
-import { riversideOrgStatement } from "../../shared/orgRevenueStatement";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
@@ -1816,7 +1815,7 @@ const financialAccounts = [
   { _id: ACCOUNT_EQUIPMENT_EXPENSE_ID, societyId: SOCIETY_ID, connectionId: FINANCIAL_CONNECTION_ID, externalId: "equipment", code: "5500", name: "Equipment and technology", currency: "CAD", accountType: "Expense", subtype: "equipment", balanceCents: 0, isRestricted: false, sourceSystem: "societyer", normalBalance: "debit" },
 ];
 
-const financialTransactions = [
+const financialTransactions: Array<Record<string, any>> = [
   {
     _id: "static_tx_grant",
     societyId: SOCIETY_ID,
@@ -1862,6 +1861,35 @@ const financialTransactions = [
     counterpartyExternalId: "vendor_harbour_office",
     counterpartyResourceType: "vendor",
   },
+  // FY2024-2025 operating ledger — categorized so the year-end Organization
+  // Revenue & Expense statement (General Fund vs Restricted Funds) derives from
+  // real finance data. General Fund lines post to the operating account;
+  // restricted lines post to the restricted "Neighbourhood grant fund" account.
+  ...[
+    ["org_member", "Membership dues", 180000, "Membership fees", CASH_ACCOUNT_ID, "2025-06-30"],
+    ["org_registration", "Program registration fees", 1500000, "Registration fees", CASH_ACCOUNT_ID, "2025-09-15"],
+    ["org_donations", "Year-end donations", 250000, "Donations", CASH_ACCOUNT_ID, "2025-12-20"],
+    ["org_fundraising", "Fall fundraiser", 320000, "Fundraising", CASH_ACCOUNT_ID, "2025-11-01"],
+    ["org_interest", "Bank interest", 12500, "Interest & other", CASH_ACCOUNT_ID, "2026-03-31"],
+    ["org_wages", "Staff wages", -1300000, "Wages & benefits", CASH_ACCOUNT_ID, "2025-07-15"],
+    ["org_rent", "Hall rent", -400000, "Rent", CASH_ACCOUNT_ID, "2025-05-01"],
+    ["org_insurance", "Liability insurance", -150000, "Insurance", CASH_ACCOUNT_ID, "2025-04-15"],
+    ["org_office", "Office supplies", -120000, "Office supplies", CASH_ACCOUNT_ID, "2025-10-10"],
+    ["org_advertising", "Program advertising", -75000, "Advertising", CASH_ACCOUNT_ID, "2025-08-20"],
+    ["org_utilities", "Utilities", -90000, "Utilities", CASH_ACCOUNT_ID, "2026-01-31"],
+    ["org_restricted_grant", "Restricted program grant received", 500000, "Program grant", GRANT_ACCOUNT_ID, "2025-05-15"],
+    ["org_restricted_delivery", "Restricted program delivery", -380000, "Program delivery", GRANT_ACCOUNT_ID, "2026-02-28"],
+  ].map(([key, description, amountCents, category, accountId, date]) => ({
+    _id: `static_tx_${key}`,
+    societyId: SOCIETY_ID,
+    connectionId: FINANCIAL_CONNECTION_ID,
+    accountId,
+    externalId: String(key),
+    date,
+    description,
+    amountCents,
+    category,
+  })),
 ];
 
 const accountingFiscalPeriods = [
@@ -2553,18 +2581,6 @@ const tables: Record<string, any[]> = {
         grantId: "static_grant_gaming",
         priorFiscalYearLabel: "2024-2025",
         currentFiscalYearLabel: "2025-2026",
-      }),
-      createdAtISO: "2026-05-01T00:00:00.000Z",
-      updatedAtISO: "2026-05-01T00:00:00.000Z",
-    },
-  ],
-  orgRevenueStatements: [
-    {
-      _id: "static_org_statement",
-      ...riversideOrgStatement({
-        societyId: SOCIETY_ID,
-        fiscalYearLabel: "2024-2025",
-        periodLabel: "April 1, 2024 to March 31, 2025",
       }),
       createdAtISO: "2026-05-01T00:00:00.000Z",
       updatedAtISO: "2026-05-01T00:00:00.000Z",

@@ -6,9 +6,9 @@ import {
   type ProgramStatementLine,
 } from "../../../../shared/programStatement";
 import {
-  computeOrgStatementTotals,
   lineTotalCents,
   type OrgRevenueStatement,
+  type OrgStatementColumnTotals,
   type OrgStatementLine,
 } from "../../../../shared/orgRevenueStatement";
 
@@ -72,42 +72,38 @@ function orgLineRows(lines: OrgStatementLine[]) {
   return lines
     .map(
       (line) =>
-        `<tr><td>${escapeHtml(line.label)}</td>${orgNum(line.generalCents)}${orgNum(line.gamingCents)}${orgNum(lineTotalCents(line), { bold: true })}</tr>`,
+        `<tr><td>${escapeHtml(line.label)}</td>${orgNum(line.generalCents)}${orgNum(line.restrictedCents)}${orgNum(lineTotalCents(line), { bold: true })}</tr>`,
     )
     .join("");
 }
 
 /**
- * Reproduces the BC Community Gaming Grants organization revenue & expense
- * statement: an org-wide Statement of Revenues & Expenses with three columns
- * (General Fund / Gaming Fund / Total), itemized revenues and expenses, totals,
- * and "Excess of Revenues over Expenses" per fund.
+ * Organisation-wide Statement of Revenues & Expenses for the fiscal year,
+ * derived from the finance ledger. Three columns: General Fund (unrestricted) /
+ * Restricted Funds / Total, with itemized revenues and expenses, totals, and
+ * "Excess of Revenues over Expenses" per fund.
  */
 export function renderOrgStatementHtml(statement: OrgRevenueStatement, society?: SocietyLike): string {
-  const t = computeOrgStatementTotals(statement);
-  const totalRow = (label: string, c: { generalCents: number; gamingCents: number; totalCents: number }, italic = false) =>
-    `<tr><td>${italic ? "<em>" : "<strong>"}${escapeHtml(label)}${italic ? "</em>" : "</strong>"}</td>${orgNum(c.generalCents, { bold: true })}${orgNum(c.gamingCents, { bold: true })}${orgNum(c.totalCents, { bold: true })}</tr>`;
+  const totalRow = (label: string, c: OrgStatementColumnTotals, italic = false) =>
+    `<tr><td>${italic ? "<em>" : "<strong>"}${escapeHtml(label)}${italic ? "</em>" : "</strong>"}</td>${orgNum(c.generalCents, { bold: true })}${orgNum(c.restrictedCents, { bold: true })}${orgNum(c.totalCents, { bold: true })}</tr>`;
   return `
     <h1>Statement of Revenues &amp; Expenses</h1>
     <p class="meta">${escapeHtml(statement.organizationName || society?.name || "[Name of Organization]")}${statement.periodLabel ? ` · ${escapeHtml(statement.periodLabel)}` : ` · Fiscal year ${escapeHtml(statement.fiscalYearLabel)}`}</p>
     <table>
       <thead>
-        <tr><th></th><th style="text-align:right">General Fund</th><th style="text-align:right">Gaming Fund<sup>2</sup></th><th style="text-align:right">Total</th></tr>
+        <tr><th></th><th style="text-align:right">General Fund</th><th style="text-align:right">Restricted Funds</th><th style="text-align:right">Total</th></tr>
       </thead>
       <tbody>
-        <tr><td><strong>Revenues<sup>3</sup></strong></td><td></td><td></td><td></td></tr>
-        ${orgLineRows(statement.revenues)}
-        ${totalRow("Total Revenues", t.revenue)}
+        <tr><td><strong>Revenues<sup>1</sup></strong></td><td></td><td></td><td></td></tr>
+        ${statement.revenues.length ? orgLineRows(statement.revenues) : `<tr><td colspan="4" class="muted">No revenue recorded for this period.</td></tr>`}
+        ${totalRow("Total Revenues", statement.revenueTotals)}
         <tr><td><strong>Expenses</strong></td><td></td><td></td><td></td></tr>
-        ${orgLineRows(statement.expenses)}
-        ${totalRow("Total Expenses", t.expense)}
-        ${totalRow("Excess of Revenues over Expenses", t.excess, true)}
+        ${statement.expenses.length ? orgLineRows(statement.expenses) : `<tr><td colspan="4" class="muted">No expenses recorded for this period.</td></tr>`}
+        ${totalRow("Total Expenses", statement.expenseTotals)}
+        ${totalRow("Excess of Revenues over Expenses", statement.excess, true)}
       </tbody>
     </table>
-    ${statement.narrative ? `<h2>Notes</h2><p>${escapeHtml(statement.narrative)}</p>` : ""}
-    <p class="meta"><sup>1</sup> Financial statement for your entire organization including all programs and all services, for the previous fiscal year.</p>
-    <p class="meta"><sup>2</sup> Gaming funds include any funds generated through gaming — licensed gaming events (e.g. raffles), Community Gaming Grants, gaming-fund donations from service clubs, plus any GST/HST rebates, interest, and revenues from the sale of assets purchased with gaming funds.</p>
-    <p class="meta"><sup>3</sup> Itemize and identify all sources of funding. Do not use abbreviations or acronyms.</p>
+    <p class="meta"><sup>1</sup> Organisation-wide statement covering all programs and services for the fiscal year, derived from the finance ledger. Restricted Funds are amounts held in restricted-purpose funds or accounts; everything else is unrestricted General Fund activity.</p>
   `;
 }
 

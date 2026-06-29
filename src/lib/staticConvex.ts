@@ -6,6 +6,7 @@ import {
   corporationPacketTemplateMarker,
 } from "../../shared/corporationDocumentPackets";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
+import { buildOrgRevenueStatement } from "../../shared/orgRevenueStatement";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
 import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../../shared/shareSplit";
 import { postIncorporationStepsForOrganization } from "../../shared/postIncorporationSteps";
@@ -890,6 +891,21 @@ function staticRestrictedFundStatement(args: StaticArgs, store?: StaticDemoDexie
     { openingCents: 0, receiptsCents: 0, disbursementsCents: 0, closingCents: 0 },
   );
   return { funds, totals };
+}
+
+function staticOrgRevenueExpense(args: StaticArgs, store?: StaticDemoDexieStore | null) {
+  // financialTransactions/financialAccounts are not seeded into the local store,
+  // so prefer store rows only when present and otherwise read the fixtures.
+  const storedTxns = store?.listRows("financialTransactions", args);
+  const storedAccts = store?.listRows("financialAccounts", args);
+  const txns = storedTxns && storedTxns.length ? storedTxns : scopedRows(financialTransactions, args);
+  const accts = storedAccts && storedAccts.length ? storedAccts : scopedRows(financialAccounts, args);
+  return buildOrgRevenueStatement({
+    organizationName: society.name,
+    fiscalYearLabel: String(args?.fiscalYear ?? ""),
+    transactions: txns as any,
+    accounts: accts as any,
+  });
 }
 
 function staticYearEndReadiness(args: StaticArgs, store?: StaticDemoDexieStore | null) {
@@ -2313,6 +2329,8 @@ function queryCasesTransparency8(name: string, args: StaticArgs, store?: StaticD
       return staticAnnualStatement(args, store);
     case "yearEnd:restrictedFundStatement":
       return staticRestrictedFundStatement(args, store);
+    case "yearEnd:orgRevenueExpense":
+      return staticOrgRevenueExpense(args, store);
     case "yearEnd:readiness":
       return staticYearEndReadiness(args, store);
     case "orgChartAssignments:list":

@@ -2,7 +2,6 @@ import { mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { assertMaintenanceToken, serviceTokenValidator } from "./lib/serviceAuth";
 import { riversideGamingProgramStatement } from "../shared/programStatement";
-import { riversideOrgStatement } from "../shared/orgRevenueStatement";
 
 // Seed the demo society "Riverside Community Society".
 // Idempotent-ish: if a society already exists, it wipes everything first.
@@ -661,16 +660,88 @@ export const run = mutation({
       createdAtISO: nowISO,
       updatedAtISO: nowISO,
     });
-    await ctx.db.insert("orgRevenueStatements", {
-      ...riversideOrgStatement({
-        societyId,
-        fiscalYearLabel: "2024-2025",
-        periodLabel: "April 1, 2024 to March 31, 2025",
-      }),
+    // Finance ledger: a general (unrestricted) operating account and a
+    // restricted fund account, plus a year of categorized transactions. The
+    // year-end Organization Revenue & Expense statement is derived from these:
+    // each line is split General Fund vs Restricted Funds by the account's
+    // isRestricted flag.
+    const financialConnectionId = await ctx.db.insert("financialConnections", {
       societyId,
-      createdAtISO: nowISO,
-      updatedAtISO: nowISO,
+      provider: "demo",
+      status: "connected",
+      accountLabel: "Demo ledger",
+      syncMode: "demo",
+      connectedAtISO: nowISO,
+      demo: true,
     });
+    const operatingAccountId = await ctx.db.insert("financialAccounts", {
+      societyId,
+      connectionId: financialConnectionId,
+      externalId: "operating-chequing",
+      code: "1000",
+      name: "Operating chequing",
+      currency: "CAD",
+      accountType: "Bank",
+      balanceCents: 3490000,
+      isRestricted: false,
+      sourceSystem: "societyer",
+    });
+    const restrictedAccountId = await ctx.db.insert("financialAccounts", {
+      societyId,
+      connectionId: financialConnectionId,
+      externalId: "restricted-fund",
+      code: "1010",
+      name: "Restricted programs fund",
+      currency: "CAD",
+      accountType: "Bank",
+      balanceCents: 1200000,
+      isRestricted: true,
+      restrictedPurpose: "Restricted program funding",
+      sourceSystem: "societyer",
+    });
+    const orgLedger: Array<[string, string, number, string]> = [
+      // [date, description, amountCents (+rev/-exp), category] — General Fund
+      ["2025-06-30", "Membership dues", 180000, "Membership fees"],
+      ["2025-09-15", "Program registration fees", 1500000, "Registration fees"],
+      ["2025-12-20", "Year-end donations", 250000, "Donations"],
+      ["2025-11-01", "Fall fundraiser", 320000, "Fundraising"],
+      ["2026-03-31", "Bank interest", 12500, "Interest & other"],
+      ["2025-07-15", "Staff wages", -1300000, "Wages & benefits"],
+      ["2025-05-01", "Hall rent", -400000, "Rent"],
+      ["2025-04-15", "Liability insurance", -150000, "Insurance"],
+      ["2025-10-10", "Office supplies", -120000, "Office supplies"],
+      ["2025-08-20", "Program advertising", -75000, "Advertising"],
+      ["2026-01-31", "Utilities", -90000, "Utilities"],
+    ];
+    let orgTxnSeq = 0;
+    for (const [date, description, amountCents, category] of orgLedger) {
+      await ctx.db.insert("financialTransactions", {
+        societyId,
+        connectionId: financialConnectionId,
+        accountId: operatingAccountId,
+        externalId: `org-txn-${orgTxnSeq++}`,
+        date,
+        description,
+        amountCents,
+        category,
+      });
+    }
+    const restrictedLedger: Array<[string, string, number, string]> = [
+      ["2025-05-15", "Restricted program grant received", 500000, "Program grant"],
+      ["2026-02-28", "Restricted program delivery", -380000, "Program delivery"],
+    ];
+    for (const [date, description, amountCents, category] of restrictedLedger) {
+      await ctx.db.insert("financialTransactions", {
+        societyId,
+        connectionId: financialConnectionId,
+        accountId: restrictedAccountId,
+        externalId: `org-txn-${orgTxnSeq++}`,
+        date,
+        description,
+        amountCents,
+        category,
+      });
+    }
 
     // Committees
     const programsCommitteeId = await ctx.db.insert("committees", {

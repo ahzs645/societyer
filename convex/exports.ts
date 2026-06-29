@@ -122,7 +122,6 @@ export const EXPORTABLE_TABLES = [
   "grantSourceProfiles",
   "grantOpportunityCandidates",
   "programStatements",
-  "orgRevenueStatements",
   "deadlines",
   "commitments",
   "commitmentEvents",

@@ -26,14 +26,6 @@ const programStatementLine = v.object({
   notes: v.optional(v.string()),
 });
 
-const orgStatementLine = v.object({
-  key: v.string(),
-  label: v.string(),
-  generalCents: v.number(),
-  gamingCents: v.number(),
-  notes: v.optional(v.string()),
-});
-
 export const yearEndTables = {
   programStatements: defineTable({
     societyId: v.id("societies"),
@@ -52,23 +44,4 @@ export const yearEndTables = {
   })
     .index("by_society", ["societyId"])
     .index("by_grant", ["grantId"]),
-
-  // Organisation-wide "Statement of Revenues & Expenses" (fund accounting:
-  // General Fund / Gaming Fund / Total) modelled on the BC Community Gaming
-  // Grants organization revenue & expense statement. Required for Program Grant
-  // and Capital Project Grant applications. Total column and excess of revenues
-  // over expenses are computed, never stored.
-  orgRevenueStatements: defineTable({
-    societyId: v.id("societies"),
-    organizationName: v.string(),
-    fiscalYearLabel: v.string(),
-    periodLabel: v.optional(v.string()),
-    revenues: v.array(orgStatementLine),
-    expenses: v.array(orgStatementLine),
-    narrative: v.optional(v.string()),
-    status: v.string(), // Draft | Final
-    createdByUserId: v.optional(v.id("users")),
-    createdAtISO: v.string(),
-    updatedAtISO: v.optional(v.string()),
-  }).index("by_society", ["societyId"]),
 };

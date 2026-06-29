@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./lib/untypedServer";
+import { buildOrgRevenueStatement, deriveFiscalRange as deriveRange } from "../shared/orgRevenueStatement";
 
 /**
  * Year-end reporting queries. These are DERIVED from existing finance/grant
@@ -9,18 +10,7 @@ import { query } from "./lib/untypedServer";
  * statement) lives in convex/programStatements.ts.
  */
 
-/** Best-effort [start, end] ISO date range for a fiscal-year label. */
-function deriveFiscalRange(fiscalYear: string): { start: string; end: string } {
-  const match = /^(\d{4})\s*-\s*(\d{4})$/.exec(fiscalYear.trim());
-  if (match) {
-    // Society fiscal years run April 1 → March 31 by convention.
-    return { start: `${match[1]}-04-01`, end: `${match[2]}-03-31` };
-  }
-  if (/^\d{4}$/.test(fiscalYear.trim())) {
-    return { start: `${fiscalYear}-01-01`, end: `${fiscalYear}-12-31` };
-  }
-  return { start: "0000-01-01", end: "9999-12-31" };
-}
+const deriveFiscalRange = deriveRange;
 
 export const annualStatement = query({
   args: { societyId: v.id("societies"), fiscalYear: v.string() },
@@ -102,6 +92,28 @@ export const annualStatement = query({
       incomeByCategory: Array.from(incomeByCategory, ([category, cents]) => ({ category, cents })),
       expenseByCategory: Array.from(expenseByCategory, ([category, cents]) => ({ category, cents })),
     };
+  },
+});
+
+export const orgRevenueExpense = query({
+  args: { societyId: v.id("societies"), fiscalYear: v.string() },
+  returns: v.any(),
+  handler: async (ctx, { societyId, fiscalYear }) => {
+    const society = await ctx.db.get(societyId);
+    const transactions = await ctx.db
+      .query("financialTransactions")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    const accounts = await ctx.db
+      .query("financialAccounts")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    return buildOrgRevenueStatement({
+      organizationName: society?.name ?? "",
+      fiscalYearLabel: fiscalYear,
+      transactions: transactions as any,
+      accounts: accounts as any,
+    });
   },
 });
 
