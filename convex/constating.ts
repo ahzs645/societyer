@@ -1,12 +1,13 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
-  constatingTimeline,
-  currentRegime as computeCurrentRegime,
-  regimeNarrative,
-  validateConstatingEvent,
-  type ConstatingEvent,
-} from "../shared/constating";
+  listPortable,
+  currentRegimePortable,
+  narrativePortable,
+  createPortable,
+  removePortable,
+} from "../shared/functions/constating";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 /**
  * Constating-document timeline (the YCN DB_GLOB_CONSTATING idea): the lineage
@@ -18,63 +19,25 @@ import {
  * load-and-delegate wrappers that map rows into plain ConstatingEvent objects.
  */
 
-/** Map a stored constatingEvents row into the plain shared ConstatingEvent shape. */
-function toConstatingEvent(row: {
-  action: string;
-  jurisdiction: string;
-  legislation: string;
-  regNumber?: string;
-  startISO: string;
-}): ConstatingEvent {
-  return {
-    action: row.action as ConstatingEvent["action"],
-    jurisdiction: row.jurisdiction,
-    legislation: row.legislation,
-    regNumber: row.regNumber,
-    startISO: row.startISO,
-  };
-}
-
 /** Constating events for a society, sorted chronologically. */
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const rows = await ctx.db
-      .query("constatingEvents")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const events = rows.map(toConstatingEvent);
-    return constatingTimeline(events);
-  },
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 /** The governing Act as of a given ISO date (null when none has taken effect). */
 export const currentRegime = query({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
-  handler: async (ctx, { societyId, asOf }) => {
-    const rows = await ctx.db
-      .query("constatingEvents")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const events = rows.map(toConstatingEvent);
-    return computeCurrentRegime(events, asOf);
-  },
+  handler: (ctx, args) => currentRegimePortable(toPortableQueryCtx(ctx), args),
 });
 
 /** Human-readable narrative of the constating chain. */
 export const narrative = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const rows = await ctx.db
-      .query("constatingEvents")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const events = rows.map(toConstatingEvent);
-    return regimeNarrative(events);
-  },
+  handler: (ctx, args) => narrativePortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -88,37 +51,11 @@ export const create = mutation({
     nowISO: v.string(),
   },
   returns: v.any(),
-  handler: async (
-    ctx,
-    { societyId, action, jurisdiction, legislation, regNumber, startISO, nowISO },
-  ) => {
-    const event: ConstatingEvent = {
-      action: action as ConstatingEvent["action"],
-      jurisdiction,
-      legislation,
-      regNumber,
-      startISO,
-    };
-    const { ok, errors } = validateConstatingEvent(event);
-    if (!ok) {
-      throw new Error(errors.join("; "));
-    }
-    return ctx.db.insert("constatingEvents", {
-      societyId,
-      action,
-      jurisdiction,
-      legislation,
-      regNumber,
-      startISO,
-      createdAtISO: nowISO,
-    });
-  },
+  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("constatingEvents") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });

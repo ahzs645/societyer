@@ -1,48 +1,33 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  committeesListPortable,
+  committeeGetPortable,
+  committeeDetailPortable,
+  committeeCreatePortable,
+  committeeUpdatePortable,
+  committeeRemovePortable,
+  committeeAddMemberPortable,
+  committeeRemoveMemberPortable,
+} from "../shared/functions/committees";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("committees")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => committeesListPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("committees") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => committeeGetPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const detail = query({
   args: { id: v.id("committees") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const committee = await ctx.db.get(id);
-    if (!committee) return null;
-    const [members, meetings, tasks, goals] = await Promise.all([
-      ctx.db
-        .query("committeeMembers")
-        .withIndex("by_committee", (q) => q.eq("committeeId", id))
-        .collect(),
-      ctx.db
-        .query("meetings")
-        .withIndex("by_committee", (q) => q.eq("committeeId", id))
-        .collect(),
-      ctx.db
-        .query("tasks")
-        .withIndex("by_committee", (q) => q.eq("committeeId", id))
-        .collect(),
-      ctx.db
-        .query("goals")
-        .withIndex("by_committee", (q) => q.eq("committeeId", id))
-        .collect(),
-    ]);
-    return { committee, members, meetings, tasks, goals };
-  },
+  handler: (ctx, args) => committeeDetailPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -57,23 +42,7 @@ export const create = mutation({
     color: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const id = await ctx.db.insert("committees", {
-      ...args,
-      status: "Active",
-      createdAtISO: new Date().toISOString(),
-    });
-    await ctx.db.insert("activity", {
-      societyId: args.societyId,
-      actor: "You",
-      entityType: "committee",
-      entityId: id,
-      action: "created",
-      summary: `Created committee "${args.name}"`,
-      createdAtISO: new Date().toISOString(),
-    });
-    return id;
-  },
+  handler: (ctx, args) => committeeCreatePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -92,22 +61,13 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    await ctx.db.patch(id, patch);
-  },
+  handler: (ctx, args) => committeeUpdatePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("committees") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const members = await ctx.db
-      .query("committeeMembers")
-      .withIndex("by_committee", (q) => q.eq("committeeId", id))
-      .collect();
-    for (const m of members) await ctx.db.delete(m._id);
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => committeeRemovePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const addMember = mutation({
@@ -121,17 +81,11 @@ export const addMember = mutation({
     memberId: v.optional(v.id("members")),
   },
   returns: v.any(),
-  handler: async (ctx, args) =>
-    ctx.db.insert("committeeMembers", {
-      ...args,
-      joinedAt: new Date().toISOString().slice(0, 10),
-    }),
+  handler: (ctx, args) => committeeAddMemberPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeMember = mutation({
   args: { id: v.id("committeeMembers") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => committeeRemoveMemberPortable(toPortableMutationCtx(ctx), args),
 });
