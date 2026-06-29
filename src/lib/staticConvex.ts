@@ -1730,33 +1730,6 @@ const QUERY_NOT_HANDLED = Symbol("staticConvex.queryNotHandled");
 
 function queryCasesActivity1(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   switch (name) {
-    case "activity:list":
-      return (store?.listRows("activity", args) ?? tables.activity)
-        .sort((a: any, b: any) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")))
-        .slice(0, args?.limit ?? tables.activity.length);
-    case "importSessions:list":
-      return staticImportSessionRows(store, args?.societyId);
-    case "importSessions:get": {
-      const sessionDoc = store?.getRow("documents", args?.sessionId);
-      if (!staticIsImportSession(sessionDoc)) return null;
-      const session = staticHydrateImportSession(sessionDoc);
-      const records = staticImportRecordRows(store, args?.sessionId);
-      return {
-        session: { ...session, summary: staticImportSessionSummary(session, records) },
-        records,
-      };
-    }
-    case "aiAgents:listDefinitions":
-      return aiAgentDefinitions;
-    case "aiAgents:listSkills":
-      return aiSkills.filter((skill: any) => skill.isActive !== false);
-    case "aiAgents:listAllSkills":
-      return aiSkills;
-    case "aiAgents:loadSkills": {
-      const names = new Set(args?.skillNames ?? []);
-      const skills = aiSkills.filter((skill) => names.has(skill.name));
-      return { skills, missing: [...names].filter((name) => !skills.some((skill) => skill.name === name)), message: `Loaded ${skills.length} skill(s).` };
-    }
     case "aiAgents:getToolCatalog": {
       const catalog: Record<string, any[]> = {};
       aiToolCatalog.forEach((tool) => {
@@ -1779,38 +1752,9 @@ function queryCasesActivity1(name: string, args: StaticArgs, store?: StaticDemoD
           .filter((row: any) => row.assetId === asset._id),
       };
     }
-    case "assets:events":
-      return (store?.listRows("assetEvents", args) ?? tables.assetEvents)
-        .filter((row: any) => row.assetId === args?.assetId)
-        .sort((a: any, b: any) => b.happenedAtISO.localeCompare(a.happenedAtISO));
-    case "assets:maintenance":
-      return store?.listRows("assetMaintenance", args) ?? scopedRows(tables.assetMaintenance, args);
-    case "assets:verificationRuns":
-      return store?.listRows("assetVerificationRuns", args) ?? scopedRows(tables.assetVerificationRuns, args);
-    case "assets:verificationItems":
-      return (store?.listRows("assetVerificationItems", args) ?? tables.assetVerificationItems)
-        .filter((row: any) => row.runId === args?.runId);
-    case "assets:receiptLinks": {
-      const rows = store?.listRows("assetReceiptLinks", args) ?? scopedRows(tables.assetReceiptLinks, args);
-      return args?.receiptDocumentId ? rows.filter((row: any) => row.receiptDocumentId === args.receiptDocumentId) : rows;
-    }
-    case "inventoryHub:connections":
-      return store?.listRows("inventoryConnections", args) ?? scopedRows(tables.inventoryConnections, args);
     case "inventoryHub:items": {
       const rows = store?.listRows("inventoryItems", args) ?? scopedRows(tables.inventoryItems, args);
       return args?.itemType ? rows.filter((row: any) => row.itemType === args.itemType) : rows;
-    }
-    case "inventoryHub:locations":
-      return store?.listRows("inventoryLocations", args) ?? scopedRows(tables.inventoryLocations, args);
-    case "inventoryHub:balances": {
-      const rows = store?.listRows("inventoryBalances", args) ?? scopedRows(tables.inventoryBalances, args);
-      return args?.inventoryItemId ? rows.filter((row: any) => row.inventoryItemId === args.inventoryItemId) : rows;
-    }
-    case "inventoryHub:lots": {
-      const rows = store?.listRows("inventoryLots", args) ?? scopedRows(tables.inventoryLots, args);
-      return (args?.inventoryItemId ? rows.filter((row: any) => row.inventoryItemId === args.inventoryItemId) : rows)
-        .slice()
-        .sort((a: any, b: any) => String(a.expiresAt ?? "9999").localeCompare(String(b.expiresAt ?? "9999")));
     }
   }
   return QUERY_NOT_HANDLED;
@@ -1818,28 +1762,6 @@ function queryCasesActivity1(name: string, args: StaticArgs, store?: StaticDemoD
 
 function queryCasesInventoryHub2(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   switch (name) {
-    case "inventoryHub:stockMovements":
-      return (store?.listRows("stockMovements", args) ?? scopedRows(tables.stockMovements, args))
-        .sort((a: any, b: any) => b.movementDate.localeCompare(a.movementDate))
-        .slice(0, args?.limit ?? 100);
-    case "inventoryHub:counts": {
-      const rows = store?.listRows("inventoryCounts", args) ?? scopedRows(tables.inventoryCounts, args);
-      const filtered = args?.status ? rows.filter((row: any) => row.status === args.status) : rows;
-      const lines = store?.listRows("inventoryCountLines", args) ?? scopedRows(tables.inventoryCountLines, args);
-      return filtered
-        .sort((a: any, b: any) => b.startedAtISO.localeCompare(a.startedAtISO))
-        .map((count: any) => ({ ...count, lines: lines.filter((line: any) => line.inventoryCountId === count._id) }));
-    }
-    case "inventoryHub:receiptLinks": {
-      const rows = store?.listRows("assetReceiptLinks", args) ?? scopedRows(tables.assetReceiptLinks, args);
-      return (args?.inventoryItemId ? rows.filter((row: any) => row.inventoryItemId === args.inventoryItemId) : rows)
-        .map((row: any) => ({
-          ...row,
-          receiptDocument: byId(store?.listRows("documents", args) ?? documents, row.receiptDocumentId),
-          asset: byId(store?.listRows("assets", args) ?? tables.assets, row.assetId),
-          inventoryItem: byId(store?.listRows("inventoryItems", args) ?? tables.inventoryItems, row.inventoryItemId),
-        }));
-    }
     case "aiAgents:getChatContext": {
       const catalog: Record<string, any[]> = {};
       aiToolCatalog.forEach((tool) => {
@@ -1864,131 +1786,16 @@ function queryCasesInventoryHub2(name: string, args: StaticArgs, store?: StaticD
     }
     case "aiAgents:executeTool":
       return { success: true, toolName: args?.toolName, rows: [] };
-    case "annualCycle:summary":
-      return annualCycleSummary(args);
     case "aiAgents:listRuns":
       return aiAgentRuns.slice(0, args?.limit ?? aiAgentRuns.length);
     case "aiAgents:auditForRun":
       return aiAgentAuditEvents.filter((event) => event.runId === args?.runId);
-    case "aiAgents:listToolDrafts":
-      return aiToolDrafts.slice(0, args?.limit ?? aiToolDrafts.length);
-    case "aiSettings:getEffective": {
-      const personal = aiProviderSettings.filter((row) => row.societyId === args?.societyId && row.userId === args?.actingUserId);
-      const workspace = aiProviderSettings.filter((row) => row.societyId === args?.societyId && row.scope === "workspace");
-      return {
-        effective: personal.find((row) => row.status === "active") ?? workspace.find((row) => row.status === "active") ?? null,
-        personal,
-        workspace,
-      };
-    }
-    case "aiChat:listThreads":
-      return aiChatThreads.slice(0, args?.limit ?? aiChatThreads.length);
-    case "aiChat:messagesForThread":
-      return aiMessages.filter((message) => message.threadId === args?.threadId);
-    case "apiPlatform:listIntegrationCatalog":
-      return INTEGRATION_CATALOG.map((manifest) => {
-        const installation = tables.pluginInstallations.find((row) => row.slug === manifest.slug);
-        return {
-          ...manifest,
-          installation,
-          installed: installation?.status === "installed",
-          health: {
-            status: installation ? (manifest.status === "planned" ? "planned" : "ready") : "not_installed",
-            checkedAtISO: installation?.updatedAtISO,
-            messages: installation
-              ? ["Static demo integration manifest is installed."]
-              : ["Install this integration to configure credentials, actions, and webhooks."],
-          },
-        };
-      });
-    case "recordLayouts:get":
-      return null;
-    case "agm:noticeDeliveries":
-      return [];
-    case "agm:runForMeeting":
-      return { _id: "static_agm_run", meetingId: args?.meetingId, status: "Ready", steps: [] };
-    case "agendas:getForMeeting": {
-      const meeting = byId(meetings, args?.meetingId);
-      if (!meeting) return null;
-      const items = staticAgendaItemsForMeeting(meeting._id).map((entry, order) => ({
-        _id: `static_agenda_item_${meeting._id}_${order}`,
-        societyId: meeting.societyId,
-        agendaId: `static_agenda_${meeting._id}`,
-        order,
-        type: entry.type || staticAgendaItemType(entry.title),
-        title: entry.title,
-        depth: entry.depth,
-        presenter: entry.presenter,
-        details: entry.details,
-        motionText: entry.motionText,
-        createdAtISO: meeting.scheduledAt,
-      }));
-      if (items.length === 0) return null;
-      return {
-        agenda: {
-          _id: `static_agenda_${meeting._id}`,
-          societyId: meeting.societyId,
-          meetingId: meeting._id,
-          title: `${meeting.title} agenda`,
-          status: "Draft",
-          createdAtISO: meeting.scheduledAt,
-          updatedAtISO: meeting.updatedAtISO ?? meeting.scheduledAt,
-        },
-        items,
-      };
-    }
   }
   return QUERY_NOT_HANDLED;
 }
 
 function queryCasesAgendas3(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   switch (name) {
-    case "agendas:listForSociety":
-      return scopedRows(meetings, args)
-        .map((meeting) => ({
-          _id: `static_agenda_${meeting._id}`,
-          societyId: meeting.societyId,
-          meetingId: meeting._id,
-          title: `${meeting.title} agenda`,
-          status: "Draft",
-          createdAtISO: meeting.scheduledAt,
-          updatedAtISO: meeting.updatedAtISO ?? meeting.scheduledAt,
-        }));
-    case "attestations:missingForYear":
-      return directors.filter((director) => director._id === "static_director_sam");
-    case "bylawRules:getActive":
-    case "bylawRules:getForDate":
-      return bylawRules;
-    case "bylawRules:list":
-      return tables.bylawRuleSets;
-    case "committees:detail":
-      return { committee: byId(committees, args?.id), members: [], meetings: [], tasks, goals };
-    case "commitments:eventsForSociety":
-      return scopedRows(commitmentEvents, args).sort((a, b) => b.happenedAtISO.localeCompare(a.happenedAtISO));
-    case "commitments:eventsForCommitment":
-      return commitmentEvents.filter((event) => event.commitmentId === args?.commitmentId);
-    case "dashboard:summary":
-      return dashboardSummaryFromStore(store, args);
-    case "documentComments:listForDocument":
-      return documentComments
-        .filter((comment) => comment.documentId === args?.documentId)
-        .sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO));
-    case "documents:reviewQueues":
-      return staticDocumentReviewQueuesFromStore(store, args);
-    case "documentVersions:latest": {
-      const rows = store?.listRows("documentVersions", args) ?? scopedRows(tables.documentVersions, args);
-      return rows
-        .filter((row) => row.documentId === args?.documentId)
-        .sort((a, b) => b.version - a.version)[0] ?? null;
-    }
-    case "documentVersions:listForDocument":
-      return (store?.listRows("documentVersions", args) ?? scopedRows(tables.documentVersions, args))
-        .filter((row) => row.documentId === args?.documentId)
-        .sort((a, b) => b.version - a.version);
-    case "evidenceRegisters:overview":
-      return evidenceRegistersOverview;
-    case "organizationHistory:list":
-      return orgHistoryBundle;
     case "paperless:connectionStatus":
       return {
         connection: paperlessConnections[0],
@@ -1999,18 +1806,6 @@ function queryCasesAgendas3(name: string, args: StaticArgs, store?: StaticDemoDe
           baseUrl: "demo://paperless-ngx",
         },
       };
-    case "paperless:listConnection":
-      return paperlessConnections[0];
-    case "paperless:recentSyncs":
-      return paperlessDocumentSyncs
-        .slice(0, args?.limit ?? paperlessDocumentSyncs.length)
-        .map((sync) => ({
-          ...sync,
-          documentTitle: byId(documents, sync.documentId)?.title ?? sync.title,
-          documentCategory: byId(documents, sync.documentId)?.category,
-        }));
-    case "paperless:syncForDocument":
-      return paperlessDocumentSyncs.find((sync) => sync.documentId === args?.documentId) ?? null;
   }
   return QUERY_NOT_HANDLED;
 }
@@ -2040,360 +1835,36 @@ function queryCasesPaperless4(name: string, args: StaticArgs, store?: StaticDemo
           usage: "Financials, grants, donation evidence, and volunteer screening files.",
         },
       ];
-    case "elections:get":
-      return electionBundle(args);
-    case "elections:listMine":
-      return mineElections(args);
-    case "elections:listNominations":
-      return [];
-    case "elections:tally":
-      return electionTally(args);
-    case "exports:countTablePage":
-      return { count: staticExportRows(args?.table, args).length, isDone: true, continueCursor: "" };
-    case "exports:exportTable":
-      return staticExportRows(args?.table, args);
-    case "exports:exportWorkspace":
-      return staticExportWorkspace(args);
-    case "exports:listExportableTables":
-      return staticExportSummaries(args);
-    case "exports:validateCurrentDatabase":
-      return staticExportValidation(args);
     case "filingBot:buildFilingPacket":
       return { filing: byId(filings, args?.filingId), documents: [] };
-    case "filingBot:runsForFiling":
-      return [];
-    case "filingExports:craPreFill":
-      return {
-        form: "CRA T3010 Registered Charity Information Return",
-        charityName: society.name,
-        fiscalPeriodEnd: "2026-03-31",
-        totalRevenue: 186400,
-        totalExpenditures: 171250,
-        netAssets: 62400,
-        directorCount: directors.filter((director) => director.status === "Active").length,
-        dueDate: "2026-09-30",
-      };
-    case "filingExports:societiesOnlinePreFill":
-      return {
-        formName: "BC Societies Annual Report",
-        societyName: society.name,
-        incorporationNumber: society.incorporationNumber,
-        agmHeldOn: "2025-06-19",
-        registeredOffice: society.registeredOfficeAddress,
-        mailingAddress: society.mailingAddress,
-        directors: directors.map((director) => ({
-          fullName: `${director.firstName} ${director.lastName}`,
-          position: director.position,
-          email: director.email,
-          isBCResident: director.isBCResident,
-          termStart: director.termStart,
-        })),
-        feeCad: 40,
-      };
-    case "financials:detailByFiscalYear": {
-      const financial = financials.find((row) => row.fiscalYear === args?.fiscalYear) ?? null;
-      const financialDocument = documents.find((row) => row._id === "static_document_financials");
-      return {
-        financial,
-        financials: financial ? [financial] : [],
-        imports: [],
-        documents: financialDocument ? [financialDocument] : [],
-        budgets: [],
-        presentedAtMeeting: null,
-      };
-    }
-    case "accounting:chartAccounts":
-      return scopedRows(store?.listRows("financialAccounts", args) ?? financialAccounts, args)
-        .sort((a, b) => String(a.code ?? "").localeCompare(String(b.code ?? "")) || a.name.localeCompare(b.name));
-    case "accounting:fiscalPeriods":
-      return scopedRows(store?.listRows("accountingFiscalPeriods", args) ?? accountingFiscalPeriods, args)
-        .sort((a, b) => a.startDate.localeCompare(b.startDate));
-    case "accounting:counterparties":
-      return scopedRows(store?.listRows("accountingCounterparties", args) ?? accountingCounterparties, args)
-        .sort((a, b) => a.name.localeCompare(b.name));
   }
   return QUERY_NOT_HANDLED;
 }
 
 function queryCasesAccounting5(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   switch (name) {
-    case "accounting:fundRestrictions":
-      return scopedRows(store?.listRows("fundRestrictions", args) ?? fundRestrictions, args)
-        .sort((a, b) => a.name.localeCompare(b.name));
-    case "accounting:restrictedFundBalances":
-      return staticRestrictedFundBalances(staticAccountingSeed(store, args), args);
-    case "accounting:accountMappings":
-      return scopedRows(store?.listRows("accountingAccountMappings", args) ?? accountingAccountMappings, args)
-        .sort((a, b) => `${a.provider}:${a.externalAccountName}`.localeCompare(`${b.provider}:${b.externalAccountName}`));
-    case "accounting:journalEntries": {
-      const entries = scopedRows(store?.listRows("journalEntries", args) ?? journalEntries, args)
-        .filter((entry) => !args?.status || entry.status === args.status)
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, args?.limit ?? 100);
-      const lines = store?.listRows("journalLines", args) ?? journalLines;
-      return entries.map((entry) => ({
-        ...entry,
-        lines: lines.filter((line) => line.journalEntryId === entry._id).sort((a, b) => a.lineOrder - b.lineOrder),
-      }));
-    }
-    case "accounting:journalEntry": {
-      const entry = byId(store?.listRows("journalEntries", args) ?? journalEntries, args?.id);
-      if (!entry) return null;
-      const lines = store?.listRows("journalLines", args) ?? journalLines;
-      return { ...entry, lines: lines.filter((line) => line.journalEntryId === entry._id).sort((a, b) => a.lineOrder - b.lineOrder) };
-    }
-    case "accounting:trialBalance":
-      return staticTrialBalance(staticAccountingSeed(store, args), args);
-    case "accounting:generalLedger":
-      return staticGeneralLedger(staticAccountingSeed(store, args), args);
-    case "accounting:exportCsv":
-      return staticAccountingCsv(staticAccountingSeed(store, args), args);
-    case "accounting:boardAuditorPackage":
-      return staticBoardAuditorPackage(staticAccountingSeed(store, args), args);
-    case "financialHub:accounts":
-      return storeFinancialAccounts(store, args);
-    case "financialHub:connections":
-      return financialConnections;
-    case "financialHub:getConnection":
-      return byId(financialConnections, args?.id) ?? financialConnections[0];
     case "financialHub:oauthUrl":
       return { provider: "wave", live: false, demoAvailable: true };
-    case "financialHub:summary":
-      return financialSummary(store, args);
-    case "financialHub:transactions": {
-      const rows = storeFinancialTransactions(store, args).slice().sort((a, b) => b.date.localeCompare(a.date));
-      return rows.slice(0, args?.limit ?? rows.length);
-    }
-    case "financialHub:transactionsForAccountExternalId": {
-      const accounts = storeFinancialAccounts(store, args);
-      const account = accounts.find((row) => row.externalId === args?.externalId) ?? null;
-      const rows = account
-        ? storeFinancialTransactions(store, args)
-            .filter((row) => row.accountId === account._id)
-            .sort((a, b) => b.date.localeCompare(a.date))
-        : [];
-      return {
-        account,
-        transactions: rows.slice(0, args?.limit ?? 500),
-        total: rows.length,
-      };
-    }
-    case "financialHub:transactionsForCounterpartyExternalId": {
-      const accounts = storeFinancialAccounts(store, args);
-      const rows = storeFinancialTransactions(store, args)
-        .filter((row) => row.counterpartyExternalId === args?.externalId)
-        .filter((row) => !args?.resourceType || row.counterpartyResourceType === args.resourceType)
-        .sort((a, b) => b.date.localeCompare(a.date));
-      return {
-        transactions: rows.slice(0, args?.limit ?? 500).map((row) => {
-          const account = accounts.find((candidate) => candidate._id === row.accountId) ?? null;
-          const accountResource = account
-            ? waveCacheResources.find((resource) => resource.resourceType === "account" && resource.externalId === account.externalId) ?? null
-            : null;
-          return { ...row, account, accountResource };
-        }),
-        total: rows.length,
-        linkedTotalCents: rows.reduce((sum, row) => sum + row.amountCents, 0),
-      };
-    }
-    case "financialHub:transactionsForCategoryAccountExternalId": {
-      const normalizedLabel = normalizeStaticCategoryLabel(args?.label);
-      const accounts = storeFinancialAccounts(store, args);
-      const rows = storeFinancialTransactions(store, args)
-        .filter((row) => {
-          if (row.categoryAccountExternalId === args?.externalId) return true;
-          return Boolean(!row.categoryAccountExternalId && normalizedLabel && normalizeStaticCategoryLabel(row.category) === normalizedLabel);
-        })
-        .sort((a, b) => b.date.localeCompare(a.date));
-      return {
-        transactions: rows.slice(0, args?.limit ?? 500).map((row) => {
-          const account = accounts.find((candidate) => candidate._id === row.accountId) ?? null;
-          const accountResource = account
-            ? waveCacheResources.find((resource) => resource.resourceType === "account" && resource.externalId === account.externalId) ?? null
-            : null;
-          return { ...row, account, accountResource };
-        }),
-        total: rows.length,
-        linkedTotalCents: rows.reduce((sum, row) => sum + row.amountCents, 0),
-      };
-    }
   }
   return QUERY_NOT_HANDLED;
 }
 
 function queryCasesFinancialHub6(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
-  switch (name) {
-    case "financialHub:operatingSubscriptions":
-      return operatingSubscriptions.map((row) => {
-        const monthlyEstimateCents = staticMonthlyEstimateCents(row.amountCents, row.interval);
-        return {
-          ...row,
-          monthlyEstimateCents,
-          annualEstimateCents: monthlyEstimateCents * 12,
-        };
-      });
-    case "library:overview":
-      return staticLibraryOverview();
-    case "fundingSources:list":
-      return staticFundingSourcesList();
-    case "fundingSources:rollup":
-      return staticFundingRollup(args);
-    case "waveCache:summary": {
-      const snapshot = waveCacheSnapshots[0];
-      return {
-        ...snapshot,
-        resourceCounts: JSON.parse(snapshot.resourceCountsJson),
-      };
-    }
-    case "waveCache:resources": {
-      const needle = args?.search?.trim?.().toLowerCase?.();
-      return waveCacheResources
-        .filter((row) => !args?.resourceType || row.resourceType === args.resourceType)
-        .filter((row) => !needle || row.searchText.includes(needle))
-        .slice(0, args?.limit ?? waveCacheResources.length)
-        .map(({ rawJson, ...row }) => ({
-          ...row,
-          ...staticCounterpartyStats(row.externalId),
-          ...staticCategoryAccountStats(row.externalId, row.label),
-          hasRawJson: Boolean(rawJson),
-        }));
-    }
-    case "waveCache:resource": {
-      const row = byId(waveCacheResources, args?.id);
-      return row
-        ? { ...row, ...staticCounterpartyStats(row.externalId), ...staticCategoryAccountStats(row.externalId, row.label), raw: JSON.parse(row.rawJson) }
-        : null;
-    }
-    case "waveCache:resourceByExternalId": {
-      const row = waveCacheResources.find(
-        (resource) =>
-          resource.externalId === args?.externalId &&
-          (!args?.resourceType || resource.resourceType === args.resourceType),
-      );
-      return row
-        ? { ...row, ...staticCounterpartyStats(row.externalId), ...staticCategoryAccountStats(row.externalId, row.label), raw: JSON.parse(row.rawJson) }
-        : null;
-    }
-    case "waveCache:structures":
-      return waveCacheStructures.slice(0, args?.limit ?? waveCacheStructures.length).map((row) => ({
-        ...row,
-        fields: JSON.parse(row.fieldsJson),
-      }));
-    case "grants:applications":
-      return tables.grantApplications;
-    case "grants:publicOpenings":
-      return tables.grants.filter((grant) => grant.allowPublicApplications);
-    case "grants:reports":
-      return tables.grantReports;
-    case "grants:summary":
-      return grantsSummary();
-    case "grants:transactions":
-      return tables.grantTransactions;
-    case "grantSources:library":
-      return staticGrantSourceLibrary();
-    case "grantSources:list":
-      return tables.grantSources;
-    case "grantSources:listWithLibrary":
-      return {
-        library: staticGrantSourceLibrary().map((source: any) => ({
-          ...source,
-          _id: tables.grantSources.find((row) => row.libraryKey === source.libraryKey)?._id,
-          installed: tables.grantSources.some((row) => row.libraryKey === source.libraryKey),
-        })),
-        workspace: tables.grantSources,
-      };
-    case "grantSources:candidates":
-      return tables.grantOpportunityCandidates;
-  }
   return QUERY_NOT_HANDLED;
 }
 
 function queryCasesMembers7(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   switch (name) {
-    case "members:get":
-      return store?.getRow("members", args?.id) ?? byId(members, args?.id);
-    case "meetings:get":
-      return byId(meetings, args?.id) ?? meetings[0];
     case "meetingMaterials:packageForMeeting":
       return staticMeetingPackage(args);
-    case "meetingMaterials:listForMeeting":
-      return staticMeetingPackage(args).materials;
-    case "meetingMaterials:listForSociety":
-      return meetingMaterials.map((material) => ({
-        ...material,
-        document: byId(documents, material.documentId),
-        meeting: byId(meetings, material.meetingId),
-      }));
-    case "minutes:getByMeeting":
-      return minutes.find((row) => row.meetingId === args?.meetingId) ?? null;
-    case "notifications:list":
-      return notifications.slice(0, args?.limit ?? notifications.length);
-    case "notifications:unreadCount":
-      return notifications.filter((notification) => !notification.readAt).length;
-    case "objectMetadata:getFullTableSetup":
-      return staticRecordTableSetup(args);
-    case "publicPortal:getSocietyBySlug":
-      return society.publicSlug === args?.slug ? society : null;
-    case "publicPortal:grantIntakeContext":
-      if (args?.slug !== society.publicSlug || !society.publicTransparencyEnabled || !society.publicGrantIntakeEnabled) return null;
-      return { society, grants: tables.grants.filter((grant) => grant.allowPublicApplications), committees };
-    case "publicPortal:volunteerIntakeContext":
-      if (args?.slug !== society.publicSlug || !society.publicTransparencyEnabled || !society.publicVolunteerIntakeEnabled) return null;
-      return { society, grants: tables.grants, committees };
-    case "signatures:listForEntity":
-      return (store?.listRows("signatures", {}) ?? [])
-        .filter((row: any) => row.entityType === args?.entityType && row.entityId === args?.entityId)
-        .sort((a: any, b: any) => String(a.signedAtISO ?? "").localeCompare(String(b.signedAtISO ?? "")));
-    case "signatures:listProfilesForSociety":
-      return (store?.listRows("signatureProfiles", { societyId: args?.societyId ?? SOCIETY_ID }) ?? [])
-        .sort((a: any, b: any) => String(a.signerName ?? "").localeCompare(String(b.signerName ?? "")));
-    case "retention:expiredForSociety":
-      return [];
-    case "subscriptions:allSubscriptions":
-      return memberSubscriptions;
-    case "subscriptions:getPlan":
-      return byId(subscriptionPlans, args?.id);
-    case "subscriptions:feeTimeline":
-      return membershipFeePeriods
-        .map((period) => ({
-          ...period,
-          planName: subscriptionPlans.find((plan) => plan._id === period.planId)?.name,
-          activePlan: subscriptionPlans.find((plan) => plan._id === period.planId)?.active,
-        }))
-        .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom) || a.label.localeCompare(b.label));
-    case "subscriptions:plans":
-      return subscriptionPlans;
-    case "transcripts:getByMeeting":
-    case "transcripts:jobForMeeting":
-      return null;
   }
   return QUERY_NOT_HANDLED;
 }
 
 function queryCasesTransparency8(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   switch (name) {
-    case "transparency:listPublications":
-      return tables.transparency;
     case "transparency:publicCenter":
       return publicCenter(args);
-    case "treasury:budgetVariance":
-      return budgetVariance(store, args);
-    case "treasury:profitAndLoss":
-      return profitAndLoss(args, store);
-    case "treasury:restrictedFunds":
-      return restrictedFunds();
-    case "yearEnd:annualStatement":
-      return staticAnnualStatement(args, store);
-    case "yearEnd:restrictedFundStatement":
-      return staticRestrictedFundStatement(args, store);
-    case "yearEnd:orgRevenueExpense":
-      return staticOrgRevenueExpense(args, store);
-    case "yearEnd:readiness":
-      return staticYearEndReadiness(args, store);
-    case "orgChartAssignments:list":
-      return tables.orgChartAssignments;
-    case "users:get":
-      return store?.getRow("users", args?.id) ?? byId(users, args?.id) ?? users[0];
     case "permissions:myPermissions": {
       const permUser = store?.getRow("users", args?.userId) ?? byId(users, args?.userId) ?? users[0];
       return { role: permUser?.role ?? "Owner", permissions: staticPermissionsForRole(permUser?.role ?? "Owner") };
@@ -2402,24 +1873,10 @@ function queryCasesTransparency8(name: string, args: StaticArgs, store?: StaticD
       const permUser = store?.getRow("users", args?.userId) ?? byId(users, args?.userId) ?? users[0];
       return staticPermissionsForRole(permUser?.role ?? "Owner").includes(args?.permission);
     }
-    case "volunteers:applications":
-      return tables.volunteerApplications;
-    case "volunteers:screenings":
-      return tables.volunteerScreenings;
-    case "volunteers:summary":
-      return { active: tables.volunteers.length, pendingApplications: tables.volunteerApplications.length };
     case "workflows:listCatalog":
       return workflowCatalog;
-    case "workflows:list":
-      return scopedRows(workflows, args);
     case "workflows:get":
       return byId(workflows, args?.id);
-    case "workflows:listRuns":
-      return workflowRuns.slice(0, args?.limit ?? workflowRuns.length);
-    case "workflows:runsForWorkflow":
-      return workflowRuns.filter((run) => run.workflowId === args?.workflowId);
-    case "workflows:getRun":
-      return byId(workflowRuns, args?.id);
   }
   return QUERY_NOT_HANDLED;
 }
@@ -4060,24 +3517,6 @@ class StaticDemoDexieStore {
 
   queryResult(name: string, args: StaticArgs) {
     switch (name) {
-      case "agendas:getForMeeting":
-        return this.agendaForMeeting(args?.meetingId);
-      case "agendas:get": {
-        const meetingId = String(args?.agendaId ?? "").replace(/^static_agenda_/, "");
-        return this.agendaForMeeting(meetingId);
-      }
-      case "agendas:listForMeeting": {
-        const record = this.agendaForMeeting(args?.meetingId);
-        return record ? [record.agenda] : [];
-      }
-      case "agendas:listForSociety":
-        return scopedRows(this.rows("meetings"), args).map((meeting) => this.agendaSummaryForMeeting(meeting));
-      case "meetings:get":
-        return this.getRow("meetings", args?.id) ?? this.listRows("meetings", args)[0] ?? null;
-      case "meetings:list":
-        return this.listRows("meetings", args);
-      case "minutes:getByMeeting":
-        return this.rows("minutes").find((row) => row.meetingId === args?.meetingId) ?? null;
       case "minutes:get":
         return this.getRow("minutes", args?.id);
     }
