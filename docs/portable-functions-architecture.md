@@ -1,20 +1,27 @@
 # Portable Functions + `ctx.db` Repository Contract
 
-> Status: **Phases 0–2 landed** — foundation, the live local async runtime, and
-> `convex-test` as a conformance oracle, with the first query (`votingPower`) and
-> first mutation (`upsertRightsClass`) ported. This document is the design record
-> and the migration plan. It realizes — and supersedes the "keep & expand the
-> static mirror" parts of — [`electron-local-first-plan.md`](./electron-local-first-plan.md).
+> Status: **Phases 0–3 landed** — foundation, the live local async runtime,
+> `convex-test` as a conformance oracle, and the bulk of the domain port:
+> **700+ functions across ~90 domains** now run as one portable handler on all
+> three runtimes (up from the first `votingPower`/`upsertRightsClass` pair). The
+> remaining un-ported handlers are the genuinely non-portable tail (document/
+> template generation, `ctx.storage` uploads, network/Wave sync, crypto token
+> hashing, AI inference, seed maintenance). This document is the design record and
+> the migration plan. It realizes — and supersedes the "keep & expand the static
+> mirror" parts of — [`electron-local-first-plan.md`](./electron-local-first-plan.md).
 
 ## Why
 
-Societyer ships a hosted-Convex web app **and** an offline/desktop runtime. Today
-the offline runtime is a ~10,900-line hand-written mirror of the backend
-(`src/lib/staticConvex.ts` + siblings) that re-implements ~300 functions by hand,
+Societyer ships a hosted-Convex web app **and** an offline/desktop runtime. The
+offline runtime began as a ~10,900-line hand-written mirror of the backend
+(`src/lib/staticConvex.ts` + siblings) that re-implemented ~300 functions by hand,
 guarded by a name-coverage ledger (`src/lib/staticConvexParity.ts`). That mirror
-is the symptom of a missing abstraction: there is no `ctx.db` seam that lets the
-**real** Convex handlers run on a non-Convex store, so every handler gets a
-second, hand-maintained copy that drifts (76 writes are tracked as not-yet-mirrored).
+was the symptom of a missing abstraction: there was no `ctx.db` seam that let the
+**real** Convex handlers run on a non-Convex store, so every handler got a
+second, hand-maintained copy that drifted (76 writes were once tracked as
+not-yet-mirrored; that ledger is now down to **12**, all genuinely non-portable —
+`ctx.storage` logo uploads, an org-history importer, `users:setRole`, and the
+multi-event calendar stager).
 
 The fix is one set of **portable functions** running on a bounded `ctx`
 contract, with a thin adapter per runtime:
@@ -146,19 +153,32 @@ the concrete providers. Budget the SDK extraction as a separate investment
   (`scripts/check-portable-convex-oracle.ts`): runs the ported functions on a
   **real** Convex `ctx.db` + schema and diffs against the local engines. It is an
   **oracle, not the production engine** (it depends on `node:async_hooks`).
-- **Phase 3 — in progress.** Ported so far: `votingPower` (query),
-  `upsertRightsClass` (mutation), the cap-table transfer domain
-  (`upsertRightsholdingTransfer` + `syncRightsHoldings`, `removeRightsholdingTransfer`,
-  `removeRightsClass`) — the **multi-row** atomic write
-  (`scripts/check-portable-captable.ts`) — and the **members** CRUD domain
-  (`list`/`get`/`create`/`update`/`remove`; `merge` deferred — it rewires FKs
-  across ~20 tables behind a Director role). All are live in the registry. ~145
-  modules remain; port domain-by-domain, deleting each mirror case as its
-  conformance test goes green. Clean-up **done**: the option allowlist moved to
-  `shared/orgHubOptions.ts` (re-exported from `convex/lib/orgHubOptions`).
-  Demo-fixture review **done**: the demo seed has no rights-ledger rows, so
-  `syncRightsHoldings` has nothing to rewrite — the transfer mutations are now in
-  the live registry (verified by `check-portable-live-runtime.ts`).
+- **Phase 3 — substantially complete.** **700+ functions across ~90 domains** are
+  ported and live in `shared/functions/registry.ts` — from the seed `votingPower`/
+  `upsertRightsClass`/cap-table/`members` work through whole-domain ports of
+  accounting, assets, inventoryHub, grants, elections, volunteers, notifications,
+  financialHub, communications, workflows, apiPlatform, paperless, importSessions,
+  transcripts, aiAgents, bylawAmendments, legalOperations role-holders, and many
+  more. Each Convex handler is now a one-line delegation
+  (`handler: (ctx, args) => fnPortable(toPortable{Query,Mutation}Ctx(ctx), args)`).
+  - **`requireRole` is portable.** It only reads the `users` table, so it moved to
+    `shared/functions/access.ts` (`requireRolePortable`, with `ROLES`/`canActAs`);
+    the Convex `requireRole` delegates to it. This unlocked the role-gated mutation
+    surface across every domain — handlers enforce the same rule live and offline.
+  - **Layering preserved.** `shared/` never imports `convex/`. Pure helpers that
+    were convex-resident moved to `shared/` with thin re-export shims left behind
+    (`shared/accountingCore.ts`, `shared/functions/importSessionHelpers/*`,
+    `shared/accountingMappingCandidates.ts`, `shared/orgHubOptions.ts`).
+  - **The registry is generated, not hand-typed.**
+    `scripts/generate-portable-registry.mjs` derives `definePortable{Query,Mutation}`
+    entries from the Convex delegations (parsing `=> fn(toPortable…Ctx(ctx)` plus
+    the `../shared/functions/*` imports) and dedupes against the existing registry,
+    so adding a domain is mechanical.
+  - **What stays on Convex (by design):** document/template/packet generation
+    (legalOperations), `ctx.storage` upload/getUrl (logos, file attachments),
+    `ctx.scheduler`/cron, `fetch`/network (Wave sync, OAuth, paperless pull),
+    crypto (API-token hashing), AI inference, and seed/backfill maintenance — each
+    routes through an explicit capability tier or remains a Convex-only action.
 - **CI:** `.github/workflows/portable-conformance.yml` runs the four
   `test:portable-*` suites + the parity gate + domain regressions on every push/PR,
   so a port that breaks cross-runtime agreement fails CI.
