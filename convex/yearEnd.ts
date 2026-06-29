@@ -62,6 +62,37 @@ export const annualStatement = query({
       }
     }
 
+    // Counterparty / grant breakdowns from posted journal lines tagged in the
+    // accounting workbench. Derived separately from the category breakdown above
+    // (which comes from bank transactions) so the new line tags surface here.
+    const [counterpartyRows, grantRows, postedEntries, journalLines] = await Promise.all([
+      ctx.db.query("accountingCounterparties").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("grants").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
+      ctx.db.query("journalLines").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ]);
+    const counterpartyName = new Map<string, string>((counterpartyRows as any[]).map((c) => [String(c._id), c.name]));
+    const grantTitle = new Map<string, string>((grantRows as any[]).map((g) => [String(g._id), g.title]));
+    const matchedPosted = (postedEntries as any[]).filter((e) => e.fiscalYear === fiscalYear || (e.date >= start && e.date <= end));
+    // Fall back to all posted entries when none fall in the parsed range, so a
+    // sparsely-dated demo dataset still produces a counterparty/grant breakdown
+    // (mirrors the transaction fallback above).
+    const entryInFy = new Set((matchedPosted.length ? matchedPosted : (postedEntries as any[])).map((e) => String(e._id)));
+    const byCounterparty = new Map<string, { incomeCents: number; expenseCents: number }>();
+    const byGrant = new Map<string, { incomeCents: number; expenseCents: number }>();
+    const bucket = (map: Map<string, { incomeCents: number; expenseCents: number }>, key: string, type: string, cents: number) => {
+      const cur = map.get(key) ?? { incomeCents: 0, expenseCents: 0 };
+      if (type === "Income") cur.incomeCents += cents;
+      else if (type === "Expense") cur.expenseCents += cents;
+      map.set(key, cur);
+    };
+    for (const line of journalLines as any[]) {
+      if (!entryInFy.has(String(line.journalEntryId))) continue;
+      const type = accountMap.get(String(line.accountId))?.accountType ?? "Other";
+      if (line.counterpartyId) bucket(byCounterparty, String(line.counterpartyId), type, line.amountCents);
+      if (line.grantId) bucket(byGrant, String(line.grantId), type, line.amountCents);
+    }
+
     const presentedAtMeeting = financial?.presentedAtMeetingId
       ? await ctx.db.get(financial.presentedAtMeetingId)
       : null;
@@ -91,6 +122,10 @@ export const annualStatement = query({
       })),
       incomeByCategory: Array.from(incomeByCategory, ([category, cents]) => ({ category, cents })),
       expenseByCategory: Array.from(expenseByCategory, ([category, cents]) => ({ category, cents })),
+      byCounterparty: Array.from(byCounterparty, ([id, v]) => ({ id, name: counterpartyName.get(id) ?? "Unknown", ...v }))
+        .sort((a, b) => (b.incomeCents + b.expenseCents) - (a.incomeCents + a.expenseCents)),
+      byGrant: Array.from(byGrant, ([id, v]) => ({ id, title: grantTitle.get(id) ?? "Unknown", ...v }))
+        .sort((a, b) => (b.incomeCents + b.expenseCents) - (a.incomeCents + a.expenseCents)),
     };
   },
 });

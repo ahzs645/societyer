@@ -843,6 +843,33 @@ function staticAnnualStatement(args: StaticArgs, store?: StaticDemoDexieStore | 
   const revenueCents = financial?.revenueCents ?? Array.from(incomeByCategory.values()).reduce((a, b) => a + b, 0);
   const expensesCents = financial?.expensesCents ?? Array.from(expenseByCategory.values()).reduce((a, b) => a + b, 0);
 
+  // Counterparty / grant breakdowns from posted journal lines (mirrors yearEnd.ts).
+  const accounts = storeFinancialAccounts(store, args);
+  const accountTypeById = new Map<string, string>(accounts.map((a: any) => [String(a._id), a.accountType]));
+  const counterpartyName = new Map<string, string>((store?.listRows("accountingCounterparties", args) ?? scopedRows(accountingCounterparties, args)).map((c: any) => [String(c._id), c.name]));
+  const grantTitle = new Map<string, string>((store?.listRows("grants", args) ?? scopedRows(tables.grants, args)).map((g: any) => [String(g._id), g.title]));
+  const allPosted = (store?.listRows("journalEntries", args) ?? scopedRows(journalEntries, args)).filter((e: any) => e.status === "posted");
+  const matchedPosted = allPosted.filter((e: any) => e.fiscalYear === fiscalYear);
+  // Mirror the transaction fallback above: if nothing matches the selected FY
+  // label (demo entries are tagged by calendar year), use all posted entries.
+  const postedEntries = matchedPosted.length ? matchedPosted : allPosted;
+  const entryInFy = new Set(postedEntries.map((e: any) => String(e._id)));
+  const jLines = store?.listRows("journalLines", args) ?? scopedRows(journalLines, args);
+  const byCounterpartyMap = new Map<string, { incomeCents: number; expenseCents: number }>();
+  const byGrantMap = new Map<string, { incomeCents: number; expenseCents: number }>();
+  const bucket = (map: Map<string, { incomeCents: number; expenseCents: number }>, key: string, type: string, cents: number) => {
+    const cur = map.get(key) ?? { incomeCents: 0, expenseCents: 0 };
+    if (type === "Income") cur.incomeCents += cents;
+    else if (type === "Expense") cur.expenseCents += cents;
+    map.set(key, cur);
+  };
+  for (const line of jLines) {
+    if (!entryInFy.has(String(line.journalEntryId))) continue;
+    const type = accountTypeById.get(String(line.accountId)) ?? "Other";
+    if (line.counterpartyId) bucket(byCounterpartyMap, String(line.counterpartyId), type, line.amountCents);
+    if (line.grantId) bucket(byGrantMap, String(line.grantId), type, line.amountCents);
+  }
+
   return {
     fiscalYear,
     financial,
@@ -865,6 +892,10 @@ function staticAnnualStatement(args: StaticArgs, store?: StaticDemoDexieStore | 
     })),
     incomeByCategory: Array.from(incomeByCategory, ([category, cents]) => ({ category, cents })),
     expenseByCategory: Array.from(expenseByCategory, ([category, cents]) => ({ category, cents })),
+    byCounterparty: Array.from(byCounterpartyMap, ([id, v]) => ({ id, name: counterpartyName.get(id) ?? "Unknown", ...v }))
+      .sort((a, b) => (b.incomeCents + b.expenseCents) - (a.incomeCents + a.expenseCents)),
+    byGrant: Array.from(byGrantMap, ([id, v]) => ({ id, title: grantTitle.get(id) ?? "Unknown", ...v }))
+      .sort((a, b) => (b.incomeCents + b.expenseCents) - (a.incomeCents + a.expenseCents)),
   };
 }
 
