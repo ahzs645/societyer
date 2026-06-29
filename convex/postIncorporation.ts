@@ -1,6 +1,7 @@
 import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
-import { postIncorporationStepsForOrganization } from "../shared/postIncorporationSteps";
+import { checklistPortable } from "../shared/functions/postIncorporation";
+import { toPortableQueryCtx } from "./lib/portable";
 
 /**
  * Post-incorporation guided checklist (YCN "next steps after incorporating").
@@ -12,25 +13,5 @@ import { postIncorporationStepsForOrganization } from "../shared/postIncorporati
 export const checklist = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const society = await ctx.db.get(societyId);
-    if (!society) return { steps: [], generatedPacketKeys: [] };
-
-    const steps = postIncorporationStepsForOrganization(society as any);
-
-    // A packet counts as "started" when a precedent run was staged for it.
-    const runs = await ctx.db
-      .query("legalPrecedentRuns")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const generatedPacketKeys = new Set<string>();
-    for (const run of runs) {
-      for (const id of run.sourceExternalIds ?? []) {
-        const match = /^societyer:corporation-packet-run:(.+)$/.exec(String(id));
-        if (match) generatedPacketKeys.add(match[1]);
-      }
-    }
-
-    return { steps, generatedPacketKeys: Array.from(generatedPacketKeys) };
-  },
+  handler: (ctx, args) => checklistPortable(toPortableQueryCtx(ctx), args),
 });

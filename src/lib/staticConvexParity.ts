@@ -101,7 +101,6 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "grants:convertApplication",
   "grants:reviewApplication",
   "grants:submitApplication",
-  "invitations:revoke",
   "meetingTemplates:duplicate",
   "meetings:applyTemplate",
   "members:merge",
@@ -138,8 +137,6 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "volunteers:submitApplication",
   "workflowPackages:markFiled",
   "workflows:addNode",
-  "writtenResolutions:markFailed",
-  "writtenResolutions:sign",
 ]);
 
 // Verbs the generic CRUD fallback in staticConvex.ts handles by table convention.

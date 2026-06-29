@@ -1,9 +1,7 @@
 import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
-import {
-  deriveComplianceDeadlines,
-  type ComplianceSettings,
-} from "../shared/corporationSettings";
+import { complianceDeadlinesPortable } from "../shared/functions/corporationSettings";
+import { toPortableQueryCtx } from "./lib/portable";
 
 /**
  * Derive compliance deadlines (AGM / fiscal-year-end / annual report) from a
@@ -17,19 +15,5 @@ import {
 export const complianceDeadlines = query({
   args: { societyId: v.id("societies"), fromISO: v.string() },
   returns: v.any(),
-  handler: async (ctx, { societyId, fromISO }) => {
-    const society = await ctx.db.get(societyId);
-    if (!society) return [];
-    const settings: ComplianceSettings = {
-      agmMonth: (society as Record<string, unknown>).agmMonth as number | undefined,
-      agmDay: (society as Record<string, unknown>).agmDay as number | undefined,
-      fiscalYearEnd: society.fiscalYearEnd ?? undefined,
-      incorporationDate: society.incorporationDate ?? undefined,
-      anniversaryDate: society.anniversaryDate ?? undefined,
-      waivePrepFinancials: (society as Record<string, unknown>).waivePrepFinancials as
-        | boolean
-        | undefined,
-    };
-    return deriveComplianceDeadlines(settings, fromISO);
-  },
+  handler: (ctx, args) => complianceDeadlinesPortable(toPortableQueryCtx(ctx), args),
 });

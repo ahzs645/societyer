@@ -36,6 +36,18 @@ import * as nameHistoryFns from "./nameHistory";
 import * as dividendsFns from "./dividends";
 import * as receiptsFns from "./receipts";
 import * as constatingFns from "./constating";
+import * as corporationSettingsFns from "./corporationSettings";
+import * as postIncorporationFns from "./postIncorporation";
+import * as recordsLocationFns from "./recordsLocation";
+import * as remunerationFns from "./remuneration";
+import * as activityFns from "./activity";
+import * as inspectionsFns from "./inspections";
+import * as invitationsFns from "./invitations";
+import * as significantIndividualStepsFns from "./significantIndividualSteps";
+import * as documentCommentsFns from "./documentComments";
+import * as writtenResolutionsFns from "./writtenResolutions";
+import * as retentionFns from "./retention";
+import * as serviceProvidersFns from "./serviceProviders";
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }),
@@ -187,6 +199,65 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "constating:narrative", handler: constatingFns.narrativePortable }),
   definePortableMutation({ name: "constating:create", handler: constatingFns.createPortable }),
   definePortableMutation({ name: "constating:remove", handler: constatingFns.removePortable }),
+
+  // corporationSettings
+  definePortableQuery({ name: "corporationSettings:complianceDeadlines", handler: corporationSettingsFns.complianceDeadlinesPortable }),
+
+  // postIncorporation
+  definePortableQuery({ name: "postIncorporation:checklist", handler: postIncorporationFns.checklistPortable }),
+
+  // recordsLocation
+  definePortableQuery({ name: "recordsLocation:get", handler: recordsLocationFns.recordsLocationGet }),
+  definePortableMutation({ name: "recordsLocation:upsert", handler: recordsLocationFns.recordsLocationUpsert }),
+
+  // remuneration
+  definePortableQuery({ name: "remuneration:disclosureForYear", handler: remunerationFns.disclosureForYearPortable }),
+  definePortableMutation({ name: "remuneration:applyToFinancials", handler: remunerationFns.applyToFinancialsPortable }),
+
+  // activity
+  definePortableQuery({ name: "activity:list", handler: activityFns.listPortable }),
+  definePortableQuery({ name: "activity:listForRecord", handler: activityFns.listForRecordPortable }),
+  definePortableMutation({ name: "activity:log", handler: activityFns.logPortable }),
+
+  // inspections
+  definePortableQuery({ name: "inspections:list", handler: inspectionsFns.inspectionsList }),
+  definePortableQuery({ name: "inspections:forDocument", handler: inspectionsFns.inspectionsForDocument }),
+  definePortableMutation({ name: "inspections:create", handler: inspectionsFns.inspectionCreate }),
+  definePortableMutation({ name: "inspections:remove", handler: inspectionsFns.inspectionRemove }),
+
+  // invitations
+  definePortableQuery({ name: "invitations:list", handler: invitationsFns.listPortable }),
+  definePortableQuery({ name: "invitations:getByToken", handler: invitationsFns.getByTokenPortable }),
+  definePortableMutation({ name: "invitations:create", handler: invitationsFns.createPortable }),
+  definePortableMutation({ name: "invitations:revoke", handler: invitationsFns.revokePortable }),
+
+  // significantIndividualSteps
+  definePortableQuery({ name: "significantIndividualSteps:list", handler: significantIndividualStepsFns.listPortable }),
+  definePortableQuery({ name: "significantIndividualSteps:reviewsDue", handler: significantIndividualStepsFns.reviewsDuePortable }),
+  definePortableMutation({ name: "significantIndividualSteps:create", handler: significantIndividualStepsFns.createPortable }),
+  definePortableMutation({ name: "significantIndividualSteps:remove", handler: significantIndividualStepsFns.removePortable }),
+
+  // documentComments
+  definePortableQuery({ name: "documentComments:listForDocument", handler: documentCommentsFns.listForDocumentPortable }),
+  definePortableMutation({ name: "documentComments:create", handler: documentCommentsFns.createPortable }),
+  definePortableMutation({ name: "documentComments:setStatus", handler: documentCommentsFns.setStatusPortable }),
+  definePortableMutation({ name: "documentComments:remove", handler: documentCommentsFns.removePortable }),
+
+  // writtenResolutions
+  definePortableQuery({ name: "writtenResolutions:list", handler: writtenResolutionsFns.listPortable }),
+  definePortableMutation({ name: "writtenResolutions:create", handler: writtenResolutionsFns.createPortable }),
+  definePortableMutation({ name: "writtenResolutions:sign", handler: writtenResolutionsFns.signPortable }),
+  definePortableMutation({ name: "writtenResolutions:markFailed", handler: writtenResolutionsFns.markFailedPortable }),
+  definePortableMutation({ name: "writtenResolutions:remove", handler: writtenResolutionsFns.removePortable }),
+
+  // retention
+  definePortableQuery({ name: "retention:expiredForSociety", handler: retentionFns.expiredForSocietyPortable }),
+
+  // serviceProviders
+  definePortableQuery({ name: "serviceProviders:list", handler: serviceProvidersFns.listPortable }),
+  definePortableQuery({ name: "serviceProviders:functionsCatalog", handler: serviceProvidersFns.functionsCatalogPortable }),
+  definePortableQuery({ name: "serviceProviders:activeAsOf", handler: serviceProvidersFns.activeAsOfPortable }),
+  definePortableMutation({ name: "serviceProviders:upsert", handler: serviceProvidersFns.upsertPortable }),
 ];
 
 /** Names of every ported function, for diagnostics / the conformance harness. */

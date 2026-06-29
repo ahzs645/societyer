@@ -1,20 +1,18 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
-
-const signature = v.object({
-  signerName: v.string(),
-  signedAtISO: v.string(),
-  memberId: v.optional(v.id("members")),
-});
+import {
+  listPortable,
+  createPortable,
+  signPortable,
+  markFailedPortable,
+  removePortable,
+} from "../shared/functions/writtenResolutions";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("writtenResolutions")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -27,13 +25,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) =>
-    ctx.db.insert("writtenResolutions", {
-      ...args,
-      circulatedAtISO: new Date().toISOString(),
-      signatures: [],
-      status: "Circulating",
-    }),
+  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const sign = mutation({
@@ -43,33 +35,17 @@ export const sign = mutation({
     memberId: v.optional(v.id("members")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, signerName, memberId }) => {
-    const row = await ctx.db.get(id);
-    if (!row) return;
-    const signatures = [
-      ...row.signatures,
-      { signerName, memberId, signedAtISO: new Date().toISOString() },
-    ];
-    const status =
-      signatures.length >= row.requiredCount ? "Carried" : row.status;
-    const completedAtISO =
-      status === "Carried" ? new Date().toISOString() : row.completedAtISO;
-    await ctx.db.patch(id, { signatures, status, completedAtISO });
-  },
+  handler: (ctx, args) => signPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const markFailed = mutation({
   args: { id: v.id("writtenResolutions"), note: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { id, note }) => {
-    await ctx.db.patch(id, { status: "Failed", notes: note });
-  },
+  handler: (ctx, args) => markFailedPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("writtenResolutions") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });

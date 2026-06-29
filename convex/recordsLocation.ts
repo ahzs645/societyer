@@ -1,16 +1,12 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
+import { recordsLocationGet, recordsLocationUpsert } from "../shared/functions/recordsLocation";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const get = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const rows = await ctx.db
-      .query("recordsLocation")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    return rows[0] ?? null;
-  },
+  handler: (ctx, args) => recordsLocationGet(toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -23,16 +19,5 @@ export const upsert = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("recordsLocation")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    if (existing[0]) {
-      const { societyId, ...patch } = args;
-      await ctx.db.patch(existing[0]._id, patch);
-      return existing[0]._id;
-    }
-    return ctx.db.insert("recordsLocation", args);
-  },
+  handler: (ctx, args) => recordsLocationUpsert(toPortableMutationCtx(ctx), args),
 });

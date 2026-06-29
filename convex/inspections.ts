@@ -1,24 +1,23 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
+import {
+  inspectionsList,
+  inspectionsForDocument,
+  inspectionCreate,
+  inspectionRemove,
+} from "../shared/functions/inspections";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("inspections")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => inspectionsList(toPortableQueryCtx(ctx), args),
 });
 
 export const forDocument = query({
   args: { documentId: v.id("documents") },
   returns: v.any(),
-  handler: async (ctx, { documentId }) =>
-    ctx.db
-      .query("inspections")
-      .withIndex("by_document", (q) => q.eq("documentId", documentId))
-      .collect(),
+  handler: (ctx, args) => inspectionsForDocument(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -36,13 +35,11 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => ctx.db.insert("inspections", args),
+  handler: (ctx, args) => inspectionCreate(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("inspections") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => inspectionRemove(toPortableMutationCtx(ctx), args),
 });
