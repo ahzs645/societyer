@@ -7,23 +7,13 @@
  * votingPower query slice.
  *
  * Option validation (`assertAllowedOption`) is enforced identically on every
- * runtime by importing the dependency-free domain allowlist. (That allowlist
- * lives under convex/lib today; moving it under shared/ is a clean-up noted in
- * docs/portable-functions-architecture.md — it does not pull any Convex runtime.)
+ * runtime via the dependency-free domain allowlist in `shared/orgHubOptions`
+ * (re-exported from `convex/lib/orgHubOptions` for existing Convex importers).
  */
 
-import { assertAllowedOption } from "../../convex/lib/orgHubOptions";
+import { assertAllowedOption } from "../orgHubOptions";
+import { cleanText, cleanList } from "./text";
 import type { PortableMutationCtx } from "../portable/ctx";
-
-function cleanText(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : undefined;
-}
-
-function cleanList(values?: string[]): string[] {
-  return Array.from(new Set((values ?? []).map((value) => cleanText(value)).filter(Boolean))) as string[];
-}
 
 export interface UpsertRightsClassArgs {
   id?: string;

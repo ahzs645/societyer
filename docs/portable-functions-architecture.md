@@ -146,11 +146,18 @@ the concrete providers. Budget the SDK extraction as a separate investment
   (`scripts/check-portable-convex-oracle.ts`): runs the ported functions on a
   **real** Convex `ctx.db` + schema and diffs against the local engines. It is an
   **oracle, not the production engine** (it depends on `node:async_hooks`).
-- **Phase 3 — in progress.** Two handlers ported (`votingPower` query,
-  `upsertRightsClass` mutation); ~150 modules remain. Port domain-by-domain;
-  delete each mirror case as its conformance test goes green; move ledger entries
-  to capability tiers. Clean-up: move the dependency-free `convex/lib/orgHubOptions`
-  allowlist under `shared/` so ported handlers don't import upward into `convex/`.
+- **Phase 3 — in progress.** Ported so far: `votingPower` (query),
+  `upsertRightsClass` (mutation), and the cap-table transfer domain
+  (`upsertRightsholdingTransfer` + `syncRightsHoldings`, `removeRightsholdingTransfer`,
+  `removeRightsClass`) — the latter exercises the **multi-row** atomic write
+  (`scripts/check-portable-captable.ts`). ~150 modules remain. Port
+  domain-by-domain; delete each mirror case as its conformance test goes green.
+  Clean-up **done**: the dependency-free option allowlist moved to
+  `shared/orgHubOptions.ts` (re-exported from `convex/lib/orgHubOptions` for
+  existing Convex importers), so ported handlers no longer import upward into
+  `convex/`. Note: the transfer mutations are Convex-production + conformance-proven
+  but **not yet in the live local registry** — `syncRightsHoldings` rewrites derived
+  holdings, so the live swap waits on a demo-fixture review.
 - **Phase 4.** Electron native-filesystem document provider + packaging
   (per `electron-local-first-plan.md`). No embedded Convex backend.
 

@@ -47,6 +47,11 @@ import { buildAnnualResolutionContext } from "../shared/annualResolution";
 import { buildDividendResolutionContext } from "../shared/dividendResolution";
 import { votingPowerPortable } from "../shared/functions/votingPower";
 import { upsertRightsClassPortable } from "../shared/functions/rightsClasses";
+import {
+  upsertRightsholdingTransferPortable,
+  removeRightsholdingTransferPortable,
+  removeRightsClassPortable,
+} from "../shared/functions/rightsholdingTransfers";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 /** Keep transfers on/before an as-of date (date-only compare, inclusive). */
@@ -335,72 +340,21 @@ export const upsertRightsholdingTransfer = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { id, ...args }) => {
-    assertAllowedOption("rightsholdingTransferTypes", args.transferType, "Rights transfer type", false);
-    assertAllowedOption("rightsholdingTransferStatuses", args.status, "Rights transfer status");
-    assertAllowedOption("currencies", args.priceToOrganizationCurrency, "Organization consideration currency");
-    assertAllowedOption("currencies", args.priceToVendorCurrency, "Vendor consideration currency");
-    const now = new Date().toISOString();
-    const payload = {
-      societyId: args.societyId,
-      transferType: cleanText(args.transferType) || "transfer",
-      status: cleanText(args.status) || "draft",
-      transferDate: cleanText(args.transferDate),
-      eventId: cleanText(args.eventId),
-      precedentRunId: args.precedentRunId,
-      rightsClassId: args.rightsClassId,
-      sourceRoleHolderId: args.sourceRoleHolderId,
-      destinationRoleHolderId: args.destinationRoleHolderId,
-      sourceHolderName: cleanText(args.sourceHolderName),
-      destinationHolderName: cleanText(args.destinationHolderName),
-      quantity: args.quantity,
-      considerationType: cleanText(args.considerationType),
-      considerationDescription: cleanText(args.considerationDescription),
-      priceToOrganizationCents: args.priceToOrganizationCents,
-      priceToOrganizationCurrency: cleanText(args.priceToOrganizationCurrency),
-      priceToVendorCents: args.priceToVendorCents,
-      priceToVendorCurrency: cleanText(args.priceToVendorCurrency),
-      sourceDocumentIds: args.sourceDocumentIds ?? [],
-      sourceExternalIds: cleanList(args.sourceExternalIds),
-      notes: cleanText(args.notes),
-      updatedAtISO: now,
-    };
-    const existingTransfers = await ctx.db
-      .query("rightsholdingTransfers")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    const proposedTransfers = existingTransfers
-      .filter((transfer) => !id || String(transfer._id) !== String(id))
-      .concat([{ ...payload, _id: id ?? "proposed", _creationTime: Date.now(), createdAtISO: now }])
-      .sort(rightsholdingTransferChronologicalSort);
-    validateLedger(proposedTransfers);
-    if (id) {
-      await ctx.db.patch(id, payload);
-      await syncRightsHoldings(ctx, args.societyId);
-      return id;
-    }
-    const transferId = await ctx.db.insert("rightsholdingTransfers", { ...payload, createdAtISO: now });
-    await syncRightsHoldings(ctx, args.societyId);
-    return transferId;
-  },
+  // Portable handler: validate-ledger + multi-row syncRightsHoldings runs on the
+  // local runtime (inside one atomic transaction) and convex-test alike.
+  handler: (ctx, args) => upsertRightsholdingTransferPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeRightsClass = mutation({
   args: { id: v.id("rightsClasses") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeRightsClassPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeRightsholdingTransfer = mutation({
   args: { id: v.id("rightsholdingTransfers") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const existing = await ctx.db.get(id);
-    await ctx.db.delete(id);
-    if (existing?.societyId) await syncRightsHoldings(ctx, existing.societyId);
-  },
+  handler: (ctx, args) => removeRightsholdingTransferPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const templateEngine = query({
