@@ -356,7 +356,10 @@ export function LocationsTab({
         },
         { id: "code", header: "Bin code", sortable: true, accessor: (row) => row.code ?? "", render: (row) => row.code ? <span className="row" style={{ gap: 4 }}><QrCode size={12} /> <span className="mono">{row.code}</span></span> : <span className="muted">-</span> },
         { id: "type", header: "Type", sortable: true, accessor: (row) => row.locationType ?? "", render: (row) => <Badge tone="info">{row.locationType}</Badge> },
-        { id: "custodian", header: "Custodian", accessor: (row) => row.custodianName ?? "", render: (row) => row.custodianName ? <span>{row.custodianName}</span> : <span className="muted">-</span> },
+        // Only show the custodian column when at least one location is in custody.
+        ...(locations.some((l) => l.custodianName || l.locationType === "custody")
+          ? [{ id: "custodian", header: "Custodian", accessor: (row: any) => row.custodianName ?? "", render: (row: any) => row.custodianName ? <span>{row.custodianName}</span> : <span className="muted">-</span> }]
+          : []),
         {
           id: "contents",
           header: "Contents",
