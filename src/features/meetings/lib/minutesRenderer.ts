@@ -1129,16 +1129,20 @@ function renderAppendices(appendices: MinutesRenderArgs["minutes"]["appendices"]
   if (!rows.length) return "";
   return renderOptionalSection(
     "Appendices",
-    `<table>
-      <tr><th>Title</th><th>Type</th><th>Reference</th><th>Notes</th></tr>
-      ${rows.map((row) => `
-        <tr>
-          <td>${escapeHtml(row.title)}</td>
-          <td>${escapeHtml(row.type ? humanizeLabel(row.type) : "—")}</td>
-          <td>${escapeHtml(row.reference ?? "—")}</td>
-          <td>${escapeHtml(row.notes ?? "—")}</td>
-        </tr>
-      `).join("")}
+    `<table data-variant="statement">
+      <thead>
+        <tr><th data-rule="header" style="width:38%">Title</th><th data-rule="header" style="width:22%">Type</th><th data-rule="header" style="width:25%">Reference</th><th data-rule="header" style="width:15%">Notes</th></tr>
+      </thead>
+      <tbody>
+        ${rows.map((row) => `
+          <tr>
+            <td>${escapeHtml(row.title)}</td>
+            <td>${escapeHtml(row.type ? humanizeLabel(row.type) : "—")}</td>
+            <td>${escapeHtml(row.reference ?? "—")}</td>
+            <td>${escapeHtml(row.notes ?? "—")}</td>
+          </tr>
+        `).join("")}
+      </tbody>
     </table>`,
     true,
     options,

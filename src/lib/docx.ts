@@ -767,11 +767,20 @@ function docxTable(table: HTMLElement, rels: DocxRels) {
     layout = '<w:tblLayout w:type="fixed"/>';
   }
 
+  // Breathing room inside every cell so text never touches the column edges.
+  const cellMargins = `<w:tblCellMar>
+        <w:top w:w="40" w:type="dxa"/>
+        <w:left w:w="108" w:type="dxa"/>
+        <w:bottom w:w="40" w:type="dxa"/>
+        <w:right w:w="108" w:type="dxa"/>
+      </w:tblCellMar>`;
+
   return `<w:tbl>
     <w:tblPr>
       ${tblWidth}
       ${layout}
       ${borders}
+      ${cellMargins}
     </w:tblPr>
     ${grid}
     ${rows.map((row) => docxTableRow(row, rels, statement)).join("")}
