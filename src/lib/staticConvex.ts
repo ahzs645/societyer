@@ -894,8 +894,10 @@ function staticRestrictedFundStatement(args: StaticArgs, store?: StaticDemoDexie
 }
 
 function staticOrgRevenueExpense(args: StaticArgs, store?: StaticDemoDexieStore | null) {
-  // financialTransactions/financialAccounts are not seeded into the local store,
-  // so prefer store rows only when present and otherwise read the fixtures.
+  // Prefer store rows when present, otherwise fall back to the fixtures. The
+  // store is seeded with financialTransactions/financialAccounts, but keep the
+  // fixture fallback so older persisted workspaces (seeded before those tables
+  // were added) still render the statement.
   const storedTxns = store?.listRows("financialTransactions", args);
   const storedAccts = store?.listRows("financialAccounts", args);
   const txns = storedTxns && storedTxns.length ? storedTxns : scopedRows(financialTransactions, args);
