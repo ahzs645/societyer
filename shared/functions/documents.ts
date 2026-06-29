@@ -30,6 +30,11 @@ const VISIBLE_DOCUMENT_CATEGORIES = [
   "Receipt",
   "CourtOrder",
   "WorkflowGenerated",
+  // Drafts produced by the document catalog (legalOperations:generateDocumentFromCatalog)
+  // and staged packets carry the lowercase "governance" category on every runtime
+  // (the portable handler, hosted Convex, and the legacy static mirror all agree).
+  // Without this they were silently absent from the documents list.
+  "governance",
   "Library",
 ];
 

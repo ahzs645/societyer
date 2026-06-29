@@ -1,12 +1,17 @@
 # Portable Functions + `ctx.db` Repository Contract
 
 > Status: **Phases 0–3 landed** — foundation, the live local async runtime,
-> `convex-test` as a conformance oracle, and the bulk of the domain port:
-> **700+ functions across ~90 domains** now run as one portable handler on all
-> three runtimes (up from the first `votingPower`/`upsertRightsClass` pair). The
-> remaining un-ported handlers are the genuinely non-portable tail (document/
-> template generation, `ctx.storage` uploads, network/Wave sync, crypto token
-> hashing, AI inference, seed maintenance). This document is the design record and
+> `convex-test` as a conformance oracle, and the domain port:
+> **773 functions across ~90 domains** now run as one portable handler on all
+> three runtimes (up from the first `votingPower`/`upsertRightsClass` pair),
+> including the role-gated write surface (portable `requireRole`), the accounting
+> double-entry money path, document/template generation, and full-text search
+> (a `withSearchIndex` contract primitive). The remaining un-ported handlers are
+> the genuinely capability-backed or server-only tail (`ctx.storage` uploads,
+> network/Wave sync, n8n execution, crypto token hashing, AI inference, scheduler/
+> cron, seed maintenance) — see
+> [`electron-native-capabilities.md`](./electron-native-capabilities.md) for how
+> those run natively on the Electron desktop. This document is the design record and
 > the migration plan. It realizes — and supersedes the "keep & expand the static
 > mirror" parts of — [`electron-local-first-plan.md`](./electron-local-first-plan.md).
 
@@ -50,7 +55,7 @@ multi-project SDK.
 
 | File | Role |
 |---|---|
-| `ctx.ts` | The bounded `ctx.db` surface: `get / query(table).withIndex().filter().order().collect()/first/unique/take/paginate`, `insert/patch/replace/delete`, and `TransactionalDb.transaction`. Plus `PortableQueryCtx` / `PortableMutationCtx`. |
+| `ctx.ts` | The bounded `ctx.db` surface: `get / query(table).withIndex().filter().order().collect()/first/unique/take/paginate`, `withSearchIndex(name, q => q.search(field, text))` for full-text, `insert/patch/replace/delete`, and `TransactionalDb.transaction`. Plus `PortableQueryCtx` / `PortableMutationCtx`. |
 | `capabilities.ts` | Injected `ctx.capabilities` (email/sms/storage/llm/…). Absent capabilities throw a structured `CAPABILITY_UNAVAILABLE` instead of a silent null. This replaces the parity ledger's NOOP/PENDING buckets. |
 | `ids.ts` | Stable application ids (`entityId`, ULID-ish, sortable) + `EntityIdMap` (native `_id` ⇆ portable id). The prerequisite for cross-runtime sync. |
 | `memoryDb.ts` | `MemoryDb` — the reference engine / differential-test oracle. Atomic snapshot-rollback transactions. |
@@ -64,6 +69,11 @@ multi-project SDK.
 - `filter` takes a **JS predicate** (engine-agnostic). The Convex adapter
   implements it as collect-then-filter (Convex's native `.filter` uses a
   FilterBuilder). Avoid `filter` on hot paths; prefer `withIndex`.
+- `withSearchIndex(name, q => q.search(field, text))` hits the **real** full-text
+  index on Convex; on the local adapters it is a **tokenized, prefix-on-last-term
+  scan** ranked by token-hit count (then `_creationTime`/`_id`). Membership matches
+  Convex; BM25 *ordering* is approximate — assert on membership, not exact rank
+  (the differential harness does: prefix, multi-term AND, and the length guard).
 - Ordering on the local adapters is by `_creationTime` then `_id`. If a handler
   depends on index-order semantics, assert it in a conformance test.
 - Capabilities are **not** part of `db`. Server-only work (AI, email, webhooks,
@@ -153,14 +163,24 @@ the concrete providers. Budget the SDK extraction as a separate investment
   (`scripts/check-portable-convex-oracle.ts`): runs the ported functions on a
   **real** Convex `ctx.db` + schema and diffs against the local engines. It is an
   **oracle, not the production engine** (it depends on `node:async_hooks`).
-- **Phase 3 — substantially complete.** **700+ functions across ~90 domains** are
-  ported and live in `shared/functions/registry.ts` — from the seed `votingPower`/
-  `upsertRightsClass`/cap-table/`members` work through whole-domain ports of
-  accounting, assets, inventoryHub, grants, elections, volunteers, notifications,
-  financialHub, communications, workflows, apiPlatform, paperless, importSessions,
-  transcripts, aiAgents, bylawAmendments, legalOperations role-holders, and many
-  more. Each Convex handler is now a one-line delegation
+- **Phase 3 — complete for the portable surface.** **773 functions across ~90
+  domains** are ported and live in `shared/functions/registry.ts` — from the seed
+  `votingPower`/`upsertRightsClass`/cap-table/`members` work through whole-domain
+  ports of accounting (incl. the double-entry money path), assets, inventoryHub,
+  grants, elections, volunteers, notifications, financialHub, communications,
+  workflows, apiPlatform, paperless, importSessions, transcripts, aiAgents,
+  bylawAmendments, legalOperations (role-holders **and** document/template
+  generation), and many more. Each Convex handler is now a one-line delegation
   (`handler: (ctx, args) => fnPortable(toPortable{Query,Mutation}Ctx(ctx), args)`).
+  - **Full-text search is portable.** `withSearchIndex` is part of the contract
+    (tokenized prefix scan locally, real index on Convex); `firm:search` runs on
+    it, conformance-tested for cross-engine agreement.
+  - **Document generation works offline end-to-end.** `legalOperations:generateDocumentFromCatalog`
+    and the `stage*`/`seed*` packet handlers run on `ctx.db` over the render kernels
+    already in `shared/` (`templateAssembly`, `packetRendering`, `*DocumentPackets`).
+    Generated drafts carry the `"governance"` category on every runtime; it was
+    added to `documents:list`'s visible-category set so generated docs surface in
+    the list (verified by `test:generate-from-catalog`).
   - **`requireRole` is portable.** It only reads the `users` table, so it moved to
     `shared/functions/access.ts` (`requireRolePortable`, with `ROLES`/`canActAs`);
     the Convex `requireRole` delegates to it. This unlocked the role-gated mutation
@@ -174,11 +194,23 @@ the concrete providers. Budget the SDK extraction as a separate investment
     entries from the Convex delegations (parsing `=> fn(toPortable…Ctx(ctx)` plus
     the `../shared/functions/*` imports) and dedupes against the existing registry,
     so adding a domain is mechanical.
-  - **What stays on Convex (by design):** document/template/packet generation
-    (legalOperations), `ctx.storage` upload/getUrl (logos, file attachments),
-    `ctx.scheduler`/cron, `fetch`/network (Wave sync, OAuth, paperless pull),
-    crypto (API-token hashing), AI inference, and seed/backfill maintenance — each
-    routes through an explicit capability tier or remains a Convex-only action.
+  - **What stays on Convex — and why it's not "the desktop can't do it":** the
+    remaining handlers are *capability-backed* or *server-only*, not portable-`ctx.db`.
+    They fall in three buckets:
+    1. **Works offline via a capability, not `ctx.db`** — `ctx.storage` (document
+       files already flow through the Electron native-fs provider; logos/blob URLs
+       would move from `ctx.storage.*` to `ctx.capabilities.storage.*`), AI (`llm`),
+       and `scheduler` (desktop background jobs). Wiring + a local provider, not a wall.
+    2. **Genuinely needs a remote server/third party** — Wave sync, OAuth, paperless
+       pull, n8n execution, outbound webhooks/email, inbound-API token crypto. Offline
+       these surface a loud `CAPABILITY_UNAVAILABLE`; the local-data side still works.
+       On **Electron** most of these can run natively (main-process fetch, OS keychain,
+       a managed/relayed n8n) — see
+       [`electron-native-capabilities.md`](./electron-native-capabilities.md).
+    3. **Token-gated maintenance the demo already reflects** — `seed:run/reset`,
+       `seedRecordTableMetadata:run/wipe`: their bodies are now in `shared/` (oracle-
+       testable) but they keep a Convex-only maintenance-token gate and stay
+       unregistered for the offline runtime.
 - **CI:** `.github/workflows/portable-conformance.yml` runs the four
   `test:portable-*` suites + the parity gate + domain regressions on every push/PR,
   so a port that breaks cross-runtime agreement fails CI.
