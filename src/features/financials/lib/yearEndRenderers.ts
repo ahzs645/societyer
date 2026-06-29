@@ -68,8 +68,8 @@ export function renderProgramStatementHtml(statement: ProgramStatement, society?
       <thead>
         <tr>
           <th data-rule="header"></th>
-          <th data-rule="header" style="text-align:right;width:${W}">Program Actuals for ${escapeHtml(statement.priorFiscalYearLabel)}</th>
-          <th data-rule="header" style="text-align:right;width:${W}">Program Budget for ${escapeHtml(statement.currentFiscalYearLabel)}</th>
+          <th data-rule="header" style="text-align:center;width:${W}">Program Actuals for ${escapeHtml(statement.priorFiscalYearLabel)}</th>
+          <th data-rule="header" style="text-align:center;width:${W}">Program Budget for ${escapeHtml(statement.currentFiscalYearLabel)}</th>
         </tr>
       </thead>
       <tbody>
@@ -110,7 +110,7 @@ export function renderOrgStatementHtml(statement: OrgRevenueStatement, society?:
     <p class="meta">${escapeHtml(statement.organizationName || society?.name || "[Name of Organization]")}${statement.periodLabel ? ` · ${escapeHtml(statement.periodLabel)}` : ` · Fiscal year ${escapeHtml(statement.fiscalYearLabel)}`}</p>
     <table data-variant="statement">
       <thead>
-        <tr><th data-rule="header"></th><th data-rule="header" style="text-align:right;width:${W}">General Fund</th><th data-rule="header" style="text-align:right;width:${W}">Restricted Funds</th><th data-rule="header" style="text-align:right;width:${W}">Total</th></tr>
+        <tr><th data-rule="header"></th><th data-rule="header" style="text-align:center;width:${W}">General Fund</th><th data-rule="header" style="text-align:center;width:${W}">Restricted Funds</th><th data-rule="header" style="text-align:center;width:${W}">Total</th></tr>
       </thead>
       <tbody>
         <tr>${labelCell("Revenues<sup>1</sup>", { bold: true })}${blankCells(3)}</tr>
@@ -130,7 +130,7 @@ export function renderAnnualStatementHtml(data: any, society: SocietyLike, fisca
   const W = "26%";
   const categoryTable = (title: string, rows: Array<{ category: string; cents: number }>) =>
     rows.length
-      ? `<h2>${escapeHtml(title)}</h2><table data-variant="statement"><thead><tr><th data-rule="header">Category</th><th data-rule="header" style="text-align:right;width:${W}">Amount</th></tr></thead><tbody>${rows
+      ? `<h2>${escapeHtml(title)}</h2><table data-variant="statement"><thead><tr><th data-rule="header">Category</th><th data-rule="header" style="text-align:center;width:${W}">Amount</th></tr></thead><tbody>${rows
           .map((r) => `<tr>${labelCell(escapeHtml(r.category))}${moneyCell(r.cents, { width: W })}</tr>`)
           .join("")}</tbody></table>`
       : "";
@@ -160,8 +160,8 @@ export function renderAnnualStatementHtml(data: any, society: SocietyLike, fisca
     </table>
     ${categoryTable("Revenue by category", data.incomeByCategory ?? [])}
     ${categoryTable("Expenses by category", data.expenseByCategory ?? [])}
-    ${budgetRows ? `<h2>Budget vs actual</h2><table data-variant="statement"><thead><tr><th data-rule="header">Category</th><th data-rule="header" style="text-align:right;width:20%">Budget</th><th data-rule="header" style="text-align:right;width:20%">Actual</th><th data-rule="header" style="text-align:right;width:20%">Variance</th></tr></thead><tbody>${budgetRows}</tbody></table>` : ""}
-    ${rem ? `<h2>Remuneration disclosure</h2><table data-variant="statement"><thead><tr><th data-rule="header">Role</th><th data-rule="header" style="text-align:right;width:${W}">Amount</th></tr></thead><tbody>${rem}</tbody></table>` : ""}
+    ${budgetRows ? `<h2>Budget vs actual</h2><table data-variant="statement"><thead><tr><th data-rule="header">Category</th><th data-rule="header" style="text-align:center;width:20%">Budget</th><th data-rule="header" style="text-align:center;width:20%">Actual</th><th data-rule="header" style="text-align:center;width:20%">Variance</th></tr></thead><tbody>${budgetRows}</tbody></table>` : ""}
+    ${rem ? `<h2>Remuneration disclosure</h2><table data-variant="statement"><thead><tr><th data-rule="header">Role</th><th data-rule="header" style="text-align:center;width:${W}">Amount</th></tr></thead><tbody>${rem}</tbody></table>` : ""}
     ${data.auditStatus ? `<p class="meta">Audit status: ${escapeHtml(data.auditStatus)}${data.auditorName ? ` · ${escapeHtml(data.auditorName)}` : ""}</p>` : ""}
   `;
 }
@@ -180,7 +180,7 @@ export function renderRestrictedFundsHtml(data: any, society: SocietyLike): stri
     <p class="meta">${escapeHtml(society?.name ?? "")}</p>
     <table data-variant="statement">
       <thead>
-        <tr><th data-rule="header">Fund</th><th data-rule="header" style="text-align:right;width:${W}">Opening</th><th data-rule="header" style="text-align:right;width:${W}">Receipts</th><th data-rule="header" style="text-align:right;width:${W}">Disbursements</th><th data-rule="header" style="text-align:right;width:${W}">Closing</th></tr>
+        <tr><th data-rule="header">Fund</th><th data-rule="header" style="text-align:center;width:${W}">Opening</th><th data-rule="header" style="text-align:center;width:${W}">Receipts</th><th data-rule="header" style="text-align:center;width:${W}">Disbursements</th><th data-rule="header" style="text-align:center;width:${W}">Closing</th></tr>
       </thead>
       <tbody>
         ${rows || `<tr>${labelCell('<span class="muted">No restricted funds recorded.</span>')}${blankCells(4)}</tr>`}

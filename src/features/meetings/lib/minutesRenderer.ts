@@ -585,7 +585,7 @@ function renderNumberedAgendaMinutes({
 
   return `
     <h1>${eh(minutesTitleForSampleStyle(society.name, meeting))}</h1>
-    <p><strong>Date:</strong> ${eh(date)} &nbsp;&nbsp; <strong>Time:</strong> ${eh(timeRange)} &nbsp;&nbsp; <strong>Location:</strong> ${eh(location)}</p>
+    <p><strong>Date:</strong> ${eh(date)} · <strong>Time:</strong> ${eh(timeRange)} · <strong>Location:</strong> ${eh(location)}</p>
 
     <h2>Attendees:</h2>
     <p><strong>Present:</strong> ${eh(presentLine)}</p>
@@ -842,7 +842,7 @@ function renderOfficialLine(minutes: MinutesRenderArgs["minutes"], options: Requ
     minutes.recorderName ? `Recorder: ${minutes.recorderName}` : "",
   ].filter(Boolean);
   if (!officers.length) return options.includePlaceholders ? `<p class="muted">[chair, secretary, and recorder not recorded]</p>` : "";
-  return `<p>${officers.map(escapeHtml).join(" &nbsp;&nbsp; ")}</p>`;
+  return `<p>${officers.map(escapeHtml).join(" · ")}</p>`;
 }
 
 function minutesTitleForSampleStyle(societyName: string, meeting: MinutesRenderArgs["meeting"]) {
