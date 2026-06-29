@@ -1,11 +1,15 @@
 // @ts-nocheck
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { requireRole } from "./users";
 import {
   fundingSourcesList,
   fundingSourcesRollup,
   applyOtenFeeStructurePortable,
+  upsertSourcePortable,
+  removeSourcePortable,
+  upsertEventPortable,
+  removeEventPortable,
+  importStudentLevyPortable,
 } from "../shared/functions/fundingSources";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -57,40 +61,13 @@ export const upsertSource = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await requireRole(ctx, {
-      actingUserId: args.actingUserId,
-      societyId: args.societyId,
-      required: "Director",
-    });
-    const { id, actingUserId, ...rest } = args;
-    const now = new Date().toISOString();
-    if (id) {
-      await ctx.db.patch(id, { ...rest, updatedAtISO: now });
-      return id;
-    }
-    return await ctx.db.insert("fundingSources", {
-      ...rest,
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-  },
+  handler: (ctx, args) => upsertSourcePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeSource = mutation({
   args: { id: v.id("fundingSources"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { id, actingUserId }) => {
-    const source = await ctx.db.get(id);
-    if (!source) return;
-    await requireRole(ctx, { actingUserId, societyId: source.societyId, required: "Director" });
-    const events = await ctx.db
-      .query("fundingSourceEvents")
-      .withIndex("by_source", (q) => q.eq("sourceId", id))
-      .collect();
-    for (const event of events) await ctx.db.delete(event._id);
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeSourcePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsertEvent = mutation({
@@ -113,39 +90,13 @@ export const upsertEvent = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const source = await ctx.db.get(args.sourceId);
-    if (!source || source.societyId !== args.societyId) {
-      throw new Error("Funding source does not belong to this society.");
-    }
-    await requireRole(ctx, {
-      actingUserId: args.actingUserId,
-      societyId: args.societyId,
-      required: "Director",
-    });
-    const { id, actingUserId, ...rest } = args;
-    const now = new Date().toISOString();
-    if (id) {
-      await ctx.db.patch(id, { ...rest, updatedAtISO: now });
-      return id;
-    }
-    return await ctx.db.insert("fundingSourceEvents", {
-      ...rest,
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-  },
+  handler: (ctx, args) => upsertEventPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeEvent = mutation({
   args: { id: v.id("fundingSourceEvents"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { id, actingUserId }) => {
-    const event = await ctx.db.get(id);
-    if (!event) return;
-    await requireRole(ctx, { actingUserId, societyId: event.societyId, required: "Director" });
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeEventPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const importStudentLevy = mutation({
@@ -192,115 +143,7 @@ export const importStudentLevy = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await requireRole(ctx, {
-      actingUserId: args.actingUserId,
-      societyId: args.societyId,
-      required: "Admin",
-    });
-
-    const sourceName = args.sourceName.trim();
-    if (!sourceName) throw new Error("Funding source name is required.");
-    if (args.feePeriods.length === 0) throw new Error("At least one fee period is required.");
-
-    const now = new Date().toISOString();
-    const sourceType = args.sourceType || "Member dues";
-    const sourcePayload = {
-      societyId: args.societyId,
-      name: sourceName,
-      sourceType,
-      status: args.status,
-      contactName: args.contactName,
-      email: args.email,
-      phone: args.phone,
-      website: args.website,
-      collectionAgentName: args.collectionAgentName,
-      collectionModel: args.collectionModel,
-      memberDisclosureLevel: args.memberDisclosureLevel,
-      estimatedMemberCount: args.estimatedMemberCount,
-      collectionFrequency: args.collectionFrequency,
-      collectionScheduleNotes: args.collectionScheduleNotes,
-      nextExpectedCollectionDate: args.nextExpectedCollectionDate,
-      reconciliationCadence: args.reconciliationCadence,
-      expectedAnnualCents: args.expectedAnnualCents,
-      committedCents: args.committedCents,
-      receivedToDateCents: args.receivedToDateCents,
-      currency: args.currency,
-      startDate: args.startDate,
-      endDate: args.endDate,
-      restrictedPurpose: args.restrictedPurpose,
-      notes: args.notes,
-      updatedAtISO: now,
-    };
-
-    const existingSources = await ctx.db
-      .query("fundingSources")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    const sourceFromId = args.sourceId ? await ctx.db.get(args.sourceId) : null;
-    if (sourceFromId && sourceFromId.societyId !== args.societyId) {
-      throw new Error("Funding source does not belong to this society.");
-    }
-    const sourceByName = existingSources.find(
-      (source) => source.name.trim().toLowerCase() === sourceName.toLowerCase(),
-    );
-    const existingSource = sourceFromId ?? sourceByName ?? null;
-    const sourceId = existingSource
-      ? (await ctx.db.patch(existingSource._id, sourcePayload), existingSource._id)
-      : await ctx.db.insert("fundingSources", { ...sourcePayload, createdAtISO: now });
-
-    const existingPeriods = await ctx.db
-      .query("membershipFeePeriods")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    let createdFeePeriods = 0;
-    let updatedFeePeriods = 0;
-
-    for (const feePeriod of args.feePeriods) {
-      const label = feePeriod.label.trim();
-      if (!label) throw new Error("Every fee period needs a label.");
-      if (!feePeriod.effectiveFrom) throw new Error(`Fee period "${label}" needs an effective-from date.`);
-      const periodFromId = feePeriod.id ? await ctx.db.get(feePeriod.id) : null;
-      if (periodFromId && periodFromId.societyId !== args.societyId) {
-        throw new Error("Fee period does not belong to this society.");
-      }
-      const periodByKey = existingPeriods.find(
-        (period) =>
-          period.label.trim().toLowerCase() === label.toLowerCase() &&
-          (period.membershipClass ?? "") === (feePeriod.membershipClass ?? "") &&
-          period.effectiveFrom === feePeriod.effectiveFrom,
-      );
-      const existingPeriod = periodFromId ?? periodByKey ?? null;
-      const payload = {
-        societyId: args.societyId,
-        planId: undefined,
-        membershipClass: feePeriod.membershipClass,
-        label,
-        priceCents: feePeriod.priceCents,
-        currency: feePeriod.currency,
-        interval: feePeriod.interval,
-        effectiveFrom: feePeriod.effectiveFrom,
-        effectiveTo: feePeriod.effectiveTo,
-        status: feePeriod.status,
-        notes: feePeriod.notes,
-        updatedAtISO: now,
-      };
-      if (existingPeriod) {
-        await ctx.db.patch(existingPeriod._id, payload);
-        updatedFeePeriods += 1;
-      } else {
-        await ctx.db.insert("membershipFeePeriods", { ...payload, createdAtISO: now });
-        createdFeePeriods += 1;
-      }
-    }
-
-    return {
-      sourceId,
-      fundingSourceAction: existingSource ? "updated" : "created",
-      createdFeePeriods,
-      updatedFeePeriods,
-    };
-  },
+  handler: (ctx, args) => importStudentLevyPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const applyOtenFeeStructure = mutation({

@@ -21,6 +21,16 @@ import {
   workflowProviderSchema,
   type WorkflowProvider,
 } from "../shared/workflows/schemas";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import {
+  listPortable,
+  listRunsPortable,
+  runsForWorkflowPortable,
+  getRunPortable,
+  setStatusPortable,
+  updatePortable,
+  addNodePortable,
+} from "../shared/functions/workflows";
 
 import {
   UNBC_AFFILIATE_FIELDS,
@@ -232,43 +242,28 @@ export const createPdfTemplateImportSession = action({
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("workflows")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .order("desc")
-      .collect(),
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 
 export const listRuns = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, limit }) =>
-    ctx.db
-      .query("workflowRuns")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .order("desc")
-      .take(limit ?? 50),
+  handler: (ctx, args) => listRunsPortable(toPortableQueryCtx(ctx), args),
 });
 
 
 export const runsForWorkflow = query({
   args: { workflowId: v.id("workflows") },
   returns: v.any(),
-  handler: async (ctx, { workflowId }) =>
-    ctx.db
-      .query("workflowRuns")
-      .withIndex("by_workflow", (q) => q.eq("workflowId", workflowId))
-      .order("desc")
-      .collect(),
+  handler: (ctx, args) => runsForWorkflowPortable(toPortableQueryCtx(ctx), args),
 });
 
 
 export const getRun = query({
   args: { id: v.id("workflowRuns") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => getRunPortable(toPortableQueryCtx(ctx), args),
 });
 
 
@@ -432,16 +427,7 @@ export const setStatus = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, status, actingUserId }) => {
-    const wf = await ctx.db.get(id);
-    if (!wf) throw new Error("Workflow not found");
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: wf.societyId,
-      required: "Director",
-    });
-    await ctx.db.patch(id, { status: parseWorkflowStatus(status) });
-  },
+  handler: (ctx, args) => setStatusPortable(toPortableMutationCtx(ctx), args),
 });
 
 // Light-touch patch for inline edits from the record table. Only
@@ -460,19 +446,7 @@ export const update = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch, actingUserId }) => {
-    const wf = await ctx.db.get(id);
-    if (!wf) throw new Error("Workflow not found");
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: wf.societyId,
-      required: "Director",
-    });
-    await ctx.db.patch(id, {
-      ...patch,
-      ...(patch.status ? { status: parseWorkflowStatus(patch.status) } : {}),
-    });
-  },
+  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
 });
 
 
@@ -592,50 +566,7 @@ export const addNode = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, node, afterKey, actingUserId }) => {
-    const wf = await ctx.db.get(id);
-    if (!wf) throw new Error("Workflow not found");
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: wf.societyId,
-      required: "Director",
-    });
-
-    const valid = NODE_TYPE_CATALOG.some((entry) => entry.type === node.type);
-    if (!valid) throw new Error(`Unknown node type: ${node.type}`);
-
-    const existing: NodePreview[] = Array.isArray(wf.nodePreview) ? [...wf.nodePreview] : [];
-    const baseKey = node.type.replace(/[^a-z0-9_]/gi, "_").toLowerCase() || "node";
-    const usedKeys = new Set(existing.map((n) => n.key));
-    let newKey = baseKey;
-    let suffix = 1;
-    while (usedKeys.has(newKey)) {
-      newKey = `${baseKey}_${suffix++}`;
-    }
-
-    const newNode: NodePreview = {
-      key: newKey,
-      type: node.type as NodePreview["type"],
-      label: node.label,
-      description: node.description,
-      status: "draft",
-    };
-
-    let next: NodePreview[];
-    if (afterKey) {
-      const idx = existing.findIndex((n) => n.key === afterKey);
-      if (idx === -1) {
-        next = [...existing, newNode];
-      } else {
-        next = [...existing.slice(0, idx + 1), newNode, ...existing.slice(idx + 1)];
-      }
-    } else {
-      next = [...existing, newNode];
-    }
-
-    await ctx.db.patch(id, { nodePreview: next });
-    return { key: newKey };
-  },
+  handler: (ctx, args) => addNodePortable(toPortableMutationCtx(ctx), args),
 });
 
 

@@ -78,7 +78,7 @@ async function getBylawRuleSetForDate(
   };
 }
 
-async function getActiveBylawRuleSet(
+export async function getActiveBylawRuleSet(
   ctx: PortableQueryCtx | PortableMutationCtx,
   societyId: string,
 ) {

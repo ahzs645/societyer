@@ -1,19 +1,20 @@
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
-import { requireRole } from "./users";
-import { requireEnabledModule } from "./lib/moduleSettings";
 import {
   listPortable,
   applicationsPortable,
   screeningsPortable,
   summaryPortable,
   buildCrrpDraftPortable,
+  submitApplicationPortable,
+  reviewApplicationPortable,
+  convertApplicationPortable,
+  upsertVolunteerPortable,
+  removeVolunteerPortable,
+  upsertScreeningPortable,
+  removeScreeningPortable,
 } from "../shared/functions/volunteers";
-import { toPortableQueryCtx } from "./lib/portable";
-
-function isoNow() {
-  return new Date().toISOString();
-}
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
@@ -54,15 +55,7 @@ export const submitApplication = mutation({
     source: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await requireEnabledModule(ctx, args.societyId, "volunteers");
-    return await ctx.db.insert("volunteerApplications", {
-      ...args,
-      source: args.source ?? "public",
-      status: "Submitted",
-      submittedAtISO: isoNow(),
-    });
-  },
+  handler: (ctx, args) => submitApplicationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const reviewApplication = mutation({
@@ -72,20 +65,7 @@ export const reviewApplication = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, status, actingUserId }) => {
-    const application = await ctx.db.get(id);
-    if (!application) throw new Error("Application not found.");
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: application.societyId,
-      required: "Director",
-    });
-    await ctx.db.patch(id, {
-      status,
-      reviewedAtISO: isoNow(),
-      reviewedByUserId: actingUserId ?? undefined,
-    });
-  },
+  handler: (ctx, args) => reviewApplicationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const convertApplication = mutation({
@@ -96,49 +76,7 @@ export const convertApplication = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, committeeId, screeningRequired, actingUserId }) => {
-    const application = await ctx.db.get(id);
-    if (!application) throw new Error("Application not found.");
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: application.societyId,
-      required: "Director",
-    });
-
-    const existingVolunteer = application.linkedVolunteerId
-      ? await ctx.db.get(application.linkedVolunteerId)
-      : null;
-
-    const volunteerId =
-      existingVolunteer?._id ??
-      (await ctx.db.insert("volunteers", {
-        societyId: application.societyId,
-        memberId: application.memberId,
-        committeeId,
-        publicApplicationId: application._id,
-        firstName: application.firstName,
-        lastName: application.lastName,
-        email: application.email,
-        phone: application.phone,
-        status: "Applied",
-        roleWanted: application.roleWanted,
-        availability: application.availability,
-        interests: application.interests,
-        screeningRequired,
-        applicationReceivedAtISO: application.submittedAtISO,
-        intakeSource: application.source,
-        notes: application.notes,
-      }));
-
-    await ctx.db.patch(id, {
-      linkedVolunteerId: volunteerId,
-      status: "Converted",
-      reviewedAtISO: isoNow(),
-      reviewedByUserId: actingUserId ?? undefined,
-    });
-
-    return volunteerId;
-  },
+  handler: (ctx, args) => convertApplicationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsertVolunteer = mutation({
@@ -167,19 +105,7 @@ export const upsertVolunteer = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await requireRole(ctx, {
-      actingUserId: args.actingUserId,
-      societyId: args.societyId,
-      required: "Director",
-    });
-    const { id, actingUserId, ...rest } = args;
-    if (id) {
-      await ctx.db.patch(id, rest);
-      return id;
-    }
-    return await ctx.db.insert("volunteers", rest);
-  },
+  handler: (ctx, args) => upsertVolunteerPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeVolunteer = mutation({
@@ -188,29 +114,7 @@ export const removeVolunteer = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, actingUserId }) => {
-    const volunteer = await ctx.db.get(id);
-    if (!volunteer) return;
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: volunteer.societyId,
-      required: "Director",
-    });
-    const screenings = await ctx.db
-      .query("volunteerScreenings")
-      .withIndex("by_volunteer", (q) => q.eq("volunteerId", id))
-      .collect();
-    for (const screening of screenings) {
-      await ctx.db.delete(screening._id);
-    }
-    if (volunteer.publicApplicationId) {
-      await ctx.db.patch(volunteer.publicApplicationId, {
-        linkedVolunteerId: undefined,
-        status: "Approved",
-      });
-    }
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeVolunteerPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsertScreening = mutation({
@@ -233,19 +137,7 @@ export const upsertScreening = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await requireRole(ctx, {
-      actingUserId: args.actingUserId,
-      societyId: args.societyId,
-      required: "Director",
-    });
-    const { id, actingUserId, ...rest } = args;
-    if (id) {
-      await ctx.db.patch(id, rest);
-      return id;
-    }
-    return await ctx.db.insert("volunteerScreenings", rest);
-  },
+  handler: (ctx, args) => upsertScreeningPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeScreening = mutation({
@@ -254,16 +146,7 @@ export const removeScreening = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, actingUserId }) => {
-    const screening = await ctx.db.get(id);
-    if (!screening) return;
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: screening.societyId,
-      required: "Director",
-    });
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeScreeningPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const buildCrrpDraft = query({

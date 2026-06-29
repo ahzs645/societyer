@@ -5,8 +5,8 @@
  * Pure `ctx.db` reads and writes over the `notifications`/`notificationPrefs`
  * tables. Each handler runs unchanged on hosted Convex, the local Dexie runtime,
  * and the convex-test oracle. The bell-state mutations (dismiss / dismissAll /
- * markRead / markAllRead / snooze) are pending; the crons (purgeDismissed /
- * scanUpcoming) and the digest action stay on Convex.
+ * markRead / markAllRead / snooze) are ported here too; the crons
+ * (purgeDismissed / scanUpcoming) and the digest action stay on Convex.
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
@@ -96,6 +96,64 @@ export async function notificationCreate(
     ...args,
     createdAtISO: new Date().toISOString(),
   });
+}
+
+export async function notificationMarkRead(ctx: PortableMutationCtx, { id }: { id: string }) {
+  await ctx.db.patch(id, { readAt: new Date().toISOString() });
+}
+
+export async function notificationMarkAllRead(
+  ctx: PortableMutationCtx,
+  { societyId, userId }: { societyId: string; userId?: string },
+) {
+  const rows = await ctx.db
+    .query("notifications")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  const now = new Date().toISOString();
+  for (const r of rows) {
+    if (r.readAt) continue;
+    if (userId && r.userId && r.userId !== userId) continue;
+    await ctx.db.patch(r._id, { readAt: now });
+  }
+}
+
+/** Clear a single notification from the bell. Stamps dismissedAt (and readAt
+ * if not already read) so it leaves the bell + unread count immediately, but
+ * the row survives on the Notifications page until `purgeDismissed` runs. */
+export async function notificationDismiss(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const now = new Date().toISOString();
+  const existing = await ctx.db.get(id);
+  await ctx.db.patch(id, {
+    dismissedAt: now,
+    readAt: existing?.readAt ?? now,
+  });
+}
+
+/** Hide a notification from the bell until `untilISO` (null un-snoozes it). The
+ *  row resurfaces automatically once the time passes — no purge needed. */
+export async function notificationSnooze(
+  ctx: PortableMutationCtx,
+  { id, untilISO }: { id: string; untilISO: string | null },
+) {
+  await ctx.db.patch(id, { snoozedUntilISO: untilISO ?? undefined });
+}
+
+/** Clear every (non-dismissed) notification for this user/society from the bell. */
+export async function notificationDismissAll(
+  ctx: PortableMutationCtx,
+  { societyId, userId }: { societyId: string; userId?: string },
+) {
+  const rows = await ctx.db
+    .query("notifications")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  const now = new Date().toISOString();
+  for (const r of rows) {
+    if (r.dismissedAt) continue;
+    if (userId && r.userId && r.userId !== userId) continue;
+    await ctx.db.patch(r._id, { dismissedAt: now, readAt: r.readAt ?? now });
+  }
 }
 
 /** Permanently delete a single notification now, without waiting for the

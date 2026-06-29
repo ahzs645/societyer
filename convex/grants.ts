@@ -1,7 +1,5 @@
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
-import { requireRole } from "./users";
-import { requireEnabledModule } from "./lib/moduleSettings";
 import {
   listPortable,
   getPortable,
@@ -11,12 +9,20 @@ import {
   reportsPortable,
   employeeLinksPortable,
   summaryPortable,
+  upsertEmployeeLinkPortable,
+  removeEmployeeLinkPortable,
+  submitApplicationPortable,
+  reviewApplicationPortable,
+  convertApplicationPortable,
+  upsertGrantPortable,
+  importGcosProjectSnapshotPortable,
+  removeGrantPortable,
+  upsertReportPortable,
+  removeReportPortable,
+  upsertTransactionPortable,
+  removeTransactionPortable,
 } from "../shared/functions/grants";
-import { toPortableQueryCtx } from "./lib/portable";
-
-function isoNow() {
-  return new Date().toISOString();
-}
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const grantRequirement = v.object({
   id: v.string(),
@@ -142,48 +148,13 @@ export const upsertEmployeeLink = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, societyId, grantId, employeeId, patch, actingUserId }) => {
-    await requireRole(ctx, { actingUserId, societyId, required: "Director" });
-    const now = isoNow();
-    if (id) {
-      await ctx.db.patch(id, { ...(patch ?? {}), updatedAtISO: now });
-      return id;
-    }
-    const existing = await ctx.db
-      .query("grantEmployeeLinks")
-      .withIndex("by_grant_employee", (q) => q.eq("grantId", grantId).eq("employeeId", employeeId))
-      .first();
-    if (existing) {
-      await ctx.db.patch(existing._id, { ...(patch ?? {}), updatedAtISO: now });
-      return existing._id;
-    }
-    return await ctx.db.insert("grantEmployeeLinks", {
-      societyId,
-      grantId,
-      employeeId,
-      status: patch?.status ?? "hired",
-      source: patch?.source ?? "manual",
-      role: patch?.role,
-      fundedHoursPerWeek: patch?.fundedHoursPerWeek,
-      fundedHourlyWageCents: patch?.fundedHourlyWageCents,
-      startDate: patch?.startDate,
-      endDate: patch?.endDate,
-      notes: patch?.notes,
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-  },
+  handler: (ctx, args) => upsertEmployeeLinkPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeEmployeeLink = mutation({
   args: { id: v.id("grantEmployeeLinks"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { id, actingUserId }) => {
-    const link = await ctx.db.get(id);
-    if (!link) return;
-    await requireRole(ctx, { actingUserId, societyId: link.societyId, required: "Director" });
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeEmployeeLinkPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const summary = query({
@@ -209,15 +180,7 @@ export const submitApplication = mutation({
     source: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await requireEnabledModule(ctx, args.societyId, "grants");
-    return await ctx.db.insert("grantApplications", {
-      ...args,
-      source: args.source ?? "public",
-      status: "Submitted",
-      submittedAtISO: isoNow(),
-    });
-  },
+  handler: (ctx, args) => submitApplicationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const reviewApplication = mutation({
@@ -228,21 +191,7 @@ export const reviewApplication = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, status, notes, actingUserId }) => {
-    const application = await ctx.db.get(id);
-    if (!application) throw new Error("Application not found.");
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: application.societyId,
-      required: "Director",
-    });
-    await ctx.db.patch(id, {
-      status,
-      notes,
-      reviewedAtISO: isoNow(),
-      reviewedByUserId: actingUserId ?? undefined,
-    });
-  },
+  handler: (ctx, args) => reviewApplicationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const convertApplication = mutation({
@@ -253,38 +202,7 @@ export const convertApplication = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, funder, program, actingUserId }) => {
-    const application = await ctx.db.get(id);
-    if (!application) throw new Error("Application not found.");
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: application.societyId,
-      required: "Director",
-    });
-
-    const grantId =
-      application.linkedGrantId ??
-      (await ctx.db.insert("grants", {
-        societyId: application.societyId,
-        title: application.projectTitle,
-        funder,
-        program,
-        status: "Drafting",
-        amountRequestedCents: application.amountRequestedCents,
-        restrictedPurpose: application.proposedUseOfFunds,
-        notes: application.projectSummary,
-        createdAtISO: isoNow(),
-      }));
-
-    await ctx.db.patch(id, {
-      linkedGrantId: grantId,
-      status: "Converted",
-      reviewedAtISO: isoNow(),
-      reviewedByUserId: actingUserId ?? undefined,
-    });
-
-    return grantId;
-  },
+  handler: (ctx, args) => convertApplicationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsertGrant = mutation({
@@ -337,24 +255,7 @@ export const upsertGrant = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await requireRole(ctx, {
-      actingUserId: args.actingUserId,
-      societyId: args.societyId,
-      required: "Director",
-    });
-    const { id, actingUserId, ...rest } = args;
-    const now = isoNow();
-    if (id) {
-      await ctx.db.patch(id, { ...rest, updatedAtISO: now });
-      return id;
-    }
-    return await ctx.db.insert("grants", {
-      ...rest,
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-  },
+  handler: (ctx, args) => upsertGrantPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const importGcosProjectSnapshot = mutation({
@@ -365,98 +266,13 @@ export const importGcosProjectSnapshot = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, normalizedGrant, snapshot, actingUserId }) => {
-    await requireRole(ctx, {
-      actingUserId,
-      societyId,
-      required: "Director",
-    });
-
-    const now = isoNow();
-    const sourceExternalIds = Array.isArray(normalizedGrant?.sourceExternalIds)
-      ? normalizedGrant.sourceExternalIds.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
-      : [];
-    const existing = sourceExternalIds.length
-      ? (await ctx.db
-        .query("grants")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect())
-        .find((grant) => (grant.sourceExternalIds ?? []).some((id) => sourceExternalIds.includes(id)))
-      : undefined;
-
-    const payload = {
-      societyId,
-      title: String(normalizedGrant?.title ?? "GCOS project"),
-      funder: String(normalizedGrant?.funder ?? "Employment and Social Development Canada"),
-      program: typeof normalizedGrant?.program === "string" ? normalizedGrant.program : undefined,
-      status: String(normalizedGrant?.status ?? "Submitted"),
-      opportunityType: "Government",
-      opportunityUrl: typeof normalizedGrant?.opportunityUrl === "string" ? normalizedGrant.opportunityUrl : undefined,
-      confirmationCode: typeof normalizedGrant?.confirmationCode === "string" ? normalizedGrant.confirmationCode : undefined,
-      amountRequestedCents: typeof normalizedGrant?.amountRequestedCents === "number" ? normalizedGrant.amountRequestedCents : undefined,
-      amountAwardedCents: typeof normalizedGrant?.amountAwardedCents === "number" ? normalizedGrant.amountAwardedCents : undefined,
-      startDate: typeof normalizedGrant?.startDate === "string" ? normalizedGrant.startDate : undefined,
-      endDate: typeof normalizedGrant?.endDate === "string" ? normalizedGrant.endDate : undefined,
-      sourceImportedAtISO: now,
-      sourceFileCount: Number(snapshot?.agreement?.downloadedAgreementPdfs?.downloadedCount ?? 0),
-      sourceExternalIds,
-      confidence: "browser-snapshot",
-      sensitivity: "contains-government-funding-records",
-      riskFlags: ["Review imported GCOS data before relying on deadlines or amounts."],
-      keyFacts: Array.isArray(normalizedGrant?.keyFacts) ? normalizedGrant.keyFacts.filter((value: unknown) => typeof value === "string") : undefined,
-      requirements: Array.isArray(normalizedGrant?.requirements) ? normalizedGrant.requirements : undefined,
-      timelineEvents: Array.isArray(normalizedGrant?.timelineEvents) ? normalizedGrant.timelineEvents : undefined,
-      complianceFlags: Array.isArray(normalizedGrant?.complianceFlags) ? normalizedGrant.complianceFlags : undefined,
-      useOfFunds: Array.isArray(normalizedGrant?.useOfFunds) ? normalizedGrant.useOfFunds : undefined,
-      nextSteps: Array.isArray(normalizedGrant?.nextSteps) ? normalizedGrant.nextSteps : undefined,
-      nextAction: typeof normalizedGrant?.nextAction === "string" ? normalizedGrant.nextAction : undefined,
-      nextReportDueAtISO: typeof normalizedGrant?.nextReportDueAtISO === "string" ? normalizedGrant.nextReportDueAtISO : undefined,
-      sourceNotes: typeof normalizedGrant?.sourceNotes === "string" ? normalizedGrant.sourceNotes : undefined,
-      notes: `Imported from GCOS at ${now}. Sensitive employee and banking fields were not imported.`,
-    };
-
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        ...payload,
-        updatedAtISO: now,
-      });
-      return { grantId: existing._id, created: false, sourceExternalIds };
-    }
-
-    const grantId = await ctx.db.insert("grants", {
-      ...payload,
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-    return { grantId, created: true, sourceExternalIds };
-  },
+  handler: (ctx, args) => importGcosProjectSnapshotPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeGrant = mutation({
   args: { id: v.id("grants"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { id, actingUserId }) => {
-    const grant = await ctx.db.get(id);
-    if (!grant) return;
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: grant.societyId,
-      required: "Director",
-    });
-    const [reports, ledger] = await Promise.all([
-      ctx.db
-        .query("grantReports")
-        .withIndex("by_grant", (q) => q.eq("grantId", id))
-        .collect(),
-      ctx.db
-        .query("grantTransactions")
-        .withIndex("by_grant", (q) => q.eq("grantId", id))
-        .collect(),
-    ]);
-    for (const report of reports) await ctx.db.delete(report._id);
-    for (const row of ledger) await ctx.db.delete(row._id);
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeGrantPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsertReport = mutation({
@@ -476,34 +292,13 @@ export const upsertReport = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await requireRole(ctx, {
-      actingUserId: args.actingUserId,
-      societyId: args.societyId,
-      required: "Director",
-    });
-    const { id, actingUserId, ...rest } = args;
-    if (id) {
-      await ctx.db.patch(id, rest);
-      return id;
-    }
-    return await ctx.db.insert("grantReports", rest);
-  },
+  handler: (ctx, args) => upsertReportPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeReport = mutation({
   args: { id: v.id("grantReports"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { id, actingUserId }) => {
-    const report = await ctx.db.get(id);
-    if (!report) return;
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: report.societyId,
-      required: "Director",
-    });
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeReportPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsertTransaction = mutation({
@@ -521,32 +316,11 @@ export const upsertTransaction = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await requireRole(ctx, {
-      actingUserId: args.actingUserId,
-      societyId: args.societyId,
-      required: "Director",
-    });
-    const { id, actingUserId, ...rest } = args;
-    if (id) {
-      await ctx.db.patch(id, rest);
-      return id;
-    }
-    return await ctx.db.insert("grantTransactions", rest);
-  },
+  handler: (ctx, args) => upsertTransactionPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeTransaction = mutation({
   args: { id: v.id("grantTransactions"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { id, actingUserId }) => {
-    const row = await ctx.db.get(id);
-    if (!row) return;
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: row.societyId,
-      required: "Director",
-    });
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeTransactionPortable(toPortableMutationCtx(ctx), args),
 });

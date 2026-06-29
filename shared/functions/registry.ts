@@ -113,6 +113,23 @@ import * as transparencyFns from "./transparency";
 import * as usersFns from "./users";
 import * as volunteersFns from "./volunteers";
 
+import * as aiAgentsFns from "./aiAgents";
+import * as aiSettingsFns from "./aiSettings";
+import * as apiPlatformFns from "./apiPlatform";
+import * as calendarSyncFns from "./calendarSync";
+import * as communicationsFns from "./communications";
+import * as documentVersionsFns from "./documentVersions";
+import * as financialHubFns from "./financialHub";
+import * as importSessionsFns from "./importSessions";
+import * as membersFns from "./members";
+import * as paperlessFns from "./paperless";
+import * as recordLayoutsFns from "./recordLayouts";
+import * as roleHoldersFns from "./roleHolders";
+import * as secretsFns from "./secrets";
+import * as transcriptsFns from "./transcripts";
+import * as waveCacheFns from "./waveCache";
+import * as workflowsFns from "./workflows";
+
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }),
   definePortableMutation({ name: "legalOperations:upsertRightsClass", handler: upsertRightsClassPortable }),
@@ -858,6 +875,207 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
 
   // transparency
   definePortableQuery({ name: "transparency:listPublications", handler: transparencyFns.listPublicationsPortable }),
+
+  // financialHub
+  definePortableQuery({ name: "financialHub:connections", handler: financialHubFns.connectionsPortable }),
+  definePortableQuery({ name: "financialHub:accounts", handler: financialHubFns.accountsPortable }),
+  definePortableQuery({ name: "financialHub:transactions", handler: financialHubFns.transactionsPortable }),
+  definePortableQuery({ name: "financialHub:transactionsForAccountExternalId", handler: financialHubFns.transactionsForAccountExternalIdPortable }),
+  definePortableQuery({ name: "financialHub:transactionsForCounterpartyExternalId", handler: financialHubFns.transactionsForCounterpartyExternalIdPortable }),
+  definePortableQuery({ name: "financialHub:transactionsForCategoryAccountExternalId", handler: financialHubFns.transactionsForCategoryAccountExternalIdPortable }),
+  definePortableQuery({ name: "financialHub:budgets", handler: financialHubFns.budgetsPortable }),
+  definePortableQuery({ name: "financialHub:operatingSubscriptions", handler: financialHubFns.operatingSubscriptionsPortable }),
+  definePortableMutation({ name: "financialHub:upsertBudget", handler: financialHubFns.upsertBudgetPortable }),
+  definePortableMutation({ name: "financialHub:upsertOperatingSubscription", handler: financialHubFns.upsertOperatingSubscriptionPortable }),
+  definePortableMutation({ name: "financialHub:removeOperatingSubscription", handler: financialHubFns.removeOperatingSubscriptionPortable }),
+  definePortableMutation({ name: "financialHub:removeBudget", handler: financialHubFns.removeBudgetPortable }),
+
+  // communications
+  definePortableQuery({ name: "communications:listTemplates", handler: communicationsFns.listTemplatesPortable }),
+  definePortableQuery({ name: "communications:getTemplate", handler: communicationsFns.getTemplatePortable }),
+  definePortableQuery({ name: "communications:listCampaigns", handler: communicationsFns.listCampaignsPortable }),
+  definePortableQuery({ name: "communications:listDeliveries", handler: communicationsFns.listDeliveriesPortable }),
+  definePortableQuery({ name: "communications:listMemberPrefs", handler: communicationsFns.listMemberPrefsPortable }),
+  definePortableQuery({ name: "communications:listSegments", handler: communicationsFns.listSegmentsPortable }),
+  definePortableMutation({ name: "communications:upsertTemplate", handler: communicationsFns.upsertTemplatePortable }),
+  definePortableMutation({ name: "communications:upsertSegment", handler: communicationsFns.upsertSegmentPortable }),
+  definePortableMutation({ name: "communications:removeSegment", handler: communicationsFns.removeSegmentPortable }),
+  definePortableMutation({ name: "communications:upsertMemberPref", handler: communicationsFns.upsertMemberPrefPortable }),
+  definePortableMutation({ name: "communications:markDeliveryOpened", handler: communicationsFns.markDeliveryOpenedPortable }),
+
+  // workflows
+  definePortableQuery({ name: "workflows:list", handler: workflowsFns.listPortable }),
+  definePortableQuery({ name: "workflows:listRuns", handler: workflowsFns.listRunsPortable }),
+  definePortableQuery({ name: "workflows:runsForWorkflow", handler: workflowsFns.runsForWorkflowPortable }),
+  definePortableQuery({ name: "workflows:getRun", handler: workflowsFns.getRunPortable }),
+  definePortableMutation({ name: "workflows:setStatus", handler: workflowsFns.setStatusPortable }),
+  definePortableMutation({ name: "workflows:update", handler: workflowsFns.updatePortable }),
+  definePortableMutation({ name: "workflows:addNode", handler: workflowsFns.addNodePortable }),
+
+  // waveCache
+  definePortableQuery({ name: "waveCache:summary", handler: waveCacheFns.summaryPortable }),
+  definePortableQuery({ name: "waveCache:resources", handler: waveCacheFns.resourcesPortable }),
+  definePortableQuery({ name: "waveCache:resource", handler: waveCacheFns.resourcePortable }),
+  definePortableQuery({ name: "waveCache:resourceByExternalId", handler: waveCacheFns.resourceByExternalIdPortable }),
+  definePortableQuery({ name: "waveCache:structures", handler: waveCacheFns.structuresPortable }),
+
+  // calendarSync
+  definePortableMutation({ name: "calendarSync:upsertExternalCalendarEventMapping", handler: calendarSyncFns.upsertExternalCalendarEventMappingPortable }),
+  definePortableMutation({ name: "calendarSync:recordCalendarWebhook", handler: calendarSyncFns.recordCalendarWebhookPortable }),
+  definePortableMutation({ name: "calendarSync:recordCalendarIncrementalCursor", handler: calendarSyncFns.recordCalendarIncrementalCursorPortable }),
+
+  // secrets
+  definePortableQuery({ name: "secrets:list", handler: secretsFns.listPortable }),
+  definePortableMutation({ name: "secrets:remove", handler: secretsFns.removePortable }),
+
+  // aiAgents
+  definePortableQuery({ name: "aiAgents:listDefinitions", handler: aiAgentsFns.listDefinitionsPortable }),
+  definePortableQuery({ name: "aiAgents:listSkills", handler: aiAgentsFns.listSkillsPortable }),
+  definePortableQuery({ name: "aiAgents:listAllSkills", handler: aiAgentsFns.listAllSkillsPortable }),
+  definePortableQuery({ name: "aiAgents:loadSkills", handler: aiAgentsFns.loadSkillsPortable }),
+  definePortableMutation({ name: "aiAgents:upsertSkill", handler: aiAgentsFns.upsertSkillPortable }),
+  definePortableMutation({ name: "aiAgents:setSkillActive", handler: aiAgentsFns.setSkillActivePortable }),
+  definePortableMutation({ name: "aiAgents:removeSkill", handler: aiAgentsFns.removeSkillPortable }),
+  definePortableQuery({ name: "aiAgents:listLogicFunctions", handler: aiAgentsFns.listLogicFunctionsPortable }),
+  definePortableQuery({ name: "aiAgents:listToolDrafts", handler: aiAgentsFns.listToolDraftsPortable }),
+  definePortableMutation({ name: "aiAgents:approveToolDraft", handler: aiAgentsFns.approveToolDraftPortable }),
+  definePortableMutation({ name: "aiAgents:rejectToolDraft", handler: aiAgentsFns.rejectToolDraftPortable }),
+  definePortableMutation({ name: "aiAgents:upsertLogicFunction", handler: aiAgentsFns.upsertLogicFunctionPortable }),
+
+  // aiSettings
+  definePortableQuery({ name: "aiSettings:getEffective", handler: aiSettingsFns.getEffectivePortable }),
+  definePortableMutation({ name: "aiSettings:upsert", handler: aiSettingsFns.upsertPortable }),
+  definePortableMutation({ name: "aiSettings:setStatus", handler: aiSettingsFns.setStatusPortable }),
+
+  // apiPlatform
+  definePortableQuery({ name: "apiPlatform:listClients", handler: apiPlatformFns.listClientsPortable }),
+  definePortableMutation({ name: "apiPlatform:createClient", handler: apiPlatformFns.createClientPortable }),
+  definePortableMutation({ name: "apiPlatform:updateClient", handler: apiPlatformFns.updateClientPortable }),
+  definePortableQuery({ name: "apiPlatform:listTokens", handler: apiPlatformFns.listTokensPortable }),
+  definePortableQuery({ name: "apiPlatform:listPluginInstallations", handler: apiPlatformFns.listPluginInstallationsPortable }),
+  definePortableQuery({ name: "apiPlatform:listIntegrationCatalog", handler: apiPlatformFns.listIntegrationCatalogPortable }),
+  definePortableMutation({ name: "apiPlatform:installIntegration", handler: apiPlatformFns.installIntegrationPortable }),
+  definePortableMutation({ name: "apiPlatform:updateIntegrationHealth", handler: apiPlatformFns.updateIntegrationHealthPortable }),
+  definePortableMutation({ name: "apiPlatform:upsertPluginInstallation", handler: apiPlatformFns.upsertPluginInstallationPortable }),
+  definePortableQuery({ name: "apiPlatform:listIntegrationSyncStates", handler: apiPlatformFns.listIntegrationSyncStatesPortable }),
+
+  // paperless
+  definePortableQuery({ name: "paperless:listConnection", handler: paperlessFns.listConnectionPortable }),
+  definePortableQuery({ name: "paperless:recentSyncs", handler: paperlessFns.recentSyncsPortable }),
+  definePortableQuery({ name: "paperless:syncForDocument", handler: paperlessFns.syncForDocumentPortable }),
+  definePortableQuery({ name: "paperless:sourcePullContext", handler: paperlessFns.sourcePullContextPortable }),
+  definePortableQuery({ name: "paperless:authorizeMeetingImport", handler: paperlessFns.authorizeMeetingImportPortable }),
+  definePortableQuery({ name: "paperless:getSync", handler: paperlessFns.getSyncPortable }),
+  definePortableMutation({ name: "paperless:recordConnectionTest", handler: paperlessFns.recordConnectionTestPortable }),
+
+  // documentVersions
+  definePortableQuery({ name: "documentVersions:listForDocument", handler: documentVersionsFns.listForDocumentPortable }),
+  definePortableQuery({ name: "documentVersions:latest", handler: documentVersionsFns.latestPortable }),
+  definePortableQuery({ name: "documentVersions:get", handler: documentVersionsFns.getPortable }),
+  definePortableMutation({ name: "documentVersions:rollback", handler: documentVersionsFns.rollbackPortable }),
+
+  // importSessions
+  definePortableQuery({ name: "importSessions:list", handler: importSessionsFns.listPortable }),
+  definePortableQuery({ name: "importSessions:get", handler: importSessionsFns.getPortable }),
+  definePortableMutation({ name: "importSessions:createFromBundle", handler: importSessionsFns.createFromBundlePortable }),
+  definePortableMutation({ name: "importSessions:updateRecord", handler: importSessionsFns.updateRecordPortable }),
+  definePortableMutation({ name: "importSessions:bulkSetStatus", handler: importSessionsFns.bulkSetStatusPortable }),
+  definePortableMutation({ name: "importSessions:bulkSetStatusByKind", handler: importSessionsFns.bulkSetStatusByKindPortable }),
+  definePortableMutation({ name: "importSessions:bulkSetStatusByFilter", handler: importSessionsFns.bulkSetStatusByFilterPortable }),
+  definePortableMutation({ name: "importSessions:refreshSessionSummaries", handler: importSessionsFns.refreshSessionSummariesPortable }),
+  definePortableMutation({ name: "importSessions:removeSession", handler: importSessionsFns.removeSessionPortable }),
+  definePortableMutation({ name: "importSessions:applyApprovedToOrgHistory", handler: importSessionsFns.applyApprovedToOrgHistoryPortable }),
+  definePortableMutation({ name: "importSessions:applyApprovedMeetings", handler: importSessionsFns.applyApprovedMeetingsPortable }),
+  definePortableMutation({ name: "importSessions:backfillApprovedMeetingReferences", handler: importSessionsFns.backfillApprovedMeetingReferencesPortable }),
+
+  // transcripts
+  definePortableQuery({ name: "transcripts:getByMeeting", handler: transcriptsFns.getByMeetingPortable }),
+  definePortableQuery({ name: "transcripts:jobForMeeting", handler: transcriptsFns.jobForMeetingPortable }),
+  definePortableMutation({ name: "transcripts:createJob", handler: transcriptsFns.createJobPortable }),
+  definePortableMutation({ name: "transcripts:updateJob", handler: transcriptsFns.updateJobPortable }),
+  definePortableMutation({ name: "transcripts:saveTranscript", handler: transcriptsFns.saveTranscriptPortable }),
+  definePortableMutation({ name: "transcripts:saveText", handler: transcriptsFns.saveTextPortable }),
+  definePortableMutation({ name: "transcripts:importVtt", handler: transcriptsFns.importVttPortable }),
+
+  // grants
+  definePortableMutation({ name: "grants:upsertEmployeeLink", handler: grantsFns.upsertEmployeeLinkPortable }),
+  definePortableMutation({ name: "grants:removeEmployeeLink", handler: grantsFns.removeEmployeeLinkPortable }),
+  definePortableMutation({ name: "grants:submitApplication", handler: grantsFns.submitApplicationPortable }),
+  definePortableMutation({ name: "grants:reviewApplication", handler: grantsFns.reviewApplicationPortable }),
+  definePortableMutation({ name: "grants:convertApplication", handler: grantsFns.convertApplicationPortable }),
+  definePortableMutation({ name: "grants:upsertGrant", handler: grantsFns.upsertGrantPortable }),
+  definePortableMutation({ name: "grants:importGcosProjectSnapshot", handler: grantsFns.importGcosProjectSnapshotPortable }),
+  definePortableMutation({ name: "grants:removeGrant", handler: grantsFns.removeGrantPortable }),
+  definePortableMutation({ name: "grants:upsertReport", handler: grantsFns.upsertReportPortable }),
+  definePortableMutation({ name: "grants:removeReport", handler: grantsFns.removeReportPortable }),
+  definePortableMutation({ name: "grants:upsertTransaction", handler: grantsFns.upsertTransactionPortable }),
+  definePortableMutation({ name: "grants:removeTransaction", handler: grantsFns.removeTransactionPortable }),
+
+  // fundingSources
+  definePortableMutation({ name: "fundingSources:upsertSource", handler: fundingSourcesFns.upsertSourcePortable }),
+  definePortableMutation({ name: "fundingSources:removeSource", handler: fundingSourcesFns.removeSourcePortable }),
+  definePortableMutation({ name: "fundingSources:upsertEvent", handler: fundingSourcesFns.upsertEventPortable }),
+  definePortableMutation({ name: "fundingSources:removeEvent", handler: fundingSourcesFns.removeEventPortable }),
+  definePortableMutation({ name: "fundingSources:importStudentLevy", handler: fundingSourcesFns.importStudentLevyPortable }),
+
+  // subscriptions
+  definePortableMutation({ name: "subscriptions:upsertPlan", handler: subscriptionsFns.upsertPlanPortable }),
+  definePortableMutation({ name: "subscriptions:upsertFeePeriod", handler: subscriptionsFns.upsertFeePeriodPortable }),
+  definePortableMutation({ name: "subscriptions:removeFeePeriod", handler: subscriptionsFns.removeFeePeriodPortable }),
+  definePortableMutation({ name: "subscriptions:removePlan", handler: subscriptionsFns.removePlanPortable }),
+
+  // elections
+  definePortableMutation({ name: "elections:create", handler: electionsFns.createPortable }),
+  definePortableMutation({ name: "elections:updateSettings", handler: electionsFns.updateSettingsPortable }),
+  definePortableMutation({ name: "elections:addQuestion", handler: electionsFns.addQuestionPortable }),
+  definePortableMutation({ name: "elections:reviewNomination", handler: electionsFns.reviewNominationPortable }),
+  definePortableMutation({ name: "elections:publishNominationToBallot", handler: electionsFns.publishNominationToBallotPortable }),
+  definePortableMutation({ name: "elections:snapshotEligibleVoters", handler: electionsFns.snapshotEligibleVotersPortable }),
+  definePortableMutation({ name: "elections:close", handler: electionsFns.closePortable }),
+  definePortableMutation({ name: "elections:tallyElection", handler: electionsFns.tallyElectionPortable }),
+
+  // volunteers
+  definePortableMutation({ name: "volunteers:submitApplication", handler: volunteersFns.submitApplicationPortable }),
+  definePortableMutation({ name: "volunteers:reviewApplication", handler: volunteersFns.reviewApplicationPortable }),
+  definePortableMutation({ name: "volunteers:convertApplication", handler: volunteersFns.convertApplicationPortable }),
+  definePortableMutation({ name: "volunteers:upsertVolunteer", handler: volunteersFns.upsertVolunteerPortable }),
+  definePortableMutation({ name: "volunteers:removeVolunteer", handler: volunteersFns.removeVolunteerPortable }),
+  definePortableMutation({ name: "volunteers:upsertScreening", handler: volunteersFns.upsertScreeningPortable }),
+  definePortableMutation({ name: "volunteers:removeScreening", handler: volunteersFns.removeScreeningPortable }),
+
+  // notifications
+  definePortableMutation({ name: "notifications:markRead", handler: notificationsFns.notificationMarkRead }),
+  definePortableMutation({ name: "notifications:markAllRead", handler: notificationsFns.notificationMarkAllRead }),
+  definePortableMutation({ name: "notifications:dismiss", handler: notificationsFns.notificationDismiss }),
+  definePortableMutation({ name: "notifications:snooze", handler: notificationsFns.notificationSnooze }),
+  definePortableMutation({ name: "notifications:dismissAll", handler: notificationsFns.notificationDismissAll }),
+
+  // transparency
+  definePortableMutation({ name: "transparency:upsertPublication", handler: transparencyFns.upsertPublicationPortable }),
+  definePortableMutation({ name: "transparency:removePublication", handler: transparencyFns.removePublicationPortable }),
+
+  // members
+  definePortableMutation({ name: "members:merge", handler: membersFns.memberMerge }),
+
+  // recordLayouts
+  definePortableQuery({ name: "recordLayouts:get", handler: recordLayoutsFns.recordLayoutGet }),
+  definePortableMutation({ name: "recordLayouts:upsert", handler: recordLayoutsFns.recordLayoutUpsert }),
+  definePortableMutation({ name: "recordLayouts:remove", handler: recordLayoutsFns.recordLayoutRemove }),
+
+  // legalOperations
+  definePortableQuery({ name: "legalOperations:listRoleHolders", handler: roleHoldersFns.listRoleHoldersPortable }),
+  definePortableMutation({ name: "legalOperations:upsertRoleHolder", handler: roleHoldersFns.upsertRoleHolderPortable }),
+  definePortableMutation({ name: "legalOperations:removeRoleHolder", handler: roleHoldersFns.removeRoleHolderPortable }),
+  definePortableQuery({ name: "legalOperations:rightsLedger", handler: roleHoldersFns.rightsLedgerPortable }),
+
+  // bylawAmendments
+  definePortableMutation({ name: "bylawAmendments:startConsultation", handler: bylawAmendmentsFns.startConsultationPortable }),
+  definePortableMutation({ name: "bylawAmendments:markResolutionPassed", handler: bylawAmendmentsFns.markResolutionPassedPortable }),
+  definePortableMutation({ name: "bylawAmendments:markFiled", handler: bylawAmendmentsFns.markFiledPortable }),
+  definePortableMutation({ name: "bylawAmendments:withdraw", handler: bylawAmendmentsFns.withdrawPortable }),
+  definePortableMutation({ name: "bylawAmendments:supersede", handler: bylawAmendmentsFns.supersedePortable }),
+  definePortableMutation({ name: "bylawAmendments:materializeSections", handler: bylawAmendmentsFns.materializeSectionsPortable }),
+
 ];
 
 /** Names of every ported function, for diagnostics / the conformance harness. */

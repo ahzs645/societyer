@@ -9,29 +9,24 @@ import {
   createDownloadUrl,
 } from "./providers/storage";
 import { assertNativeFileStorageEnabled } from "./providers/env";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import {
+  listForDocumentPortable,
+  latestPortable,
+  getPortable,
+  rollbackPortable,
+} from "../shared/functions/documentVersions";
 
 export const listForDocument = query({
   args: { documentId: v.id("documents") },
   returns: v.any(),
-  handler: async (ctx, { documentId }) => {
-    const rows = await ctx.db
-      .query("documentVersions")
-      .withIndex("by_document", (q) => q.eq("documentId", documentId))
-      .collect();
-    return rows.sort((a, b) => b.version - a.version);
-  },
+  handler: (ctx, args) => listForDocumentPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const latest = query({
   args: { documentId: v.id("documents") },
   returns: v.any(),
-  handler: async (ctx, { documentId }) => {
-    const rows = await ctx.db
-      .query("documentVersions")
-      .withIndex("by_document", (q) => q.eq("documentId", documentId))
-      .collect();
-    return rows.sort((a, b) => b.version - a.version)[0] ?? null;
-  },
+  handler: (ctx, args) => latestPortable(toPortableQueryCtx(ctx), args),
 });
 
 // Action: caller asks us for a presigned upload URL. The client PUTs the file
@@ -242,7 +237,7 @@ async function downloadTargetForVersion(version: any) {
 export const get = query({
   args: { id: v.id("documentVersions") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
 });
 
 // Demo-friendly helper: creates a new version inline with a synthesized blob.
@@ -318,36 +313,5 @@ export const rollback = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { versionId, actingUserId }) => {
-    const v = await ctx.db.get(versionId);
-    if (!v) throw new Error("Version not found.");
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: v.societyId,
-      required: "Admin",
-    });
-    const siblings = await ctx.db
-      .query("documentVersions")
-      .withIndex("by_document", (q) => q.eq("documentId", v.documentId))
-      .collect();
-    for (const row of siblings) {
-      if (row.isCurrent) await ctx.db.patch(row._id, { isCurrent: false });
-    }
-    await ctx.db.patch(versionId, { isCurrent: true });
-    await ctx.db.patch(v.documentId, {
-      storageId: undefined,
-      fileName: v.fileName,
-      mimeType: v.mimeType,
-      fileSizeBytes: v.fileSizeBytes,
-    });
-    await ctx.db.insert("activity", {
-      societyId: v.societyId,
-      actor: "System",
-      entityType: "document",
-      entityId: v.documentId,
-      action: "rolled-back",
-      summary: `Rolled back to v${v.version} (${v.fileName})`,
-      createdAtISO: new Date().toISOString(),
-    });
-  },
+  handler: (ctx, args) => rollbackPortable(toPortableMutationCtx(ctx), args),
 });

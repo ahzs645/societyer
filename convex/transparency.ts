@@ -1,11 +1,14 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireRole } from "./users";
 import { isSocietyModuleEnabled } from "./lib/moduleSettings";
 import { createDownloadUrl } from "./providers/storage";
-import { listPublicationsPortable } from "../shared/functions/transparency";
-import { toPortableQueryCtx } from "./lib/portable";
+import {
+  listPublicationsPortable,
+  upsertPublicationPortable,
+  removePublicationPortable,
+} from "../shared/functions/transparency";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const listPublications = query({
   args: { societyId: v.id("societies") },
@@ -31,43 +34,13 @@ export const upsertPublication = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args): Promise<any> => {
-    await requireRole(ctx, {
-      actingUserId: args.actingUserId,
-      societyId: args.societyId,
-      required: "Director",
-    });
-    const { id, actingUserId, ...rest } = args;
-    if (rest.status === "Published" && rest.reviewStatus !== "Approved") {
-      throw new Error("Publication must be reviewed and approved before it goes live.");
-    }
-    if (id) {
-      await ctx.db.patch(id, rest);
-      return id;
-    }
-    const payload: any = {
-      ...rest,
-      createdAtISO: new Date().toISOString(),
-    };
-    return await ctx.db.insert("publications", {
-      ...payload,
-    });
-  },
+  handler: (ctx, args): Promise<any> => upsertPublicationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removePublication = mutation({
   args: { id: v.id("publications"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { id, actingUserId }): Promise<void> => {
-    const publication: any = await ctx.db.get(id);
-    if (!publication) return;
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: publication.societyId,
-      required: "Director",
-    });
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args): Promise<void> => removePublicationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const publicCenter = query({

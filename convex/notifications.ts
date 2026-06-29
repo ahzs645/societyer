@@ -8,6 +8,11 @@ import {
   notificationsList,
   notificationsUnreadCount,
   notificationCreate,
+  notificationMarkRead,
+  notificationMarkAllRead,
+  notificationDismiss,
+  notificationSnooze,
+  notificationDismissAll,
   notificationRemove,
   notificationRemoveAllDismissed,
   notificationsListPrefs,
@@ -54,26 +59,13 @@ export const create = mutation({
 export const markRead = mutation({
   args: { id: v.id("notifications") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.patch(id, { readAt: new Date().toISOString() });
-  },
+  handler: (ctx, args) => notificationMarkRead(toPortableMutationCtx(ctx), args),
 });
 
 export const markAllRead = mutation({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { societyId, userId }) => {
-    const rows = await ctx.db
-      .query("notifications")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const now = new Date().toISOString();
-    for (const r of rows) {
-      if (r.readAt) continue;
-      if (userId && r.userId && r.userId !== userId) continue;
-      await ctx.db.patch(r._id, { readAt: now });
-    }
-  },
+  handler: (ctx, args) => notificationMarkAllRead(toPortableMutationCtx(ctx), args),
 });
 
 /** Clear a single notification from the bell. Stamps dismissedAt (and readAt
@@ -82,14 +74,7 @@ export const markAllRead = mutation({
 export const dismiss = mutation({
   args: { id: v.id("notifications") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const now = new Date().toISOString();
-    const existing = await ctx.db.get(id);
-    await ctx.db.patch(id, {
-      dismissedAt: now,
-      readAt: existing?.readAt ?? now,
-    });
-  },
+  handler: (ctx, args) => notificationDismiss(toPortableMutationCtx(ctx), args),
 });
 
 /** Hide a notification from the bell until `untilISO` (null un-snoozes it). The
@@ -97,27 +82,14 @@ export const dismiss = mutation({
 export const snooze = mutation({
   args: { id: v.id("notifications"), untilISO: v.union(v.string(), v.null()) },
   returns: v.any(),
-  handler: async (ctx, { id, untilISO }) => {
-    await ctx.db.patch(id, { snoozedUntilISO: untilISO ?? undefined });
-  },
+  handler: (ctx, args) => notificationSnooze(toPortableMutationCtx(ctx), args),
 });
 
 /** Clear every (non-dismissed) notification for this user/society from the bell. */
 export const dismissAll = mutation({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { societyId, userId }) => {
-    const rows = await ctx.db
-      .query("notifications")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const now = new Date().toISOString();
-    for (const r of rows) {
-      if (r.dismissedAt) continue;
-      if (userId && r.userId && r.userId !== userId) continue;
-      await ctx.db.patch(r._id, { dismissedAt: now, readAt: r.readAt ?? now });
-    }
-  },
+  handler: (ctx, args) => notificationDismissAll(toPortableMutationCtx(ctx), args),
 });
 
 /** Permanently delete a single notification now, without waiting for the

@@ -4,6 +4,14 @@ import { action, internalMutation, query } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { waveFetchSnapshot, waveHealthCheck, waveInvoicePaymentProbe } from "./providers/waveData";
 import { redactWaveDiagnostic, waveEnvironmentStatus } from "./providers/waveDiagnostics";
+import { toPortableQueryCtx } from "./lib/portable";
+import {
+  summaryPortable,
+  resourcesPortable,
+  resourcePortable,
+  resourceByExternalIdPortable,
+  structuresPortable,
+} from "../shared/functions/waveCache";
 
 const resourceValidator = v.object({
   resourceType: v.string(),
@@ -31,14 +39,7 @@ const structureValidator = v.object({
 export const summary = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const snapshot = await latestSnapshot(ctx, societyId);
-    if (!snapshot) return null;
-    return {
-      ...snapshot,
-      resourceCounts: parseJson(snapshot.resourceCountsJson, {}),
-    };
-  },
+  handler: (ctx, args) => summaryPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const resources = query({
@@ -49,53 +50,13 @@ export const resources = query({
     limit: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, resourceType, search, limit }) => {
-    const snapshot = await latestSnapshot(ctx, societyId);
-    if (!snapshot) return [];
-    const rows = await ctx.db
-      .query("waveCacheResources")
-      .withIndex("by_snapshot", (q) => q.eq("snapshotId", snapshot._id))
-      .collect();
-    const [counterpartyStats, categoryStats] = await Promise.all([
-      linkedTransactionStatsByExternalId(ctx, societyId),
-      linkedCategoryStatsByAccountExternalId(ctx, societyId, rows),
-    ]);
-    const needle = search?.trim().toLowerCase();
-    return rows
-      .filter((row) => !resourceType || row.resourceType === resourceType)
-      .filter((row) => !needle || row.searchText.includes(needle))
-      .sort((a, b) => `${a.resourceType}:${a.label}`.localeCompare(`${b.resourceType}:${b.label}`))
-      .slice(0, limit ?? 500)
-      .map(({ rawJson, ...row }) => ({
-        ...row,
-        ...counterpartyStats.get(row.externalId ?? ""),
-        ...categoryStats.get(row.externalId ?? ""),
-        hasRawJson: Boolean(rawJson),
-      }));
-  },
+  handler: (ctx, args) => resourcesPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const resource = query({
   args: { id: v.id("waveCacheResources") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const row = await ctx.db.get(id);
-    if (!row) return null;
-    const snapshotRows = await ctx.db
-      .query("waveCacheResources")
-      .withIndex("by_snapshot", (q) => q.eq("snapshotId", row.snapshotId))
-      .collect();
-    const [counterpartyStats, categoryStats] = await Promise.all([
-      linkedTransactionStatsByExternalId(ctx, row.societyId),
-      linkedCategoryStatsByAccountExternalId(ctx, row.societyId, snapshotRows),
-    ]);
-    return {
-      ...row,
-      ...counterpartyStats.get(row.externalId ?? ""),
-      ...categoryStats.get(row.externalId ?? ""),
-      raw: parseJson(row.rawJson, null),
-    };
-  },
+  handler: (ctx, args) => resourcePortable(toPortableQueryCtx(ctx), args),
 });
 
 export const resourceByExternalId = query({
@@ -105,30 +66,7 @@ export const resourceByExternalId = query({
     resourceType: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, externalId, resourceType }) => {
-    const snapshot = await latestSnapshot(ctx, societyId);
-    if (!snapshot) return null;
-    const rows = await ctx.db
-      .query("waveCacheResources")
-      .withIndex("by_society_external", (q) => q.eq("societyId", societyId).eq("externalId", externalId))
-      .collect();
-    const row = rows.find((candidate) => candidate.snapshotId === snapshot._id && (!resourceType || candidate.resourceType === resourceType));
-    if (!row) return null;
-    const snapshotRows = await ctx.db
-      .query("waveCacheResources")
-      .withIndex("by_snapshot", (q) => q.eq("snapshotId", snapshot._id))
-      .collect();
-    const [counterpartyStats, categoryStats] = await Promise.all([
-      linkedTransactionStatsByExternalId(ctx, societyId),
-      linkedCategoryStatsByAccountExternalId(ctx, societyId, snapshotRows),
-    ]);
-    return {
-      ...row,
-      ...counterpartyStats.get(row.externalId ?? ""),
-      ...categoryStats.get(row.externalId ?? ""),
-      raw: parseJson(row.rawJson, null),
-    };
-  },
+  handler: (ctx, args) => resourceByExternalIdPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const structures = query({
@@ -138,23 +76,7 @@ export const structures = query({
     limit: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, search, limit }) => {
-    const snapshot = await latestSnapshot(ctx, societyId);
-    if (!snapshot) return [];
-    const needle = search?.trim().toLowerCase();
-    const rows = await ctx.db
-      .query("waveCacheStructures")
-      .withIndex("by_snapshot", (q) => q.eq("snapshotId", snapshot._id))
-      .collect();
-    return rows
-      .filter((row) => !needle || row.typeName.toLowerCase().includes(needle) || row.kind.toLowerCase().includes(needle))
-      .sort((a, b) => a.typeName.localeCompare(b.typeName))
-      .slice(0, limit ?? 100)
-      .map((row) => ({
-        ...row,
-        fields: parseJson(row.fieldsJson, []),
-      }));
-  },
+  handler: (ctx, args) => structuresPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const sync = action({
@@ -334,15 +256,6 @@ export const _replaceSnapshot = internalMutation({
   },
 });
 
-async function latestSnapshot(ctx: any, societyId: string) {
-  const rows = await ctx.db
-    .query("waveCacheSnapshots")
-    .withIndex("by_society_provider", (q) => q.eq("societyId", societyId).eq("provider", "wave"))
-    .order("desc")
-    .take(1);
-  return rows[0] ?? null;
-}
-
 async function findWaveConnection(ctx: any, societyId: string) {
   const connections = await ctx.runQuery(api.financialHub.connections, { societyId });
   return (
@@ -350,73 +263,4 @@ async function findWaveConnection(ctx: any, societyId: string) {
     connections.find((row: any) => row.provider === "wave") ??
     null
   );
-}
-
-function parseJson(value: string, fallback: any) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-
-async function linkedTransactionStatsByExternalId(ctx: any, societyId: string) {
-  const rows = await ctx.db
-    .query("financialTransactions")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
-  const stats = new Map<string, { linkedTransactionCount: number; linkedTransactionTotalCents: number }>();
-  for (const transaction of rows) {
-    if (!transaction.counterpartyExternalId) continue;
-    const current = stats.get(transaction.counterpartyExternalId) ?? {
-      linkedTransactionCount: 0,
-      linkedTransactionTotalCents: 0,
-    };
-    current.linkedTransactionCount += 1;
-    current.linkedTransactionTotalCents += transaction.amountCents;
-    stats.set(transaction.counterpartyExternalId, current);
-  }
-  return stats;
-}
-
-async function linkedCategoryStatsByAccountExternalId(ctx: any, societyId: string, resources: any[]) {
-  const rows = await ctx.db
-    .query("financialTransactions")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
-  const accountIdsByLabel = new Map<string, string[]>();
-  for (const resource of resources) {
-    if (resource.resourceType !== "account" || !resource.externalId) continue;
-    const label = normalizeCategoryLabel(resource.label);
-    if (!label) continue;
-    const ids = accountIdsByLabel.get(label) ?? [];
-    ids.push(resource.externalId);
-    accountIdsByLabel.set(label, ids);
-  }
-
-  const stats = new Map<string, { linkedCategoryTransactionCount: number; linkedCategoryTransactionTotalCents: number }>();
-  for (const transaction of rows) {
-    const matchedExternalIds = new Set<string>();
-    if (transaction.categoryAccountExternalId) {
-      matchedExternalIds.add(transaction.categoryAccountExternalId);
-    } else {
-      const categoryMatches = accountIdsByLabel.get(normalizeCategoryLabel(transaction.category)) ?? [];
-      for (const externalId of categoryMatches) matchedExternalIds.add(externalId);
-    }
-
-    for (const externalId of matchedExternalIds) {
-      const current = stats.get(externalId) ?? {
-        linkedCategoryTransactionCount: 0,
-        linkedCategoryTransactionTotalCents: 0,
-      };
-      current.linkedCategoryTransactionCount += 1;
-      current.linkedCategoryTransactionTotalCents += transaction.amountCents;
-      stats.set(externalId, current);
-    }
-  }
-  return stats;
-}
-
-function normalizeCategoryLabel(value: unknown) {
-  return String(value ?? "").trim().toLowerCase();
 }

@@ -5,12 +5,12 @@
  * Pure `ctx.db` reads and writes across the funding-source register, its events,
  * grants, receipts, member billing, and the membership fee-period table. Each
  * handler runs unchanged on hosted Convex, the local Dexie runtime, and the
- * convex-test oracle. The role-gated handlers (upsertSource / removeSource /
- * upsertEvent / removeEvent / importStudentLevy) stay on Convex — they call
- * `requireRole`, a server-side helper.
+ * convex-test oracle. Role gating goes through `requireRolePortable`, a pure
+ * `ctx.db` reader.
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { requireRolePortable } from "./access";
 
 function inRange(date: string | undefined, from?: string, to?: string) {
   if (!date) return true;
@@ -418,5 +418,226 @@ export async function applyOtenFeeStructurePortable(
     chargedTerms: ["January", "September"],
     excludedTerms: ["May", "Summer"],
     graduateStudentsChargedFrom: "2025-09-01",
+  };
+}
+
+export async function upsertSourcePortable(ctx: PortableMutationCtx, args: Record<string, any>) {
+  await requireRolePortable(ctx, {
+    actingUserId: args.actingUserId,
+    societyId: args.societyId,
+    required: "Director",
+  });
+  const { id, actingUserId, ...rest } = args;
+  void actingUserId;
+  const now = new Date().toISOString();
+  if (id) {
+    await ctx.db.patch(id, { ...rest, updatedAtISO: now });
+    return id;
+  }
+  return await ctx.db.insert("fundingSources", {
+    ...rest,
+    createdAtISO: now,
+    updatedAtISO: now,
+  });
+}
+
+export async function removeSourcePortable(
+  ctx: PortableMutationCtx,
+  { id, actingUserId }: { id: string; actingUserId?: string },
+) {
+  const source = await ctx.db.get(id);
+  if (!source) return;
+  await requireRolePortable(ctx, { actingUserId, societyId: String(source.societyId), required: "Director" });
+  const events = await ctx.db
+    .query("fundingSourceEvents")
+    .withIndex("by_source", (q) => q.eq("sourceId", id))
+    .collect();
+  for (const event of events) await ctx.db.delete(event._id);
+  await ctx.db.delete(id);
+}
+
+export async function upsertEventPortable(ctx: PortableMutationCtx, args: Record<string, any>) {
+  const source = await ctx.db.get(args.sourceId);
+  if (!source || source.societyId !== args.societyId) {
+    throw new Error("Funding source does not belong to this society.");
+  }
+  await requireRolePortable(ctx, {
+    actingUserId: args.actingUserId,
+    societyId: args.societyId,
+    required: "Director",
+  });
+  const { id, actingUserId, ...rest } = args;
+  void actingUserId;
+  const now = new Date().toISOString();
+  if (id) {
+    await ctx.db.patch(id, { ...rest, updatedAtISO: now });
+    return id;
+  }
+  return await ctx.db.insert("fundingSourceEvents", {
+    ...rest,
+    createdAtISO: now,
+    updatedAtISO: now,
+  });
+}
+
+export async function removeEventPortable(
+  ctx: PortableMutationCtx,
+  { id, actingUserId }: { id: string; actingUserId?: string },
+) {
+  const event = await ctx.db.get(id);
+  if (!event) return;
+  await requireRolePortable(ctx, { actingUserId, societyId: String(event.societyId), required: "Director" });
+  await ctx.db.delete(id);
+}
+
+export async function importStudentLevyPortable(
+  ctx: PortableMutationCtx,
+  args: {
+    societyId: string;
+    sourceId?: string;
+    sourceName: string;
+    sourceType?: string;
+    status: string;
+    contactName?: string;
+    email?: string;
+    phone?: string;
+    website?: string;
+    collectionAgentName?: string;
+    collectionModel?: string;
+    memberDisclosureLevel?: string;
+    estimatedMemberCount?: number;
+    collectionFrequency?: string;
+    collectionScheduleNotes?: string;
+    nextExpectedCollectionDate?: string;
+    reconciliationCadence?: string;
+    expectedAnnualCents?: number;
+    committedCents?: number;
+    receivedToDateCents?: number;
+    currency: string;
+    startDate?: string;
+    endDate?: string;
+    restrictedPurpose?: string;
+    notes?: string;
+    feePeriods: Array<{
+      id?: string;
+      label: string;
+      membershipClass?: string;
+      priceCents: number;
+      currency: string;
+      interval: string;
+      effectiveFrom: string;
+      effectiveTo?: string;
+      status: string;
+      notes?: string;
+    }>;
+    actingUserId?: string;
+  },
+) {
+  await requireRolePortable(ctx, {
+    actingUserId: args.actingUserId,
+    societyId: args.societyId,
+    required: "Admin",
+  });
+
+  const sourceName = args.sourceName.trim();
+  if (!sourceName) throw new Error("Funding source name is required.");
+  if (args.feePeriods.length === 0) throw new Error("At least one fee period is required.");
+
+  const now = new Date().toISOString();
+  const sourceType = args.sourceType || "Member dues";
+  const sourcePayload = {
+    societyId: args.societyId,
+    name: sourceName,
+    sourceType,
+    status: args.status,
+    contactName: args.contactName,
+    email: args.email,
+    phone: args.phone,
+    website: args.website,
+    collectionAgentName: args.collectionAgentName,
+    collectionModel: args.collectionModel,
+    memberDisclosureLevel: args.memberDisclosureLevel,
+    estimatedMemberCount: args.estimatedMemberCount,
+    collectionFrequency: args.collectionFrequency,
+    collectionScheduleNotes: args.collectionScheduleNotes,
+    nextExpectedCollectionDate: args.nextExpectedCollectionDate,
+    reconciliationCadence: args.reconciliationCadence,
+    expectedAnnualCents: args.expectedAnnualCents,
+    committedCents: args.committedCents,
+    receivedToDateCents: args.receivedToDateCents,
+    currency: args.currency,
+    startDate: args.startDate,
+    endDate: args.endDate,
+    restrictedPurpose: args.restrictedPurpose,
+    notes: args.notes,
+    updatedAtISO: now,
+  };
+
+  const existingSources = await ctx.db
+    .query("fundingSources")
+    .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+    .collect();
+  const sourceFromId = args.sourceId ? await ctx.db.get(args.sourceId) : null;
+  if (sourceFromId && sourceFromId.societyId !== args.societyId) {
+    throw new Error("Funding source does not belong to this society.");
+  }
+  const sourceByName = existingSources.find(
+    (source) => source.name.trim().toLowerCase() === sourceName.toLowerCase(),
+  );
+  const existingSource = sourceFromId ?? sourceByName ?? null;
+  const sourceId = existingSource
+    ? (await ctx.db.patch(existingSource._id, sourcePayload), existingSource._id)
+    : await ctx.db.insert("fundingSources", { ...sourcePayload, createdAtISO: now });
+
+  const existingPeriods = await ctx.db
+    .query("membershipFeePeriods")
+    .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
+    .collect();
+  let createdFeePeriods = 0;
+  let updatedFeePeriods = 0;
+
+  for (const feePeriod of args.feePeriods) {
+    const label = feePeriod.label.trim();
+    if (!label) throw new Error("Every fee period needs a label.");
+    if (!feePeriod.effectiveFrom) throw new Error(`Fee period "${label}" needs an effective-from date.`);
+    const periodFromId = feePeriod.id ? await ctx.db.get(feePeriod.id) : null;
+    if (periodFromId && periodFromId.societyId !== args.societyId) {
+      throw new Error("Fee period does not belong to this society.");
+    }
+    const periodByKey = existingPeriods.find(
+      (period) =>
+        period.label.trim().toLowerCase() === label.toLowerCase() &&
+        (period.membershipClass ?? "") === (feePeriod.membershipClass ?? "") &&
+        period.effectiveFrom === feePeriod.effectiveFrom,
+    );
+    const existingPeriod = periodFromId ?? periodByKey ?? null;
+    const payload = {
+      societyId: args.societyId,
+      planId: undefined,
+      membershipClass: feePeriod.membershipClass,
+      label,
+      priceCents: feePeriod.priceCents,
+      currency: feePeriod.currency,
+      interval: feePeriod.interval,
+      effectiveFrom: feePeriod.effectiveFrom,
+      effectiveTo: feePeriod.effectiveTo,
+      status: feePeriod.status,
+      notes: feePeriod.notes,
+      updatedAtISO: now,
+    };
+    if (existingPeriod) {
+      await ctx.db.patch(existingPeriod._id, payload);
+      updatedFeePeriods += 1;
+    } else {
+      await ctx.db.insert("membershipFeePeriods", { ...payload, createdAtISO: now });
+      createdFeePeriods += 1;
+    }
+  }
+
+  return {
+    sourceId,
+    fundingSourceAction: existingSource ? "updated" : "created",
+    createdFeePeriods,
+    updatedFeePeriods,
   };
 }

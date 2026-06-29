@@ -14,6 +14,17 @@ import {
 } from "./providers/paperless";
 import { createDownloadUrl } from "./providers/storage";
 import { assertNativeFileStorageEnabled } from "./providers/env";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import {
+  tagProfilesPortable,
+  listConnectionPortable,
+  recentSyncsPortable,
+  syncForDocumentPortable,
+  sourcePullContextPortable,
+  authorizeMeetingImportPortable,
+  getSyncPortable,
+  recordConnectionTestPortable,
+} from "../shared/functions/paperless";
 
 import {
   latestVersion,
@@ -137,41 +148,14 @@ import {
 export const tagProfiles = query({
   args: {},
   returns: v.any(),
-  handler: async () => [
-    {
-      scope: "Core record",
-      tags: ["societyer", "category:<document category>", "local document tags"],
-      usage: "Every synced document carries stable app-level context.",
-    },
-    {
-      scope: "Governance",
-      tags: ["constitution", "bylaws", "minutes", "election", "auditor"],
-      usage: "Society profile, meetings, elections, bylaws, and auditor records.",
-    },
-    {
-      scope: "Compliance",
-      tags: ["filing", "filing:<kind>", "records-inspection", "pipa-training"],
-      usage: "Filing evidence, retained records, inspections, and privacy training proof.",
-    },
-    {
-      scope: "Finance and programs",
-      tags: ["financial-statement", "grant-report", "grant-transaction", "volunteer-screening"],
-      usage: "Financials, grants, donation evidence, and volunteer screening files.",
-    },
-  ],
+  handler: () => tagProfilesPortable(),
 });
 
 
 export const listConnection = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const rows = await ctx.db
-      .query("paperlessConnections")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    return rows.sort((a, b) => b.connectedAtISO.localeCompare(a.connectedAtISO))[0] ?? null;
-  },
+  handler: (ctx, args) => listConnectionPortable(toPortableQueryCtx(ctx), args),
 });
 
 
@@ -195,38 +179,14 @@ export const connectionStatus = query({
 export const recentSyncs = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, limit }) => {
-    const rows = await ctx.db
-      .query("paperlessDocumentSyncs")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const sorted = rows
-      .sort((a, b) => b.queuedAtISO.localeCompare(a.queuedAtISO))
-      .slice(0, limit ?? 20);
-    return await Promise.all(
-      sorted.map(async (row) => {
-        const document = await ctx.db.get(row.documentId);
-        return {
-          ...row,
-          documentTitle: document?.title ?? row.title,
-          documentCategory: document?.category,
-        };
-      }),
-    );
-  },
+  handler: (ctx, args) => recentSyncsPortable(toPortableQueryCtx(ctx), args),
 });
 
 
 export const syncForDocument = query({
   args: { documentId: v.id("documents") },
   returns: v.any(),
-  handler: async (ctx, { documentId }) => {
-    const rows = await ctx.db
-      .query("paperlessDocumentSyncs")
-      .withIndex("by_document", (q) => q.eq("documentId", documentId))
-      .collect();
-    return rows.sort((a, b) => b.queuedAtISO.localeCompare(a.queuedAtISO))[0] ?? null;
-  },
+  handler: (ctx, args) => syncForDocumentPortable(toPortableQueryCtx(ctx), args),
 });
 
 
@@ -237,20 +197,7 @@ export const sourcePullContext = query({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    if (args.actingUserId) {
-      await requireRole(ctx, {
-        actingUserId: args.actingUserId,
-        societyId: args.societyId,
-        required: "Director",
-      });
-    }
-    const document = await ctx.db.get(args.documentId);
-    if (!document || document.societyId !== args.societyId) {
-      throw new Error("Document not found.");
-    }
-    return { document };
-  },
+  handler: (ctx, args) => sourcePullContextPortable(toPortableQueryCtx(ctx), args),
 });
 
 
@@ -597,21 +544,14 @@ export const authorizeMeetingImport = query({
     actingUserId: v.id("users"),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await requireRole(ctx, {
-      actingUserId: args.actingUserId,
-      societyId: args.societyId,
-      required: "Director",
-    });
-    return true;
-  },
+  handler: (ctx, args) => authorizeMeetingImportPortable(toPortableQueryCtx(ctx), args),
 });
 
 
 export const getSync = query({
   args: { id: v.id("paperlessDocumentSyncs") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => getSyncPortable(toPortableQueryCtx(ctx), args),
 });
 
 
@@ -716,24 +656,7 @@ export const recordConnectionTest = mutation({
     demo: v.boolean(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const connection = await ctx.db
-      .query("paperlessConnections")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect()
-      .then((rows) => rows[0] ?? null);
-    if (!connection) return null;
-    await ctx.db.patch(connection._id, {
-      status: args.ok ? "connected" : "error",
-      baseUrl: args.baseUrl,
-      apiVersion: args.apiVersion,
-      serverVersion: args.serverVersion,
-      lastCheckedAtISO: new Date().toISOString(),
-      lastError: args.error,
-      demo: args.demo,
-    });
-    return connection._id;
-  },
+  handler: (ctx, args) => recordConnectionTestPortable(toPortableMutationCtx(ctx), args),
 });
 
 

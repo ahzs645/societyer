@@ -1,6 +1,12 @@
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { mutation } from "./lib/untypedServer";
+import { toPortableMutationCtx } from "./lib/portable";
+import {
+  upsertExternalCalendarEventMappingPortable,
+  recordCalendarWebhookPortable,
+  recordCalendarIncrementalCursorPortable,
+} from "../shared/functions/calendarSync";
 
 export const stageCalendarEvents = mutation({
   args: {
@@ -35,26 +41,7 @@ export const upsertExternalCalendarEventMapping = mutation({
     metadata: v.optional(v.any()),
   },
   returns: v.id("integrationSyncStates"),
-  handler: async (ctx, args) => {
-    return await upsertSyncState(ctx, {
-      societyId: args.societyId,
-      provider: args.provider,
-      resourceType: "calendar_event_mapping",
-      resourceId: `${args.localResourceType}:${args.localResourceId}`,
-      externalResourceId: args.externalEventId,
-      status: "active",
-      metadataJson: JSON.stringify({
-        calendarId: args.calendarId,
-        localResourceType: args.localResourceType,
-        localResourceId: args.localResourceId,
-        externalEventId: args.externalEventId,
-        iCalUID: args.iCalUID,
-        etag: args.etag,
-        syncDirection: args.syncDirection ?? "bidirectional",
-        ...(args.metadata && typeof args.metadata === "object" ? args.metadata : {}),
-      }),
-    });
-  },
+  handler: (ctx, args) => upsertExternalCalendarEventMappingPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const recordCalendarWebhook = mutation({
@@ -69,24 +56,7 @@ export const recordCalendarWebhook = mutation({
     payload: v.optional(v.any()),
   },
   returns: v.id("integrationSyncStates"),
-  handler: async (ctx, args) => {
-    return await upsertSyncState(ctx, {
-      societyId: args.societyId,
-      provider: args.provider,
-      resourceType: "calendar_webhook",
-      resourceId: args.resourceId ?? args.channelId ?? args.subscriptionId,
-      webhookChannelId: args.channelId,
-      webhookSubscriptionId: args.subscriptionId,
-      webhookResourceId: args.resourceId,
-      webhookExpiresAtISO: args.expiresAtISO,
-      lastWebhookAtISO: nowISO(),
-      status: "active",
-      metadataJson: JSON.stringify({
-        eventType: args.eventType,
-        payload: args.payload,
-      }),
-    });
-  },
+  handler: (ctx, args) => recordCalendarWebhookPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const recordCalendarIncrementalCursor = mutation({
@@ -102,24 +72,7 @@ export const recordCalendarIncrementalCursor = mutation({
     metadata: v.optional(v.any()),
   },
   returns: v.id("integrationSyncStates"),
-  handler: async (ctx, args) => {
-    return await upsertSyncState(ctx, {
-      societyId: args.societyId,
-      provider: args.provider,
-      resourceType: "calendar_incremental_cursor",
-      resourceId: args.calendarId ?? "primary",
-      syncToken: args.syncToken,
-      deltaLink: args.deltaLink,
-      lastIncrementalSyncAtISO: nowISO(),
-      status: args.status ?? (args.lastError ? "error" : "active"),
-      lastError: args.lastError,
-      metadataJson: JSON.stringify({
-        calendarId: args.calendarId,
-        cursorType: args.cursorType ?? "events",
-        ...(args.metadata && typeof args.metadata === "object" ? args.metadata : {}),
-      }),
-    });
-  },
+  handler: (ctx, args) => recordCalendarIncrementalCursorPortable(toPortableMutationCtx(ctx), args),
 });
 
 function calendarEventsImportBundle(input: { provider: string; calendarId?: string; events: any[] }) {
@@ -190,32 +143,6 @@ function normalizeCalendarEvent(event: any, index: number, provider: string, cal
     notes: "Review staged calendar event before applying it to governance records.",
     raw: event,
   };
-}
-
-async function upsertSyncState(ctx: any, args: any) {
-  const now = nowISO();
-  const existing = (await ctx.db
-    .query("integrationSyncStates")
-    .withIndex("by_society_provider_resource", (q: any) =>
-      q.eq("societyId", args.societyId).eq("provider", args.provider).eq("resourceType", args.resourceType),
-    )
-    .collect()).find((row: any) =>
-      (row.resourceId ?? "") === (args.resourceId ?? "") &&
-      (row.externalResourceId ?? "") === (args.externalResourceId ?? ""),
-    );
-  const payload = {
-    ...args,
-    status: args.status ?? "active",
-    updatedAtISO: now,
-  };
-  if (existing) {
-    await ctx.db.patch(existing._id, payload);
-    return existing._id;
-  }
-  return await ctx.db.insert("integrationSyncStates", {
-    ...payload,
-    createdAtISO: now,
-  });
 }
 
 function providerLabel(provider: string) {

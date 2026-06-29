@@ -63,45 +63,24 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
 // path to closing each gap — the parity gate flags any entry that has since
 // become handled so this list cannot rot.
 export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
+  // Stages external calendar events via ctx.runMutation orchestration — left on
+  // Convex (the per-event upsert IS ported; the multi-event stager is not).
   "calendarSync:stageCalendarEvents",
-  "bylawAmendments:materializeSections",
-  "bylawAmendments:markFiled",
-  "bylawAmendments:markResolutionPassed",
-  "bylawAmendments:startConsultation",
-  "bylawAmendments:supersede",
-  "bylawAmendments:withdraw",
-  "elections:addQuestion",
-  "elections:close",
-  "elections:publishNominationToBallot",
-  "elections:reviewNomination",
-  "elections:snapshotEligibleVoters",
-  "elections:tallyElection",
-  "grants:convertApplication",
-  "grants:reviewApplication",
-  "grants:submitApplication",
-  "members:merge",
-  "notifications:dismiss",
-  "notifications:dismissAll",
-  "notifications:markAllRead",
-  "notifications:markRead",
-  "notifications:snooze",
+  // Org-history import/extraction handlers still depend on convex-only helpers.
   "organizationHistory:bulkImport",
   "organizationHistory:extractBudgetSourceDetails",
   "organizationHistory:saveItem",
   "organizationHistory:saveSource",
+  // Logo/letterhead writes go through ctx.storage (upload/getUrl/delete), which
+  // is not part of the portable ctx.db contract.
   "society:clearDarkLogo",
   "society:clearLetterhead",
   "society:clearLogo",
   "society:setDarkLogo",
   "society:setLetterhead",
   "society:setLogo",
-  "transcripts:importVtt",
-  "transcripts:saveText",
+  // Auth-adjacent: deliberately not ported to the offline mirror yet.
   "users:setRole",
-  "volunteers:convertApplication",
-  "volunteers:reviewApplication",
-  "volunteers:submitApplication",
-  "workflows:addNode",
 ]);
 
 // Verbs the generic CRUD fallback in staticConvex.ts handles by table convention.

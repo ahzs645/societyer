@@ -5,6 +5,20 @@ import { api, internal } from "./_generated/api";
 import { sendEmail } from "./providers/email";
 import { sendSms } from "./providers/sms";
 import { requireEnabledModule } from "./lib/moduleSettings";
+import {
+  listTemplatesPortable,
+  getTemplatePortable,
+  listCampaignsPortable,
+  listDeliveriesPortable,
+  listMemberPrefsPortable,
+  listSegmentsPortable,
+  upsertTemplatePortable,
+  upsertSegmentPortable,
+  removeSegmentPortable,
+  upsertMemberPrefPortable,
+  markDeliveryOpenedPortable,
+} from "../shared/functions/communications";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const DEFAULT_TEMPLATE_SLUGS = [
   {
@@ -285,28 +299,19 @@ async function resolveAudienceRecipients(
 export const listTemplates = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("communicationTemplates")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listTemplatesPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const getTemplate = query({
   args: { id: v.id("communicationTemplates") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => getTemplatePortable(toPortableQueryCtx(ctx), args),
 });
 
 export const listCampaigns = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, limit }) =>
-    ctx.db
-      .query("communicationCampaigns")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .order("desc")
-      .take(limit ?? 50),
+  handler: (ctx, args) => listCampaignsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const listDeliveries = query({
@@ -317,36 +322,19 @@ export const listDeliveries = query({
     limit: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, campaignId, meetingId, limit }) => {
-    let rows = await ctx.db
-      .query("communicationDeliveries")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .order("desc")
-      .take(limit ?? 200);
-    if (campaignId) rows = rows.filter((row) => row.campaignId === campaignId);
-    if (meetingId) rows = rows.filter((row) => row.meetingId === meetingId);
-    return rows;
-  },
+  handler: (ctx, args) => listDeliveriesPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const listMemberPrefs = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("memberCommunicationPrefs")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listMemberPrefsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const listSegments = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("communicationSegments")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listSegmentsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const upsertTemplate = mutation({
@@ -364,15 +352,7 @@ export const upsertTemplate = mutation({
     system: v.boolean(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const { id, ...rest } = args;
-    const payload = { ...rest, updatedAtISO: new Date().toISOString() };
-    if (id) {
-      await ctx.db.patch(id, payload);
-      return id;
-    }
-    return await ctx.db.insert("communicationTemplates", payload);
-  },
+  handler: (ctx, args) => upsertTemplatePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsertSegment = mutation({
@@ -390,23 +370,13 @@ export const upsertSegment = mutation({
     volunteerStatus: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const { id, ...rest } = args;
-    const payload = { ...rest, updatedAtISO: new Date().toISOString() };
-    if (id) {
-      await ctx.db.patch(id, payload);
-      return id;
-    }
-    return await ctx.db.insert("communicationSegments", payload);
-  },
+  handler: (ctx, args) => upsertSegmentPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeSegment = mutation({
   args: { id: v.id("communicationSegments") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeSegmentPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const ensureDefaultTemplates = mutation({
@@ -454,32 +424,7 @@ export const upsertMemberPref = mutation({
     unsubscribeReason: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("memberCommunicationPrefs")
-      .withIndex("by_member", (q) => q.eq("memberId", args.memberId))
-      .collect();
-    const existingRow = existing[0] ?? null;
-    const nowISO = new Date().toISOString();
-    const payload = {
-      ...args,
-      mailEnabled: args.mailEnabled ?? existingRow?.mailEnabled ?? !!args.postalAddress,
-      newsletterConsentAtISO:
-        args.newsletterConsentAtISO ??
-        (args.newsletterEmailEnabled
-          ? existingRow?.newsletterConsentAtISO ?? nowISO
-          : undefined),
-      smsConsentAtISO:
-        args.smsConsentAtISO ??
-        (args.smsEnabled ? existingRow?.smsConsentAtISO ?? nowISO : undefined),
-      updatedAtISO: nowISO,
-    };
-    if (existingRow) {
-      await ctx.db.patch(existingRow._id, payload);
-      return existingRow._id;
-    }
-    return await ctx.db.insert("memberCommunicationPrefs", payload);
-  },
+  handler: (ctx, args) => upsertMemberPrefPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const _createCampaign = internalMutation({
@@ -566,24 +511,7 @@ export const _recordDelivery = internalMutation({
 export const markDeliveryOpened = mutation({
   args: { id: v.id("communicationDeliveries") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const delivery = await ctx.db.get(id);
-    const alreadyOpened = delivery?.status === "opened";
-    await ctx.db.patch(id, {
-      status: "opened",
-      openedAtISO: new Date().toISOString(),
-    });
-    // Roll the open up to the parent campaign so the campaign-level open rate is
-    // not stuck at 0. Only count the first open of each delivery.
-    if (delivery?.campaignId && !alreadyOpened) {
-      const campaign = await ctx.db.get(delivery.campaignId);
-      if (campaign) {
-        await ctx.db.patch(delivery.campaignId, {
-          openedCount: (campaign.openedCount ?? 0) + 1,
-        });
-      }
-    }
-  },
+  handler: (ctx, args) => markDeliveryOpenedPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const markDeliveryBounced = mutation({

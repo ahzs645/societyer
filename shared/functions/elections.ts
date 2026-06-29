@@ -8,6 +8,8 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { requireRolePortable } from "./access";
+import { getActiveBylawRuleSet } from "./bylawRules";
 
 // Portable, dep-free copy of the role hierarchy from `convex/users.ts`.
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"] as const;
@@ -323,5 +325,330 @@ export async function tallyPortable(
         votes: counts.get(option.id) ?? 0,
       })),
     };
+  });
+}
+
+export async function createPortable(
+  ctx: PortableMutationCtx,
+  args: {
+    societyId: string;
+    meetingId?: string;
+    title: string;
+    description?: string;
+    opensAtISO: string;
+    closesAtISO: string;
+    nominationsOpenAtISO?: string;
+    nominationsCloseAtISO?: string;
+    eligibilityCutoffISO?: string;
+    scrutineerUserIds?: string[];
+    notes?: string;
+    actingUserId?: string;
+  },
+) {
+  const { user } = await requireRolePortable(ctx, {
+    actingUserId: args.actingUserId,
+    societyId: args.societyId,
+    required: "Director",
+  });
+  const rules = await getActiveBylawRuleSet(ctx, args.societyId);
+  const id = await ctx.db.insert("elections", {
+    societyId: args.societyId,
+    meetingId: args.meetingId,
+    title: args.title,
+    description: args.description,
+    status: "Draft",
+    opensAtISO: args.opensAtISO,
+    closesAtISO: args.closesAtISO,
+    nominationsOpenAtISO: args.nominationsOpenAtISO,
+    nominationsCloseAtISO: args.nominationsCloseAtISO,
+    eligibilityCutoffISO: args.eligibilityCutoffISO,
+    anonymousBallot: rules.ballotIsAnonymous,
+    scrutineerUserIds: args.scrutineerUserIds,
+    createdByUserId: args.actingUserId,
+    createdAtISO: new Date().toISOString(),
+    updatedAtISO: new Date().toISOString(),
+    notes: args.notes,
+  });
+  await logAudit(ctx, {
+    societyId: args.societyId,
+    electionId: id,
+    actorName: user?.displayName ?? "System",
+    action: "created",
+    detail: args.title,
+  });
+  return id;
+}
+
+export async function updateSettingsPortable(
+  ctx: PortableMutationCtx,
+  args: {
+    electionId: string;
+    nominationsOpenAtISO?: string;
+    nominationsCloseAtISO?: string;
+    scrutineerUserIds?: string[];
+    resultsSummary?: string;
+    evidenceDocumentId?: string;
+    actingUserId?: string;
+  },
+) {
+  const election = await ctx.db.get(args.electionId);
+  if (!election) throw new Error("Election not found.");
+  const { user } = await requireRolePortable(ctx, {
+    actingUserId: args.actingUserId,
+    societyId: String(election.societyId),
+    required: "Director",
+  });
+  await ctx.db.patch(args.electionId, {
+    nominationsOpenAtISO: args.nominationsOpenAtISO,
+    nominationsCloseAtISO: args.nominationsCloseAtISO,
+    scrutineerUserIds: args.scrutineerUserIds,
+    resultsSummary: args.resultsSummary,
+    evidenceDocumentId: args.evidenceDocumentId,
+    updatedAtISO: new Date().toISOString(),
+  });
+  await logAudit(ctx, {
+    societyId: election.societyId,
+    electionId: args.electionId,
+    actorName: user?.displayName ?? "System",
+    action: "settings-updated",
+  });
+}
+
+export async function addQuestionPortable(
+  ctx: PortableMutationCtx,
+  args: {
+    electionId: string;
+    title: string;
+    description?: string;
+    maxSelections: number;
+    options: { id: string; label: string; memberId?: string; statement?: string }[];
+    actingUserId?: string;
+  },
+) {
+  const election = await ctx.db.get(args.electionId);
+  if (!election) throw new Error("Election not found.");
+  const { user } = await requireRolePortable(ctx, {
+    actingUserId: args.actingUserId,
+    societyId: String(election.societyId),
+    required: "Director",
+  });
+  const existing = await ctx.db
+    .query("electionQuestions")
+    .withIndex("by_election", (q) => q.eq("electionId", args.electionId))
+    .collect();
+  const id = await ctx.db.insert("electionQuestions", {
+    societyId: election.societyId,
+    electionId: args.electionId,
+    title: args.title,
+    description: args.description,
+    maxSelections: args.maxSelections,
+    options: args.options,
+    order: existing.length,
+  });
+  await logAudit(ctx, {
+    societyId: election.societyId,
+    electionId: args.electionId,
+    actorName: user?.displayName ?? "System",
+    action: "question-added",
+    detail: args.title,
+  });
+  return id;
+}
+
+export async function reviewNominationPortable(
+  ctx: PortableMutationCtx,
+  { id, status, actingUserId }: { id: string; status: string; actingUserId?: string },
+) {
+  const nomination = await ctx.db.get(id);
+  if (!nomination) throw new Error("Nomination not found.");
+  const { user } = await requireRolePortable(ctx, {
+    actingUserId,
+    societyId: String(nomination.societyId),
+    required: "Director",
+  });
+  await ctx.db.patch(id, {
+    status,
+    reviewedByUserId: actingUserId,
+    reviewedAtISO: new Date().toISOString(),
+  });
+  await logAudit(ctx, {
+    societyId: nomination.societyId,
+    electionId: nomination.electionId,
+    actorName: user?.displayName ?? "System",
+    action: "nomination-reviewed",
+    detail: `${nomination.nomineeName}: ${status}`,
+  });
+}
+
+export async function publishNominationToBallotPortable(
+  ctx: PortableMutationCtx,
+  { id, questionId, actingUserId }: { id: string; questionId: string; actingUserId?: string },
+) {
+  const nomination = await ctx.db.get(id);
+  if (!nomination) throw new Error("Nomination not found.");
+  const question = await ctx.db.get(questionId);
+  if (!question || question.electionId !== nomination.electionId) {
+    throw new Error("Election question not found.");
+  }
+  const { user } = await requireRolePortable(ctx, {
+    actingUserId,
+    societyId: String(nomination.societyId),
+    required: "Director",
+  });
+  const optionId = `nomination-${id}`;
+  const hasOption = question.options.some((option: Record<string, any>) => option.id === optionId);
+  if (!hasOption) {
+    await ctx.db.patch(questionId, {
+      options: [
+        ...question.options,
+        {
+          id: optionId,
+          label: nomination.nomineeName,
+          memberId: nomination.memberId,
+          statement: nomination.statement,
+        },
+      ],
+    });
+  }
+  await ctx.db.patch(id, {
+    questionId,
+    status: "OnBallot",
+    reviewedByUserId: actingUserId,
+    reviewedAtISO: new Date().toISOString(),
+    addedToBallotAtISO: new Date().toISOString(),
+  });
+  await logAudit(ctx, {
+    societyId: nomination.societyId,
+    electionId: nomination.electionId,
+    actorName: user?.displayName ?? "System",
+    action: "nomination-added-to-ballot",
+    detail: nomination.nomineeName,
+  });
+}
+
+export async function snapshotEligibleVotersPortable(
+  ctx: PortableMutationCtx,
+  { electionId, actingUserId }: { electionId: string; actingUserId?: string },
+) {
+  const election = await ctx.db.get(electionId);
+  if (!election) throw new Error("Election not found.");
+  const { user } = await requireRolePortable(ctx, {
+    actingUserId,
+    societyId: String(election.societyId),
+    required: "Director",
+  });
+  const rules = await getActiveBylawRuleSet(ctx, String(election.societyId));
+  const members = await ctx.db
+    .query("members")
+    .withIndex("by_society", (q) => q.eq("societyId", election.societyId))
+    .collect();
+  const users = await ctx.db
+    .query("users")
+    .withIndex("by_society", (q) => q.eq("societyId", election.societyId))
+    .collect();
+  const existing = await ctx.db
+    .query("electionEligibleVoters")
+    .withIndex("by_election", (q) => q.eq("electionId", electionId))
+    .collect();
+  for (const row of existing) await ctx.db.delete(row._id);
+
+  const eligibleMembers = members.filter((member) =>
+    rules.voterMustBeMemberAtRecordDate
+      ? member.status === "Active" && member.votingRights
+      : member.votingRights,
+  );
+
+  for (const member of eligibleMembers) {
+    const linkedUser =
+      users.find((candidate) => candidate.memberId === member._id) ??
+      users.find(
+        (candidate) =>
+          candidate.email &&
+          member.email &&
+          candidate.email.toLowerCase() === member.email.toLowerCase(),
+      );
+    await ctx.db.insert("electionEligibleVoters", {
+      societyId: election.societyId,
+      electionId,
+      memberId: member._id,
+      userId: linkedUser?._id,
+      email: member.email,
+      fullName: fullName(member as any),
+      status: "Eligible",
+      eligibilityReason: "Active voting member at snapshot time",
+      createdAtISO: new Date().toISOString(),
+    });
+  }
+
+  await ctx.db.patch(electionId, {
+    updatedAtISO: new Date().toISOString(),
+    status: election.status === "Draft" ? "Open" : election.status,
+  });
+  await logAudit(ctx, {
+    societyId: election.societyId,
+    electionId,
+    actorName: user?.displayName ?? "System",
+    action: "eligibility-snapshotted",
+    detail: `${eligibleMembers.length} eligible voters`,
+  });
+  return { eligibleCount: eligibleMembers.length };
+}
+
+export async function closePortable(
+  ctx: PortableMutationCtx,
+  { electionId, actingUserId }: { electionId: string; actingUserId?: string },
+) {
+  const election = await ctx.db.get(electionId);
+  if (!election) throw new Error("Election not found.");
+  const { user } = await requireRolePortable(ctx, {
+    actingUserId,
+    societyId: String(election.societyId),
+    required: "Director",
+  });
+  await ctx.db.patch(electionId, {
+    status: "Closed",
+    updatedAtISO: new Date().toISOString(),
+  });
+  await logAudit(ctx, {
+    societyId: election.societyId,
+    electionId,
+    actorName: user?.displayName ?? "System",
+    action: "closed",
+  });
+}
+
+export async function tallyElectionPortable(
+  ctx: PortableMutationCtx,
+  { electionId, resultsSummary, evidenceDocumentId, actingUserId }: {
+    electionId: string;
+    resultsSummary?: string;
+    evidenceDocumentId?: string;
+    actingUserId?: string;
+  },
+) {
+  const election = await ctx.db.get(electionId);
+  if (!election) throw new Error("Election not found.");
+  const { user } = await requireRolePortable(ctx, {
+    actingUserId,
+    societyId: String(election.societyId),
+    required: "Director",
+  });
+  if (election.status === "Open") {
+    throw new Error("Close the election before publishing results.");
+  }
+  await ctx.db.patch(electionId, {
+    status: "Tallied",
+    talliedAtISO: new Date().toISOString(),
+    resultsPublishedAtISO: new Date().toISOString(),
+    resultsSummary,
+    evidenceDocumentId,
+    updatedAtISO: new Date().toISOString(),
+  });
+  await logAudit(ctx, {
+    societyId: election.societyId,
+    electionId,
+    actorName: user?.displayName ?? "System",
+    action: "tallied",
+    detail: "Election results marked as published.",
   });
 }

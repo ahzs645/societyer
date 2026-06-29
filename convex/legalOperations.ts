@@ -52,21 +52,18 @@ import {
   removeRightsholdingTransferPortable,
   removeRightsClassPortable,
 } from "../shared/functions/rightsholdingTransfers";
+import {
+  listRoleHoldersPortable,
+  upsertRoleHolderPortable,
+  removeRoleHolderPortable,
+  rightsLedgerPortable,
+} from "../shared/functions/roleHolders";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
-
-/** Keep transfers on/before an as-of date (date-only compare, inclusive). */
-function transfersAsOf(transfers: any[], asOf?: string): any[] {
-  if (!asOf) return transfers;
-  return transfers.filter((t) => String(t.transferDate ?? t.createdAtISO ?? "").slice(0, 10) <= asOf);
-}
 
 export const listRoleHolders = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const rows = await ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    return rows.sort((a, b) => String(a.fullName).localeCompare(String(b.fullName)));
-  },
+  handler: (ctx, args) => listRoleHoldersPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const upsertRoleHolder = mutation({
@@ -132,115 +129,13 @@ export const upsertRoleHolder = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { id, ...args }) => {
-    assertAllowedOption("representativeTypes", args.roleType, "Role-holder type", false);
-    assertAllowedOption("roleHolderStatuses", args.status, "Role-holder status");
-    assertAllowedOption("officerTitles", args.officerTitle, "Officer title");
-    assertAllowedOption("directorTerms", args.directorTerm, "Director term");
-    assertAllowedOption("citizenshipResidencies", args.citizenshipResidency, "Citizenship/residency");
-    // Enforce the society's People Directory constraint (free unless restricted).
-    const directoryPersonId = await enforcePersonReference(
-      ctx,
-      args.societyId,
-      args.fullName,
-      args.directoryPersonId,
-    );
-    const now = new Date().toISOString();
-    const payload = {
-      societyId: args.societyId,
-      roleType: cleanText(args.roleType) || "authorized_representative",
-      status: cleanText(args.status) || "current",
-      fullName: cleanText(args.fullName) || [args.firstName, args.lastName].map(cleanText).filter(Boolean).join(" ") || "Unnamed role holder",
-      firstName: cleanText(args.firstName),
-      middleName: cleanText(args.middleName),
-      lastName: cleanText(args.lastName),
-      email: cleanText(args.email),
-      phone: cleanText(args.phone),
-      signerTag: cleanText(args.signerTag),
-      membershipId: cleanText(args.membershipId),
-      membershipClassName: cleanText(args.membershipClassName),
-      membershipClassId: args.membershipClassId,
-      officerTitle: cleanText(args.officerTitle),
-      directorTerm: cleanText(args.directorTerm),
-      startDate: cleanText(args.startDate),
-      endDate: cleanText(args.endDate),
-      referenceDate: cleanText(args.referenceDate),
-      street: cleanText(args.street),
-      unit: cleanText(args.unit),
-      city: cleanText(args.city),
-      provinceState: cleanText(args.provinceState),
-      postalCode: cleanText(args.postalCode),
-      country: cleanText(args.country),
-      alternateStreet: cleanText(args.alternateStreet),
-      alternateUnit: cleanText(args.alternateUnit),
-      alternateCity: cleanText(args.alternateCity),
-      alternateProvinceState: cleanText(args.alternateProvinceState),
-      alternatePostalCode: cleanText(args.alternatePostalCode),
-      alternateCountry: cleanText(args.alternateCountry),
-      serviceStreet: cleanText(args.serviceStreet),
-      serviceUnit: cleanText(args.serviceUnit),
-      serviceCity: cleanText(args.serviceCity),
-      serviceProvinceState: cleanText(args.serviceProvinceState),
-      servicePostalCode: cleanText(args.servicePostalCode),
-      serviceCountry: cleanText(args.serviceCountry),
-      ageOver18: args.ageOver18,
-      dateOfBirth: cleanText(args.dateOfBirth),
-      occupation: cleanText(args.occupation),
-      citizenshipResidency: cleanText(args.citizenshipResidency),
-      citizenshipCountries: cleanList(args.citizenshipCountries),
-      taxResidenceCountries: cleanList(args.taxResidenceCountries),
-      nonNaturalPerson: args.nonNaturalPerson,
-      nonNaturalPersonType: cleanText(args.nonNaturalPersonType),
-      nonNaturalJurisdiction: cleanText(args.nonNaturalJurisdiction),
-      natureOfControl: cleanText(args.natureOfControl),
-      authorizedRepresentative: args.authorizedRepresentative,
-      relatedRoleHolderId: args.relatedRoleHolderId,
-      relatedShareholderIds: cleanList(args.relatedShareholderIds),
-      controllingIndividualIds: cleanList(args.controllingIndividualIds),
-      extraProvincialRegistrationId: args.extraProvincialRegistrationId,
-      directoryPersonId,
-      gender: normalizeGender(args.gender),
-      pronouns: cleanText(args.pronouns),
-      sourceDocumentIds: args.sourceDocumentIds ?? [],
-      sourceExternalIds: cleanList(args.sourceExternalIds),
-      notes: cleanText(args.notes),
-      updatedAtISO: now,
-    };
-    if (id) {
-      const existing = await ctx.db.get(id);
-      if (existing) {
-        // Append the prior version to the edit history, then patch the live row.
-        const { revision, liveStamps } = planRoleHolderRevision(existing, now, args.actorUserId);
-        await ctx.db.insert("roleHolderRevisions", { societyId: args.societyId, ...revision, createdAtISO: now });
-        await ctx.db.patch(id, { ...payload, ...liveStamps });
-        return id;
-      }
-      await ctx.db.patch(id, payload);
-      return id;
-    }
-    return await ctx.db.insert("roleHolders", {
-      ...payload,
-      enteredAtISO: now,
-      enteredByUserId: args.actorUserId,
-      createdAtISO: now,
-    });
-  },
+  handler: (ctx, args) => upsertRoleHolderPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeRoleHolder = mutation({
   args: { id: v.id("roleHolders"), actorUserId: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { id, actorUserId }) => {
-    // Capture a final closed revision before deleting, so the audit trail records
-    // the removal (and the last known values).
-    const existing = await ctx.db.get(id);
-    if (existing) {
-      const now = new Date().toISOString();
-      const { revision } = planRoleHolderRevision(existing, now, actorUserId);
-      await ctx.db.insert("roleHolderRevisions", { societyId: existing.societyId, ...revision, createdAtISO: now });
-    }
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeRoleHolderPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const rightsLedger = query({
@@ -249,23 +144,7 @@ export const rightsLedger = query({
   // register. Omitted = live state from the stored holdings.
   args: { societyId: v.id("societies"), asOf: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, asOf }) => {
-    const [classes, transfers, roleHolders] = await Promise.all([
-      ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ]);
-    const scopedTransfers = transfersAsOf(transfers, asOf);
-    const holdings = asOf
-      ? materializeRightsHoldings(scopedTransfers as any)
-      : await ctx.db.query("rightsHoldings").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
-    return {
-      classes: classes.sort((a, b) => String(a.className).localeCompare(String(b.className))),
-      holdings,
-      transfers: scopedTransfers.sort((a, b) => String(b.transferDate ?? b.createdAtISO).localeCompare(String(a.transferDate ?? a.createdAtISO))),
-      roleHolders: roleHolders.sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))),
-    };
-  },
+  handler: (ctx, args) => rightsLedgerPortable(toPortableQueryCtx(ctx), args),
 });
 
 /**

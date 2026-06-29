@@ -1,6 +1,8 @@
 import { internalQuery, query, mutation } from "./lib/untypedServer";
 import { v, ConvexError } from "convex/values";
 import { requireRole, canActAs } from "./users";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import { listPortable, removePortable } from "../shared/functions/secrets";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -71,14 +73,6 @@ function previewFor(value: string) {
   return `•••• ${suffix}`;
 }
 
-function publicSecret(row: any) {
-  const { secretEncrypted, ...rest } = row;
-  return {
-    ...rest,
-    hasSecretValue: Boolean(secretEncrypted),
-  };
-}
-
 async function assertVaultWrite(ctx: any, societyId: any, actingUserId?: any) {
   if (!actingUserId) {
     throw new ConvexError({ code: "FORBIDDEN", message: "Admin role required." });
@@ -126,13 +120,7 @@ async function logActivity(ctx: any, row: any, actorName: string, action: string
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const rows = await ctx.db
-      .query("secretVaultItems")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    return rows.map(publicSecret);
-  },
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -287,11 +275,5 @@ export const _revealForServer = internalQuery({
 export const remove = mutation({
   args: { id: v.id("secretVaultItems"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { id, actingUserId }) => {
-    const existing = await ctx.db.get(id);
-    if (!existing) return;
-    const { user } = await assertVaultWrite(ctx, existing.societyId, actingUserId);
-    await ctx.db.delete(id);
-    await logActivity(ctx, existing, user.displayName, "deleted", `Deleted access vault record "${existing.name}".`);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });

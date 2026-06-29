@@ -25,6 +25,21 @@ if (modules.length === 0) {
 
 const root = resolve(import.meta.dirname, "..");
 
+/** Names + namespace-imported modules already present in the registry. */
+function readExistingRegistry() {
+  const names = new Set();
+  const nsModules = new Set();
+  try {
+    const src = readFileSync(resolve(root, "shared/functions/registry.ts"), "utf8");
+    for (const m of src.matchAll(/name:\s*"([^"]+)"/g)) names.add(m[1]);
+    for (const m of src.matchAll(/import\s*\*\s*as\s+\w+\s+from\s+["']\.\/([\w-]+)["']/g)) nsModules.add(m[1]);
+  } catch {
+    /* first run: no registry yet */
+  }
+  return { names, nsModules };
+}
+const existing = readExistingRegistry();
+
 /** Parse `import { a, b } from "../shared/functions/<mod>"` (multi/single line). */
 function parseSharedImports(source) {
   const fnToModule = new Map();
@@ -76,7 +91,11 @@ for (const mod of modules) {
       console.error(`WARN ${mod}:${d.exportName} -> ${d.fn} has no shared import`);
       continue;
     }
-    if (!importsByModule.has(sharedModule)) importsByModule.set(sharedModule, true);
+    // Skip entries already present in the registry (re-running over an
+    // already-ported module only surfaces the new delegations).
+    if (existing.names.has(`${mod}:${d.exportName}`)) continue;
+    // Only emit an import line for shared modules not already namespace-imported.
+    if (!existing.nsModules.has(sharedModule)) importsByModule.set(sharedModule, true);
     entries.push({ ...d, sharedModule, convexModule: mod });
   }
   entriesByModule.set(mod, entries);
