@@ -65,7 +65,7 @@ export interface EmailCapability {
   sendEmail(input: { to: string; subject: string; html?: string; text?: string; tag?: string }): Promise<{ id: string; accepted: boolean }>;
 }
 export interface SmsCapability {
-  sendSms(input: { to: string; body: string }): Promise<{ id: string; accepted: boolean }>;
+  sendSms(input: { to: string; body: string; tag?: string }): Promise<{ id: string; accepted: boolean }>;
 }
 export interface StorageCapability {
   createUploadUrl(input: { contentType?: string }): Promise<{ uploadUrl: string; storageKey: string }>;

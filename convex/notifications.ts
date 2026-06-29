@@ -2,8 +2,7 @@ import { v } from "convex/values";
 import { query, mutation, action, internalMutation, internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
-import { sendEmail } from "./providers/email";
-import { sendSms } from "./providers/sms";
+import { buildConvexCapabilities } from "./providers/capabilities";
 
 /**
  * Notifications historically stored app-relative links as bare paths
@@ -487,6 +486,10 @@ export const sendDigest = action({
     ]);
     if (notifications.length === 0) return { emailsSent: 0, smsSent: 0 };
 
+    // Reach delivery providers through the injected capability bag instead of
+    // importing them directly. A runtime without email/sms wired gets a
+    // structured CAPABILITY_UNAVAILABLE rather than a silent send.
+    const capabilities = buildConvexCapabilities();
     let emailsSent = 0;
     let smsSent = 0;
     for (const u of users) {
@@ -499,7 +502,7 @@ export const sendDigest = action({
           .slice(0, 10)
           .map((n: any) => `• [${n.severity.toUpperCase()}] ${n.title}`)
           .join("\n");
-        await sendEmail({
+        await capabilities.email.sendEmail({
           to: u.email,
           subject: `Societyer digest — ${emailItems.length} open item${emailItems.length === 1 ? "" : "s"}`,
           text: `Hi ${u.displayName},\n\n${lines}\n\nOpen Societyer to review.`,
@@ -513,7 +516,7 @@ export const sendDigest = action({
       const smsItems = notifications.filter((n: any) => digestAllows(prefs, "sms", n.kind));
       if (smsOptedIn && u.phone && smsItems.length > 0) {
         const top = smsItems.slice(0, 3).map((n: any) => n.title).join("; ");
-        await sendSms({
+        await capabilities.sms.sendSms({
           to: u.phone,
           body: `Societyer: ${smsItems.length} open item${smsItems.length === 1 ? "" : "s"}. ${top}`,
           tag: "digest",

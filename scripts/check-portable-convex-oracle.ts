@@ -28,6 +28,7 @@ import {
 } from "../shared/portable/index";
 import { votingPowerPortable } from "../shared/functions/votingPower";
 import { upsertRightsClassPortable } from "../shared/functions/rightsClasses";
+import { buildConvexCapabilities } from "../convex/providers/capabilities";
 
 // convex-test resolves api.legalOperations.* from this module map (we only invoke
 // votingPower, which makes no nested calls, so the one module suffices).
@@ -175,5 +176,17 @@ await assert.rejects(
   "local runtime should reject the same invalid classType",
 );
 console.log("✓ upsertRightsClass mutation: real Convex == MemoryDb == LocalStoreDb (create, update, validation)");
+
+// === CAPABILITY bag: the converted notifications.sendDigest call-site ==========
+{
+  const caps = buildConvexCapabilities();
+  assert.equal(caps.has("email"), true, "email capability is wired on Convex");
+  assert.equal(caps.has("sms"), true, "sms capability is wired on Convex");
+  const email = await caps.email.sendEmail({ to: "board@example.org", subject: "Digest", text: "hi" });
+  assert.ok(email.id && email.accepted, "email routes through the injected bag");
+  const sms = await caps.sms.sendSms({ to: "+15551234567", body: "hi", tag: "digest" });
+  assert.ok(sms.id, "sms routes through the injected bag");
+  console.log("✓ buildConvexCapabilities() routes email/sms through the injected capability surface");
+}
 
 console.log("\nPortable convex-oracle conformance passed.");

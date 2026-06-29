@@ -158,8 +158,23 @@ the concrete providers. Budget the SDK extraction as a separate investment
   `convex/`. Note: the transfer mutations are Convex-production + conformance-proven
   but **not yet in the live local registry** — `syncRightsHoldings` rewrites derived
   holdings, so the live swap waits on a demo-fixture review.
-- **Phase 4.** Electron native-filesystem document provider + packaging
-  (per `electron-local-first-plan.md`). No embedded Convex backend.
+- **Phase 4 — partly present.** The Electron native-filesystem document provider
+  already exists (`electron/documents.ts` native read/write + `src/lib/documentStorage.ts`
+  adapter + preload bridge) and passes `npm run desktop:typecheck`. The local
+  capability policy is now a named seam (`src/lib/localCapabilities.ts`,
+  `buildLocalCapabilities`) — the hook point where native desktop capabilities
+  (keychain, local OCR, background jobs) wire in as the host gains them. Remaining
+  and **environment-gated** (not runnable in CI): code signing, notarization, and
+  building platform installers via `electron-builder`. No embedded Convex backend.
+
+### Capabilities are now injected end-to-end
+
+- Convex side: handlers obtain providers through `buildConvexCapabilities()`
+  (`convex/providers/capabilities.ts`) instead of importing `providers/*` directly
+  — converted at `notifications.sendDigest` (email + SMS).
+- Local side: `StaticConvexClient` runs portable functions with
+  `buildLocalCapabilities()`; absent services raise a structured
+  CAPABILITY_UNAVAILABLE naming the runtime, never a silent no-op.
 
 ## Decision record
 

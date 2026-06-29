@@ -23,7 +23,7 @@ import {
 import { summarizeVotingPower, transfersAsOf } from "../../shared/functions/votingPower";
 import { PortableRuntime } from "../../shared/portable/define";
 import { LocalStoreDb } from "../../shared/portable/localRowStore";
-import { makeCapabilities } from "../../shared/portable/capabilities";
+import { buildLocalCapabilities } from "./localCapabilities";
 import { PORTABLE_FUNCTIONS } from "../../shared/functions/registry";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../shared/societyDocumentPackets";
 import {
@@ -6215,7 +6215,8 @@ export class StaticConvexClient {
       db: new LocalStoreDb(this.store.rowStore),
       // Local workspaces have no server-only services wired by default; calling
       // one throws a structured CAPABILITY_UNAVAILABLE rather than silently no-op.
-      capabilities: makeCapabilities({}, (cap) => `This local workspace has no ${cap} service connected.`),
+      // buildLocalCapabilities is the seam where native Electron capabilities wire in.
+      capabilities: buildLocalCapabilities(),
     }).registerAll(PORTABLE_FUNCTIONS);
   }
 
