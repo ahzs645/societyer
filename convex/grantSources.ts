@@ -8,6 +8,16 @@ import {
   parseJsonFeedOpportunities,
   type DiscoveredOpportunity,
 } from "../shared/grantFeedParsers";
+import {
+  libraryPortable,
+  listPortable,
+  listWithLibraryPortable,
+  getSourcePortable,
+  candidatesPortable,
+  createCandidatePortable,
+  setCandidateStatusPortable,
+} from "../shared/functions/grantSources";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 function isoNow() {
   return new Date().toISOString();
@@ -33,69 +43,19 @@ const sourcePatchValidator = v.object({
 export const library = query({
   args: {},
   returns: v.any(),
-  handler: async () =>
-    BUILT_IN_SOURCES.map((source) => ({
-      ...source,
-      builtIn: true,
-      profile: BUILT_IN_PROFILES.find((profile) => profile.libraryKey === source.libraryKey),
-    })),
+  handler: (ctx, args) => libraryPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const [sources, profiles, candidates] = await Promise.all([
-      ctx.db
-        .query("grantSources")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-      ctx.db
-        .query("grantSourceProfiles")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-      ctx.db
-        .query("grantOpportunityCandidates")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-    ]);
-    const profileBySource = new Map(profiles.map((profile: any) => [String(profile.sourceId), profile]));
-    const candidateCountBySource = new Map<string, number>();
-    for (const candidate of candidates) {
-      if (!candidate.sourceId) continue;
-      const key = String(candidate.sourceId);
-      candidateCountBySource.set(key, (candidateCountBySource.get(key) ?? 0) + 1);
-    }
-    return sources
-      .map((source: any) => ({
-        ...source,
-        builtIn: false,
-        profile: profileBySource.get(String(source._id)),
-        candidateCount: candidateCountBySource.get(String(source._id)) ?? 0,
-      }))
-      .sort((a, b) => `${a.status}:${a.name}`.localeCompare(`${b.status}:${b.name}`));
-  },
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const listWithLibrary = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const installed = await ctx.db
-      .query("grantSources")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const installedKeys = new Set(installed.map((source: any) => source.libraryKey).filter(Boolean));
-    const installedByKey = new Map<string, any>(installed.map((source: any) => [source.libraryKey, source]));
-    const libraryRows = BUILT_IN_SOURCES.map((source) => ({
-      ...source,
-      _id: installedByKey.get(source.libraryKey)?._id,
-      builtIn: true,
-      installed: installedKeys.has(source.libraryKey),
-      profile: BUILT_IN_PROFILES.find((profile) => profile.libraryKey === source.libraryKey),
-    }));
-    return { library: libraryRows, workspace: installed };
-  },
+  handler: (ctx, args) => listWithLibraryPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -213,36 +173,13 @@ export const addFromLibrary = mutation({
 export const getSource = query({
   args: { sourceId: v.id("grantSources") },
   returns: v.any(),
-  handler: async (ctx, { sourceId }) => {
-    const source = await ctx.db.get(sourceId);
-    if (!source) return null;
-    const profile = (
-      await ctx.db
-        .query("grantSourceProfiles")
-        .withIndex("by_source", (q: any) => q.eq("sourceId", sourceId))
-        .collect()
-    )[0];
-    return { ...source, profile };
-  },
+  handler: (ctx, args) => getSourcePortable(toPortableQueryCtx(ctx), args),
 });
 
 export const candidates = query({
   args: { societyId: v.id("societies"), sourceId: v.optional(v.id("grantSources")) },
   returns: v.any(),
-  handler: async (ctx, { societyId, sourceId }) => {
-    const rows = sourceId
-      ? await ctx.db
-          .query("grantOpportunityCandidates")
-          .withIndex("by_source", (q) => q.eq("sourceId", sourceId))
-          .collect()
-      : await ctx.db
-          .query("grantOpportunityCandidates")
-          .withIndex("by_society", (q) => q.eq("societyId", societyId))
-          .collect();
-    return rows
-      .filter((row: any) => row.societyId === societyId)
-      .sort((a: any, b: any) => (a.applicationDueDate ?? "").localeCompare(b.applicationDueDate ?? ""));
-  },
+  handler: (ctx, args) => candidatesPortable(toPortableQueryCtx(ctx), args),
 });
 
 // Manually add a grant opportunity to the review queue. The automated scraping
@@ -262,35 +199,13 @@ export const createCandidate = mutation({
     description: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const now = new Date().toISOString();
-    return await ctx.db.insert("grantOpportunityCandidates", {
-      societyId: args.societyId,
-      sourceId: args.sourceId,
-      title: args.title.trim(),
-      funder: cleanText(args.funder),
-      program: cleanText(args.program),
-      opportunityUrl: cleanText(args.opportunityUrl),
-      applicationDueDate: cleanText(args.applicationDueDate),
-      amountText: cleanText(args.amountText),
-      eligibilityText: cleanText(args.eligibilityText),
-      description: cleanText(args.description),
-      confidence: "high", // manual entry
-      status: "New",
-      sourceExternalIds: [],
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-  },
+  handler: (ctx, args) => createCandidatePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const setCandidateStatus = mutation({
   args: { candidateId: v.id("grantOpportunityCandidates"), status: v.string() },
   returns: v.any(),
-  handler: async (ctx, { candidateId, status }) => {
-    await ctx.db.patch(candidateId, { status, updatedAtISO: new Date().toISOString() });
-    return candidateId;
-  },
+  handler: (ctx, args) => setCandidateStatusPortable(toPortableMutationCtx(ctx), args),
 });
 
 // Persist discovered opportunities into the queue, deduping by sourceExternalId

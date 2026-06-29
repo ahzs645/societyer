@@ -2,84 +2,41 @@ import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import { requireRole } from "./users";
 import { requireEnabledModule } from "./lib/moduleSettings";
+import {
+  listPortable,
+  applicationsPortable,
+  screeningsPortable,
+  summaryPortable,
+  buildCrrpDraftPortable,
+} from "../shared/functions/volunteers";
+import { toPortableQueryCtx } from "./lib/portable";
 
 function isoNow() {
   return new Date().toISOString();
 }
 
-function fullName(row: { firstName: string; lastName: string }) {
-  return `${row.firstName} ${row.lastName}`.trim();
-}
-
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("volunteers")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const applications = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("volunteerApplications")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => applicationsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const screenings = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("volunteerScreenings")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => screeningsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const summary = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const [volunteers, screenings, applications] = await Promise.all([
-      ctx.db
-        .query("volunteers")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-      ctx.db
-        .query("volunteerScreenings")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-      ctx.db
-        .query("volunteerApplications")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-    ]);
-
-    const now = Date.now();
-    return {
-      total: volunteers.length,
-      active: volunteers.filter((volunteer) => volunteer.status === "Active").length,
-      applied: volunteers.filter((volunteer) => volunteer.status === "Applied").length,
-      screeningRequired: volunteers.filter((volunteer) => volunteer.screeningRequired).length,
-      pendingApplications: applications.filter((row) =>
-        ["Submitted", "Reviewing"].includes(row.status),
-      ).length,
-      expiringChecks: screenings.filter((screening) => {
-        if (!screening.expiresAtISO) return false;
-        const due = new Date(screening.expiresAtISO).getTime();
-        return due >= now && due <= now + 30 * 24 * 60 * 60 * 1000;
-      }).length,
-      overdueChecks: screenings.filter((screening) => {
-        if (!screening.expiresAtISO) return false;
-        return new Date(screening.expiresAtISO).getTime() < now;
-      }).length,
-    };
-  },
+  handler: (ctx, args) => summaryPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const submitApplication = mutation({
@@ -312,19 +269,5 @@ export const removeScreening = mutation({
 export const buildCrrpDraft = query({
   args: { volunteerId: v.id("volunteers") },
   returns: v.any(),
-  handler: async (ctx, { volunteerId }) => {
-    const volunteer = await ctx.db.get(volunteerId);
-    if (!volunteer) return null;
-    const base =
-      (globalThis as any)?.process?.env?.BC_CRRP_ORG_PORTAL_URL ??
-      "https://justice.gov.bc.ca/eCRC/";
-    return {
-      volunteerId,
-      volunteerName: fullName(volunteer),
-      provider: "BC_CRRP",
-      launchUrl: base,
-      suggestedNote:
-        "Launch the BC Criminal Records Review Program portal, issue the request to the volunteer, then attach consent and result evidence here.",
-    };
-  },
+  handler: (ctx, args) => buildCrrpDraftPortable(toPortableQueryCtx(ctx), args),
 });

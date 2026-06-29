@@ -4,15 +4,13 @@ import { mutation, query } from "./_generated/server";
 import { requireRole } from "./users";
 import { isSocietyModuleEnabled } from "./lib/moduleSettings";
 import { createDownloadUrl } from "./providers/storage";
+import { listPublicationsPortable } from "../shared/functions/transparency";
+import { toPortableQueryCtx } from "./lib/portable";
 
 export const listPublications = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }): Promise<any[]> =>
-    ctx.db
-      .query("publications")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listPublicationsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const upsertPublication = mutation({

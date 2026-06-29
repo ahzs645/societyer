@@ -2,6 +2,21 @@ import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import { requireRole } from "./users";
 import { transactionBackfillSides, validateBalancedJournalLines } from "./lib/accountingCore";
+import {
+  chartAccountsPortable,
+  fiscalPeriodsPortable,
+  counterpartiesPortable,
+  fundRestrictionsPortable,
+  restrictedFundBalancesPortable,
+  accountMappingsPortable,
+  journalEntriesPortable,
+  journalEntryPortable,
+  trialBalancePortable,
+  generalLedgerPortable,
+  exportCsvPortable,
+  boardAuditorPackagePortable,
+} from "../shared/functions/accounting";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const ACCOUNT_TYPES = ["Asset", "Liability", "Equity", "Income", "Expense"] as const;
 const NORMAL_BALANCES = ["debit", "credit"] as const;
@@ -43,15 +58,6 @@ function validateJournalLines(lines: Array<{ amountCents: number; side: string }
   validateBalancedJournalLines(lines);
 }
 
-function csvEscape(value: unknown) {
-  const text = String(value ?? "");
-  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
-function csvRows(rows: unknown[][]) {
-  return rows.map((row) => row.map(csvEscape).join(",")).join("\n");
-}
-
 async function assertPeriodOpen(ctx: any, args: { societyId: string; fiscalPeriodId?: string; date: string; allowClosed?: boolean }) {
   if (args.allowClosed) return null;
   let period: any = null;
@@ -71,231 +77,64 @@ async function assertPeriodOpen(ctx: any, args: { societyId: string; fiscalPerio
   return period;
 }
 
-async function buildTrialBalance(ctx: any, societyId: string, fiscalYear?: string) {
-  const [accounts, entries, allLines] = await Promise.all([
-    ctx.db.query("financialAccounts").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
-    ctx.db.query("journalEntries").withIndex("by_society_status", (q: any) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
-    ctx.db.query("journalLines").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
-  ]);
-  const entryIds = new Set(
-    entries
-      .filter((entry: any) => !fiscalYear || entry.fiscalYear === fiscalYear)
-      .map((entry: any) => String(entry._id)),
-  );
-  const accountById = new Map(accounts.map((account: any) => [String(account._id), account]));
-  const totals = new Map<string, { debitCents: number; creditCents: number }>();
-  for (const line of allLines) {
-    if (!entryIds.has(String(line.journalEntryId))) continue;
-    const current = totals.get(String(line.accountId)) ?? { debitCents: 0, creditCents: 0 };
-    if (line.side === "debit") current.debitCents += line.amountCents;
-    if (line.side === "credit") current.creditCents += line.amountCents;
-    totals.set(String(line.accountId), current);
-  }
-  return Array.from(totals.entries())
-    .map(([accountId, total]) => ({
-      account: (accountById.get(accountId) as any) ?? null,
-      ...total,
-      balanceCents: total.debitCents - total.creditCents,
-    }))
-    .sort((a, b) => String(a.account?.code ?? "").localeCompare(String(b.account?.code ?? "")));
-}
-
-async function buildGeneralLedger(ctx: any, societyId: string, fiscalYear?: string, accountId?: string) {
-  const [entries, lines, accounts] = await Promise.all([
-    ctx.db.query("journalEntries").withIndex("by_society_status", (q: any) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
-    accountId
-      ? ctx.db.query("journalLines").withIndex("by_account", (q: any) => q.eq("accountId", accountId)).collect()
-      : ctx.db.query("journalLines").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
-    ctx.db.query("financialAccounts").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
-  ]);
-  const entryById = new Map(entries.filter((entry: any) => !fiscalYear || entry.fiscalYear === fiscalYear).map((entry: any) => [String(entry._id), entry]));
-  const accountById = new Map(accounts.map((account: any) => [String(account._id), account]));
-  return lines
-    .filter((line: any) => entryById.has(String(line.journalEntryId)))
-    .map((line: any) => {
-      const entry: any = entryById.get(String(line.journalEntryId));
-      return {
-        ...line,
-        entry,
-        account: (accountById.get(String(line.accountId)) as any) ?? null,
-      };
-    })
-    .sort((a: any, b: any) => `${a.entry.date}:${a.account?.code ?? ""}:${a.lineOrder}`.localeCompare(`${b.entry.date}:${b.account?.code ?? ""}:${b.lineOrder}`));
-}
-
 export const chartAccounts = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const accounts = await ctx.db
-      .query("financialAccounts")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    return accounts.sort((a, b) => String(a.code ?? "").localeCompare(String(b.code ?? "")) || a.name.localeCompare(b.name));
-  },
+  handler: (ctx, args) => chartAccountsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const fiscalPeriods = query({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, fiscalYear }) => {
-    const rows = await ctx.db
-      .query("accountingFiscalPeriods")
-      .withIndex("by_society_fiscal_year", (q) =>
-        fiscalYear ? q.eq("societyId", societyId).eq("fiscalYear", fiscalYear) : q.eq("societyId", societyId),
-      )
-      .collect();
-    return rows.sort((a, b) => a.startDate.localeCompare(b.startDate));
-  },
+  handler: (ctx, args) => fiscalPeriodsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const counterparties = query({
   args: { societyId: v.id("societies"), kind: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, kind }) => {
-    const rows = await (kind
-      ? ctx.db
-          .query("accountingCounterparties")
-          .withIndex("by_society_kind", (q) => q.eq("societyId", societyId).eq("kind", kind))
-          .collect()
-      : ctx.db
-          .query("accountingCounterparties")
-          .withIndex("by_society", (q) => q.eq("societyId", societyId))
-          .collect());
-    return rows.sort((a, b) => a.name.localeCompare(b.name));
-  },
+  handler: (ctx, args) => counterpartiesPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const fundRestrictions = query({
   args: { societyId: v.id("societies"), status: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, status }) => {
-    const rows = await (status
-      ? ctx.db
-          .query("fundRestrictions")
-          .withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", status))
-          .collect()
-      : ctx.db
-          .query("fundRestrictions")
-          .withIndex("by_society", (q) => q.eq("societyId", societyId))
-          .collect());
-    return rows.sort((a, b) => a.name.localeCompare(b.name));
-  },
+  handler: (ctx, args) => fundRestrictionsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const restrictedFundBalances = query({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, fiscalYear }) => {
-    const [restrictions, entries, lines] = await Promise.all([
-      ctx.db.query("fundRestrictions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
-      ctx.db.query("journalLines").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ]);
-    const entryIds = new Set(
-      entries
-        .filter((entry) => !fiscalYear || entry.fiscalYear === fiscalYear)
-        .map((entry) => String(entry._id)),
-    );
-    const totals = new Map<string, { debitCents: number; creditCents: number }>();
-    for (const line of lines) {
-      if (!line.fundRestrictionId || !entryIds.has(String(line.journalEntryId))) continue;
-      const key = String(line.fundRestrictionId);
-      const current = totals.get(key) ?? { debitCents: 0, creditCents: 0 };
-      if (line.side === "debit") current.debitCents += line.amountCents;
-      if (line.side === "credit") current.creditCents += line.amountCents;
-      totals.set(key, current);
-    }
-    return restrictions
-      .map((restriction) => {
-        const total = totals.get(String(restriction._id)) ?? { debitCents: 0, creditCents: 0 };
-        return {
-          ...restriction,
-          debitCents: total.debitCents,
-          creditCents: total.creditCents,
-          balanceCents: total.debitCents - total.creditCents,
-        };
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  },
+  handler: (ctx, args) => restrictedFundBalancesPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const accountMappings = query({
   args: { societyId: v.id("societies"), provider: v.optional(v.string()), status: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, provider, status }) => {
-    const rows = await (provider
-      ? ctx.db
-          .query("accountingAccountMappings")
-          .withIndex("by_society_provider", (q) => q.eq("societyId", societyId).eq("provider", provider))
-          .collect()
-      : status
-        ? ctx.db
-            .query("accountingAccountMappings")
-            .withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", status))
-            .collect()
-        : ctx.db
-            .query("accountingAccountMappings")
-            .withIndex("by_society", (q) => q.eq("societyId", societyId))
-            .collect());
-    return rows.sort((a, b) => `${a.provider}:${a.externalAccountName}`.localeCompare(`${b.provider}:${b.externalAccountName}`));
-  },
+  handler: (ctx, args) => accountMappingsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const journalEntries = query({
   args: { societyId: v.id("societies"), status: v.optional(v.string()), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, status, limit }) => {
-    const entries = await (status
-      ? ctx.db
-          .query("journalEntries")
-          .withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", status))
-          .collect()
-      : ctx.db
-          .query("journalEntries")
-          .withIndex("by_society_date", (q) => q.eq("societyId", societyId))
-          .order("desc")
-          .take(limit ?? 100));
-    const sorted = entries.sort((a, b) => b.date.localeCompare(a.date)).slice(0, limit ?? 100);
-    const lines = await Promise.all(
-      sorted.map((entry) =>
-        ctx.db
-          .query("journalLines")
-          .withIndex("by_entry", (q) => q.eq("journalEntryId", entry._id))
-          .collect(),
-      ),
-    );
-    return sorted.map((entry, index) => ({
-      ...entry,
-      lines: lines[index].sort((a, b) => a.lineOrder - b.lineOrder),
-    }));
-  },
+  handler: (ctx, args) => journalEntriesPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const journalEntry = query({
   args: { id: v.id("journalEntries") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const entry = await ctx.db.get(id);
-    if (!entry) return null;
-    const lines = await ctx.db
-      .query("journalLines")
-      .withIndex("by_entry", (q) => q.eq("journalEntryId", id))
-      .collect();
-    return { ...entry, lines: lines.sort((a, b) => a.lineOrder - b.lineOrder) };
-  },
+  handler: (ctx, args) => journalEntryPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const trialBalance = query({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, fiscalYear }) => buildTrialBalance(ctx, societyId, fiscalYear),
+  handler: (ctx, args) => trialBalancePortable(toPortableQueryCtx(ctx), args),
 });
 
 export const generalLedger = query({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()), accountId: v.optional(v.id("financialAccounts")) },
   returns: v.any(),
-  handler: async (ctx, { societyId, fiscalYear, accountId }) => buildGeneralLedger(ctx, societyId, fiscalYear, accountId),
+  handler: (ctx, args) => generalLedgerPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const exportCsv = query({
@@ -305,43 +144,7 @@ export const exportCsv = query({
     fiscalYear: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, kind, fiscalYear }) => {
-    if (kind === "chart_of_accounts") {
-      const accounts = await ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-      const rows = [["code", "name", "type", "subtype", "currency", "normal_balance", "external_id"]];
-      for (const account of accounts.sort((a, b) => String(a.code ?? "").localeCompare(String(b.code ?? "")))) {
-        rows.push([account.code ?? "", account.name, account.accountType, account.subtype ?? "", account.currency, account.normalBalance ?? "", account.externalId]);
-      }
-      return { filename: "chart-of-accounts.csv", contentType: "text/csv", csv: csvRows(rows) };
-    }
-    if (kind === "trial_balance") {
-      const rows = [["account_code", "account_name", "debit_cents", "credit_cents", "balance_cents"]];
-      const trial = await buildTrialBalance(ctx, societyId, fiscalYear);
-      for (const row of trial) rows.push([row.account?.code ?? "", row.account?.name ?? "", row.debitCents, row.creditCents, row.balanceCents]);
-      return { filename: "trial-balance.csv", contentType: "text/csv", csv: csvRows(rows) };
-    }
-    if (kind === "journal_entries" || kind === "general_ledger") {
-      const rows = [["entry_date", "entry_number", "reference", "memo", "status", "source", "account_code", "account_name", "side", "amount_cents", "line_description"]];
-      const ledger = await buildGeneralLedger(ctx, societyId, fiscalYear);
-      for (const line of ledger) {
-        rows.push([
-          line.entry.date,
-          line.entry.entryNumber ?? "",
-          line.entry.reference ?? "",
-          line.entry.memo,
-          line.entry.status,
-          line.entry.source,
-          line.account?.code ?? "",
-          line.account?.name ?? "",
-          line.side,
-          line.amountCents,
-          line.description ?? "",
-        ]);
-      }
-      return { filename: kind === "journal_entries" ? "journal-entries.csv" : "general-ledger.csv", contentType: "text/csv", csv: csvRows(rows) };
-    }
-    throw new Error("Unsupported accounting CSV export kind.");
-  },
+  handler: (ctx, args) => exportCsvPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const boardAuditorPackage = query({
@@ -351,66 +154,7 @@ export const boardAuditorPackage = query({
     packageKind: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, fiscalYear, packageKind }) => {
-    const [society, trial, ledger, entries, restrictions, reconciliations] = await Promise.all([
-      ctx.db.get(societyId),
-      buildTrialBalance(ctx, societyId, fiscalYear),
-      buildGeneralLedger(ctx, societyId, fiscalYear),
-      ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
-      ctx.db.query("fundRestrictions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("reconciliationRuns").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ]);
-    if (!society) throw new Error("Society not found.");
-    const includedEntries = entries.filter((entry) => !fiscalYear || entry.fiscalYear === fiscalYear);
-    const documentIds = new Set<string>();
-    for (const entry of includedEntries) for (const id of entry.sourceDocumentIds ?? []) documentIds.add(String(id));
-    for (const line of ledger) for (const id of line.documentIds ?? []) documentIds.add(String(id));
-    for (const restriction of restrictions) for (const id of restriction.sourceDocumentIds ?? []) documentIds.add(String(id));
-    for (const run of reconciliations) for (const id of run.sourceDocumentIds ?? []) documentIds.add(String(id));
-    const documents = await Promise.all(Array.from(documentIds).map((id) => ctx.db.get(id as any)));
-    const attachments = documents
-      .filter(Boolean)
-      .map((document: any) => ({
-        documentId: document._id,
-        title: document.title,
-        category: document.category,
-        fileName: document.fileName,
-        storageId: document.storageId ? String(document.storageId) : undefined,
-        url: document.url,
-      }));
-    const trialRows = [["account_code", "account_name", "debit_cents", "credit_cents", "balance_cents"]];
-    for (const row of trial) trialRows.push([row.account?.code ?? "", row.account?.name ?? "", row.debitCents, row.creditCents, row.balanceCents]);
-    const ledgerRows = [["entry_date", "entry_number", "memo", "account_code", "account_name", "side", "amount_cents", "line_description", "document_ids"]];
-    for (const line of ledger) {
-      ledgerRows.push([line.entry.date, line.entry.entryNumber ?? "", line.entry.memo, line.account?.code ?? "", line.account?.name ?? "", line.side, line.amountCents, line.description ?? "", (line.documentIds ?? []).join(";")]);
-    }
-    const reconciliationRows = [["statement_date", "account_id", "statement_balance_cents", "book_balance_cents", "status"]];
-    for (const run of reconciliations) {
-      reconciliationRows.push([run.statementDate, String(run.financialAccountId), run.statementBalanceCents, run.bookBalanceCents ?? "", run.status]);
-    }
-    const manifest = {
-      packageVersion: 1,
-      packageKind: packageKind ?? "board_auditor",
-      societyId,
-      societyName: society.name,
-      fiscalYear: fiscalYear ?? null,
-      generatedAtISO: new Date().toISOString(),
-      files: ["manifest.json", "trial-balance.csv", "general-ledger.csv", "reconciliations.csv", "attachments.json"],
-      attachmentCount: attachments.length,
-    };
-    return {
-      filename: `societyer-${packageKind ?? "board-auditor"}-${fiscalYear ?? "all"}-package.zip`,
-      contentType: "application/zip",
-      files: [
-        { path: "manifest.json", content: JSON.stringify(manifest, null, 2) },
-        { path: "trial-balance.csv", content: csvRows(trialRows) },
-        { path: "general-ledger.csv", content: csvRows(ledgerRows) },
-        { path: "reconciliations.csv", content: csvRows(reconciliationRows) },
-        { path: "attachments.json", content: JSON.stringify(attachments, null, 2) },
-      ],
-      attachments,
-    };
-  },
+  handler: (ctx, args) => boardAuditorPackagePortable(toPortableQueryCtx(ctx), args),
 });
 
 export const ensureSocietyerConnection = mutation({

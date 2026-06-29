@@ -1,6 +1,15 @@
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import {
+  usersList,
+  userGet,
+  userGetByEmail,
+  userGetByAuthSubject,
+  resolveAuthSessionPortable,
+  recordLoginPortable,
+} from "../shared/functions/users";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"] as const;
 export type Role = (typeof ROLES)[number];
@@ -55,41 +64,25 @@ export async function requireRole(
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("users")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => usersList(toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("users") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => userGet(toPortableQueryCtx(ctx), args),
 });
 
 export const getByEmail = query({
   args: { email: v.string() },
   returns: v.any(),
-  handler: async (ctx, { email }) => {
-    const rows = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", email))
-      .collect();
-    return rows[0] ?? null;
-  },
+  handler: (ctx, args) => userGetByEmail(toPortableQueryCtx(ctx), args),
 });
 
 export const getByAuthSubject = query({
   args: { authSubject: v.string() },
   returns: v.any(),
-  handler: async (ctx, { authSubject }) => {
-    const rows = await ctx.db
-      .query("users")
-      .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
-      .collect();
-    return rows[0] ?? null;
-  },
+  handler: (ctx, args) => userGetByAuthSubject(toPortableQueryCtx(ctx), args),
 });
 
 export const resolveAuthSession = mutation({
@@ -101,65 +94,7 @@ export const resolveAuthSession = mutation({
     emailVerified: v.boolean(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const [existingByAuth, members, users] = await Promise.all([
-      ctx.db
-        .query("users")
-        .withIndex("by_auth_subject", (q) => q.eq("authSubject", args.authSubject))
-        .collect(),
-      ctx.db
-        .query("members")
-        .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-        .collect(),
-      ctx.db
-        .query("users")
-        .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-        .collect(),
-    ]);
-
-    const email = args.email.toLowerCase();
-    const existing =
-      existingByAuth.find((row) => row.societyId === args.societyId) ??
-      users.find(
-        (row) =>
-          row.societyId === args.societyId &&
-          row.email.toLowerCase() === email,
-      ) ??
-      null;
-    const linkedMember =
-      members.find((member) => member.email?.toLowerCase() === email) ?? null;
-    const now = new Date().toISOString();
-
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        email: args.email,
-        displayName: args.displayName,
-        authProvider: "better-auth",
-        authSubject: args.authSubject,
-        memberId: existing.memberId ?? linkedMember?._id,
-        emailVerifiedAtISO: args.emailVerified ? now : existing.emailVerifiedAtISO,
-        lastLoginAtISO: now,
-        status: existing.status === "Invited" ? "Active" : existing.status,
-      });
-      return { userId: existing._id };
-    }
-
-    const ownerRole = users.length === 0 ? "Owner" : linkedMember ? "Member" : "Viewer";
-    const userId = await ctx.db.insert("users", {
-      societyId: args.societyId,
-      email: args.email,
-      displayName: args.displayName,
-      role: ownerRole,
-      authProvider: "better-auth",
-      authSubject: args.authSubject,
-      memberId: linkedMember?._id,
-      status: "Active",
-      createdAtISO: now,
-      emailVerifiedAtISO: args.emailVerified ? now : undefined,
-      lastLoginAtISO: now,
-    });
-    return { userId };
-  },
+  handler: (ctx, args) => resolveAuthSessionPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -260,7 +195,5 @@ export const remove = mutation({
 export const recordLogin = mutation({
   args: { id: v.id("users") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.patch(id, { lastLoginAtISO: new Date().toISOString() });
-  },
+  handler: (ctx, args) => recordLoginPortable(toPortableMutationCtx(ctx), args),
 });

@@ -2,6 +2,17 @@ import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import { requireRole } from "./users";
 import { requireEnabledModule } from "./lib/moduleSettings";
+import {
+  listPortable,
+  getPortable,
+  publicOpeningsPortable,
+  applicationsPortable,
+  transactionsPortable,
+  reportsPortable,
+  employeeLinksPortable,
+  summaryPortable,
+} from "../shared/functions/grants";
+import { toPortableQueryCtx } from "./lib/portable";
 
 function isoNow() {
   return new Date().toISOString();
@@ -82,76 +93,43 @@ const grantAnswerLibraryItem = v.object({
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("grants")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("grants") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const publicOpenings = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const rows = await ctx.db
-      .query("grants")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    return rows.filter((grant) => grant.allowPublicApplications);
-  },
+  handler: (ctx, args) => publicOpeningsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const applications = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("grantApplications")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => applicationsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const transactions = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("grantTransactions")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => transactionsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const reports = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("grantReports")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => reportsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const employeeLinks = query({
   args: { societyId: v.id("societies"), grantId: v.optional(v.id("grants")) },
   returns: v.any(),
-  handler: async (ctx, { societyId, grantId }) => {
-    if (grantId) {
-      return await ctx.db
-        .query("grantEmployeeLinks")
-        .withIndex("by_grant", (q) => q.eq("grantId", grantId))
-        .collect();
-    }
-    return await ctx.db
-      .query("grantEmployeeLinks")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-  },
+  handler: (ctx, args) => employeeLinksPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const upsertEmployeeLink = mutation({
@@ -211,67 +189,7 @@ export const removeEmployeeLink = mutation({
 export const summary = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const [grants, reports, accounts, applications, ledger] = await Promise.all([
-      ctx.db
-        .query("grants")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-      ctx.db
-        .query("grantReports")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-      ctx.db
-        .query("financialAccounts")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-      ctx.db
-        .query("grantApplications")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-      ctx.db
-        .query("grantTransactions")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-    ]);
-
-    const now = Date.now();
-    const active = grants.filter((grant) => ["Awarded", "Active"].includes(grant.status));
-    const linkedRestrictedBalance = active.reduce((sum, grant) => {
-      if (!grant.linkedFinancialAccountId) return sum;
-      const account = accounts.find((row) => row._id === grant.linkedFinancialAccountId);
-      return sum + (account?.balanceCents ?? 0);
-    }, 0);
-    const spentCents = ledger
-      .filter((row) => row.direction === "outflow")
-      .reduce((sum, row) => sum + row.amountCents, 0);
-
-    return {
-      total: grants.length,
-      pipeline: grants.filter((grant) =>
-        ["Prospecting", "Drafting", "Submitted"].includes(grant.status),
-      ).length,
-      active: active.length,
-      awardedCents: active.reduce(
-        (sum, grant) => sum + (grant.amountAwardedCents ?? 0),
-        0,
-      ),
-      linkedRestrictedBalanceCents: linkedRestrictedBalance,
-      pendingApplications: applications.filter((row) =>
-        ["Submitted", "Reviewing", "Shortlisted"].includes(row.status),
-      ).length,
-      ledgerSpendCents: spentCents,
-      overdueReports: reports.filter((report) => {
-        if (report.status === "Submitted") return false;
-        return new Date(report.dueAtISO).getTime() < now;
-      }).length,
-      dueSoonReports: reports.filter((report) => {
-        if (report.status === "Submitted") return false;
-        const due = new Date(report.dueAtISO).getTime();
-        return due >= now && due <= now + 30 * 24 * 60 * 60 * 1000;
-      }).length,
-    };
-  },
+  handler: (ctx, args) => summaryPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const submitApplication = mutation({

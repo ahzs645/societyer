@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import { createDownloadUrl } from "./providers/storage";
+import { listPortable, createPortable, revokePortable } from "../shared/functions/partyPortals";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 /**
  * External stakeholder portals (Corporify's auditor portal): a society shares a
@@ -10,17 +12,10 @@ import { createDownloadUrl } from "./providers/storage";
  * whether files can be pulled (vs. read-only metadata).
  */
 
-const VALID_SCOPES = ["board", "publications", "documents"];
-
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    (await ctx.db
-      .query("partyPortals")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect())
-      .sort((a: any, b: any) => String(b.createdAtISO).localeCompare(String(a.createdAtISO))),
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -34,27 +29,13 @@ export const create = mutation({
     expiresAtISO: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const scopes = args.scopes.filter((s) => VALID_SCOPES.includes(s));
-    return await ctx.db.insert("partyPortals", {
-      societyId: args.societyId,
-      token: args.token,
-      label: args.label,
-      partyEmail: args.partyEmail || undefined,
-      scopes,
-      allowDownload: args.allowDownload,
-      expiresAtISO: args.expiresAtISO || undefined,
-      createdAtISO: new Date().toISOString(),
-    });
-  },
+  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const revoke = mutation({
   args: { id: v.id("partyPortals") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.patch(id, { revokedAtISO: new Date().toISOString() });
-  },
+  handler: (ctx, args) => revokePortable(toPortableMutationCtx(ctx), args),
 });
 
 /** Public, token-gated view. Returns null for an unknown/revoked/expired token,
