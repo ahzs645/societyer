@@ -1,25 +1,25 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
-import { getActiveBylawRuleSet } from "./lib/bylawRules";
+import {
+  proxiesList,
+  proxiesForMeeting,
+  proxyCreate,
+  proxyUpdate,
+  proxyRevoke,
+  proxyRemove,
+} from "../shared/functions/proxies";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("proxies")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => proxiesList(toPortableQueryCtx(ctx), args),
 });
 
 export const forMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: async (ctx, { meetingId }) =>
-    ctx.db
-      .query("proxies")
-      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-      .collect(),
+  handler: (ctx, args) => proxiesForMeeting(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -34,38 +34,7 @@ export const create = mutation({
     signedAtISO: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const rules = await getActiveBylawRuleSet(ctx, args.societyId);
-    if (!rules.allowProxyVoting) {
-      throw new Error(
-        "Proxy voting is disabled by the active bylaw rule set.",
-      );
-    }
-    if (rules.proxyHolderMustBeMember && !args.proxyHolderMemberId) {
-      throw new Error(
-        "The proxy holder must be linked to a member under the active bylaw rule set.",
-      );
-    }
-
-    const existing = await ctx.db
-      .query("proxies")
-      .withIndex("by_meeting", (q) => q.eq("meetingId", args.meetingId))
-      .collect();
-    const activeForGrantor = existing.filter((proxy) => {
-      if (proxy.revokedAtISO) return false;
-      if (args.grantorMemberId && proxy.grantorMemberId) {
-        return proxy.grantorMemberId === args.grantorMemberId;
-      }
-      return proxy.grantorName.trim().toLowerCase() === args.grantorName.trim().toLowerCase();
-    });
-    if (activeForGrantor.length >= rules.proxyLimitPerGrantorPerMeeting) {
-      throw new Error(
-        `A grantor may only appoint ${rules.proxyLimitPerGrantorPerMeeting} proxy holder(s) for a meeting under the active bylaw rule set.`,
-      );
-    }
-
-    return ctx.db.insert("proxies", args);
-  },
+  handler: (ctx, args) => proxyCreate(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -79,23 +48,17 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    await ctx.db.patch(id, patch);
-  },
+  handler: (ctx, args) => proxyUpdate(toPortableMutationCtx(ctx), args),
 });
 
 export const revoke = mutation({
   args: { id: v.id("proxies") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.patch(id, { revokedAtISO: new Date().toISOString() });
-  },
+  handler: (ctx, args) => proxyRevoke(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("proxies") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => proxyRemove(toPortableMutationCtx(ctx), args),
 });

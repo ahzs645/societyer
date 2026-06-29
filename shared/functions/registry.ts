@@ -23,6 +23,12 @@ import * as notesFns from "./notes";
 import * as auditorsFns from "./auditors";
 import * as courtOrdersFns from "./courtOrders";
 import * as conflictsFns from "./conflicts";
+import * as goalsFns from "./goals";
+import * as attestationsFns from "./attestations";
+import * as proxiesFns from "./proxies";
+import * as pipaTrainingFns from "./pipaTraining";
+import * as complianceObligationsFns from "./complianceObligations";
+import * as programStatementsFns from "./programStatements";
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }),
@@ -75,6 +81,49 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "conflicts:create", handler: conflictsFns.conflictsCreatePortable }),
   definePortableMutation({ name: "conflicts:resolve", handler: conflictsFns.conflictsResolvePortable }),
   definePortableMutation({ name: "conflicts:remove", handler: conflictsFns.conflictsRemovePortable }),
+
+  // goals
+  definePortableQuery({ name: "goals:list", handler: goalsFns.listPortable }),
+  definePortableQuery({ name: "goals:get", handler: goalsFns.getPortable }),
+  definePortableQuery({ name: "goals:byCommittee", handler: goalsFns.byCommitteePortable }),
+  definePortableMutation({ name: "goals:create", handler: goalsFns.createPortable }),
+  definePortableMutation({ name: "goals:update", handler: goalsFns.updatePortable }),
+  definePortableMutation({ name: "goals:toggleMilestone", handler: goalsFns.toggleMilestonePortable }),
+  definePortableMutation({ name: "goals:remove", handler: goalsFns.removePortable }),
+
+  // attestations
+  definePortableQuery({ name: "attestations:list", handler: attestationsFns.attestationsListPortable }),
+  definePortableQuery({ name: "attestations:forDirector", handler: attestationsFns.attestationsForDirectorPortable }),
+  definePortableQuery({ name: "attestations:missingForYear", handler: attestationsFns.attestationsMissingForYearPortable }),
+  definePortableMutation({ name: "attestations:sign", handler: attestationsFns.attestationSignPortable }),
+  definePortableMutation({ name: "attestations:remove", handler: attestationsFns.attestationRemovePortable }),
+
+  // proxies
+  definePortableQuery({ name: "proxies:list", handler: proxiesFns.proxiesList }),
+  definePortableQuery({ name: "proxies:forMeeting", handler: proxiesFns.proxiesForMeeting }),
+  definePortableMutation({ name: "proxies:create", handler: proxiesFns.proxyCreate }),
+  definePortableMutation({ name: "proxies:update", handler: proxiesFns.proxyUpdate }),
+  definePortableMutation({ name: "proxies:revoke", handler: proxiesFns.proxyRevoke }),
+  definePortableMutation({ name: "proxies:remove", handler: proxiesFns.proxyRemove }),
+
+  // pipaTraining
+  definePortableQuery({ name: "pipaTraining:list", handler: pipaTrainingFns.pipaTrainingList }),
+  definePortableMutation({ name: "pipaTraining:create", handler: pipaTrainingFns.pipaTrainingCreate }),
+  definePortableMutation({ name: "pipaTraining:update", handler: pipaTrainingFns.pipaTrainingUpdate }),
+  definePortableMutation({ name: "pipaTraining:remove", handler: pipaTrainingFns.pipaTrainingRemove }),
+
+  // complianceObligations
+  definePortableQuery({ name: "complianceObligations:listDecisions", handler: complianceObligationsFns.listDecisionsPortable }),
+  definePortableMutation({ name: "complianceObligations:markReviewed", handler: complianceObligationsFns.markReviewedPortable }),
+  definePortableMutation({ name: "complianceObligations:dismissDecision", handler: complianceObligationsFns.dismissDecisionPortable }),
+  definePortableMutation({ name: "complianceObligations:reopenDecision", handler: complianceObligationsFns.reopenDecisionPortable }),
+
+  // programStatements
+  definePortableQuery({ name: "programStatements:list", handler: programStatementsFns.programStatementsList }),
+  definePortableQuery({ name: "programStatements:get", handler: programStatementsFns.programStatementGet }),
+  definePortableMutation({ name: "programStatements:create", handler: programStatementsFns.programStatementCreate }),
+  definePortableMutation({ name: "programStatements:update", handler: programStatementsFns.programStatementUpdate }),
+  definePortableMutation({ name: "programStatements:remove", handler: programStatementsFns.programStatementRemove }),
 ];
 
 /** Names of every ported function, for diagnostics / the conformance harness. */
