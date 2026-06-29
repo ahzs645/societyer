@@ -1,75 +1,26 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
+import {
+  financialsList,
+  detailByFiscalYearPortable,
+  financialCreate,
+  financialUpdate,
+  financialRemove,
+} from "../shared/functions/financials";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const remItem = v.object({ role: v.string(), amountCents: v.number() });
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("financials")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => financialsList(toPortableQueryCtx(ctx), args),
 });
 
 export const detailByFiscalYear = query({
   args: { societyId: v.id("societies"), fiscalYear: v.string() },
   returns: v.any(),
-  handler: async (ctx, { societyId, fiscalYear }) => {
-    const rows = await ctx.db
-      .query("financials")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const financials = rows
-      .filter((row) => row.fiscalYear === fiscalYear)
-      .sort((a, b) => String(b.periodEnd ?? "").localeCompare(String(a.periodEnd ?? "")));
-    const financial = financials[0] ?? null;
-
-    const imports = await ctx.db
-      .query("financialStatementImports")
-      .withIndex("by_society_fy", (q) => q.eq("societyId", societyId).eq("fiscalYear", fiscalYear))
-      .collect();
-    const importsWithLines = await Promise.all(
-      imports
-        .sort((a, b) => String(b.periodEnd ?? "").localeCompare(String(a.periodEnd ?? "")))
-        .map(async (row) => {
-          const lines = await ctx.db
-            .query("financialStatementImportLines")
-            .withIndex("by_statement_import", (q) => q.eq("statementImportId", row._id))
-            .collect();
-          return {
-            ...row,
-            lines: lines.sort((a, b) => a._creationTime - b._creationTime),
-          };
-        }),
-    );
-
-    const documentIds = new Set<string>();
-    if (financial?.statementsDocId) documentIds.add(financial.statementsDocId);
-    for (const row of importsWithLines) {
-      for (const id of row.sourceDocumentIds ?? []) documentIds.add(id);
-    }
-    const documents = (await Promise.all(Array.from(documentIds).map((id) => ctx.db.get(id as any))))
-      .filter(Boolean);
-
-    const budgets = await ctx.db
-      .query("budgets")
-      .withIndex("by_society_fy", (q) => q.eq("societyId", societyId).eq("fiscalYear", fiscalYear))
-      .collect();
-    const presentedAtMeeting = financial?.presentedAtMeetingId
-      ? await ctx.db.get(financial.presentedAtMeetingId)
-      : null;
-
-    return {
-      financial,
-      financials,
-      imports: importsWithLines,
-      documents,
-      budgets,
-      presentedAtMeeting,
-    };
-  },
+  handler: (ctx, args) => detailByFiscalYearPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -86,7 +37,7 @@ export const create = mutation({
     remunerationDisclosures: v.array(remItem),
   },
   returns: v.any(),
-  handler: async (ctx, args) => ctx.db.insert("financials", args),
+  handler: (ctx, args) => financialCreate(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -107,15 +58,11 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    await ctx.db.patch(id, patch);
-  },
+  handler: (ctx, args) => financialUpdate(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("financials") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => financialRemove(toPortableMutationCtx(ctx), args),
 });

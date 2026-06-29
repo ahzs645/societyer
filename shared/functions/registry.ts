@@ -48,6 +48,18 @@ import * as documentCommentsFns from "./documentComments";
 import * as writtenResolutionsFns from "./writtenResolutions";
 import * as retentionFns from "./retention";
 import * as serviceProvidersFns from "./serviceProviders";
+import * as tasksFns from "./tasks";
+import * as agmFns from "./agm";
+import * as financialsFns from "./financials";
+import * as firmFns from "./firm";
+import * as orgChartAssignmentsFns from "./orgChartAssignments";
+import * as shareCertificatesFns from "./shareCertificates";
+import * as annualFilingsFns from "./annualFilings";
+import * as peopleDirectoryFns from "./peopleDirectory";
+import * as memberProposalsFns from "./memberProposals";
+import * as commandMenuItemsFns from "./commandMenuItems";
+import * as expenseReportsFns from "./expenseReports";
+import * as insuranceFns from "./insurance";
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }),
@@ -258,6 +270,85 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "serviceProviders:functionsCatalog", handler: serviceProvidersFns.functionsCatalogPortable }),
   definePortableQuery({ name: "serviceProviders:activeAsOf", handler: serviceProvidersFns.activeAsOfPortable }),
   definePortableMutation({ name: "serviceProviders:upsert", handler: serviceProvidersFns.upsertPortable }),
+
+  // tasks
+  definePortableQuery({ name: "tasks:list", handler: tasksFns.tasksList }),
+  definePortableQuery({ name: "tasks:byCommittee", handler: tasksFns.tasksByCommittee }),
+  definePortableQuery({ name: "tasks:byGoal", handler: tasksFns.tasksByGoal }),
+  definePortableQuery({ name: "tasks:byMeeting", handler: tasksFns.tasksByMeeting }),
+  definePortableMutation({ name: "tasks:create", handler: tasksFns.taskCreate }),
+  definePortableMutation({ name: "tasks:update", handler: tasksFns.taskUpdate }),
+  definePortableMutation({ name: "tasks:remove", handler: tasksFns.taskRemove }),
+
+  // agm
+  definePortableQuery({ name: "agm:runForMeeting", handler: agmFns.runForMeeting }),
+  definePortableQuery({ name: "agm:noticeDeliveries", handler: agmFns.noticeDeliveries }),
+  definePortableMutation({ name: "agm:init", handler: agmFns.agmInit }),
+  definePortableMutation({ name: "agm:markStep", handler: agmFns.agmMarkStep }),
+  definePortableMutation({ name: "agm:logNoticeDelivery", handler: agmFns.logNoticeDelivery }),
+  definePortableMutation({ name: "agm:queueNoticeToAllVotingMembers", handler: agmFns.queueNoticeToAllVotingMembers }),
+
+  // financials
+  definePortableQuery({ name: "financials:list", handler: financialsFns.financialsList }),
+  definePortableQuery({ name: "financials:detailByFiscalYear", handler: financialsFns.detailByFiscalYearPortable }),
+  definePortableMutation({ name: "financials:create", handler: financialsFns.financialCreate }),
+  definePortableMutation({ name: "financials:update", handler: financialsFns.financialUpdate }),
+  definePortableMutation({ name: "financials:remove", handler: financialsFns.financialRemove }),
+
+  // firm
+  definePortableQuery({ name: "firm:overview", handler: firmFns.overviewPortable }),
+
+  // orgChartAssignments
+  definePortableQuery({ name: "orgChartAssignments:list", handler: orgChartAssignmentsFns.listPortable }),
+  definePortableQuery({ name: "orgChartAssignments:listAsOf", handler: orgChartAssignmentsFns.listAsOfPortable }),
+  definePortableMutation({ name: "orgChartAssignments:upsert", handler: orgChartAssignmentsFns.upsertPortable }),
+  definePortableMutation({ name: "orgChartAssignments:remove", handler: orgChartAssignmentsFns.removePortable }),
+
+  // shareCertificates
+  definePortableQuery({ name: "shareCertificates:list", handler: shareCertificatesFns.listPortable }),
+  definePortableQuery({ name: "shareCertificates:register", handler: shareCertificatesFns.registerPortable }),
+  definePortableQuery({ name: "shareCertificates:chain", handler: shareCertificatesFns.chainPortable }),
+  definePortableMutation({ name: "shareCertificates:create", handler: shareCertificatesFns.createPortable }),
+  definePortableMutation({ name: "shareCertificates:update", handler: shareCertificatesFns.updatePortable }),
+  definePortableMutation({ name: "shareCertificates:remove", handler: shareCertificatesFns.removePortable }),
+
+  // annualFilings
+  definePortableQuery({ name: "annualFilings:list", handler: annualFilingsFns.listPortable }),
+  definePortableQuery({ name: "annualFilings:jurisdictions", handler: annualFilingsFns.jurisdictionsPortable }),
+  definePortableQuery({ name: "annualFilings:history", handler: annualFilingsFns.historyPortable }),
+  definePortableQuery({ name: "annualFilings:outstanding", handler: annualFilingsFns.outstandingPortable }),
+  definePortableMutation({ name: "annualFilings:upsert", handler: annualFilingsFns.upsertPortable }),
+  definePortableMutation({ name: "annualFilings:remove", handler: annualFilingsFns.removePortable }),
+
+  // peopleDirectory
+  definePortableQuery({ name: "peopleDirectory:list", handler: peopleDirectoryFns.listPortable }),
+  definePortableQuery({ name: "peopleDirectory:searchByPrefix", handler: peopleDirectoryFns.searchByPrefixPortable }),
+  definePortableQuery({ name: "peopleDirectory:duplicates", handler: peopleDirectoryFns.duplicatesPortable }),
+  definePortableMutation({ name: "peopleDirectory:upsert", handler: peopleDirectoryFns.upsertPortable }),
+  definePortableMutation({ name: "peopleDirectory:addToSociety", handler: peopleDirectoryFns.addToSocietyPortable }),
+
+  // memberProposals
+  definePortableQuery({ name: "memberProposals:list", handler: memberProposalsFns.memberProposalsList }),
+  definePortableMutation({ name: "memberProposals:create", handler: memberProposalsFns.memberProposalCreate }),
+  definePortableMutation({ name: "memberProposals:update", handler: memberProposalsFns.memberProposalUpdate }),
+  definePortableMutation({ name: "memberProposals:remove", handler: memberProposalsFns.memberProposalRemove }),
+
+  // commandMenuItems
+  definePortableQuery({ name: "commandMenuItems:listForScope", handler: commandMenuItemsFns.commandMenuItemsListForScope }),
+  definePortableMutation({ name: "commandMenuItems:upsert", handler: commandMenuItemsFns.commandMenuItemUpsert }),
+  definePortableMutation({ name: "commandMenuItems:remove", handler: commandMenuItemsFns.commandMenuItemRemove }),
+
+  // expenseReports
+  definePortableQuery({ name: "expenseReports:list", handler: expenseReportsFns.listPortable }),
+  definePortableMutation({ name: "expenseReports:upsert", handler: expenseReportsFns.upsertPortable }),
+  definePortableMutation({ name: "expenseReports:setStatus", handler: expenseReportsFns.setStatusPortable }),
+  definePortableMutation({ name: "expenseReports:remove", handler: expenseReportsFns.removePortable }),
+
+  // insurance
+  definePortableQuery({ name: "insurance:list", handler: insuranceFns.listPortable }),
+  definePortableMutation({ name: "insurance:create", handler: insuranceFns.createPortable }),
+  definePortableMutation({ name: "insurance:update", handler: insuranceFns.updatePortable }),
+  definePortableMutation({ name: "insurance:remove", handler: insuranceFns.removePortable }),
 ];
 
 /** Names of every ported function, for diagnostics / the conformance harness. */

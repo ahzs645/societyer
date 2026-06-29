@@ -1,33 +1,25 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  runForMeeting as runForMeetingPortable,
+  agmInit,
+  agmMarkStep,
+  logNoticeDelivery as logNoticeDeliveryPortable,
+  noticeDeliveries as noticeDeliveriesPortable,
+  queueNoticeToAllVotingMembers as queueNoticeToAllVotingMembersPortable,
+} from "../shared/functions/agm";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const runForMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: async (ctx, { meetingId }) => {
-    const rows = await ctx.db
-      .query("agmRuns")
-      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-      .collect();
-    return rows[0] ?? null;
-  },
+  handler: (ctx, args) => runForMeetingPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const init = mutation({
   args: { societyId: v.id("societies"), meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("agmRuns")
-      .withIndex("by_meeting", (q) => q.eq("meetingId", args.meetingId))
-      .collect();
-    if (existing[0]) return existing[0]._id;
-    return ctx.db.insert("agmRuns", {
-      ...args,
-      step: "notice",
-      updatedAtISO: new Date().toISOString(),
-    });
-  },
+  handler: (ctx, args) => agmInit(toPortableMutationCtx(ctx), args),
 });
 
 export const markStep = mutation({
@@ -48,13 +40,7 @@ export const markStep = mutation({
     ),
   },
   returns: v.any(),
-  handler: async (ctx, { id, step, patch }) => {
-    await ctx.db.patch(id, {
-      step,
-      ...(patch ?? {}),
-      updatedAtISO: new Date().toISOString(),
-    });
-  },
+  handler: (ctx, args) => agmMarkStep(toPortableMutationCtx(ctx), args),
 });
 
 export const logNoticeDelivery = mutation({
@@ -75,21 +61,13 @@ export const logNoticeDelivery = mutation({
     status: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, args) =>
-    ctx.db.insert("noticeDeliveries", {
-      ...args,
-      sentAtISO: new Date().toISOString(),
-    }),
+  handler: (ctx, args) => logNoticeDeliveryPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const noticeDeliveries = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: async (ctx, { meetingId }) =>
-    ctx.db
-      .query("noticeDeliveries")
-      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-      .collect(),
+  handler: (ctx, args) => noticeDeliveriesPortable(toPortableQueryCtx(ctx), args),
 });
 
 /** Bulk-create notice delivery records for all voting members.
@@ -106,35 +84,5 @@ export const queueNoticeToAllVotingMembers = mutation({
     channel: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, meetingId, channel }) => {
-    const members = await ctx.db
-      .query("members")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const voting = members.filter((m) => m.votingRights && m.status === "Active");
-    const now = new Date().toISOString();
-    const isEmail = channel === "email";
-    for (const m of voting) {
-      await ctx.db.insert("noticeDeliveries", {
-        societyId,
-        meetingId,
-        campaignId: undefined,
-        recipientName: `${m.firstName} ${m.lastName}`,
-        recipientEmail: m.email,
-        memberId: m._id,
-        channel,
-        provider: isEmail ? "pending" : "manual",
-        subject: undefined,
-        sentAtISO: now,
-        // No fabricated proof for un-dispatched email notices.
-        proofOfNotice: isEmail ? undefined : `manual:${channel}:${now}`,
-        status: isEmail ? "queued" : "sent",
-      });
-    }
-    return {
-      queued: isEmail ? voting.length : 0,
-      recorded: isEmail ? 0 : voting.length,
-      channel,
-    };
-  },
+  handler: (ctx, args) => queueNoticeToAllVotingMembersPortable(toPortableMutationCtx(ctx), args),
 });

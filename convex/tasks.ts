@@ -1,44 +1,38 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
+import {
+  tasksList,
+  tasksByCommittee,
+  tasksByGoal,
+  tasksByMeeting,
+  taskCreate,
+  taskUpdate,
+  taskRemove,
+} from "../shared/functions/tasks";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("tasks")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => tasksList(toPortableQueryCtx(ctx), args),
 });
 
 export const byCommittee = query({
   args: { committeeId: v.id("committees") },
   returns: v.any(),
-  handler: async (ctx, { committeeId }) =>
-    ctx.db
-      .query("tasks")
-      .withIndex("by_committee", (q) => q.eq("committeeId", committeeId))
-      .collect(),
+  handler: (ctx, args) => tasksByCommittee(toPortableQueryCtx(ctx), args),
 });
 
 export const byGoal = query({
   args: { goalId: v.id("goals") },
   returns: v.any(),
-  handler: async (ctx, { goalId }) =>
-    ctx.db
-      .query("tasks")
-      .withIndex("by_goal", (q) => q.eq("goalId", goalId))
-      .collect(),
+  handler: (ctx, args) => tasksByGoal(toPortableQueryCtx(ctx), args),
 });
 
 export const byMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: async (ctx, { meetingId }) =>
-    ctx.db
-      .query("tasks")
-      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-      .collect(),
+  handler: (ctx, args) => tasksByMeeting(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -62,22 +56,7 @@ export const create = mutation({
     tags: v.array(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const id = await ctx.db.insert("tasks", {
-      ...args,
-      createdAtISO: new Date().toISOString(),
-    });
-    await ctx.db.insert("activity", {
-      societyId: args.societyId,
-      actor: "You",
-      entityType: "task",
-      entityId: id,
-      action: "created",
-      summary: `Created task "${args.title}"`,
-      createdAtISO: new Date().toISOString(),
-    });
-    return id;
-  },
+  handler: (ctx, args) => taskCreate(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -106,35 +85,11 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    const task = await ctx.db.get(id);
-    if (!task) return;
-    const next = { ...patch };
-    if (patch.status === "Done" && !task.completedAt) {
-      next.completedAt = new Date().toISOString();
-    }
-    if (patch.status && patch.status !== "Done" && task.completedAt) {
-      next.completedAt = undefined as any;
-    }
-    await ctx.db.patch(id, next);
-    if (patch.status) {
-      await ctx.db.insert("activity", {
-        societyId: task.societyId,
-        actor: "You",
-        entityType: "task",
-        entityId: id,
-        action: patch.status === "Done" ? "completed" : "updated",
-        summary: `${patch.status === "Done" ? "Completed" : "Moved"} task "${task.title}" → ${patch.status}`,
-        createdAtISO: new Date().toISOString(),
-      });
-    }
-  },
+  handler: (ctx, args) => taskUpdate(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("tasks") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => taskRemove(toPortableMutationCtx(ctx), args),
 });

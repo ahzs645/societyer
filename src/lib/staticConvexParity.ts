@@ -70,9 +70,7 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
 // path to closing each gap — the parity gate flags any entry that has since
 // become handled so this list cannot rot.
 export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
-  "agm:init",
   "calendarSync:stageCalendarEvents",
-  "agm:markStep",
   "aiChat:archiveThread",
   "aiChat:deleteThread",
   "aiChat:renameThread",
