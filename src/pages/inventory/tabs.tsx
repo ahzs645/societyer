@@ -3,7 +3,7 @@
 // page component stays focused on state and the tables stay independently
 // readable.
 import { Link } from "react-router-dom";
-import { Boxes, ClipboardList, History, Layers, Link2, MapPin, Package, Pencil, QrCode, Trash2 } from "lucide-react";
+import { Boxes, ChevronDown, ChevronRight, ClipboardList, History, Layers, Link2, MapPin, Package, Pencil, QrCode, Trash2 } from "lucide-react";
 import { Badge } from "../../components/ui";
 import { DataTable } from "../../components/DataTable";
 import { money } from "../../lib/format";
@@ -44,6 +44,25 @@ export function StockTab({
   onDelete: (item: any) => void;
 }) {
   const { itemById, locationById, onHandByItemId, receiptLinksByItemId } = maps;
+  // Locations that currently hold stock, used as preset options for the Location
+  // filter on both tables.
+  const locationOptions = Array.from(
+    new Set(
+      balanceRows
+        .map((b) => locationById.get(b.locationId)?.name)
+        .filter((name): name is string => Boolean(name)),
+    ),
+  ).sort();
+  // item id -> the location names it has any balance in, for the catalog filter.
+  const locationNamesByItemId = new Map<string, Set<string>>();
+  for (const b of balanceRows) {
+    const name = locationById.get(b.locationId)?.name;
+    if (!name) continue;
+    const set = locationNamesByItemId.get(String(b.inventoryItemId)) ?? new Set<string>();
+    set.add(name);
+    locationNamesByItemId.set(String(b.inventoryItemId), set);
+  }
+  const categoryOptions = Array.from(new Set(itemRows.map((r) => r.category).filter(Boolean))).sort();
   return (
     <>
       <DataTable
@@ -55,6 +74,10 @@ export function StockTab({
         viewsKey="inventory-items"
         searchPlaceholder="Search item, SKU, category..."
         searchExtraFields={[(row) => row.sku, (row) => row.category, (row) => row.itemType]}
+        filterFields={[
+          { id: "category", label: "Category", options: categoryOptions, match: (row: any, q: string) => String(row.category ?? "").toLowerCase() === q.toLowerCase() },
+          { id: "location", label: "Stored in", options: locationOptions, match: (row: any, q: string) => Array.from(locationNamesByItemId.get(String(row._id)) ?? new Set<string>()).some((n) => n.toLowerCase() === q.toLowerCase()) },
+        ]}
         emptyMessage="No items yet. Add an item, backfill from the asset register, or import an OpenBoxes snapshot."
         columns={[
           {
@@ -110,6 +133,9 @@ export function StockTab({
           (row) => locationById.get(row.locationId)?.name,
           (row) => locationById.get(row.locationId)?.code,
           (row) => receiptLinksByItemId.get(row.inventoryItemId)?.map((link) => link.receiptDocument?.title).join(" "),
+        ]}
+        filterFields={[
+          { id: "location", label: "Location", options: locationOptions, match: (row: any, q: string) => String(locationById.get(row.locationId)?.name ?? "").toLowerCase() === q.toLowerCase() },
         ]}
         emptyMessage="No stock balances yet. Backfill assets or post a receive movement to create the first ledger balance."
         columns={[
@@ -215,7 +241,7 @@ export function StockTab({
 // Order locations as a depth-first tree (parent immediately followed by its
 // children) and record each row's depth so the name cell can indent. Locations
 // whose parent is missing/filtered are treated as roots so nothing disappears.
-function orderLocationTree(locations: any[]) {
+function orderLocationTree(locations: any[], collapsedIds?: Set<string>) {
   const byId = new Map(locations.map((row) => [String(row._id), row]));
   const children = new Map<string, any[]>();
   const roots: any[] = [];
@@ -232,13 +258,18 @@ function orderLocationTree(locations: any[]) {
   const sortByName = (a: any, b: any) => String(a.name ?? "").localeCompare(String(b.name ?? ""));
   const ordered: any[] = [];
   const depthById = new Map<string, number>();
+  const childCountById = new Map<string, number>();
   const visit = (row: any, depth: number) => {
+    const kids = (children.get(String(row._id)) ?? []).sort(sortByName);
     depthById.set(String(row._id), depth);
+    childCountById.set(String(row._id), kids.length);
     ordered.push(row);
-    for (const child of (children.get(String(row._id)) ?? []).sort(sortByName)) visit(child, depth + 1);
+    // Stop descending when this node is collapsed so its subtree is hidden.
+    if (collapsedIds?.has(String(row._id))) return;
+    for (const child of kids) visit(child, depth + 1);
   };
   for (const root of roots.sort(sortByName)) visit(root, 0);
-  return { ordered, depthById };
+  return { ordered, depthById, childCountById };
 }
 
 export function LocationsTab({
@@ -249,6 +280,8 @@ export function LocationsTab({
   onEdit,
   onDelete,
   onLabel,
+  collapsedIds,
+  onToggleCollapse,
 }: {
   locations: any[];
   loading: boolean;
@@ -257,14 +290,24 @@ export function LocationsTab({
   onEdit: (location: any) => void;
   onDelete: (location: any) => void;
   onLabel: (location: any) => void;
+  collapsedIds: Set<string>;
+  onToggleCollapse: (id: string) => void;
 }) {
-  const { locationById, balancesByLocationId } = maps;
-  const { ordered, depthById } = orderLocationTree(locations);
+  const { balancesByLocationId } = maps;
+  const { ordered, depthById, childCountById } = orderLocationTree(locations, collapsedIds);
   // Roll child contents up into ancestors so a facility/room shows everything
-  // stored beneath it, not just items placed directly on it.
+  // stored beneath it, not just items placed directly on it. Walk the full
+  // location set (not the collapse-filtered `ordered`) so totals stay correct.
+  const childrenByParent = new Map<string, any[]>();
+  for (const loc of locations) {
+    if (!loc.parentLocationId) continue;
+    const list = childrenByParent.get(String(loc.parentLocationId)) ?? [];
+    list.push(loc);
+    childrenByParent.set(String(loc.parentLocationId), list);
+  }
   const rollupQty = (row: any): number => {
     const direct = (balancesByLocationId.get(row._id) ?? []).reduce((sum, b) => sum + (b.quantityOnHand ?? 0), 0);
-    const kids = ordered.filter((loc) => String(loc.parentLocationId) === String(row._id));
+    const kids = childrenByParent.get(String(row._id)) ?? [];
     return direct + kids.reduce((sum, kid) => sum + rollupQty(kid), 0);
   };
   return (
@@ -286,14 +329,26 @@ export function LocationsTab({
           accessor: (row) => row.name ?? "",
           render: (row) => {
             const depth = depthById.get(String(row._id)) ?? 0;
-            const hasChildren = ordered.some((loc) => String(loc.parentLocationId) === String(row._id));
+            const childCount = childCountById.get(String(row._id)) ?? 0;
+            const collapsed = collapsedIds.has(String(row._id));
             return (
-              <div className="row" style={{ gap: 8, alignItems: "center", paddingLeft: depth * 18 }}>
-                {depth > 0 && <span aria-hidden className="muted" style={{ marginLeft: -12 }}>└</span>}
+              <div className="row" style={{ gap: 6, alignItems: "center", paddingLeft: depth * 18 }}>
+                {childCount > 0 ? (
+                  <button
+                    className="btn btn--ghost btn--sm btn--icon"
+                    style={{ marginLeft: depth > 0 ? -12 : 0 }}
+                    aria-label={collapsed ? `Expand ${row.name}` : `Collapse ${row.name}`}
+                    onClick={(e) => { e.stopPropagation(); onToggleCollapse(String(row._id)); }}
+                  >
+                    {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                ) : (
+                  <span style={{ display: "inline-block", width: depth > 0 ? 12 : 24 }} aria-hidden />
+                )}
                 <LocationGlyph type={row.locationType} />
                 <div>
                   <strong>{row.name}</strong>{!row.active && <Badge tone="neutral">inactive</Badge>}
-                  {hasChildren && <span className="muted"> · contains sub-locations</span>}
+                  {childCount > 0 && <span className="muted"> · {childCount} sub-location{childCount === 1 ? "" : "s"}{collapsed ? " (collapsed)" : ""}</span>}
                 </div>
               </div>
             );

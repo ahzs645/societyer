@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { AssetScanner } from "../features/assets/AssetScanner";
 import { AssetQrLabel } from "../features/assets/AssetQrLabel";
+import { ASSET_LABEL_TYPES } from "../features/assets/assetUtils";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
@@ -117,6 +118,8 @@ export function InventoryPage() {
   const [activeCountId, setActiveCountId] = useState<string | null>(null);
   const [detailLocationId, setDetailLocationId] = useState<string | null>(null);
   const [labelLocationId, setLabelLocationId] = useState<string | null>(null);
+  const [labelType, setLabelType] = useState("qr");
+  const [collapsedLocationIds, setCollapsedLocationIds] = useState<Set<string>>(new Set());
   const [scanOpen, setScanOpen] = useState(false);
   const [openBoxesJson, setOpenBoxesJson] = useState(JSON.stringify({
     products: [
@@ -786,6 +789,8 @@ export function InventoryPage() {
         <TabButton active={tab === "lots"} onClick={() => setTab("lots")} icon={<Layers size={13} />} label={`Lots & serials (${lotRows.length})`} />
         <TabButton active={tab === "counts"} onClick={() => setTab("counts")} icon={<ClipboardList size={13} />} label={`Physical counts (${openCounts.length})`} />
         <div style={{ flex: 1 }} />
+        {tab === "locations" && collapsedLocationIds.size > 0 && <button className="btn btn--sm" onClick={() => setCollapsedLocationIds(new Set())}>Expand all</button>}
+        {tab === "locations" && <button className="btn btn--sm" onClick={() => setCollapsedLocationIds(new Set(((locations ?? []) as any[]).filter((l) => ((locations ?? []) as any[]).some((c) => String(c.parentLocationId) === String(l._id))).map((l) => String(l._id))))}>Collapse all</button>}
         {tab === "locations" && <button className="btn btn--sm" onClick={() => setScanOpen(true)}><ScanLine size={12} /> Scan bin</button>}
         {tab === "locations" && <button className="btn btn--sm btn--accent" onClick={openNewLocation}><Plus size={12} /> New location</button>}
         {tab === "lots" && <button className="btn btn--sm btn--accent" onClick={() => openNewLot()}><Plus size={12} /> New lot / serial</button>}
@@ -816,7 +821,13 @@ export function InventoryPage() {
           onWhatsHere={(location) => { setDetailLocationId(location._id); setDrawer("location-detail"); }}
           onEdit={openEditLocation}
           onDelete={removeLocation}
-          onLabel={(location) => { setLabelLocationId(location._id); setDrawer("location-label"); }}
+          onLabel={(location) => { setLabelLocationId(location._id); setLabelType("qr"); setDrawer("location-label"); }}
+          collapsedIds={collapsedLocationIds}
+          onToggleCollapse={(id) => setCollapsedLocationIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+          })}
         />
       )}
 
@@ -1096,7 +1107,14 @@ export function InventoryPage() {
           <div className="stack" style={{ gap: 12 }}>
             {labelLocation.code ? (
               <>
-                <AssetQrLabel assetTag={labelLocation.code} name={labelLocation.name} url={labelLocation.code} labelType="qr" />
+                <Field label="Label format">
+                  <Select
+                    value={labelType}
+                    onChange={setLabelType}
+                    options={ASSET_LABEL_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+                  />
+                </Field>
+                <AssetQrLabel assetTag={labelLocation.code} name={labelLocation.name} url={labelLocation.code} labelType={labelType} />
                 <p className="muted">Print and stick this on the bin. Scanning it with <strong>Scan bin</strong> opens this location.</p>
                 <button className="btn-action" onClick={() => window.print()}>Print label</button>
               </>
