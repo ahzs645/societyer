@@ -1,5 +1,4 @@
 import { escapeHtml } from "../../../lib/html";
-import { money } from "../../../lib/format";
 import {
   computeStatementTotals,
   type ProgramStatement,
@@ -14,18 +13,34 @@ import {
 
 type SocietyLike = { name?: string } | null | undefined;
 
-function numCell(cents: number, opts?: { bold?: boolean }) {
-  const inner = opts?.bold ? `<strong>${escapeHtml(money(cents))}</strong>` : escapeHtml(money(cents));
-  return `<td style="text-align:right">${inner}</td>`;
+// Always two decimals so columns line up cleanly in the exported statement.
+const MONEY = new Intl.NumberFormat("en-CA", {
+  style: "currency",
+  currency: "CAD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+function fmtMoney(cents?: number): string {
+  return MONEY.format((cents ?? 0) / 100);
 }
 
-function lineRows(lines: ProgramStatementLine[]) {
-  return lines
-    .map(
-      (line) =>
-        `<tr><td>${escapeHtml(line.label)}${line.notes ? ` <span class="meta">(${escapeHtml(line.notes)})</span>` : ""}</td>${numCell(line.actualCents)}${numCell(line.budgetCents)}</tr>`,
-    )
-    .join("");
+type CellOpts = { bold?: boolean; rule?: "top" | "header"; width?: string };
+
+function moneyCell(cents: number, opts: CellOpts = {}): string {
+  const width = opts.width ? `;width:${opts.width}` : "";
+  const rule = opts.rule ? ` data-rule="${opts.rule}"` : "";
+  const inner = opts.bold ? `<strong>${escapeHtml(fmtMoney(cents))}</strong>` : escapeHtml(fmtMoney(cents));
+  return `<td${rule} style="text-align:right${width}">${inner}</td>`;
+}
+function labelCell(html: string, opts: { rule?: "top" | "header"; bold?: boolean; em?: boolean } = {}): string {
+  const rule = opts.rule ? ` data-rule="${opts.rule}"` : "";
+  let inner = html;
+  if (opts.bold) inner = `<strong>${inner}</strong>`;
+  if (opts.em) inner = `<em>${inner}</em>`;
+  return `<td${rule}>${inner}</td>`;
+}
+function blankCells(n: number): string {
+  return "<td></td>".repeat(n);
 }
 
 /**
@@ -36,45 +51,41 @@ function lineRows(lines: ProgramStatementLine[]) {
  */
 export function renderProgramStatementHtml(statement: ProgramStatement, society?: SocietyLike): string {
   const totals = computeStatementTotals(statement);
+  const W = "26%";
+  const lineRows = (lines: ProgramStatementLine[]) =>
+    lines
+      .map(
+        (line) =>
+          `<tr>${labelCell(
+            `${escapeHtml(line.label)}${line.notes ? ` <span class="meta">(${escapeHtml(line.notes)})</span>` : ""}`,
+          )}${moneyCell(line.actualCents, { width: W })}${moneyCell(line.budgetCents, { width: W })}</tr>`,
+      )
+      .join("");
   return `
     <h1>Program Actual Revenue and Expenses and Budget</h1>
-    <p class="meta">${escapeHtml(society?.name ?? "")}${statement.funderName ? ` · ${escapeHtml(statement.funderName)}` : ""}</p>
-    <table>
+    <p class="meta">${escapeHtml(statement.programName || "[Program Name]")}${society?.name ? ` · ${escapeHtml(society.name)}` : ""}${statement.funderName ? ` · ${escapeHtml(statement.funderName)}` : ""}</p>
+    <table data-variant="statement">
       <thead>
         <tr>
-          <th>${escapeHtml(statement.programName || "[Program Name]")}</th>
-          <th style="text-align:right">Program Actuals for<br/>${escapeHtml(statement.priorFiscalYearLabel)}</th>
-          <th style="text-align:right">Program Budget for<br/>${escapeHtml(statement.currentFiscalYearLabel)}</th>
+          <th data-rule="header"></th>
+          <th data-rule="header" style="text-align:right;width:${W}">Program Actuals for ${escapeHtml(statement.priorFiscalYearLabel)}</th>
+          <th data-rule="header" style="text-align:right;width:${W}">Program Budget for ${escapeHtml(statement.currentFiscalYearLabel)}</th>
         </tr>
       </thead>
       <tbody>
-        <tr><td><strong>Program Revenues<sup>1</sup></strong></td><td></td><td></td></tr>
+        <tr>${labelCell("Program Revenues<sup>1</sup>", { bold: true })}${blankCells(2)}</tr>
         ${lineRows(statement.revenues)}
-        <tr><td><strong>Total Revenues</strong></td>${numCell(totals.revenueActualCents, { bold: true })}${numCell(totals.revenueBudgetCents, { bold: true })}</tr>
-        <tr><td><strong>Program Expenses</strong></td><td></td><td></td></tr>
+        <tr>${labelCell("Total Revenues", { bold: true, rule: "top" })}${moneyCell(totals.revenueActualCents, { bold: true, rule: "top", width: W })}${moneyCell(totals.revenueBudgetCents, { bold: true, rule: "top", width: W })}</tr>
+        <tr>${labelCell("Program Expenses", { bold: true })}${blankCells(2)}</tr>
         ${lineRows(statement.expenses)}
-        <tr><td><strong>Total Expenses</strong></td>${numCell(totals.expenseActualCents, { bold: true })}${numCell(totals.expenseBudgetCents, { bold: true })}</tr>
-        <tr><td><strong><em>Surplus / Deficit</em></strong></td>${numCell(totals.surplusActualCents, { bold: true })}${numCell(totals.surplusBudgetCents, { bold: true })}</tr>
+        <tr>${labelCell("Total Expenses", { bold: true, rule: "top" })}${moneyCell(totals.expenseActualCents, { bold: true, rule: "top", width: W })}${moneyCell(totals.expenseBudgetCents, { bold: true, rule: "top", width: W })}</tr>
+        <tr>${labelCell("Surplus / Deficit", { bold: true, em: true, rule: "top" })}${moneyCell(totals.surplusActualCents, { bold: true, rule: "top", width: W })}${moneyCell(totals.surplusBudgetCents, { bold: true, rule: "top", width: W })}</tr>
       </tbody>
     </table>
     ${statement.narrative ? `<h2>Notes</h2><p>${escapeHtml(statement.narrative)}</p>` : ""}
     <p class="meta"><sup>1</sup> Itemize funding sources. Do not use abbreviations or acronyms.</p>
     <p class="meta"><sup>2</sup> The Community Gaming Grant amount should equal the Program Grant used for this program in the previous fiscal year (actuals) and/or requested for the current fiscal year (budget). If grant funds were used toward organizational costs (up to 15% of the total Program Grant), this amount may be less than the funding received for this program.</p>
   `;
-}
-
-function orgNum(cents: number, opts?: { bold?: boolean }) {
-  const inner = opts?.bold ? `<strong>${escapeHtml(money(cents))}</strong>` : escapeHtml(money(cents));
-  return `<td style="text-align:right">${inner}</td>`;
-}
-
-function orgLineRows(lines: OrgStatementLine[]) {
-  return lines
-    .map(
-      (line) =>
-        `<tr><td>${escapeHtml(line.label)}</td>${orgNum(line.generalCents)}${orgNum(line.restrictedCents)}${orgNum(lineTotalCents(line), { bold: true })}</tr>`,
-    )
-    .join("");
 }
 
 /**
@@ -84,21 +95,29 @@ function orgLineRows(lines: OrgStatementLine[]) {
  * "Excess of Revenues over Expenses" per fund.
  */
 export function renderOrgStatementHtml(statement: OrgRevenueStatement, society?: SocietyLike): string {
-  const totalRow = (label: string, c: OrgStatementColumnTotals, italic = false) =>
-    `<tr><td>${italic ? "<em>" : "<strong>"}${escapeHtml(label)}${italic ? "</em>" : "</strong>"}</td>${orgNum(c.generalCents, { bold: true })}${orgNum(c.restrictedCents, { bold: true })}${orgNum(c.totalCents, { bold: true })}</tr>`;
+  const W = "20%";
+  const lineRows = (lines: OrgStatementLine[]) =>
+    lines
+      .map(
+        (line) =>
+          `<tr>${labelCell(escapeHtml(line.label))}${moneyCell(line.generalCents, { width: W })}${moneyCell(line.restrictedCents, { width: W })}${moneyCell(lineTotalCents(line), { bold: true, width: W })}</tr>`,
+      )
+      .join("");
+  const totalRow = (label: string, c: OrgStatementColumnTotals, em = false) =>
+    `<tr>${labelCell(escapeHtml(label), { bold: !em, em, rule: "top" })}${moneyCell(c.generalCents, { bold: true, rule: "top", width: W })}${moneyCell(c.restrictedCents, { bold: true, rule: "top", width: W })}${moneyCell(c.totalCents, { bold: true, rule: "top", width: W })}</tr>`;
   return `
     <h1>Statement of Revenues &amp; Expenses</h1>
     <p class="meta">${escapeHtml(statement.organizationName || society?.name || "[Name of Organization]")}${statement.periodLabel ? ` · ${escapeHtml(statement.periodLabel)}` : ` · Fiscal year ${escapeHtml(statement.fiscalYearLabel)}`}</p>
-    <table>
+    <table data-variant="statement">
       <thead>
-        <tr><th></th><th style="text-align:right">General Fund</th><th style="text-align:right">Restricted Funds</th><th style="text-align:right">Total</th></tr>
+        <tr><th data-rule="header"></th><th data-rule="header" style="text-align:right;width:${W}">General Fund</th><th data-rule="header" style="text-align:right;width:${W}">Restricted Funds</th><th data-rule="header" style="text-align:right;width:${W}">Total</th></tr>
       </thead>
       <tbody>
-        <tr><td><strong>Revenues<sup>1</sup></strong></td><td></td><td></td><td></td></tr>
-        ${statement.revenues.length ? orgLineRows(statement.revenues) : `<tr><td colspan="4" class="muted">No revenue recorded for this period.</td></tr>`}
+        <tr>${labelCell("Revenues<sup>1</sup>", { bold: true })}${blankCells(3)}</tr>
+        ${statement.revenues.length ? lineRows(statement.revenues) : `<tr>${labelCell('<span class="muted">No revenue recorded for this period.</span>')}${blankCells(3)}</tr>`}
         ${totalRow("Total Revenues", statement.revenueTotals)}
-        <tr><td><strong>Expenses</strong></td><td></td><td></td><td></td></tr>
-        ${statement.expenses.length ? orgLineRows(statement.expenses) : `<tr><td colspan="4" class="muted">No expenses recorded for this period.</td></tr>`}
+        <tr>${labelCell("Expenses", { bold: true })}${blankCells(3)}</tr>
+        ${statement.expenses.length ? lineRows(statement.expenses) : `<tr>${labelCell('<span class="muted">No expenses recorded for this period.</span>')}${blankCells(3)}</tr>`}
         ${totalRow("Total Expenses", statement.expenseTotals)}
         ${totalRow("Excess of Revenues over Expenses", statement.excess, true)}
       </tbody>
@@ -108,59 +127,64 @@ export function renderOrgStatementHtml(statement: OrgRevenueStatement, society?:
 }
 
 export function renderAnnualStatementHtml(data: any, society: SocietyLike, fiscalYear: string): string {
-  const incomeRows = (data.incomeByCategory ?? [])
-    .map((r: any) => `<tr><td>${escapeHtml(r.category)}</td>${numCell(r.cents)}</tr>`)
-    .join("");
-  const expenseRows = (data.expenseByCategory ?? [])
-    .map((r: any) => `<tr><td>${escapeHtml(r.category)}</td>${numCell(r.cents)}</tr>`)
-    .join("");
+  const W = "26%";
+  const categoryTable = (title: string, rows: Array<{ category: string; cents: number }>) =>
+    rows.length
+      ? `<h2>${escapeHtml(title)}</h2><table data-variant="statement"><thead><tr><th data-rule="header">Category</th><th data-rule="header" style="text-align:right;width:${W}">Amount</th></tr></thead><tbody>${rows
+          .map((r) => `<tr>${labelCell(escapeHtml(r.category))}${moneyCell(r.cents, { width: W })}</tr>`)
+          .join("")}</tbody></table>`
+      : "";
+
   const budgetRows = (data.budgets ?? [])
     .map(
       (b: any) =>
-        `<tr><td>${escapeHtml(b.category)}</td>${numCell(b.plannedCents)}${numCell(b.actualCents)}${numCell(b.varianceCents)}</tr>`,
+        `<tr>${labelCell(escapeHtml(b.category))}${moneyCell(b.plannedCents, { width: "20%" })}${moneyCell(b.actualCents, { width: "20%" })}${moneyCell(b.varianceCents, { width: "20%" })}</tr>`,
     )
     .join("");
   const rem = (data.remunerationDisclosures ?? [])
-    .map((r: any) => `<tr><td>${escapeHtml(r.role)}</td>${numCell(r.amountCents)}</tr>`)
+    .map((r: any) => `<tr>${labelCell(escapeHtml(r.role))}${moneyCell(r.amountCents, { width: W })}</tr>`)
     .join("");
 
   return `
     <h1>Annual Financial Statement</h1>
     <p class="meta">${escapeHtml(society?.name ?? "")} · Fiscal year ${escapeHtml(fiscalYear)}${data.approvedByBoardAt ? ` · Approved by the board ${escapeHtml(data.approvedByBoardAt)}` : ""}</p>
     <h2>Statement of Operations</h2>
-    <table>
-      <tr><th>Total revenue</th>${numCell(data.revenueCents ?? 0, { bold: true })}</tr>
-      <tr><th>Total expenses</th>${numCell(data.expensesCents ?? 0, { bold: true })}</tr>
-      <tr><th>Surplus / (Deficit)</th>${numCell(data.surplusCents ?? 0, { bold: true })}</tr>
-      ${data.netAssetsCents != null ? `<tr><th>Net assets</th>${numCell(data.netAssetsCents, { bold: true })}</tr>` : ""}
-      ${data.restrictedFundsCents != null ? `<tr><th>Restricted funds</th>${numCell(data.restrictedFundsCents, { bold: true })}</tr>` : ""}
+    <table data-variant="statement">
+      <tbody>
+        <tr>${labelCell("Total revenue")}${moneyCell(data.revenueCents ?? 0, { bold: true, width: W })}</tr>
+        <tr>${labelCell("Total expenses")}${moneyCell(data.expensesCents ?? 0, { width: W })}</tr>
+        <tr>${labelCell("Surplus / (Deficit)", { bold: true, rule: "top" })}${moneyCell(data.surplusCents ?? 0, { bold: true, rule: "top", width: W })}</tr>
+        ${data.netAssetsCents != null ? `<tr>${labelCell("Net assets")}${moneyCell(data.netAssetsCents, { width: W })}</tr>` : ""}
+        ${data.restrictedFundsCents != null ? `<tr>${labelCell("Restricted funds")}${moneyCell(data.restrictedFundsCents, { width: W })}</tr>` : ""}
+      </tbody>
     </table>
-    ${incomeRows ? `<h2>Revenue by category</h2><table><thead><tr><th>Category</th><th style="text-align:right">Amount</th></tr></thead><tbody>${incomeRows}</tbody></table>` : ""}
-    ${expenseRows ? `<h2>Expenses by category</h2><table><thead><tr><th>Category</th><th style="text-align:right">Amount</th></tr></thead><tbody>${expenseRows}</tbody></table>` : ""}
-    ${budgetRows ? `<h2>Budget vs actual</h2><table><thead><tr><th>Category</th><th style="text-align:right">Budget</th><th style="text-align:right">Actual</th><th style="text-align:right">Variance</th></tr></thead><tbody>${budgetRows}</tbody></table>` : ""}
-    ${rem ? `<h2>Remuneration disclosure</h2><table><thead><tr><th>Role</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rem}</tbody></table>` : ""}
+    ${categoryTable("Revenue by category", data.incomeByCategory ?? [])}
+    ${categoryTable("Expenses by category", data.expenseByCategory ?? [])}
+    ${budgetRows ? `<h2>Budget vs actual</h2><table data-variant="statement"><thead><tr><th data-rule="header">Category</th><th data-rule="header" style="text-align:right;width:20%">Budget</th><th data-rule="header" style="text-align:right;width:20%">Actual</th><th data-rule="header" style="text-align:right;width:20%">Variance</th></tr></thead><tbody>${budgetRows}</tbody></table>` : ""}
+    ${rem ? `<h2>Remuneration disclosure</h2><table data-variant="statement"><thead><tr><th data-rule="header">Role</th><th data-rule="header" style="text-align:right;width:${W}">Amount</th></tr></thead><tbody>${rem}</tbody></table>` : ""}
     ${data.auditStatus ? `<p class="meta">Audit status: ${escapeHtml(data.auditStatus)}${data.auditorName ? ` · ${escapeHtml(data.auditorName)}` : ""}</p>` : ""}
   `;
 }
 
 export function renderRestrictedFundsHtml(data: any, society: SocietyLike): string {
+  const W = "15%";
   const rows = (data.funds ?? [])
     .map(
       (f: any) =>
-        `<tr><td>${escapeHtml(f.title)} <span class="meta">(${escapeHtml(f.funder)})</span></td>${numCell(f.openingCents)}${numCell(f.receiptsCents)}${numCell(f.disbursementsCents)}${numCell(f.closingCents, { bold: true })}</tr>`,
+        `<tr>${labelCell(`${escapeHtml(f.title)} <span class="meta">(${escapeHtml(f.funder)})</span>`)}${moneyCell(f.openingCents, { width: W })}${moneyCell(f.receiptsCents, { width: W })}${moneyCell(f.disbursementsCents, { width: W })}${moneyCell(f.closingCents, { bold: true, width: W })}</tr>`,
     )
     .join("");
   const t = data.totals ?? { openingCents: 0, receiptsCents: 0, disbursementsCents: 0, closingCents: 0 };
   return `
     <h1>Statement of Restricted Funds</h1>
     <p class="meta">${escapeHtml(society?.name ?? "")}</p>
-    <table>
+    <table data-variant="statement">
       <thead>
-        <tr><th>Fund</th><th style="text-align:right">Opening</th><th style="text-align:right">Receipts</th><th style="text-align:right">Disbursements</th><th style="text-align:right">Closing</th></tr>
+        <tr><th data-rule="header">Fund</th><th data-rule="header" style="text-align:right;width:${W}">Opening</th><th data-rule="header" style="text-align:right;width:${W}">Receipts</th><th data-rule="header" style="text-align:right;width:${W}">Disbursements</th><th data-rule="header" style="text-align:right;width:${W}">Closing</th></tr>
       </thead>
       <tbody>
-        ${rows || `<tr><td colspan="5" class="muted">No restricted funds recorded.</td></tr>`}
-        <tr><td><strong>Total</strong></td>${numCell(t.openingCents, { bold: true })}${numCell(t.receiptsCents, { bold: true })}${numCell(t.disbursementsCents, { bold: true })}${numCell(t.closingCents, { bold: true })}</tr>
+        ${rows || `<tr>${labelCell('<span class="muted">No restricted funds recorded.</span>')}${blankCells(4)}</tr>`}
+        <tr>${labelCell("Total", { bold: true, rule: "top" })}${moneyCell(t.openingCents, { bold: true, rule: "top", width: W })}${moneyCell(t.receiptsCents, { bold: true, rule: "top", width: W })}${moneyCell(t.disbursementsCents, { bold: true, rule: "top", width: W })}${moneyCell(t.closingCents, { bold: true, rule: "top", width: W })}</tr>
       </tbody>
     </table>
     <p class="meta">Opening balances are tracked per period; funds opening at zero show their full-period activity.</p>
@@ -172,14 +196,14 @@ export function renderReadinessHtml(data: any, society: SocietyLike, fiscalYear:
   const rows = (data.items ?? [])
     .map(
       (item: any) =>
-        `<tr><td>${mark(item)}</td><td>${escapeHtml(item.label)}</td><td>${escapeHtml(item.detail)}</td></tr>`,
+        `<tr><td style="text-align:center;width:12%">${mark(item)}</td>${labelCell(escapeHtml(item.label), { bold: true })}${labelCell(escapeHtml(item.detail))}</tr>`,
     )
     .join("");
   return `
     <h1>Year-End Readiness Checklist</h1>
     <p class="meta">${escapeHtml(society?.name ?? "")} · Fiscal year ${escapeHtml(fiscalYear)} · ${data.completed ?? 0} of ${data.total ?? 0} complete</p>
-    <table>
-      <thead><tr><th>Status</th><th>Requirement</th><th>Detail</th></tr></thead>
+    <table data-variant="statement">
+      <thead><tr><th data-rule="header" style="text-align:center;width:12%">Status</th><th data-rule="header" style="width:38%">Requirement</th><th data-rule="header">Detail</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   `;

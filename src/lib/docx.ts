@@ -674,13 +674,46 @@ function docxParagraph(text: string | null | undefined, style?: "Title" | "Headi
   return docxParagraphFromRuns(docxRun(collapseWhitespace(text ?? "")), style);
 }
 
-function docxParagraphFromRuns(runs: string, style?: "Title" | "Heading1" | "Heading2", indent?: { left: number; hanging?: number }) {
+function docxParagraphFromRuns(
+  runs: string,
+  style?: "Title" | "Heading1" | "Heading2",
+  indent?: { left: number; hanging?: number },
+  jc?: "left" | "right" | "center",
+) {
   const paragraphProps = [
     style ? `<w:pStyle w:val="${style}"/>` : "",
     indent ? `<w:ind w:left="${indent.left}"${indent.hanging ? ` w:hanging="${indent.hanging}"` : ""}/>` : "",
+    jc && jc !== "left" ? `<w:jc w:val="${jc}"/>` : "",
     '<w:spacing w:after="120"/>',
   ].filter(Boolean).join("");
   return `<w:p>${paragraphProps ? `<w:pPr>${paragraphProps}</w:pPr>` : ""}${runs}</w:p>`;
+}
+
+// Convert a CSS width ("22%", "120px", "1.5in") to an OOXML <w:tcW>. Percentages
+// use the pct type (fiftieths of a percent); absolute units use dxa (twentieths
+// of a point).
+function cssWidthToTcW(width: string | undefined): string {
+  if (width) {
+    const pct = /^([\d.]+)%$/.exec(width.trim());
+    if (pct) return `<w:tcW w:w="${Math.round(parseFloat(pct[1]) * 50)}" w:type="pct"/>`;
+    const pt = parsePoints(width);
+    if (pt) return `<w:tcW w:w="${Math.round(pt * 20)}" w:type="dxa"/>`;
+  }
+  return '<w:tcW w:w="0" w:type="auto"/>';
+}
+
+const STATEMENT_CONTENT_WIDTH_DXA = 10368; // Letter (12240) minus 936 margins each side.
+
+function cssWidthToDxa(width: string | undefined): number | null {
+  if (!width) return null;
+  const pct = /^([\d.]+)%$/.exec(width.trim());
+  if (pct) return Math.round((parseFloat(pct[1]) / 100) * STATEMENT_CONTENT_WIDTH_DXA);
+  const pt = parsePoints(width);
+  return pt ? Math.round(pt * 20) : null;
+}
+
+function cellWidthValue(cell: Element): string | undefined {
+  return parseInlineStyle(cell.getAttribute("style") ?? "")["width"] || cell.getAttribute("width") || undefined;
 }
 
 function docxList(node: HTMLElement, ordered: boolean, rels: DocxRels) {
@@ -696,40 +729,86 @@ function docxList(node: HTMLElement, ordered: boolean, rels: DocxRels) {
 function docxTable(table: HTMLElement, rels: DocxRels) {
   const rows = Array.from(table.querySelectorAll("tr"));
   if (!rows.length) return "";
-  return `<w:tbl>
-    <w:tblPr>
-      <w:tblW w:w="0" w:type="auto"/>
-      <w:tblBorders>
+  // A "statement" table renders as a clean financial statement: an outer box
+  // with no internal gridlines (horizontal/vertical rules are added per-cell via
+  // data-rule), fixed column widths, and right-aligned figures.
+  const statement = table.getAttribute("data-variant") === "statement";
+
+  const borders = statement
+    ? `<w:tblBorders>
+        <w:top w:val="single" w:sz="4" w:space="0" w:color="888888"/>
+        <w:left w:val="nil"/>
+        <w:bottom w:val="single" w:sz="4" w:space="0" w:color="888888"/>
+        <w:right w:val="nil"/>
+        <w:insideH w:val="nil"/>
+        <w:insideV w:val="nil"/>
+      </w:tblBorders>`
+    : `<w:tblBorders>
         <w:top w:val="single" w:sz="4" w:space="0" w:color="BBBBBB"/>
         <w:left w:val="single" w:sz="4" w:space="0" w:color="BBBBBB"/>
         <w:bottom w:val="single" w:sz="4" w:space="0" w:color="BBBBBB"/>
         <w:right w:val="single" w:sz="4" w:space="0" w:color="BBBBBB"/>
         <w:insideH w:val="single" w:sz="4" w:space="0" w:color="BBBBBB"/>
         <w:insideV w:val="single" w:sz="4" w:space="0" w:color="BBBBBB"/>
-      </w:tblBorders>
+      </w:tblBorders>`;
+
+  let tblWidth = '<w:tblW w:w="0" w:type="auto"/>';
+  let layout = "";
+  let grid = "";
+  if (statement) {
+    const cells = Array.from(rows[0].cells);
+    const widths = cells.map((cell) => cssWidthToDxa(cellWidthValue(cell)));
+    const used = widths.reduce<number>((sum, w) => sum + (w ?? 0), 0);
+    const autoCount = widths.filter((w) => w == null).length;
+    const autoWidth = autoCount > 0 ? Math.max(0, Math.round((STATEMENT_CONTENT_WIDTH_DXA - used) / autoCount)) : 0;
+    const resolved = widths.map((w) => w ?? autoWidth);
+    grid = `<w:tblGrid>${resolved.map((w) => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>`;
+    tblWidth = `<w:tblW w:w="${STATEMENT_CONTENT_WIDTH_DXA}" w:type="dxa"/>`;
+    layout = '<w:tblLayout w:type="fixed"/>';
+  }
+
+  return `<w:tbl>
+    <w:tblPr>
+      ${tblWidth}
+      ${layout}
+      ${borders}
     </w:tblPr>
-    ${rows.map((row) => docxTableRow(row, rels)).join("")}
+    ${grid}
+    ${rows.map((row) => docxTableRow(row, rels, statement)).join("")}
   </w:tbl>`;
 }
 
-function docxTableRow(row: HTMLTableRowElement, rels: DocxRels) {
-  return `<w:tr>${Array.from(row.cells).map((cell) => docxTableCell(cell, rels)).join("")}</w:tr>`;
+function docxTableRow(row: HTMLTableRowElement, rels: DocxRels, statement: boolean) {
+  return `<w:tr>${Array.from(row.cells).map((cell) => docxTableCell(cell, rels, statement)).join("")}</w:tr>`;
 }
 
 const CELL_BLOCK_TAGS = new Set(["p", "ul", "ol", "blockquote", "table", "pre", "h1", "h2", "h3", "h4", "h5", "h6", "div"]);
 
-function docxTableCell(cell: HTMLTableCellElement, rels: DocxRels) {
+function docxTableCell(cell: HTMLTableCellElement, rels: DocxRels, statement = false) {
   const isHeader = cell.tagName.toLowerCase() === "th";
+  const styles = parseInlineStyle(cell.getAttribute("style") ?? "");
+  const alignValue = styles["text-align"] || cell.getAttribute("align") || "";
+  const jc = alignValue === "right" ? "right" : alignValue === "center" ? "center" : undefined;
+
+  // Per-cell horizontal rules: data-rule="header" underlines the header row;
+  // data-rule="top" draws the rule above a totals row.
+  const rule = cell.getAttribute("data-rule") ?? "";
+  const cellBorders: string[] = [];
+  if (rule.includes("top")) cellBorders.push('<w:top w:val="single" w:sz="6" w:space="0" w:color="888888"/>');
+  if (rule.includes("header")) cellBorders.push('<w:bottom w:val="single" w:sz="6" w:space="0" w:color="888888"/>');
+  const tcBorders = cellBorders.length ? `<w:tcBorders>${cellBorders.join("")}</w:tcBorders>` : "";
+
   const hasBlockChild = Array.from(cell.children).some((child) =>
     CELL_BLOCK_TAGS.has(child.tagName.toLowerCase()),
   );
   const content = hasBlockChild
     ? Array.from(cell.childNodes).map((node) => docxBlockFromNode(node, rels)).join("")
-    : docxParagraphFromRuns(docxInlineRuns(cell, rels, isHeader ? "<w:b/>" : ""));
+    : docxParagraphFromRuns(docxInlineRuns(cell, rels, isHeader ? "<w:b/>" : ""), undefined, undefined, jc);
   return `<w:tc>
     <w:tcPr>
-      <w:tcW w:w="0" w:type="auto"/>
-      ${isHeader ? '<w:shd w:val="clear" w:color="auto" w:fill="F1F1F1"/>' : ""}
+      ${cssWidthToTcW(cellWidthValue(cell))}
+      ${tcBorders}
+      ${isHeader && !statement ? '<w:shd w:val="clear" w:color="auto" w:fill="F1F1F1"/>' : ""}
     </w:tcPr>
     ${content || docxParagraphFromRuns("")}
   </w:tc>`;
