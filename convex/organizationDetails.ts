@@ -1,6 +1,15 @@
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
-import { assertAllowedOption } from "./lib/orgHubOptions";
+import {
+  overviewPortable,
+  upsertAddressPortable,
+  removeAddressPortable,
+  upsertRegistrationPortable,
+  removeRegistrationPortable,
+  upsertIdentifierPortable,
+  removeIdentifierPortable,
+} from "../shared/functions/organizationDetails";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const BACKFILL_DOCUMENT_CATEGORIES = [
   "Constitution",
@@ -18,30 +27,7 @@ const BACKFILL_INSERT_LIMIT = 100;
 export const overview = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const [addresses, registrations, identifiers] = await Promise.all([
-      ctx.db
-        .query("organizationAddresses")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-      ctx.db
-        .query("organizationRegistrations")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-      ctx.db
-        .query("organizationIdentifiers")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-    ]);
-
-    return {
-      addresses: sortCurrentFirst(addresses, "effectiveFrom"),
-      registrations: sortCurrentFirst(registrations, "registrationDate"),
-      identifiers: identifiers
-        .slice()
-        .sort((a, b) => String(a.kind ?? "").localeCompare(String(b.kind ?? ""))),
-    };
-  },
+  handler: (ctx, args) => overviewPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const seedFromSocietyAddresses = mutation({
@@ -182,36 +168,13 @@ export const upsertAddress = mutation({
     sourceDocumentIds: v.optional(v.array(v.id("documents"))),
   },
   returns: v.any(),
-  handler: async (ctx, { id, ...args }) => {
-    assertAllowedOption("addressTypes", args.type, "Address type", false);
-    assertAllowedOption("addressStatuses", args.status, "Address status", false);
-    const now = new Date().toISOString();
-    const payload = {
-      ...cleanObject(args),
-      status: cleanText(args.status) || "current",
-      type: cleanText(args.type) || "other",
-      street: cleanText(args.street) || "Needs review",
-      city: cleanText(args.city) || "Needs review",
-      country: cleanText(args.country) || "Canada",
-      updatedAtISO: now,
-    };
-    if (id) {
-      await ctx.db.patch(id, payload);
-      return id;
-    }
-    return await ctx.db.insert("organizationAddresses", {
-      ...payload,
-      createdAtISO: now,
-    });
-  },
+  handler: (ctx, args) => upsertAddressPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeAddress = mutation({
   args: { id: v.id("organizationAddresses") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeAddressPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsertRegistration = mutation({
@@ -243,37 +206,13 @@ export const upsertRegistration = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { id, ...args }) => {
-    assertAllowedOption("entityJurisdictions", args.jurisdiction, "Registration jurisdiction", false);
-    assertAllowedOption("entityJurisdictions", args.homeJurisdiction, "Home jurisdiction");
-    assertAllowedOption("registrationTypes", args.registrationType, "Registration type");
-    assertAllowedOption("registrationStatuses", args.status, "Registration status");
-    const now = new Date().toISOString();
-    const payload = {
-      ...cleanObject(args),
-      registrationType: cleanText(args.registrationType) || "extra_provincial",
-      jurisdiction: cleanText(args.jurisdiction) || "Needs review",
-      representativeIds: args.representativeIds ?? [],
-      status: cleanText(args.status) || "needs_review",
-      updatedAtISO: now,
-    };
-    if (id) {
-      await ctx.db.patch(id, payload);
-      return id;
-    }
-    return await ctx.db.insert("organizationRegistrations", {
-      ...payload,
-      createdAtISO: now,
-    });
-  },
+  handler: (ctx, args) => upsertRegistrationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeRegistration = mutation({
   args: { id: v.id("organizationRegistrations") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeRegistrationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsertIdentifier = mutation({
@@ -291,47 +230,14 @@ export const upsertIdentifier = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { id, ...args }) => {
-    assertAllowedOption("taxNumberTypes", args.kind, "Identifier kind", false);
-    assertAllowedOption("entityJurisdictions", args.jurisdiction, "Identifier jurisdiction");
-    assertAllowedOption("identifierStatuses", args.status, "Identifier status");
-    assertAllowedOption("accessLevels", args.accessLevel, "Identifier access level");
-    const now = new Date().toISOString();
-    const payload = {
-      ...cleanObject(args),
-      kind: cleanText(args.kind) || "other",
-      number: cleanText(args.number) || "Needs review",
-      status: cleanText(args.status) || "needs_review",
-      accessLevel: cleanText(args.accessLevel) || "restricted",
-      updatedAtISO: now,
-    };
-    if (id) {
-      await ctx.db.patch(id, payload);
-      return id;
-    }
-    return await ctx.db.insert("organizationIdentifiers", {
-      ...payload,
-      createdAtISO: now,
-    });
-  },
+  handler: (ctx, args) => upsertIdentifierPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeIdentifier = mutation({
   args: { id: v.id("organizationIdentifiers") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removeIdentifierPortable(toPortableMutationCtx(ctx), args),
 });
-
-function sortCurrentFirst(rows: any[], dateField: string) {
-  return rows.slice().sort((a, b) => {
-    const statusScore = (row: any) => row.status === "current" || row.status === "active" ? 0 : 1;
-    const score = statusScore(a) - statusScore(b);
-    if (score !== 0) return score;
-    return String(b[dateField] ?? "").localeCompare(String(a[dateField] ?? ""));
-  });
-}
 
 function minuteBookRecordTypeForDocument(doc: any) {
   const text = [doc.title, doc.category, ...(doc.tags ?? [])].join(" ").toLowerCase();
@@ -346,19 +252,6 @@ function minuteBookRecordTypeForDocument(doc: any) {
   if (doc.category === "FinancialStatement") return "financial_statement";
   if (doc.category === "WorkflowGenerated") return "workflow_package_document";
   return undefined;
-}
-
-function cleanObject<T extends Record<string, any>>(source: T) {
-  const result: Record<string, any> = {};
-  for (const [key, value] of Object.entries(source)) {
-    if (typeof value === "string") {
-      const cleaned = cleanText(value);
-      if (cleaned !== undefined) result[key] = cleaned;
-      continue;
-    }
-    if (value !== undefined) result[key] = value;
-  }
-  return result as T;
 }
 
 function cleanText(value: unknown) {

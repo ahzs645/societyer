@@ -72,6 +72,15 @@ import * as reconciliationFns from "./reconciliation";
 import * as signaturesFns from "./signatures";
 import * as bylawRulesFns from "./bylawRules";
 import * as policiesFns from "./policies";
+import * as viewsFns from "./views";
+import * as motionBacklogFns from "./motionBacklog";
+import * as workflowPackagesFns from "./workflowPackages";
+import * as yearEndFns from "./yearEnd";
+import * as annualCycleFns from "./annualCycle";
+import * as objectMetadataFns from "./objectMetadata";
+import * as bylawAmendmentsFns from "./bylawAmendments";
+import * as filingsFns from "./filings";
+import * as organizationDetailsFns from "./organizationDetails";
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }),
@@ -438,6 +447,91 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "policies:createReviewTask", handler: policiesFns.createReviewTaskPortable }),
   definePortableMutation({ name: "policies:createRequiredSignerTask", handler: policiesFns.createRequiredSignerTaskPortable }),
   definePortableMutation({ name: "policies:createTransparencyDraft", handler: policiesFns.createTransparencyDraftPortable }),
+
+  // views
+  definePortableQuery({ name: "views:listForObject", handler: viewsFns.listForObjectPortable }),
+  definePortableQuery({ name: "views:get", handler: viewsFns.getPortable }),
+  definePortableQuery({ name: "views:getHydrated", handler: viewsFns.getHydratedPortable }),
+  definePortableQuery({ name: "views:listSharedForDataTable", handler: viewsFns.listSharedForDataTablePortable }),
+  definePortableQuery({ name: "views:listFieldsForView", handler: viewsFns.listFieldsForViewPortable }),
+  definePortableMutation({ name: "views:create", handler: viewsFns.createPortable }),
+  definePortableMutation({ name: "views:update", handler: viewsFns.updatePortable }),
+  definePortableMutation({ name: "views:createSharedDataTableView", handler: viewsFns.createSharedDataTableViewPortable }),
+  definePortableMutation({ name: "views:deleteSharedDataTableView", handler: viewsFns.deleteSharedDataTableViewPortable }),
+  definePortableMutation({ name: "views:seedGovernanceDataTableViews", handler: viewsFns.seedGovernanceDataTableViewsPortable }),
+  definePortableMutation({ name: "views:remove", handler: viewsFns.removePortable }),
+  definePortableMutation({ name: "views:addField", handler: viewsFns.addFieldPortable }),
+  definePortableMutation({ name: "views:updateField", handler: viewsFns.updateFieldPortable }),
+  definePortableMutation({ name: "views:removeField", handler: viewsFns.removeFieldPortable }),
+  definePortableMutation({ name: "views:reorderFields", handler: viewsFns.reorderFieldsPortable }),
+
+  // motionBacklog
+  definePortableQuery({ name: "motionBacklog:list", handler: motionBacklogFns.listPortable }),
+  definePortableQuery({ name: "motionBacklog:suggestForMeeting", handler: motionBacklogFns.suggestForMeetingPortable }),
+  definePortableMutation({ name: "motionBacklog:create", handler: motionBacklogFns.createPortable }),
+  definePortableMutation({ name: "motionBacklog:update", handler: motionBacklogFns.updatePortable }),
+  definePortableMutation({ name: "motionBacklog:remove", handler: motionBacklogFns.removePortable }),
+  definePortableMutation({ name: "motionBacklog:createFromMinutesMotion", handler: motionBacklogFns.createFromMinutesMotionPortable }),
+  definePortableMutation({ name: "motionBacklog:createFromMinutesSection", handler: motionBacklogFns.createFromMinutesSectionPortable }),
+  definePortableMutation({ name: "motionBacklog:seedPipaSetup", handler: motionBacklogFns.seedPipaSetupPortable }),
+  definePortableMutation({ name: "motionBacklog:addToAgenda", handler: motionBacklogFns.addToAgendaPortable }),
+  definePortableMutation({ name: "motionBacklog:carryForwardToMeeting", handler: motionBacklogFns.carryForwardToMeetingPortable }),
+  definePortableMutation({ name: "motionBacklog:seedToMinutes", handler: motionBacklogFns.seedToMinutesPortable }),
+
+  // workflowPackages
+  definePortableQuery({ name: "workflowPackages:list", handler: workflowPackagesFns.listPortable }),
+  definePortableMutation({ name: "workflowPackages:upsert", handler: workflowPackagesFns.upsertPortable }),
+  definePortableMutation({ name: "workflowPackages:remove", handler: workflowPackagesFns.removePortable }),
+  definePortableMutation({ name: "workflowPackages:createFollowUpTask", handler: workflowPackagesFns.createFollowUpTaskPortable }),
+  definePortableMutation({ name: "workflowPackages:markFiled", handler: workflowPackagesFns.markFiledPortable }),
+  definePortableMutation({ name: "workflowPackages:createBoardPack", handler: workflowPackagesFns.createBoardPackPortable }),
+
+  // yearEnd
+  definePortableQuery({ name: "yearEnd:annualStatement", handler: yearEndFns.annualStatementPortable }),
+  definePortableQuery({ name: "yearEnd:orgRevenueExpense", handler: yearEndFns.orgRevenueExpensePortable }),
+  definePortableQuery({ name: "yearEnd:restrictedFundStatement", handler: yearEndFns.restrictedFundStatementPortable }),
+  definePortableQuery({ name: "yearEnd:readiness", handler: yearEndFns.readinessPortable }),
+
+  // annualCycle
+  definePortableQuery({ name: "annualCycle:summary", handler: annualCycleFns.summaryPortable }),
+
+  // objectMetadata
+  definePortableQuery({ name: "objectMetadata:list", handler: objectMetadataFns.listPortable }),
+  definePortableQuery({ name: "objectMetadata:get", handler: objectMetadataFns.getPortable }),
+  definePortableQuery({ name: "objectMetadata:getByNameSingular", handler: objectMetadataFns.getByNameSingularPortable }),
+  definePortableQuery({ name: "objectMetadata:getByNamePlural", handler: objectMetadataFns.getByNamePluralPortable }),
+  definePortableQuery({ name: "objectMetadata:getWithFields", handler: objectMetadataFns.getWithFieldsPortable }),
+  definePortableQuery({ name: "objectMetadata:getFullTableSetup", handler: objectMetadataFns.getFullTableSetupPortable }),
+  definePortableMutation({ name: "objectMetadata:create", handler: objectMetadataFns.createPortable }),
+  definePortableMutation({ name: "objectMetadata:update", handler: objectMetadataFns.updatePortable }),
+  definePortableMutation({ name: "objectMetadata:remove", handler: objectMetadataFns.removePortable }),
+
+  // bylawAmendments
+  definePortableQuery({ name: "bylawAmendments:list", handler: bylawAmendmentsFns.listPortable }),
+  definePortableQuery({ name: "bylawAmendments:get", handler: bylawAmendmentsFns.getPortable }),
+  definePortableQuery({ name: "bylawAmendments:sectionsForAmendment", handler: bylawAmendmentsFns.sectionsForAmendmentPortable }),
+  definePortableMutation({ name: "bylawAmendments:createDraft", handler: bylawAmendmentsFns.createDraftPortable }),
+  definePortableMutation({ name: "bylawAmendments:updateDraft", handler: bylawAmendmentsFns.updateDraftPortable }),
+  definePortableMutation({ name: "bylawAmendments:remove", handler: bylawAmendmentsFns.removePortable }),
+
+  // filings
+  definePortableQuery({ name: "filings:get", handler: filingsFns.getPortable }),
+  definePortableQuery({ name: "filings:list", handler: filingsFns.listPortable }),
+  definePortableQuery({ name: "filings:guidance", handler: filingsFns.guidancePortable }),
+  definePortableMutation({ name: "filings:create", handler: filingsFns.createPortable }),
+  definePortableMutation({ name: "filings:markFiled", handler: filingsFns.markFiledPortable }),
+  definePortableMutation({ name: "filings:update", handler: filingsFns.updatePortable }),
+  definePortableMutation({ name: "filings:importBcRegistryHistory", handler: filingsFns.importBcRegistryHistoryPortable }),
+  definePortableMutation({ name: "filings:remove", handler: filingsFns.removePortable }),
+
+  // organizationDetails
+  definePortableQuery({ name: "organizationDetails:overview", handler: organizationDetailsFns.overviewPortable }),
+  definePortableMutation({ name: "organizationDetails:upsertAddress", handler: organizationDetailsFns.upsertAddressPortable }),
+  definePortableMutation({ name: "organizationDetails:removeAddress", handler: organizationDetailsFns.removeAddressPortable }),
+  definePortableMutation({ name: "organizationDetails:upsertRegistration", handler: organizationDetailsFns.upsertRegistrationPortable }),
+  definePortableMutation({ name: "organizationDetails:removeRegistration", handler: organizationDetailsFns.removeRegistrationPortable }),
+  definePortableMutation({ name: "organizationDetails:upsertIdentifier", handler: organizationDetailsFns.upsertIdentifierPortable }),
+  definePortableMutation({ name: "organizationDetails:removeIdentifier", handler: organizationDetailsFns.removeIdentifierPortable }),
 ];
 
 /** Names of every ported function, for diagnostics / the conformance harness. */

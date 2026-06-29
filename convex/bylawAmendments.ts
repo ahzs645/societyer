@@ -1,20 +1,25 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  listPortable,
+  getPortable,
+  createDraftPortable,
+  updateDraftPortable,
+  sectionsForAmendmentPortable,
+  removePortable,
+} from "../shared/functions/bylawAmendments";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("bylawAmendments")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("bylawAmendments") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
 });
 
 const nowEvent = (actor: string, action: string, note?: string) => ({
@@ -34,16 +39,7 @@ export const createDraft = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const now = new Date().toISOString();
-    return ctx.db.insert("bylawAmendments", {
-      ...args,
-      status: "Draft",
-      createdAtISO: now,
-      updatedAtISO: now,
-      history: [nowEvent(args.createdByName ?? "You", "created", "Draft started")],
-    });
-  },
+  handler: (ctx, args) => createDraftPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const updateDraft = mutation({
@@ -58,19 +54,7 @@ export const updateDraft = mutation({
     actor: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch, actor }) => {
-    const row = await ctx.db.get(id);
-    if (!row) return;
-    if (row.status !== "Draft") {
-      throw new Error("Only drafts can be edited — withdraw or supersede to change a non-draft amendment.");
-    }
-    const history = [...row.history, nowEvent(actor ?? "You", "edited")];
-    await ctx.db.patch(id, {
-      ...patch,
-      updatedAtISO: new Date().toISOString(),
-      history,
-    });
-  },
+  handler: (ctx, args) => updateDraftPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const startConsultation = mutation({
@@ -238,25 +222,11 @@ export const materializeSections = mutation({
 export const sectionsForAmendment = query({
   args: { amendmentId: v.id("bylawAmendments") },
   returns: v.any(),
-  handler: async (ctx, { amendmentId }) => {
-    const rows = await ctx.db
-      .query("bylawSections")
-      .withIndex("by_amendment", (q) => q.eq("amendmentId", amendmentId))
-      .collect();
-    return rows.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  },
+  handler: (ctx, args) => sectionsForAmendmentPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("bylawAmendments") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    // Clean up materialized section records when the amendment is deleted.
-    const sections = await ctx.db
-      .query("bylawSections")
-      .withIndex("by_amendment", (q) => q.eq("amendmentId", id))
-      .collect();
-    for (const row of sections) await ctx.db.delete(row._id);
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });
