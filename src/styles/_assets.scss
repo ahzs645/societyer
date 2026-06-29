@@ -1,25 +1,24 @@
 @use "tokens" as *;
 @use "mixins" as *;
 
-.asset-detail-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
-  grid-template-areas:
-    "register qr"
-    "register maintenance"
-    "compliance compliance";
+/* Tabbed asset detail: a stack of the active tab's panel(s)/tables. */
+.asset-detail {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   margin-bottom: 16px;
 }
 
-.asset-panel--register { grid-area: register; }
-.asset-panel--qr { grid-area: qr; }
-.asset-panel--maintenance { grid-area: maintenance; }
-.asset-panel--compliance { grid-area: compliance; }
+/* Cap static key/value panels for readability so a full-width 2-col grid
+ * doesn't fling labels and values to opposite edges. Tables stay full width
+ * (they aren't .panel). */
+.asset-detail .panel {
+  max-width: 880px;
+}
 
-/* Give every detail panel a consistent title row: heading on the left, the
- * trailing badge/icon aligned to the right instead of wrapping underneath. */
-.asset-detail-grid .panel__head {
+/* Consistent title row: heading left, trailing badge/icon aligned right
+ * instead of wrapping underneath. */
+.asset-detail .panel__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -27,7 +26,7 @@
   margin-bottom: 12px;
 }
 
-.asset-detail-grid .panel__head h2 {
+.asset-detail .panel__head h2 {
   margin: 0;
 }
 
@@ -37,6 +36,7 @@
 .asset-hero {
   position: relative;
   margin: 0 0 14px;
+  max-width: 480px;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid token('border');
@@ -173,7 +173,6 @@
 }
 
 @media (max-width: 760px) {
-  .asset-detail-grid,
   .form-grid {
     grid-template-columns: 1fr;
   }
@@ -183,17 +182,6 @@
    * and let long values wrap within their column. */
   .record-kv {
     gap: 10px 12px;
-  }
-
-  .asset-detail-grid {
-    /* Single column: restate the areas stacked so each panel's named
-     * grid-area still resolves (clearing them to `none` would collapse
-     * every panel into one cell and overlap them). */
-    grid-template-areas:
-      "register"
-      "qr"
-      "maintenance"
-      "compliance";
   }
 
   .asset-label {

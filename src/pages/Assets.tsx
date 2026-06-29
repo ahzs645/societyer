@@ -29,6 +29,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DataTable } from "../components/DataTable";
+import { Tabs } from "../components/primitives";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { Select as StyledSelect } from "../components/Select";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -528,6 +529,8 @@ export function AssetsPage() {
   );
 }
 
+type DetailTab = "overview" | "maintenance" | "custody" | "compliance" | "label";
+
 export function AssetDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -544,6 +547,7 @@ export function AssetDetailPage() {
   const dispose = useMutation(api.assets.dispose);
   const [drawer, setDrawer] = useState<"edit" | "custody" | "maintenance" | "disposal" | null>(null);
   const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState<DetailTab>("overview");
   const [form, setForm] = useState<AssetFormValue | null>(null);
   const [eventForm, setEventForm] = useState<any>({ eventType: "checkout", toCustodianType: "member", toCustodianName: "", responsiblePersonName: "", location: "", condition: "Good", expectedReturnDate: "", acceptanceSignature: "", notes: "" });
   const [maintenanceForm, setMaintenanceForm] = useState<any>({ title: "Asset maintenance", kind: "maintenance", dueDate: todayDate(), createTask: true, notes: "" });
@@ -624,96 +628,122 @@ export function AssetDetailPage() {
         }
       />
 
-      <div className="asset-detail-grid">
-        <section className="panel asset-panel--register">
-          <div className="panel__head"><h2>Register</h2>{!asset.imageUrl && <StatusBadge status={asset.status} />}</div>
-          {asset.imageUrl ? (
-            <figure className="asset-hero">
-              <img src={asset.imageUrl} alt={`Photo of ${asset.name}`} />
-              <span className="asset-hero__status"><StatusBadge status={asset.status} /></span>
-            </figure>
-          ) : null}
-          <dl className="record-kv">
-            <div><dt>Category</dt><dd>{asset.category}</dd></div>
-            <div><dt>Serial</dt><dd className="mono">{asset.serialNumber || "—"}</dd></div>
-            <div><dt>Condition</dt><dd>{asset.condition}</dd></div>
-            <div><dt>Quantity on hand</dt><dd>{asset.category === "Consumable" ? formatQuantity(asset.quantityOnHand, asset.quantityUnit) : "—"}</dd></div>
-            <div><dt>Location</dt><dd>{asset.location || "—"}</dd></div>
-            <div><dt>Responsible person</dt><dd>{asset.responsiblePersonName || "—"}</dd></div>
-            <div><dt>Custodian</dt><dd>{asset.custodianName || "—"}</dd></div>
-            <div><dt>Supplier</dt><dd>{asset.supplier || "—"}</dd></div>
-            <div><dt>Purchase date</dt><dd>{formatDate(asset.purchaseDate)}</dd></div>
-            <div><dt>Purchase value</dt><dd>{money(asset.purchaseValueCents, asset.currency)}</dd></div>
-            <div><dt>Book value</dt><dd>{money(asset.bookValueCents, asset.currency)}</dd></div>
-            <div><dt>Receipt</dt><dd>{receiptDocument ? <Link to={`/app/documents/${receiptDocument._id}`}>{receiptDocument.title}</Link> : "—"}</dd></div>
-            <div><dt>Purchase transaction</dt><dd>{purchaseTransaction ? `${formatDate(purchaseTransaction.date)} · ${purchaseTransaction.description} · ${money(Math.abs(purchaseTransaction.amountCents), asset.currency)}` : "—"}</dd></div>
-          </dl>
-        </section>
-        <section className="panel asset-panel--qr">
-          <div className="panel__head"><h2>QR label</h2><QrCode size={16} /></div>
-          <Field label="Label type">
-            <StyledSelect
-              value={labelType}
-              onChange={(value) => setLabelType(value)}
-              options={ASSET_LABEL_TYPES.map((type) => ({ value: type.value, label: type.label }))}
+      <div className="asset-detail">
+        <Tabs<DetailTab>
+          value={tab}
+          onChange={setTab}
+          items={[
+            { id: "overview", label: "Overview", icon: <Package size={14} /> },
+            { id: "maintenance", label: "Maintenance", icon: <Wrench size={14} />, count: maintenance.length || null },
+            { id: "custody", label: "Custody", icon: <Repeat2 size={14} />, count: events.length || null },
+            { id: "compliance", label: "Compliance", icon: <ClipboardCheck size={14} /> },
+            { id: "label", label: "Label", icon: <QrCode size={14} /> },
+          ]}
+        />
+
+        {tab === "overview" && (
+          <section className="panel">
+            <div className="panel__head"><h2>Register</h2>{!asset.imageUrl && <StatusBadge status={asset.status} />}</div>
+            {asset.imageUrl ? (
+              <figure className="asset-hero">
+                <img src={asset.imageUrl} alt={`Photo of ${asset.name}`} />
+                <span className="asset-hero__status"><StatusBadge status={asset.status} /></span>
+              </figure>
+            ) : null}
+            <dl className="record-kv">
+              <div><dt>Category</dt><dd>{asset.category}</dd></div>
+              <div><dt>Serial</dt><dd className="mono">{asset.serialNumber || "—"}</dd></div>
+              <div><dt>Condition</dt><dd>{asset.condition}</dd></div>
+              <div><dt>Quantity on hand</dt><dd>{asset.category === "Consumable" ? formatQuantity(asset.quantityOnHand, asset.quantityUnit) : "—"}</dd></div>
+              <div><dt>Location</dt><dd>{asset.location || "—"}</dd></div>
+              <div><dt>Responsible person</dt><dd>{asset.responsiblePersonName || "—"}</dd></div>
+              <div><dt>Custodian</dt><dd>{asset.custodianName || "—"}</dd></div>
+              <div><dt>Supplier</dt><dd>{asset.supplier || "—"}</dd></div>
+              <div><dt>Purchase date</dt><dd>{formatDate(asset.purchaseDate)}</dd></div>
+              <div><dt>Purchase value</dt><dd>{money(asset.purchaseValueCents, asset.currency)}</dd></div>
+              <div><dt>Book value</dt><dd>{money(asset.bookValueCents, asset.currency)}</dd></div>
+              <div><dt>Receipt</dt><dd>{receiptDocument ? <Link to={`/app/documents/${receiptDocument._id}`}>{receiptDocument.title}</Link> : "—"}</dd></div>
+              <div><dt>Purchase transaction</dt><dd>{purchaseTransaction ? `${formatDate(purchaseTransaction.date)} · ${purchaseTransaction.description} · ${money(Math.abs(purchaseTransaction.amountCents), asset.currency)}` : "—"}</dd></div>
+            </dl>
+          </section>
+        )}
+
+        {tab === "maintenance" && (
+          <>
+            <section className="panel">
+              <div className="panel__head"><h2>Maintenance and warranty</h2><Wrench size={16} /></div>
+              <dl className="record-kv">
+                <div><dt>Warranty expires</dt><dd>{asset.warrantyExpiresAt ? <DueDate date={asset.warrantyExpiresAt} /> : "—"}</dd></div>
+                <div><dt>Next maintenance</dt><dd>{asset.nextMaintenanceDate ? <DueDate date={asset.nextMaintenanceDate} /> : "—"}</dd></div>
+                <div><dt>Next verification</dt><dd>{asset.nextVerificationDate ? <DueDate date={asset.nextVerificationDate} /> : "—"}</dd></div>
+              </dl>
+            </section>
+            <DataTable
+              label="Maintenance schedule"
+              icon={<Wrench size={14} />}
+              data={maintenance}
+              rowKey={(row) => row._id as string}
+              columns={[
+                { id: "title", header: "Title", accessor: (row) => row.title },
+                { id: "kind", header: "Kind", accessor: (row) => row.kind, render: (row) => <span className="cell-tag">{row.kind}</span> },
+                { id: "dueDate", header: "Due", sortable: true, accessor: (row) => row.dueDate, render: (row) => <DueDate date={row.dueDate} /> },
+                { id: "status", header: "Status", accessor: (row) => row.status, render: (row) => <Badge tone={row.status === "Completed" ? "success" : "warn"}>{row.status}</Badge> },
+              ]}
+              renderRowActions={(row) => row.status !== "Completed" ? (
+                <button className="btn btn--ghost btn--sm" onClick={() => completeMaintenance({ id: row._id, completedAtISO: new Date().toISOString(), notes: row.notes })}>
+                  <CheckCircle2 size={12} /> Done
+                </button>
+              ) : null}
             />
-          </Field>
-          <AssetQrLabel assetTag={asset.assetTag} name={asset.name} url={assetUrl(asset._id)} labelType={labelType} />
-          <button className="btn btn--sm" onClick={() => window.print()}>Print label</button>
-        </section>
-        <section className="panel asset-panel--maintenance">
-          <div className="panel__head"><h2>Maintenance and warranty</h2><Wrench size={16} /></div>
-          <dl className="record-kv">
-            <div><dt>Warranty expires</dt><dd>{asset.warrantyExpiresAt ? <DueDate date={asset.warrantyExpiresAt} /> : "—"}</dd></div>
-            <div><dt>Next maintenance</dt><dd>{asset.nextMaintenanceDate ? <DueDate date={asset.nextMaintenanceDate} /> : "—"}</dd></div>
-            <div><dt>Next verification</dt><dd>{asset.nextVerificationDate ? <DueDate date={asset.nextVerificationDate} /> : "—"}</dd></div>
-          </dl>
-        </section>
-        <section className="panel asset-panel--compliance">
-          <div className="panel__head"><h2>Grant and compliance</h2></div>
-          <dl className="record-kv">
-            <div><dt>Funding source</dt><dd>{asset.fundingSource || "—"}</dd></div>
-            <div><dt>Grant restrictions</dt><dd>{asset.grantRestrictions || "—"}</dd></div>
-            <div><dt>Retention until</dt><dd>{formatDate(asset.retentionUntil)}</dd></div>
-            <div><dt>Disposal rules</dt><dd>{asset.disposalRules || "—"}</dd></div>
-            <div><dt>Insurance notes</dt><dd>{asset.insuranceNotes || "—"}</dd></div>
-          </dl>
-        </section>
+          </>
+        )}
+
+        {tab === "custody" && (
+          <DataTable
+            label="Custody and audit history"
+            icon={<ClipboardCheck size={14} />}
+            data={events}
+            rowKey={(row) => row._id as string}
+            defaultSort={{ columnId: "happenedAtISO", dir: "desc" }}
+            columns={[
+              { id: "happenedAtISO", header: "Date", sortable: true, accessor: (row) => row.happenedAtISO, render: (row) => <span className="mono">{formatDate(row.happenedAtISO)}</span> },
+              { id: "eventType", header: "Event", accessor: (row) => row.eventType, render: (row) => <span className="cell-tag">{row.eventType}</span> },
+              { id: "custody", header: "Custody", accessor: (row) => row.toCustodianName, render: (row) => row.toCustodianName || row.location || "—" },
+              { id: "condition", header: "Condition", accessor: (row) => row.condition },
+              { id: "quantity", header: "Quantity", accessor: (row) => row.quantityAfter ?? row.quantityAdded, render: (row) => row.quantityAfter == null ? "—" : `${row.observedQuantityBefore ?? "—"} + ${row.quantityAdded ?? "—"} = ${row.quantityAfter}` },
+              { id: "notes", header: "Notes", accessor: (row) => row.notes },
+            ]}
+          />
+        )}
+
+        {tab === "compliance" && (
+          <section className="panel">
+            <div className="panel__head"><h2>Grant and compliance</h2></div>
+            <dl className="record-kv">
+              <div><dt>Funding source</dt><dd>{asset.fundingSource || "—"}</dd></div>
+              <div><dt>Grant restrictions</dt><dd>{asset.grantRestrictions || "—"}</dd></div>
+              <div><dt>Retention until</dt><dd>{formatDate(asset.retentionUntil)}</dd></div>
+              <div><dt>Disposal rules</dt><dd>{asset.disposalRules || "—"}</dd></div>
+              <div><dt>Insurance notes</dt><dd>{asset.insuranceNotes || "—"}</dd></div>
+            </dl>
+          </section>
+        )}
+
+        {tab === "label" && (
+          <section className="panel">
+            <div className="panel__head"><h2>QR label</h2><QrCode size={16} /></div>
+            <Field label="Label type">
+              <StyledSelect
+                value={labelType}
+                onChange={(value) => setLabelType(value)}
+                options={ASSET_LABEL_TYPES.map((type) => ({ value: type.value, label: type.label }))}
+              />
+            </Field>
+            <AssetQrLabel assetTag={asset.assetTag} name={asset.name} url={assetUrl(asset._id)} labelType={labelType} />
+            <div><button className="btn btn--sm" onClick={() => window.print()}>Print label</button></div>
+          </section>
+        )}
       </div>
-
-      <DataTable
-        label="Maintenance"
-        icon={<Wrench size={14} />}
-        data={maintenance}
-        rowKey={(row) => row._id as string}
-        columns={[
-          { id: "title", header: "Title", accessor: (row) => row.title },
-          { id: "kind", header: "Kind", accessor: (row) => row.kind, render: (row) => <span className="cell-tag">{row.kind}</span> },
-          { id: "dueDate", header: "Due", sortable: true, accessor: (row) => row.dueDate, render: (row) => <DueDate date={row.dueDate} /> },
-          { id: "status", header: "Status", accessor: (row) => row.status, render: (row) => <Badge tone={row.status === "Completed" ? "success" : "warn"}>{row.status}</Badge> },
-        ]}
-        renderRowActions={(row) => row.status !== "Completed" ? (
-          <button className="btn btn--ghost btn--sm" onClick={() => completeMaintenance({ id: row._id, completedAtISO: new Date().toISOString(), notes: row.notes })}>
-            <CheckCircle2 size={12} /> Done
-          </button>
-        ) : null}
-      />
-
-      <DataTable
-        label="Custody and audit history"
-        icon={<ClipboardCheck size={14} />}
-        data={events}
-        rowKey={(row) => row._id as string}
-        defaultSort={{ columnId: "happenedAtISO", dir: "desc" }}
-        columns={[
-          { id: "happenedAtISO", header: "Date", sortable: true, accessor: (row) => row.happenedAtISO, render: (row) => <span className="mono">{formatDate(row.happenedAtISO)}</span> },
-          { id: "eventType", header: "Event", accessor: (row) => row.eventType, render: (row) => <span className="cell-tag">{row.eventType}</span> },
-          { id: "custody", header: "Custody", accessor: (row) => row.toCustodianName, render: (row) => row.toCustodianName || row.location || "—" },
-          { id: "condition", header: "Condition", accessor: (row) => row.condition },
-          { id: "quantity", header: "Quantity", accessor: (row) => row.quantityAfter ?? row.quantityAdded, render: (row) => row.quantityAfter == null ? "—" : `${row.observedQuantityBefore ?? "—"} + ${row.quantityAdded ?? "—"} = ${row.quantityAfter}` },
-          { id: "notes", header: "Notes", accessor: (row) => row.notes },
-        ]}
-      />
 
       <Drawer open={drawer === "edit"} onClose={() => setDrawer(null)} title="Edit asset" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveEdit} disabled={saving}>{saving ? "Saving…" : "Save"}</button></>}>
         {form && (
