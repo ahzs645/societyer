@@ -1,7 +1,12 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
-import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
-import { enforcePersonReference } from "./lib/personReference";
+import {
+  listPortable,
+  activeAsOfQueryPortable,
+  upsertPortable,
+  removePortable,
+} from "../shared/functions/entitySigners";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 /**
  * Thin persistence/query wrapper for the `entitySigners` table.
@@ -12,41 +17,18 @@ import { enforcePersonReference } from "./lib/personReference";
  * names remapped). Handlers stay thin: load rows, delegate, sort, return.
  */
 
-/** Sort comparator: ascending signOrder, undefined/null last. */
-function bySignOrder(a: { signOrder?: unknown }, b: { signOrder?: unknown }) {
-  const av = typeof a.signOrder === "number" ? a.signOrder : Infinity;
-  const bv = typeof b.signOrder === "number" ? b.signOrder : Infinity;
-  return av - bv;
-}
-
 /** All signers for a society, ordered by signOrder ascending (undefined last). */
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const rows = await ctx.db
-      .query("entitySigners")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    return [...rows].sort(bySignOrder);
-  },
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 /** Signers whose validity interval covers a specific ISO date, ordered by signOrder. */
 export const activeAsOfQuery = query({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
-  handler: async (ctx, { societyId, asOf }) => {
-    const rows = await ctx.db
-      .query("entitySigners")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const active = activeAsOf(rows as unknown as IntervalRow[], asOf, {
-      start: "validFromISO",
-      end: "validToISO",
-    });
-    return [...(active as Array<{ signOrder?: unknown }>)].sort(bySignOrder);
-  },
+  handler: (ctx, args) => activeAsOfQueryPortable(toPortableQueryCtx(ctx), args),
 });
 
 /** Create or update a signer. Patches when `id` is given, otherwise inserts. */
@@ -63,47 +45,12 @@ export const upsert = mutation({
     nowISO: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const {
-      id,
-      societyId,
-      directoryPersonId,
-      name,
-      signOrder,
-      validFromISO,
-      validToISO,
-      corpSign,
-      nowISO,
-    } = args;
-    // Enforce the society's People Directory constraint (free unless restricted).
-    const resolvedDirectoryPersonId = await enforcePersonReference(
-      ctx,
-      societyId,
-      name,
-      directoryPersonId,
-    );
-    const fields = {
-      societyId,
-      directoryPersonId: resolvedDirectoryPersonId,
-      name,
-      signOrder,
-      validFromISO,
-      validToISO,
-      corpSign,
-    };
-    if (id) {
-      await ctx.db.patch(id, fields);
-      return id;
-    }
-    return ctx.db.insert("entitySigners", { ...fields, createdAtISO: nowISO });
-  },
+  handler: (ctx, args) => upsertPortable(toPortableMutationCtx(ctx), args),
 });
 
 /** Delete a signer. */
 export const remove = mutation({
   args: { id: v.id("entitySigners") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });

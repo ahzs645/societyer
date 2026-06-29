@@ -1,25 +1,28 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { buildQuorumSnapshot } from "./lib/bylawRules";
 import {
-  buildQuorumSnapshot,
-  getBylawRuleSetForDate,
-} from "./lib/bylawRules";
+  listPortable,
+  getPortable,
+  createPortable,
+  applyTemplatePortable,
+  updatePortable,
+  markSourceReviewPortable,
+  setPackageReviewStatusPortable,
+  removePortable,
+} from "../shared/functions/meetings";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("meetings")
-      .withIndex("by_society_date", (q) => q.eq("societyId", societyId))
-      .order("desc")
-      .collect(),
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("meetings") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -55,161 +58,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const rules = await getBylawRuleSetForDate(
-      ctx,
-      args.societyId,
-      args.scheduledAt,
-    );
-    if (args.electronic && !rules.allowElectronicMeetings) {
-      throw new Error(
-        "Electronic participation is disabled by the bylaw rule set effective for this meeting date.",
-      );
-    }
-
-    const snapshot = await buildQuorumSnapshot(ctx, {
-      societyId: args.societyId,
-      meetingDateISO: args.scheduledAt,
-      meetingType: args.type,
-      quorumRequiredOverride: args.quorumRequired,
-    });
-
-    const template = args.meetingTemplateId
-      ? await ctx.db.get(args.meetingTemplateId)
-      : null;
-    if (args.meetingTemplateId && !template) {
-      throw new Error("Meeting template not found.");
-    }
-    if (template && template.societyId !== args.societyId) {
-      throw new Error("Meeting template belongs to a different society.");
-    }
-    const templateItems = template ? normalizeTemplateItems(template.items) : [];
-    const templateContext = template
-      ? await buildTemplateContext(ctx, args.societyId, args.scheduledAt)
-      : {};
-    const templateMotions = template
-      ? await buildTemplateMotions(ctx, templateItems, templateContext)
-      : [];
-    const templateSnapshotJson = template
-      ? JSON.stringify({
-          templateId: template._id,
-          name: template.name,
-          description: template.description,
-          meetingType: template.meetingType,
-          items: templateItems,
-          capturedAtISO: new Date().toISOString(),
-        })
-      : undefined;
-
-    const { agendaJson: _agendaJsonInput, ...meetingArgs } = args;
-    const meetingId = await ctx.db.insert("meetings", {
-      ...meetingArgs,
-      templateSnapshotJson,
-      bylawRuleSetId: args.bylawRuleSetId ?? snapshot.bylawRuleSetId,
-      quorumRuleVersion: args.quorumRuleVersion ?? snapshot.quorumRuleVersion,
-      quorumRuleEffectiveFromISO:
-        args.quorumRuleEffectiveFromISO ??
-        snapshot.quorumRuleEffectiveFromISO,
-      quorumSourceLabel: args.quorumSourceLabel ?? snapshot.quorumSourceLabel,
-      quorumRequired: args.quorumRequired ?? snapshot.quorumRequired,
-      quorumComputedAtISO:
-        args.quorumComputedAtISO ?? snapshot.quorumComputedAtISO,
-    });
-    if (templateItems.length > 0 || args.agendaJson) {
-      const agendaId = await ctx.db.insert("agendas", {
-        societyId: args.societyId,
-        meetingId,
-        title: `${args.title} agenda`,
-        status: "Draft",
-        createdAtISO: new Date().toISOString(),
-        updatedAtISO: new Date().toISOString(),
-      });
-      const initialAgendaItems = templateItems.length
-        ? templateItems.map((item) => ({
-            title: resolveTemplateText(item.title, templateContext),
-            depth: item.depth,
-            type: item.sectionType ?? inferAgendaSectionType(item.title),
-            details: item.details ? resolveTemplateText(item.details, templateContext) : undefined,
-            presenter: item.presenter || undefined,
-            motionTemplateId: item.motionTemplateId,
-            motionText: item.motionText ? resolveTemplateText(item.motionText, templateContext) : undefined,
-          }))
-        : normalizeAgendaJsonItems(args.agendaJson);
-      for (let order = 0; order < initialAgendaItems.length; order++) {
-        const item = initialAgendaItems[order];
-        await ctx.db.insert("agendaItems", {
-          societyId: args.societyId,
-          agendaId,
-          order,
-          type: item.type ?? inferAgendaSectionType(item.title),
-          title: item.title,
-          depth: item.depth,
-          details: item.details,
-          presenter: item.presenter,
-          motionTemplateId: item.motionTemplateId,
-          motionText: item.motionText,
-          createdAtISO: new Date().toISOString(),
-        });
-      }
-    }
-    // Resolve attendees. Explicit form input wins; otherwise auto-snapshot
-    // current directors for Board meetings. One-shot at create time only —
-    // edits never re-seed, so the user can manage the list freely afterwards.
-    let attendees = Array.isArray(args.attendeeIds) ? args.attendeeIds.map(String) : [];
-    if (attendees.length === 0 && args.type === "Board") {
-      const allDirectors = await ctx.db
-        .query("directors")
-        .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-        .collect();
-      const todayISO = new Date().toISOString().slice(0, 10);
-      attendees = allDirectors
-        .filter((d) => {
-          const status = String(d.status ?? "").toLowerCase();
-          if (status && !["active", "current", "verified"].includes(status)) return false;
-          const end = d.termEnd || d.resignedAt;
-          if (!end) return true;
-          return String(end).slice(0, 10) >= todayISO;
-        })
-        .map((d) => `${d.firstName ?? ""} ${d.lastName ?? ""}`.trim())
-        .filter(Boolean);
-    }
-
-    const quorumRequired = args.quorumRequired ?? snapshot.quorumRequired;
-    const minutesId = await ctx.db.insert("minutes", {
-      societyId: args.societyId,
-      meetingId,
-      heldAt: args.scheduledAt,
-      attendees,
-      absent: [],
-      quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
-      quorumRequired: quorumRequired ?? undefined,
-      bylawRuleSetId: args.bylawRuleSetId ?? snapshot.bylawRuleSetId,
-      quorumRuleVersion: args.quorumRuleVersion ?? snapshot.quorumRuleVersion,
-      quorumRuleEffectiveFromISO:
-        args.quorumRuleEffectiveFromISO ??
-        snapshot.quorumRuleEffectiveFromISO,
-      quorumSourceLabel: args.quorumSourceLabel ?? snapshot.quorumSourceLabel,
-      quorumComputedAtISO:
-        args.quorumComputedAtISO ?? snapshot.quorumComputedAtISO,
-      discussion: "",
-      sections: templateItems.length > 0
-        ? templateItems.map((item) => ({
-            title: resolveTemplateText(item.title, templateContext),
-            type: item.sectionType ?? inferAgendaSectionType(item.title),
-            presenter: item.presenter || undefined,
-            discussion: item.details ? resolveTemplateText(item.details, templateContext) : "",
-            decisions: [],
-            actionItems: [],
-            depth: item.depth,
-          }))
-        : [],
-      motions: templateMotions,
-      decisions: [],
-      actionItems: [],
-    });
-    await ctx.db.patch(meetingId, { minutesId });
-    return meetingId;
-  },
+  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 // Apply (or re-apply) a meeting template's agenda + minutes scaffolding onto an
@@ -226,117 +75,7 @@ export const applyTemplate = mutation({
     replace: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: async (ctx, { meetingId, meetingTemplateId, replace }) => {
-    const meeting = await ctx.db.get(meetingId);
-    if (!meeting) throw new Error("Meeting not found.");
-    const template = await ctx.db.get(meetingTemplateId);
-    if (!template) throw new Error("Meeting template not found.");
-    if (template.societyId !== meeting.societyId) {
-      throw new Error("Meeting template belongs to a different society.");
-    }
-
-    const templateItems = normalizeTemplateItems(template.items);
-    if (templateItems.length === 0) {
-      throw new Error("This template has no agenda items to apply.");
-    }
-    const templateContext = await buildTemplateContext(ctx, meeting.societyId, meeting.scheduledAt);
-    const templateMotions = await buildTemplateMotions(ctx, templateItems, templateContext);
-    const now = new Date().toISOString();
-
-    // Resolve (or create) the meeting's agenda.
-    const agendas = await ctx.db
-      .query("agendas")
-      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-      .collect();
-    agendas.sort((a, b) => String(a.createdAtISO).localeCompare(String(b.createdAtISO)));
-    let agendaId = agendas[0]?._id;
-    if (!agendaId) {
-      agendaId = await ctx.db.insert("agendas", {
-        societyId: meeting.societyId,
-        meetingId,
-        title: `${meeting.title} agenda`,
-        status: "Draft",
-        createdAtISO: now,
-        updatedAtISO: now,
-      });
-    }
-
-    // Guard existing agenda items.
-    const existingItems = await ctx.db
-      .query("agendaItems")
-      .withIndex("by_agenda", (q) => q.eq("agendaId", agendaId))
-      .collect();
-    if (existingItems.length > 0) {
-      if (!replace) {
-        throw new Error(
-          "This meeting already has agenda items. Re-apply with replace to overwrite them.",
-        );
-      }
-      for (const it of existingItems) await ctx.db.delete(it._id);
-    }
-
-    const resolvedItems = templateItems.map((item) => ({
-      title: resolveTemplateText(item.title, templateContext),
-      depth: item.depth,
-      type: item.sectionType ?? inferAgendaSectionType(item.title),
-      details: item.details ? resolveTemplateText(item.details, templateContext) : undefined,
-      presenter: item.presenter || undefined,
-      motionTemplateId: item.motionTemplateId,
-      motionText: item.motionText ? resolveTemplateText(item.motionText, templateContext) : undefined,
-    }));
-    for (let order = 0; order < resolvedItems.length; order++) {
-      const item = resolvedItems[order];
-      await ctx.db.insert("agendaItems", {
-        societyId: meeting.societyId,
-        agendaId,
-        order,
-        type: item.type,
-        title: item.title,
-        depth: item.depth,
-        details: item.details,
-        presenter: item.presenter,
-        motionTemplateId: item.motionTemplateId,
-        motionText: item.motionText,
-        createdAtISO: now,
-      });
-    }
-
-    // Scaffold minutes sections/motions, but never clobber recorded minutes
-    // unless the caller explicitly asked to replace.
-    let minutesScaffolded = false;
-    if (meeting.minutesId) {
-      const minutes = await ctx.db.get(meeting.minutesId);
-      const hasSections = Array.isArray(minutes?.sections) && minutes.sections.length > 0;
-      const hasMotions = Array.isArray(minutes?.motions) && minutes.motions.length > 0;
-      if (minutes && (replace || (!hasSections && !hasMotions))) {
-        await ctx.db.patch(meeting.minutesId, {
-          sections: templateItems.map((item) => ({
-            title: resolveTemplateText(item.title, templateContext),
-            type: item.sectionType ?? inferAgendaSectionType(item.title),
-            presenter: item.presenter || undefined,
-            discussion: item.details ? resolveTemplateText(item.details, templateContext) : "",
-            decisions: [],
-            actionItems: [],
-            depth: item.depth,
-          })),
-          motions: templateMotions,
-        });
-        minutesScaffolded = true;
-      }
-    }
-
-    const templateSnapshotJson = JSON.stringify({
-      templateId: template._id,
-      name: template.name,
-      description: template.description,
-      meetingType: template.meetingType,
-      items: templateItems,
-      capturedAtISO: now,
-    });
-    await ctx.db.patch(meetingId, { meetingTemplateId, templateSnapshotJson });
-
-    return { agendaId, items: resolvedItems.length, minutesScaffolded };
-  },
+  handler: (ctx, args) => applyTemplatePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -379,146 +118,8 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    const { clearNoticeSent, ...rest } = patch;
-    const next: Record<string, unknown> = { ...rest };
-    if (clearNoticeSent) next.noticeSentAt = undefined;
-    await ctx.db.patch(id, next);
-  },
+  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
 });
-
-type TemplateItem = {
-  title: string;
-  depth: 0 | 1;
-  sectionType?: string;
-  presenter?: string;
-  details?: string;
-  motionTemplateId?: any;
-  motionText?: string;
-};
-
-function normalizeTemplateItems(items: any[]): TemplateItem[] {
-  const normalized: TemplateItem[] = [];
-  let hasRoot = false;
-  for (const item of items ?? []) {
-    const title = String(item?.title ?? "").trim();
-    if (!title) continue;
-    const depth: 0 | 1 = item?.depth === 1 && hasRoot ? 1 : 0;
-    normalized.push({
-      title,
-      depth,
-      sectionType: item?.sectionType || undefined,
-      presenter: item?.presenter || undefined,
-      details: item?.details || undefined,
-      motionTemplateId: item?.motionTemplateId,
-      motionText: item?.motionText || undefined,
-    });
-    if (depth === 0) hasRoot = true;
-  }
-  return normalized;
-}
-
-function normalizeAgendaJsonItems(agendaJson?: string) {
-  if (!agendaJson) return [];
-  try {
-    const parsed = JSON.parse(agendaJson);
-    const values = Array.isArray(parsed) ? parsed : [];
-    const items: Array<{ title: string; depth: 0 | 1; type?: string; details?: string; presenter?: string; motionTemplateId?: any; motionText?: string }> = [];
-    let hasRoot = false;
-    for (const value of values) {
-      const title = typeof value === "string" ? value.trim() : String(value?.title ?? "").trim();
-      if (!title) continue;
-      const depth: 0 | 1 = typeof value === "object" && value?.depth === 1 && hasRoot ? 1 : 0;
-      items.push({
-        title,
-        depth,
-        type: typeof value === "object" ? value?.type ?? value?.sectionType : undefined,
-        details: typeof value === "object" ? value?.details : undefined,
-        presenter: typeof value === "object" ? value?.presenter : undefined,
-        motionTemplateId: typeof value === "object" ? value?.motionTemplateId : undefined,
-        motionText: typeof value === "object" ? value?.motionText : undefined,
-      });
-      if (depth === 0) hasRoot = true;
-    }
-    return items;
-  } catch {
-    return [];
-  }
-}
-
-async function buildTemplateMotions(ctx: any, items: TemplateItem[], templateContext: Record<string, string>) {
-  const motions: any[] = [];
-  const now = new Date().toISOString();
-  for (let index = 0; index < items.length; index++) {
-    const item = items[index];
-    let text = item.motionText;
-    let resolutionType = "Ordinary";
-    if (item.motionTemplateId) {
-      const template = await ctx.db.get(item.motionTemplateId);
-      if (template) {
-        text = text || template.body;
-        resolutionType = template.requiresSpecialResolution ? "Special" : "Ordinary";
-        await ctx.db.patch(template._id, {
-          usageCount: (template.usageCount ?? 0) + 1,
-          updatedAtISO: now,
-        });
-      }
-    }
-    text = resolveTemplateText(text, templateContext);
-    if (!text?.trim()) continue;
-    motions.push({
-      text: text.trim(),
-      outcome: "Pending",
-      resolutionType,
-      sectionIndex: index,
-      sectionTitle: item.title,
-    });
-  }
-  return motions;
-}
-
-async function buildTemplateContext(ctx: any, societyId: any, scheduledAt: string) {
-  const meetings = await ctx.db
-    .query("meetings")
-    .withIndex("by_society_date", (q: any) => q.eq("societyId", societyId))
-    .order("desc")
-    .collect();
-  const previous = meetings.find((meeting: any) => {
-    if (meeting.status === "Cancelled") return false;
-    if (!meeting.scheduledAt || meeting.scheduledAt >= scheduledAt) return false;
-    return true;
-  });
-  return {
-    previousMeetingTitle: previous?.title ?? "previous meeting",
-    previousMeetingDate: previous?.scheduledAt ? formatLongDate(previous.scheduledAt) : "the previous meeting date",
-    calledToOrderTime: "[time]",
-    adjournedAt: "[time]",
-  };
-}
-
-function resolveTemplateText(value: string | undefined, context: Record<string, string>) {
-  if (!value) return "";
-  return value.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => context[key] ?? "");
-}
-
-function formatLongDate(value: string) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return value.slice(0, 10);
-  return date.toLocaleDateString("en-CA", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "America/Vancouver",
-  });
-}
-
-function inferAgendaSectionType(title: string) {
-  const lower = title.toLowerCase();
-  if (lower.includes("motion") || lower.includes("adopt") || lower.includes("approve") || lower.includes("adjourn")) return "motion";
-  if (lower.includes("report") || lower.includes("financial statement")) return "report";
-  if (lower.includes("decision") || lower.includes("resolution")) return "decision";
-  return "discussion";
-}
 
 export const markSourceReview = mutation({
   args: {
@@ -528,47 +129,7 @@ export const markSourceReview = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, status, notes, actingUserId }) => {
-    const meeting = await ctx.db.get(id);
-    if (!meeting) throw new Error("Meeting not found.");
-    const actor = actingUserId ? await ctx.db.get(actingUserId) : null;
-    if (actor && actor.societyId !== meeting.societyId) {
-      throw new Error("Reviewer is not part of this society.");
-    }
-    const now = new Date().toISOString();
-    const patch: any = {
-      sourceReviewStatus: status,
-      sourceReviewNotes: notes || undefined,
-    };
-    if (status === "source_reviewed") {
-      patch.sourceReviewedAtISO = now;
-      patch.sourceReviewedByUserId = actingUserId;
-    }
-    await ctx.db.patch(id, patch);
-
-    const minutes = await ctx.db
-      .query("minutes")
-      .withIndex("by_meeting", (q) => q.eq("meetingId", id))
-      .first();
-    if (minutes) {
-      await ctx.db.patch(minutes._id, {
-        sourceReviewStatus: status,
-        sourceReviewNotes: notes || undefined,
-        sourceReviewedAtISO: status === "source_reviewed" ? now : undefined,
-        sourceReviewedByUserId: status === "source_reviewed" ? actingUserId : undefined,
-      });
-    }
-
-    await ctx.db.insert("activity", {
-      societyId: meeting.societyId,
-      actor: actor?.displayName ?? "You",
-      entityType: "meeting",
-      entityId: id,
-      action: "source-review",
-      summary: `Marked source review ${status.replace(/_/g, " ")} for ${meeting.title}`,
-      createdAtISO: now,
-    });
-  },
+  handler: (ctx, args) => markSourceReviewPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const setPackageReviewStatus = mutation({
@@ -579,33 +140,7 @@ export const setPackageReviewStatus = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, status, notes, actingUserId }) => {
-    const meeting = await ctx.db.get(id);
-    if (!meeting) throw new Error("Meeting not found.");
-    const actor = actingUserId ? await ctx.db.get(actingUserId) : null;
-    if (actor && actor.societyId !== meeting.societyId) {
-      throw new Error("Reviewer is not part of this society.");
-    }
-    const now = new Date().toISOString();
-    const patch: any = {
-      packageReviewStatus: status,
-      packageReviewNotes: notes || undefined,
-    };
-    if (status === "ready" || status === "released") {
-      patch.packageReviewedAtISO = now;
-      patch.packageReviewedByUserId = actingUserId;
-    }
-    await ctx.db.patch(id, patch);
-    await ctx.db.insert("activity", {
-      societyId: meeting.societyId,
-      actor: actor?.displayName ?? "You",
-      entityType: "meeting",
-      entityId: id,
-      action: "package-review",
-      summary: `Marked board package ${status.replace(/_/g, " ")} for ${meeting.title}`,
-      createdAtISO: now,
-    });
-  },
+  handler: (ctx, args) => setPackageReviewStatusPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const backfillQuorumSnapshot = mutation({
@@ -649,7 +184,5 @@ export const backfillQuorumSnapshot = mutation({
 export const remove = mutation({
   args: { id: v.id("meetings") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });

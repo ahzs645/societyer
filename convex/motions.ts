@@ -5,6 +5,19 @@ import {
   classifyProceduralMotion,
   defaultDecidedByFor,
 } from "../shared/proceduralMotions";
+import {
+  listPortable,
+  listForMinutesPortable,
+  listForMeetingPortable,
+  backlogPortable,
+  createPortable,
+  updatePortable,
+  setStatusPortable,
+  setTagsPortable,
+  recordVotePortable,
+  removePortable,
+} from "../shared/functions/motions";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 // Standalone first-class motion store. See
 // docs/motions-first-class-object-design.md. During the dual-write phase the
@@ -55,52 +68,6 @@ function stripUndefined(obj: Record<string, any>) {
   const out: Record<string, any> = {};
   for (const [k, val] of Object.entries(obj)) if (val !== undefined) out[k] = val;
   return out;
-}
-
-// ----- shared write helpers (reused by the dual-write hooks) ----------------
-
-/** Stamp a motion's procedural classification onto an input record without
- *  overwriting values the caller set explicitly: the `proceduralKind` slug, the
- *  auto-applied kind tag, and the default `decidedBy`. Applied to every direct
- *  insert so backlog / import / AI-transcript creation paths label recurring
- *  procedural motions (adjournment, approve-minutes, …) the same way the
- *  minutes→motions mirror does. Substantive motions are left untouched. */
-export function classifyMotionInput(input: Record<string, any>) {
-  const subject = {
-    text: input.text,
-    sectionTitle: input.sectionTitle,
-    resolutionType: input.resolutionType ?? input.resolutionTypeLabel,
-  };
-  const kind = classifyProceduralMotion(subject);
-  if (!kind) return input;
-  return {
-    ...input,
-    proceduralKind: input.proceduralKind ?? kind.key,
-    tags: applyProceduralTags(input.tags, subject),
-    decidedBy: input.decidedBy ?? kind.defaultDecidedBy,
-  };
-}
-
-/** Insert a motion row, defaulting status to Draft and stamping timestamps.
- *  Returns the new id. */
-export async function insertMotion(ctx: any, input: Record<string, any>) {
-  const now = new Date().toISOString();
-  const classified = classifyMotionInput(input);
-  return await ctx.db.insert("motions", {
-    ...stripUndefined(classified),
-    status: classified.status ?? "Draft",
-    createdAtISO: now,
-    updatedAtISO: now,
-  });
-}
-
-/** Patch a motion row, dropping undefined keys and stamping updatedAtISO. */
-export async function patchMotion(ctx: any, motionId: any, patch: Record<string, any>) {
-  await ctx.db.patch(motionId, {
-    ...stripUndefined(patch),
-    updatedAtISO: new Date().toISOString(),
-  });
-  return motionId;
 }
 
 // ----- dual-write: mirror embedded minutes.motions[] into the table ---------
@@ -332,46 +299,27 @@ export const backfillProceduralClassification = internalMutation({
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx: any, { societyId }: any) =>
-    ctx.db
-      .query("motions")
-      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx: any, args: any) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const listForMinutes = query({
   args: { minutesId: v.id("minutes") },
   returns: v.any(),
-  handler: async (ctx: any, { minutesId }: any) =>
-    ctx.db
-      .query("motions")
-      .withIndex("by_minutes", (q: any) => q.eq("minutesId", minutesId))
-      .collect(),
+  handler: (ctx: any, args: any) => listForMinutesPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const listForMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: async (ctx: any, { meetingId }: any) =>
-    ctx.db
-      .query("motions")
-      .withIndex("by_meeting", (q: any) => q.eq("primaryMeetingId", meetingId))
-      .collect(),
+  handler: (ctx: any, args: any) => listForMeetingPortable(toPortableQueryCtx(ctx), args),
 });
 
 // Backlog list = motions parked before/around a meeting. Folds in the old
 // motionBacklog query surface; the "backlog" is just a status filter now.
-const BACKLOG_STATUSES = new Set(["Backlog", "Tabled", "Deferred"]);
 export const backlog = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx: any, { societyId }: any) => {
-    const rows = await ctx.db
-      .query("motions")
-      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-      .collect();
-    return rows.filter((r: any) => BACKLOG_STATUSES.has(r.status));
-  },
+  handler: (ctx: any, args: any) => backlogPortable(toPortableQueryCtx(ctx), args),
 });
 
 // ----- mutations ------------------------------------------------------------
@@ -384,7 +332,7 @@ export const create = mutation({
     ...motionContent,
   },
   returns: v.any(),
-  handler: async (ctx: any, args: any) => insertMotion(ctx, args),
+  handler: (ctx: any, args: any) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -397,7 +345,7 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx: any, { motionId, patch }: any) => patchMotion(ctx, motionId, patch),
+  handler: (ctx: any, args: any) => updatePortable(toPortableMutationCtx(ctx), args),
 });
 
 /** Set an explicit, overridable status (and optional outcome), appending a
@@ -413,33 +361,7 @@ export const setStatus = mutation({
     note: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx: any, { motionId, status, outcome, manual, meetingId, note }: any) => {
-    const row = await ctx.db.get(motionId);
-    if (!row) return null;
-    const now = new Date().toISOString();
-    const entry = stripUndefined({
-      at: now,
-      status,
-      outcome,
-      meetingId,
-      minutesId: row.minutesId,
-      votesFor: row.votesFor,
-      votesAgainst: row.votesAgainst,
-      abstentions: row.abstentions,
-      note,
-    });
-    await ctx.db.patch(
-      motionId,
-      stripUndefined({
-        status,
-        outcome,
-        statusIsManual: manual === true ? true : row.statusIsManual,
-        history: [...(row.history ?? []), entry],
-        updatedAtISO: now,
-      }),
-    );
-    return motionId;
-  },
+  handler: (ctx: any, args: any) => setStatusPortable(toPortableMutationCtx(ctx), args),
 });
 
 /** Replace a motion's tag/label set (normalized: trimmed, lowercased, deduped).
@@ -448,16 +370,7 @@ export const setStatus = mutation({
 export const setTags = mutation({
   args: { motionId: v.id("motions"), tags: v.array(v.string()) },
   returns: v.any(),
-  handler: async (ctx: any, { motionId, tags }: any) => {
-    const normalized = Array.from(
-      new Set(
-        (tags ?? [])
-          .map((t: string) => String(t ?? "").trim().toLowerCase())
-          .filter(Boolean),
-      ),
-    );
-    return patchMotion(ctx, motionId, { tags: normalized });
-  },
+  handler: (ctx: any, args: any) => setTagsPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const recordVote = mutation({
@@ -468,15 +381,11 @@ export const recordVote = mutation({
     abstentions: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: async (ctx: any, { motionId, votesFor, votesAgainst, abstentions }: any) =>
-    patchMotion(ctx, motionId, { votesFor, votesAgainst, abstentions }),
+  handler: (ctx: any, args: any) => recordVotePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { motionId: v.id("motions") },
   returns: v.any(),
-  handler: async (ctx: any, { motionId }: any) => {
-    await ctx.db.delete(motionId);
-    return null;
-  },
+  handler: (ctx: any, args: any) => removePortable(toPortableMutationCtx(ctx), args),
 });
