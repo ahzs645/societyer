@@ -5,9 +5,10 @@
  * progress over `ctx.db`, running unchanged on hosted Convex, the local Dexie
  * runtime, and the convex-test oracle.
  *
- * The `search` (search-index) and `batchGeneratePacket` (raw-ctx packet
- * generation) handlers stay in convex/firm.ts; they fall outside the portable
- * `ctx.db` contract.
+ * `searchPortable` runs the firm-wide quick search over the portable
+ * `withSearchIndex` contract (a tokenized prefix scan on the local adapters, the
+ * real full-text index on Convex). `batchGeneratePacket` (raw-ctx packet
+ * generation) stays in convex/firm.ts.
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
@@ -75,4 +76,36 @@ export async function overviewPortable(ctx: PortableQueryCtx, { todayISO }: { to
       upcomingDeadlines: entities.reduce((sum, e) => sum + e.upcomingDeadlines, 0),
     },
   };
+}
+
+export async function searchPortable(ctx: PortableQueryCtx, { query: term }: { query: string }) {
+  const q = String(term ?? "").trim();
+  if (q.length < 2) return [];
+  const [deadlines, documents, people] = await Promise.all([
+    ctx.db.query("deadlines").withSearchIndex("search_title", (s) => s.search("title", q)).take(12),
+    ctx.db.query("documents").withSearchIndex("search_title", (s) => s.search("title", q)).take(12),
+    ctx.db.query("peopleDirectory").withSearchIndex("search_full_name", (s) => s.search("fullName", q)).take(12),
+  ]);
+
+  const societyById = new Map<string, any>();
+  for (const id of new Set<string>([...deadlines, ...documents].map((r: any) => String(r.societyId)))) {
+    const s = await ctx.db.get(id);
+    if (s) societyById.set(id, s);
+  }
+  const nameOf = (id: string) => {
+    const s = societyById.get(id);
+    return s ? organizationLabel(s as any) : "Unknown entity";
+  };
+
+  const results: any[] = [];
+  for (const d of deadlines) {
+    results.push({ kind: "deadline", id: String(d._id), title: d.title, societyId: String(d.societyId), societyName: nameOf(String(d.societyId)), to: "/app/deadlines" });
+  }
+  for (const d of documents) {
+    results.push({ kind: "document", id: String(d._id), title: d.title, societyId: String(d.societyId), societyName: nameOf(String(d.societyId)), to: "/app/documents" });
+  }
+  for (const p of people) {
+    results.push({ kind: "person", id: String(p._id), title: p.fullName, societyId: null, societyName: null, to: "/app/people-directory" });
+  }
+  return results;
 }

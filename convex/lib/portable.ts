@@ -19,6 +19,7 @@ import type {
   PortableMutationCtx,
   PortableQuery,
   PortableQueryCtx,
+  SearchFilterBuilder,
   TransactionalDb,
 } from "../../shared/portable/ctx";
 
@@ -32,6 +33,14 @@ class ConvexPortableQuery<T extends PortableDoc> implements PortableQuery<T> {
 
   withIndex(indexName: string, range?: (q: IndexRangeBuilder) => IndexRangeBuilder): PortableQuery<T> {
     this.inner = this.inner.withIndex(indexName, range as any);
+    return this;
+  }
+
+  withSearchIndex(indexName: string, search: (q: SearchFilterBuilder) => SearchFilterBuilder): PortableQuery<T> {
+    // Convex's real search builder is shape-compatible with SearchFilterBuilder
+    // (`search(field, query)` + `eq(field, value)`), so pass the callback straight
+    // through to the live full-text index.
+    this.inner = this.inner.withSearchIndex(indexName, search as any);
     return this;
   }
 

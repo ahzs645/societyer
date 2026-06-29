@@ -31,6 +31,7 @@ import {
   type TransactionalDb,
 } from "../shared/portable/index";
 import { votingPowerPortable, summarizeVotingPower } from "../shared/functions/votingPower";
+import { searchPortable } from "../shared/functions/firm";
 
 // --- deterministic injection so both engines produce byte-identical writes ----
 const fixedNow = () => 1000;
@@ -211,6 +212,46 @@ async function holdingsAndClass(db: TransactionalDb) {
   assert.equal(map.entityFor("convex_native_123"), minted);
   assert.equal(map.ensureEntityFor("convex_native_123", () => "SHOULD_NOT_MINT"), minted, "idempotent");
   console.log("✓ ids: monotonic sortable entityIds + bidirectional native<->entity map");
+}
+
+// === 5. full-text search (withSearchIndex) parity + semantics =================
+{
+  const searchFixture = (): Record<string, PortableDoc[]> => ({
+    societies: [{ _id: "soc_a", legalName: "Riverside Society", _creationTime: 1 }],
+    deadlines: [
+      { _id: "dl_1", societyId: "soc_a", title: "Annual Report Filing", _creationTime: 2 },
+      { _id: "dl_2", societyId: "soc_a", title: "Quarterly Budget Review", _creationTime: 3 },
+    ],
+    documents: [
+      { _id: "doc_1", societyId: "soc_a", title: "Annual General Meeting Minutes", _creationTime: 4 },
+      { _id: "doc_2", societyId: "soc_a", title: "Lease Agreement", _creationTime: 5 },
+    ],
+    peopleDirectory: [
+      { _id: "p_1", fullName: "Annabelle Stone", _creationTime: 6 },
+      { _id: "p_2", fullName: "Bob Jones", _creationTime: 7 },
+    ],
+  });
+  const ctxFor = (db: TransactionalDb) => ({ db, capabilities: makeCapabilities({}), runQuery: async () => undefined });
+
+  const memCtx = ctxFor(new MemoryDb({ seed: searchFixture() }));
+  const localCtx = ctxFor(new LocalStoreDb(new MemoryRowStore(searchFixture())));
+
+  // Prefix-on-last-term: "ann" hits "Annual…" and "Annabelle".
+  const memHits = await searchPortable(memCtx, { query: "ann" });
+  const localHits = await searchPortable(localCtx, { query: "ann" });
+  assert.deepEqual(localHits, memHits, "MemoryDb and LocalStoreDb diverged for withSearchIndex");
+  const ids = new Set(memHits.map((r: any) => r.id));
+  assert.ok(ids.has("dl_1") && ids.has("doc_1") && ids.has("p_1"), "search 'ann' should hit annual/Annabelle rows");
+  assert.ok(!ids.has("dl_2") && !ids.has("doc_2") && !ids.has("p_2"), "search 'ann' must not hit non-matching rows");
+
+  // Multi-term is AND: "annual report" keeps the deadline, drops the AGM doc.
+  const andHits = (await searchPortable(memCtx, { query: "annual report" })).map((r: any) => r.id);
+  assert.ok(andHits.includes("dl_1"), "multi-term AND should keep 'Annual Report Filing'");
+  assert.ok(!andHits.includes("doc_1"), "multi-term AND should drop a row missing a term");
+
+  // The <2-char guard returns nothing.
+  assert.deepEqual(await searchPortable(memCtx, { query: "a" }), [], "search guard: <2 chars returns []");
+  console.log("✓ search: withSearchIndex MemoryDb == LocalStoreDb (prefix + multi-term AND + guard)");
 }
 
 console.log("\nAll portable-runtime conformance checks passed.");

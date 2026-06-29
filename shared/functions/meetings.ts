@@ -793,3 +793,37 @@ export async function setPackageReviewStatusPortable(
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
   await ctx.db.delete(id);
 }
+
+export async function backfillQuorumSnapshotPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const meeting = await ctx.db.get(id);
+  if (!meeting) return null;
+  const snapshot = await buildQuorumSnapshot(ctx, {
+    societyId: String(meeting.societyId),
+    meetingDateISO: meeting.scheduledAt,
+    meetingType: meeting.type,
+    quorumRequiredOverride: meeting.quorumRequired,
+  });
+  const patch: any = {};
+  if (meeting.quorumRequired == null && snapshot.quorumRequired != null) {
+    patch.quorumRequired = snapshot.quorumRequired;
+  }
+  if (!meeting.bylawRuleSetId && snapshot.bylawRuleSetId) {
+    patch.bylawRuleSetId = snapshot.bylawRuleSetId;
+  }
+  if (meeting.quorumRuleVersion == null && snapshot.quorumRuleVersion != null) {
+    patch.quorumRuleVersion = snapshot.quorumRuleVersion;
+  }
+  if (!meeting.quorumRuleEffectiveFromISO && snapshot.quorumRuleEffectiveFromISO) {
+    patch.quorumRuleEffectiveFromISO = snapshot.quorumRuleEffectiveFromISO;
+  }
+  if (!meeting.quorumSourceLabel) {
+    patch.quorumSourceLabel = snapshot.quorumSourceLabel;
+  }
+  if (!meeting.quorumComputedAtISO) {
+    patch.quorumComputedAtISO = snapshot.quorumComputedAtISO;
+  }
+  if (Object.keys(patch).length > 0) {
+    await ctx.db.patch(id, patch);
+  }
+  return { patched: Object.keys(patch) };
+}

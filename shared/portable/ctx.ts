@@ -43,6 +43,18 @@ export interface IndexRangeBuilder {
   lte(field: string, value: unknown): IndexRangeBuilder;
 }
 
+/**
+ * Full-text search builder passed to `withSearchIndex`. Mirrors Convex's
+ * `SearchFilterBuilder`: one `search(field, query)` plus zero or more `eq` filter
+ * fields declared on the search index. On the local adapters this is emulated by
+ * a tokenized, prefix-on-last-term scan (relevance-ranked but not BM25-identical);
+ * on Convex it hits the real search index. See the fidelity boundary in ctx doc.
+ */
+export interface SearchFilterBuilder {
+  search(field: string, query: string): SearchFilterBuilder;
+  eq(field: string, value: unknown): SearchFilterBuilder;
+}
+
 export interface PaginationOptions {
   numItems: number;
   cursor: string | null;
@@ -57,6 +69,7 @@ export interface PaginationResult<T> {
 /** The read query builder. A subset of Convex's QueryInitializer/Query. */
 export interface PortableQuery<T extends PortableDoc = PortableDoc> {
   withIndex(indexName: string, range?: (q: IndexRangeBuilder) => IndexRangeBuilder): PortableQuery<T>;
+  withSearchIndex(indexName: string, search: (q: SearchFilterBuilder) => SearchFilterBuilder): PortableQuery<T>;
   filter(predicate: (doc: T) => boolean): PortableQuery<T>;
   order(direction: "asc" | "desc"): PortableQuery<T>;
   collect(): Promise<T[]>;

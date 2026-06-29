@@ -1,6 +1,5 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { buildQuorumSnapshot } from "./lib/bylawRules";
 import {
   listPortable,
   getPortable,
@@ -10,6 +9,7 @@ import {
   markSourceReviewPortable,
   setPackageReviewStatusPortable,
   removePortable,
+  backfillQuorumSnapshotPortable,
 } from "../shared/functions/meetings";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -146,39 +146,7 @@ export const setPackageReviewStatus = mutation({
 export const backfillQuorumSnapshot = mutation({
   args: { id: v.id("meetings") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const meeting = await ctx.db.get(id);
-    if (!meeting) return null;
-    const snapshot = await buildQuorumSnapshot(ctx, {
-      societyId: meeting.societyId,
-      meetingDateISO: meeting.scheduledAt,
-      meetingType: meeting.type,
-      quorumRequiredOverride: meeting.quorumRequired,
-    });
-    const patch: any = {};
-    if (meeting.quorumRequired == null && snapshot.quorumRequired != null) {
-      patch.quorumRequired = snapshot.quorumRequired;
-    }
-    if (!meeting.bylawRuleSetId && snapshot.bylawRuleSetId) {
-      patch.bylawRuleSetId = snapshot.bylawRuleSetId;
-    }
-    if (meeting.quorumRuleVersion == null && snapshot.quorumRuleVersion != null) {
-      patch.quorumRuleVersion = snapshot.quorumRuleVersion;
-    }
-    if (!meeting.quorumRuleEffectiveFromISO && snapshot.quorumRuleEffectiveFromISO) {
-      patch.quorumRuleEffectiveFromISO = snapshot.quorumRuleEffectiveFromISO;
-    }
-    if (!meeting.quorumSourceLabel) {
-      patch.quorumSourceLabel = snapshot.quorumSourceLabel;
-    }
-    if (!meeting.quorumComputedAtISO) {
-      patch.quorumComputedAtISO = snapshot.quorumComputedAtISO;
-    }
-    if (Object.keys(patch).length > 0) {
-      await ctx.db.patch(id, patch);
-    }
-    return { patched: Object.keys(patch) };
-  },
+  handler: (ctx, args) => backfillQuorumSnapshotPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({

@@ -133,6 +133,9 @@ import * as workflowsFns from "./workflows";
 import * as filingBotFns from "./filingBot";
 import * as legalRecordsFns from "./legalRecords";
 
+import * as legalDocumentsFns from "./legalDocuments";
+import * as seedRecordTableMetadataFns from "./seedRecordTableMetadata";
+
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }),
   definePortableMutation({ name: "legalOperations:upsertRightsClass", handler: upsertRightsClassPortable }),
@@ -1144,6 +1147,42 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   // importSessions
   definePortableMutation({ name: "importSessions:applyApprovedDocuments", handler: importSessionsFns.applyApprovedDocumentsPortable }),
   definePortableMutation({ name: "importSessions:applyApprovedSectionRecords", handler: importSessionsFns.applyApprovedSectionRecordsPortable }),
+
+
+  // firm
+  definePortableQuery({ name: "firm:search", handler: firmFns.searchPortable }),
+
+  // meetingTemplates
+  definePortableMutation({ name: "meetingTemplates:seedDefaults", handler: meetingTemplatesFns.seedDefaultsPortable }),
+
+  // motionTemplates
+  definePortableMutation({ name: "motionTemplates:seedDefaults", handler: motionTemplatesFns.seedDefaultsPortable }),
+
+  // meetings
+  definePortableMutation({ name: "meetings:backfillQuorumSnapshot", handler: meetingsFns.backfillQuorumSnapshotPortable }),
+
+  // minutes
+  definePortableMutation({ name: "minutes:backfillQuorumSnapshot", handler: minutesFns.backfillQuorumSnapshotPortable }),
+
+  // organizationDetails
+  definePortableMutation({ name: "organizationDetails:seedFromSocietyAddresses", handler: organizationDetailsFns.seedFromSocietyAddressesPortable }),
+  definePortableMutation({ name: "organizationDetails:backfillFromExistingRecords", handler: organizationDetailsFns.backfillFromExistingRecordsPortable }),
+
+  // seedRecordTableMetadata
+  definePortableMutation({ name: "seedRecordTableMetadata:ensureForSociety", handler: seedRecordTableMetadataFns.ensureForSocietyPortable }),
+
+  // legalOperations
+  definePortableQuery({ name: "legalOperations:templateEngine", handler: legalDocumentsFns.templateEnginePortable }),
+  definePortableMutation({ name: "legalOperations:seedStarterPolicyTemplates", handler: legalDocumentsFns.seedStarterPolicyTemplatesPortable }),
+  definePortableMutation({ name: "legalOperations:seedCorporationDocumentPackets", handler: legalDocumentsFns.seedCorporationDocumentPacketsPortable }),
+  definePortableMutation({ name: "legalOperations:seedSocietyDocumentPackets", handler: legalDocumentsFns.seedSocietyDocumentPacketsPortable }),
+  definePortableMutation({ name: "legalOperations:generateDocumentFromCatalog", handler: legalDocumentsFns.generateDocumentFromCatalogPortable }),
+  definePortableMutation({ name: "legalOperations:seedDocumentPacketsForEntity", handler: legalDocumentsFns.seedDocumentPacketsForEntityPortable }),
+  definePortableMutation({ name: "legalOperations:stageCorporationDocumentPacket", handler: legalDocumentsFns.stageCorporationDocumentPacketPortable }),
+  definePortableMutation({ name: "legalOperations:stageShareIssuancePacket", handler: legalDocumentsFns.stageShareIssuancePacketPortable }),
+  definePortableMutation({ name: "legalOperations:stageShareSplitPacket", handler: legalDocumentsFns.stageShareSplitPacketPortable }),
+  definePortableMutation({ name: "legalOperations:upsertTemplateDataField", handler: legalDocumentsFns.upsertTemplateDataFieldPortable }),
+  definePortableMutation({ name: "legalOperations:removeTemplateDataField", handler: legalDocumentsFns.removeTemplateDataFieldPortable }),
 
 ];
 

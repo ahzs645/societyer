@@ -4,7 +4,7 @@ import { organizationKind, organizationLabel } from "../shared/organizationDomai
 import { CORPORATION_DOCUMENT_PACKETS } from "../shared/corporationDocumentPackets";
 import { SOCIETY_DOCUMENT_PACKETS } from "../shared/societyDocumentPackets";
 import { generatePacketForSociety } from "./legalOperations";
-import { overviewPortable } from "../shared/functions/firm";
+import { overviewPortable, searchPortable } from "../shared/functions/firm";
 import { toPortableQueryCtx } from "./lib/portable";
 
 /** The entity kind a packet applies to ("corporation" | "society"), or null. */
@@ -36,37 +36,7 @@ export const overview = query({
 export const search = query({
   args: { query: v.string() },
   returns: v.any(),
-  handler: async (ctx, { query: term }) => {
-    const q = String(term ?? "").trim();
-    if (q.length < 2) return [];
-    const [deadlines, documents, people] = await Promise.all([
-      ctx.db.query("deadlines").withSearchIndex("search_title", (s: any) => s.search("title", q)).take(12),
-      ctx.db.query("documents").withSearchIndex("search_title", (s: any) => s.search("title", q)).take(12),
-      ctx.db.query("peopleDirectory").withSearchIndex("search_full_name", (s: any) => s.search("fullName", q)).take(12),
-    ]);
-
-    const societyById = new Map<string, any>();
-    for (const id of new Set<string>([...deadlines, ...documents].map((r: any) => String(r.societyId)))) {
-      const s = await ctx.db.get(id as any);
-      if (s) societyById.set(id, s);
-    }
-    const nameOf = (id: string) => {
-      const s = societyById.get(id);
-      return s ? organizationLabel(s as any) : "Unknown entity";
-    };
-
-    const results: any[] = [];
-    for (const d of deadlines) {
-      results.push({ kind: "deadline", id: String(d._id), title: d.title, societyId: String(d.societyId), societyName: nameOf(String(d.societyId)), to: "/app/deadlines" });
-    }
-    for (const d of documents) {
-      results.push({ kind: "document", id: String(d._id), title: d.title, societyId: String(d.societyId), societyName: nameOf(String(d.societyId)), to: "/app/documents" });
-    }
-    for (const p of people) {
-      results.push({ kind: "person", id: String(p._id), title: p.fullName, societyId: null, societyName: null, to: "/app/people-directory" });
-    }
-    return results;
-  },
+  handler: (ctx, args) => searchPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const batchGeneratePacket = mutation({

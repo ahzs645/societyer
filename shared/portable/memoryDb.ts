@@ -20,10 +20,74 @@ import type {
   PortableDbWriter,
   PortableDoc,
   PortableQuery,
+  SearchFilterBuilder,
   TableName,
 } from "./ctx";
 
 type Constraint = { op: "eq" | "gt" | "gte" | "lt" | "lte"; field: string; value: unknown };
+
+/** Captured `withSearchIndex` spec: the searched field/query + any eq filters. */
+export type SearchSpec = { field: string; query: string; eqs: { field: string; value: unknown }[] };
+
+export function collectSearch(search: (q: SearchFilterBuilder) => SearchFilterBuilder): SearchSpec {
+  const spec: SearchSpec = { field: "", query: "", eqs: [] };
+  const builder: SearchFilterBuilder = {
+    search: (field, query) => ((spec.field = field), (spec.query = query), builder),
+    eq: (field, value) => (spec.eqs.push({ field, value }), builder),
+  };
+  search(builder);
+  return spec;
+}
+
+function tokenize(text: unknown): string[] {
+  return String(text ?? "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/**
+ * Local emulation of Convex full-text search. A row matches when every query
+ * token hits a field token (the LAST token prefix-matches, mirroring Convex);
+ * results are relevance-ranked by token-hit count, then `_creationTime`/`_id` for
+ * a deterministic order. Not BM25-identical, but stable and engine-equal across
+ * MemoryDb and LocalStoreDb (the differential harness asserts on membership).
+ */
+export function evaluateSearch<T extends PortableDoc>(
+  rows: T[],
+  spec: SearchSpec,
+  predicates: ((doc: T) => boolean)[],
+): T[] {
+  let candidates = rows.filter((doc) => spec.eqs.every((e) => doc[e.field] === e.value));
+  for (const p of predicates) candidates = candidates.filter(p);
+  const terms = tokenize(spec.query);
+  if (terms.length === 0) return [];
+  const scored: { row: T; score: number }[] = [];
+  for (const row of candidates) {
+    const tokens = tokenize(row[spec.field]);
+    let matchedAll = true;
+    let score = 0;
+    for (let i = 0; i < terms.length; i++) {
+      const term = terms[i];
+      const isLast = i === terms.length - 1;
+      let hits = 0;
+      for (const tok of tokens) if (tok === term || (isLast && tok.startsWith(term))) hits += 1;
+      if (hits === 0) {
+        matchedAll = false;
+        break;
+      }
+      score += hits;
+    }
+    if (matchedAll) scored.push({ row, score });
+  }
+  scored.sort(
+    (a, b) =>
+      b.score - a.score ||
+      Number(b.row._creationTime ?? 0) - Number(a.row._creationTime ?? 0) ||
+      String(a.row._id).localeCompare(String(b.row._id)),
+  );
+  return scored.map((s) => s.row);
+}
 
 function collectConstraints(range?: (q: IndexRangeBuilder) => IndexRangeBuilder): Constraint[] {
   if (!range) return [];
@@ -79,6 +143,7 @@ class QueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
   private constraints: Constraint[] = [];
   private predicates: ((doc: T) => boolean)[] = [];
   private direction: "asc" | "desc" = "asc";
+  private search: SearchSpec | null = null;
 
   constructor(source: () => T[]) {
     this.source = source;
@@ -86,6 +151,11 @@ class QueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
 
   withIndex(_indexName: string, range?: (q: IndexRangeBuilder) => IndexRangeBuilder): PortableQuery<T> {
     this.constraints.push(...collectConstraints(range));
+    return this;
+  }
+
+  withSearchIndex(_indexName: string, search: (q: SearchFilterBuilder) => SearchFilterBuilder): PortableQuery<T> {
+    this.search = collectSearch(search);
     return this;
   }
 
@@ -100,6 +170,7 @@ class QueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
   }
 
   private run(): T[] {
+    if (this.search) return evaluateSearch(this.source(), this.search, this.predicates);
     return evaluateQuery(this.source(), this.constraints, this.predicates, this.direction);
   }
 

@@ -22,9 +22,10 @@ import type {
   PortableDbWriter,
   PortableDoc,
   PortableQuery,
+  SearchFilterBuilder,
   TableName,
 } from "./ctx";
-import { evaluateQuery, type MemoryDbOptions } from "./memoryDb";
+import { collectSearch, evaluateQuery, evaluateSearch, type MemoryDbOptions, type SearchSpec } from "./memoryDb";
 import { createEntityIdFactory } from "./ids";
 
 /** Atomic write operation flushed by `commitBatch`. */
@@ -53,6 +54,7 @@ class LocalQueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
   private constraints: { op: "eq" | "gt" | "gte" | "lt" | "lte"; field: string; value: unknown }[] = [];
   private predicates: ((doc: T) => boolean)[] = [];
   private direction: "asc" | "desc" = "asc";
+  private search: SearchSpec | null = null;
 
   constructor(source: () => T[]) {
     this.source = source;
@@ -73,6 +75,11 @@ class LocalQueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
     return this;
   }
 
+  withSearchIndex(_indexName: string, search: (q: SearchFilterBuilder) => SearchFilterBuilder): PortableQuery<T> {
+    this.search = collectSearch(search);
+    return this;
+  }
+
   filter(predicate: (doc: T) => boolean): PortableQuery<T> {
     this.predicates.push(predicate);
     return this;
@@ -84,6 +91,7 @@ class LocalQueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
   }
 
   private run(): T[] {
+    if (this.search) return evaluateSearch(this.source(), this.search, this.predicates);
     return reusableEvaluator(this.source(), this.constraints, this.predicates, this.direction);
   }
 

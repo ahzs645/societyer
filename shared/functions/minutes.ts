@@ -515,6 +515,41 @@ export async function backfillMotionPersonLinksPortable(
   return { minutesScanned: rows.length, minutesUpdated, motionRowsUpdated, linkedNames, unresolvedNames };
 }
 
+export async function backfillQuorumSnapshotPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const minutes = await ctx.db.get(id);
+  if (!minutes) return null;
+  const meeting = await ctx.db.get(minutes.meetingId);
+  if (!meeting) return null;
+  const snapshot = await quorumSnapshotForMeeting(
+    ctx,
+    meeting,
+    minutes.quorumRequired ?? meeting.quorumRequired,
+  );
+  const patch: any = {};
+  if (minutes.quorumRequired == null && snapshot.quorumRequired != null) {
+    patch.quorumRequired = snapshot.quorumRequired;
+  }
+  if (!minutes.bylawRuleSetId && snapshot.bylawRuleSetId) {
+    patch.bylawRuleSetId = snapshot.bylawRuleSetId;
+  }
+  if (minutes.quorumRuleVersion == null && snapshot.quorumRuleVersion != null) {
+    patch.quorumRuleVersion = snapshot.quorumRuleVersion;
+  }
+  if (!minutes.quorumRuleEffectiveFromISO && snapshot.quorumRuleEffectiveFromISO) {
+    patch.quorumRuleEffectiveFromISO = snapshot.quorumRuleEffectiveFromISO;
+  }
+  if (!minutes.quorumSourceLabel) {
+    patch.quorumSourceLabel = snapshot.quorumSourceLabel;
+  }
+  if (!minutes.quorumComputedAtISO) {
+    patch.quorumComputedAtISO = snapshot.quorumComputedAtISO;
+  }
+  if (Object.keys(patch).length > 0) {
+    await ctx.db.patch(id, patch);
+  }
+  return { patched: Object.keys(patch) };
+}
+
 // ----- helpers --------------------------------------------------------------
 
 async function quorumSnapshotForMeeting(

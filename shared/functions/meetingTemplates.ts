@@ -9,6 +9,56 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 
+export async function seedDefaultsPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }) {
+  const existing = await ctx.db
+    .query("meetingTemplates")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  if (existing.length > 0) return { inserted: 0, existing: existing.length };
+  const now = new Date().toISOString();
+  await ctx.db.insert("meetingTemplates", {
+    societyId,
+    name: "Regular board meeting",
+    description: "Baseline recurring board agenda with standard procedural motions.",
+    meetingType: "Board",
+    isDefault: true,
+    items: [
+      { title: "Welcome and call to order", depth: 0, sectionType: "discussion" },
+      {
+        title: "Indigenous acknowledgement",
+        depth: 0,
+        sectionType: "discussion",
+        details: "Acknowledgement that the meeting is taking place on the unceded and ancestral territory of the Lheidli T'enneh, part of the Dakelh (Carrier) First Nations.",
+      },
+      {
+        title: "Adopt agenda",
+        depth: 0,
+        sectionType: "motion",
+        motionText: "BE IT RESOLVED THAT the agenda for this meeting be adopted as presented.",
+      },
+      {
+        title: "Adopt previous minutes",
+        depth: 0,
+        sectionType: "motion",
+        motionText: "BE IT RESOLVED THAT the minutes of the previous meeting, as circulated, be approved.",
+      },
+      { title: "Reports", depth: 0, sectionType: "report" },
+      { title: "Chair report", depth: 1, sectionType: "report" },
+      { title: "Treasurer report", depth: 1, sectionType: "report" },
+      { title: "New business", depth: 0, sectionType: "discussion" },
+      {
+        title: "Adjournment",
+        depth: 0,
+        sectionType: "motion",
+        motionText: "BE IT RESOLVED THAT the meeting be adjourned.",
+      },
+    ],
+    createdAtISO: now,
+    updatedAtISO: now,
+  });
+  return { inserted: 1, existing: 0 };
+}
+
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   const rows = await ctx.db
     .query("meetingTemplates")
