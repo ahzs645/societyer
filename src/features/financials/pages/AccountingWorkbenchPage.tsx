@@ -151,6 +151,9 @@ export function AccountingWorkbenchPage() {
     allocationAccountId: "",
     amount: "",
     description: "",
+    counterpartyId: "",
+    fundRestrictionId: "",
+    grantId: "",
   });
   const [reconciliationForm, setReconciliationForm] = useState({
     financialAccountId: "",
@@ -167,6 +170,7 @@ export function AccountingWorkbenchPage() {
   const restrictedBalances = useQuery(api.accounting.restrictedFundBalances, society ? { societyId: society._id } : "skip");
   const counterparties = useQuery(api.accounting.counterparties, society ? { societyId: society._id } : "skip");
   const fundRestrictions = useQuery(api.accounting.fundRestrictions, society ? { societyId: society._id } : "skip");
+  const grants = useQuery(api.grants.list, society ? { societyId: society._id } : "skip");
   const transactionCandidates = useQuery(api.evidenceRegisters.overview, society ? { societyId: society._id } : "skip");
   const seedChart = useMutation(api.accounting.seedSocietyChartOfAccounts);
   const upsertPeriod = useMutation(api.accounting.upsertFiscalPeriod);
@@ -242,11 +246,14 @@ export function AccountingWorkbenchPage() {
         allowClosedPeriodAdjustment: journalForm.allowClosed,
         lines: journalForm.lines
           .filter((line) => line.accountId && line.amount)
-          .map((line) => ({
+          .map((line: any) => ({
             accountId: line.accountId as any,
             side: line.side,
             amountCents: centsFromInput(line.amount),
             description: line.description || undefined,
+            counterpartyId: (line.counterpartyId || undefined) as any,
+            fundRestrictionId: (line.fundRestrictionId || undefined) as any,
+            grantId: (line.grantId || undefined) as any,
           })),
         actingUserId,
       });
@@ -263,6 +270,9 @@ export function AccountingWorkbenchPage() {
             accountId: candidateForm.allocationAccountId as any,
             amountCents: centsFromInput(candidateForm.amount),
             description: candidateForm.description || undefined,
+            counterpartyId: (candidateForm.counterpartyId || undefined) as any,
+            fundRestrictionId: (candidateForm.fundRestrictionId || undefined) as any,
+            grantId: (candidateForm.grantId || undefined) as any,
           },
         ],
         fiscalYear: currentYear(),
@@ -574,7 +584,17 @@ export function AccountingWorkbenchPage() {
           <Field label="Memo"><input className="input" value={journalForm.memo} onChange={(e) => setJournalForm({ ...journalForm, memo: e.target.value })} /></Field>
           <label className="checkbox"><input type="checkbox" checked={journalForm.allowClosed} onChange={(e) => setJournalForm({ ...journalForm, allowClosed: e.target.checked })} /> Closed-period adjustment</label>
         </FormGrid>
-        <AccountingLines rows={journalForm.lines} setRows={(lines: any) => setJournalForm({ ...journalForm, lines })} accounts={accounts ?? []} includeDescription />
+        <AccountingLines
+          rows={journalForm.lines}
+          setRows={(lines: any) => setJournalForm({ ...journalForm, lines })}
+          accounts={accounts ?? []}
+          includeDescription
+          links={{
+            counterparties: (counterparties ?? []).map((row: any) => ({ value: row._id, label: row.name })),
+            fundRestrictions: (fundRestrictions ?? []).map((row: any) => ({ value: row._id, label: row.name })),
+            grants: (grants ?? []).map((row: any) => ({ value: row._id, label: row.title })),
+          }}
+        />
       </Drawer>
 
       <Drawer open={drawer === "candidate"} onClose={() => setDrawer(null)} title="Post transaction candidate" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy || !candidateForm.candidateId} onClick={saveCandidateAllocation}>Post</button></>}>
@@ -587,6 +607,9 @@ export function AccountingWorkbenchPage() {
           <Field label="Offset account"><AccountSelect accounts={accounts ?? []} value={candidateForm.allocationAccountId} onChange={(allocationAccountId) => setCandidateForm({ ...candidateForm, allocationAccountId })} /></Field>
           <Field label="Amount"><input className="input" type="number" value={candidateForm.amount} onChange={(e) => setCandidateForm({ ...candidateForm, amount: e.target.value })} /></Field>
           <Field label="Description"><input className="input" value={candidateForm.description} onChange={(e) => setCandidateForm({ ...candidateForm, description: e.target.value })} /></Field>
+          <Field label="Counterparty" hint="Optional — tag the vendor/customer for reporting."><LinkSelect placeholder="No counterparty" value={candidateForm.counterpartyId} onChange={(counterpartyId) => setCandidateForm({ ...candidateForm, counterpartyId })} options={(counterparties ?? []).map((row: any) => ({ value: row._id, label: row.name }))} /></Field>
+          <Field label="Restricted fund" hint="Optional — track against a donor/grant restriction."><LinkSelect placeholder="No fund restriction" value={candidateForm.fundRestrictionId} onChange={(fundRestrictionId) => setCandidateForm({ ...candidateForm, fundRestrictionId })} options={(fundRestrictions ?? []).map((row: any) => ({ value: row._id, label: row.name }))} /></Field>
+          <Field label="Grant" hint="Optional — link to a grant."><LinkSelect placeholder="No grant" value={candidateForm.grantId} onChange={(grantId) => setCandidateForm({ ...candidateForm, grantId })} options={(grants ?? []).map((row: any) => ({ value: row._id, label: row.title }))} /></Field>
         </div>
       </Drawer>
 
@@ -622,16 +645,32 @@ function AccountSelect({ accounts, value, onChange }: { accounts: any[]; value: 
   );
 }
 
+function LinkSelect({ value, onChange, options, placeholder }: { value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string }>; placeholder: string }) {
+  return (
+    <Select
+      value={value}
+      onChange={(next) => onChange(next)}
+      options={[{ value: "", label: placeholder }, ...options]}
+    />
+  );
+}
+
 function AccountingLines({
   rows,
   setRows,
   accounts,
   includeDescription,
+  links,
 }: {
   rows: any[];
   setRows: (rows: any[]) => void;
   accounts: any[];
   includeDescription?: boolean;
+  links?: {
+    counterparties: Array<{ value: string; label: string }>;
+    fundRestrictions: Array<{ value: string; label: string }>;
+    grants: Array<{ value: string; label: string }>;
+  };
 }) {
   const update = (index: number, patch: any) => setRows(rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
   return (
@@ -642,6 +681,9 @@ function AccountingLines({
           <Field label="Side"><Select value={row.side} onChange={(value) => update(index, { side: value })} options={[{ value: "debit", label: "Debit" }, { value: "credit", label: "Credit" }]} /></Field>
           <Field label="Amount"><input className="input" type="number" value={row.amount} onChange={(e) => update(index, { amount: e.target.value })} /></Field>
           {includeDescription && <Field label="Description"><input className="input" value={row.description ?? ""} onChange={(e) => update(index, { description: e.target.value })} /></Field>}
+          {links && <Field label="Counterparty"><LinkSelect placeholder="No counterparty" value={row.counterpartyId ?? ""} onChange={(counterpartyId) => update(index, { counterpartyId })} options={links.counterparties} /></Field>}
+          {links && <Field label="Restricted fund"><LinkSelect placeholder="No fund restriction" value={row.fundRestrictionId ?? ""} onChange={(fundRestrictionId) => update(index, { fundRestrictionId })} options={links.fundRestrictions} /></Field>}
+          {links && <Field label="Grant"><LinkSelect placeholder="No grant" value={row.grantId ?? ""} onChange={(grantId) => update(index, { grantId })} options={links.grants} /></Field>}
         </div>
       ))}
       <button className="btn-action" type="button" onClick={() => setRows([...rows, { accountId: "", side: "debit", amount: "", description: "" }])}>

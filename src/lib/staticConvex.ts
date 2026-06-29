@@ -3257,8 +3257,12 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
         amountCents: line.amountCents,
         side: line.side,
         description: line.description,
+        counterpartyId: line.counterpartyId,
+        grantId: line.grantId,
         fundRestrictionId: line.fundRestrictionId,
-        documentIds: args?.sourceDocumentIds,
+        financialTransactionId: line.financialTransactionId,
+        transactionCandidateId: line.transactionCandidateId,
+        documentIds: line.documentIds ?? args?.sourceDocumentIds,
         createdAtISO: now,
         updatedAtISO: now,
       });
@@ -3306,6 +3310,11 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
         amountCents: line.amountCents,
         side: "debit",
         description: line.description,
+        counterpartyId: line.counterpartyId,
+        grantId: line.grantId,
+        fundRestrictionId: line.fundRestrictionId,
+        transactionCandidateId: args?.transactionCandidateId,
+        documentIds: line.documentIds,
         createdAtISO: now,
         updatedAtISO: now,
       });
@@ -4557,6 +4566,60 @@ function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDe
     if (event.condition) patch.condition = event.condition;
     store?.upsertRow("assets", { ...asset, ...patch });
     return event._id;
+  }
+  if (name === "inventoryHub:deleteConnection") {
+    // Mirror the Convex mutation: detach items that referenced the connection
+    // so imported records survive, then drop the connection.
+    const now = new Date().toISOString();
+    for (const item of (store?.listRows("inventoryItems", args) ?? tables.inventoryItems).filter((row: any) => row.connectionId === args?.id)) {
+      store?.upsertRow("inventoryItems", { ...item, connectionId: undefined, updatedAtISO: now });
+    }
+    store?.removeRow("inventoryConnections", args?.id);
+    return null;
+  }
+  if (name === "inventoryHub:setCandidateStatus") {
+    const candidate = store?.getRow("inventoryCandidates", args?.candidateId) ?? byId(tables.inventoryCandidates, args?.candidateId);
+    if (!candidate) return args?.candidateId;
+    store?.upsertRow("inventoryCandidates", { ...candidate, status: args?.status, updatedAtISO: new Date().toISOString() });
+    return args?.candidateId;
+  }
+  if (name === "inventoryHub:promoteCandidateToMovement") {
+    const candidate = store?.getRow("inventoryCandidates", args?.candidateId) ?? byId(tables.inventoryCandidates, args?.candidateId);
+    if (!candidate) throw new Error("Candidate not found.");
+    if (candidate.status === "posted") throw new Error("Candidate has already been posted.");
+    const itemId = args?.inventoryItemId ?? candidate.suggestedInventoryItemId;
+    if (!itemId) throw new Error("Resolve an inventory item before posting this candidate.");
+    const toLocationId = args?.toLocationId ?? candidate.suggestedLocationId;
+    if (!toLocationId && !args?.fromLocationId) {
+      throw new Error("Choose a destination (or source) location for the movement.");
+    }
+    const quantity = Math.abs(candidate.quantity ?? 0);
+    if (quantity <= 0) throw new Error("Candidate has no positive quantity to post.");
+    const item = store?.getRow("inventoryItems", itemId) ?? byId(tables.inventoryItems, itemId);
+    const now = new Date().toISOString();
+    const movementId = mutationResult("inventoryHub:postStockMovement", {
+      societyId: candidate.societyId,
+      connectionId: candidate.connectionId,
+      movementDate: candidate.occurredAtISO ?? now.slice(0, 10),
+      movementType: args?.movementType ?? "receive",
+      inventoryItemId: itemId,
+      fromLocationId: args?.fromLocationId,
+      toLocationId,
+      quantity,
+      unitOfMeasure: candidate.unitOfMeasure ?? item?.unitOfMeasure ?? "unit",
+      reason: candidate.notes,
+      sourceExternalId: candidate.sourceExternalId,
+      sourceSystem: candidate.sourceSystem ?? "import",
+    }, store);
+    store?.upsertRow("inventoryCandidates", {
+      ...candidate,
+      status: "posted",
+      postedMovementId: movementId,
+      suggestedInventoryItemId: itemId,
+      suggestedLocationId: toLocationId,
+      updatedAtISO: now,
+    });
+    return { movementId };
   }
   return MUT_NOT_HANDLED;
 }
