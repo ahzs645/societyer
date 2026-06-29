@@ -174,9 +174,15 @@
 
 @media (max-width: 760px) {
   .asset-detail-grid,
-  .form-grid,
-  .record-kv {
+  .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Keep the register fields two-up on phones (each label is short) so the
+   * panel isn't an extremely long one-field-per-row scroll. Tighten the gap
+   * and let long values wrap within their column. */
+  .record-kv {
+    gap: 10px 12px;
   }
 
   .asset-detail-grid {
