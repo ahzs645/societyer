@@ -30,13 +30,24 @@ import {
   type ProgramStatementLine,
 } from "../../../../shared/programStatement";
 import {
+  ORG_EXPENSE_CATEGORIES,
+  ORG_REVENUE_CATEGORIES,
+  blankOrgStatement,
+  buildOrgStatementFromFinances,
+  computeOrgStatementTotals,
+  lineTotalCents,
+  type OrgRevenueStatement,
+  type OrgStatementLine,
+} from "../../../../shared/orgRevenueStatement";
+import {
   renderAnnualStatementHtml,
+  renderOrgStatementHtml,
   renderProgramStatementHtml,
   renderReadinessHtml,
   renderRestrictedFundsHtml,
 } from "../lib/yearEndRenderers";
 
-type TabId = "readiness" | "annual" | "restricted" | "programs";
+type TabId = "readiness" | "annual" | "restricted" | "org" | "programs";
 
 type EditLine = { key: string; label: string; actual: string; budget: string; notes?: string };
 type EditState = {
@@ -102,6 +113,64 @@ function statementFromEdit(edit: EditState): ProgramStatement {
   };
 }
 
+type OrgEditLine = { key: string; label: string; general: string; gaming: string; notes?: string };
+type OrgEditState = {
+  _id?: string;
+  organizationName: string;
+  fiscalYearLabel: string;
+  periodLabel: string;
+  status: string;
+  narrative: string;
+  revenues: OrgEditLine[];
+  expenses: OrgEditLine[];
+};
+
+function toOrgEditLine(line: OrgStatementLine): OrgEditLine {
+  return {
+    key: line.key,
+    label: line.label,
+    general: centsToDollarInput(line.generalCents),
+    gaming: centsToDollarInput(line.gamingCents),
+    notes: line.notes,
+  };
+}
+
+function orgEditFromStatement(statement: OrgRevenueStatement & { _id?: string }): OrgEditState {
+  return {
+    _id: statement._id,
+    organizationName: statement.organizationName ?? "",
+    fiscalYearLabel: statement.fiscalYearLabel,
+    periodLabel: statement.periodLabel ?? "",
+    status: statement.status ?? "Draft",
+    narrative: statement.narrative ?? "",
+    revenues: statement.revenues.map(toOrgEditLine),
+    expenses: statement.expenses.map(toOrgEditLine),
+  };
+}
+
+function orgEditLineToLine(line: OrgEditLine): OrgStatementLine {
+  return {
+    key: line.key,
+    label: line.label,
+    generalCents: dollarInputToCents(line.general) ?? 0,
+    gamingCents: dollarInputToCents(line.gaming) ?? 0,
+    ...(line.notes ? { notes: line.notes } : {}),
+  };
+}
+
+function orgStatementFromEdit(edit: OrgEditState): OrgRevenueStatement {
+  return {
+    _id: edit._id,
+    organizationName: edit.organizationName,
+    fiscalYearLabel: edit.fiscalYearLabel,
+    periodLabel: edit.periodLabel || undefined,
+    status: edit.status,
+    narrative: edit.narrative || undefined,
+    revenues: edit.revenues.map(orgEditLineToLine),
+    expenses: edit.expenses.map(orgEditLineToLine),
+  };
+}
+
 function ToneBadge({ tone }: { tone: string }) {
   if (tone === "complete") return <Badge tone="success">Complete</Badge>;
   if (tone === "upcoming") return <Badge tone="neutral">Upcoming</Badge>;
@@ -154,12 +223,18 @@ export function YearEndReportsPage() {
   const grants = useQuery(api.grants.list, society ? { societyId: society._id } : "skip");
   const grantTxns = useQuery(api.grants.transactions, society ? { societyId: society._id } : "skip");
 
+  const orgStatements = useQuery(api.orgRevenueStatements.list, society ? { societyId: society._id } : "skip");
+
   const createStatement = useMutation(api.programStatements.create);
   const updateStatement = useMutation(api.programStatements.update);
   const removeStatement = useMutation(api.programStatements.remove);
+  const createOrg = useMutation(api.orgRevenueStatements.create);
+  const updateOrg = useMutation(api.orgRevenueStatements.update);
+  const removeOrg = useMutation(api.orgRevenueStatements.remove);
 
   const [edit, setEdit] = useState<EditState | null>(null);
   const [grantPick, setGrantPick] = useState<string>("");
+  const [orgEdit, setOrgEdit] = useState<OrgEditState | null>(null);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -250,10 +325,84 @@ export function YearEndReportsPage() {
     });
   };
 
+  const startNewOrg = () => {
+    setOrgEdit(
+      orgEditFromStatement(
+        blankOrgStatement({ organizationName: society.name, fiscalYearLabel: fiscalYear ?? "" }),
+      ),
+    );
+  };
+  const prefillOrgFromFinances = () => {
+    const built = buildOrgStatementFromFinances({
+      organizationName: society.name,
+      fiscalYearLabel: fiscalYear ?? "",
+      incomeByCategory: annual?.incomeByCategory ?? [],
+      expenseByCategory: annual?.expenseByCategory ?? [],
+      gamingGrantCents: restricted?.totals?.receiptsCents ?? 0,
+    });
+    setOrgEdit(orgEditFromStatement(built));
+  };
+  const saveOrg = async () => {
+    if (!orgEdit) return;
+    const statement = orgStatementFromEdit(orgEdit);
+    if (orgEdit._id) {
+      await updateOrg({
+        id: orgEdit._id as any,
+        patch: {
+          organizationName: statement.organizationName,
+          fiscalYearLabel: statement.fiscalYearLabel,
+          periodLabel: statement.periodLabel,
+          revenues: statement.revenues,
+          expenses: statement.expenses,
+          narrative: statement.narrative,
+          status: statement.status,
+        },
+      });
+    } else {
+      await createOrg({
+        societyId: society._id,
+        organizationName: statement.organizationName,
+        fiscalYearLabel: statement.fiscalYearLabel,
+        periodLabel: statement.periodLabel,
+        revenues: statement.revenues,
+        expenses: statement.expenses,
+        narrative: statement.narrative,
+        status: statement.status,
+      });
+    }
+    setOrgEdit(null);
+  };
+  const deleteOrg = async (id: string) => {
+    await removeOrg({ id: id as any });
+    if (orgEdit?._id === id) setOrgEdit(null);
+  };
+  const updateOrgLine = (kind: "revenues" | "expenses", index: number, patch: Partial<OrgEditLine>) => {
+    setOrgEdit((prev) => {
+      if (!prev) return prev;
+      const lines = prev[kind].slice();
+      lines[index] = { ...lines[index], ...patch };
+      return { ...prev, [kind]: lines };
+    });
+  };
+  const addOrgLine = (kind: "revenues" | "expenses") => {
+    setOrgEdit((prev) => {
+      if (!prev) return prev;
+      const line: OrgEditLine = { key: `custom:${kind}:${Date.now()}`, label: "Other", general: "", gaming: "" };
+      return { ...prev, [kind]: [...prev[kind], line] };
+    });
+  };
+  const removeOrgLine = (kind: "revenues" | "expenses", index: number) => {
+    setOrgEdit((prev) => {
+      if (!prev) return prev;
+      return { ...prev, [kind]: prev[kind].filter((_, i) => i !== index) };
+    });
+  };
+
   const TABS: Array<{ id: TabId; label: string }> = [
     { id: "readiness", label: "Readiness checklist" },
     { id: "annual", label: "Annual statement" },
     { id: "restricted", label: "Restricted funds" },
+    { id: "org", label: "Organization revenue & expenses" },
     { id: "programs", label: "Program actuals & budget" },
   ];
 
@@ -375,6 +524,74 @@ export function YearEndReportsPage() {
               />
               <PreviewBox bodyHtml={renderRestrictedFundsHtml(restricted, society)} />
             </>
+          )}
+        </div>
+      )}
+
+      {tab === "org" && (
+        <div className="col" style={{ gap: 12 }}>
+          {!orgEdit ? (
+            <>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <button className="btn-action btn-action--primary" onClick={startNewOrg}>
+                  <Plus size={12} /> New statement
+                </button>
+                <button className="btn-action" onClick={prefillOrgFromFinances}>
+                  Prefill from finances
+                </button>
+              </div>
+              <p className="meta">
+                Organization-wide Statement of Revenues &amp; Expenses (General Fund / Gaming Fund / Total) — the BC
+                Community Gaming Grants org-level financial statement required for Program and Capital Project grants.
+              </p>
+              {orgStatements === undefined ? (
+                <p className="muted">Loading…</p>
+              ) : orgStatements.length === 0 ? (
+                <p className="muted">No organization statements yet. Create one or prefill it from your finances.</p>
+              ) : (
+                <div className="col" style={{ gap: 8 }}>
+                  {orgStatements.map((s: any) => {
+                    const totals = computeOrgStatementTotals(s);
+                    return (
+                      <div key={s._id} className="card" style={{ padding: 12 }}>
+                        <div className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                          <div className="col" style={{ gap: 2 }}>
+                            <strong>{s.organizationName}</strong>
+                            <span className="meta">
+                              {s.periodLabel ? s.periodLabel : `Fiscal year ${s.fiscalYearLabel}`}
+                            </span>
+                            <span className="meta">
+                              Total revenues {money(totals.revenue.totalCents)} · Total expenses{" "}
+                              {money(totals.expense.totalCents)} · Excess {money(totals.excess.totalCents)}
+                            </span>
+                          </div>
+                          <div className="row" style={{ gap: 6 }}>
+                            <Badge tone={s.status === "Final" ? "success" : "neutral"}>{s.status}</Badge>
+                            <button className="btn-action" onClick={() => setOrgEdit(orgEditFromStatement(s))}>
+                              Edit
+                            </button>
+                            <button className="btn-action" onClick={() => void deleteOrg(s._id)}>
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          ) : (
+            <OrgStatementEditor
+              edit={orgEdit}
+              society={society}
+              onField={(patch) => setOrgEdit((prev) => (prev ? { ...prev, ...patch } : prev))}
+              onLine={updateOrgLine}
+              onAddLine={addOrgLine}
+              onRemoveLine={removeOrgLine}
+              onSave={saveOrg}
+              onCancel={() => setOrgEdit(null)}
+            />
           )}
         </div>
       )}
@@ -645,6 +862,184 @@ function ProgramStatementEditor({
       </div>
 
       <ReportActions title="Program Actual Revenue and Expenses and Budget" filenameBase={filenameBase} bodyHtml={bodyHtml} />
+      <PreviewBox bodyHtml={bodyHtml} />
+    </div>
+  );
+}
+
+function OrgLineEditor({
+  title,
+  categories,
+  lines,
+  kind,
+  onLine,
+  onAddLine,
+  onRemoveLine,
+}: {
+  title: string;
+  categories: Array<{ key: string }>;
+  lines: OrgEditLine[];
+  kind: "revenues" | "expenses";
+  onLine: (kind: "revenues" | "expenses", index: number, patch: Partial<OrgEditLine>) => void;
+  onAddLine: (kind: "revenues" | "expenses") => void;
+  onRemoveLine: (kind: "revenues" | "expenses", index: number) => void;
+}) {
+  const fixedKeys = new Set(categories.map((c) => c.key));
+  return (
+    <div className="col" style={{ gap: 6 }}>
+      <strong>{title}</strong>
+      <table className="table" style={{ width: "100%" }}>
+        <thead>
+          <tr>
+            <th>Line</th>
+            <th style={{ width: 120 }}>General Fund ($)</th>
+            <th style={{ width: 120 }}>Gaming Fund ($)</th>
+            <th style={{ width: 110 }}>Total</th>
+            <th style={{ width: 36 }} />
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((line, index) => (
+            <tr key={`${line.key}-${index}`}>
+              <td>
+                <input className="input" value={line.label} onChange={(e) => onLine(kind, index, { label: e.target.value })} />
+              </td>
+              <td>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  value={line.general}
+                  onChange={(e) => onLine(kind, index, { general: e.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  value={line.gaming}
+                  onChange={(e) => onLine(kind, index, { gaming: e.target.value })}
+                />
+              </td>
+              <td style={{ textAlign: "right" }}>
+                {money(lineTotalCents(orgEditLineToLine(line)))}
+              </td>
+              <td>
+                {!fixedKeys.has(line.key) && (
+                  <button className="btn-action" onClick={() => onRemoveLine(kind, index)} aria-label="Remove line">
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div>
+        <button className="btn-action" onClick={() => onAddLine(kind)}>
+          <Plus size={12} /> Add line
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function OrgStatementEditor({
+  edit,
+  society,
+  onField,
+  onLine,
+  onAddLine,
+  onRemoveLine,
+  onSave,
+  onCancel,
+}: {
+  edit: OrgEditState;
+  society: any;
+  onField: (patch: Partial<OrgEditState>) => void;
+  onLine: (kind: "revenues" | "expenses", index: number, patch: Partial<OrgEditLine>) => void;
+  onAddLine: (kind: "revenues" | "expenses") => void;
+  onRemoveLine: (kind: "revenues" | "expenses", index: number) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const statement = orgStatementFromEdit(edit);
+  const totals = computeOrgStatementTotals(statement);
+  const bodyHtml = renderOrgStatementHtml(statement, society);
+  const filenameBase = `organization-revenue-expenses-${(edit.fiscalYearLabel || "fy").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+
+  return (
+    <div className="col" style={{ gap: 14 }}>
+      <div className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+        <button className="btn-action" onClick={onCancel}>
+          <ArrowLeft size={12} /> Back to list
+        </button>
+        <button className="btn-action btn-action--primary" onClick={onSave}>
+          Save statement
+        </button>
+      </div>
+
+      <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
+        <Field label="Organization name">
+          <input className="input" value={edit.organizationName} onChange={(e) => onField({ organizationName: e.target.value })} />
+        </Field>
+        <Field label="Fiscal year">
+          <input className="input" value={edit.fiscalYearLabel} onChange={(e) => onField({ fiscalYearLabel: e.target.value })} />
+        </Field>
+        <Field label="Period (optional)">
+          <input
+            className="input"
+            placeholder="April 1, 2024 to March 31, 2025"
+            value={edit.periodLabel}
+            onChange={(e) => onField({ periodLabel: e.target.value })}
+          />
+        </Field>
+        <Field label="Status">
+          <select className="input" value={edit.status} onChange={(e) => onField({ status: e.target.value })}>
+            <option value="Draft">Draft</option>
+            <option value="Final">Final</option>
+          </select>
+        </Field>
+      </div>
+
+      <OrgLineEditor
+        title="Revenues"
+        categories={ORG_REVENUE_CATEGORIES}
+        lines={edit.revenues}
+        kind="revenues"
+        onLine={onLine}
+        onAddLine={onAddLine}
+        onRemoveLine={onRemoveLine}
+      />
+      <OrgLineEditor
+        title="Expenses"
+        categories={ORG_EXPENSE_CATEGORIES}
+        lines={edit.expenses}
+        kind="expenses"
+        onLine={onLine}
+        onAddLine={onAddLine}
+        onRemoveLine={onRemoveLine}
+      />
+
+      <Field label="Notes">
+        <textarea className="input" rows={2} value={edit.narrative} onChange={(e) => onField({ narrative: e.target.value })} />
+      </Field>
+
+      <div className="card" style={{ padding: 12 }}>
+        <div className="row" style={{ gap: 16, flexWrap: "wrap" }}>
+          <span>
+            Total Revenues: <strong>{money(totals.revenue.totalCents)}</strong> (Gen {money(totals.revenue.generalCents)} · Gaming{" "}
+            {money(totals.revenue.gamingCents)})
+          </span>
+          <span>
+            Total Expenses: <strong>{money(totals.expense.totalCents)}</strong>
+          </span>
+          <span>
+            Excess of Revenues over Expenses: <strong>{money(totals.excess.totalCents)}</strong>
+          </span>
+        </div>
+      </div>
+
+      <ReportActions title="Organization Revenue and Expense Statement" filenameBase={filenameBase} bodyHtml={bodyHtml} />
       <PreviewBox bodyHtml={bodyHtml} />
     </div>
   );

@@ -5,6 +5,12 @@ import {
   type ProgramStatement,
   type ProgramStatementLine,
 } from "../../../../shared/programStatement";
+import {
+  computeOrgStatementTotals,
+  lineTotalCents,
+  type OrgRevenueStatement,
+  type OrgStatementLine,
+} from "../../../../shared/orgRevenueStatement";
 
 type SocietyLike = { name?: string } | null | undefined;
 
@@ -54,6 +60,54 @@ export function renderProgramStatementHtml(statement: ProgramStatement, society?
     ${statement.narrative ? `<h2>Notes</h2><p>${escapeHtml(statement.narrative)}</p>` : ""}
     <p class="meta"><sup>1</sup> Itemize funding sources. Do not use abbreviations or acronyms.</p>
     <p class="meta"><sup>2</sup> The Community Gaming Grant amount should equal the Program Grant used for this program in the previous fiscal year (actuals) and/or requested for the current fiscal year (budget). If grant funds were used toward organizational costs (up to 15% of the total Program Grant), this amount may be less than the funding received for this program.</p>
+  `;
+}
+
+function orgNum(cents: number, opts?: { bold?: boolean }) {
+  const inner = opts?.bold ? `<strong>${escapeHtml(money(cents))}</strong>` : escapeHtml(money(cents));
+  return `<td style="text-align:right">${inner}</td>`;
+}
+
+function orgLineRows(lines: OrgStatementLine[]) {
+  return lines
+    .map(
+      (line) =>
+        `<tr><td>${escapeHtml(line.label)}</td>${orgNum(line.generalCents)}${orgNum(line.gamingCents)}${orgNum(lineTotalCents(line), { bold: true })}</tr>`,
+    )
+    .join("");
+}
+
+/**
+ * Reproduces the BC Community Gaming Grants organization revenue & expense
+ * statement: an org-wide Statement of Revenues & Expenses with three columns
+ * (General Fund / Gaming Fund / Total), itemized revenues and expenses, totals,
+ * and "Excess of Revenues over Expenses" per fund.
+ */
+export function renderOrgStatementHtml(statement: OrgRevenueStatement, society?: SocietyLike): string {
+  const t = computeOrgStatementTotals(statement);
+  const totalRow = (label: string, c: { generalCents: number; gamingCents: number; totalCents: number }, italic = false) =>
+    `<tr><td>${italic ? "<em>" : "<strong>"}${escapeHtml(label)}${italic ? "</em>" : "</strong>"}</td>${orgNum(c.generalCents, { bold: true })}${orgNum(c.gamingCents, { bold: true })}${orgNum(c.totalCents, { bold: true })}</tr>`;
+  return `
+    <h1>Statement of Revenues &amp; Expenses</h1>
+    <p class="meta">${escapeHtml(statement.organizationName || society?.name || "[Name of Organization]")}${statement.periodLabel ? ` · ${escapeHtml(statement.periodLabel)}` : ` · Fiscal year ${escapeHtml(statement.fiscalYearLabel)}`}</p>
+    <table>
+      <thead>
+        <tr><th></th><th style="text-align:right">General Fund</th><th style="text-align:right">Gaming Fund<sup>2</sup></th><th style="text-align:right">Total</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Revenues<sup>3</sup></strong></td><td></td><td></td><td></td></tr>
+        ${orgLineRows(statement.revenues)}
+        ${totalRow("Total Revenues", t.revenue)}
+        <tr><td><strong>Expenses</strong></td><td></td><td></td><td></td></tr>
+        ${orgLineRows(statement.expenses)}
+        ${totalRow("Total Expenses", t.expense)}
+        ${totalRow("Excess of Revenues over Expenses", t.excess, true)}
+      </tbody>
+    </table>
+    ${statement.narrative ? `<h2>Notes</h2><p>${escapeHtml(statement.narrative)}</p>` : ""}
+    <p class="meta"><sup>1</sup> Financial statement for your entire organization including all programs and all services, for the previous fiscal year.</p>
+    <p class="meta"><sup>2</sup> Gaming funds include any funds generated through gaming — licensed gaming events (e.g. raffles), Community Gaming Grants, gaming-fund donations from service clubs, plus any GST/HST rebates, interest, and revenues from the sale of assets purchased with gaming funds.</p>
+    <p class="meta"><sup>3</sup> Itemize and identify all sources of funding. Do not use abbreviations or acronyms.</p>
   `;
 }
 

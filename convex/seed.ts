@@ -2,6 +2,7 @@ import { mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { assertMaintenanceToken, serviceTokenValidator } from "./lib/serviceAuth";
 import { riversideGamingProgramStatement } from "../shared/programStatement";
+import { riversideOrgStatement } from "../shared/orgRevenueStatement";
 
 // Seed the demo society "Riverside Community Society".
 // Idempotent-ish: if a society already exists, it wipes everything first.
@@ -657,6 +658,16 @@ export const run = mutation({
       }),
       societyId,
       grantId: gamingGrantId,
+      createdAtISO: nowISO,
+      updatedAtISO: nowISO,
+    });
+    await ctx.db.insert("orgRevenueStatements", {
+      ...riversideOrgStatement({
+        societyId,
+        fiscalYearLabel: "2024-2025",
+        periodLabel: "April 1, 2024 to March 31, 2025",
+      }),
+      societyId,
       createdAtISO: nowISO,
       updatedAtISO: nowISO,
     });

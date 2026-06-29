@@ -20,6 +20,7 @@ import {
 } from "../../shared/corporationPacketDocx";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
 import { riversideGamingProgramStatement } from "../../shared/programStatement";
+import { riversideOrgStatement } from "../../shared/orgRevenueStatement";
 import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
@@ -2552,6 +2553,18 @@ const tables: Record<string, any[]> = {
         grantId: "static_grant_gaming",
         priorFiscalYearLabel: "2024-2025",
         currentFiscalYearLabel: "2025-2026",
+      }),
+      createdAtISO: "2026-05-01T00:00:00.000Z",
+      updatedAtISO: "2026-05-01T00:00:00.000Z",
+    },
+  ],
+  orgRevenueStatements: [
+    {
+      _id: "static_org_statement",
+      ...riversideOrgStatement({
+        societyId: SOCIETY_ID,
+        fiscalYearLabel: "2024-2025",
+        periodLabel: "April 1, 2024 to March 31, 2025",
       }),
       createdAtISO: "2026-05-01T00:00:00.000Z",
       updatedAtISO: "2026-05-01T00:00:00.000Z",
