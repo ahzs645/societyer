@@ -370,7 +370,6 @@ export function LocationsTab({
             return <span className="mono">{rows.length} item{rows.length === 1 ? "" : "s"} · {qty}{total !== qty ? ` (${total} incl. sub)` : ""}</span>;
           },
         },
-        { id: "address", header: "Address / notes", accessor: (row) => `${row.address ?? ""} ${row.notes ?? ""}`, render: (row) => <span className="muted">{row.address || row.notes || "-"}</span> },
       ]}
       renderRowActions={(row) => (
         <>

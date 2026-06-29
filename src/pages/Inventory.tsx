@@ -639,13 +639,13 @@ export function InventoryPage() {
         }
       />
 
+      {/* Compact KPI row — the actionable alerts (expiring lots, count
+          variances) surface as callouts below rather than as zero-value tiles. */}
       <div className="stat-grid">
         <Stat label="Tracked records" value={(items ?? []).length} sub="assets, supplies, consumables" />
         <Stat label="Locations & bins" value={(locations ?? []).length} sub="rooms, bins, people, off-site" />
         <Stat label="On hand" value={formatQuantity(totalOnHand, "")} sub="posted balance total" />
         <Stat label="Low stock" value={lowStock.length} sub="at or below reorder point" tone={lowStock.length ? "warn" : undefined} />
-        <Stat label="Expiring lots" value={expiringLots.length} sub={`within ${EXPIRY_SOON_DAYS} days`} tone={expiringLots.length ? "warn" : undefined} />
-        <Stat label="Count variances" value={varianceLines.length} sub="ready for adjustment" tone={varianceLines.length ? "warn" : undefined} />
       </div>
 
       {lowStock.length > 0 && (
