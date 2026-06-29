@@ -181,7 +181,7 @@ export function AnnualCyclePage() {
       </div>
 
       {(data.caveats ?? []).length > 0 && (
-        <aside
+        <details
           className="muted"
           style={{
             marginTop: 24,
@@ -191,17 +191,26 @@ export function AnnualCyclePage() {
             lineHeight: 1.5,
           }}
         >
-          <div className="row" style={{ gap: 6, alignItems: "center", marginBottom: 4 }}>
+          <summary
+            style={{
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              listStyle: "none",
+              userSelect: "none",
+            }}
+          >
             <Info size={13} />
             <strong style={{ fontWeight: 600 }}>Caveats</strong>
-            <span>· Rules are evidence checks, not legal conclusions.</span>
-          </div>
-          <ul style={{ margin: 0, paddingLeft: 24 }}>
+            <span>· Rules are evidence checks, not legal conclusions</span>
+          </summary>
+          <ul style={{ margin: "8px 0 0", paddingLeft: 24 }}>
             {(data.caveats ?? []).map((caveat: string) => (
               <li key={caveat} style={{ margin: "2px 0" }}>{caveat}</li>
             ))}
           </ul>
-        </aside>
+        </details>
       )}
     </div>
   );
