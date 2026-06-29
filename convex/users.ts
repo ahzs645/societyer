@@ -9,56 +9,21 @@ import {
   resolveAuthSessionPortable,
   recordLoginPortable,
 } from "../shared/functions/users";
+import { ROLES, canActAs, requireRolePortable, type Role } from "../shared/functions/access";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"] as const;
-export type Role = (typeof ROLES)[number];
-
-const ROLE_RANK: Record<Role, number> = {
-  Owner: 100,
-  Admin: 80,
-  Director: 60,
-  Member: 40,
-  Viewer: 20,
-};
-
-export function canActAs(actual: Role | undefined | null, required: Role): boolean {
-  if (!actual) return false;
-  return ROLE_RANK[actual] >= ROLE_RANK[required];
-}
+export { ROLES, canActAs };
+export type { Role };
 
 export async function requireRole(
   ctx: QueryCtx | MutationCtx,
   args: { actingUserId?: Id<"users"> | null; societyId: Id<"societies">; required: Role },
 ): Promise<{ user: any | null }> {
-  if (!args.actingUserId) {
-    // Bootstrap: if the society has no users yet, allow the first action so an
-    // Owner can be created. There's no admin to enforce against in that state;
-    // refusing it strands the page (no actor → can't create the actor).
-    const firstUser = await ctx.db
-      .query("users")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .first();
-    if (!firstUser) return { user: null };
-    throw new Error(`Role ${args.required} required — no authenticated actor.`);
-  }
-  const user = await ctx.db.get(args.actingUserId);
-  if (!user) throw new Error("Unknown user.");
-  if (user.societyId !== args.societyId) throw new Error("User is not part of this society.");
-  if (!canActAs(user.role as Role, args.required)) {
-    // Second bootstrap: if NOBODY in the society has the required role, let
-    // any user proceed so they can self-promote. Covers the case where a
-    // society was seeded with only non-admin users (e.g. all "Member"s) and
-    // is otherwise stranded — there's no admin to recover from.
-    const peers = await ctx.db
-      .query("users")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    const hasQualifiedActor = peers.some((peer) => canActAs(peer.role as Role, args.required));
-    if (!hasQualifiedActor) return { user };
-    throw new Error(`Role ${args.required} required — you have ${user.role}.`);
-  }
-  return { user };
+  return requireRolePortable(toPortableQueryCtx(ctx), {
+    actingUserId: args.actingUserId ?? undefined,
+    societyId: args.societyId,
+    required: args.required,
+  });
 }
 
 export const list = query({
