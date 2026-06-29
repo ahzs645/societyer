@@ -110,7 +110,7 @@ export function emptyItemForm() {
 }
 
 export function emptyLocationForm() {
-  return { name: "", code: "", locationType: "facility", parentLocationId: "", address: "", notes: "", active: true };
+  return { name: "", code: "", locationType: "facility", parentLocationId: "", address: "", notes: "", active: true, custodianName: "", custodianMemberId: "" };
 }
 
 export function emptyLotForm() {

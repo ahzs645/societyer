@@ -711,34 +711,48 @@ function annualCycleSummary(args: StaticArgs) {
 
 
 
-function financialSummary() {
+// Reads that should reflect writes (e.g. CSV-imported rows) prefer the local
+// store when one is active, falling back to the module fixtures for non-store
+// contexts (SSR, tests). financialTransactions/financialAccounts are seeded into
+// the store, so listRows returns the full set including anything imported.
+function storeFinancialTransactions(store?: StaticDemoDexieStore | null, args?: StaticArgs) {
+  return scopedRows(store?.listRows("financialTransactions", args) ?? financialTransactions, args);
+}
+function storeFinancialAccounts(store?: StaticDemoDexieStore | null, args?: StaticArgs) {
+  return scopedRows(store?.listRows("financialAccounts", args) ?? financialAccounts, args);
+}
+
+function financialSummary(store?: StaticDemoDexieStore | null, args?: StaticArgs) {
+  const accounts = storeFinancialAccounts(store, args);
+  const transactions = storeFinancialTransactions(store, args);
+  const budgetRows = scopedRows(store?.listRows("budgets", args) ?? budgets, args);
   return {
-    totalBalance: financialAccounts.reduce((sum, account) => sum + account.balanceCents, 0),
-    unrestricted: financialAccounts
+    totalBalance: accounts.reduce((sum, account) => sum + account.balanceCents, 0),
+    unrestricted: accounts
       .filter((account) => !account.isRestricted)
       .reduce((sum, account) => sum + account.balanceCents, 0),
-    restrictedAccounts: financialAccounts
+    restrictedAccounts: accounts
       .filter((account) => account.isRestricted)
       .map((account) => ({
         name: account.name,
         balanceCents: account.balanceCents,
         purpose: account.restrictedPurpose,
       })),
-    budgetRows: budgets.map((budget) => ({
+    budgetRows: budgetRows.map((budget) => ({
       ...budget,
-      actualCents: financialTransactions
+      actualCents: transactions
         .filter((transaction) => transaction.category === budget.category)
         .reduce((sum, transaction) => sum + Math.abs(transaction.amountCents), 0),
     })),
-    recentTransactions: financialTransactions,
+    recentTransactions: transactions,
   };
 }
 
 
-function profitAndLoss(args: StaticArgs) {
+function profitAndLoss(args: StaticArgs, store?: StaticDemoDexieStore | null) {
   const from = args?.from ?? "2026-01-01";
   const to = args?.to ?? "2026-12-31";
-  const rows = financialTransactions.filter((transaction) => transaction.date >= from && transaction.date <= to);
+  const rows = storeFinancialTransactions(store, args).filter((transaction) => transaction.date >= from && transaction.date <= to);
   const incomeByCategoryMap = new Map<string, number>();
   const expenseByCategoryMap = new Map<string, number>();
   let totalIncomeCents = 0;
@@ -769,9 +783,10 @@ function profitAndLoss(args: StaticArgs) {
   };
 }
 
-function budgetVariance() {
-  return budgets.map((budget) => {
-    const actualCents = financialTransactions
+function budgetVariance(store?: StaticDemoDexieStore | null, args?: StaticArgs) {
+  const transactions = storeFinancialTransactions(store, args);
+  return (scopedRows(store?.listRows("budgets", args) ?? budgets, args)).map((budget) => {
+    const actualCents = transactions
       .filter((transaction) => transaction.category === budget.category)
       .reduce((sum, transaction) => sum + Math.abs(transaction.amountCents), 0);
 
@@ -828,6 +843,33 @@ function staticAnnualStatement(args: StaticArgs, store?: StaticDemoDexieStore | 
   const revenueCents = financial?.revenueCents ?? Array.from(incomeByCategory.values()).reduce((a, b) => a + b, 0);
   const expensesCents = financial?.expensesCents ?? Array.from(expenseByCategory.values()).reduce((a, b) => a + b, 0);
 
+  // Counterparty / grant breakdowns from posted journal lines (mirrors yearEnd.ts).
+  const accounts = storeFinancialAccounts(store, args);
+  const accountTypeById = new Map<string, string>(accounts.map((a: any) => [String(a._id), a.accountType]));
+  const counterpartyName = new Map<string, string>((store?.listRows("accountingCounterparties", args) ?? scopedRows(accountingCounterparties, args)).map((c: any) => [String(c._id), c.name]));
+  const grantTitle = new Map<string, string>((store?.listRows("grants", args) ?? scopedRows(tables.grants, args)).map((g: any) => [String(g._id), g.title]));
+  const allPosted = (store?.listRows("journalEntries", args) ?? scopedRows(journalEntries, args)).filter((e: any) => e.status === "posted");
+  const matchedPosted = allPosted.filter((e: any) => e.fiscalYear === fiscalYear);
+  // Mirror the transaction fallback above: if nothing matches the selected FY
+  // label (demo entries are tagged by calendar year), use all posted entries.
+  const postedEntries = matchedPosted.length ? matchedPosted : allPosted;
+  const entryInFy = new Set(postedEntries.map((e: any) => String(e._id)));
+  const jLines = store?.listRows("journalLines", args) ?? scopedRows(journalLines, args);
+  const byCounterpartyMap = new Map<string, { incomeCents: number; expenseCents: number }>();
+  const byGrantMap = new Map<string, { incomeCents: number; expenseCents: number }>();
+  const bucket = (map: Map<string, { incomeCents: number; expenseCents: number }>, key: string, type: string, cents: number) => {
+    const cur = map.get(key) ?? { incomeCents: 0, expenseCents: 0 };
+    if (type === "Income") cur.incomeCents += cents;
+    else if (type === "Expense") cur.expenseCents += cents;
+    map.set(key, cur);
+  };
+  for (const line of jLines) {
+    if (!entryInFy.has(String(line.journalEntryId))) continue;
+    const type = accountTypeById.get(String(line.accountId)) ?? "Other";
+    if (line.counterpartyId) bucket(byCounterpartyMap, String(line.counterpartyId), type, line.amountCents);
+    if (line.grantId) bucket(byGrantMap, String(line.grantId), type, line.amountCents);
+  }
+
   return {
     fiscalYear,
     financial,
@@ -850,6 +892,10 @@ function staticAnnualStatement(args: StaticArgs, store?: StaticDemoDexieStore | 
     })),
     incomeByCategory: Array.from(incomeByCategory, ([category, cents]) => ({ category, cents })),
     expenseByCategory: Array.from(expenseByCategory, ([category, cents]) => ({ category, cents })),
+    byCounterparty: Array.from(byCounterpartyMap, ([id, v]) => ({ id, name: counterpartyName.get(id) ?? "Unknown", ...v }))
+      .sort((a, b) => (b.incomeCents + b.expenseCents) - (a.incomeCents + a.expenseCents)),
+    byGrant: Array.from(byGrantMap, ([id, v]) => ({ id, title: grantTitle.get(id) ?? "Unknown", ...v }))
+      .sort((a, b) => (b.incomeCents + b.expenseCents) - (a.incomeCents + a.expenseCents)),
   };
 }
 
@@ -894,8 +940,10 @@ function staticRestrictedFundStatement(args: StaticArgs, store?: StaticDemoDexie
 }
 
 function staticOrgRevenueExpense(args: StaticArgs, store?: StaticDemoDexieStore | null) {
-  // financialTransactions/financialAccounts are not seeded into the local store,
-  // so prefer store rows only when present and otherwise read the fixtures.
+  // Prefer store rows when present, otherwise fall back to the fixtures. The
+  // store is seeded with financialTransactions/financialAccounts, but keep the
+  // fixture fallback so older persisted workspaces (seeded before those tables
+  // were added) still render the statement.
   const storedTxns = store?.listRows("financialTransactions", args);
   const storedAccts = store?.listRows("financialAccounts", args);
   const txns = storedTxns && storedTxns.length ? storedTxns : scopedRows(financialTransactions, args);
@@ -2099,7 +2147,7 @@ function queryCasesAccounting5(name: string, args: StaticArgs, store?: StaticDem
     case "accounting:boardAuditorPackage":
       return staticBoardAuditorPackage(staticAccountingSeed(store, args), args);
     case "financialHub:accounts":
-      return financialAccounts;
+      return storeFinancialAccounts(store, args);
     case "financialHub:connections":
       return financialConnections;
     case "financialHub:getConnection":
@@ -2107,13 +2155,16 @@ function queryCasesAccounting5(name: string, args: StaticArgs, store?: StaticDem
     case "financialHub:oauthUrl":
       return { provider: "wave", live: false, demoAvailable: true };
     case "financialHub:summary":
-      return financialSummary();
-    case "financialHub:transactions":
-      return financialTransactions.slice(0, args?.limit ?? financialTransactions.length);
+      return financialSummary(store, args);
+    case "financialHub:transactions": {
+      const rows = storeFinancialTransactions(store, args).slice().sort((a, b) => b.date.localeCompare(a.date));
+      return rows.slice(0, args?.limit ?? rows.length);
+    }
     case "financialHub:transactionsForAccountExternalId": {
-      const account = financialAccounts.find((row) => row.externalId === args?.externalId) ?? null;
+      const accounts = storeFinancialAccounts(store, args);
+      const account = accounts.find((row) => row.externalId === args?.externalId) ?? null;
       const rows = account
-        ? financialTransactions
+        ? storeFinancialTransactions(store, args)
             .filter((row) => row.accountId === account._id)
             .sort((a, b) => b.date.localeCompare(a.date))
         : [];
@@ -2124,13 +2175,14 @@ function queryCasesAccounting5(name: string, args: StaticArgs, store?: StaticDem
       };
     }
     case "financialHub:transactionsForCounterpartyExternalId": {
-      const rows = financialTransactions
+      const accounts = storeFinancialAccounts(store, args);
+      const rows = storeFinancialTransactions(store, args)
         .filter((row) => row.counterpartyExternalId === args?.externalId)
         .filter((row) => !args?.resourceType || row.counterpartyResourceType === args.resourceType)
         .sort((a, b) => b.date.localeCompare(a.date));
       return {
         transactions: rows.slice(0, args?.limit ?? 500).map((row) => {
-          const account = financialAccounts.find((candidate) => candidate._id === row.accountId) ?? null;
+          const account = accounts.find((candidate) => candidate._id === row.accountId) ?? null;
           const accountResource = account
             ? waveCacheResources.find((resource) => resource.resourceType === "account" && resource.externalId === account.externalId) ?? null
             : null;
@@ -2142,7 +2194,8 @@ function queryCasesAccounting5(name: string, args: StaticArgs, store?: StaticDem
     }
     case "financialHub:transactionsForCategoryAccountExternalId": {
       const normalizedLabel = normalizeStaticCategoryLabel(args?.label);
-      const rows = financialTransactions
+      const accounts = storeFinancialAccounts(store, args);
+      const rows = storeFinancialTransactions(store, args)
         .filter((row) => {
           if (row.categoryAccountExternalId === args?.externalId) return true;
           return Boolean(!row.categoryAccountExternalId && normalizedLabel && normalizeStaticCategoryLabel(row.category) === normalizedLabel);
@@ -2150,7 +2203,7 @@ function queryCasesAccounting5(name: string, args: StaticArgs, store?: StaticDem
         .sort((a, b) => b.date.localeCompare(a.date));
       return {
         transactions: rows.slice(0, args?.limit ?? 500).map((row) => {
-          const account = financialAccounts.find((candidate) => candidate._id === row.accountId) ?? null;
+          const account = accounts.find((candidate) => candidate._id === row.accountId) ?? null;
           const accountResource = account
             ? waveCacheResources.find((resource) => resource.resourceType === "account" && resource.externalId === account.externalId) ?? null
             : null;
@@ -2320,9 +2373,9 @@ function queryCasesTransparency8(name: string, args: StaticArgs, store?: StaticD
     case "transparency:publicCenter":
       return publicCenter(args);
     case "treasury:budgetVariance":
-      return budgetVariance();
+      return budgetVariance(store, args);
     case "treasury:profitAndLoss":
-      return profitAndLoss(args);
+      return profitAndLoss(args, store);
     case "treasury:restrictedFunds":
       return restrictedFunds();
     case "yearEnd:annualStatement":
@@ -3235,8 +3288,12 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
         amountCents: line.amountCents,
         side: line.side,
         description: line.description,
+        counterpartyId: line.counterpartyId,
+        grantId: line.grantId,
         fundRestrictionId: line.fundRestrictionId,
-        documentIds: args?.sourceDocumentIds,
+        financialTransactionId: line.financialTransactionId,
+        transactionCandidateId: line.transactionCandidateId,
+        documentIds: line.documentIds ?? args?.sourceDocumentIds,
         createdAtISO: now,
         updatedAtISO: now,
       });
@@ -3284,6 +3341,11 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
         amountCents: line.amountCents,
         side: "debit",
         description: line.description,
+        counterpartyId: line.counterpartyId,
+        grantId: line.grantId,
+        fundRestrictionId: line.fundRestrictionId,
+        transactionCandidateId: args?.transactionCandidateId,
+        documentIds: line.documentIds,
         createdAtISO: now,
         updatedAtISO: now,
       });
@@ -3396,6 +3458,46 @@ function mutCasesAccounting4(name: string, args: StaticArgs, store?: StaticDemoD
       posted += 1;
     }
     return { scanned, posted, skipped, needsMapping };
+  }
+  if (name === "financialHub:importBankCsvTransactions") {
+    const account =
+      store?.getRow("financialAccounts", args?.accountId) ?? byId(financialAccounts, args?.accountId);
+    if (!account || (args?.societyId && account.societyId !== args.societyId)) {
+      throw new Error("Account must belong to this society.");
+    }
+    const accountId = args?.accountId;
+    const existing = scopedRows(store?.listRows("financialTransactions", args) ?? financialTransactions, args);
+    const seen = new Set(
+      existing.filter((t: any) => t.accountId === accountId).map((t: any) => t.externalId),
+    );
+    const rows = (args?.rows ?? []) as any[];
+    let inserted = 0;
+    let skipped = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const externalId =
+        (typeof row.externalId === "string" && row.externalId.trim()) ||
+        `csv:${String(accountId)}:${row.date}:${row.amountCents}:${i}`;
+      if (seen.has(externalId)) {
+        skipped += 1;
+        continue;
+      }
+      store?.upsertRow("financialTransactions", {
+        _id: `static_tx_${externalId.replace(/[^a-zA-Z0-9]+/g, "_")}`,
+        societyId: args?.societyId ?? SOCIETY_ID,
+        connectionId: account.connectionId,
+        accountId,
+        externalId,
+        date: row.date,
+        description: row.description,
+        amountCents: row.amountCents,
+        category: row.category,
+        counterparty: row.counterparty,
+      });
+      seen.add(externalId);
+      inserted += 1;
+    }
+    return { inserted, skipped, total: rows.length };
   }
   if (name === "seed:run") {
     void store?.reseed();
@@ -3865,6 +3967,8 @@ function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDe
       address: args?.address ?? existing.address,
       notes: args?.notes ?? existing.notes,
       active: args?.active ?? existing.active ?? true,
+      custodianName: args?.custodianName ?? existing.custodianName,
+      custodianMemberId: args?.custodianMemberId ?? existing.custodianMemberId,
       sourceSystem: args?.sourceSystem ?? existing.sourceSystem ?? "manual",
       createdAtISO: existing.createdAtISO ?? now,
       updatedAtISO: now,
@@ -4495,6 +4599,60 @@ function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDe
     if (event.condition) patch.condition = event.condition;
     store?.upsertRow("assets", { ...asset, ...patch });
     return event._id;
+  }
+  if (name === "inventoryHub:deleteConnection") {
+    // Mirror the Convex mutation: detach items that referenced the connection
+    // so imported records survive, then drop the connection.
+    const now = new Date().toISOString();
+    for (const item of (store?.listRows("inventoryItems", args) ?? tables.inventoryItems).filter((row: any) => row.connectionId === args?.id)) {
+      store?.upsertRow("inventoryItems", { ...item, connectionId: undefined, updatedAtISO: now });
+    }
+    store?.removeRow("inventoryConnections", args?.id);
+    return null;
+  }
+  if (name === "inventoryHub:setCandidateStatus") {
+    const candidate = store?.getRow("inventoryCandidates", args?.candidateId) ?? byId(tables.inventoryCandidates, args?.candidateId);
+    if (!candidate) return args?.candidateId;
+    store?.upsertRow("inventoryCandidates", { ...candidate, status: args?.status, updatedAtISO: new Date().toISOString() });
+    return args?.candidateId;
+  }
+  if (name === "inventoryHub:promoteCandidateToMovement") {
+    const candidate = store?.getRow("inventoryCandidates", args?.candidateId) ?? byId(tables.inventoryCandidates, args?.candidateId);
+    if (!candidate) throw new Error("Candidate not found.");
+    if (candidate.status === "posted") throw new Error("Candidate has already been posted.");
+    const itemId = args?.inventoryItemId ?? candidate.suggestedInventoryItemId;
+    if (!itemId) throw new Error("Resolve an inventory item before posting this candidate.");
+    const toLocationId = args?.toLocationId ?? candidate.suggestedLocationId;
+    if (!toLocationId && !args?.fromLocationId) {
+      throw new Error("Choose a destination (or source) location for the movement.");
+    }
+    const quantity = Math.abs(candidate.quantity ?? 0);
+    if (quantity <= 0) throw new Error("Candidate has no positive quantity to post.");
+    const item = store?.getRow("inventoryItems", itemId) ?? byId(tables.inventoryItems, itemId);
+    const now = new Date().toISOString();
+    const movementId = mutationResult("inventoryHub:postStockMovement", {
+      societyId: candidate.societyId,
+      connectionId: candidate.connectionId,
+      movementDate: candidate.occurredAtISO ?? now.slice(0, 10),
+      movementType: args?.movementType ?? "receive",
+      inventoryItemId: itemId,
+      fromLocationId: args?.fromLocationId,
+      toLocationId,
+      quantity,
+      unitOfMeasure: candidate.unitOfMeasure ?? item?.unitOfMeasure ?? "unit",
+      reason: candidate.notes,
+      sourceExternalId: candidate.sourceExternalId,
+      sourceSystem: candidate.sourceSystem ?? "import",
+    }, store);
+    store?.upsertRow("inventoryCandidates", {
+      ...candidate,
+      status: "posted",
+      postedMovementId: movementId,
+      suggestedInventoryItemId: itemId,
+      suggestedLocationId: toLocationId,
+      updatedAtISO: now,
+    });
+    return { movementId };
   }
   return MUT_NOT_HANDLED;
 }
@@ -5986,6 +6144,7 @@ function staticMutationTableName(moduleName: string, exportName: string) {
   if (moduleName === "fundingSources") return "fundingSources";
   if (moduleName === "financialHub" && exportName.includes("Budget")) return "budgets";
   if (moduleName === "financialHub" && exportName.includes("OperatingSubscription")) return "operatingSubscriptions";
+  if (moduleName === "financialHub" && exportName.includes("Transaction")) return "financialTransactions";
   if (moduleName === "transparency") return "transparency";
   return staticTableNameForModule(moduleName);
 }

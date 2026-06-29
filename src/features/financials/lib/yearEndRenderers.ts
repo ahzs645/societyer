@@ -145,6 +145,15 @@ export function renderAnnualStatementHtml(data: any, society: SocietyLike, fisca
     .map((r: any) => `<tr>${labelCell(escapeHtml(r.role))}${moneyCell(r.amountCents, { width: W })}</tr>`)
     .join("");
 
+  // Income/expense broken down by the counterparty / grant tags on posted
+  // journal lines. Only rendered when there is tagged activity.
+  const partyTable = (title: string, label: string, rows: any[], nameKey: string) =>
+    rows && rows.length
+      ? `<h2>${escapeHtml(title)}</h2><table data-variant="statement"><thead><tr><th data-rule="header">${escapeHtml(label)}</th><th data-rule="header" style="text-align:center;width:24%">Income</th><th data-rule="header" style="text-align:center;width:24%">Expense</th></tr></thead><tbody>${rows
+          .map((r: any) => `<tr>${labelCell(escapeHtml(r[nameKey] ?? "Unknown"))}${moneyCell(r.incomeCents ?? 0, { width: "24%" })}${moneyCell(r.expenseCents ?? 0, { width: "24%" })}</tr>`)
+          .join("")}</tbody></table>`
+      : "";
+
   return `
     <h1>Annual Financial Statement</h1>
     <p class="meta">${escapeHtml(society?.name ?? "")} · Fiscal year ${escapeHtml(fiscalYear)}${data.approvedByBoardAt ? ` · Approved by the board ${escapeHtml(data.approvedByBoardAt)}` : ""}</p>
@@ -161,6 +170,8 @@ export function renderAnnualStatementHtml(data: any, society: SocietyLike, fisca
     ${categoryTable("Revenue by category", data.incomeByCategory ?? [])}
     ${categoryTable("Expenses by category", data.expenseByCategory ?? [])}
     ${budgetRows ? `<h2>Budget vs actual</h2><table data-variant="statement"><thead><tr><th data-rule="header">Category</th><th data-rule="header" style="text-align:center;width:20%">Budget</th><th data-rule="header" style="text-align:center;width:20%">Actual</th><th data-rule="header" style="text-align:center;width:20%">Variance</th></tr></thead><tbody>${budgetRows}</tbody></table>` : ""}
+    ${partyTable("By counterparty", "Counterparty", data.byCounterparty ?? [], "name")}
+    ${partyTable("By grant", "Grant", data.byGrant ?? [], "title")}
     ${rem ? `<h2>Remuneration disclosure</h2><table data-variant="statement"><thead><tr><th data-rule="header">Role</th><th data-rule="header" style="text-align:center;width:${W}">Amount</th></tr></thead><tbody>${rem}</tbody></table>` : ""}
     ${data.auditStatus ? `<p class="meta">Audit status: ${escapeHtml(data.auditStatus)}${data.auditorName ? ` · ${escapeHtml(data.auditorName)}` : ""}</p>` : ""}
   `;

@@ -63,6 +63,11 @@ export const inventoryTables = {
     address: v.optional(v.string()),
     notes: v.optional(v.string()),
     active: v.boolean(),
+    // For locationType "custody": who currently holds the items. custodianName
+    // mirrors the asset register's custodian vocabulary; custodianMemberId links
+    // to a person record when the holder is a known member/director.
+    custodianName: v.optional(v.string()),
+    custodianMemberId: v.optional(v.id("members")),
     externalId: v.optional(v.string()),
     sourceSystem: v.optional(v.string()),
     rawJson: v.optional(v.string()),

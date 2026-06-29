@@ -91,6 +91,7 @@ export function FinancialsPage() {
   const removeBudget = useMutation(api.financialHub.removeBudget);
   const upsertOperatingSubscription = useMutation(api.financialHub.upsertOperatingSubscription);
   const removeOperatingSubscription = useMutation(api.financialHub.removeOperatingSubscription);
+  const updateTransaction = useMutation(api.financialHub.updateTransaction);
   const inventoryItems = useQuery(api.inventoryHub.items, society ? { societyId: society._id } : "skip");
   const inventoryLinks = useQuery(api.inventoryHub.receiptLinks, society ? { societyId: society._id } : "skip");
   const linkInventoryReceipt = useMutation(api.inventoryHub.linkReceipt);
@@ -112,6 +113,7 @@ export function FinancialsPage() {
   const [hideZeroWaveAccounts, setHideZeroWaveAccounts] = useState(false);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [tab, setTab] = useState<"overview" | "transactions" | "wave" | "subscriptions">("overview");
   const waveResources = useQuery(
     api.waveCache.resources,
     society
@@ -203,9 +205,6 @@ export function FinancialsPage() {
   const ledgerAssetCents = (trialBalance ?? [])
     .filter((row: any) => ["Asset", "Bank", "Credit"].includes(row.account?.accountType))
     .reduce((sum: number, row: any) => sum + row.balanceCents, 0);
-  const ledgerRestrictedCents = (trialBalance ?? [])
-    .filter((row: any) => row.account?.isRestricted)
-    .reduce((sum: number, row: any) => sum + Math.abs(row.balanceCents), 0);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -261,6 +260,7 @@ export function FinancialsPage() {
   const runWaveHealthCheck = async () => {
     if (!society) return;
     setWaveHealthBusy(true);
+    setTab("wave");
     try {
       const result = redactWaveHealthResult(await checkWaveHealth({
         businessId: activeConnection?.externalBusinessId,
@@ -347,7 +347,24 @@ export function FinancialsPage() {
         }
       />
 
-      {(accounts ?? []).length > 0 && (
+      <div className="tab-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+        {[
+          { id: "overview", label: "Overview" },
+          { id: "transactions", label: "Transactions" },
+          { id: "wave", label: "Wave data" },
+          { id: "subscriptions", label: "Subscriptions" },
+        ].map((t) => (
+          <button
+            key={t.id}
+            className={`btn-action${tab === t.id ? " btn-action--primary" : ""}`}
+            onClick={() => setTab(t.id as typeof tab)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "transactions" && (accounts ?? []).length > 0 && (
         <BankCsvImportCard
           societyId={society._id}
           accounts={accounts ?? []}
@@ -355,7 +372,7 @@ export function FinancialsPage() {
         />
       )}
 
-      {!activeConnection && (
+      {tab === "overview" && !activeConnection && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
             <h2 className="card__title">Connect a bookkeeping source</h2>
@@ -385,28 +402,24 @@ export function FinancialsPage() {
         </div>
       )}
 
-      {waveHealth && <WaveHealthPanel result={waveHealth} />}
+      {tab === "wave" && waveHealth && <WaveHealthPanel result={waveHealth} />}
 
-      {(trialBalance ?? []).length > 0 && (
+      {tab === "overview" && (trialBalance ?? []).length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
             <h2 className="card__title">Internal ledger summary</h2>
             <span className="card__subtitle">Posted journal lines take priority for board and auditor reporting.</span>
           </div>
-          <div className="stat-grid stat-grid--3" style={{ margin: "0 16px 16px" }}>
+          <div className="stat-grid" style={{ margin: "0 16px 16px" }}>
             <Stat label="Ledger revenue" value={money(ledgerRevenueCents)} />
             <Stat label="Ledger expenses" value={money(ledgerExpenseCents)} />
             <Stat label="Ledger net" value={money(ledgerRevenueCents - ledgerExpenseCents)} tone={ledgerRevenueCents - ledgerExpenseCents < 0 ? "danger" : "ok"} />
-          </div>
-          <div className="stat-grid stat-grid--3" style={{ margin: "0 16px 16px" }}>
             <Stat label="Ledger assets" value={money(ledgerAssetCents)} />
-            <Stat label="Restricted ledger" value={money(ledgerRestrictedCents)} />
-            <Stat label="Trial balance lines" value={String(trialBalance.length)} />
           </div>
         </div>
       )}
 
-      {activeConnection && hub && (
+      {tab === "overview" && activeConnection && hub && (
         <div className="stat-grid" style={{ marginBottom: 16 }}>
           <Stat label="Total bank balance" value={money(hub.totalBalance)} />
           <Stat label="Unrestricted" value={money(hub.unrestricted)} tone={hub.unrestricted < 0 ? "danger" : "ok"} />
@@ -418,7 +431,7 @@ export function FinancialsPage() {
         </div>
       )}
 
-      {activeConnection && (
+      {tab === "wave" && activeConnection && (
         <WaveCacheExplorer
           societyId={society._id}
           syncConnectionId={activeConnection?._id}
@@ -448,21 +461,31 @@ export function FinancialsPage() {
         />
       )}
 
-      <OperatingSubscriptionsCard
-        rows={operatingSubscriptions ?? []}
-        loading={operatingSubscriptions === undefined}
-        activeMonthlyCents={activeMonthlyCents}
-        plannedMonthlyCents={plannedMonthlyCents}
-        projectedMonthlyCents={projectedMonthlyCents}
-        onNew={() => setSubscriptionForm(newOperatingSubscriptionForm())}
-        onEdit={(row) => setSubscriptionForm(operatingSubscriptionFormFromRow(row))}
-        onRemove={async (row) => {
-          await removeOperatingSubscription({ id: row._id, actingUserId });
-          toast.info("Subscription cost removed");
-        }}
-      />
+      {tab === "wave" && !activeConnection && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card__body muted" style={{ padding: 24, textAlign: "center" }}>
+            Connect a bookkeeping source from the <button className="btn btn--ghost btn--sm" onClick={() => setTab("overview")}>Overview</button> tab to browse synced Wave accounts, vendors, and transactions here.
+          </div>
+        </div>
+      )}
 
-      {activeConnection && hub && hub.restrictedAccounts.length > 0 && (
+      {tab === "subscriptions" && (
+        <OperatingSubscriptionsCard
+          rows={operatingSubscriptions ?? []}
+          loading={operatingSubscriptions === undefined}
+          activeMonthlyCents={activeMonthlyCents}
+          plannedMonthlyCents={plannedMonthlyCents}
+          projectedMonthlyCents={projectedMonthlyCents}
+          onNew={() => setSubscriptionForm(newOperatingSubscriptionForm())}
+          onEdit={(row) => setSubscriptionForm(operatingSubscriptionFormFromRow(row))}
+          onRemove={async (row) => {
+            await removeOperatingSubscription({ id: row._id, actingUserId });
+            toast.info("Subscription cost removed");
+          }}
+        />
+      )}
+
+      {tab === "overview" && activeConnection && hub && hub.restrictedAccounts.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
             <h2 className="card__title">Restricted funds</h2>
@@ -485,7 +508,7 @@ export function FinancialsPage() {
         </div>
       )}
 
-      {activeConnection && (
+      {tab === "overview" && activeConnection && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card__head">
             <h2 className="card__title">Budget vs actuals — FY {fiscalYear}</h2>
@@ -589,7 +612,7 @@ export function FinancialsPage() {
         </div>
       )}
 
-      {activeConnection && transactions && transactions.length > 0 && (
+      {tab === "transactions" && activeConnection && transactions && transactions.length > 0 && (
         showMetadataWarning ? (
           <div style={{ marginBottom: 16 }}>
             <RecordTableMetadataEmpty societyId={society?._id} objectLabel="financial transaction" />
@@ -601,6 +624,13 @@ export function FinancialsPage() {
               objectMetadata={tableData.objectMetadata}
               hydratedView={tableData.hydratedView}
               records={records}
+              onUpdate={async ({ recordId, fieldName, value }) => {
+                await updateTransaction({
+                  id: recordId as Id<"financialTransactions">,
+                  patch: { [fieldName]: value } as any,
+                  actingUserId: actingUserId as any,
+                });
+              }}
             >
               <RecordTableViewToolbar
                 societyId={society._id}
@@ -651,7 +681,15 @@ export function FinancialsPage() {
         ) : null
       )}
 
-      {importedBudgetReviewCount > 0 && (
+      {tab === "transactions" && !activeConnection && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card__body muted" style={{ padding: 24, textAlign: "center" }}>
+            Connect a bookkeeping source from the <button className="btn btn--ghost btn--sm" onClick={() => setTab("overview")}>Overview</button> tab to sync transactions, or import a bank CSV once an account exists.
+          </div>
+        </div>
+      )}
+
+      {tab === "overview" && importedBudgetReviewCount > 0 && (
         <div style={{ marginBottom: 16 }}>
           <Flag level="warn">
             <strong>{importedBudgetReviewCount} imported budget record{importedBudgetReviewCount === 1 ? "" : "s"}</strong>{" "}
@@ -661,7 +699,7 @@ export function FinancialsPage() {
         </div>
       )}
 
-      {latest && (
+      {tab === "overview" && latest && (
         <div className="stat-grid">
           <Stat label={`FY ${latest.fiscalYear} revenue`} value={money(latest.revenueCents)} />
           <Stat label="Expenses" value={money(latest.expensesCents)} />
@@ -674,9 +712,9 @@ export function FinancialsPage() {
         </div>
       )}
 
-      <YearOverYearFinancialsCard rows={sorted} onOpenFinancialYear={openFinancialYear} />
+      {tab === "overview" && <YearOverYearFinancialsCard rows={sorted} onOpenFinancialYear={openFinancialYear} />}
 
-      {latest && latest.remunerationDisclosures.length > 0 && (
+      {tab === "overview" && latest && latest.remunerationDisclosures.length > 0 && (
         <>
           <div className="spacer-6" />
           <div className="card">

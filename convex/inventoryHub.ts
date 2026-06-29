@@ -375,6 +375,8 @@ export const upsertLocation = mutation({
     address: v.optional(v.string()),
     notes: v.optional(v.string()),
     active: v.optional(v.boolean()),
+    custodianName: v.optional(v.string()),
+    custodianMemberId: v.optional(v.id("members")),
     externalId: v.optional(v.string()),
     sourceSystem: v.optional(v.string()),
     rawJson: v.optional(v.string()),

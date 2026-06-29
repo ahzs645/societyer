@@ -339,6 +339,31 @@ export const removeBudget = mutation({
   },
 });
 
+// Edit a single imported/synced transaction. Only the user-correctable fields
+// (date, description, category, counterparty, amount) are patchable; the
+// account binding and external/source identifiers stay immutable.
+export const updateTransaction = mutation({
+  args: {
+    id: v.id("financialTransactions"),
+    patch: v.object({
+      date: v.optional(v.string()),
+      description: v.optional(v.string()),
+      category: v.optional(v.string()),
+      counterparty: v.optional(v.string()),
+      amountCents: v.optional(v.number()),
+    }),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, { id, patch, actingUserId }) => {
+    const row = await ctx.db.get(id);
+    if (!row) throw new Error("Transaction not found.");
+    await requireRole(ctx, { actingUserId, societyId: row.societyId, required: "Director" });
+    await ctx.db.patch(id, patch);
+    return id;
+  },
+});
+
 function monthlyEquivalentCents(amountCents: number, interval: string) {
   if (interval === "week") return Math.round((amountCents * 52) / 12);
   if (interval === "quarter") return Math.round(amountCents / 3);

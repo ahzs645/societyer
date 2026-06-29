@@ -57,12 +57,12 @@ export function ReceiptEvidence({ links, receiptDocumentId }: { links: any[]; re
   );
 }
 
-export function Stat({ label, value, sub, tone }: { label: string; value: any; sub: string; tone?: "warn" | "info" }) {
+export function Stat({ label, value, sub, tone }: { label: string; value: any; sub?: string; tone?: "warn" | "info" }) {
   return (
     <div className="stat-card">
       <div className="stat-card__label">{label}</div>
       <div className="stat-card__value">{value}</div>
-      <div className={tone ? `stat-card__sub stat-card__sub--${tone}` : "stat-card__sub"}>{sub}</div>
+      {sub && <div className={tone ? `stat-card__sub stat-card__sub--${tone}` : "stat-card__sub"}>{sub}</div>}
     </div>
   );
 }
