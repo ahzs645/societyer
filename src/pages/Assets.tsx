@@ -625,15 +625,14 @@ export function AssetDetailPage() {
       />
 
       <div className="asset-detail-grid">
-        <section className="panel">
-          <div className="panel__head"><h2>Register</h2><StatusBadge status={asset.status} /></div>
-          {asset.imageUrl && (
-            <img
-              src={asset.imageUrl}
-              alt={`Photo of ${asset.name}`}
-              style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 8, border: "1px solid var(--border, #d8dadf)", marginBottom: 12 }}
-            />
-          )}
+        <section className="panel asset-panel--register">
+          <div className="panel__head"><h2>Register</h2>{!asset.imageUrl && <StatusBadge status={asset.status} />}</div>
+          {asset.imageUrl ? (
+            <figure className="asset-hero">
+              <img src={asset.imageUrl} alt={`Photo of ${asset.name}`} />
+              <span className="asset-hero__status"><StatusBadge status={asset.status} /></span>
+            </figure>
+          ) : null}
           <dl className="record-kv">
             <div><dt>Category</dt><dd>{asset.category}</dd></div>
             <div><dt>Serial</dt><dd className="mono">{asset.serialNumber || "—"}</dd></div>
@@ -650,7 +649,7 @@ export function AssetDetailPage() {
             <div><dt>Purchase transaction</dt><dd>{purchaseTransaction ? `${formatDate(purchaseTransaction.date)} · ${purchaseTransaction.description} · ${money(Math.abs(purchaseTransaction.amountCents), asset.currency)}` : "—"}</dd></div>
           </dl>
         </section>
-        <section className="panel">
+        <section className="panel asset-panel--qr">
           <div className="panel__head"><h2>QR label</h2><QrCode size={16} /></div>
           <Field label="Label type">
             <StyledSelect
@@ -662,7 +661,7 @@ export function AssetDetailPage() {
           <AssetQrLabel assetTag={asset.assetTag} name={asset.name} url={assetUrl(asset._id)} labelType={labelType} />
           <button className="btn btn--sm" onClick={() => window.print()}>Print label</button>
         </section>
-        <section className="panel">
+        <section className="panel asset-panel--maintenance">
           <div className="panel__head"><h2>Maintenance and warranty</h2><Wrench size={16} /></div>
           <dl className="record-kv">
             <div><dt>Warranty expires</dt><dd>{asset.warrantyExpiresAt ? <DueDate date={asset.warrantyExpiresAt} /> : "—"}</dd></div>
@@ -670,7 +669,7 @@ export function AssetDetailPage() {
             <div><dt>Next verification</dt><dd>{asset.nextVerificationDate ? <DueDate date={asset.nextVerificationDate} /> : "—"}</dd></div>
           </dl>
         </section>
-        <section className="panel">
+        <section className="panel asset-panel--compliance">
           <div className="panel__head"><h2>Grant and compliance</h2></div>
           <dl className="record-kv">
             <div><dt>Funding source</dt><dd>{asset.fundingSource || "—"}</dd></div>

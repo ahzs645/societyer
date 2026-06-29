@@ -4,12 +4,59 @@
 .asset-detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+  grid-template-areas:
+    "register qr"
+    "register maintenance"
+    "compliance compliance";
   gap: 12px;
   margin-bottom: 16px;
 }
 
-.asset-detail-grid > .panel:nth-child(3) {
-  grid-column: 1 / -1;
+.asset-panel--register { grid-area: register; }
+.asset-panel--qr { grid-area: qr; }
+.asset-panel--maintenance { grid-area: maintenance; }
+.asset-panel--compliance { grid-area: compliance; }
+
+/* Give every detail panel a consistent title row: heading on the left, the
+ * trailing badge/icon aligned to the right instead of wrapping underneath. */
+.asset-detail-grid .panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.asset-detail-grid .panel__head h2 {
+  margin: 0;
+}
+
+/* Asset photo: a framed figure with a fixed aspect ratio so portrait and
+ * landscape photos both read as a deliberate hero, with the live status shown
+ * as a chip on the image rather than floating above it. */
+.asset-hero {
+  position: relative;
+  margin: 0 0 14px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid token('border');
+  background: token('bg-subtle');
+  aspect-ratio: 16 / 10;
+}
+
+.asset-hero img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.asset-hero__status {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
 .record-kv {
@@ -132,8 +179,15 @@
     grid-template-columns: 1fr;
   }
 
-  .asset-detail-grid > .panel:nth-child(3) {
-    grid-column: auto;
+  .asset-detail-grid {
+    /* Single column: restate the areas stacked so each panel's named
+     * grid-area still resolves (clearing them to `none` would collapse
+     * every panel into one cell and overlap them). */
+    grid-template-areas:
+      "register"
+      "qr"
+      "maintenance"
+      "compliance";
   }
 
   .asset-label {
