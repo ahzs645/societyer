@@ -45,7 +45,8 @@ import { buildExecutionBlock, resolvingBodyFor, type SignerLine } from "../share
 import { activeAsOf, type IntervalRow } from "../shared/registerHistory";
 import { buildAnnualResolutionContext } from "../shared/annualResolution";
 import { buildDividendResolutionContext } from "../shared/dividendResolution";
-import { computeVotingPower } from "../shared/votingPower";
+import { votingPowerPortable } from "../shared/functions/votingPower";
+import { toPortableQueryCtx } from "./lib/portable";
 
 /** Keep transfers on/before an as-of date (date-only compare, inclusive). */
 function transfersAsOf(transfers: any[], asOf?: string): any[] {
@@ -272,45 +273,12 @@ export const votingPower = query({
   // past date (holdings re-derived from transfers ≤ asOf). Omitted = live state.
   args: { societyId: v.id("societies"), asOf: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, asOf }) => {
-    const [classes, storedHoldings, roleHolders, directory, transfers] = await Promise.all([
-      ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("rightsHoldings").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("peopleDirectory").collect(),
-      asOf
-        ? ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect()
-        : Promise.resolve([] as any[]),
-    ]);
-    // As-of: re-materialize holdings from truncated transfers (same shape as the
-    // stored rows, so the meta-resolution below is unchanged).
-    const holdings = asOf ? materializeRightsHoldings(transfersAsOf(transfers, asOf) as any) : storedHoldings;
-    const roleById = new Map<string, any>(roleHolders.map((r: any) => [String(r._id), r]));
-    const dirById = new Map<string, any>(directory.map((d: any) => [String(d._id), d]));
-    const meta: Record<string, { isIndividual?: boolean; atAgeOfMajority?: boolean }> = {};
-    const holdingInputs = holdings
-      .filter((h: any) => String(h.status) === "current" && Number(h.quantity) > 0)
-      .map((h: any) => {
-        const role = h.holderRoleHolderId ? roleById.get(String(h.holderRoleHolderId)) : undefined;
-        const dir = role?.directoryPersonId ? dirById.get(String(role.directoryPersonId)) : undefined;
-        if (dir && (dir.isIndividual !== undefined || dir.atAgeOfMajority !== undefined)) {
-          meta[String(h.holderKey)] = { isIndividual: dir.isIndividual, atAgeOfMajority: dir.atAgeOfMajority };
-        }
-        return {
-          holderKey: String(h.holderKey),
-          holderName: String(role?.fullName ?? h.holderKey),
-          rightsClassId: String(h.rightsClassId),
-          quantity: Number(h.quantity) || 0,
-        };
-      });
-    const classInputs = classes.map((c: any) => ({
-      rightsClassId: String(c._id),
-      votesPerShare: c.votesPerShare,
-      votingRights: c.votingRights,
-      classType: c.classType,
-    }));
-    return computeVotingPower(holdingInputs, classInputs, meta);
-  },
+  // Portable handler: the SAME function runs unchanged on the local (Dexie)
+  // runtime. The marshalling that used to be hand-copied into the static mirror
+  // now lives once in shared/functions/votingPower.ts.
+  // See docs/portable-functions-architecture.md.
+  handler: (ctx, { societyId, asOf }) =>
+    votingPowerPortable(toPortableQueryCtx(ctx), { societyId, asOf }),
 });
 
 export const upsertRightsClass = mutation({

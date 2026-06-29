@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import { DEFAULT_HOME_JURISDICTION_CODE } from "../../shared/jurisdictionWorkspace";
+import type { LocalRowStore, RowStoreOp } from "../../shared/portable/localRowStore";
 
 export type LocalSeed = Record<string, any[]>;
 export type LocalArgs = Record<string, any> | undefined;
@@ -90,7 +91,7 @@ export class LocalDexieDatabase extends Dexie {
   }
 }
 
-export class LocalDexieRowStore {
+export class LocalDexieRowStore implements LocalRowStore {
   private db: LocalDexieDatabase | null = null;
   private cache: LocalSeed;
   private seed: LocalSeed;
@@ -181,6 +182,74 @@ export class LocalDexieRowStore {
       this.transactionDepth -= 1;
       if (this.transactionDepth === 0 && this.pendingNotify) this.notify();
     }
+  }
+
+  /** Table names currently held in the cache (LocalRowStore contract). */
+  tableNames(): string[] {
+    return Object.keys(this.cache);
+  }
+
+  /**
+   * Apply a batch of writes ATOMICALLY (LocalRowStore contract, used by the
+   * portable mutation adapter). Unlike the legacy per-row `upsertRow`/`removeRow`
+   * path — which fires un-awaited `void db.records.put(...)` with no isolation —
+   * this persists every op in a single Dexie `rw` transaction and rolls the
+   * in-memory cache back if the persist fails, so a multi-table mutation never
+   * commits partially. This is the fix for the non-atomic-write correctness bug.
+   */
+  async commitBatch(ops: RowStoreOp[]): Promise<void> {
+    if (!ops.length) return;
+
+    const touched = new Set(ops.map((op) => op.table));
+    const cacheBackup: LocalSeed = {};
+    for (const table of touched) cacheBackup[table] = this.rows(table).map(cloneLocalRow);
+
+    // Apply to the in-memory cache up front (reads see the new state immediately).
+    for (const op of ops) {
+      if (op.kind === "delete") this.cache[op.table] = this.rows(op.table).filter((row) => row._id !== op.id);
+      else this.cache[op.table] = upsertLocalRow(this.rows(op.table), op.row);
+    }
+
+    const changes: LocalChangeEnvelope[] = [];
+    const now = new Date().toISOString();
+    for (const op of ops) {
+      const id = op.kind === "delete" ? op.id : op.row._id;
+      const societyId = op.kind === "delete" ? cacheBackup[op.table]?.find((r) => r._id === id)?.societyId : op.row.societyId;
+      changes.push({
+        table: op.table,
+        id,
+        societyId,
+        op: op.kind === "delete" ? "delete" : "upsert",
+        createdAtISO: now,
+        mutationId: `${op.table}:${id}:${Date.now()}`,
+      });
+    }
+
+    if (this.db) {
+      try {
+        await this.db.open();
+        await this.db.transaction("rw", [this.db.records, this.db.changes, this.db.meetings, this.db.minutes], async () => {
+          for (const op of ops) {
+            if (op.kind === "delete") {
+              const previous = cacheBackup[op.table]?.find((r) => r._id === op.id);
+              await this.db!.records.put(localDeletedRecord(op.table, { _id: op.id, societyId: previous?.societyId, ...(previous ?? {}) }));
+              if (op.table === "meetings" || op.table === "minutes") await this.db![op.table].delete(op.id);
+            } else {
+              await this.db!.records.put(localRecord(op.table, op.row));
+              if (op.table === "meetings" || op.table === "minutes") await this.db![op.table].put(cloneLocalRow(op.row));
+            }
+          }
+          await this.db!.changes.bulkAdd(changes);
+        });
+      } catch (error) {
+        // Roll the cache back to its pre-batch state so memory matches storage.
+        for (const table of touched) this.cache[table] = cacheBackup[table];
+        throw error;
+      }
+    }
+
+    this.changesCache = [...this.changesCache, ...changes];
+    this.scheduleNotify();
   }
 
   exportSnapshot() {

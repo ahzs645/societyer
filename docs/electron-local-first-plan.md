@@ -29,6 +29,13 @@ Recommended meanings:
 
 The existing `/demo` client in `src/lib/staticConvex.ts` is a useful prototype adapter, but it should not be treated as a finished durable local database. It should be formalized into a reusable local workspace adapter with explicit seed data, persistence, migrations, and export/import boundaries.
 
+> **Update:** the formalization is now under way as a portable `ctx.db` contract —
+> see [`portable-functions-architecture.md`](./portable-functions-architecture.md).
+> Rather than hand-mirroring each handler, the **real** Convex functions run on a
+> bounded `ctx.db` adapter over the Dexie row store, so the mirror shrinks as
+> handlers are ported. Phase 0 (the contract, adapters, atomic local writes,
+> injected capabilities, stable ids, and the `votingPower` slice) has landed.
+
 ## Document Storage Providers
 
 Document storage should be configured separately from runtime mode:

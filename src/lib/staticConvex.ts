@@ -20,7 +20,7 @@ import {
   type LiveRoleHolder,
   type StoredRevision,
 } from "../../shared/roleHolderHistory";
-import { computeVotingPower } from "../../shared/votingPower";
+import { summarizeVotingPower, transfersAsOf } from "../../shared/functions/votingPower";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../shared/societyDocumentPackets";
 import {
   ycnQueryResult,
@@ -2562,40 +2562,20 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     return { classes, holdings, transfers, roleHolders };
   }
   if (moduleName === "legalOperations" && exportName === "votingPower") {
+    // The marshalling lives once in shared/functions/votingPower.ts and is shared
+    // with the Convex handler (convex/legalOperations.ts). This sync path loads
+    // rows from the local store; Phase 1 replaces it with the portable handler run
+    // on the Dexie-backed ctx.db once the local reactive path goes async.
+    // See docs/portable-functions-architecture.md.
     const classes = store?.listRows("rightsClasses", args) ?? [];
     const holdings = args?.asOf
       ? materializeRightsHoldings(
-          (store?.listRows("rightsholdingTransfers", args) ?? [])
-            .filter((t: any) => String(t.transferDate ?? t.createdAtISO ?? "").slice(0, 10) <= args.asOf) as any,
+          transfersAsOf(store?.listRows("rightsholdingTransfers", args) ?? [], args.asOf) as any,
         )
       : store?.listRows("rightsHoldings", args) ?? [];
     const roleHolders = store?.listRows("roleHolders", args) ?? [];
     const directory = store?.listRows("peopleDirectory", {}) ?? [];
-    const roleById = new Map(roleHolders.map((r: any) => [String(r._id), r]));
-    const dirById = new Map(directory.map((d: any) => [String(d._id), d]));
-    const meta: Record<string, { isIndividual?: boolean; atAgeOfMajority?: boolean }> = {};
-    const holdingInputs = holdings
-      .filter((h: any) => String(h.status) === "current" && Number(h.quantity) > 0)
-      .map((h: any) => {
-        const role = h.holderRoleHolderId ? roleById.get(String(h.holderRoleHolderId)) : undefined;
-        const dir = role?.directoryPersonId ? dirById.get(String(role.directoryPersonId)) : undefined;
-        if (dir && (dir.isIndividual !== undefined || dir.atAgeOfMajority !== undefined)) {
-          meta[String(h.holderKey)] = { isIndividual: dir.isIndividual, atAgeOfMajority: dir.atAgeOfMajority };
-        }
-        return {
-          holderKey: String(h.holderKey),
-          holderName: String(role?.fullName ?? h.holderKey),
-          rightsClassId: String(h.rightsClassId),
-          quantity: Number(h.quantity) || 0,
-        };
-      });
-    const classInputs = classes.map((c: any) => ({
-      rightsClassId: String(c._id),
-      votesPerShare: c.votesPerShare,
-      votingRights: c.votingRights,
-      classType: c.classType,
-    }));
-    return computeVotingPower(holdingInputs, classInputs, meta);
+    return summarizeVotingPower({ classes, holdings, roleHolders, directory });
   }
   if (moduleName === "legalOperations" && exportName === "templateEngine") {
     return staticTemplateEngine(store, args);
