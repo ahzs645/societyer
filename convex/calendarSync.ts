@@ -1,11 +1,11 @@
 import { v } from "convex/values";
-import { api } from "./_generated/api";
 import { mutation } from "./lib/untypedServer";
 import { toPortableMutationCtx } from "./lib/portable";
 import {
   upsertExternalCalendarEventMappingPortable,
   recordCalendarWebhookPortable,
   recordCalendarIncrementalCursorPortable,
+  stageCalendarEventsPortable,
 } from "../shared/functions/calendarSync";
 
 export const stageCalendarEvents = mutation({
@@ -17,14 +17,7 @@ export const stageCalendarEvents = mutation({
     name: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, provider, calendarId, events, name }) => {
-    const bundle = calendarEventsImportBundle({ provider, calendarId, events });
-    return await ctx.runMutation(api.importSessions.createFromBundle, {
-      societyId,
-      name: name ?? `${providerLabel(provider)} calendar sync`,
-      bundle,
-    });
-  },
+  handler: (ctx, args) => stageCalendarEventsPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsertExternalCalendarEventMapping = mutation({

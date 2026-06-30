@@ -614,6 +614,10 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "organizationHistory:removeSource", handler: organizationHistoryFns.removeSourcePortable }),
   definePortableMutation({ name: "organizationHistory:bulkSetItemReviewStatus", handler: organizationHistoryFns.bulkSetItemReviewStatusPortable }),
   definePortableMutation({ name: "organizationHistory:removeItem", handler: organizationHistoryFns.removeItemPortable }),
+  definePortableMutation({ name: "organizationHistory:saveSource", handler: organizationHistoryFns.saveSourcePortable }),
+  definePortableMutation({ name: "organizationHistory:saveItem", handler: organizationHistoryFns.saveItemPortable }),
+  definePortableMutation({ name: "organizationHistory:extractBudgetSourceDetails", handler: organizationHistoryFns.extractBudgetSourceDetailsPortable }),
+  definePortableMutation({ name: "organizationHistory:bulkImport", handler: organizationHistoryFns.bulkImportPortable }),
 
   // meetings
   definePortableQuery({ name: "meetings:list", handler: meetingsFns.listPortable }),
@@ -953,6 +957,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "waveCache:structures", handler: waveCacheFns.structuresPortable }),
 
   // calendarSync
+  definePortableMutation({ name: "calendarSync:stageCalendarEvents", handler: calendarSyncFns.stageCalendarEventsPortable }),
   definePortableMutation({ name: "calendarSync:upsertExternalCalendarEventMapping", handler: calendarSyncFns.upsertExternalCalendarEventMappingPortable }),
   definePortableMutation({ name: "calendarSync:recordCalendarWebhook", handler: calendarSyncFns.recordCalendarWebhookPortable }),
   definePortableMutation({ name: "calendarSync:recordCalendarIncrementalCursor", handler: calendarSyncFns.recordCalendarIncrementalCursorPortable }),

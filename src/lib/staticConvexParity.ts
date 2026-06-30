@@ -55,16 +55,10 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
 // covering it via the generic CRUD verbs) and removing the entry here is the
 // path to closing each gap — the parity gate flags any entry that has since
 // become handled so this list cannot rot.
-export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
-  // Stages external calendar events via ctx.runMutation orchestration — left on
-  // Convex (the per-event upsert IS ported; the multi-event stager is not).
-  "calendarSync:stageCalendarEvents",
-  // Org-history import/extraction handlers still depend on convex-only helpers.
-  "organizationHistory:bulkImport",
-  "organizationHistory:extractBudgetSourceDetails",
-  "organizationHistory:saveItem",
-  "organizationHistory:saveSource",
-]);
+// Every frontend write now persists offline — either through a portable handler,
+// the generic CRUD fallback, or an explicit capability tier (no-op writes below).
+// This set is intentionally empty; the parity gate keeps it that way.
+export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([]);
 
 // Verbs the generic CRUD fallback in staticConvex.ts handles by table convention.
 export const STATIC_GENERIC_CRUD_PREFIX = /^(create|update|upsert|issue|setStatus|remove)/;
