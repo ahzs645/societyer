@@ -151,7 +151,6 @@ import {
   aiAgentAuditEvents,
   aiChatThreads,
   aiMessages,
-  aiToolDrafts,
   aiProviderSettings,
   motions,
   tables,
@@ -1015,6 +1014,7 @@ function mutCasesAiAgents3(name: string, args: StaticArgs, store?: StaticDemoDex
       const now = new Date().toISOString();
       const draft = {
         _id: `static_ai_tool_draft_${Date.now()}`,
+        _creationTime: Date.now(),
         societyId: args?.societyId ?? SOCIETY_ID,
         threadId: args?.threadId,
         runId: args?.runId,
@@ -1026,7 +1026,10 @@ function mutCasesAiAgents3(name: string, args: StaticArgs, store?: StaticDemoDex
         createdAtISO: now,
         updatedAtISO: now,
       };
-      aiToolDrafts.unshift(draft);
+      // Write to the shared row store (not the in-memory fixture array) so the
+      // now-portable aiAgents:listToolDrafts / approveToolDraft handlers, which
+      // read ctx.db, see this draft.
+      store?.upsertRow("aiToolDrafts", draft);
       return { success: true, draftId: draft._id, draft: draft.payload };
     }
     return { success: true, toolName: args?.toolName, rows: [], recordReferences: [] };
