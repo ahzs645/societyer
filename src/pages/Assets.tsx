@@ -548,8 +548,12 @@ export function AssetDetailPage() {
   const scheduleMaintenance = useMutation(api.assets.scheduleMaintenance);
   const completeMaintenance = useMutation(api.assets.completeMaintenance);
   const dispose = useMutation(api.assets.dispose);
-  const [drawer, setDrawer] = useState<"edit" | "custody" | "maintenance" | "disposal" | null>(null);
+  const [drawer, setDrawer] = useState<"custody" | "maintenance" | "disposal" | null>(null);
   const [saving, setSaving] = useState(false);
+  // Editing an asset from its own page is a full-screen edit (the body becomes
+  // the form), not the side drawer — the drawer edit is reserved for the table
+  // view, where you're editing a row without leaving the list.
+  const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState<DetailTab>("overview");
   const [form, setForm] = useState<AssetFormValue | null>(null);
   const [eventForm, setEventForm] = useState<any>({ eventType: "checkout", toCustodianType: "member", toCustodianName: "", responsiblePersonName: "", location: "", condition: "Good", expectedReturnDate: "", acceptanceSignature: "", notes: "" });
@@ -582,7 +586,7 @@ export function AssetDetailPage() {
 
   const openEdit = () => {
     setForm(formFromAsset(asset) as AssetFormValue);
-    setDrawer("edit");
+    setEditing(true);
   };
 
   const runSave = async (label: string, fn: () => Promise<unknown>, success: string) => {
@@ -600,8 +604,17 @@ export function AssetDetailPage() {
   };
 
   const saveEdit = async () => {
-    if (!form) return;
-    await runSave("Could not update asset", () => update({ id: asset._id, patch: normalizeAssetForm(form) as any }), "Asset updated");
+    if (!form || saving) return;
+    setSaving(true);
+    try {
+      await update({ id: asset._id, patch: normalizeAssetForm(form) as any });
+      toast.success("Asset updated");
+      setEditing(false);
+    } catch (error: any) {
+      toast.error("Could not update asset", error?.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveEvent = async () => {
@@ -630,20 +643,39 @@ export function AssetDetailPage() {
   return (
     <div className="page">
       <PageHeader
-        title={asset.assetTag}
+        title={editing ? `Edit ${asset.assetTag}` : asset.assetTag}
         subtitle={asset.name}
         routeKey="/app/assets"
         actions={
-          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
-            <button className="btn-action" onClick={() => setDrawer("custody")}><Repeat2 size={12} /> Custody</button>
-            {serviceable && <button className="btn-action" onClick={() => setDrawer("maintenance")}><Wrench size={12} /> Schedule</button>}
-            <button className="btn-action" onClick={() => setDrawer("disposal")}><Trash2 size={12} /> Dispose</button>
-            <button className="btn-action btn-action--primary" onClick={openEdit}><Pencil size={12} /> Edit</button>
-          </div>
+          editing ? (
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <button className="btn-action" onClick={() => setEditing(false)} disabled={saving}><ArrowLeft size={12} /> Cancel</button>
+              <button className="btn-action btn-action--primary" onClick={saveEdit} disabled={saving}><Pencil size={12} /> {saving ? "Saving…" : "Save"}</button>
+            </div>
+          ) : (
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
+              <button className="btn-action" onClick={() => setDrawer("custody")}><Repeat2 size={12} /> Custody</button>
+              {serviceable && <button className="btn-action" onClick={() => setDrawer("maintenance")}><Wrench size={12} /> Schedule</button>}
+              <button className="btn-action" onClick={() => setDrawer("disposal")}><Trash2 size={12} /> Dispose</button>
+              <button className="btn-action btn-action--primary" onClick={openEdit}><Pencil size={12} /> Edit</button>
+            </div>
+          )
         }
       />
 
+      {editing ? (
+        <section className="panel asset-edit-panel">
+          {form && (
+            <AssetFormFields
+              value={form}
+              onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
+              data={formData}
+              autoFocusName={false}
+            />
+          )}
+        </section>
+      ) : (
       <div className="asset-detail">
         <Tabs<DetailTab>
           value={activeTab}
@@ -801,17 +833,8 @@ export function AssetDetailPage() {
           </section>
         )}
       </div>
+      )}
 
-      <Drawer open={drawer === "edit"} onClose={() => setDrawer(null)} title="Edit asset" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveEdit} disabled={saving}>{saving ? "Saving…" : "Save"}</button></>}>
-        {form && (
-          <AssetFormFields
-            value={form}
-            onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
-            data={formData}
-            autoFocusName={false}
-          />
-        )}
-      </Drawer>
       <Drawer open={drawer === "custody"} onClose={() => setDrawer(null)} title="Record custody event" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveEvent} disabled={saving}>{saving ? "Saving…" : "Record"}</button></>}>
         <CustodyForm form={eventForm} setForm={setEventForm} />
       </Drawer>
