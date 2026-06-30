@@ -2,7 +2,7 @@
 
 > Status: **Phases 0–3 landed** — foundation, the live local async runtime,
 > `convex-test` as a conformance oracle, and the domain port:
-> **773 functions across ~90 domains** now run as one portable handler on all
+> **796 functions across ~90 domains** now run as one portable handler on all
 > three runtimes (up from the first `votingPower`/`upsertRightsClass` pair),
 > including the role-gated write surface (portable `requireRole`), the accounting
 > double-entry money path, document/template generation, and full-text search
@@ -24,9 +24,12 @@ guarded by a name-coverage ledger (`src/lib/staticConvexParity.ts`). That mirror
 was the symptom of a missing abstraction: there was no `ctx.db` seam that let the
 **real** Convex handlers run on a non-Convex store, so every handler got a
 second, hand-maintained copy that drifted (76 writes were once tracked as
-not-yet-mirrored; that ledger is now down to **12**, all genuinely non-portable —
-`ctx.storage` logo uploads, an org-history importer, `users:setRole`, and the
-multi-event calendar stager).
+not-yet-mirrored). **That pending ledger is now empty (0):** every frontend write
+persists offline through a portable handler, the generic CRUD fallback, or an
+explicit `CAPABILITY_UNAVAILABLE` no-op tier (the 22 genuinely server-only
+operations — Wave sync, outbound email/SMS, AI inference, …). The dead
+hand-written dispatch has been deleted from the mirror, shrinking
+`staticConvex.ts` from 6,368 to ~3,800 lines.
 
 The fix is one set of **portable functions** running on a bounded `ctx`
 contract, with a thin adapter per runtime:
