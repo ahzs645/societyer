@@ -55,7 +55,7 @@ export function AssetCreateModal({
     }
     setSaving(true);
     try {
-      const id = await create({ societyId, ...payload, sourceDocumentIds: [] } as any);
+      const id = await create({ societyId, ...payload } as any);
       toast.success("Asset created", payload.name);
       onCreated?.(id as Id<"assets">);
       onClose();

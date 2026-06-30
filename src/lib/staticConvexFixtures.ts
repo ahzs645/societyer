@@ -2950,6 +2950,10 @@ const tables: Record<string, any[]> = {
       purchaseTransactionId: "static_tx_projector",
       receiptDocumentId: "static_document_projector_receipt",
       sourceDocumentIds: ["static_document_projector_receipt", "static_document_financials"],
+      resourceLinks: [
+        { label: "Epson projector manual (PDF)", url: "https://epson.com/support/projector-manual" },
+        { label: "Lamp replacement guide", url: "https://epson.com/support/lamp-replacement" },
+      ],
       warrantyExpiresAt: "2027-09-12",
       nextMaintenanceDate: "2026-06-15",
       nextVerificationDate: "2026-08-31",

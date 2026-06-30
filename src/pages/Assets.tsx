@@ -8,7 +8,9 @@ import {
   ClipboardCheck,
   ClipboardList,
   Download,
+  ExternalLink,
   FileSpreadsheet,
+  FileText,
   Link2,
   Package,
   PackageCheck,
@@ -61,6 +63,7 @@ import {
   MAINTENANCE_KINDS,
   assetUrl,
   assetsToCsv,
+  categorySupportsMaintenance,
   centsToInput,
   downloadText,
   formFromAsset,
@@ -545,8 +548,12 @@ export function AssetDetailPage() {
   const scheduleMaintenance = useMutation(api.assets.scheduleMaintenance);
   const completeMaintenance = useMutation(api.assets.completeMaintenance);
   const dispose = useMutation(api.assets.dispose);
-  const [drawer, setDrawer] = useState<"edit" | "custody" | "maintenance" | "disposal" | null>(null);
+  const [drawer, setDrawer] = useState<"custody" | "maintenance" | "disposal" | null>(null);
   const [saving, setSaving] = useState(false);
+  // Editing an asset from its own page is a full-screen edit (the body becomes
+  // the form), not the side drawer — the drawer edit is reserved for the table
+  // view, where you're editing a row without leaving the list.
+  const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState<DetailTab>("overview");
   const [form, setForm] = useState<AssetFormValue | null>(null);
   const [eventForm, setEventForm] = useState<any>({ eventType: "checkout", toCustodianType: "member", toCustodianName: "", responsiblePersonName: "", location: "", condition: "Good", expectedReturnDate: "", acceptanceSignature: "", notes: "" });
@@ -559,14 +566,27 @@ export function AssetDetailPage() {
   }, [bundle?.asset?._id, bundle?.asset?.preferredLabelType]);
 
   if (bundle === undefined) return <PageLoading />;
-  if (!bundle) return <div className="page"><Link className="btn" to="/app/assets"><ArrowLeft size={14} /> Assets</Link><p>Asset not found.</p></div>;
+  if (bundle === null) return <div className="page"><Link className="btn" to="/app/assets"><ArrowLeft size={14} /> Assets</Link><p>Asset not found.</p></div>;
+  // `assets.bundle` resolves to `{ asset, events, maintenance, ... }`. Some
+  // runtimes hand back a transient placeholder (e.g. an empty array) before the
+  // real bundle loads — treat any asset-less, non-null shape as still loading
+  // rather than dereferencing `asset` and crashing.
+  if (Array.isArray(bundle) || !bundle.asset) return <PageLoading />;
   const { asset, events, maintenance } = bundle;
   const receiptDocument = (documents ?? []).find((doc: any) => doc._id === asset.receiptDocumentId);
   const purchaseTransaction = (transactions ?? []).find((txn: any) => txn._id === asset.purchaseTransactionId);
+  // Consumables (food, supplies) have no warranty/maintenance/verification
+  // lifecycle, so that whole tab is hidden for them.
+  const serviceable = categorySupportsMaintenance(asset.category);
+  const activeTab: DetailTab = !serviceable && tab === "maintenance" ? "overview" : tab;
+  const linkedDocuments = ((asset.sourceDocumentIds ?? []) as string[])
+    .map((docId) => (documents ?? []).find((doc: any) => doc._id === docId))
+    .filter(Boolean) as any[];
+  const resourceLinks = Array.isArray(asset.resourceLinks) ? asset.resourceLinks : [];
 
   const openEdit = () => {
     setForm(formFromAsset(asset) as AssetFormValue);
-    setDrawer("edit");
+    setEditing(true);
   };
 
   const runSave = async (label: string, fn: () => Promise<unknown>, success: string) => {
@@ -584,8 +604,17 @@ export function AssetDetailPage() {
   };
 
   const saveEdit = async () => {
-    if (!form) return;
-    await runSave("Could not update asset", () => update({ id: asset._id, patch: normalizeAssetForm(form) as any }), "Asset updated");
+    if (!form || saving) return;
+    setSaving(true);
+    try {
+      await update({ id: asset._id, patch: normalizeAssetForm(form) as any });
+      toast.success("Asset updated");
+      setEditing(false);
+    } catch (error: any) {
+      toast.error("Could not update asset", error?.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveEvent = async () => {
@@ -614,34 +643,55 @@ export function AssetDetailPage() {
   return (
     <div className="page">
       <PageHeader
-        title={asset.assetTag}
+        title={editing ? `Edit ${asset.assetTag}` : asset.assetTag}
         subtitle={asset.name}
         routeKey="/app/assets"
         actions={
-          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
-            <button className="btn-action" onClick={() => setDrawer("custody")}><Repeat2 size={12} /> Custody</button>
-            <button className="btn-action" onClick={() => setDrawer("maintenance")}><Wrench size={12} /> Schedule</button>
-            <button className="btn-action" onClick={() => setDrawer("disposal")}><Trash2 size={12} /> Dispose</button>
-            <button className="btn-action btn-action--primary" onClick={openEdit}><Pencil size={12} /> Edit</button>
-          </div>
+          editing ? (
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <button className="btn-action" onClick={() => setEditing(false)} disabled={saving}><ArrowLeft size={12} /> Cancel</button>
+              <button className="btn-action btn-action--primary" onClick={saveEdit} disabled={saving}><Pencil size={12} /> {saving ? "Saving…" : "Save"}</button>
+            </div>
+          ) : (
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
+              <button className="btn-action" onClick={() => setDrawer("custody")}><Repeat2 size={12} /> Custody</button>
+              {serviceable && <button className="btn-action" onClick={() => setDrawer("maintenance")}><Wrench size={12} /> Schedule</button>}
+              <button className="btn-action" onClick={() => setDrawer("disposal")}><Trash2 size={12} /> Dispose</button>
+              <button className="btn-action btn-action--primary" onClick={openEdit}><Pencil size={12} /> Edit</button>
+            </div>
+          )
         }
       />
 
+      {editing ? (
+        <section className="panel asset-edit-panel">
+          {form && (
+            <AssetFormFields
+              value={form}
+              onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
+              data={formData}
+              autoFocusName={false}
+            />
+          )}
+        </section>
+      ) : (
       <div className="asset-detail">
         <Tabs<DetailTab>
-          value={tab}
+          value={activeTab}
           onChange={setTab}
           items={[
             { id: "overview", label: "Overview", icon: <Package size={14} /> },
-            { id: "maintenance", label: "Maintenance", icon: <Wrench size={14} />, count: maintenance.length || null },
+            ...(serviceable
+              ? [{ id: "maintenance" as const, label: "Maintenance", icon: <Wrench size={14} />, count: maintenance.length || null }]
+              : []),
             { id: "custody", label: "Custody", icon: <Repeat2 size={14} />, count: events.length || null },
             { id: "compliance", label: "Compliance", icon: <ClipboardCheck size={14} /> },
             { id: "label", label: "Label", icon: <QrCode size={14} /> },
           ]}
         />
 
-        {tab === "overview" && (
+        {activeTab === "overview" && (
           <section className="panel">
             <div className="panel__head"><h2>Register</h2>{!asset.imageUrl && <StatusBadge status={asset.status} />}</div>
             {asset.imageUrl ? (
@@ -668,7 +718,7 @@ export function AssetDetailPage() {
           </section>
         )}
 
-        {tab === "maintenance" && (
+        {activeTab === "maintenance" && (
           <>
             <section className="panel">
               <div className="panel__head"><h2>Maintenance and warranty</h2><Wrench size={16} /></div>
@@ -695,10 +745,49 @@ export function AssetDetailPage() {
                 </button>
               ) : null}
             />
+            <section className="panel">
+              <div className="panel__head"><h2>Documentation &amp; resources</h2><FileText size={16} /></div>
+              {linkedDocuments.length === 0 && resourceLinks.length === 0 ? (
+                <p className="muted" style={{ margin: 0 }}>
+                  No manuals, warranty documents, or resource links yet. Use <strong>Edit</strong> to attach a document or add a link.
+                </p>
+              ) : (
+                <dl className="record-kv">
+                  <div>
+                    <dt>Documents</dt>
+                    <dd>
+                      {linkedDocuments.length ? (
+                        <ul className="asset-detail__doc-links">
+                          {linkedDocuments.map((doc: any) => (
+                            <li key={doc._id}>
+                              <Link to={`/app/documents/${doc._id}`}><FileText size={13} /> {doc.title}</Link>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Resource links</dt>
+                    <dd>
+                      {resourceLinks.length ? (
+                        <ul className="asset-detail__doc-links">
+                          {resourceLinks.map((link: any, i: number) => (
+                            <li key={i}>
+                              <a href={link.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} /> {link.label || link.url}</a>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : "—"}
+                    </dd>
+                  </div>
+                </dl>
+              )}
+            </section>
           </>
         )}
 
-        {tab === "custody" && (
+        {activeTab === "custody" && (
           <DataTable
             label="Custody and audit history"
             icon={<ClipboardCheck size={14} />}
@@ -716,7 +805,7 @@ export function AssetDetailPage() {
           />
         )}
 
-        {tab === "compliance" && (
+        {activeTab === "compliance" && (
           <section className="panel">
             <div className="panel__head"><h2>Grant and compliance</h2></div>
             <dl className="record-kv">
@@ -729,7 +818,7 @@ export function AssetDetailPage() {
           </section>
         )}
 
-        {tab === "label" && (
+        {activeTab === "label" && (
           <section className="panel">
             <div className="panel__head"><h2>QR label</h2><QrCode size={16} /></div>
             <Field label="Label type">
@@ -744,17 +833,8 @@ export function AssetDetailPage() {
           </section>
         )}
       </div>
+      )}
 
-      <Drawer open={drawer === "edit"} onClose={() => setDrawer(null)} title="Edit asset" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveEdit} disabled={saving}>{saving ? "Saving…" : "Save"}</button></>}>
-        {form && (
-          <AssetFormFields
-            value={form}
-            onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
-            data={formData}
-            autoFocusName={false}
-          />
-        )}
-      </Drawer>
       <Drawer open={drawer === "custody"} onClose={() => setDrawer(null)} title="Record custody event" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveEvent} disabled={saving}>{saving ? "Saving…" : "Record"}</button></>}>
         <CustodyForm form={eventForm} setForm={setEventForm} />
       </Drawer>

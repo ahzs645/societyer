@@ -1,0 +1,140 @@
+/**
+ * Resolve a column's symbol for the RecordTable header.
+ *
+ * Two layers:
+ *   1. `field.icon` — the lucide icon name stored on the field's metadata
+ *      (set by the record-table metadata seed). Looked up in ICON_BY_NAME.
+ *   2. Fallback to a per-field-type glyph so EVERY column shows a symbol,
+ *      even fields whose metadata has no explicit icon.
+ *
+ * Icons are imported by name (not `import *`) so the bundle only carries the
+ * set we actually reference — most are already pulled in by the sidebar /
+ * pages, so the marginal cost is tiny.
+ */
+import {
+  Activity,
+  AlertTriangle,
+  Archive,
+  ArrowRight,
+  Asterisk,
+  AtSign,
+  BadgeDollarSign,
+  BarChart,
+  BookOpen,
+  Briefcase,
+  Building,
+  Calculator,
+  Calendar,
+  CalendarClock,
+  Check,
+  CheckCircle,
+  CheckCircle2,
+  CircleDot,
+  ClipboardCheck,
+  ClipboardList,
+  Clock,
+  Copy,
+  Database,
+  DollarSign,
+  DoorOpen,
+  ExternalLink,
+  Eye,
+  FileCheck,
+  FileText,
+  Filter,
+  Flag,
+  FolderOpen,
+  Gauge,
+  Gavel,
+  Globe,
+  GraduationCap,
+  HandHeart,
+  Hash,
+  History,
+  Inbox,
+  KeyRound,
+  Landmark,
+  Link,
+  List,
+  ListChecks,
+  ListTodo,
+  LockKeyhole,
+  LogOut,
+  Mail,
+  MapPin,
+  Network,
+  Package,
+  PackageCheck,
+  Paperclip,
+  PenLine,
+  Phone,
+  PiggyBank,
+  Plug,
+  QrCode,
+  Receipt,
+  RefreshCw,
+  Reply,
+  Scale,
+  Send,
+  Server,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Sliders,
+  SlidersHorizontal,
+  Star,
+  StickyNote,
+  Tag,
+  Tags,
+  ToggleLeft,
+  Type,
+  User,
+  UserCheck,
+  UserPlus,
+  Users,
+  Vote,
+  Wallet,
+  Workflow,
+  Wrench,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
+import { FIELD_TYPES, type FieldType } from "../types";
+
+/** Metadata icon-name → component. Covers every name used by the seed. */
+const ICON_BY_NAME: Record<string, LucideIcon> = {
+  Activity, AlertTriangle, Archive, ArrowRight, Asterisk, BadgeDollarSign,
+  BarChart, BookOpen, Briefcase, Building, Calculator, Calendar, CalendarClock,
+  Check, CheckCircle, CheckCircle2, ClipboardCheck, ClipboardList, Clock, Copy,
+  Database, DollarSign, DoorOpen, ExternalLink, Eye, FileCheck, FileText, Filter,
+  Flag, FolderOpen, Gauge, Gavel, Globe, GraduationCap, HandHeart, Hash, History,
+  Inbox, KeyRound, Landmark, Link, ListChecks, ListTodo, LockKeyhole, LogOut,
+  Mail, MapPin, Network, Package, PackageCheck, Paperclip, PenLine, Phone,
+  PiggyBank, Plug, QrCode, Receipt, RefreshCw, Reply, Scale, Send, Server,
+  Shield, ShieldAlert, ShieldCheck, Sliders, SlidersHorizontal, StickyNote, Tag,
+  Type, User, UserCheck, UserPlus, Users, Vote, Wallet, Workflow, Wrench, Zap,
+};
+
+/** Per-field-type fallback glyph, so a column always shows a symbol. */
+const ICON_BY_FIELD_TYPE: Record<FieldType, LucideIcon> = {
+  [FIELD_TYPES.TEXT]: Type,
+  [FIELD_TYPES.NUMBER]: Hash,
+  [FIELD_TYPES.CURRENCY]: DollarSign,
+  [FIELD_TYPES.BOOLEAN]: ToggleLeft,
+  [FIELD_TYPES.DATE]: Calendar,
+  [FIELD_TYPES.DATE_TIME]: CalendarClock,
+  [FIELD_TYPES.SELECT]: CircleDot,
+  [FIELD_TYPES.MULTI_SELECT]: Tags,
+  [FIELD_TYPES.EMAIL]: AtSign,
+  [FIELD_TYPES.PHONE]: Phone,
+  [FIELD_TYPES.LINK]: Link,
+  [FIELD_TYPES.RELATION]: Link,
+  [FIELD_TYPES.RATING]: Star,
+  [FIELD_TYPES.UUID]: Hash,
+  [FIELD_TYPES.ARRAY]: List,
+};
+
+export function resolveFieldIcon(field: { icon?: string; fieldType: FieldType }): LucideIcon {
+  if (field.icon && ICON_BY_NAME[field.icon]) return ICON_BY_NAME[field.icon];
+  return ICON_BY_FIELD_TYPE[field.fieldType] ?? Type;
+}

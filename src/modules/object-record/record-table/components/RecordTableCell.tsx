@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Copy, ExternalLink, Mail, PanelRightOpen, Pencil } from "lucide-react";
+import { Copy, ExternalLink, Mail, Pencil } from "lucide-react";
 import type { RecordField } from "../../types";
 import { FIELD_TYPES } from "../../types";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
@@ -113,17 +113,11 @@ export function RecordTableCell({
               {action.icon}
             </button>
           ))}
-          {isLabelIdentifier && tableCtx.onRecordClick ? (
-            <button
-              type="button"
-              className="record-table__cell-action"
-              aria-label={`Open ${tableCtx.objectMetadata.labelSingular ?? "record"} details`}
-              title={`Open ${tableCtx.objectMetadata.labelSingular ?? "record"} details`}
-              onClick={() => tableCtx.onRecordClick?.(recordId, record)}
-            >
-              <PanelRightOpen size={12} />
-            </button>
-          ) : canEdit ? (
+          {/* The "open record" affordance lives once per row in the trailing
+              actions column (RecordTableRow). The identifier cell itself is a
+              link (click to open), so we don't repeat the open icon here —
+              only the inline edit pencil for editable non-identifier cells. */}
+          {canEdit && !isLabelIdentifier ? (
             <button
               type="button"
               className="record-table__cell-action"

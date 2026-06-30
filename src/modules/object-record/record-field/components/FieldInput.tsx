@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
-import type { FieldMetadata, SelectFieldConfig } from "../../types";
+import type { BooleanFieldConfig, FieldMetadata, SelectFieldConfig } from "../../types";
 import { FIELD_TYPES } from "../../types";
 import { Select } from "@/components/Select";
 import type { TagColor } from "@/components/Tag";
@@ -286,14 +286,63 @@ function MultiSelectInput({ value, onCommit, onCancel, field }: FieldInputProps)
   );
 }
 
-function BooleanInput({ value, onCommit }: FieldInputProps) {
-  // Boolean "edit" is an immediate toggle — no popover needed.
+/**
+ * BOOLEAN inline editor. Renders the same Twenty-style floating option menu as
+ * SELECT (anchored to the cell) instead of blind-toggling the value — so the
+ * user always sees and picks from the available options (Yes / No, or the
+ * field's custom true/false labels) rather than the value silently swapping.
+ */
+function BooleanInput({ value, onCommit, onCancel, field }: FieldInputProps) {
+  const config = field.config as BooleanFieldConfig;
   const current = value === true || value === "true" || value === 1 || value === "1";
-  useEffect(() => {
-    onCommit(!current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const isEmpty = value === null || value === undefined;
+  const options = [
+    { value: "true", label: config.trueLabel ?? "Yes" },
+    { value: "false", label: config.falseLabel ?? "No" },
+  ];
+  const hasCommittedRef = useRef(false);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const [anchorRect, setAnchorRect] = useState<{
+    top: number;
+    bottom: number;
+    left: number;
+    width: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    const cell = anchorRef.current?.closest("[data-record-cell-editor-anchor], td");
+    if (!cell) return;
+    const r = cell.getBoundingClientRect();
+    setAnchorRect({ top: r.top, bottom: r.bottom, left: r.left, width: r.width });
   }, []);
-  return null;
+
+  return (
+    <span
+      ref={anchorRef}
+      className="record-cell__select-anchor"
+      style={{ display: "inline-block", minHeight: 20 }}
+    >
+      {anchorRect && (
+        <Select
+          size="sm"
+          triggerless
+          anchorRect={anchorRect}
+          defaultOpen
+          value={isEmpty ? "" : current ? "true" : "false"}
+          options={options}
+          clearable={field.isNullable}
+          clearLabel={field.isNullable ? `No ${field.label.toLowerCase()}` : undefined}
+          onChange={(v) => {
+            hasCommittedRef.current = true;
+            onCommit(v === "" ? null : v === "true");
+          }}
+          onClose={() => {
+            if (!hasCommittedRef.current) onCancel();
+          }}
+        />
+      )}
+    </span>
+  );
 }
 
 const INPUT_BY_TYPE: Partial<Record<FieldMetadata["fieldType"], InputComponent>> = {

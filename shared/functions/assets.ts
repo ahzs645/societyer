@@ -286,6 +286,7 @@ export async function createPortable(
     receiptDocumentId?: string;
     clearReceiptDocument?: boolean;
     sourceDocumentIds?: string[];
+    resourceLinks?: { label: string; url: string }[];
     warrantyExpiresAt?: string;
     nextMaintenanceDate?: string;
     nextVerificationDate?: string;
