@@ -182,16 +182,6 @@ function privateWebhookSubscription(row: any) {
   };
 }
 
-function parseConfigJson(value?: string) {
-  if (!value) return {};
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
 async function assertCanManageApiPlatform(
   ctx: any,
   societyId: any,
