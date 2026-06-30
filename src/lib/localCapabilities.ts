@@ -1,7 +1,9 @@
 import {
   makeCapabilities,
+  CapabilityUnavailableError,
   type CapabilityKey,
   type PortableCapabilities,
+  type StorageCapability,
 } from "../../shared/portable/capabilities";
 
 export interface LocalCapabilityOptions {
@@ -9,6 +11,26 @@ export interface LocalCapabilityOptions {
   runtimeLabel?: string;
   /** Capabilities the host can actually provide (e.g. native storage on Electron). */
   provided?: Parameters<typeof makeCapabilities>[0];
+}
+
+/**
+ * Default local storage: read handlers resolve a blob reference to a URL only if
+ * it is already a self-contained URL (a `data:`/`blob:`/`http(s):` value stored
+ * inline) — a Convex `_storage` id has no local blob, so it resolves to null and
+ * the handler falls back gracefully. Uploads aren't available offline (the
+ * Electron host overrides this whole capability via `provided.storage` with a
+ * native-filesystem implementation).
+ */
+function defaultLocalStorage(label: string): StorageCapability {
+  return {
+    async createUploadUrl() {
+      throw new CapabilityUnavailableError("storage", `This ${label} workspace has no upload storage.`);
+    },
+    async getDownloadUrl({ storageKey }) {
+      const isInlineUrl = /^(data:|blob:|https?:)/.test(String(storageKey ?? ""));
+      return { url: isInlineUrl ? String(storageKey) : null };
+    },
+  };
 }
 
 /**
@@ -27,7 +49,7 @@ export interface LocalCapabilityOptions {
 export function buildLocalCapabilities(options: LocalCapabilityOptions = {}): PortableCapabilities {
   const label = options.runtimeLabel ?? "local";
   return makeCapabilities(
-    options.provided ?? {},
+    { storage: defaultLocalStorage(label), ...(options.provided ?? {}) },
     (capability: CapabilityKey) => `This ${label} workspace has no ${capability} service connected.`,
   );
 }

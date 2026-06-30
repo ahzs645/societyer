@@ -813,6 +813,9 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "grantSources:setCandidateStatus", handler: grantSourcesFns.setCandidateStatusPortable }),
 
   // society
+  definePortableQuery({ name: "society:get", handler: societyFns.getPortable }),
+  definePortableQuery({ name: "society:list", handler: societyFns.listPortable }),
+  definePortableQuery({ name: "society:getById", handler: societyFns.getByIdPortable }),
   definePortableMutation({ name: "society:setLogoInvertInDarkMode", handler: societyFns.setLogoInvertInDarkModePortable }),
   definePortableMutation({ name: "society:updateModules", handler: societyFns.updateModulesPortable }),
   definePortableMutation({ name: "society:cloneSociety", handler: societyFns.cloneSocietyPortable }),

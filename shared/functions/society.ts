@@ -1,13 +1,42 @@
 /**
- * PORTABLE FUNCTIONS: the society domain (pure `ctx.db` handlers only).
+ * PORTABLE FUNCTIONS: the society domain.
  *
- * Only the handlers that touch `ctx.db` exclusively live here so they run
- * unchanged on hosted Convex, the local Dexie runtime, and the convex-test
- * oracle. Handlers that need `ctx.storage` (logo/letterhead blob lifecycle) or
- * server-only seed helpers (`upsert`, `createWorkspace`) stay on Convex.
+ * The `ctx.db`-only handlers plus the read handlers (`get`/`list`/`getById`),
+ * which resolve logo/letterhead blob URLs through the injected
+ * `ctx.capabilities.storage` (Convex `_storage` on hosted Convex; a
+ * passthrough/null resolver on the local runtime). Logo/letterhead WRITES
+ * (`setLogo`/`clearLogo` …) still need upload + delete and stay on Convex until
+ * the storage capability covers the write side.
  */
 
-import type { PortableMutationCtx } from "../portable/ctx";
+import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+
+/** Resolve a society's logo/letterhead blob ids to URLs via the storage capability. */
+async function withLogoUrl(ctx: PortableQueryCtx, society: any) {
+  if (!society) return society;
+  const resolve = async (storageId: unknown) =>
+    storageId ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(storageId) })).url ?? undefined : undefined;
+  const [logoUrl, logoDarkUrl, letterheadUrl] = await Promise.all([
+    resolve(society.logoStorageId),
+    resolve(society.logoDarkStorageId),
+    resolve(society.letterheadStorageId),
+  ]);
+  return { ...society, logoUrl, logoDarkUrl, letterheadUrl };
+}
+
+export async function getPortable(ctx: PortableQueryCtx, _args: Record<string, never>) {
+  const all = await ctx.db.query("societies").collect();
+  return withLogoUrl(ctx, all[0] ?? null);
+}
+
+export async function listPortable(ctx: PortableQueryCtx) {
+  const all = await ctx.db.query("societies").collect();
+  return Promise.all(all.map((society) => withLogoUrl(ctx, society)));
+}
+
+export async function getByIdPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
+  return withLogoUrl(ctx, await ctx.db.get(id));
+}
 
 export async function setLogoInvertInDarkModePortable(
   ctx: PortableMutationCtx,

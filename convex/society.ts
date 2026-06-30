@@ -13,50 +13,29 @@ import {
   updateComplianceSettingsPortable,
   updateInventorySettingsPortable,
   updateNotificationSettingsPortable,
+  getPortable,
+  listPortable,
+  getByIdPortable,
 } from "../shared/functions/society";
-import { toPortableMutationCtx } from "./lib/portable";
-
-async function withLogoUrl(ctx, society) {
-  if (!society) return society;
-  const logoUrl = society.logoStorageId
-    ? await ctx.storage.getUrl(society.logoStorageId)
-    : undefined;
-  const logoDarkUrl = society.logoDarkStorageId
-    ? await ctx.storage.getUrl(society.logoDarkStorageId)
-    : undefined;
-  const letterheadUrl = society.letterheadStorageId
-    ? await ctx.storage.getUrl(society.letterheadStorageId)
-    : undefined;
-  return {
-    ...society,
-    logoUrl: logoUrl ?? undefined,
-    logoDarkUrl: logoDarkUrl ?? undefined,
-    letterheadUrl: letterheadUrl ?? undefined,
-  };
-}
+import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
+import { buildConvexCapabilities } from "./providers/capabilities";
 
 export const get = query({
   args: {},
   returns: v.any(),
-  handler: async (ctx) => {
-    const all = await ctx.db.query("societies").collect();
-    return withLogoUrl(ctx, all[0] ?? null);
-  },
+  handler: (ctx) => getPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), {}),
 });
 
 export const list = query({
   args: {},
   returns: v.any(),
-  handler: async (ctx) => {
-    const all = await ctx.db.query("societies").collect();
-    return Promise.all(all.map((society) => withLogoUrl(ctx, society)));
-  },
+  handler: (ctx) => listPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx))),
 });
 
 export const getById = query({
   args: { id: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { id }) => withLogoUrl(ctx, await ctx.db.get(id)),
+  handler: (ctx, args) => getByIdPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const setLogo = mutation({

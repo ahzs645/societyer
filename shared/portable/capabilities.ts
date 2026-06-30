@@ -69,7 +69,10 @@ export interface SmsCapability {
 }
 export interface StorageCapability {
   createUploadUrl(input: { contentType?: string }): Promise<{ uploadUrl: string; storageKey: string }>;
-  getDownloadUrl(input: { storageKey: string }): Promise<{ url: string }>;
+  // Resolves a stored blob reference to a download URL. `url` is null when the
+  // reference can't be resolved on this runtime (e.g. a Convex _storage id with
+  // no local blob), so read handlers fall back gracefully instead of throwing.
+  getDownloadUrl(input: { storageKey: string }): Promise<{ url: string | null }>;
 }
 export interface LlmCapability {
   complete(input: { prompt: string; system?: string; maxTokens?: number }): Promise<{ text: string }>;
