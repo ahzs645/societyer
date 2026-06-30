@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createElement, useEffect, useRef, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import {
   ArrowDownUp,
   CalendarDays,
@@ -6,10 +7,10 @@ import {
   Columns,
   Filter,
   Kanban,
-  PanelRight,
   RotateCcw,
   Save,
   Search,
+  SlidersHorizontal,
   Table2,
   X,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import {
   useRecordTableStoreHandle,
 } from "../state/recordTableStore";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
+import { resolveRouteIdentity } from "../../../../lib/routeIdentity";
 import { RecordTableSortPopover } from "./RecordTableSortPopover";
 
 /**
@@ -63,10 +65,21 @@ export function RecordTableToolbar({
   const viewType = useRecordTableState((s) => s.type);
   const kanbanFieldMetadataId = useRecordTableState((s) => s.kanbanFieldMetadataId);
   const calendarFieldMetadataId = useRecordTableState((s) => s.calendarFieldMetadataId);
-  const openRecordIn = useRecordTableState((s) => s.openRecordIn);
   const handle = useRecordTableStoreHandle();
   const isDirty = useRecordTableIsDirty();
   const { objectMetadata } = useRecordTableContextOrThrow();
+
+  // The section icon comes from the route registry so a table's icon always
+  // matches its page header and sidebar nav (single source of truth, same as
+  // PageHeader). The `icon` prop is only a fallback for unregistered routes.
+  const location = useLocation();
+  const routeIdentity = resolveRouteIdentity(location.pathname);
+  const resolvedIcon: ReactNode = routeIdentity
+    ? createElement(routeIdentity.icon, { size: 14 })
+    : icon;
+  // The view-options dropdown only configures kanban/calendar grouping fields,
+  // so it's hidden in plain table view where it would otherwise be empty.
+  const showViewOptions = viewType === "kanban" || viewType === "board" || viewType === "calendar";
 
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
@@ -128,7 +141,7 @@ export function RecordTableToolbar({
               className="record-table__view-button"
               onClick={() => setViewMenuOpen((x) => !x)}
             >
-              {icon}
+              {resolvedIcon}
               <span>{activeViewName}</span>
               <ChevronDown size={12} />
             </button>
@@ -156,7 +169,7 @@ export function RecordTableToolbar({
           </div>
         ) : (
           <div className="record-table__title">
-            {icon}
+            {resolvedIcon}
             <span>{label}</span>
           </div>
         )}
@@ -268,6 +281,7 @@ export function RecordTableToolbar({
           </button>
         </div>
 
+        {showViewOptions && (
         <div className="record-table__view-switcher" ref={viewOptionsRef}>
           <button
             type="button"
@@ -275,31 +289,11 @@ export function RecordTableToolbar({
             onClick={() => setViewOptionsOpen((x) => !x)}
             title="View options"
           >
-            <PanelRight size={12} />
-            <span>{openRecordIn === "drawer" ? "Drawer" : "Page"}</span>
+            <SlidersHorizontal size={12} />
+            <span>Options</span>
           </button>
           {viewOptionsOpen && (
             <div className="record-table__menu record-table__menu--right record-table__menu--wide">
-              <div className="record-table__menu-section">
-                <div className="record-table__menu-label">Open records in</div>
-                <label className="record-table__menu-radio">
-                  <input
-                    type="radio"
-                    checked={openRecordIn === "drawer"}
-                    onChange={() => handle.get().setOpenRecordIn("drawer")}
-                  />
-                  Drawer
-                </label>
-                <label className="record-table__menu-radio">
-                  <input
-                    type="radio"
-                    checked={openRecordIn === "page"}
-                    onChange={() => handle.get().setOpenRecordIn("page")}
-                  />
-                  Page
-                </label>
-              </div>
-
               {(viewType === "kanban" || viewType === "board") && (
                 <div className="record-table__menu-section">
                   <label className="record-table__menu-label" htmlFor="record-table-kanban-field">
@@ -348,6 +342,7 @@ export function RecordTableToolbar({
             </div>
           )}
         </div>
+        )}
 
         {onOpenFilter && (
           <button

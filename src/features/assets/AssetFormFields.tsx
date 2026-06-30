@@ -12,6 +12,7 @@
  * hook live here too so callers never re-declare them.
  */
 import { useState } from "react";
+import { FileText, Link2, Plus, X } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -28,8 +29,10 @@ import {
   ASSET_LABEL_TYPES,
   ASSET_STATUSES,
   CUSTODIAN_TYPES,
+  categorySupportsMaintenance,
   money,
   nextAssetTag,
+  type AssetResourceLink,
 } from "./assetUtils";
 
 export type AssetFormValue = {
@@ -63,6 +66,8 @@ export type AssetFormValue = {
   image: ImageValue;
   purchaseTransactionId: string;
   receiptDocumentId: string;
+  sourceDocumentIds: string[];
+  resourceLinks: AssetResourceLink[];
   warrantyExpiresAt: string;
   nextMaintenanceDate: string;
   nextVerificationDate: string;
@@ -106,6 +111,8 @@ export function makeAssetFormDefaults(
     image: initial?.image ?? {},
     purchaseTransactionId: initial?.purchaseTransactionId ?? "",
     receiptDocumentId: initial?.receiptDocumentId ?? "",
+    sourceDocumentIds: initial?.sourceDocumentIds ?? [],
+    resourceLinks: initial?.resourceLinks ?? [],
     warrantyExpiresAt: initial?.warrantyExpiresAt ?? "",
     nextMaintenanceDate: initial?.nextMaintenanceDate ?? "",
     nextVerificationDate: initial?.nextVerificationDate ?? "",
@@ -147,6 +154,7 @@ export function AssetFormFields({
   autoFocusName?: boolean;
 }) {
   const { documents, transactions } = data;
+  const serviceable = categorySupportsMaintenance(value.category);
   const [activeNotesTab, setActiveNotesTab] = useState<NotesTabId>("notes");
   const receiptDocuments = (documents ?? []).filter(
     (doc: any) =>
@@ -369,24 +377,41 @@ export function AssetFormFields({
           onChange={(v) => onChange({ retentionUntil: v })}
         />
       </Field>
-      <Field label="Warranty expires">
-        <DatePicker
-          value={value.warrantyExpiresAt}
-          onChange={(v) => onChange({ warrantyExpiresAt: v })}
-        />
-      </Field>
-      <Field label="Next maintenance">
-        <DatePicker
-          value={value.nextMaintenanceDate}
-          onChange={(v) => onChange({ nextMaintenanceDate: v })}
-        />
-      </Field>
-      <Field label="Next verification">
-        <DatePicker
-          value={value.nextVerificationDate}
-          onChange={(v) => onChange({ nextVerificationDate: v })}
-        />
-      </Field>
+      {serviceable ? (
+        <>
+          <Field label="Warranty expires">
+            <DatePicker
+              value={value.warrantyExpiresAt}
+              onChange={(v) => onChange({ warrantyExpiresAt: v })}
+            />
+          </Field>
+          <Field label="Next maintenance">
+            <DatePicker
+              value={value.nextMaintenanceDate}
+              onChange={(v) => onChange({ nextMaintenanceDate: v })}
+            />
+          </Field>
+          <Field label="Next verification">
+            <DatePicker
+              value={value.nextVerificationDate}
+              onChange={(v) => onChange({ nextVerificationDate: v })}
+            />
+          </Field>
+        </>
+      ) : (
+        <div style={{ gridColumn: "1 / -1" }} className="muted asset-form__hint">
+          Warranty, maintenance, and verification don't apply to consumables — track shelf life with lot expiry dates instead.
+        </div>
+      )}
+      {serviceable && (
+        <div style={{ gridColumn: "1 / -1" }}>
+          <AssetDocumentationFields
+            value={value}
+            onChange={onChange}
+            documents={documents}
+          />
+        </div>
+      )}
       <div className="asset-form__notes">
         <Tabs<NotesTabId>
           value={activeNotesTab}
@@ -428,6 +453,110 @@ export function AssetFormFields({
             />
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Documentation & resources" block for serviceable assets — attach existing
+ * documents (owner's manual, warranty PDF) and add labelled links to external
+ * resources (manufacturer support page, maintenance guide). Linked documents
+ * are stored on `sourceDocumentIds`; links on `resourceLinks`.
+ */
+function AssetDocumentationFields({
+  value,
+  onChange,
+  documents,
+}: {
+  value: AssetFormValue;
+  onChange: (patch: Partial<AssetFormValue>) => void;
+  documents: any[] | undefined;
+}) {
+  const docList = documents ?? [];
+  const docById = new Map(docList.map((doc: any) => [String(doc._id), doc]));
+  const linkedIds = value.sourceDocumentIds ?? [];
+  const linkedRows = value.resourceLinks ?? [];
+
+  const addDocument = (id: string) => {
+    if (!id || linkedIds.includes(id)) return;
+    onChange({ sourceDocumentIds: [...linkedIds, id] });
+  };
+  const removeDocument = (id: string) => {
+    onChange({ sourceDocumentIds: linkedIds.filter((existing) => existing !== id) });
+  };
+  const updateLink = (index: number, patch: Partial<AssetResourceLink>) => {
+    onChange({
+      resourceLinks: linkedRows.map((link, i) => (i === index ? { ...link, ...patch } : link)),
+    });
+  };
+  const addLink = () => onChange({ resourceLinks: [...linkedRows, { label: "", url: "" }] });
+  const removeLink = (index: number) =>
+    onChange({ resourceLinks: linkedRows.filter((_, i) => i !== index) });
+
+  const availableDocs = docList.filter((doc: any) => !linkedIds.includes(String(doc._id)));
+
+  return (
+    <div className="asset-form__documentation">
+      <Field
+        label="Documentation"
+        hint="Attach an owner's manual, warranty, or maintenance document, and add links to support resources."
+      >
+        <Select
+          value=""
+          onChange={addDocument}
+          searchable
+          placeholder={docList.length ? "Attach a document…" : "No documents available yet"}
+          options={availableDocs.map((doc: any) => ({ value: String(doc._id), label: doc.title }))}
+        />
+      </Field>
+      {linkedIds.length > 0 && (
+        <ul className="asset-form__doc-list">
+          {linkedIds.map((id) => (
+            <li key={id} className="asset-form__doc-chip">
+              <FileText size={13} />
+              <span>{docById.get(id)?.title ?? "Linked document"}</span>
+              <button
+                type="button"
+                aria-label="Remove document"
+                className="btn btn--ghost btn--sm btn--icon"
+                onClick={() => removeDocument(id)}
+              >
+                <X size={12} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="asset-form__links">
+        {linkedRows.map((link, index) => (
+          <div className="asset-form__link-row" key={index}>
+            <input
+              className="input"
+              placeholder="Label (e.g. Manufacturer manual)"
+              value={link.label}
+              onChange={(e) => updateLink(index, { label: e.target.value })}
+            />
+            <input
+              className="input"
+              placeholder="https://…"
+              inputMode="url"
+              value={link.url}
+              onChange={(e) => updateLink(index, { url: e.target.value })}
+            />
+            <button
+              type="button"
+              aria-label="Remove link"
+              className="btn btn--ghost btn--sm btn--icon"
+              onClick={() => removeLink(index)}
+            >
+              <X size={12} />
+            </button>
+          </div>
+        ))}
+        <button type="button" className="btn btn--ghost btn--sm" onClick={addLink}>
+          <Link2 size={12} /> <Plus size={12} /> Add resource link
+        </button>
       </div>
     </div>
   );

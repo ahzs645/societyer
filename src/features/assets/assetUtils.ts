@@ -17,6 +17,32 @@ export const ASSET_LABEL_TYPES = [
   { value: "itf14", label: "ITF-14", payload: "13 or 14 numeric digits" },
 ] as const;
 
+/**
+ * Categories that represent durable / serviceable items. Consumables (food,
+ * supplies that get used up) have no warranty, scheduled maintenance, or
+ * physical-verification lifecycle — so those surfaces are hidden for them.
+ * Add any other "used up" categories here to hide warranty/maintenance.
+ */
+export const NON_SERVICEABLE_CATEGORIES = ["Consumable"];
+
+export function categorySupportsMaintenance(category?: string | null): boolean {
+  return !NON_SERVICEABLE_CATEGORIES.includes(String(category ?? "").trim());
+}
+
+export type AssetResourceLink = { label: string; url: string };
+
+/** Drop empty rows and trim. A link with no label falls back to its URL. */
+export function cleanResourceLinks(links: unknown): AssetResourceLink[] {
+  if (!Array.isArray(links)) return [];
+  return links
+    .map((link) => ({
+      label: String((link as any)?.label ?? "").trim(),
+      url: String((link as any)?.url ?? "").trim(),
+    }))
+    .filter((link) => link.url.length > 0)
+    .map((link) => ({ label: link.label || link.url, url: link.url }));
+}
+
 export function centsToInput(cents?: number | null) {
   if (cents == null) return "";
   return (cents / 100).toFixed(2);
@@ -120,6 +146,8 @@ export function formFromAsset(row: any) {
     image: { imageStorageId: row.imageStorageId, imageUrl: row.imageUrl },
     purchaseTransactionId: row.purchaseTransactionId ?? "",
     receiptDocumentId: row.receiptDocumentId ?? "",
+    sourceDocumentIds: Array.isArray(row.sourceDocumentIds) ? row.sourceDocumentIds.map(String) : [],
+    resourceLinks: Array.isArray(row.resourceLinks) ? row.resourceLinks.map((link: any) => ({ label: String(link?.label ?? ""), url: String(link?.url ?? "") })) : [],
     warrantyExpiresAt: row.warrantyExpiresAt ?? "",
     nextMaintenanceDate: row.nextMaintenanceDate ?? "",
     nextVerificationDate: row.nextVerificationDate ?? "",
@@ -165,6 +193,8 @@ export function normalizeAssetForm(form: any) {
     clearPurchaseTransaction: !clean(form.purchaseTransactionId),
     receiptDocumentId: clean(form.receiptDocumentId),
     clearReceiptDocument: !clean(form.receiptDocumentId),
+    sourceDocumentIds: Array.isArray(form.sourceDocumentIds) ? form.sourceDocumentIds.filter(Boolean) : [],
+    resourceLinks: cleanResourceLinks(form.resourceLinks),
     warrantyExpiresAt: clean(form.warrantyExpiresAt),
     nextMaintenanceDate: clean(form.nextMaintenanceDate),
     nextVerificationDate: clean(form.nextVerificationDate),

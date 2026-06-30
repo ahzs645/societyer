@@ -42,6 +42,10 @@ export const assetTables = {
     purchaseTransactionId: v.optional(v.id("financialTransactions")),
     receiptDocumentId: v.optional(v.id("documents")),
     sourceDocumentIds: v.array(v.id("documents")),
+    // Supporting documentation for serviceable assets: links to external
+    // resources (manufacturer manual, warranty page, support article). Linked
+    // documents (uploaded manuals/warranty PDFs) reuse `sourceDocumentIds`.
+    resourceLinks: v.optional(v.array(v.object({ label: v.string(), url: v.string() }))),
     warrantyExpiresAt: v.optional(v.string()),
     nextMaintenanceDate: v.optional(v.string()),
     nextVerificationDate: v.optional(v.string()),

@@ -8,7 +8,9 @@ import {
   ClipboardCheck,
   ClipboardList,
   Download,
+  ExternalLink,
   FileSpreadsheet,
+  FileText,
   Link2,
   Package,
   PackageCheck,
@@ -61,6 +63,7 @@ import {
   MAINTENANCE_KINDS,
   assetUrl,
   assetsToCsv,
+  categorySupportsMaintenance,
   centsToInput,
   downloadText,
   formFromAsset,
@@ -559,10 +562,23 @@ export function AssetDetailPage() {
   }, [bundle?.asset?._id, bundle?.asset?.preferredLabelType]);
 
   if (bundle === undefined) return <PageLoading />;
-  if (!bundle) return <div className="page"><Link className="btn" to="/app/assets"><ArrowLeft size={14} /> Assets</Link><p>Asset not found.</p></div>;
+  if (bundle === null) return <div className="page"><Link className="btn" to="/app/assets"><ArrowLeft size={14} /> Assets</Link><p>Asset not found.</p></div>;
+  // `assets.bundle` resolves to `{ asset, events, maintenance, ... }`. Some
+  // runtimes hand back a transient placeholder (e.g. an empty array) before the
+  // real bundle loads — treat any asset-less, non-null shape as still loading
+  // rather than dereferencing `asset` and crashing.
+  if (Array.isArray(bundle) || !bundle.asset) return <PageLoading />;
   const { asset, events, maintenance } = bundle;
   const receiptDocument = (documents ?? []).find((doc: any) => doc._id === asset.receiptDocumentId);
   const purchaseTransaction = (transactions ?? []).find((txn: any) => txn._id === asset.purchaseTransactionId);
+  // Consumables (food, supplies) have no warranty/maintenance/verification
+  // lifecycle, so that whole tab is hidden for them.
+  const serviceable = categorySupportsMaintenance(asset.category);
+  const activeTab: DetailTab = !serviceable && tab === "maintenance" ? "overview" : tab;
+  const linkedDocuments = ((asset.sourceDocumentIds ?? []) as string[])
+    .map((docId) => (documents ?? []).find((doc: any) => doc._id === docId))
+    .filter(Boolean) as any[];
+  const resourceLinks = Array.isArray(asset.resourceLinks) ? asset.resourceLinks : [];
 
   const openEdit = () => {
     setForm(formFromAsset(asset) as AssetFormValue);
@@ -621,7 +637,7 @@ export function AssetDetailPage() {
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
             <button className="btn-action" onClick={() => setDrawer("custody")}><Repeat2 size={12} /> Custody</button>
-            <button className="btn-action" onClick={() => setDrawer("maintenance")}><Wrench size={12} /> Schedule</button>
+            {serviceable && <button className="btn-action" onClick={() => setDrawer("maintenance")}><Wrench size={12} /> Schedule</button>}
             <button className="btn-action" onClick={() => setDrawer("disposal")}><Trash2 size={12} /> Dispose</button>
             <button className="btn-action btn-action--primary" onClick={openEdit}><Pencil size={12} /> Edit</button>
           </div>
@@ -630,18 +646,20 @@ export function AssetDetailPage() {
 
       <div className="asset-detail">
         <Tabs<DetailTab>
-          value={tab}
+          value={activeTab}
           onChange={setTab}
           items={[
             { id: "overview", label: "Overview", icon: <Package size={14} /> },
-            { id: "maintenance", label: "Maintenance", icon: <Wrench size={14} />, count: maintenance.length || null },
+            ...(serviceable
+              ? [{ id: "maintenance" as const, label: "Maintenance", icon: <Wrench size={14} />, count: maintenance.length || null }]
+              : []),
             { id: "custody", label: "Custody", icon: <Repeat2 size={14} />, count: events.length || null },
             { id: "compliance", label: "Compliance", icon: <ClipboardCheck size={14} /> },
             { id: "label", label: "Label", icon: <QrCode size={14} /> },
           ]}
         />
 
-        {tab === "overview" && (
+        {activeTab === "overview" && (
           <section className="panel">
             <div className="panel__head"><h2>Register</h2>{!asset.imageUrl && <StatusBadge status={asset.status} />}</div>
             {asset.imageUrl ? (
@@ -668,7 +686,7 @@ export function AssetDetailPage() {
           </section>
         )}
 
-        {tab === "maintenance" && (
+        {activeTab === "maintenance" && (
           <>
             <section className="panel">
               <div className="panel__head"><h2>Maintenance and warranty</h2><Wrench size={16} /></div>
@@ -695,10 +713,49 @@ export function AssetDetailPage() {
                 </button>
               ) : null}
             />
+            <section className="panel">
+              <div className="panel__head"><h2>Documentation &amp; resources</h2><FileText size={16} /></div>
+              {linkedDocuments.length === 0 && resourceLinks.length === 0 ? (
+                <p className="muted" style={{ margin: 0 }}>
+                  No manuals, warranty documents, or resource links yet. Use <strong>Edit</strong> to attach a document or add a link.
+                </p>
+              ) : (
+                <dl className="record-kv">
+                  <div>
+                    <dt>Documents</dt>
+                    <dd>
+                      {linkedDocuments.length ? (
+                        <ul className="asset-detail__doc-links">
+                          {linkedDocuments.map((doc: any) => (
+                            <li key={doc._id}>
+                              <Link to={`/app/documents/${doc._id}`}><FileText size={13} /> {doc.title}</Link>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Resource links</dt>
+                    <dd>
+                      {resourceLinks.length ? (
+                        <ul className="asset-detail__doc-links">
+                          {resourceLinks.map((link: any, i: number) => (
+                            <li key={i}>
+                              <a href={link.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} /> {link.label || link.url}</a>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : "—"}
+                    </dd>
+                  </div>
+                </dl>
+              )}
+            </section>
           </>
         )}
 
-        {tab === "custody" && (
+        {activeTab === "custody" && (
           <DataTable
             label="Custody and audit history"
             icon={<ClipboardCheck size={14} />}
@@ -716,7 +773,7 @@ export function AssetDetailPage() {
           />
         )}
 
-        {tab === "compliance" && (
+        {activeTab === "compliance" && (
           <section className="panel">
             <div className="panel__head"><h2>Grant and compliance</h2></div>
             <dl className="record-kv">
@@ -729,7 +786,7 @@ export function AssetDetailPage() {
           </section>
         )}
 
-        {tab === "label" && (
+        {activeTab === "label" && (
           <section className="panel">
             <div className="panel__head"><h2>QR label</h2><QrCode size={16} /></div>
             <Field label="Label type">
