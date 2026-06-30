@@ -2,7 +2,19 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { assertApiPlatformServiceToken, serviceTokenValidator } from "./lib/serviceAuth";
 import { requireRole } from "./users";
-import { INTEGRATION_CATALOG, getIntegrationManifest } from "../shared/integrationCatalog";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import {
+  listClientsPortable,
+  createClientPortable,
+  updateClientPortable,
+  listTokensPortable,
+  listPluginInstallationsPortable,
+  listIntegrationCatalogPortable,
+  installIntegrationPortable,
+  updateIntegrationHealthPortable,
+  upsertPluginInstallationPortable,
+  listIntegrationSyncStatesPortable,
+} from "../shared/functions/apiPlatform";
 
 const idString = v.string();
 
@@ -170,44 +182,6 @@ function privateWebhookSubscription(row: any) {
   };
 }
 
-function parseConfigJson(value?: string) {
-  if (!value) return {};
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function healthForInstallation(row: any | undefined, manifest: any) {
-  if (!row) {
-    return {
-      status: "not_installed",
-      messages: ["Install this integration to configure credentials, actions, and webhooks."],
-    };
-  }
-  if (row.status !== "installed") {
-    return {
-      status: row.status,
-      messages: [`Integration is ${row.status}.`],
-      checkedAtISO: parseConfigJson(row.configJson).healthCheckedAtISO,
-    };
-  }
-  const config = parseConfigJson(row.configJson);
-  const missingSecrets = manifest.requiredSecrets.filter(
-    (key: string) => !config.secretStatus?.[key] && !config.envStatus?.[key],
-  );
-  return {
-    status: missingSecrets.length ? "needs_setup" : manifest.status === "planned" ? "planned" : "ready",
-    checkedAtISO: config.healthCheckedAtISO,
-    messages: [
-      missingSecrets.length ? `Missing configured secret status: ${missingSecrets.join(", ")}` : "Required secret statuses are configured.",
-      ...(Array.isArray(config.healthMessages) ? config.healthMessages : []),
-    ],
-  };
-}
-
 async function assertCanManageApiPlatform(
   ctx: any,
   societyId: any,
@@ -241,11 +215,7 @@ function invalidToken(reason: string) {
 export const listClients = query({
   args: { societyId: v.id("societies") },
   returns: v.array(apiClientReturn),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("apiClients")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listClientsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const createClient = mutation({
@@ -257,19 +227,7 @@ export const createClient = mutation({
     createdByUserId: v.optional(v.id("users")),
   },
   returns: v.id("apiClients"),
-  handler: async (ctx, args) => {
-    const at = nowISO();
-    return await ctx.db.insert("apiClients", {
-      societyId: args.societyId,
-      name: args.name,
-      description: args.description,
-      kind: args.kind ?? "plugin",
-      status: "active",
-      createdByUserId: args.createdByUserId,
-      createdAtISO: at,
-      updatedAtISO: at,
-    });
-  },
+  handler: (ctx, args) => createClientPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const updateClient = mutation({
@@ -283,10 +241,7 @@ export const updateClient = mutation({
     }),
   },
   returns: v.null(),
-  handler: async (ctx, { id, patch }) => {
-    await ctx.db.patch(id, { ...patch, updatedAtISO: nowISO() });
-    return null;
-  },
+  handler: (ctx, args) => updateClientPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const listTokens = query({
@@ -295,18 +250,7 @@ export const listTokens = query({
     clientId: v.optional(v.id("apiClients")),
   },
   returns: v.array(apiTokenPublicReturn),
-  handler: async (ctx, { societyId, clientId }) => {
-    const rows = clientId
-      ? await ctx.db
-          .query("apiTokens")
-          .withIndex("by_client", (q) => q.eq("clientId", clientId))
-          .collect()
-      : await ctx.db
-          .query("apiTokens")
-          .withIndex("by_society", (q) => q.eq("societyId", societyId))
-          .collect();
-    return rows.filter((row) => row.societyId === societyId).map(redactToken);
-  },
+  handler: (ctx, args) => listTokensPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const createToken = mutation({
@@ -401,34 +345,13 @@ export const revokeToken = mutation({
 export const listPluginInstallations = query({
   args: { societyId: v.id("societies") },
   returns: v.array(pluginInstallationReturn),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("pluginInstallations")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listPluginInstallationsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const listIntegrationCatalog = query({
   args: { societyId: v.optional(v.id("societies")) },
   returns: v.array(integrationCatalogItemReturn),
-  handler: async (ctx, { societyId }) => {
-    const installations = societyId
-      ? await ctx.db
-          .query("pluginInstallations")
-          .withIndex("by_society", (q) => q.eq("societyId", societyId))
-          .collect()
-      : [];
-    const bySlug = new Map(installations.map((row) => [row.slug, row]));
-    return INTEGRATION_CATALOG.map((manifest) => {
-      const installation = bySlug.get(manifest.slug);
-      return {
-        ...manifest,
-        installation,
-        installed: installation?.status === "installed",
-        health: healthForInstallation(installation, manifest),
-      };
-    });
-  },
+  handler: (ctx, args) => listIntegrationCatalogPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const installIntegration = mutation({
@@ -439,46 +362,7 @@ export const installIntegration = mutation({
     installedByUserId: v.optional(v.id("users")),
   },
   returns: v.id("pluginInstallations"),
-  handler: async (ctx, args) => {
-    const manifest = getIntegrationManifest(args.slug);
-    if (!manifest) throw new ConvexError({ code: "UNKNOWN_INTEGRATION", message: "Integration manifest not found." });
-    if (args.installedByUserId) {
-      await requireRole(ctx, { societyId: args.societyId, actingUserId: args.installedByUserId, required: "Admin" });
-    }
-    const existing = (await ctx.db
-      .query("pluginInstallations")
-      .withIndex("by_society_slug", (q) => q.eq("societyId", args.societyId).eq("slug", manifest.slug))
-      .collect())[0];
-    const config = {
-      manifestVersion: 1,
-      kind: manifest.kind,
-      category: manifest.category,
-      requiredSecrets: manifest.requiredSecrets,
-      dataMappings: manifest.dataMappings,
-      auditEvents: manifest.auditEvents,
-      healthChecks: manifest.healthChecks,
-      actions: manifest.actions,
-      healthMessages: [`Installed from integration catalog at ${nowISO()}.`],
-    };
-    const payload = {
-      societyId: args.societyId,
-      name: manifest.name,
-      slug: manifest.slug,
-      status: args.status ?? "installed",
-      capabilities: manifest.capabilities,
-      configJson: JSON.stringify(config, null, 2),
-      installedByUserId: args.installedByUserId,
-      updatedAtISO: nowISO(),
-    };
-    if (existing) {
-      await ctx.db.patch(existing._id, payload);
-      return existing._id;
-    }
-    return await ctx.db.insert("pluginInstallations", {
-      ...payload,
-      createdAtISO: nowISO(),
-    });
-  },
+  handler: (ctx, args) => installIntegrationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const updateIntegrationHealth = mutation({
@@ -490,23 +374,7 @@ export const updateIntegrationHealth = mutation({
     status: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: async (ctx, { id, ...patch }) => {
-    const row = await ctx.db.get(id);
-    if (!row) throw new ConvexError({ code: "NOT_FOUND", message: "Integration installation not found." });
-    const config = parseConfigJson(row.configJson);
-    await ctx.db.patch(id, {
-      status: patch.status ?? row.status,
-      configJson: JSON.stringify({
-        ...config,
-        secretStatus: patch.secretStatus ?? config.secretStatus,
-        envStatus: patch.envStatus ?? config.envStatus,
-        healthMessages: patch.healthMessages ?? config.healthMessages ?? [],
-        healthCheckedAtISO: nowISO(),
-      }, null, 2),
-      updatedAtISO: nowISO(),
-    });
-    return null;
-  },
+  handler: (ctx, args) => updateIntegrationHealthPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsertPluginInstallation = mutation({
@@ -522,24 +390,7 @@ export const upsertPluginInstallation = mutation({
     installedByUserId: v.optional(v.id("users")),
   },
   returns: v.id("pluginInstallations"),
-  handler: async (ctx, args) => {
-    const at = nowISO();
-    const { id, ...rest } = args;
-    if (id) {
-      await ctx.db.patch(id, {
-        ...rest,
-        status: rest.status ?? "installed",
-        updatedAtISO: at,
-      });
-      return id;
-    }
-    return await ctx.db.insert("pluginInstallations", {
-      ...rest,
-      status: rest.status ?? "installed",
-      createdAtISO: at,
-      updatedAtISO: at,
-    });
-  },
+  handler: (ctx, args) => upsertPluginInstallationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const listWebhookSubscriptions = query({
@@ -725,25 +576,7 @@ export const listIntegrationSyncStates = query({
     resourceType: v.optional(v.string()),
   },
   returns: v.array(integrationSyncStateReturn),
-  handler: async (ctx, { societyId, provider, resourceType }) => {
-    const rows = provider && resourceType
-      ? await ctx.db
-          .query("integrationSyncStates")
-          .withIndex("by_society_provider_resource", (q) =>
-            q.eq("societyId", societyId).eq("provider", provider).eq("resourceType", resourceType),
-          )
-          .collect()
-      : provider
-        ? await ctx.db
-            .query("integrationSyncStates")
-            .withIndex("by_society_provider", (q) => q.eq("societyId", societyId).eq("provider", provider))
-            .collect()
-        : await ctx.db
-            .query("integrationSyncStates")
-            .withIndex("by_society", (q) => q.eq("societyId", societyId))
-            .collect();
-    return rows.sort((a, b) => String(b.updatedAtISO).localeCompare(String(a.updatedAtISO)));
-  },
+  handler: (ctx, args) => listIntegrationSyncStatesPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const upsertIntegrationSyncState = mutation({

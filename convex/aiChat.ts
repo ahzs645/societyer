@@ -1,5 +1,15 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./lib/untypedServer";
+import {
+  listThreadsPortable,
+  messagesForThreadPortable,
+  getThreadPortable,
+  createThreadPortable,
+  archiveThreadPortable,
+  renameThreadPortable,
+  deleteThreadPortable,
+} from "../shared/functions/aiChat";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const listThreads = query({
   args: {
@@ -7,12 +17,7 @@ export const listThreads = query({
     limit: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, limit }) =>
-    ctx.db
-      .query("aiChatThreads")
-      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-      .order("desc")
-      .take(limit ?? 20),
+  handler: (ctx, args) => listThreadsPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const messagesForThread = query({
@@ -20,12 +25,7 @@ export const messagesForThread = query({
     threadId: v.id("aiChatThreads"),
   },
   returns: v.any(),
-  handler: async (ctx, { threadId }) =>
-    ctx.db
-      .query("aiMessages")
-      .withIndex("by_thread", (q: any) => q.eq("threadId", threadId))
-      .order("asc")
-      .collect(),
+  handler: (ctx, args) => messagesForThreadPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const getThread = query({
@@ -33,7 +33,7 @@ export const getThread = query({
     threadId: v.id("aiChatThreads"),
   },
   returns: v.any(),
-  handler: async (ctx, { threadId }) => ctx.db.get(threadId),
+  handler: (ctx, args) => getThreadPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const createThread = mutation({
@@ -46,20 +46,7 @@ export const createThread = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.id("aiChatThreads"),
-  handler: async (ctx, args) => {
-    const now = new Date().toISOString();
-    return await ctx.db.insert("aiChatThreads", {
-      societyId: args.societyId,
-      title: args.title?.trim() || "New AI chat",
-      status: "active",
-      modelId: args.modelId,
-      browsingContext: args.browsingContext,
-      workspaceInstructions: args.workspaceInstructions,
-      createdByUserId: args.actingUserId,
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-  },
+  handler: (ctx, args) => createThreadPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const archiveThread = mutation({
@@ -67,10 +54,7 @@ export const archiveThread = mutation({
     threadId: v.id("aiChatThreads"),
   },
   returns: v.any(),
-  handler: async (ctx, { threadId }) => {
-    await ctx.db.patch(threadId, { status: "archived", updatedAtISO: new Date().toISOString() });
-    return threadId;
-  },
+  handler: (ctx, args) => archiveThreadPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const renameThread = mutation({
@@ -79,15 +63,7 @@ export const renameThread = mutation({
     title: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, { threadId, title }) => {
-    const trimmed = title.trim();
-    if (!trimmed) return threadId;
-    await ctx.db.patch(threadId, {
-      title: trimmed.slice(0, 200),
-      updatedAtISO: new Date().toISOString(),
-    });
-    return threadId;
-  },
+  handler: (ctx, args) => renameThreadPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const deleteThread = mutation({
@@ -95,17 +71,7 @@ export const deleteThread = mutation({
     threadId: v.id("aiChatThreads"),
   },
   returns: v.any(),
-  handler: async (ctx, { threadId }) => {
-    const messages = await ctx.db
-      .query("aiMessages")
-      .withIndex("by_thread", (q: any) => q.eq("threadId", threadId))
-      .collect();
-    for (const message of messages) {
-      await ctx.db.delete(message._id);
-    }
-    await ctx.db.delete(threadId);
-    return threadId;
-  },
+  handler: (ctx, args) => deleteThreadPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const _appendMessage = internalMutation({

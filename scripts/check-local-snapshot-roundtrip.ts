@@ -92,8 +92,14 @@ const ontarioRegistrationId = await source.mutation("organizationDetails:upsertR
 const packetSeed = await source.mutation("legalOperations:seedCorporationDocumentPackets", {
   societyId: federalWorkspace.societyId,
 });
-assert.equal(packetSeed.insertedTemplates, 7);
-assert.equal(packetSeed.insertedPrecedents, 7);
+// createWorkspace already auto-seeds the corporation document packets, so this
+// explicit re-seed is idempotent (updates rather than inserts). Derive the
+// catalog size from the seed result so the round-trip assertions stay correct as
+// the corporation packet catalog grows.
+const corpTemplateCount = packetSeed.insertedTemplates + packetSeed.updatedTemplates;
+const corpPrecedentCount = packetSeed.insertedPrecedents + packetSeed.updatedPrecedents;
+assert.ok(corpTemplateCount > 0, "corporation packet catalog should seed templates");
+assert.ok(corpPrecedentCount > 0, "corporation packet catalog should seed precedents");
 const issuancePacket = await source.mutation("legalOperations:stageShareIssuancePacket", {
   societyId: federalWorkspace.societyId,
   transferId: issuanceId,
@@ -121,8 +127,8 @@ assert.ok(snapshot.tables.rightsClasses.some((row: any) => row._id === commonSha
 assert.ok(snapshot.tables.rightsholdingTransfers.some((row: any) => row._id === issuanceId), "Share issuance missing from snapshot");
 assert.ok(snapshot.tables.rightsHoldings.some((row: any) => row.lastTransactionId === issuanceId && row.quantity === 100), "Materialized holding missing from snapshot");
 assert.ok(snapshot.tables.documentVersions.some((row: any) => row._id === issuancePacket.draftDocumentVersionId && row.storageProvider === "generated-inline"), "Generated DOCX version missing from snapshot");
-assert.equal(snapshot.tables.legalTemplates.filter((row: any) => row.societyId === federalWorkspace.societyId).length, 7);
-assert.equal(snapshot.tables.legalPrecedents.filter((row: any) => row.societyId === federalWorkspace.societyId).length, 7);
+assert.equal(snapshot.tables.legalTemplates.filter((row: any) => row.societyId === federalWorkspace.societyId).length, corpTemplateCount);
+assert.equal(snapshot.tables.legalPrecedents.filter((row: any) => row.societyId === federalWorkspace.societyId).length, corpPrecedentCount);
 assert.equal(snapshot.tables.complianceRemediations.filter((row: any) => row.societyId === federalWorkspace.societyId).length, 1);
 
 const imported = new StaticConvexClient({
@@ -167,8 +173,8 @@ assert.ok(importedDetails.registrations.some((row: any) => row._id === importedF
 assert.ok(importedDetails.registrations.some((row: any) => row._id === ontarioRegistrationId && row.registrationType === "extra_provincial"));
 
 const importedPackets = await imported.query("legalOperations:templateEngine", { societyId: federalWorkspace.societyId });
-assert.equal(importedPackets.templates.length, 7);
-assert.equal(importedPackets.precedents.length, 7);
+assert.equal(importedPackets.templates.length, corpTemplateCount);
+assert.equal(importedPackets.precedents.length, corpPrecedentCount);
 assert.ok(importedPackets.runs.some((row: any) => row._id === issuancePacket.runId));
 assert.ok(importedPackets.generatedDocuments.some((row: any) => row._id === issuancePacket.generatedDocumentId));
 assert.ok(importedPackets.templates.some((row: any) => row.name === "Issue shares"));

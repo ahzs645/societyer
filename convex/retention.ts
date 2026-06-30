@@ -1,6 +1,8 @@
 // @ts-nocheck
 import { internalMutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { expiredForSocietyPortable } from "../shared/functions/retention";
+import { toPortableQueryCtx } from "./lib/portable";
 
 /**
  * Weekly sweep — find documents whose `retentionYears` has elapsed since
@@ -71,28 +73,5 @@ export const openAttestationYear = internalMutation({
 export const expiredForSociety = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const docs = await ctx.db
-      .query("documents")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const now = Date.now();
-    return docs
-      .map((d) => {
-        const createdMs = new Date(d.createdAtISO).getTime();
-        const years = d.retentionYears ?? 0;
-        const expiresMs = years > 0 ? createdMs + years * 365.25 * 86_400_000 : null;
-        const daysOverdue = expiresMs
-          ? Math.floor((now - expiresMs) / 86_400_000)
-          : null;
-        return { doc: d, expiresMs, daysOverdue };
-      })
-      .filter(
-        (r) =>
-          !r.doc.archivedAtISO &&
-          r.daysOverdue != null &&
-          (r.daysOverdue >= 0 || r.doc.flaggedForDeletion),
-      )
-      .sort((a, b) => (b.daysOverdue ?? 0) - (a.daysOverdue ?? 0));
-  },
+  handler: (ctx, args) => expiredForSocietyPortable(toPortableQueryCtx(ctx), args),
 });

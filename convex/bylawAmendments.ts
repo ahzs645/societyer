@@ -1,27 +1,31 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  listPortable,
+  getPortable,
+  createDraftPortable,
+  updateDraftPortable,
+  sectionsForAmendmentPortable,
+  removePortable,
+  startConsultationPortable,
+  markResolutionPassedPortable,
+  markFiledPortable,
+  withdrawPortable,
+  supersedePortable,
+  materializeSectionsPortable,
+} from "../shared/functions/bylawAmendments";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("bylawAmendments")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("bylawAmendments") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
-});
-
-const nowEvent = (actor: string, action: string, note?: string) => ({
-  atISO: new Date().toISOString(),
-  actor,
-  action,
-  note,
+  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const createDraft = mutation({
@@ -34,16 +38,7 @@ export const createDraft = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const now = new Date().toISOString();
-    return ctx.db.insert("bylawAmendments", {
-      ...args,
-      status: "Draft",
-      createdAtISO: now,
-      updatedAtISO: now,
-      history: [nowEvent(args.createdByName ?? "You", "created", "Draft started")],
-    });
-  },
+  handler: (ctx, args) => createDraftPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const updateDraft = mutation({
@@ -58,35 +53,13 @@ export const updateDraft = mutation({
     actor: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch, actor }) => {
-    const row = await ctx.db.get(id);
-    if (!row) return;
-    if (row.status !== "Draft") {
-      throw new Error("Only drafts can be edited — withdraw or supersede to change a non-draft amendment.");
-    }
-    const history = [...row.history, nowEvent(actor ?? "You", "edited")];
-    await ctx.db.patch(id, {
-      ...patch,
-      updatedAtISO: new Date().toISOString(),
-      history,
-    });
-  },
+  handler: (ctx, args) => updateDraftPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const startConsultation = mutation({
   args: { id: v.id("bylawAmendments"), actor: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { id, actor }) => {
-    const row = await ctx.db.get(id);
-    if (!row || row.status !== "Draft") return;
-    const now = new Date().toISOString();
-    await ctx.db.patch(id, {
-      status: "Consultation",
-      consultationStartedAtISO: now,
-      updatedAtISO: now,
-      history: [...row.history, nowEvent(actor ?? "You", "consultation_started", "Open for member consultation")],
-    });
-  },
+  handler: (ctx, args) => startConsultationPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const markResolutionPassed = mutation({
@@ -99,25 +72,7 @@ export const markResolutionPassed = mutation({
     actor: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { id, meetingId, votesFor, votesAgainst, abstentions, actor }) => {
-    const row = await ctx.db.get(id);
-    if (!row) return;
-    const now = new Date().toISOString();
-    const note = votesFor != null
-      ? `For ${votesFor} · Against ${votesAgainst ?? 0} · Abstain ${abstentions ?? 0}`
-      : undefined;
-    await ctx.db.patch(id, {
-      status: "ResolutionPassed",
-      resolutionMeetingId: meetingId,
-      resolutionPassedAtISO: now,
-      consultationEndedAtISO: row.consultationEndedAtISO ?? now,
-      votesFor,
-      votesAgainst,
-      abstentions,
-      updatedAtISO: now,
-      history: [...row.history, nowEvent(actor ?? "You", "resolution_passed", note)],
-    });
-  },
+  handler: (ctx, args) => markResolutionPassedPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const markFiled = mutation({
@@ -127,33 +82,13 @@ export const markFiled = mutation({
     actor: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { id, filingId, actor }) => {
-    const row = await ctx.db.get(id);
-    if (!row) return;
-    const now = new Date().toISOString();
-    await ctx.db.patch(id, {
-      status: "Filed",
-      filingId,
-      filedAtISO: now,
-      updatedAtISO: now,
-      history: [...row.history, nowEvent(actor ?? "You", "filed", "Filed via Societies Online")],
-    });
-  },
+  handler: (ctx, args) => markFiledPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const withdraw = mutation({
   args: { id: v.id("bylawAmendments"), actor: v.optional(v.string()), reason: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { id, actor, reason }) => {
-    const row = await ctx.db.get(id);
-    if (!row) return;
-    const now = new Date().toISOString();
-    await ctx.db.patch(id, {
-      status: "Withdrawn",
-      updatedAtISO: now,
-      history: [...row.history, nowEvent(actor ?? "You", "withdrawn", reason)],
-    });
-  },
+  handler: (ctx, args) => withdrawPortable(toPortableMutationCtx(ctx), args),
 });
 
 /** Mark an amendment Superseded — the status the UI already renders but that no
@@ -168,27 +103,7 @@ export const supersede = mutation({
     reason: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { id, supersededByAmendmentId, actor, reason }) => {
-    const row = await ctx.db.get(id);
-    if (!row) return;
-    if (row.status === "Withdrawn") {
-      throw new Error("Withdrawn amendments cannot be superseded.");
-    }
-    if (supersededByAmendmentId) {
-      const replacement = await ctx.db.get(supersededByAmendmentId);
-      if (!replacement || replacement.societyId !== row.societyId) {
-        throw new Error("Superseding amendment must belong to the same society.");
-      }
-    }
-    const now = new Date().toISOString();
-    await ctx.db.patch(id, {
-      status: "Superseded",
-      supersededAtISO: now,
-      supersededByAmendmentId,
-      updatedAtISO: now,
-      history: [...row.history, nowEvent(actor ?? "You", "superseded", reason)],
-    });
-  },
+  handler: (ctx, args) => supersedePortable(toPortableMutationCtx(ctx), args),
 });
 
 // Persist an amendment's proposed text as structured section records (replacing
@@ -207,56 +122,17 @@ export const materializeSections = mutation({
     ),
   },
   returns: v.any(),
-  handler: async (ctx, { amendmentId, sections }) => {
-    const amendment = await ctx.db.get(amendmentId);
-    if (!amendment) throw new Error("Amendment not found.");
-    const existing = await ctx.db
-      .query("bylawSections")
-      .withIndex("by_amendment", (q) => q.eq("amendmentId", amendmentId))
-      .collect();
-    for (const row of existing) await ctx.db.delete(row._id);
-
-    const now = new Date().toISOString();
-    for (let i = 0; i < sections.length; i++) {
-      const s = sections[i];
-      await ctx.db.insert("bylawSections", {
-        societyId: amendment.societyId,
-        amendmentId,
-        order: i,
-        heading: s.heading,
-        key: s.key,
-        level: s.level,
-        body: s.body,
-        createdAtISO: now,
-        updatedAtISO: now,
-      });
-    }
-    return { stored: sections.length };
-  },
+  handler: (ctx, args) => materializeSectionsPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const sectionsForAmendment = query({
   args: { amendmentId: v.id("bylawAmendments") },
   returns: v.any(),
-  handler: async (ctx, { amendmentId }) => {
-    const rows = await ctx.db
-      .query("bylawSections")
-      .withIndex("by_amendment", (q) => q.eq("amendmentId", amendmentId))
-      .collect();
-    return rows.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  },
+  handler: (ctx, args) => sectionsForAmendmentPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("bylawAmendments") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    // Clean up materialized section records when the amendment is deleted.
-    const sections = await ctx.db
-      .query("bylawSections")
-      .withIndex("by_amendment", (q) => q.eq("amendmentId", id))
-      .collect();
-    for (const row of sections) await ctx.db.delete(row._id);
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });

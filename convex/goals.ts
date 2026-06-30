@@ -1,5 +1,15 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
+import {
+  listPortable,
+  getPortable,
+  byCommitteePortable,
+  createPortable,
+  updatePortable,
+  toggleMilestonePortable,
+  removePortable,
+} from "../shared/functions/goals";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const milestone = v.object({
   title: v.string(),
@@ -16,27 +26,19 @@ const keyResult = v.object({
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("goals")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("goals") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const byCommittee = query({
   args: { committeeId: v.id("committees") },
   returns: v.any(),
-  handler: async (ctx, { committeeId }) =>
-    ctx.db
-      .query("goals")
-      .withIndex("by_committee", (q) => q.eq("committeeId", committeeId))
-      .collect(),
+  handler: (ctx, args) => byCommitteePortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -55,22 +57,7 @@ export const create = mutation({
     keyResults: v.array(keyResult),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const id = await ctx.db.insert("goals", {
-      ...args,
-      createdAtISO: new Date().toISOString(),
-    });
-    await ctx.db.insert("activity", {
-      societyId: args.societyId,
-      actor: "You",
-      entityType: "goal",
-      entityId: id,
-      action: "created",
-      summary: `Created goal "${args.title}"`,
-      createdAtISO: new Date().toISOString(),
-    });
-    return id;
-  },
+  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -91,30 +78,17 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    await ctx.db.patch(id, patch);
-  },
+  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const toggleMilestone = mutation({
   args: { id: v.id("goals"), index: v.number() },
   returns: v.any(),
-  handler: async (ctx, { id, index }) => {
-    const goal = await ctx.db.get(id);
-    if (!goal) return;
-    const milestones = [...goal.milestones];
-    milestones[index] = { ...milestones[index], done: !milestones[index].done };
-    const pct = Math.round(
-      (milestones.filter((m) => m.done).length / Math.max(milestones.length, 1)) * 100,
-    );
-    await ctx.db.patch(id, { milestones, progressPercent: pct });
-  },
+  handler: (ctx, args) => toggleMilestonePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("goals") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });

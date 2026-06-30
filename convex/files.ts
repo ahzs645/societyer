@@ -2,6 +2,9 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { assertNativeFileStorageEnabled } from "./providers/env";
+import { getUrlPortable } from "../shared/functions/files";
+import { toPortableQueryCtx } from "./lib/portable";
+import { buildConvexCapabilities } from "./providers/capabilities";
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -41,5 +44,5 @@ export const attachUploadedFileToDocument = mutation({
 export const getUrl = query({
   args: { storageId: v.id("_storage") },
   returns: v.any(),
-  handler: async (ctx, { storageId }) => ctx.storage.getUrl(storageId),
+  handler: (ctx, args) => getUrlPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });

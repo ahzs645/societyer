@@ -2,9 +2,16 @@ import { query, mutation, action } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { summarizeMinutes } from "./providers/llm";
-import { buildQuorumSnapshot, QuorumSnapshot } from "./lib/bylawRules";
-import { Doc } from "./_generated/dataModel";
-import { syncMotionsForMinutes } from "./motions";
+import {
+  listPortable,
+  getByMeetingPortable,
+  createPortable,
+  updatePortable,
+  upsertFromDraftPortable,
+  backfillMotionPersonLinksPortable,
+  backfillQuorumSnapshotPortable,
+} from "../shared/functions/minutes";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const motion = v.object({
   name: v.optional(v.string()),
@@ -127,23 +134,13 @@ const structuredMinutesFields = {
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("minutes")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const getByMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: async (ctx, { meetingId }) => {
-    const rows = await ctx.db
-      .query("minutes")
-      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-      .collect();
-    return rows[0] ?? null;
-  },
+  handler: (ctx, args) => getByMeetingPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -174,27 +171,7 @@ export const create = mutation({
     draftTranscript: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await assertMotionPersonLinksBelongToSociety(ctx, args.societyId, args.motions);
-    const meeting = await ctx.db.get(args.meetingId);
-    const snapshot = meeting
-      ? await quorumSnapshotForMeeting(ctx, meeting, args.quorumRequired)
-      : null;
-    const id = await ctx.db.insert("minutes", {
-      ...args,
-      ...minutesSnapshotFields(args, snapshot),
-    });
-    await ctx.db.patch(args.meetingId, { minutesId: id });
-    // Dual-write: mirror into the standalone motions table (reads still use the
-    // embedded array; see docs/motions-first-class-object-design.md).
-    await syncMotionsForMinutes(ctx, {
-      societyId: args.societyId,
-      minutesId: id,
-      meetingId: args.meetingId,
-      motions: args.motions,
-    });
-    return id;
-  },
+  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -228,36 +205,7 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    const minutes = await ctx.db.get(id);
-    if (!minutes) throw new Error("Minutes not found");
-    if (patch.motions) {
-      await assertMotionPersonLinksBelongToSociety(ctx, minutes.societyId, patch.motions);
-    }
-    await ctx.db.patch(id, patch);
-
-    // Snapshot-on-approval: the first time minutes become approved, freeze the
-    // motion set so later edits to live motions never rewrite the approved legal
-    // record. Skipped if a snapshot already exists (idempotent).
-    const newlyApproved = !!patch.approvedAt && !minutes.approvedAt;
-    if (newlyApproved && !minutes.motionSnapshots) {
-      const frozen = patch.motions ?? minutes.motions ?? [];
-      await ctx.db.patch(id, {
-        motionSnapshots: frozen,
-        motionSnapshotAtISO: new Date().toISOString(),
-      });
-    }
-
-    // Dual-write: re-mirror only when the motions array was part of this patch.
-    if (patch.motions) {
-      await syncMotionsForMinutes(ctx, {
-        societyId: minutes.societyId,
-        minutesId: id,
-        meetingId: minutes.meetingId,
-        motions: patch.motions,
-      });
-    }
-  },
+  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
 });
 
 // Upsert a minutes row from an AI-generated draft (transcripts.runPipeline).
@@ -289,155 +237,19 @@ export const upsertFromDraft = mutation({
     draftTranscript: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await assertMotionPersonLinksBelongToSociety(ctx, args.societyId, args.motions);
-    const meeting = await ctx.db.get(args.meetingId);
-    const snapshot = meeting
-      ? await quorumSnapshotForMeeting(ctx, meeting, args.quorumRequired)
-      : null;
-    const quorumRequired = args.quorumRequired ?? snapshot?.quorumRequired;
-    const payload = {
-      ...args,
-      ...minutesSnapshotFields(args, snapshot),
-      quorumMet:
-        quorumRequired == null
-          ? args.quorumMet
-          : args.attendees.length >= quorumRequired,
-    };
-    const existing = await ctx.db
-      .query("minutes")
-      .withIndex("by_meeting", (q) => q.eq("meetingId", args.meetingId))
-      .collect();
-    if (existing[0]) {
-      await ctx.db.patch(existing[0]._id, payload);
-      await syncMotionsForMinutes(ctx, {
-        societyId: args.societyId,
-        minutesId: existing[0]._id,
-        meetingId: args.meetingId,
-        motions: args.motions,
-      });
-      return existing[0]._id;
-    }
-    const id = await ctx.db.insert("minutes", payload);
-    await ctx.db.patch(args.meetingId, { minutesId: id });
-    await syncMotionsForMinutes(ctx, {
-      societyId: args.societyId,
-      minutesId: id,
-      meetingId: args.meetingId,
-      motions: args.motions,
-    });
-    return id;
-  },
+  handler: (ctx, args) => upsertFromDraftPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const backfillMotionPersonLinks = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const [rows, members, directors] = await Promise.all([
-      ctx.db
-        .query("minutes")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-      ctx.db
-        .query("members")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-      ctx.db
-        .query("directors")
-        .withIndex("by_society", (q) => q.eq("societyId", societyId))
-        .collect(),
-    ]);
-
-    let minutesUpdated = 0;
-    let motionRowsUpdated = 0;
-    const linkedNames: Record<string, string> = {};
-    const unresolvedNames: Record<string, number> = {};
-
-    for (const row of rows) {
-      let changed = false;
-      const motions = row.motions.map((motion: any) => {
-        const movedBy = resolveMotionPersonLink(motion.movedBy, members, directors);
-        const secondedBy = resolveMotionPersonLink(motion.secondedBy, members, directors);
-        const next = { ...motion };
-
-        if (movedBy.label || !motion.movedBy) {
-          next.movedByMemberId = movedBy.memberId;
-          next.movedByDirectorId = movedBy.directorId;
-        }
-        if (secondedBy.label || !motion.secondedBy) {
-          next.secondedByMemberId = secondedBy.memberId;
-          next.secondedByDirectorId = secondedBy.directorId;
-        }
-
-        if (motion.movedBy) {
-          if (movedBy.label) linkedNames[motion.movedBy] = movedBy.label;
-          else unresolvedNames[motion.movedBy] = (unresolvedNames[motion.movedBy] ?? 0) + 1;
-        }
-        if (motion.secondedBy) {
-          if (secondedBy.label) linkedNames[motion.secondedBy] = secondedBy.label;
-          else unresolvedNames[motion.secondedBy] = (unresolvedNames[motion.secondedBy] ?? 0) + 1;
-        }
-
-        if (
-          next.movedByMemberId !== motion.movedByMemberId ||
-          next.movedByDirectorId !== motion.movedByDirectorId ||
-          next.secondedByMemberId !== motion.secondedByMemberId ||
-          next.secondedByDirectorId !== motion.secondedByDirectorId
-        ) {
-          changed = true;
-          motionRowsUpdated += 1;
-        }
-        return next;
-      });
-
-      if (changed) {
-        await ctx.db.patch(row._id, { motions });
-        minutesUpdated += 1;
-      }
-    }
-
-    return { minutesScanned: rows.length, minutesUpdated, motionRowsUpdated, linkedNames, unresolvedNames };
-  },
+  handler: (ctx, args) => backfillMotionPersonLinksPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const backfillQuorumSnapshot = mutation({
   args: { id: v.id("minutes") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const minutes = await ctx.db.get(id);
-    if (!minutes) return null;
-    const meeting = await ctx.db.get(minutes.meetingId);
-    if (!meeting) return null;
-    const snapshot = await quorumSnapshotForMeeting(
-      ctx,
-      meeting,
-      minutes.quorumRequired ?? meeting.quorumRequired,
-    );
-    const patch: any = {};
-    if (minutes.quorumRequired == null && snapshot.quorumRequired != null) {
-      patch.quorumRequired = snapshot.quorumRequired;
-    }
-    if (!minutes.bylawRuleSetId && snapshot.bylawRuleSetId) {
-      patch.bylawRuleSetId = snapshot.bylawRuleSetId;
-    }
-    if (minutes.quorumRuleVersion == null && snapshot.quorumRuleVersion != null) {
-      patch.quorumRuleVersion = snapshot.quorumRuleVersion;
-    }
-    if (!minutes.quorumRuleEffectiveFromISO && snapshot.quorumRuleEffectiveFromISO) {
-      patch.quorumRuleEffectiveFromISO = snapshot.quorumRuleEffectiveFromISO;
-    }
-    if (!minutes.quorumSourceLabel) {
-      patch.quorumSourceLabel = snapshot.quorumSourceLabel;
-    }
-    if (!minutes.quorumComputedAtISO) {
-      patch.quorumComputedAtISO = snapshot.quorumComputedAtISO;
-    }
-    if (Object.keys(patch).length > 0) {
-      await ctx.db.patch(id, patch);
-    }
-    return { patched: Object.keys(patch) };
-  },
+  handler: (ctx, args) => backfillQuorumSnapshotPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const generateDraft = action({
@@ -486,113 +298,3 @@ export const generateDraft = action({
   },
 });
 
-async function quorumSnapshotForMeeting(
-  ctx: any,
-  meeting: Doc<"meetings">,
-  quorumRequiredOverride?: number,
-) {
-  return await buildQuorumSnapshot(ctx, {
-    societyId: meeting.societyId,
-    meetingDateISO: meeting.scheduledAt,
-    meetingType: meeting.type,
-    quorumRequiredOverride,
-  });
-}
-
-function minutesSnapshotFields(
-  args: {
-    quorumRequired?: number;
-    bylawRuleSetId?: any;
-    quorumRuleVersion?: number;
-    quorumRuleEffectiveFromISO?: string;
-    quorumSourceLabel?: string;
-    quorumComputedAtISO?: string;
-  },
-  snapshot: QuorumSnapshot | null,
-) {
-  return {
-    quorumRequired: args.quorumRequired ?? snapshot?.quorumRequired,
-    bylawRuleSetId: args.bylawRuleSetId ?? snapshot?.bylawRuleSetId,
-    quorumRuleVersion: args.quorumRuleVersion ?? snapshot?.quorumRuleVersion,
-    quorumRuleEffectiveFromISO:
-      args.quorumRuleEffectiveFromISO ??
-      snapshot?.quorumRuleEffectiveFromISO,
-    quorumSourceLabel: args.quorumSourceLabel ?? snapshot?.quorumSourceLabel,
-    quorumComputedAtISO: args.quorumComputedAtISO ?? snapshot?.quorumComputedAtISO,
-  };
-}
-
-async function assertMotionPersonLinksBelongToSociety(ctx: any, societyId: string, motions: any[]) {
-  for (const motion of motions) {
-    await assertPersonLinkBelongsToSociety(ctx, societyId, "members", motion.movedByMemberId, "movedByMemberId");
-    await assertPersonLinkBelongsToSociety(ctx, societyId, "directors", motion.movedByDirectorId, "movedByDirectorId");
-    await assertPersonLinkBelongsToSociety(ctx, societyId, "members", motion.secondedByMemberId, "secondedByMemberId");
-    await assertPersonLinkBelongsToSociety(ctx, societyId, "directors", motion.secondedByDirectorId, "secondedByDirectorId");
-  }
-}
-
-async function assertPersonLinkBelongsToSociety(
-  ctx: any,
-  societyId: string,
-  table: "members" | "directors",
-  id: string | undefined,
-  fieldName: string,
-) {
-  if (!id) return;
-  const row = await ctx.db.get(id);
-  if (!row || row.societyId !== societyId) {
-    throw new Error(`Motion ${fieldName} must reference a ${table.slice(0, -1)} in the same society.`);
-  }
-}
-
-function resolveMotionPersonLink(
-  value: unknown,
-  members: any[],
-  directors: any[],
-): { memberId?: string; directorId?: string; label?: string } {
-  const key = normalizePersonLookupName(value);
-  if (!key) return {};
-  const memberMatches = members.filter((member) => personLookupKeys(member).includes(key));
-  const directorMatches = directors.filter((director) => personLookupKeys(director).includes(key));
-  const matches = [
-    ...memberMatches.map((member) => ({
-      memberId: member._id,
-      label: `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim(),
-    })),
-    ...directorMatches.map((director) => ({
-      directorId: director._id,
-      label: `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim(),
-    })),
-  ];
-  return matches.length === 1 ? matches[0] : {};
-}
-
-function personLookupKeys(row: any) {
-  return unique([
-    `${row?.firstName ?? ""} ${row?.lastName ?? ""}`,
-    `${row?.lastName ?? ""}, ${row?.firstName ?? ""}`,
-    row?.name,
-    ...(Array.isArray(row?.aliases) ? row.aliases : []),
-  ]).map(normalizePersonLookupName).filter(Boolean);
-}
-
-function normalizePersonLookupName(value: unknown) {
-  if (typeof value !== "string") return undefined;
-  const text = value.trim();
-  if (!text) return undefined;
-  const withoutFormer = text.replace(/\([^)]*\)/g, " ");
-  const commaMatch = withoutFormer.match(/^\s*([^,]+),\s*(.+?)\s*$/);
-  const name = commaMatch ? `${commaMatch[2]} ${commaMatch[1]}` : withoutFormer;
-  return name
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function unique<T>(values: T[]) {
-  return Array.from(new Set(values.filter(Boolean)));
-}

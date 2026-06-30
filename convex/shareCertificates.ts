@@ -1,12 +1,14 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
-  activeCertificates,
-  certificateChain,
-  validateCertificate,
-  sharesOutstandingByClass,
-  type CertificateEvent,
-} from "../shared/shareCertificates";
+  listPortable,
+  registerPortable,
+  chainPortable,
+  createPortable,
+  updatePortable,
+  removePortable,
+} from "../shared/functions/shareCertificates";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 /**
  * Physical share-certificate register (YCN SHR_CERT / SHR_CERT_REPL /
@@ -17,66 +19,24 @@ import {
  * objects before being passed to the shared reconstruction functions.
  */
 
-/** Map a stored row onto the plain CertificateEvent shape the shared fns expect. */
-function toEvent(row: {
-  certificateNumber: string;
-  holderName: string;
-  shareClass: string;
-  shares: number;
-  issuedOn: string;
-  replacesCertificateNumber?: string | null;
-  cancelledOn?: string | null;
-}): CertificateEvent {
-  return {
-    certificateNumber: row.certificateNumber,
-    holderName: row.holderName,
-    shareClass: row.shareClass,
-    shares: row.shares,
-    issuedOn: row.issuedOn,
-    replacesCertificateNumber: row.replacesCertificateNumber ?? null,
-    cancelledOn: row.cancelledOn ?? null,
-  };
-}
-
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("shareCertificates")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 /** Active certificates and shares-outstanding-by-class as of an ISO date. */
 export const register = query({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
-  handler: async (ctx, { societyId, asOf }) => {
-    const rows = await ctx.db
-      .query("shareCertificates")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const events = rows.map(toEvent);
-    return {
-      active: activeCertificates(events, asOf),
-      outstandingByClass: sharesOutstandingByClass(events, asOf),
-    };
-  },
+  handler: (ctx, args) => registerPortable(toPortableQueryCtx(ctx), args),
 });
 
 /** The lineage of a certificate, original → latest. */
 export const chain = query({
   args: { societyId: v.id("societies"), certificateNumber: v.string() },
   returns: v.any(),
-  handler: async (ctx, { societyId, certificateNumber }) => {
-    const rows = await ctx.db
-      .query("shareCertificates")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const events = rows.map(toEvent);
-    return certificateChain(events, certificateNumber);
-  },
+  handler: (ctx, args) => chainPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -91,31 +51,7 @@ export const create = mutation({
     nowISO: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const event: CertificateEvent = {
-      certificateNumber: args.certificateNumber,
-      holderName: args.holderName,
-      shareClass: args.shareClass,
-      shares: args.shares,
-      issuedOn: args.issuedOn,
-      replacesCertificateNumber: args.replacesCertificateNumber ?? null,
-      cancelledOn: null,
-    };
-    const result = validateCertificate(event);
-    if (!result.ok) {
-      throw new Error(`Invalid certificate: ${result.errors.join("; ")}`);
-    }
-    return ctx.db.insert("shareCertificates", {
-      societyId: args.societyId,
-      certificateNumber: args.certificateNumber,
-      holderName: args.holderName,
-      shareClass: args.shareClass,
-      shares: args.shares,
-      issuedOn: args.issuedOn,
-      replacesCertificateNumber: args.replacesCertificateNumber,
-      createdAtISO: args.nowISO,
-    });
-  },
+  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -132,16 +68,11 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    await ctx.db.patch(id, patch);
-    return null;
-  },
+  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("shareCertificates") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });

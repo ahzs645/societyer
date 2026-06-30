@@ -1,50 +1,30 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import {
-  getActiveBylawRuleSet,
-  getBylawRuleSetForDate,
-  getNextBylawRuleVersion,
-  getDefaultBylawRules,
-} from "./lib/bylawRules";
+  getActivePortable,
+  getForDatePortable,
+  listPortable,
+  upsertActivePortable,
+  resetToDefaultPortable,
+} from "../shared/functions/bylawRules";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const getActive = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const active = await getActiveBylawRuleSet(ctx, societyId);
-    return {
-      ...active,
-      isFallback: !active._id,
-    };
-  },
+  handler: (ctx, args) => getActivePortable(toPortableQueryCtx(ctx), args),
 });
 
 export const getForDate = query({
   args: { societyId: v.id("societies"), dateISO: v.string() },
   returns: v.any(),
-  handler: async (ctx, { societyId, dateISO }) => {
-    const rules = await getBylawRuleSetForDate(ctx, societyId, dateISO);
-    return {
-      ...rules,
-      isFallback: !rules._id,
-    };
-  },
+  handler: (ctx, args) => getForDatePortable(toPortableQueryCtx(ctx), args),
 });
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const rows = await ctx.db
-      .query("bylawRuleSets")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    return rows.sort((a, b) => {
-      const byEffective = timestamp(b.effectiveFromISO ?? b.updatedAtISO) - timestamp(a.effectiveFromISO ?? a.updatedAtISO);
-      if (byEffective !== 0) return byEffective;
-      return b.version - a.version;
-    });
-  },
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const upsertActive = mutation({
@@ -98,63 +78,11 @@ export const upsertActive = mutation({
     ),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const now = new Date().toISOString();
-    const {
-      id: _previousId,
-      effectiveFromISO,
-      ...ruleValues
-    } = args;
-    const payload = {
-      ...ruleValues,
-      status: "Active",
-      effectiveFromISO: effectiveFromISO || now,
-      updatedAtISO: now,
-    };
-
-    const rows = await ctx.db
-      .query("bylawRuleSets")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    for (const row of rows) {
-      if (row.status === "Active") {
-        await ctx.db.patch(row._id, { status: "Archived" });
-      }
-    }
-
-    return await ctx.db.insert("bylawRuleSets", {
-      ...payload,
-      version: await getNextBylawRuleVersion(ctx, args.societyId),
-    });
-  },
+  handler: (ctx, args) => upsertActivePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const resetToDefault = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const now = new Date().toISOString();
-    const defaults = {
-      ...getDefaultBylawRules(societyId),
-      effectiveFromISO: now,
-      updatedAtISO: now,
-      version: await getNextBylawRuleVersion(ctx, societyId),
-    };
-    const rows = await ctx.db
-      .query("bylawRuleSets")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    for (const row of rows) {
-      if (row.status === "Active") {
-        await ctx.db.patch(row._id, { status: "Archived" });
-      }
-    }
-    return await ctx.db.insert("bylawRuleSets", defaults);
-  },
+  handler: (ctx, args) => resetToDefaultPortable(toPortableMutationCtx(ctx), args),
 });
-
-function timestamp(value?: string) {
-  if (!value) return Number.NEGATIVE_INFINITY;
-  const ts = new Date(value).getTime();
-  return Number.isFinite(ts) ? ts : Number.NEGATIVE_INFINITY;
-}

@@ -1,15 +1,17 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
+import {
+  listForDocumentPortable,
+  createPortable,
+  setStatusPortable,
+  removePortable,
+} from "../shared/functions/documentComments";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const listForDocument = query({
   args: { documentId: v.id("documents") },
   returns: v.any(),
-  handler: async (ctx, { documentId }) =>
-    ctx.db
-      .query("documentComments")
-      .withIndex("by_document", (q) => q.eq("documentId", documentId))
-      .collect()
-      .then((rows) => rows.sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO)))),
+  handler: (ctx, args) => listForDocumentPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -23,28 +25,7 @@ export const create = mutation({
     body: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    if (!args.body.trim()) throw new Error("Comment body is required.");
-    const document = await ctx.db.get(args.documentId);
-    if (!document || document.societyId !== args.societyId) {
-      throw new Error("Document not found for this society.");
-    }
-    const id = await ctx.db.insert("documentComments", {
-      societyId: args.societyId,
-      documentId: args.documentId,
-      pageNumber: args.pageNumber,
-      anchorText: args.anchorText || undefined,
-      authorName: args.authorName,
-      authorUserId: args.authorUserId,
-      body: args.body,
-      status: "open",
-      createdAtISO: new Date().toISOString(),
-    });
-    await ctx.db.patch(args.documentId, {
-      reviewStatus: document.reviewStatus === "approved" ? "in_review" : document.reviewStatus ?? "in_review",
-    });
-    return id;
-  },
+  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const setStatus = mutation({
@@ -54,21 +35,11 @@ export const setStatus = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, status, actingUserId }) => {
-    const comment = await ctx.db.get(id);
-    if (!comment) return;
-    await ctx.db.patch(id, {
-      status,
-      resolvedAtISO: status === "resolved" ? new Date().toISOString() : undefined,
-      resolvedByUserId: status === "resolved" ? actingUserId : undefined,
-    });
-  },
+  handler: (ctx, args) => setStatusPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("documentComments") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });

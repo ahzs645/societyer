@@ -1,5 +1,17 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  listPortable,
+  getPortable,
+  eventsForSocietyPortable,
+  eventsForCommitmentPortable,
+  createPortable,
+  updatePortable,
+  recordEventPortable,
+  removeEventPortable,
+  removePortable,
+} from "../shared/functions/commitments";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const commitmentFields = {
   title: v.string(),
@@ -24,38 +36,25 @@ const commitmentFields = {
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("commitments")
-      .withIndex("by_society_due", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("commitments") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const eventsForSociety = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("commitmentEvents")
-      .withIndex("by_society_happened", (q) => q.eq("societyId", societyId))
-      .order("desc")
-      .collect(),
+  handler: (ctx, args) => eventsForSocietyPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const eventsForCommitment = query({
   args: { commitmentId: v.id("commitments") },
   returns: v.any(),
-  handler: async (ctx, { commitmentId }) =>
-    ctx.db
-      .query("commitmentEvents")
-      .withIndex("by_commitment", (q) => q.eq("commitmentId", commitmentId))
-      .collect(),
+  handler: (ctx, args) => eventsForCommitmentPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -64,27 +63,7 @@ export const create = mutation({
     ...commitmentFields,
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    await assertSocietyRefs(ctx, args.societyId, {
-      sourceDocumentId: args.sourceDocumentId,
-    });
-    const nowISO = new Date().toISOString();
-    const id = await ctx.db.insert("commitments", {
-      ...args,
-      createdAtISO: nowISO,
-      updatedAtISO: nowISO,
-    });
-    await ctx.db.insert("activity", {
-      societyId: args.societyId,
-      actor: "You",
-      entityType: "commitment",
-      entityId: id,
-      action: "created",
-      summary: `Created commitment "${args.title}"`,
-      createdAtISO: nowISO,
-    });
-    return id;
-  },
+  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -111,17 +90,7 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    const commitment = await ctx.db.get(id);
-    if (!commitment) throw new Error("Commitment not found.");
-    await assertSocietyRefs(ctx, commitment.societyId, {
-      sourceDocumentId: patch.sourceDocumentId,
-    });
-    await ctx.db.patch(id, {
-      ...patch,
-      updatedAtISO: new Date().toISOString(),
-    });
-  },
+  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const recordEvent = mutation({
@@ -137,114 +106,17 @@ export const recordEvent = mutation({
     nextDueDate: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const commitment = await ctx.db.get(args.commitmentId);
-    if (!commitment) throw new Error("Commitment not found.");
-    await assertSocietyRefs(ctx, commitment.societyId, {
-      meetingId: args.meetingId,
-      evidenceDocumentIds: args.evidenceDocumentIds,
-    });
-
-    const nowISO = new Date().toISOString();
-    const id = await ctx.db.insert("commitmentEvents", {
-      societyId: commitment.societyId,
-      commitmentId: args.commitmentId,
-      title: args.title,
-      happenedAtISO: args.happenedAtISO,
-      meetingId: args.meetingId,
-      evidenceDocumentIds: args.evidenceDocumentIds,
-      evidenceStatus: args.evidenceStatus,
-      evidenceNotes: args.evidenceNotes,
-      summary: args.summary,
-      createdAtISO: nowISO,
-    });
-
-    const eventIsLatest =
-      !commitment.lastCompletedAtISO ||
-      args.happenedAtISO.localeCompare(commitment.lastCompletedAtISO) >= 0;
-    const patch: Record<string, unknown> = {
-      updatedAtISO: nowISO,
-    };
-    if (eventIsLatest) {
-      patch.lastCompletedAtISO = args.happenedAtISO;
-      patch.lastCompletionSummary = args.summary || args.title;
-    }
-    if (args.nextDueDate) {
-      patch.nextDueDate = args.nextDueDate;
-    }
-    await ctx.db.patch(args.commitmentId, patch);
-
-    await ctx.db.insert("activity", {
-      societyId: commitment.societyId,
-      actor: "You",
-      entityType: "commitment",
-      entityId: args.commitmentId,
-      action: "completed",
-      summary: `Recorded "${args.title}" for ${commitment.title}`,
-      createdAtISO: nowISO,
-    });
-    return id;
-  },
+  handler: (ctx, args) => recordEventPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const removeEvent = mutation({
   args: { id: v.id("commitmentEvents") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const event = await ctx.db.get(id);
-    if (!event) return;
-    await ctx.db.delete(id);
-    const remaining = await ctx.db
-      .query("commitmentEvents")
-      .withIndex("by_commitment", (q) => q.eq("commitmentId", event.commitmentId))
-      .collect();
-    const latest = remaining.sort((a, b) => b.happenedAtISO.localeCompare(a.happenedAtISO))[0];
-    await ctx.db.patch(event.commitmentId, {
-      lastCompletedAtISO: latest?.happenedAtISO,
-      lastCompletionSummary: latest ? latest.summary || latest.title : undefined,
-      updatedAtISO: new Date().toISOString(),
-    });
-  },
+  handler: (ctx, args) => removeEventPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("commitments") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const events = await ctx.db
-      .query("commitmentEvents")
-      .withIndex("by_commitment", (q) => q.eq("commitmentId", id))
-      .collect();
-    await Promise.all(events.map((event) => ctx.db.delete(event._id)));
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });
-
-async function assertSocietyRefs(
-  ctx: any,
-  societyId: string,
-  refs: {
-    sourceDocumentId?: string;
-    meetingId?: string;
-    evidenceDocumentIds?: string[];
-  },
-) {
-  if (refs.sourceDocumentId) {
-    const document = await ctx.db.get(refs.sourceDocumentId);
-    if (!document || String(document.societyId) !== String(societyId)) {
-      throw new Error("Source document is not in this society.");
-    }
-  }
-  if (refs.meetingId) {
-    const meeting = await ctx.db.get(refs.meetingId);
-    if (!meeting || String(meeting.societyId) !== String(societyId)) {
-      throw new Error("Meeting is not in this society.");
-    }
-  }
-  for (const documentId of refs.evidenceDocumentIds ?? []) {
-    const document = await ctx.db.get(documentId);
-    if (!document || String(document.societyId) !== String(societyId)) {
-      throw new Error("Evidence document is not in this society.");
-    }
-  }
-}

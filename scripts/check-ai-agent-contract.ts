@@ -5,6 +5,12 @@ const client = new StaticConvexClient();
 const [society] = await client.query("society:list", {});
 assert.ok(society?._id, "static society is available");
 
+// Approving an AI tool draft is Director-gated (same rule on hosted Convex and
+// the portable runtime); act as a privileged demo user, like the real UI does.
+const users = await client.query("users:list", { societyId: society._id });
+const actingUserId = users.find((user: any) => ["Owner", "Admin", "Director"].includes(user.role))?._id;
+assert.ok(actingUserId, "a privileged demo user is available to approve drafts");
+
 const context = await client.query("aiAgents:getChatContext", {
   societyId: society._id,
   browsingContext: { route: "/app/ai-agents" },
@@ -47,6 +53,7 @@ assert.equal(drafts[0]._id, draftResult.draftId);
 
 const approval = await client.mutation("aiAgents:approveToolDraft", {
   societyId: society._id,
+  actingUserId,
   id: draftResult.draftId,
 });
 assert.equal(approval.status, "executed");

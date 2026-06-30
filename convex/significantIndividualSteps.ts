@@ -1,20 +1,17 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
-  reviewsDue as computeReviewsDue,
-  type SignificanceStep,
-} from "../shared/significantIndividuals";
+  listPortable,
+  createPortable,
+  reviewsDuePortable,
+  removePortable,
+} from "../shared/functions/significantIndividualSteps";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const rows = await ctx.db
-      .query("significantIndividualSteps")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    return rows.sort((a, b) => (a.stepDate < b.stepDate ? 1 : a.stepDate > b.stepDate ? -1 : 0));
-  },
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -28,37 +25,17 @@ export const create = mutation({
     nowISO: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const { nowISO, ...rest } = args;
-    return ctx.db.insert("significantIndividualSteps", {
-      ...rest,
-      createdAtISO: nowISO,
-    });
-  },
+  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const reviewsDue = query({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
-  handler: async (ctx, { societyId, asOf }) => {
-    const rows = await ctx.db
-      .query("significantIndividualSteps")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const steps: SignificanceStep[] = rows.map((row) => ({
-      individualName: row.individualName,
-      stepsNarrative: row.stepsNarrative,
-      stepDate: row.stepDate,
-      nextReviewDate: row.nextReviewDate,
-    }));
-    return computeReviewsDue(steps, asOf);
-  },
+  handler: (ctx, args) => reviewsDuePortable(toPortableQueryCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("significantIndividualSteps") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });

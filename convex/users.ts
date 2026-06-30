@@ -1,95 +1,54 @@
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import {
+  usersList,
+  userGet,
+  userGetByEmail,
+  userGetByAuthSubject,
+  resolveAuthSessionPortable,
+  recordLoginPortable,
+  setRolePortable,
+} from "../shared/functions/users";
+import { ROLES, canActAs, requireRolePortable, type Role } from "../shared/functions/access";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"] as const;
-export type Role = (typeof ROLES)[number];
-
-const ROLE_RANK: Record<Role, number> = {
-  Owner: 100,
-  Admin: 80,
-  Director: 60,
-  Member: 40,
-  Viewer: 20,
-};
-
-export function canActAs(actual: Role | undefined | null, required: Role): boolean {
-  if (!actual) return false;
-  return ROLE_RANK[actual] >= ROLE_RANK[required];
-}
+export { ROLES, canActAs };
+export type { Role };
 
 export async function requireRole(
   ctx: QueryCtx | MutationCtx,
   args: { actingUserId?: Id<"users"> | null; societyId: Id<"societies">; required: Role },
 ): Promise<{ user: any | null }> {
-  if (!args.actingUserId) {
-    // Bootstrap: if the society has no users yet, allow the first action so an
-    // Owner can be created. There's no admin to enforce against in that state;
-    // refusing it strands the page (no actor → can't create the actor).
-    const firstUser = await ctx.db
-      .query("users")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .first();
-    if (!firstUser) return { user: null };
-    throw new Error(`Role ${args.required} required — no authenticated actor.`);
-  }
-  const user = await ctx.db.get(args.actingUserId);
-  if (!user) throw new Error("Unknown user.");
-  if (user.societyId !== args.societyId) throw new Error("User is not part of this society.");
-  if (!canActAs(user.role as Role, args.required)) {
-    // Second bootstrap: if NOBODY in the society has the required role, let
-    // any user proceed so they can self-promote. Covers the case where a
-    // society was seeded with only non-admin users (e.g. all "Member"s) and
-    // is otherwise stranded — there's no admin to recover from.
-    const peers = await ctx.db
-      .query("users")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    const hasQualifiedActor = peers.some((peer) => canActAs(peer.role as Role, args.required));
-    if (!hasQualifiedActor) return { user };
-    throw new Error(`Role ${args.required} required — you have ${user.role}.`);
-  }
-  return { user };
+  return requireRolePortable(toPortableQueryCtx(ctx), {
+    actingUserId: args.actingUserId ?? undefined,
+    societyId: args.societyId,
+    required: args.required,
+  });
 }
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("users")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => usersList(toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("users") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => userGet(toPortableQueryCtx(ctx), args),
 });
 
 export const getByEmail = query({
   args: { email: v.string() },
   returns: v.any(),
-  handler: async (ctx, { email }) => {
-    const rows = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", email))
-      .collect();
-    return rows[0] ?? null;
-  },
+  handler: (ctx, args) => userGetByEmail(toPortableQueryCtx(ctx), args),
 });
 
 export const getByAuthSubject = query({
   args: { authSubject: v.string() },
   returns: v.any(),
-  handler: async (ctx, { authSubject }) => {
-    const rows = await ctx.db
-      .query("users")
-      .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
-      .collect();
-    return rows[0] ?? null;
-  },
+  handler: (ctx, args) => userGetByAuthSubject(toPortableQueryCtx(ctx), args),
 });
 
 export const resolveAuthSession = mutation({
@@ -101,65 +60,7 @@ export const resolveAuthSession = mutation({
     emailVerified: v.boolean(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const [existingByAuth, members, users] = await Promise.all([
-      ctx.db
-        .query("users")
-        .withIndex("by_auth_subject", (q) => q.eq("authSubject", args.authSubject))
-        .collect(),
-      ctx.db
-        .query("members")
-        .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-        .collect(),
-      ctx.db
-        .query("users")
-        .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-        .collect(),
-    ]);
-
-    const email = args.email.toLowerCase();
-    const existing =
-      existingByAuth.find((row) => row.societyId === args.societyId) ??
-      users.find(
-        (row) =>
-          row.societyId === args.societyId &&
-          row.email.toLowerCase() === email,
-      ) ??
-      null;
-    const linkedMember =
-      members.find((member) => member.email?.toLowerCase() === email) ?? null;
-    const now = new Date().toISOString();
-
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        email: args.email,
-        displayName: args.displayName,
-        authProvider: "better-auth",
-        authSubject: args.authSubject,
-        memberId: existing.memberId ?? linkedMember?._id,
-        emailVerifiedAtISO: args.emailVerified ? now : existing.emailVerifiedAtISO,
-        lastLoginAtISO: now,
-        status: existing.status === "Invited" ? "Active" : existing.status,
-      });
-      return { userId: existing._id };
-    }
-
-    const ownerRole = users.length === 0 ? "Owner" : linkedMember ? "Member" : "Viewer";
-    const userId = await ctx.db.insert("users", {
-      societyId: args.societyId,
-      email: args.email,
-      displayName: args.displayName,
-      role: ownerRole,
-      authProvider: "better-auth",
-      authSubject: args.authSubject,
-      memberId: linkedMember?._id,
-      status: "Active",
-      createdAtISO: now,
-      emailVerifiedAtISO: args.emailVerified ? now : undefined,
-      lastLoginAtISO: now,
-    });
-    return { userId };
-  },
+  handler: (ctx, args) => resolveAuthSessionPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -228,17 +129,7 @@ export const setRole = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, role, actingUserId }) => {
-    const target = await ctx.db.get(id);
-    if (!target) throw new Error("User not found.");
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: target.societyId,
-      required: "Admin",
-    });
-    if (role !== "Owner") await assertNotLastOwner(ctx, target);
-    await ctx.db.patch(id, { role });
-  },
+  handler: (ctx, args) => setRolePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
@@ -260,7 +151,5 @@ export const remove = mutation({
 export const recordLogin = mutation({
   args: { id: v.id("users") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.patch(id, { lastLoginAtISO: new Date().toISOString() });
-  },
+  handler: (ctx, args) => recordLoginPortable(toPortableMutationCtx(ctx), args),
 });

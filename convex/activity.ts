@@ -1,17 +1,12 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { listPortable, listForRecordPortable, logPortable } from "../shared/functions/activity";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, limit }) => {
-    const rows = await ctx.db
-      .query("activity")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .order("desc")
-      .take(limit ?? 30);
-    return rows;
-  },
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const listForRecord = query({
@@ -22,15 +17,7 @@ export const listForRecord = query({
     limit: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, entityType, entityId, limit }) => {
-    return ctx.db
-      .query("activity")
-      .withIndex("by_entity", (q) =>
-        q.eq("societyId", societyId).eq("entityType", entityType).eq("entityId", entityId),
-      )
-      .order("desc")
-      .take(limit ?? 100);
-  },
+  handler: (ctx, args) => listForRecordPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const log = mutation({
@@ -43,6 +30,5 @@ export const log = mutation({
     summary: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, args) =>
-    ctx.db.insert("activity", { ...args, createdAtISO: new Date().toISOString() }),
+  handler: (ctx, args) => logPortable(toPortableMutationCtx(ctx), args),
 });

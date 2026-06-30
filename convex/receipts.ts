@@ -1,15 +1,18 @@
 // @ts-nocheck
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  receiptsListPortable,
+  receiptIssuePortable,
+  receiptVoidPortable,
+  receiptRemovePortable,
+} from "../shared/functions/receipts";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("donationReceipts")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => receiptsListPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const issue = mutation({
@@ -28,45 +31,17 @@ export const issue = mutation({
     appraiserName: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    // Serial receipt numbers per society — next = count + 1, zero-padded.
-    const existing = await ctx.db
-      .query("donationReceipts")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect();
-    const next = String(existing.length + 1).padStart(6, "0");
-    return ctx.db.insert("donationReceipts", {
-      ...args,
-      receiptNumber: next,
-      issuedAtISO: new Date().toISOString(),
-    });
-  },
+  handler: (ctx, args) => receiptIssuePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const voidReceipt = mutation({
   args: { id: v.id("donationReceipts"), reason: v.string() },
   returns: v.any(),
-  handler: async (ctx, { id, reason }) => {
-    await ctx.db.patch(id, {
-      voidedAtISO: new Date().toISOString(),
-      voidReason: reason,
-    });
-  },
+  handler: (ctx, args) => receiptVoidPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("donationReceipts") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    // Receipt numbers are serial (next = count + 1). Deleting a receipt would
-    // make a future issue reuse a number, breaking the CRA audit-trail
-    // invariant — void it instead (voidReceipt) to preserve the sequence.
-    const receipt = await ctx.db.get(id);
-    if (receipt?.receiptNumber) {
-      throw new Error(
-        "Issued donation receipts cannot be deleted — void the receipt instead to preserve serial numbering.",
-      );
-    }
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => receiptRemovePortable(toPortableMutationCtx(ctx), args),
 });

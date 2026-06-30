@@ -16,6 +16,7 @@ import {
   STATIC_PENDING_WRITES,
   isStaticGenericCrud,
 } from "../src/lib/staticConvexParity.ts";
+import { PORTABLE_FUNCTION_NAMES } from "../shared/functions/registry.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
@@ -71,8 +72,12 @@ function collectExplicitlyHandled(): Set<string> {
 const frontendWrites = collectFrontendWrites();
 const explicitlyHandled = collectExplicitlyHandled();
 
+// Functions ported to the portable ctx.db contract are handled by the live local
+// runtime (PortableRuntime in staticConvex.ts), not the hand-written mirror.
+const portableHandled = new Set(PORTABLE_FUNCTION_NAMES);
+
 const isHandled = (name: string) =>
-  explicitlyHandled.has(name) || isStaticGenericCrud(name);
+  explicitlyHandled.has(name) || isStaticGenericCrud(name) || portableHandled.has(name);
 
 const summary = { handled: 0, noop: 0, pending: 0 };
 const unclassified: string[] = [];

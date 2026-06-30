@@ -1,9 +1,13 @@
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
-
-function isoNow() {
-  return new Date().toISOString();
-}
+import {
+  programStatementsList,
+  programStatementGet,
+  programStatementCreate,
+  programStatementUpdate,
+  programStatementRemove,
+} from "../shared/functions/programStatements";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const statementLine = v.object({
   key: v.string(),
@@ -16,17 +20,13 @@ const statementLine = v.object({
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("programStatements")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => programStatementsList(toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("programStatements") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => programStatementGet(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -44,15 +44,7 @@ export const create = mutation({
     createdByUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const now = isoNow();
-    return ctx.db.insert("programStatements", {
-      ...args,
-      status: args.status ?? "Draft",
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-  },
+  handler: (ctx, args) => programStatementCreate(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -71,15 +63,11 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    await ctx.db.patch(id, { ...patch, updatedAtISO: isoNow() });
-  },
+  handler: (ctx, args) => programStatementUpdate(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("programStatements") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => programStatementRemove(toPortableMutationCtx(ctx), args),
 });

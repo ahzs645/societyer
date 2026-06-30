@@ -1,5 +1,15 @@
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
+import {
+  listPortable,
+  getPortable,
+  createPortable,
+  updatePortable,
+  markSentPortable,
+  cancelPortable,
+  removePortable,
+} from "../shared/functions/pendingEmails";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const ATTACHMENT_SHAPE = v.array(
   v.object({
@@ -14,28 +24,13 @@ export const list = query({
     status: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, status }) => {
-    const rows = status
-      ? await ctx.db
-          .query("pendingEmails")
-          .withIndex("by_society_status", (q) =>
-            q.eq("societyId", societyId).eq("status", status),
-          )
-          .order("desc")
-          .collect()
-      : await ctx.db
-          .query("pendingEmails")
-          .withIndex("by_society", (q) => q.eq("societyId", societyId))
-          .order("desc")
-          .collect();
-    return rows;
-  },
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("pendingEmails") },
   returns: v.any(),
-  handler: async (ctx, { id }) => ctx.db.get(id),
+  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -58,28 +53,7 @@ export const create = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const id = await ctx.db.insert("pendingEmails", {
-      societyId: args.societyId,
-      workflowId: args.workflowId,
-      workflowRunId: args.workflowRunId,
-      nodeKey: args.nodeKey,
-      fromName: args.fromName,
-      fromEmail: args.fromEmail,
-      replyTo: args.replyTo,
-      to: args.to,
-      cc: args.cc,
-      bcc: args.bcc,
-      subject: args.subject,
-      body: args.body,
-      attachments: args.attachments ?? [],
-      status: args.status ?? "ready",
-      createdAtISO: new Date().toISOString(),
-      createdByUserId: args.actingUserId,
-      notes: args.notes,
-    });
-    return id;
-  },
+  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -101,11 +75,7 @@ export const update = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    const existing = await ctx.db.get(id);
-    if (!existing) throw new Error("Pending email not found");
-    await ctx.db.patch(id, patch);
-  },
+  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const markSent = mutation({
@@ -116,17 +86,7 @@ export const markSent = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, sentChannel, notes, actingUserId }) => {
-    const existing = await ctx.db.get(id);
-    if (!existing) throw new Error("Pending email not found");
-    await ctx.db.patch(id, {
-      status: "sent",
-      sentAtISO: new Date().toISOString(),
-      sentByUserId: actingUserId,
-      sentChannel: sentChannel ?? existing.sentChannel ?? "personal_email",
-      notes: notes ?? existing.notes,
-    });
-  },
+  handler: (ctx, args) => markSentPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const cancel = mutation({
@@ -136,14 +96,7 @@ export const cancel = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, reason }) => {
-    const existing = await ctx.db.get(id);
-    if (!existing) throw new Error("Pending email not found");
-    await ctx.db.patch(id, {
-      status: "cancelled",
-      notes: reason ?? existing.notes,
-    });
-  },
+  handler: (ctx, args) => cancelPortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
@@ -152,7 +105,5 @@ export const remove = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
 });

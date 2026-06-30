@@ -1,15 +1,17 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
-import { getActiveBylawRuleSet } from "./lib/bylawRules";
+import {
+  memberProposalsList,
+  memberProposalCreate,
+  memberProposalUpdate,
+  memberProposalRemove,
+} from "../shared/functions/memberProposals";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) =>
-    ctx.db
-      .query("memberProposals")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect(),
+  handler: (ctx, args) => memberProposalsList(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -26,40 +28,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const rules = await getActiveBylawRuleSet(ctx, args.societyId);
-    const thresholdPercent =
-      args.thresholdPercent ?? rules.memberProposalThresholdPct;
-    const signatureThresholdCount =
-      args.eligibleVotersAtSubmission && args.eligibleVotersAtSubmission > 0
-        ? Math.ceil(args.eligibleVotersAtSubmission * (thresholdPercent / 100))
-        : 0;
-    const requiredSignatureCount = Math.max(
-      rules.memberProposalMinSignatures,
-      signatureThresholdCount,
-    );
-    // Evaluate threshold on insert
-    const meets = args.signatureCount >= requiredSignatureCount;
-
-    let status = meets ? "MeetsThreshold" : "Submitted";
-    if (args.meetingId) {
-      const meeting = await ctx.db.get(args.meetingId);
-      if (meeting?.noticeSentAt) {
-        const leadMs = rules.memberProposalLeadDays * 86_400_000;
-        const receivedTs = new Date(args.submittedAtISO).getTime();
-        const noticeTs = new Date(meeting.noticeSentAt).getTime();
-        if (receivedTs > noticeTs - leadMs) {
-          status = "Rejected";
-        }
-      }
-    }
-    return ctx.db.insert("memberProposals", {
-      ...args,
-      thresholdPercent,
-      includedInAgenda: false,
-      status,
-    });
-  },
+  handler: (ctx, args) => memberProposalCreate(toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -78,34 +47,11 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: async (ctx, { id, patch }) => {
-    const before = await ctx.db.get(id);
-    await ctx.db.patch(id, patch);
-
-    // Re-evaluate the signature threshold when the count or electorate changes,
-    // but only while the proposal is in an auto-managed state — never override a
-    // manual status set in this patch, nor a terminal status like Rejected.
-    const autoManaged = before?.status === "Submitted" || before?.status === "MeetsThreshold";
-    if (before && patch.status === undefined && autoManaged) {
-      const merged = { ...before, ...patch };
-      const rules = await getActiveBylawRuleSet(ctx, before.societyId);
-      const thresholdPercent = merged.thresholdPercent ?? rules.memberProposalThresholdPct;
-      const eligibleVoters = merged.eligibleVotersAtSubmission ?? 0;
-      const signatureThresholdCount =
-        eligibleVoters > 0 ? Math.ceil(eligibleVoters * (thresholdPercent / 100)) : 0;
-      const required = Math.max(rules.memberProposalMinSignatures, signatureThresholdCount);
-      const recomputed = (merged.signatureCount ?? 0) >= required ? "MeetsThreshold" : "Submitted";
-      if (recomputed !== before.status) {
-        await ctx.db.patch(id, { status: recomputed });
-      }
-    }
-  },
+  handler: (ctx, args) => memberProposalUpdate(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("memberProposals") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => memberProposalRemove(toPortableMutationCtx(ctx), args),
 });

@@ -2,23 +2,25 @@ import { v } from "convex/values";
 import { query, mutation, action, internalMutation, internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
-import { sendEmail } from "./providers/email";
-import { sendSms } from "./providers/sms";
+import { buildConvexCapabilities } from "./providers/capabilities";
+import {
+  normalizeNotificationLink,
+  notificationsList,
+  notificationsUnreadCount,
+  notificationCreate,
+  notificationMarkRead,
+  notificationMarkAllRead,
+  notificationDismiss,
+  notificationSnooze,
+  notificationDismissAll,
+  notificationRemove,
+  notificationRemoveAllDismissed,
+  notificationsListPrefs,
+  notificationUpsertPref,
+} from "../shared/functions/notifications";
+import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-/**
- * Notifications historically stored app-relative links as bare paths
- * (e.g. "/filings"), but every real route lives under "/app". Normalize on
- * READ so every click target resolves, without rewriting stored rows — which
- * keeps the scan dedup keys and `financialHub`'s demo-notification matcher
- * (both compare the raw stored value) working untouched.
- */
-export function normalizeNotificationLink(href?: string): string | undefined {
-  if (!href) return href;
-  if (href.startsWith("/app") || href.startsWith("/demo") || href.startsWith("http")) {
-    return href;
-  }
-  return href.startsWith("/") ? `/app${href}` : `/app/${href}`;
-}
+export { normalizeNotificationLink };
 
 export const list = query({
   args: {
@@ -31,45 +33,13 @@ export const list = query({
     includeDismissed: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, userId, limit, unreadOnly, includeDismissed }) => {
-    const nowISO = new Date().toISOString();
-    const rows = await ctx.db
-      .query("notifications")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .order("desc")
-      .take(limit ?? 100);
-    return rows
-      .filter((r) => {
-        if (userId && r.userId && r.userId !== userId) return false;
-        if (unreadOnly && r.readAt) return false;
-        if (!includeDismissed && r.dismissedAt) return false;
-        // Snoozed rows leave the bell until their time passes; the full page
-        // (includeDismissed) still shows them so the user can un-snooze.
-        if (!includeDismissed && r.snoozedUntilISO && r.snoozedUntilISO > nowISO) return false;
-        return true;
-      })
-      .map((r) => ({ ...r, linkHref: normalizeNotificationLink(r.linkHref) }));
-  },
+  handler: (ctx, args) => notificationsList(toPortableQueryCtx(ctx), args),
 });
 
 export const unreadCount = query({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { societyId, userId }) => {
-    const nowISO = new Date().toISOString();
-    const rows = await ctx.db
-      .query("notifications")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .order("desc")
-      .take(200);
-    return rows.filter((r) => {
-      if (r.readAt) return false;
-      if (r.dismissedAt) return false;
-      if (r.snoozedUntilISO && r.snoozedUntilISO > nowISO) return false;
-      if (userId && r.userId && r.userId !== userId) return false;
-      return true;
-    }).length;
-  },
+  handler: (ctx, args) => notificationsUnreadCount(toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -83,37 +53,19 @@ export const create = mutation({
     linkHref: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args): Promise<Id<"notifications">> => {
-    return await ctx.db.insert("notifications", {
-      ...args,
-      createdAtISO: new Date().toISOString(),
-    });
-  },
+  handler: (ctx, args) => notificationCreate(toPortableMutationCtx(ctx), args),
 });
 
 export const markRead = mutation({
   args: { id: v.id("notifications") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.patch(id, { readAt: new Date().toISOString() });
-  },
+  handler: (ctx, args) => notificationMarkRead(toPortableMutationCtx(ctx), args),
 });
 
 export const markAllRead = mutation({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { societyId, userId }) => {
-    const rows = await ctx.db
-      .query("notifications")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const now = new Date().toISOString();
-    for (const r of rows) {
-      if (r.readAt) continue;
-      if (userId && r.userId && r.userId !== userId) continue;
-      await ctx.db.patch(r._id, { readAt: now });
-    }
-  },
+  handler: (ctx, args) => notificationMarkAllRead(toPortableMutationCtx(ctx), args),
 });
 
 /** Clear a single notification from the bell. Stamps dismissedAt (and readAt
@@ -122,14 +74,7 @@ export const markAllRead = mutation({
 export const dismiss = mutation({
   args: { id: v.id("notifications") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const now = new Date().toISOString();
-    const existing = await ctx.db.get(id);
-    await ctx.db.patch(id, {
-      dismissedAt: now,
-      readAt: existing?.readAt ?? now,
-    });
-  },
+  handler: (ctx, args) => notificationDismiss(toPortableMutationCtx(ctx), args),
 });
 
 /** Hide a notification from the bell until `untilISO` (null un-snoozes it). The
@@ -137,27 +82,14 @@ export const dismiss = mutation({
 export const snooze = mutation({
   args: { id: v.id("notifications"), untilISO: v.union(v.string(), v.null()) },
   returns: v.any(),
-  handler: async (ctx, { id, untilISO }) => {
-    await ctx.db.patch(id, { snoozedUntilISO: untilISO ?? undefined });
-  },
+  handler: (ctx, args) => notificationSnooze(toPortableMutationCtx(ctx), args),
 });
 
 /** Clear every (non-dismissed) notification for this user/society from the bell. */
 export const dismissAll = mutation({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { societyId, userId }) => {
-    const rows = await ctx.db
-      .query("notifications")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const now = new Date().toISOString();
-    for (const r of rows) {
-      if (r.dismissedAt) continue;
-      if (userId && r.userId && r.userId !== userId) continue;
-      await ctx.db.patch(r._id, { dismissedAt: now, readAt: r.readAt ?? now });
-    }
-  },
+  handler: (ctx, args) => notificationDismissAll(toPortableMutationCtx(ctx), args),
 });
 
 /** Permanently delete a single notification now, without waiting for the
@@ -166,29 +98,14 @@ export const dismissAll = mutation({
 export const remove = mutation({
   args: { id: v.id("notifications") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
-  },
+  handler: (ctx, args) => notificationRemove(toPortableMutationCtx(ctx), args),
 });
 
 /** Permanently delete every dismissed notification for this user/society now. */
 export const removeAllDismissed = mutation({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { societyId, userId }) => {
-    const rows = await ctx.db
-      .query("notifications")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    let removed = 0;
-    for (const r of rows) {
-      if (!r.dismissedAt) continue;
-      if (userId && r.userId && r.userId !== userId) continue;
-      await ctx.db.delete(r._id);
-      removed++;
-    }
-    return { removed };
-  },
+  handler: (ctx, args) => notificationRemoveAllDismissed(toPortableMutationCtx(ctx), args),
 });
 
 /** Default retention window (days) when a society hasn't set its own. Mirrored
@@ -232,11 +149,7 @@ export const purgeDismissed = internalMutation({
 export const listPrefs = query({
   args: { userId: v.id("users") },
   returns: v.any(),
-  handler: async (ctx, { userId }) =>
-    ctx.db
-      .query("notificationPrefs")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect(),
+  handler: (ctx, args) => notificationsListPrefs(toPortableQueryCtx(ctx), args),
 });
 
 export const upsertPref = mutation({
@@ -247,20 +160,7 @@ export const upsertPref = mutation({
     enabled: v.boolean(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("notificationPrefs")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-    const match = existing.find(
-      (p) => p.channel === args.channel && p.kind === args.kind,
-    );
-    if (match) {
-      await ctx.db.patch(match._id, { enabled: args.enabled });
-      return match._id;
-    }
-    return await ctx.db.insert("notificationPrefs", args);
-  },
+  handler: (ctx, args) => notificationUpsertPref(toPortableMutationCtx(ctx), args),
 });
 
 // Cron: scan upcoming deadlines and filings, raise notifications for anything
@@ -487,6 +387,10 @@ export const sendDigest = action({
     ]);
     if (notifications.length === 0) return { emailsSent: 0, smsSent: 0 };
 
+    // Reach delivery providers through the injected capability bag instead of
+    // importing them directly. A runtime without email/sms wired gets a
+    // structured CAPABILITY_UNAVAILABLE rather than a silent send.
+    const capabilities = buildConvexCapabilities();
     let emailsSent = 0;
     let smsSent = 0;
     for (const u of users) {
@@ -499,7 +403,7 @@ export const sendDigest = action({
           .slice(0, 10)
           .map((n: any) => `• [${n.severity.toUpperCase()}] ${n.title}`)
           .join("\n");
-        await sendEmail({
+        await capabilities.email.sendEmail({
           to: u.email,
           subject: `Societyer digest — ${emailItems.length} open item${emailItems.length === 1 ? "" : "s"}`,
           text: `Hi ${u.displayName},\n\n${lines}\n\nOpen Societyer to review.`,
@@ -513,7 +417,7 @@ export const sendDigest = action({
       const smsItems = notifications.filter((n: any) => digestAllows(prefs, "sms", n.kind));
       if (smsOptedIn && u.phone && smsItems.length > 0) {
         const top = smsItems.slice(0, 3).map((n: any) => n.title).join("; ");
-        await sendSms({
+        await capabilities.sms.sendSms({
           to: u.phone,
           body: `Societyer: ${smsItems.length} open item${smsItems.length === 1 ? "" : "s"}. ${top}`,
           tag: "digest",

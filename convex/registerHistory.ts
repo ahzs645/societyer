@@ -1,10 +1,12 @@
 import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
-import { roleHoldersAsOf, activeAsOf, type IntervalRow } from "../shared/registerHistory";
 import {
-  deriveSignificanceStatus,
-  type SignificantIndividual,
-} from "../shared/significantIndividuals";
+  roleHoldersAsOfDatePortable,
+  addressesAsOfPortable,
+  directorsAsOfPortable,
+  significantIndividualsAsOfPortable,
+} from "../shared/functions/registerHistory";
+import { toPortableQueryCtx } from "./lib/portable";
 
 /**
  * Point-in-time register queries (the YCN bitemporal-register idea), built on
@@ -23,13 +25,7 @@ export const roleHoldersAsOfDate = query({
     roleType: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, { societyId, asOf, roleType }) => {
-    const rows = await ctx.db
-      .query("roleHolders")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    return roleHoldersAsOf(rows as IntervalRow[], asOf, roleType);
-  },
+  handler: (ctx, args) => roleHoldersAsOfDatePortable(toPortableQueryCtx(ctx), args),
 });
 
 /**
@@ -40,30 +36,14 @@ export const roleHoldersAsOfDate = query({
 export const addressesAsOf = query({
   args: { societyId: v.id("societies"), asOf: v.string(), type: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, asOf, type }) => {
-    const rows = await ctx.db
-      .query("organizationAddresses")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const filtered = type ? rows.filter((r) => r.type === type) : rows;
-    return activeAsOf(filtered as IntervalRow[], asOf, {
-      start: "effectiveFrom",
-      end: "effectiveTo",
-    });
-  },
+  handler: (ctx, args) => addressesAsOfPortable(toPortableQueryCtx(ctx), args),
 });
 
 /** Directors who held office on a specific ISO date ("who were the directors on X?"). */
 export const directorsAsOf = query({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
-  handler: async (ctx, { societyId, asOf }) => {
-    const rows = await ctx.db
-      .query("roleHolders")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    return roleHoldersAsOf(rows as IntervalRow[], asOf, "director");
-  },
+  handler: (ctx, args) => directorsAsOfPortable(toPortableQueryCtx(ctx), args),
 });
 
 /**
@@ -75,25 +55,5 @@ export const directorsAsOf = query({
 export const significantIndividualsAsOf = query({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
-  handler: async (ctx, { societyId, asOf }) => {
-    const rows = await ctx.db
-      .query("roleHolders")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    return rows
-      .filter((row) => row.roleType === "controller")
-      .map((row) => {
-        const si: SignificantIndividual = {
-          name: String(row.fullName ?? ""),
-          dateOfBirth: row.dateOfBirth ?? undefined,
-          becameSignificantOn: String(row.startDate ?? row.referenceDate ?? ""),
-          ceasedSignificantOn: row.endDate ?? null,
-          reason: String(row.significanceReason ?? row.notes ?? ""),
-        };
-        const status = si.becameSignificantOn
-          ? deriveSignificanceStatus(si, asOf)
-          : "current";
-        return { ...si, status, roleHolderId: row._id };
-      });
-  },
+  handler: (ctx, args) => significantIndividualsAsOfPortable(toPortableQueryCtx(ctx), args),
 });
