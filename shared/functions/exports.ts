@@ -7,12 +7,13 @@
  * payloads. Each handler runs unchanged on hosted Convex, the local Dexie
  * runtime, and the convex-test oracle.
  *
- * `exportAttachmentPage` stays on Convex: it resolves storage download URLs via
- * ctx.storage / the storage provider, which are not part of the portable db
- * contract.
+ * `exportAttachmentPage` resolves storage download URLs: a `local`/`rustfs`/
+ * `demo` provider key through the portable signer (or the local generated-docs
+ * endpoint), a Convex `_storage` id through the injected `ctx.capabilities.storage`.
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { createDownloadUrl } from "../storage/signedUrl";
 
 const EXPORT_VERSION = 2;
 
@@ -270,6 +271,78 @@ export async function countTablePagePortable(
     isDone: result.isDone,
     continueCursor: result.continueCursor,
   };
+}
+
+export async function exportAttachmentPagePortable(
+  ctx: PortableQueryCtx,
+  { societyId, source, paginationOpts }: { societyId: string; source: "documents" | "documentVersions"; paginationOpts: any },
+) {
+  const society = await ctx.db.get(societyId);
+  if (!society) throw new Error("Society not found.");
+
+  if (source === "documentVersions") {
+    const page = await ctx.db
+      .query("documentVersions")
+      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+      .paginate(paginationOpts);
+    const attachments = await Promise.all(
+      page.page.map(async (row: any) => ({
+        source: "documentVersions",
+        id: row._id,
+        documentId: row.documentId,
+        version: row.version,
+        storageProvider: row.storageProvider,
+        storageKey: row.storageKey,
+        fileName: row.fileName,
+        mimeType: row.mimeType,
+        fileSizeBytes: row.fileSizeBytes,
+        sha256: row.sha256,
+        downloadUrl: await downloadUrlForVersion(row),
+      })),
+    );
+    return { ...page, page: attachments };
+  }
+
+  const page = await ctx.db
+    .query("documents")
+    .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+    .paginate(paginationOpts);
+  const attachments = await Promise.all(
+    page.page
+      .filter((row: any) => row.storageId || row.url)
+      .map(async (row: any) => ({
+        source: "documents",
+        id: row._id,
+        documentId: row._id,
+        title: row.title,
+        category: row.category,
+        storageProvider: row.storageId ? "convex" : "externalUrl",
+        storageId: row.storageId ? String(row.storageId) : undefined,
+        fileName: row.fileName,
+        mimeType: row.mimeType,
+        fileSizeBytes: row.fileSizeBytes,
+        externalUrl: row.url,
+        downloadUrl: row.storageId ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(row.storageId) })).url : row.url,
+      })),
+  );
+  return { ...page, page: attachments };
+}
+
+async function downloadUrlForVersion(row: any) {
+  if (row.storageProvider === "local") {
+    const base =
+      (globalThis as any)?.process?.env?.SOCIETYER_API_PUBLIC_URL ??
+      (globalThis as any)?.process?.env?.BETTER_AUTH_BASE_URL?.replace(/\/$/, "").replace(/:5173$/, ":8787") ??
+      "http://127.0.0.1:8787";
+    return `${base.replace(/\/$/, "")}/api/v1/workflow-generated-documents/${encodeURIComponent(row.storageKey)}`;
+  }
+  if (row.storageProvider === "rustfs" || row.storageProvider === "demo") {
+    return await createDownloadUrl({
+      provider: row.storageProvider,
+      key: row.storageKey,
+    });
+  }
+  return null;
 }
 
 export async function exportWorkspacePortable(

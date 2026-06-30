@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import {
+  listPortable,
+  bundlePortable,
   getPortable,
   resolveScanPortable,
   receiptLinksPortable,
@@ -22,6 +24,7 @@ import {
   removePortable,
 } from "../shared/functions/assets";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import { buildConvexCapabilities } from "./providers/capabilities";
 
 const assetPatch = v.object({
   assetTag: v.optional(v.string()),
@@ -103,18 +106,7 @@ const eventInput = v.object({
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => {
-    const rows = await ctx.db
-      .query("assets")
-      .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-      .collect();
-    return Promise.all(
-      rows.map(async (row: any) => ({
-        ...row,
-        imageUrl: row.imageStorageId ? (await ctx.storage.getUrl(row.imageStorageId)) ?? row.imageUrl : row.imageUrl,
-      })),
-    );
-  },
+  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const get = query({
@@ -135,29 +127,7 @@ export const resolveScan = query({
 export const bundle = query({
   args: { id: v.id("assets") },
   returns: v.any(),
-  handler: async (ctx, { id }) => {
-    const asset = await ctx.db.get(id);
-    if (!asset) return null;
-    if (asset.imageStorageId) {
-      asset.imageUrl = (await ctx.storage.getUrl(asset.imageStorageId)) ?? asset.imageUrl;
-    }
-    const [events, maintenance, receiptLinks] = await Promise.all([
-      ctx.db
-        .query("assetEvents")
-        .withIndex("by_asset_happened", (q: any) => q.eq("assetId", id))
-        .order("desc")
-        .collect(),
-      ctx.db
-        .query("assetMaintenance")
-        .withIndex("by_asset", (q: any) => q.eq("assetId", id))
-        .collect(),
-      ctx.db
-        .query("assetReceiptLinks")
-        .withIndex("by_asset", (q: any) => q.eq("assetId", id))
-        .collect(),
-    ]);
-    return { asset, events, maintenance, receiptLinks };
-  },
+  handler: (ctx, args) => bundlePortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const receiptLinks = query({

@@ -69,7 +69,9 @@ function parseDelegations(source) {
     nextRe.lastIndex = re.lastIndex;
     const next = nextRe.exec(source);
     const block = source.slice(start, next ? next.index : source.length);
-    const deleg = block.match(/=>\s*(\w+)\(\s*toPortable(?:Query|Mutation)Ctx\(ctx\)/);
+    // Matches both `=> fn(toPortableQueryCtx(ctx), args)` and the capability form
+    // `=> fn(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args)`.
+    const deleg = block.match(/=>\s*(\w+)\(\s*toPortable(?:Query|Mutation)Ctx\(ctx[,)]/);
     if (deleg) {
       out.push({ exportName, kind, fn: deleg[1] });
     }

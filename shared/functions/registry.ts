@@ -136,6 +136,8 @@ import * as legalRecordsFns from "./legalRecords";
 import * as legalDocumentsFns from "./legalDocuments";
 import * as seedRecordTableMetadataFns from "./seedRecordTableMetadata";
 
+import * as filesFns from "./files";
+
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }),
   definePortableMutation({ name: "legalOperations:upsertRightsClass", handler: upsertRightsClassPortable }),
@@ -1186,6 +1188,29 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "legalOperations:stageShareSplitPacket", handler: legalDocumentsFns.stageShareSplitPacketPortable }),
   definePortableMutation({ name: "legalOperations:upsertTemplateDataField", handler: legalDocumentsFns.upsertTemplateDataFieldPortable }),
   definePortableMutation({ name: "legalOperations:removeTemplateDataField", handler: legalDocumentsFns.removeTemplateDataFieldPortable }),
+
+
+  // files
+  definePortableQuery({ name: "files:getUrl", handler: filesFns.getUrlPortable }),
+
+  // assets
+  definePortableQuery({ name: "assets:list", handler: assetsFns.listPortable }),
+  definePortableQuery({ name: "assets:bundle", handler: assetsFns.bundlePortable }),
+
+  // inventoryHub
+  definePortableQuery({ name: "inventoryHub:items", handler: inventoryHubFns.itemsPortable }),
+
+  // transparency
+  definePortableQuery({ name: "transparency:publicCenter", handler: transparencyFns.publicCenterPortable }),
+
+  // partyPortals
+  definePortableQuery({ name: "partyPortals:center", handler: partyPortalsFns.centerPortable }),
+
+  // meetingMaterials
+  definePortableQuery({ name: "meetingMaterials:packageForMeeting", handler: meetingMaterialsFns.packageForMeetingPortable }),
+
+  // exports
+  definePortableQuery({ name: "exports:exportAttachmentPage", handler: exportsFns.exportAttachmentPagePortable }),
 
 ];
 

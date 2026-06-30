@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import {
   connectionsPortable,
+  itemsPortable,
   locationsPortable,
   balancesPortable,
   lotsPortable,
@@ -34,6 +35,7 @@ import {
   backfillAssetsPortable,
 } from "../shared/functions/inventoryHub";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import { buildConvexCapabilities } from "./providers/capabilities";
 
 export const connections = query({
   args: { societyId: v.id("societies") },
@@ -41,28 +43,11 @@ export const connections = query({
   handler: (ctx, args) => connectionsPortable(toPortableQueryCtx(ctx), args),
 });
 
-// Stays on Convex: depends on ctx.storage.getUrl to resolve image URLs.
+// Resolves item image blob URLs through the injected storage capability.
 export const items = query({
   args: { societyId: v.id("societies"), itemType: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, { societyId, itemType }) => {
-    const rows = await (itemType
-      ? ctx.db
-          .query("inventoryItems")
-          .withIndex("by_society_type", (q: any) => q.eq("societyId", societyId).eq("itemType", itemType))
-          .collect()
-      : ctx.db
-          .query("inventoryItems")
-          .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-          .collect());
-    const sorted = rows.sort((a: any, b: any) => a.name.localeCompare(b.name));
-    return Promise.all(
-      sorted.map(async (row: any) => ({
-        ...row,
-        imageUrl: row.imageStorageId ? (await ctx.storage.getUrl(row.imageStorageId)) ?? row.imageUrl : row.imageUrl,
-      })),
-    );
-  },
+  handler: (ctx, args) => itemsPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const locations = query({

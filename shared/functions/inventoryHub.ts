@@ -6,8 +6,9 @@
  * `ctx.db`. Each handler runs unchanged on hosted Convex, the local Dexie
  * runtime, and the convex-test oracle.
  *
- * NOTE: the `items` query is NOT here — it depends on `ctx.storage.getUrl` and
- * stays on Convex.
+ * The `items` query resolves item image blob URLs through the injected
+ * `ctx.capabilities.storage` (Convex `_storage` on hosted Convex; an inline/null
+ * resolver on the local runtime).
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
@@ -168,6 +169,28 @@ export async function connectionsPortable(
     .query("inventoryConnections")
     .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
     .collect();
+}
+
+export async function itemsPortable(
+  ctx: PortableQueryCtx,
+  { societyId, itemType }: { societyId: string; itemType?: string },
+) {
+  const rows = await (itemType
+    ? ctx.db
+        .query("inventoryItems")
+        .withIndex("by_society_type", (q: any) => q.eq("societyId", societyId).eq("itemType", itemType))
+        .collect()
+    : ctx.db
+        .query("inventoryItems")
+        .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+        .collect());
+  const sorted = rows.sort((a: any, b: any) => a.name.localeCompare(b.name));
+  return Promise.all(
+    sorted.map(async (row: any) => ({
+      ...row,
+      imageUrl: row.imageStorageId ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(row.imageStorageId) })).url ?? row.imageUrl : row.imageUrl,
+    })),
+  );
 }
 
 export async function locationsPortable(

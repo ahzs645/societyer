@@ -1738,24 +1738,6 @@ function queryCasesActivity1(name: string, args: StaticArgs, store?: StaticDemoD
       });
       return { role: "Owner", categories: Object.keys(catalog), catalog, tools: aiToolCatalog };
     }
-    case "assets:bundle": {
-      const asset = store?.getRow("assets", args?.id) ?? byId(tables.assets, args?.id);
-      if (!asset) return null;
-      return {
-        asset,
-        events: (store?.listRows("assetEvents", { societyId: asset.societyId }) ?? tables.assetEvents)
-          .filter((row: any) => row.assetId === asset._id)
-          .sort((a: any, b: any) => b.happenedAtISO.localeCompare(a.happenedAtISO)),
-        maintenance: (store?.listRows("assetMaintenance", { societyId: asset.societyId }) ?? tables.assetMaintenance)
-          .filter((row: any) => row.assetId === asset._id),
-        receiptLinks: (store?.listRows("assetReceiptLinks", { societyId: asset.societyId }) ?? tables.assetReceiptLinks)
-          .filter((row: any) => row.assetId === asset._id),
-      };
-    }
-    case "inventoryHub:items": {
-      const rows = store?.listRows("inventoryItems", args) ?? scopedRows(tables.inventoryItems, args);
-      return args?.itemType ? rows.filter((row: any) => row.itemType === args.itemType) : rows;
-    }
   }
   return QUERY_NOT_HANDLED;
 }
@@ -1855,16 +1837,12 @@ function queryCasesFinancialHub6(name: string, args: StaticArgs, store?: StaticD
 
 function queryCasesMembers7(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   switch (name) {
-    case "meetingMaterials:packageForMeeting":
-      return staticMeetingPackage(args);
   }
   return QUERY_NOT_HANDLED;
 }
 
 function queryCasesTransparency8(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   switch (name) {
-    case "transparency:publicCenter":
-      return publicCenter(args);
     case "permissions:myPermissions": {
       const permUser = store?.getRow("users", args?.userId) ?? byId(users, args?.userId) ?? users[0];
       return { role: permUser?.role ?? "Owner", permissions: staticPermissionsForRole(permUser?.role ?? "Owner") };

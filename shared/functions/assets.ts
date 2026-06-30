@@ -1,9 +1,10 @@
 /**
  * PORTABLE FUNCTIONS: the assets domain (fixed-asset & consumable register).
  *
- * Only the pure-`ctx.db` query/mutation handlers live here. Handlers that touch
- * `ctx.storage` (image URLs) stay on Convex. Each handler below runs unchanged
- * on hosted Convex, the local Dexie runtime, and the convex-test oracle.
+ * The `ctx.db`-only handlers plus the image-resolving reads (`list`/`bundle`),
+ * which resolve asset image blob URLs through the injected
+ * `ctx.capabilities.storage`. Each handler below runs unchanged on hosted
+ * Convex, the local Dexie runtime, and the convex-test oracle.
  *
  * Reads/writes the asset register tables plus the inventory mirror tables over
  * `ctx.db`.
@@ -128,8 +129,45 @@ async function recordConsumableStockMovement(
 
 /* ----------------------------- Queries ----------------------------- */
 
+export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  const rows = await ctx.db
+    .query("assets")
+    .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+    .collect();
+  return Promise.all(
+    rows.map(async (row: any) => ({
+      ...row,
+      imageUrl: row.imageStorageId ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(row.imageStorageId) })).url ?? row.imageUrl : row.imageUrl,
+    })),
+  );
+}
+
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
   return ctx.db.get(id);
+}
+
+export async function bundlePortable(ctx: PortableQueryCtx, { id }: { id: string }) {
+  const asset = await ctx.db.get(id);
+  if (!asset) return null;
+  if (asset.imageStorageId) {
+    asset.imageUrl = (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(asset.imageStorageId) })).url ?? asset.imageUrl;
+  }
+  const [events, maintenance, receiptLinks] = await Promise.all([
+    ctx.db
+      .query("assetEvents")
+      .withIndex("by_asset_happened", (q: any) => q.eq("assetId", id))
+      .order("desc")
+      .collect(),
+    ctx.db
+      .query("assetMaintenance")
+      .withIndex("by_asset", (q: any) => q.eq("assetId", id))
+      .collect(),
+    ctx.db
+      .query("assetReceiptLinks")
+      .withIndex("by_asset", (q: any) => q.eq("assetId", id))
+      .collect(),
+  ]);
+  return { asset, events, maintenance, receiptLinks };
 }
 
 // Resolve a scanned code to an asset. QR/2D labels encode the asset page URL

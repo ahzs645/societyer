@@ -9,8 +9,9 @@
  * runs unchanged on hosted Convex, the local Dexie runtime, and the convex-test
  * oracle.
  *
- * Server-only handlers stay on Convex (convex/meetingMaterials.ts):
- *   - packageForMeeting (query; ctx.storage.getUrl for download URLs)
+ * `packageForMeeting` resolves each material's document download URL through the
+ * injected `ctx.capabilities.storage`; its agenda + material-summary helpers are
+ * portable copies of `convex/lib/agendaItems.ts` and the material-access lib.
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
@@ -58,6 +59,24 @@ function isMaterialExpired(material: any, nowMs = Date.now()) {
   if (!material?.expiresAtISO) return false;
   const expires = new Date(material.expiresAtISO).getTime();
   return Number.isFinite(expires) && expires < nowMs;
+}
+
+function materialNeedsAttention(material: any, nowMs = Date.now()) {
+  const status = materialEffectiveStatus(material, nowMs);
+  return status === "pending" || status === "expired" || status === "withdrawn";
+}
+
+function summarizeMeetingMaterials(materials: any[], nowMs = Date.now()) {
+  const total = materials.length;
+  const ready = materials.filter((material) => !materialNeedsAttention(material, nowMs)).length;
+  return {
+    total,
+    ready,
+    needsAttention: total - ready,
+    expired: materials.filter((material) => materialEffectiveStatus(material, nowMs) === "expired").length,
+    restricted: materials.filter((material) => material.accessLevel === "restricted").length,
+    withExplicitGrants: materials.filter((material) => (material.accessGrants ?? []).length > 0).length,
+  };
 }
 
 function canAccessMeetingMaterial(
@@ -178,6 +197,36 @@ function normalizeDocLabel(value: string) {
     .replace(/\s+/g, " ");
 }
 
+// --- Portable copy of convex/lib/agendaItems.ts (ctx.db-only) ----------------
+
+type AgendaEntry = { title: string; depth: 0 | 1 };
+
+async function readMeetingAgendaItems(ctx: PortableQueryCtx, meetingId: string): Promise<any[]> {
+  const agendas = await ctx.db
+    .query("agendas")
+    .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
+    .collect();
+  agendas.sort((a: any, b: any) => a.createdAtISO.localeCompare(b.createdAtISO));
+  const agenda = agendas[0];
+  if (!agenda) return [];
+  const items = await ctx.db
+    .query("agendaItems")
+    .withIndex("by_agenda", (q) => q.eq("agendaId", agenda._id))
+    .collect();
+  items.sort((a: any, b: any) => a.order - b.order);
+  return items;
+}
+
+async function readMeetingAgendaEntries(ctx: PortableQueryCtx, meetingId: string): Promise<AgendaEntry[]> {
+  const items = await readMeetingAgendaItems(ctx, meetingId);
+  return items
+    .map((item: any) => ({
+      title: String(item.title ?? "").trim(),
+      depth: item.depth === 1 ? (1 as const) : (0 as const),
+    }))
+    .filter((entry: AgendaEntry) => entry.title);
+}
+
 // ----- queries --------------------------------------------------------------
 
 export async function listForMeetingPortable(
@@ -201,6 +250,70 @@ export async function listForMeetingPortable(
     })),
   );
   return rows.sort((a: any, b: any) => a.order - b.order || String(a.createdAtISO).localeCompare(String(b.createdAtISO)));
+}
+
+export async function packageForMeetingPortable(
+  ctx: PortableQueryCtx,
+  { meetingId, actingUserId }: { meetingId: string; actingUserId?: string },
+) {
+  const meeting = await ctx.db.get(meetingId);
+  if (!meeting) return null;
+
+  const [materials, minutes, tasks] = await Promise.all([
+    ctx.db
+      .query("meetingMaterials")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
+      .collect(),
+    ctx.db
+      .query("minutes")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
+      .first(),
+    ctx.db
+      .query("tasks")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
+      .collect(),
+  ]);
+  const accessContext = await documentAccessContextForActor(ctx, meeting.societyId, actingUserId);
+  const visibleMaterials = accessContext
+    ? materials.filter((material) => canAccessMeetingMaterial(material, accessContext))
+    : materials;
+
+  const materialRows = await Promise.all(
+    visibleMaterials.map(async (material) => {
+      const document = await ctx.db.get(material.documentId);
+      const downloadUrl = document?.storageId
+        ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(document.storageId) })).url
+        : null;
+      return {
+        ...material,
+        document: document ? { ...document, downloadUrl } : document,
+      };
+    }),
+  );
+
+  const agenda = (await readMeetingAgendaEntries(ctx, meetingId)).map((entry) => entry.title);
+  const visibleMaterialSummary = summarizeMeetingMaterials(visibleMaterials);
+  return {
+    meeting,
+    minutes,
+    agenda,
+      materials: materialRows
+      .filter((row: any) => row.document)
+      .sort((a: any, b: any) => a.order - b.order || String(a.createdAtISO).localeCompare(String(b.createdAtISO))),
+    tasks: tasks.sort((a, b) => String(a.dueDate ?? "").localeCompare(String(b.dueDate ?? ""))),
+    counts: {
+      agendaItems: agenda.length,
+      materials: materials.length,
+      visibleMaterials: visibleMaterials.length,
+      requiredMaterials: visibleMaterials.filter((row) => row.requiredForMeeting).length,
+      readyMaterials: visibleMaterialSummary.ready,
+      attentionMaterials: visibleMaterialSummary.needsAttention,
+      expiredMaterials: visibleMaterialSummary.expired,
+      restrictedMaterials: visibleMaterialSummary.restricted,
+      explicitGrantMaterials: visibleMaterialSummary.withExplicitGrants,
+      openTasks: tasks.filter((task) => task.status !== "Done").length,
+    },
+  };
 }
 
 export async function listForSocietyPortable(

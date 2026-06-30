@@ -1,19 +1,15 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
-  canAccessMeetingMaterial,
-  summarizeMeetingMaterials,
-} from "./lib/access/materialAccess";
-import { documentAccessContextForActor } from "./lib/access/documentAccess";
-import { readMeetingAgendaEntries } from "./lib/agendaItems";
-import {
   listForMeetingPortable,
   listForSocietyPortable,
+  packageForMeetingPortable,
   attachPortable,
   setAvailabilityPortable,
   removePortable,
 } from "../shared/functions/meetingMaterials";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import { buildConvexCapabilities } from "./providers/capabilities";
 
 const accessGrantValidator = v.object({
   subjectType: v.string(),
@@ -32,66 +28,7 @@ export const listForMeeting = query({
 export const packageForMeeting = query({
   args: { meetingId: v.id("meetings"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { meetingId, actingUserId }) => {
-    const meeting = await ctx.db.get(meetingId);
-    if (!meeting) return null;
-
-    const [materials, minutes, tasks] = await Promise.all([
-      ctx.db
-        .query("meetingMaterials")
-        .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-        .collect(),
-      ctx.db
-        .query("minutes")
-        .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-        .first(),
-      ctx.db
-        .query("tasks")
-        .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-        .collect(),
-    ]);
-    const accessContext = await documentAccessContextForActor(ctx, meeting.societyId, actingUserId);
-    const visibleMaterials = accessContext
-      ? materials.filter((material) => canAccessMeetingMaterial(material, accessContext))
-      : materials;
-
-    const materialRows = await Promise.all(
-      visibleMaterials.map(async (material) => {
-        const document = await ctx.db.get(material.documentId);
-        const downloadUrl = document?.storageId
-          ? await ctx.storage.getUrl(document.storageId)
-          : null;
-        return {
-          ...material,
-          document: document ? { ...document, downloadUrl } : document,
-        };
-      }),
-    );
-
-    const agenda = (await readMeetingAgendaEntries(ctx, meetingId)).map((entry) => entry.title);
-    const visibleMaterialSummary = summarizeMeetingMaterials(visibleMaterials);
-    return {
-      meeting,
-      minutes,
-      agenda,
-        materials: materialRows
-        .filter((row) => row.document)
-        .sort((a, b) => a.order - b.order || String(a.createdAtISO).localeCompare(String(b.createdAtISO))),
-      tasks: tasks.sort((a, b) => String(a.dueDate ?? "").localeCompare(String(b.dueDate ?? ""))),
-      counts: {
-        agendaItems: agenda.length,
-        materials: materials.length,
-        visibleMaterials: visibleMaterials.length,
-        requiredMaterials: visibleMaterials.filter((row) => row.requiredForMeeting).length,
-        readyMaterials: visibleMaterialSummary.ready,
-        attentionMaterials: visibleMaterialSummary.needsAttention,
-        expiredMaterials: visibleMaterialSummary.expired,
-        restrictedMaterials: visibleMaterialSummary.restricted,
-        explicitGrantMaterials: visibleMaterialSummary.withExplicitGrants,
-        openTasks: tasks.filter((task) => task.status !== "Done").length,
-      },
-    };
-  },
+  handler: (ctx, args) => packageForMeetingPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const listForSociety = query({
