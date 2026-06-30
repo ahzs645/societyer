@@ -9,6 +9,7 @@ import {
   Filter,
 } from "lucide-react";
 import { FIELD_TYPES, type RecordField, type ViewFilterOperator } from "../../types";
+import { resolveFieldIcon } from "../../record-field/fieldIcons";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 
 /**
@@ -32,6 +33,7 @@ export function RecordTableHeaderCell({
   const [filterValue, setFilterValue] = useState("");
 
   const sort = sorts.find((s) => s.fieldMetadataId === recordField.fieldMetadataId);
+  const FieldIcon = resolveFieldIcon(recordField.field);
   const visibleColumns = columns.filter((column) => column.isVisible);
   const visibleIndex = visibleColumns.findIndex(
     (column) => column.viewFieldId === recordField.viewFieldId,
@@ -162,6 +164,7 @@ export function RecordTableHeaderCell({
         onClick={cycleSort}
         type="button"
       >
+        <FieldIcon size={13} className="record-table__header-cell-icon" aria-hidden="true" />
         <span className="record-table__header-cell-label">{recordField.field.label}</span>
         {sort?.direction === "asc" && <ArrowUp size={11} />}
         {sort?.direction === "desc" && <ArrowDown size={11} />}

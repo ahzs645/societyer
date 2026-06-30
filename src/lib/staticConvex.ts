@@ -1809,6 +1809,18 @@ export class StaticConvexClient {
   // portable handler (shared/functions/*) against the Dexie-backed ctx.db,
   // instead of the hand-written mirror case. See docs/portable-functions-architecture.md.
   private portable: PortableRuntime;
+  // Client-level cache for async portable query results. convex/react re-creates
+  // a Watch on every render and only subscribes to the committed one, so a result
+  // stored in a per-watch closure is thrown away before it reaches the component
+  // (sync mirror queries don't hit this because they return data synchronously).
+  // Caching by query+args here lets any freshly-created watch read the resolved
+  // value synchronously, and `portableListeners` re-renders subscribers on resolve.
+  private portableCache = new Map<string, unknown>();
+  private portableListeners = new Set<() => void>();
+
+  private emitPortable() {
+    for (const listener of this.portableListeners) listener();
+  }
 
   constructor(options?: { databaseName?: string; seed?: StaticDemoSeed; url?: string }) {
     this.store = new StaticDemoDexieStore(options?.seed ?? STATIC_DEMO_SEED, options);
@@ -1820,6 +1832,26 @@ export class StaticConvexClient {
       // buildLocalCapabilities is the seam where native Electron capabilities wire in.
       capabilities: buildLocalCapabilities(),
     }).registerAll(PORTABLE_FUNCTIONS);
+    // Seed the Twenty-style record-table metadata for the demo society up front,
+    // so RecordTable pages (members, assets, …) render immediately instead of
+    // showing the "Metadata not seeded" empty state on first visit. Idempotent.
+    void this.ensureRecordTableMetadata();
+  }
+
+  /** Fire-and-forget metadata seed for every society in the demo store. */
+  private async ensureRecordTableMetadata() {
+    try {
+      const societies = this.store.listRows("societies") ?? [];
+      for (const society of societies as any[]) {
+        await this.portable.runMutation("seedRecordTableMetadata:ensureForSociety", {
+          societyId: society._id,
+          objects: RECORD_TABLE_OBJECTS,
+        });
+      }
+      this.emitPortable();
+    } catch (error) {
+      console.warn("[societyer-local] metadata auto-seed failed", error);
+    }
   }
 
   get url() {
@@ -1848,21 +1880,16 @@ export class StaticConvexClient {
   private watchPortableQuery(name: string, args?: StaticArgs) {
     const store = this.store;
     const portable = this.portable;
-    let asyncResult: any;
-    let hasAsync = false;
-    let disposed = false;
-    let unsubStore: (() => void) | null = null;
-    const subscribers = new Set<() => void>();
+    const cacheKey = `${name}|${JSON.stringify(args ?? {})}`;
 
     const recompute = () => {
       portable
         .runQuery(name, args ?? {})
         .then((next) => {
-          if (disposed) return;
-          hasAsync = true;
-          if (JSON.stringify(next) !== JSON.stringify(asyncResult)) {
-            asyncResult = next;
-            for (const callback of subscribers) callback();
+          const prev = this.portableCache.get(cacheKey);
+          if (!this.portableCache.has(cacheKey) || JSON.stringify(next) !== JSON.stringify(prev)) {
+            this.portableCache.set(cacheKey, next);
+            this.emitPortable();
           }
         })
         .catch((error) => {
@@ -1873,18 +1900,22 @@ export class StaticConvexClient {
 
     return {
       onUpdate: (callback: () => void) => {
-        subscribers.add(callback);
-        if (!unsubStore) unsubStore = store.onUpdate(() => recompute());
+        this.portableListeners.add(callback);
+        const unsubStore = store.onUpdate(() => recompute());
+        // Re-run on (re)subscribe so a watch attached after the initial resolve
+        // still refreshes the shared cache; the cached value is read
+        // synchronously by localQueryResult regardless of which watch instance
+        // convex/react keeps (it re-creates the Watch on every render).
+        recompute();
         return () => {
-          subscribers.delete(callback);
-          if (subscribers.size === 0 && unsubStore) {
-            unsubStore();
-            unsubStore = null;
-            disposed = true;
-          }
+          this.portableListeners.delete(callback);
+          unsubStore();
         };
       },
-      localQueryResult: () => (hasAsync ? asyncResult : mutableQueryResult(name, args, store)),
+      localQueryResult: () =>
+        this.portableCache.has(cacheKey)
+          ? this.portableCache.get(cacheKey)
+          : mutableQueryResult(name, args, store),
       journal: () => undefined,
     };
   }
@@ -1909,7 +1940,16 @@ export class StaticConvexClient {
 
   mutation(mutation: any, args?: StaticArgs) {
     const name = functionName(mutation);
-    if (this.portable.kind(name) === "mutation") return this.portable.runMutation(name, args ?? {});
+    if (this.portable.kind(name) === "mutation") {
+      // The Convex wrapper for this mutation injects RECORD_TABLE_OBJECTS before
+      // calling the portable handler; the offline runtime has to do the same or
+      // the handler iterates `undefined` ("objects is not iterable").
+      const enriched =
+        name === "seedRecordTableMetadata:ensureForSociety" && !(args as any)?.objects
+          ? { ...(args ?? {}), objects: RECORD_TABLE_OBJECTS }
+          : args ?? {};
+      return this.portable.runMutation(name, enriched);
+    }
     return Promise.resolve(mutationResult(name, args, this.store));
   }
 
