@@ -73,6 +73,9 @@ export interface StorageCapability {
   // reference can't be resolved on this runtime (e.g. a Convex _storage id with
   // no local blob), so read handlers fall back gracefully instead of throwing.
   getDownloadUrl(input: { storageKey: string }): Promise<{ url: string | null }>;
+  // Deletes a stored blob. A no-op where there's no blob backend (e.g. a local
+  // runtime that stores logos inline as data: URLs); native on Electron.
+  delete(input: { storageKey: string }): Promise<void>;
 }
 export interface LlmCapability {
   complete(input: { prompt: string; system?: string; maxTokens?: number }): Promise<{ text: string }>;
@@ -132,6 +135,7 @@ export function makeCapabilities(
       provided.storage ?? {
         createUploadUrl: () => unavailable("storage", reasonFor("storage")),
         getDownloadUrl: () => unavailable("storage", reasonFor("storage")),
+        delete: () => unavailable("storage", reasonFor("storage")),
       },
     llm:
       provided.llm ?? {

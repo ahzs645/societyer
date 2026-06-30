@@ -64,14 +64,6 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "organizationHistory:extractBudgetSourceDetails",
   "organizationHistory:saveItem",
   "organizationHistory:saveSource",
-  // Logo/letterhead writes go through ctx.storage (upload/getUrl/delete), which
-  // is not part of the portable ctx.db contract.
-  "society:clearDarkLogo",
-  "society:clearLetterhead",
-  "society:clearLogo",
-  "society:setDarkLogo",
-  "society:setLetterhead",
-  "society:setLogo",
   // Auth-adjacent: deliberately not ported to the offline mirror yet.
   "users:setRole",
 ]);

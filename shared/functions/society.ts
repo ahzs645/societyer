@@ -38,6 +38,41 @@ export async function getByIdPortable(ctx: PortableQueryCtx, { id }: { id: strin
   return withLogoUrl(ctx, await ctx.db.get(id));
 }
 
+/**
+ * Set or clear a society logo/letterhead field. The record write is pure
+ * `ctx.db`; the only side effect is deleting the previously-stored blob, which
+ * goes through `ctx.capabilities.storage` (Convex `_storage` on hosted Convex; a
+ * no-op locally where logos are stored inline as data: URLs). `storageId` is a
+ * Convex `_storage` id live, or a data: URL on the local runtime.
+ */
+async function setStorageField(ctx: PortableMutationCtx, societyId: string, field: string, storageId?: string) {
+  const society = await ctx.db.get(societyId);
+  if (!society) throw new Error("Society not found.");
+  const previous = society[field];
+  if (previous && previous !== storageId) {
+    try {
+      await ctx.capabilities.storage.delete({ storageKey: String(previous) });
+    } catch {
+      // Old blob may have already been removed; not fatal.
+    }
+  }
+  await ctx.db.patch(societyId, { [field]: storageId, updatedAt: Date.now() });
+  return societyId;
+}
+
+export const setLogoPortable = (ctx: PortableMutationCtx, { societyId, storageId }: { societyId: string; storageId: string }) =>
+  setStorageField(ctx, societyId, "logoStorageId", storageId);
+export const clearLogoPortable = (ctx: PortableMutationCtx, { societyId }: { societyId: string }) =>
+  setStorageField(ctx, societyId, "logoStorageId", undefined);
+export const setDarkLogoPortable = (ctx: PortableMutationCtx, { societyId, storageId }: { societyId: string; storageId: string }) =>
+  setStorageField(ctx, societyId, "logoDarkStorageId", storageId);
+export const clearDarkLogoPortable = (ctx: PortableMutationCtx, { societyId }: { societyId: string }) =>
+  setStorageField(ctx, societyId, "logoDarkStorageId", undefined);
+export const setLetterheadPortable = (ctx: PortableMutationCtx, { societyId, storageId }: { societyId: string; storageId: string }) =>
+  setStorageField(ctx, societyId, "letterheadStorageId", storageId);
+export const clearLetterheadPortable = (ctx: PortableMutationCtx, { societyId }: { societyId: string }) =>
+  setStorageField(ctx, societyId, "letterheadStorageId", undefined);
+
 export async function setLogoInvertInDarkModePortable(
   ctx: PortableMutationCtx,
   { societyId, invert }: { societyId: string; invert: boolean },

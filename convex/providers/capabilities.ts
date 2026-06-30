@@ -27,6 +27,7 @@ type ConvexStorageCtx = {
   storage: {
     getUrl(id: any): Promise<string | null>;
     generateUploadUrl(): Promise<string>;
+    delete(id: any): Promise<void>;
   };
 };
 
@@ -45,6 +46,9 @@ function convexStorageCapability(ctx: ConvexStorageCtx): StorageCapability {
     },
     async getDownloadUrl(input) {
       return { url: await ctx.storage.getUrl(input.storageKey as any) };
+    },
+    async delete(input) {
+      await ctx.storage.delete(input.storageKey as any);
     },
   };
 }
@@ -80,6 +84,10 @@ export function buildConvexCapabilities(ctx?: ConvexStorageCtx): PortableCapabil
             async getDownloadUrl(input) {
               const url = await createDownloadUrl({ provider: providers.storage().id, key: input.storageKey });
               return { url };
+            },
+            async delete() {
+              // The rustfs/demo provider has no delete primitive wired; logo/file
+              // blob deletes always go through the ctx.storage path above.
             },
           },
     },

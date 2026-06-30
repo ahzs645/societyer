@@ -32,7 +32,7 @@ import {
 } from "../shared/portable/index";
 import { votingPowerPortable, summarizeVotingPower } from "../shared/functions/votingPower";
 import { searchPortable } from "../shared/functions/firm";
-import { getPortable as societyGetPortable } from "../shared/functions/society";
+import { getPortable as societyGetPortable, setLogoPortable, clearLogoPortable } from "../shared/functions/society";
 import { buildLocalCapabilities } from "../src/lib/localCapabilities";
 
 // --- deterministic injection so both engines produce byte-identical writes ----
@@ -277,7 +277,16 @@ async function holdingsAndClass(db: TransactionalDb) {
   assert.deepEqual(fromLocal, fromMem, "MemoryDb and LocalStoreDb diverged for society:get");
   assert.equal(fromMem.logoUrl, "data:image/png;base64,AAA", "inline logo resolves via storage capability");
   assert.equal(fromMem.letterheadUrl, undefined, "unresolvable _storage id → undefined (no local blob)");
-  console.log("✓ storage: capability resolves blobs (passthrough/null); society:get MemoryDb == LocalStoreDb");
+
+  // Write side: setLogo persists the field (the old-blob delete is a capability
+  // no-op locally) and clearLogo removes it — offline logo lifecycle, option A.
+  const wdb = new MemoryDb({ seed: { societies: [{ _id: "soc_w", legalName: "W", _creationTime: 1 }] } });
+  const wctx: any = { db: wdb, capabilities: caps, runQuery: async () => undefined, runMutation: async () => undefined };
+  await wdb.transaction(() => setLogoPortable(wctx, { societyId: "soc_w", storageId: "data:image/png;base64,Z" }));
+  assert.equal((await societyGetPortable(wctx, {} as any)).logoUrl, "data:image/png;base64,Z", "setLogo persists + read resolves it");
+  await wdb.transaction(() => clearLogoPortable(wctx, { societyId: "soc_w" }));
+  assert.equal((await societyGetPortable(wctx, {} as any)).logoUrl, undefined, "clearLogo removes the logo");
+  console.log("✓ storage: read passthrough/null + society:get parity + setLogo/clearLogo persist offline");
 }
 
 console.log("\nAll portable-runtime conformance checks passed.");

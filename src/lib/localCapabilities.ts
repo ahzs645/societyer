@@ -30,6 +30,11 @@ function defaultLocalStorage(label: string): StorageCapability {
       const isInlineUrl = /^(data:|blob:|https?:)/.test(String(storageKey ?? ""));
       return { url: isInlineUrl ? String(storageKey) : null };
     },
+    async delete() {
+      // Logos are stored inline (data: URLs) locally, so there is no separate
+      // blob to delete — the record patch alone clears them. Electron overrides
+      // this capability with a native-filesystem delete via `provided`.
+    },
   };
 }
 

@@ -16,6 +16,12 @@ import {
   getPortable,
   listPortable,
   getByIdPortable,
+  setLogoPortable,
+  clearLogoPortable,
+  setDarkLogoPortable,
+  clearDarkLogoPortable,
+  setLetterheadPortable,
+  clearLetterheadPortable,
 } from "../shared/functions/society";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { buildConvexCapabilities } from "./providers/capabilities";
@@ -38,121 +44,42 @@ export const getById = query({
   handler: (ctx, args) => getByIdPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
+const withStorageCaps = (ctx) => toPortableMutationCtx(ctx, buildConvexCapabilities(ctx));
+
 export const setLogo = mutation({
-  args: {
-    societyId: v.id("societies"),
-    storageId: v.id("_storage"),
-  },
+  args: { societyId: v.id("societies"), storageId: v.id("_storage") },
   returns: v.id("societies"),
-  handler: async (ctx, { societyId, storageId }) => {
-    const society = await ctx.db.get(societyId);
-    if (!society) throw new Error("Society not found.");
-    if (society.logoStorageId && society.logoStorageId !== storageId) {
-      try {
-        await ctx.storage.delete(society.logoStorageId);
-      } catch {
-        // Old blob may have already been removed; not fatal.
-      }
-    }
-    await ctx.db.patch(societyId, { logoStorageId: storageId, updatedAt: Date.now() });
-    return societyId;
-  },
+  handler: (ctx, args) => setLogoPortable(withStorageCaps(ctx), args),
 });
 
 export const clearLogo = mutation({
   args: { societyId: v.id("societies") },
   returns: v.id("societies"),
-  handler: async (ctx, { societyId }) => {
-    const society = await ctx.db.get(societyId);
-    if (!society) throw new Error("Society not found.");
-    if (society.logoStorageId) {
-      try {
-        await ctx.storage.delete(society.logoStorageId);
-      } catch {
-        // Already gone — no-op.
-      }
-    }
-    await ctx.db.patch(societyId, { logoStorageId: undefined, updatedAt: Date.now() });
-    return societyId;
-  },
+  handler: (ctx, args) => clearLogoPortable(withStorageCaps(ctx), args),
 });
 
 export const setDarkLogo = mutation({
-  args: {
-    societyId: v.id("societies"),
-    storageId: v.id("_storage"),
-  },
+  args: { societyId: v.id("societies"), storageId: v.id("_storage") },
   returns: v.id("societies"),
-  handler: async (ctx, { societyId, storageId }) => {
-    const society = await ctx.db.get(societyId);
-    if (!society) throw new Error("Society not found.");
-    if (society.logoDarkStorageId && society.logoDarkStorageId !== storageId) {
-      try {
-        await ctx.storage.delete(society.logoDarkStorageId);
-      } catch {
-        // Already gone — no-op.
-      }
-    }
-    await ctx.db.patch(societyId, { logoDarkStorageId: storageId, updatedAt: Date.now() });
-    return societyId;
-  },
+  handler: (ctx, args) => setDarkLogoPortable(withStorageCaps(ctx), args),
 });
 
 export const clearDarkLogo = mutation({
   args: { societyId: v.id("societies") },
   returns: v.id("societies"),
-  handler: async (ctx, { societyId }) => {
-    const society = await ctx.db.get(societyId);
-    if (!society) throw new Error("Society not found.");
-    if (society.logoDarkStorageId) {
-      try {
-        await ctx.storage.delete(society.logoDarkStorageId);
-      } catch {
-        // Already gone — no-op.
-      }
-    }
-    await ctx.db.patch(societyId, { logoDarkStorageId: undefined, updatedAt: Date.now() });
-    return societyId;
-  },
+  handler: (ctx, args) => clearDarkLogoPortable(withStorageCaps(ctx), args),
 });
 
 export const setLetterhead = mutation({
-  args: {
-    societyId: v.id("societies"),
-    storageId: v.id("_storage"),
-  },
+  args: { societyId: v.id("societies"), storageId: v.id("_storage") },
   returns: v.id("societies"),
-  handler: async (ctx, { societyId, storageId }) => {
-    const society = await ctx.db.get(societyId);
-    if (!society) throw new Error("Society not found.");
-    if (society.letterheadStorageId && society.letterheadStorageId !== storageId) {
-      try {
-        await ctx.storage.delete(society.letterheadStorageId);
-      } catch {
-        // Already gone — no-op.
-      }
-    }
-    await ctx.db.patch(societyId, { letterheadStorageId: storageId, updatedAt: Date.now() });
-    return societyId;
-  },
+  handler: (ctx, args) => setLetterheadPortable(withStorageCaps(ctx), args),
 });
 
 export const clearLetterhead = mutation({
   args: { societyId: v.id("societies") },
   returns: v.id("societies"),
-  handler: async (ctx, { societyId }) => {
-    const society = await ctx.db.get(societyId);
-    if (!society) throw new Error("Society not found.");
-    if (society.letterheadStorageId) {
-      try {
-        await ctx.storage.delete(society.letterheadStorageId);
-      } catch {
-        // Already gone — no-op.
-      }
-    }
-    await ctx.db.patch(societyId, { letterheadStorageId: undefined, updatedAt: Date.now() });
-    return societyId;
-  },
+  handler: (ctx, args) => clearLetterheadPortable(withStorageCaps(ctx), args),
 });
 
 export const setLogoInvertInDarkMode = mutation({
