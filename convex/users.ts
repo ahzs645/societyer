@@ -8,6 +8,7 @@ import {
   userGetByAuthSubject,
   resolveAuthSessionPortable,
   recordLoginPortable,
+  setRolePortable,
 } from "../shared/functions/users";
 import { ROLES, canActAs, requireRolePortable, type Role } from "../shared/functions/access";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
@@ -128,17 +129,7 @@ export const setRole = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, { id, role, actingUserId }) => {
-    const target = await ctx.db.get(id);
-    if (!target) throw new Error("User not found.");
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: target.societyId,
-      required: "Admin",
-    });
-    if (role !== "Owner") await assertNotLastOwner(ctx, target);
-    await ctx.db.patch(id, { role });
-  },
+  handler: (ctx, args) => setRolePortable(toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({

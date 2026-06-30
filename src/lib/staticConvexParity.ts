@@ -64,8 +64,6 @@ export const STATIC_PENDING_WRITES: ReadonlySet<string> = new Set([
   "organizationHistory:extractBudgetSourceDetails",
   "organizationHistory:saveItem",
   "organizationHistory:saveSource",
-  // Auth-adjacent: deliberately not ported to the offline mirror yet.
-  "users:setRole",
 ]);
 
 // Verbs the generic CRUD fallback in staticConvex.ts handles by table convention.

@@ -4,11 +4,35 @@
  *
  * Pure `ctx.db` reads and writes over the `users`/`members` tables. Each handler
  * runs unchanged on hosted Convex, the local Dexie runtime, and the convex-test
- * oracle. Role-gated handlers (`upsert`/`setRole`/`remove`) stay on Convex —
- * they call `requireRole`, which is a server-side helper.
+ * oracle. `setRole` is role-gated through the portable `requireRolePortable`.
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { requireRolePortable } from "./access";
+
+/** Refuse to demote the society's last Owner (FilterBuilder rewritten as a JS predicate). */
+async function assertNotLastOwnerPortable(ctx: PortableMutationCtx, target: any) {
+  if (target.role !== "Owner") return;
+  const otherOwner = await ctx.db
+    .query("users")
+    .withIndex("by_society", (q) => q.eq("societyId", target.societyId))
+    .filter((row) => String(row._id) !== String(target._id) && row.role === "Owner")
+    .first();
+  if (!otherOwner) {
+    throw new Error("Can't remove the last Owner — promote another user to Owner first.");
+  }
+}
+
+export async function setRolePortable(
+  ctx: PortableMutationCtx,
+  { id, role, actingUserId }: { id: string; role: string; actingUserId?: string },
+) {
+  const target = await ctx.db.get(id);
+  if (!target) throw new Error("User not found.");
+  await requireRolePortable(ctx, { actingUserId, societyId: String(target.societyId), required: "Admin" });
+  if (role !== "Owner") await assertNotLastOwnerPortable(ctx, target);
+  await ctx.db.patch(id, { role });
+}
 
 export async function usersList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   return ctx.db

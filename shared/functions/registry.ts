@@ -862,6 +862,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "users:getByAuthSubject", handler: usersFns.userGetByAuthSubject }),
   definePortableMutation({ name: "users:resolveAuthSession", handler: usersFns.resolveAuthSessionPortable }),
   definePortableMutation({ name: "users:recordLogin", handler: usersFns.recordLoginPortable }),
+  definePortableMutation({ name: "users:setRole", handler: usersFns.setRolePortable }),
 
   // notifications
   definePortableQuery({ name: "notifications:list", handler: notificationsFns.notificationsList }),
