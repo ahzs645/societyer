@@ -167,7 +167,23 @@ the concrete providers. Budget the SDK extraction as a separate investment
 - **Phase 2 — landed.** `convex-test` adopted as a third conformance engine
   (`scripts/check-portable-convex-oracle.ts`): runs the ported functions on a
   **real** Convex `ctx.db` + schema and diffs against the local engines. It is an
-  **oracle, not the production engine** (it depends on `node:async_hooks`).
+  **oracle, not the production engine** (it depends on `node:async_hooks`). The
+  oracle is deliberately deep-but-narrow (a few high-value domains proven against
+  real Convex); **breadth** across the whole registry is covered by the
+  conformance matrix below.
+- **Breadth conformance matrix — landed.**
+  `scripts/check-portable-conformance-matrix.ts` takes the manifest's work-list
+  (every registered `PORTABLE_FUNCTIONS` entry), seeds one realistic workspace
+  (via the portable `seed` handler) into an **identical** fixture, and runs each
+  function on **both** local engines — `MemoryDb` and `LocalStoreDb` — asserting
+  they agree (same return + same post-mutation state, or an identical throw).
+  Wall-clock and `Math.random` are frozen so the comparison isolates the storage
+  engines rather than the clock. A run exercises **~300 queries and ~280
+  mutations** behaviourally on both engines; the rest consistently throw on both
+  (they need domain-specific args a smoke harness doesn't synthesize — an honest,
+  reported coverage boundary, not a silent skip). This is the guard against a
+  future port that behaves differently on the browser/Electron adapter than on
+  the reference engine.
 - **Phase 3 — complete for the portable surface.** The portable surface (see the
   generated **[`shared/functions/portable-manifest.json`](../shared/functions/portable-manifest.json)**
   for exact, always-current counts) is ported and lives in
@@ -227,9 +243,10 @@ the concrete providers. Budget the SDK extraction as a separate investment
        testable) but they keep a Convex-only maintenance-token gate and stay
        unregistered for the offline runtime.
 - **CI:** `.github/workflows/portable-conformance.yml` runs the manifest drift gate
-  (`test:portable-manifest`) + the four `test:portable-*` suites + the parity gate +
-  domain regressions on every push/PR, so a port that breaks cross-runtime agreement
-  — or a registry that drifts from the Convex delegations — fails CI.
+  (`test:portable-manifest`) + the portable suites (runtime, live-runtime, oracle,
+  cap-table, and the whole-registry `test:portable-conformance-matrix`) + the parity
+  gate + domain regressions on every push/PR, so a port that breaks cross-runtime
+  agreement — or a registry that drifts from the Convex delegations — fails CI.
 - **Phase 4 — partly present.** The Electron native-filesystem document provider
   already exists (`electron/documents.ts` native read/write + `src/lib/documentStorage.ts`
   adapter + preload bridge) and passes `npm run desktop:typecheck`. The local
@@ -268,6 +285,7 @@ npm run test:portable-manifest        # gate: registry in sync with Convex (fail
 npm run test:portable-runtime         # Phase 0: differential conformance (MemoryDb vs LocalStoreDb)
 npm run test:portable-live-runtime    # Phase 1: the real StaticConvexClient runs portable handlers live
 npm run test:portable-convex-oracle   # Phase 2: convex-test (real Convex ctx.db) == local engines
+npm run test:portable-conformance-matrix  # breadth: every registered fn, MemoryDb == LocalStoreDb
 npm run test:voting-power             # the shared kernel (unchanged)
 npm run test:static-parity            # the mirror gate (still green during migration)
 ```
