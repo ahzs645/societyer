@@ -499,11 +499,11 @@ export function AccountingWorkbenchPage() {
         </div>
       </section>
 
-      {restrictedBalances.length > 0 && (
+      {(restrictedBalances ?? []).length > 0 && (
         <section className="card">
           <div className="card__head"><h2 className="card__title">Restricted funds</h2></div>
           <div className="accounting-list">
-            {restrictedBalances.map((row: any) => (
+            {(restrictedBalances ?? []).map((row: any) => (
               <div className="accounting-row" key={row._id}>
                 <div><strong>{row.name}</strong><div className="muted">{row.purpose}</div></div>
                 <div className="mono">{money(row.balanceCents)}</div>
