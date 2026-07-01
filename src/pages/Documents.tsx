@@ -194,7 +194,13 @@ export function DocumentsPage() {
         }
       />
 
-      {reviewQueues && <DocumentQueues queues={reviewQueues} />}
+      {reviewQueues && (
+        <>
+          <h2 className="card__title" style={{ marginBottom: 8 }}>Quick access</h2>
+          <DocumentQueues queues={reviewQueues} />
+          <div className="hr" style={{ marginBottom: 16 }} />
+        </>
+      )}
 
       {documentImportSession && (
         <div className="card" style={{ marginBottom: 16 }}>

@@ -197,6 +197,11 @@ export function TransparencyPage() {
             <Badge tone={society.publicVolunteerIntakeEnabled ? "success" : "warn"}>{society.publicVolunteerIntakeEnabled ? "Volunteer intake on" : "Volunteer intake off"}</Badge>
             <Badge tone={society.publicGrantIntakeEnabled ? "success" : "warn"}>{society.publicGrantIntakeEnabled ? "Grant intake on" : "Grant intake off"}</Badge>
           </div>
+          {publishedCount === 0 && (
+            <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 8 }}>
+              These are visibility settings, not published content — with 0 published records below, the public page has nothing to show yet even though a category reads "visible."
+            </div>
+          )}
           <div className="muted" style={{ whiteSpace: "pre-wrap" }}>
             {society.publicSummary ?? "No public summary yet."}
           </div>

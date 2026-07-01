@@ -69,7 +69,7 @@ export function RecordTableCell({
     <td
       className={
         "record-table__cell" +
-        (isLabelIdentifier ? " record-table__cell--identifier" : "") +
+        (isLabelIdentifier && tableCtx.onRecordClick ? " record-table__cell--identifier" : "") +
         (canEdit ? " record-table__cell--editable" : "") +
         (isHovered ? " record-table__cell--hovered" : "") +
         (isFocused ? " record-table__cell--focused" : "")
