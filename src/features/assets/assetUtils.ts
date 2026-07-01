@@ -1,4 +1,5 @@
 import { parseCsv, rowsToCsv } from "@/lib/csv";
+import { appBasePath } from "@/lib/staticRuntime";
 
 export const ASSET_CATEGORIES = ["IT", "Program equipment", "Consumable", "Furniture", "Vehicle", "Facilities", "Software/license", "Other"];
 export const ASSET_CONDITIONS = ["New", "Good", "Fair", "Needs repair", "Damaged", "Lost"];
@@ -110,8 +111,9 @@ export function isDue(date?: string, days = 0) {
 }
 
 export function assetUrl(assetId: string) {
-  if (typeof window === "undefined") return `/app/assets/${assetId}`;
-  return new URL(`/app/assets/${assetId}`, window.location.origin).toString();
+  const path = `${appBasePath()}/app/assets/${assetId}`;
+  if (typeof window === "undefined") return path;
+  return new URL(path, window.location.origin).toString();
 }
 
 export function formFromAsset(row: any) {

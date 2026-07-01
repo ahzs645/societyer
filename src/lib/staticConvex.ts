@@ -798,12 +798,34 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
   if (moduleName === "society" && exportName === "list") return store?.listRows("societies", args) ?? [society];
   if (exportName === "list") return store?.listRows(tableName, args) ?? scopedRows(tables[tableName] ?? [], args);
   if (exportName === "get") return store?.getRow(tableName, args?.id) ?? byId(tables[tableName] ?? [], args?.id);
-  return [];
+  // Nothing above recognizes this query. `[]` is a safe historical default for
+  // non-portable queries (most consumers do `data ?? []`), but for a *portable*
+  // query in-flight on its real async handler, handing back `[]` here is a
+  // truthy-but-wrong-shaped stub for any query that actually resolves to a
+  // single object/null — `const { x } = data` then crashes on the very first
+  // render, before the real async result has a chance to replace it. Calls from
+  // the portable bridge translate this sentinel to `undefined` (i.e. "loading")
+  // instead; non-portable callers keep getting `[]` via QUERY_RESULT_NOT_MIRRORED.
+  return QUERY_RESULT_NOT_MIRRORED;
 }
 
+const QUERY_RESULT_NOT_MIRRORED = Symbol("staticConvex.queryResultNotMirrored");
 
 function mutableQueryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
-  return store?.queryResult(name, args) ?? queryResult(name, args, store);
+  const result = store?.queryResult(name, args) ?? queryResult(name, args, store);
+  return result === QUERY_RESULT_NOT_MIRRORED ? [] : result;
+}
+
+/**
+ * Synchronous placeholder for a portable query before its first async result
+ * lands (see watchPortableQuery). Unlike `mutableQueryResult`, a query this
+ * file has no real mirror for resolves to `undefined` ("loading") rather than
+ * `[]`, since the portable handler may return a single object/null and a
+ * `[]` stub would crash any code that destructures the resolved shape.
+ */
+function portableSyncStub(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null) {
+  const result = store?.queryResult(name, args) ?? queryResult(name, args, store);
+  return result === QUERY_RESULT_NOT_MIRRORED ? undefined : result;
 }
 
 const MUT_NOT_HANDLED = Symbol("staticConvex.mutationNotHandled");
@@ -1915,7 +1937,7 @@ export class StaticConvexClient {
       localQueryResult: () =>
         this.portableCache.has(cacheKey)
           ? this.portableCache.get(cacheKey)
-          : mutableQueryResult(name, args, store),
+          : portableSyncStub(name, args, store),
       journal: () => undefined,
     };
   }

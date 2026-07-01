@@ -14,7 +14,7 @@ export function PublicTransparencyPage() {
     return <PageLoading />;
   }
 
-  if (!data) {
+  if (!data || !data.society) {
     return (
       <div className="landing" style={{ minHeight: "100vh", padding: "4rem 0" }}>
         <div className="landing__container">

@@ -29,9 +29,12 @@ import {
   type ModuleKey,
 } from "../lib/modules";
 
+type SettingsTab = "workspace" | "modules" | "runtime";
+
 export function SettingsPage() {
   const { t } = useTranslation();
   const society = useSociety();
+  const [activeTab, setActiveTab] = useState<SettingsTab>("workspace");
   const [demo, setDemo] = useState(isDemoMode());
   const authMode = getAuthMode();
   const updateModules = useMutation(api.society.updateModules);
@@ -285,9 +288,12 @@ export function SettingsPage() {
           { id: "modules", label: "Modules" },
           { id: "runtime", label: "Runtime" },
         ]}
-        activeTab="workspace"
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as SettingsTab)}
       >
 
+      {activeTab === "workspace" && (
+      <>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
           <h2 className="card__title">Organization logo</h2>
@@ -559,7 +565,11 @@ export function SettingsPage() {
           />
         </div>
       </div>
+      </>
+      )}
 
+      {activeTab === "modules" && (
+      <>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
           <h2 className="card__title">{t("settings.modulesTitle")}</h2>
@@ -622,7 +632,11 @@ export function SettingsPage() {
           />
         </div>
       </div>
+      </>
+      )}
 
+      {activeTab === "runtime" && (
+      <>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
           <h2 className="card__title">Notifications</h2>
@@ -777,6 +791,8 @@ export function SettingsPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
       </SettingsShell>
     </div>
   );

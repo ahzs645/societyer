@@ -1,4 +1,4 @@
-import { FIELD_TYPES, type FieldType } from "../../types/FieldType";
+import { FIELD_TYPES, type FieldType, type CurrencyFieldConfig } from "../../types/FieldType";
 import type { AggregateOperation, RecordField } from "../../types/View";
 import { isEmptyValue } from "./filterRecords";
 
@@ -79,11 +79,31 @@ export function aggregateRecordValues({
 
   const numbers = filledValues.map(Number).filter(Number.isFinite);
   if (numbers.length === 0) return "";
-  if (operation === "sum") return `Sum ${formatNumber(numbers.reduce((sum, value) => sum + value, 0))}`;
-  if (operation === "avg") return `Avg ${formatNumber(numbers.reduce((sum, value) => sum + value, 0) / numbers.length)}`;
-  if (operation === "min") return `Min ${formatNumber(Math.min(...numbers))}`;
-  if (operation === "max") return `Max ${formatNumber(Math.max(...numbers))}`;
+  const format =
+    column.field.fieldType === FIELD_TYPES.CURRENCY
+      ? (value: number) => formatCurrencyAggregate(value, column.field.config as CurrencyFieldConfig | undefined)
+      : formatNumber;
+  if (operation === "sum") return `Sum ${format(numbers.reduce((sum, value) => sum + value, 0))}`;
+  if (operation === "avg") return `Avg ${format(numbers.reduce((sum, value) => sum + value, 0) / numbers.length)}`;
+  if (operation === "min") return `Min ${format(Math.min(...numbers))}`;
+  if (operation === "max") return `Max ${format(Math.max(...numbers))}`;
   return "";
+}
+
+/** Mirrors CurrencyFieldDisplay's per-cell formatting so aggregate footers agree with the cells they summarize. */
+function formatCurrencyAggregate(value: number, config: CurrencyFieldConfig | undefined) {
+  const amount = config?.isCents ? value / 100 : value;
+  const currency = config?.currencyCode ?? "USD";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: config?.decimals ?? 2,
+      maximumFractionDigits: config?.decimals ?? 2,
+    }).format(amount);
+  } catch {
+    return amount.toFixed(2);
+  }
 }
 
 function isNumericFieldType(fieldType: FieldType) {

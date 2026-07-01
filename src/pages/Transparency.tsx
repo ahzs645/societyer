@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { appBasePath } from "../lib/staticRuntime";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
@@ -55,7 +56,7 @@ export function TransparencyPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const publicHref = useMemo(
-    () => (society?.publicSlug ? `/public/${society.publicSlug}` : "/public"),
+    () => `${appBasePath()}${society?.publicSlug ? `/public/${society.publicSlug}` : "/public"}`,
     [society?.publicSlug],
   );
   const [settingsDraft, setSettingsDraft] = useState<any | null>(null);

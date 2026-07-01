@@ -35,17 +35,17 @@ export function LibraryPage() {
       <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Reference docs</div>
-          <div className="stat__value">{data?.counts.referenceDocuments ?? 0}</div>
+          <div className="stat__value">{data?.counts?.referenceDocuments ?? 0}</div>
           <div className="stat__sub">library, policy, governance</div>
         </div>
         <div className="stat">
           <div className="stat__label">Meeting packets</div>
-          <div className="stat__value">{data?.counts.meetingPackets ?? 0}</div>
+          <div className="stat__value">{data?.counts?.meetingPackets ?? 0}</div>
           <div className="stat__sub">grouped by meeting</div>
         </div>
         <div className="stat">
           <div className="stat__label">Packet materials</div>
-          <div className="stat__value">{data?.counts.meetingMaterials ?? 0}</div>
+          <div className="stat__value">{data?.counts?.meetingMaterials ?? 0}</div>
           <div className="stat__sub">agenda-linked documents</div>
         </div>
       </div>
@@ -65,7 +65,7 @@ export function LibraryPage() {
               </div>
             </div>
           ))}
-          {data && data.sections.length === 0 && (
+          {data && (data.sections?.length ?? 0) === 0 && (
             <EmptyState
               icon={<BookOpen size={18} />}
               title="No library documents yet"
@@ -110,7 +110,7 @@ export function LibraryPage() {
                   </div>
                 </div>
               ))}
-              {data && data.meetingPackets.length === 0 && (
+              {data && (data.meetingPackets?.length ?? 0) === 0 && (
                 <div className="muted">No meeting material packets yet.</div>
               )}
             </div>

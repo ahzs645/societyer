@@ -80,6 +80,26 @@ export function ElectionDetailPage() {
     );
   }, [currentUser?.memberId, electionBundle?.eligible]);
 
+  useEffect(() => {
+    if (!election) return;
+    setAdminDraft((current: any) =>
+      current && current.electionId === election._id
+        ? current
+        : {
+            electionId: election._id,
+            nominationsOpenAtISO: toLocalDateTime(
+              election.nominationsOpenAtISO ?? election.opensAtISO,
+            ),
+            nominationsCloseAtISO: toLocalDateTime(
+              election.nominationsCloseAtISO ?? election.closesAtISO,
+            ),
+            scrutineerUserIds: election.scrutineerUserIds ?? [],
+            resultsSummary: election.resultsSummary ?? "",
+            evidenceDocumentId: election.evidenceDocumentId ?? "",
+          },
+    );
+  }, [election]);
+
   if (electionBundle === undefined) return <PageLoading />;
   if (electionBundle === null || !election) return <SeedPrompt />;
 
@@ -105,26 +125,6 @@ export function ElectionDetailPage() {
       election.nominationsOpenAtISO ?? election.createdAtISO,
       election.nominationsCloseAtISO ?? election.closesAtISO,
     );
-
-  useEffect(() => {
-    if (!election) return;
-    setAdminDraft((current: any) =>
-      current && current.electionId === election._id
-        ? current
-        : {
-            electionId: election._id,
-            nominationsOpenAtISO: toLocalDateTime(
-              election.nominationsOpenAtISO ?? election.opensAtISO,
-            ),
-            nominationsCloseAtISO: toLocalDateTime(
-              election.nominationsCloseAtISO ?? election.closesAtISO,
-            ),
-            scrutineerUserIds: election.scrutineerUserIds ?? [],
-            resultsSummary: election.resultsSummary ?? "",
-            evidenceDocumentId: election.evidenceDocumentId ?? "",
-          },
-    );
-  }, [election]);
 
   const saveBallot = async () => {
     await castBallot({
