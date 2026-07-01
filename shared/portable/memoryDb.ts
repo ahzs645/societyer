@@ -309,4 +309,9 @@ export class MemoryDb implements PortableDbWriter {
   dump(table: TableName): PortableDoc[] {
     return [...(this.tables.get(table)?.values() ?? [])].map(clone);
   }
+
+  /** Test/debug helper: names of every table that currently holds rows. */
+  tableNames(): TableName[] {
+    return [...this.tables.keys()];
+  }
 }

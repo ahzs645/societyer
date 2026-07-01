@@ -38,6 +38,7 @@ jobs:
           npm run test:portable-live-runtime
           npm run test:portable-convex-oracle
           npm run test:portable-captable
+          npm run test:portable-conformance-matrix
 
       - name: Static-mirror parity gate
         run: npm run test:static-parity
