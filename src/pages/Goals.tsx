@@ -143,7 +143,7 @@ export function GoalsPage() {
                 <h2 className="card__title" style={{ marginRight: "auto" }}>
                   <Link to={`/app/goals/${g._id}`}>{g.title}</Link>
                 </h2>
-                <Badge tone={goalTone(g.status)}>{labelStatus(g.status)}</Badge>
+                <Badge tone={goalTone(effectiveGoalStatus(g))}>{labelStatus(effectiveGoalStatus(g))}</Badge>
               </div>
               <div className="card__body col" style={{ gap: 10 }}>
                 <div className="row" style={{ gap: 6 }}>
@@ -157,7 +157,7 @@ export function GoalsPage() {
                 </div>
                 {g.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{g.description}</div>}
                 <div className="row" style={{ gap: 8 }}>
-                  <Progress value={g.progressPercent} tone={g.status === "AtRisk" || g.status === "OffTrack" ? "warn" : undefined} />
+                  <Progress value={g.progressPercent} tone={effectiveGoalStatus(g) === "AtRisk" || effectiveGoalStatus(g) === "OffTrack" ? "warn" : undefined} />
                   <span className="mono" style={{ minWidth: 40, textAlign: "right" }}>{g.progressPercent}%</span>
                 </div>
                 <div className="row" style={{ fontSize: "var(--fs-sm)", color: "var(--text-tertiary)" }}>
@@ -245,6 +245,19 @@ export function GoalsPage() {
       </Drawer>
     </div>
   );
+}
+
+/**
+ * Display-only status override: a goal past its target date and not already
+ * Completed/OffTrack reads as "At risk" even if nobody went back and updated
+ * the manually-set status field. Doesn't touch the stored value, so board
+ * drag-and-drop (grouped by the literal stored status) is unaffected.
+ */
+export function effectiveGoalStatus(goal: { status?: string; targetDate?: string }) {
+  const status = goal.status ?? "NotStarted";
+  if (status === "Completed" || status === "OffTrack" || status === "AtRisk") return status;
+  if (goal.targetDate && new Date(goal.targetDate).getTime() < Date.now()) return "AtRisk";
+  return status;
 }
 
 export function goalTone(status: string) {

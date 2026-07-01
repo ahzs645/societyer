@@ -208,7 +208,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/commitments": { icon: ClipboardList, group: "work", label: "Commitments" },
   "/app/documents": { icon: FolderOpen, group: "work", label: "Documents" },
   "/app/document-catalog": { icon: FileText, group: "work", label: "Document catalog" },
-  "/app/post-incorporation": { icon: ListChecks, group: "work", label: "Post-incorporation" },
+  "/app/post-incorporation": { icon: ListChecks, group: "work", label: "Post-incorporation", entityKinds: ["corporation"] },
   "/app/library": { icon: BookOpen, group: "work", label: "Library" },
   "/app/communications": { icon: Mail, group: "work", label: "Communications", module: "communications" },
   "/app/outbox": { icon: Inbox, group: "work", label: "Outbox" },
@@ -243,7 +243,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/certificate-register": { icon: ScrollText, group: "records", label: "Certificate register", entityKinds: ["corporation"] },
   "/app/minute-book": { icon: BookOpen, group: "records", label: "Minute book" },
   "/app/bylaw-rules": { icon: BookMarked, group: "records", label: "Bylaw rules" },
-  "/app/bylaw-diff": { icon: GitCompare, group: "records", label: "Bylaw redline" },
+  "/app/bylaw-diff": { icon: GitCompare, group: "records", label: "Bylaw amendments" },
   "/app/bylaws-history": { icon: Scroll, group: "records", label: "Bylaws history" },
 
   // ---- Compliance ----
@@ -264,6 +264,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
 
   // ---- Finance ----
   "/app/financials": { icon: PiggyBank, group: "finance", label: "Financials" },
+  "/app/financials/accounting": { icon: Calculator, group: "finance", label: "Accounting" },
   "/app/financials/year-end": { icon: CalendarCheck, group: "finance", label: "Year-end reports" },
   "/app/finance-imports": { icon: ArrowDownToLine, group: "finance", label: "Finance imports" },
   "/app/treasurer": { icon: Landmark, group: "finance", label: "Treasurer" },
@@ -291,6 +292,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/imports": { icon: FileJson, group: "administration", label: "Import sessions" },
   "/app/paperless": { icon: Database, group: "administration", label: "Paperless-ngx", module: "paperless" },
   "/app/settings": { icon: Settings, group: "administration", label: "Settings" },
+  "/app/settings/api-keys": { icon: KeyRound, group: "administration", label: "API keys" },
   "/app/webhooks": { icon: Webhook, group: "administration", label: "Webhooks" },
   "/app/audit": { icon: ShieldCheck, group: "administration", label: "Audit log" },
   "/app/exports": { icon: Download, group: "administration", label: "Data export" },

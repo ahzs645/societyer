@@ -250,8 +250,8 @@ export function MinuteBookPage() {
       <div className="grid two">
         <LinkedList title="Canonical documents" rows={safeRows(detail, "documents")} getTitle={(row: any) => row.title} getMeta={(row: any) => row.category} />
         <LinkedList title="Meetings and minutes" rows={safeRows(detail, "meetings")} getTitle={(row: any) => row.title} getMeta={(row: any) => `${row.type} - ${row.scheduledAt ? formatDate(row.scheduledAt) : "unscheduled"}`} />
-        <LinkedList title="Filings" rows={safeRows(detail, "filings")} getTitle={(row: any) => row.kind} getMeta={(row: any) => `${row.status} - ${row.dueDate ? formatDate(row.dueDate) : "no due date"}`} />
-        <LinkedList title="Policies and workflow packages" rows={[...safeRows(detail, "policies"), ...safeRows(detail, "workflowPackages")]} getTitle={(row: any) => row.policyName ?? row.packageName} getMeta={(row: any) => row.status ?? row.eventType} />
+        <LinkedList title="Filings" rows={safeRows(detail, "filings")} getTitle={(row: any) => humanize(row.kind)} getMeta={(row: any) => `${humanize(row.status)} - ${row.dueDate ? formatDate(row.dueDate) : "no due date"}`} />
+        <LinkedList title="Policies and workflow packages" rows={[...safeRows(detail, "policies"), ...safeRows(detail, "workflowPackages")]} getTitle={(row: any) => row.policyName ?? row.packageName} getMeta={(row: any) => humanize(row.status ?? row.eventType)} />
       </div>
 
       <Drawer
@@ -332,7 +332,7 @@ function RecordBundlesCard({ rows }: { rows: any[] }) {
             {visibleRows.map((row) => (
               <tr key={row.key}>
                 <td>
-                  <div>{row.href ? <Link to={row.href}><strong>{row.title}</strong></Link> : <strong>{row.title}</strong>}</div>
+                  <div>{row.href ? <Link to={row.href}><strong>{humanize(row.title)}</strong></Link> : <strong>{humanize(row.title)}</strong>}</div>
                   <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 4 }}>
                     <Badge>{labelize(row.type)}</Badge>
                     {(row.badges ?? []).slice(0, 3).map((badge: any) => <Badge key={`${row.key}:${badge.label}`} tone={badge.tone}>{badge.label}</Badge>)}
@@ -341,7 +341,7 @@ function RecordBundlesCard({ rows }: { rows: any[] }) {
                 <td><BundleLinks links={row.links ?? []} /></td>
                 <td><CountBadges counts={row.counts ?? {}} /></td>
                 <td><GapBadges gaps={row.gaps ?? []} /></td>
-                <td><Badge tone={toneForStatus(row.status)}>{row.status ?? "-"}</Badge></td>
+                <td><Badge tone={toneForStatus(row.status)}>{humanize(row.status) || "-"}</Badge></td>
               </tr>
             ))}
             {rows.length === 0 && (
@@ -469,6 +469,20 @@ function safeCount(detail: any, key: string) {
 
 function labelize(value?: string) {
   return String(value ?? "-").replace(/_/g, " ");
+}
+
+/**
+ * Some connected records (filings, policy statuses) come through as raw
+ * PascalCase identifiers (e.g. "ChangeOfDirectors", "ReviewDue") rather than
+ * human-authored titles. Insert spaces before internal capitals so they read
+ * as words; leave anything that already contains a space untouched so real
+ * titles ("2025 annual general meeting agenda") pass through unchanged.
+ */
+function humanize(value?: string) {
+  const raw = String(value ?? "");
+  if (!raw || raw.includes(" ")) return raw;
+  const spaced = raw.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 function toneForStatus(status?: string) {

@@ -270,6 +270,11 @@ export function SocietyPage() {
   const mailingAddressLine = currentMailingAddress
     ? addressLine(currentMailingAddress)
     : form.mailingAddress ?? "";
+  // Count locations actually shown below, not just structured rows — a legacy
+  // plain-text address (pre-migration) still renders as a location, so the
+  // badge shouldn't read "0" while the two summaries beneath it are populated.
+  const displayedLocationCount =
+    (registeredOfficeLine ? 1 : 0) + (mailingAddressLine ? 1 : 0);
 
   const save = async () => {
     setSaving(true);
@@ -475,7 +480,7 @@ export function SocietyPage() {
               <div className="row" style={{ gap: 8 }}>
                 <MapPin size={14} />
                 <h2 className="card__title">Registered locations</h2>
-                <Badge>{detail === undefined ? "..." : addresses.length}</Badge>
+                <Badge>{detail === undefined ? "..." : displayedLocationCount}</Badge>
               </div>
               <Link className="btn btn--sm" to="/app/organization-details" style={{ marginLeft: "auto" }}>Manage</Link>
             </div>

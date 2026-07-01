@@ -32,6 +32,14 @@ export function ComplianceSettingsPage() {
     api.deadlines.list,
     society ? { societyId: society._id } : "skip",
   ) as Array<{ title?: string; dueDate?: string }> | undefined;
+  const meetings = useQuery(
+    api.meetings.list,
+    society ? { societyId: society._id } : "skip",
+  ) as Array<{ type?: string; scheduledAt?: string }> | undefined;
+  const lastAgm = (meetings ?? [])
+    .filter((m) => m.type === "AGM" && m.scheduledAt)
+    .sort((a, b) => String(b.scheduledAt).localeCompare(String(a.scheduledAt)))[0];
+  const lastAgmDate = lastAgm?.scheduledAt ? new Date(lastAgm.scheduledAt) : null;
 
   const [agmMonth, setAgmMonth] = useState<number | "">(society?.agmMonth ?? "");
   const [agmDay, setAgmDay] = useState<number | "">(society?.agmDay ?? "");
@@ -122,6 +130,22 @@ export function ComplianceSettingsPage() {
               onChange={(e) => setAgmDay(e.target.value === "" ? "" : Number(e.target.value))} />
           </Field>
         </div>
+        {lastAgmDate && (agmMonth === "" || agmDay === "") && (
+          <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: -8 }}>
+            Last AGM was held {MONTHS[lastAgmDate.getMonth()]} {lastAgmDate.getDate()}.{" "}
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              style={{ display: "inline", padding: 0, height: "auto" }}
+              onClick={() => {
+                setAgmMonth(lastAgmDate.getMonth() + 1);
+                setAgmDay(lastAgmDate.getDate());
+              }}
+            >
+              Use this date
+            </button>
+          </p>
+        )}
         <Field label="Fiscal year-end">
           <input className="input" value={society.fiscalYearEnd ?? "(not set on society)"} disabled />
         </Field>
@@ -176,7 +200,7 @@ export function ComplianceSettingsPage() {
 
       <div className="card" style={{ maxWidth: 520, marginBottom: 16 }}>
         <h3 style={{ margin: "0 0 8px" }}>Contacts &amp; records</h3>
-        <Field label="Short name / defined term (e.g. &quot;the Company&quot;)">
+        <Field label="Short name / defined term (e.g. &quot;the Society&quot;)">
           <input className="input" value={contacts.shortName} onChange={(e) => setC("shortName", e.target.value)} />
         </Field>
         <div className="row" style={{ gap: 12 }}>

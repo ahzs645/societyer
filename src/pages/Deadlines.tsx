@@ -204,6 +204,17 @@ export function DeadlinesPage() {
                     </span>
                   );
                 }
+                if (field.name === "dueDate") {
+                  const s = statusOf(record);
+                  const isOverdue = s === "open" && record.dueDate && new Date(record.dueDate).getTime() < Date.now();
+                  if (!record.dueDate) return <span className="record-cell__empty">—</span>;
+                  return (
+                    <span style={isOverdue ? { color: "var(--danger)", fontWeight: 600 } : undefined}>
+                      {new Date(record.dueDate).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                      {isOverdue && " · Overdue"}
+                    </span>
+                  );
+                }
                 if (field.name === "title") {
                   const s = statusOf(record);
                   const isComplete = s === "complete";

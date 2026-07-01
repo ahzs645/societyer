@@ -416,13 +416,13 @@ function buildRecordBundles(data: Record<string, any[]>) {
     bundles.push(bundle({
       key: `filing:${filingId}`,
       type: "filing",
-      title: filing.kind,
+      title: humanizeLabel(filing.kind),
       date: filing.filedAt ?? filing.dueDate,
       status: filing.status,
       href: "/app/filings",
-      badges: [badge("Filing", "neutral"), badge(filing.status ?? "Needs review", toneForBundleStatus(filing.status))],
+      badges: [badge("Filing", "neutral"), badge(humanizeLabel(filing.status) || "Needs review", toneForBundleStatus(filing.status))],
       links: compact([
-        bundleLink("Filing", filing.kind, "/app/filings"),
+        bundleLink("Filing", humanizeLabel(filing.kind), "/app/filings"),
         sourceDocumentIds.length ? bundleLink("Documents", `${sourceDocumentIds.length} filing documents`, "/app/documents", sourceDocumentIds.length) : undefined,
         relatedAmendments.length ? bundleLink("Bylaws", `${relatedAmendments.length} bylaw amendments`, "/app/bylaws-history", relatedAmendments.length) : undefined,
         sourceRows.length ? bundleLink("Evidence", `${sourceRows.length} source evidence`, "/app/meeting-evidence", sourceRows.length) : undefined,
@@ -682,6 +682,19 @@ function compact(values: any[]) {
 
 function bundle(value: any) {
   return value;
+}
+
+/**
+ * Some source fields (filing.kind, filing.status) are raw PascalCase
+ * identifiers rather than display text. Insert spaces before internal
+ * capitals so they read as words in the minute-book UI; leave anything that
+ * already contains a space (human-authored titles) untouched.
+ */
+function humanizeLabel(value?: string | null) {
+  const raw = String(value ?? "");
+  if (!raw || raw.includes(" ")) return raw;
+  const spaced = raw.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 function badge(label: string, tone = "neutral") {

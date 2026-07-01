@@ -388,6 +388,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Finance",
     items: [
       navItem("/app/financials"),
+      navItem("/app/financials/accounting"),
       navItem("/app/financials/year-end"),
       navItem("/app/finance-imports"),
       navItem("/app/treasurer"),
@@ -423,6 +424,7 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/imports"),
       navItem("/app/paperless"),
       navItem("/app/settings"),
+      navItem("/app/settings/api-keys"),
       navItem("/app/webhooks"),
       navItem("/app/audit"),
       navItem("/app/exports"),

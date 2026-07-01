@@ -34,6 +34,10 @@ const COLS = [
   { id: "Done", label: "Done", accent: "var(--success)" },
 ];
 
+export function taskStatusLabel(status: string) {
+  return COLS.find((c) => c.id === status)?.label ?? status;
+}
+
 export function TasksPage() {
   const society = useSociety();
   const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");

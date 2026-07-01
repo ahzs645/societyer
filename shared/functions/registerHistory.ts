@@ -55,7 +55,8 @@ export async function roleHoldersAsOfDatePortable(
     .query("roleHolders")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
-  if (rows.length === 0) {
+  const hasRoleTypeCoverage = rows.some((row) => row.roleType === roleType);
+  if (!hasRoleTypeCoverage) {
     if (roleType === "director") return directorsAsOfFallback(ctx, societyId, asOf);
     if (roleType === "member") return membersAsOfFallback(ctx, societyId, asOf);
   }
@@ -91,7 +92,7 @@ export async function directorsAsOfPortable(
     .query("roleHolders")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
-  if (rows.length === 0) return directorsAsOfFallback(ctx, societyId, asOf);
+  if (!rows.some((row) => row.roleType === "director")) return directorsAsOfFallback(ctx, societyId, asOf);
   return roleHoldersAsOf(rows as IntervalRow[], asOf, "director");
 }
 
