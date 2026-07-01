@@ -158,7 +158,7 @@ export function MembershipPage() {
         <Stat label="Active subscribers" value={String(activeSubs.length)} />
         <Stat label="Active fee periods" value={String(activeFeePeriods.length)} />
         <Stat
-          label="MRR (monthly recurring)"
+          label="Monthly dues revenue"
           value={money(
             activeSubs.reduce((sum, s) => {
               const plan = (plans ?? []).find((p) => p._id === s.planId);

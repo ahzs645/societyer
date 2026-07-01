@@ -54,9 +54,9 @@ export function SectionRedline({
               {d.chunks.map((c, i) => {
                 if (c.kind === "same") return <span key={i}>{c.text}</span>;
                 if (c.kind === "add")
-                  return <span key={i} style={{ background: "#d4f4dd", color: "#0a5e32" }}>{c.text}</span>;
+                  return <span key={i} style={{ background: "#d4f4dd", color: "#0a5e32", margin: "0 1px" }}>{c.text}</span>;
                 return (
-                  <span key={i} style={{ background: "#fde1e6", color: "#9b1c3a", textDecoration: "line-through" }}>
+                  <span key={i} style={{ background: "#fde1e6", color: "#9b1c3a", textDecoration: "line-through", margin: "0 1px" }}>
                     {c.text}
                   </span>
                 );

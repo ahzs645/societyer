@@ -110,10 +110,19 @@ export function WrittenResolutionsPage() {
               if (field.name === "circulatedAtISO") return <span className="mono">{formatDate(record.circulatedAtISO)}</span>;
               if (field.name === "signatureCount") {
                 const count = record.signatures?.length ?? 0;
+                const daysCirculating = record.circulatedAtISO
+                  ? Math.floor((Date.now() - new Date(record.circulatedAtISO).getTime()) / 86_400_000)
+                  : null;
+                const isStale = record.status === "Circulating" && daysCirculating !== null && daysCirculating > 30;
                 return (
                   <div style={{ minWidth: 140 }}>
                     <Progress value={Math.min(100, (count / Math.max(1, record.requiredCount)) * 100)} tone={count >= record.requiredCount ? "success" : undefined} />
                     <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 2 }}>{count} / {record.requiredCount}</div>
+                    {isStale && (
+                      <div style={{ fontSize: "var(--fs-xs)", marginTop: 2, color: "var(--danger)", fontWeight: 600 }}>
+                        Circulating for {daysCirculating} days
+                      </div>
+                    )}
                   </div>
                 );
               }

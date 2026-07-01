@@ -593,7 +593,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "title", size: 260 },
         { fieldName: "court", size: 220 },
         { fieldName: "fileNumber", size: 120 },
-        { fieldName: "orderDate", size: 120 },
+        { fieldName: "orderDate", size: 150 },
         { fieldName: "status", size: 120 },
       ],
     },

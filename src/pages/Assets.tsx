@@ -655,7 +655,7 @@ export function AssetDetailPage() {
           ) : (
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
-              <button className="btn-action" onClick={() => setDrawer("custody")}><Repeat2 size={12} /> Custody</button>
+              <button className="btn-action" onClick={() => setDrawer("custody")}><Repeat2 size={12} /> Log custody change</button>
               {serviceable && <button className="btn-action" onClick={() => setDrawer("maintenance")}><Wrench size={12} /> Schedule</button>}
               <button className="btn-action" onClick={() => setDrawer("disposal")}><Trash2 size={12} /> Dispose</button>
               <button className="btn-action btn-action--primary" onClick={openEdit}><Pencil size={12} /> Edit</button>

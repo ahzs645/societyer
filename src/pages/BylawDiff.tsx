@@ -163,8 +163,8 @@ export function BylawDiffPage() {
         const body = d.chunks
           .map((c) => {
             const t = escapeHtml(c.text);
-            if (c.kind === "add") return `<span style="background:#d4f4dd;">${t}</span>`;
-            if (c.kind === "del") return `<span style="background:#fde1e6; text-decoration:line-through;">${t}</span>`;
+            if (c.kind === "add") return `<span style="background:#d4f4dd; margin:0 1px;">${t}</span>`;
+            if (c.kind === "del") return `<span style="background:#fde1e6; text-decoration:line-through; margin:0 1px;">${t}</span>`;
             return t;
           })
           .join("");

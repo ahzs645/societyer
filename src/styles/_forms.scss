@@ -64,6 +64,12 @@
   margin-bottom: 0;
 }
 
+.signature-form-row .field__label {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+
 .signature-mode-toggle {
   display: inline-flex;
   gap: 4px;

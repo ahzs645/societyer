@@ -155,7 +155,9 @@ export function PoliciesPage() {
                   <td>{row.owner || "-"}</td>
                   <td>
                     <div>{row.effectiveDate ? formatDate(row.effectiveDate) : "No effective date"}</div>
-                    <div className="muted">{row.reviewDate ? `Review ${formatDate(row.reviewDate)}` : "No review date"}</div>
+                    <div className={row.lifecycle?.reviewState === "overdue" ? "" : "muted"} style={row.lifecycle?.reviewState === "overdue" ? { color: "var(--danger)", fontWeight: 600 } : undefined}>
+                      {row.reviewDate ? `Review ${formatDate(row.reviewDate)}${row.lifecycle?.reviewState === "overdue" ? " · Overdue" : ""}` : "No review date"}
+                    </div>
                   </td>
                   <td>
                     <div>{row.docxDocumentId ? docById.get(row.docxDocumentId)?.title ?? "DOCX linked" : "No DOCX"}</div>

@@ -147,13 +147,13 @@ export function ImportSessionsPage() {
   const [searchText, setSearchText] = useState("");
   const [recordForm, setRecordForm] = useState<any | null>(null);
   const [paperlessQuery, setPaperlessQuery] = useState("meeting minutes");
-  const [paperlessLimit, setPaperlessLimit] = useState(500);
+  const [paperlessLimit, setPaperlessLimit] = useState(100);
   const [paperlessBusy, setPaperlessBusy] = useState(false);
   const [discoveryQuery, setDiscoveryQuery] = useState("");
-  const [discoveryLimit, setDiscoveryLimit] = useState(1179);
+  const [discoveryLimit, setDiscoveryLimit] = useState(100);
   const [discoveryBusy, setDiscoveryBusy] = useState(false);
   const [transposeQuery, setTransposeQuery] = useState("");
-  const [transposeLimit, setTransposeLimit] = useState(1179);
+  const [transposeLimit, setTransposeLimit] = useState(100);
   const [transposeBusy, setTransposeBusy] = useState(false);
 
   useEffect(() => {
@@ -472,7 +472,7 @@ export function ImportSessionsPage() {
             <Field label="Search query">
               <input className="input" value={paperlessQuery} onChange={(event) => setPaperlessQuery(event.target.value)} />
             </Field>
-            <Field label="Max documents">
+            <Field label="Max documents" hint="Caps how many Paperless-ngx documents this pass will fetch and review.">
               <input className="input" type="number" min={1} max={1179} value={paperlessLimit} onChange={(event) => setPaperlessLimit(Number(event.target.value) || 1)} />
             </Field>
           </div>
@@ -492,7 +492,7 @@ export function ImportSessionsPage() {
             <Field label="Search query" hint="Leave blank to scan broadly across Paperless.">
               <input className="input" value={discoveryQuery} onChange={(event) => setDiscoveryQuery(event.target.value)} placeholder="budget, annual report, policy..." />
             </Field>
-            <Field label="Max documents">
+            <Field label="Max documents" hint="Caps how many Paperless-ngx documents this pass will fetch and review.">
               <input className="input" type="number" min={1} max={1179} value={discoveryLimit} onChange={(event) => setDiscoveryLimit(Number(event.target.value) || 1)} />
             </Field>
           </div>
@@ -512,7 +512,7 @@ export function ImportSessionsPage() {
             <Field label="Search query" hint="Leave blank to transpose broadly across Paperless OCR.">
               <input className="input" value={transposeQuery} onChange={(event) => setTransposeQuery(event.target.value)} placeholder="insurance, filings, issue, grant..." />
             </Field>
-            <Field label="Max documents">
+            <Field label="Max documents" hint="Caps how many Paperless-ngx documents this pass will fetch and review.">
               <input className="input" type="number" min={1} max={1179} value={transposeLimit} onChange={(event) => setTransposeLimit(Number(event.target.value) || 1)} />
             </Field>
           </div>

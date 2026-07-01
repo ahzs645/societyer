@@ -148,7 +148,7 @@ export function MeetingsPage() {
     setForm({
       type: meeting.type,
       title: meeting.title,
-      scheduledAt: meeting.scheduledAt,
+      scheduledAt: meeting.scheduledAt ? toDateTimeLocalValue(new Date(meeting.scheduledAt)) : "",
       location: meeting.location ?? "",
       electronic: !!meeting.electronic,
       quorumRequired: meeting.quorumRequired != null ? String(meeting.quorumRequired) : "",
