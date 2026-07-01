@@ -129,6 +129,11 @@ export function AuditorsPage() {
       )}
 
       <div className="spacer-6" />
+      <div className="hr" style={{ marginBottom: 16 }} />
+
+      <p className="muted" style={{ marginBottom: 12 }}>
+        External parties like auditors can be given limited portal access to specific records — configure that here.
+      </p>
       <StakeholderPortalSection societyId={society._id} />
 
       <Drawer
@@ -236,7 +241,7 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
   return (
     <div className="card">
       <div className="card__head">
-        <h2 className="card__title"><Share2 size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />Stakeholder portals</h2>
+        <h2 className="card__title"><Share2 size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />Stakeholder portal access</h2>
         <span className="card__subtitle">Read-only rooms for auditors and other outside parties — no account needed</span>
       </div>
       <div className="card__body col" style={{ gap: 14 }}>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -20,6 +20,45 @@ import {
   downloadMinuteBookCsv,
   type MinuteBookExportInput,
 } from "../features/meetings/lib/minuteBookExport";
+
+/**
+ * Tracks whether a horizontally-scrollable container is scrolled away from
+ * either edge, so callers can toggle the `.table-scroll` fade-shadow classes
+ * (see src/styles/_components-tables-misc.scss) that hint more content is
+ * off-screen.
+ */
+function useScrollEdges<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const { scrollLeft, scrollWidth, clientWidth } = el;
+      setEdges({
+        left: scrollLeft > 0,
+        right: scrollLeft + clientWidth < scrollWidth - 1,
+      });
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, []);
+
+  const className = [
+    "table-scroll",
+    edges.left ? "is-scrolled-left" : "",
+    edges.right ? "is-scrolled-right" : "",
+  ].filter(Boolean).join(" ");
+
+  return { ref, className };
+}
 
 export function MinuteBookPage() {
   const society = useSociety();
@@ -130,6 +169,8 @@ export function MinuteBookPage() {
     toast.success("Minute book record deleted");
   };
 
+  const recordSpineScroll = useScrollEdges<HTMLDivElement>();
+
   const items = Array.isArray(detail) ? [] : detail?.items ?? [];
   const checks = safeRows(detail, "checks");
   const recordBundles = safeRows(detail, "recordBundles");
@@ -196,7 +237,7 @@ export function MinuteBookPage() {
           <h2 className="card__title">Record spine</h2>
           <Badge>{items.length}</Badge>
         </div>
-        <div className="table-wrap">
+        <div ref={recordSpineScroll.ref} className={`table-wrap ${recordSpineScroll.className}`}>
           <table className="table">
             <thead>
               <tr>
@@ -303,6 +344,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "wa
 }
 
 function RecordBundlesCard({ rows }: { rows: any[] }) {
+  const scroll = useScrollEdges<HTMLDivElement>();
   const gapCount = rows.reduce((count, row) => count + actionableGaps(row.gaps).length, 0);
   const visibleRows = rows
     .slice()
@@ -319,7 +361,7 @@ function RecordBundlesCard({ rows }: { rows: any[] }) {
         <h2 className="card__title">Connected records</h2>
         <Badge tone={gapCount ? "warn" : "success"}>{gapCount ? `${gapCount} gaps` : `${rows.length} records`}</Badge>
       </div>
-      <div className="table-wrap">
+      <div ref={scroll.ref} className={`table-wrap ${scroll.className}`}>
         <table className="table">
           <thead>
             <tr>

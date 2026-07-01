@@ -8,8 +8,8 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { RadioGroup, Toggle } from "../components/Controls";
 import { Select } from "../components/Select";
-import { SettingsShell } from "../components/ui";
-import { Settings as SettingsIcon } from "lucide-react";
+import { Badge, SettingsShell } from "../components/ui";
+import { Settings as SettingsIcon, AlertTriangle } from "lucide-react";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
 import { DesktopDiagnosticsPanel } from "../components/DesktopDiagnosticsPanel";
 import { getAuthMode } from "../lib/authMode";
@@ -671,34 +671,6 @@ export function SettingsPage() {
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head"><h2 className="card__title">Workspace shared views</h2></div>
-        <div className="card__body col">
-          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-            Seed shared governance views for board work, filings, attestations, conflicts, and grants.
-          </div>
-          <div className="row">
-            <button
-              className="btn btn--accent"
-              disabled={sharedViewsBusy}
-              onClick={async () => {
-                setSharedViewsBusy(true);
-                try {
-                  const result = await seedSharedViews({ societyId: society._id });
-                  toast.success("Shared views seeded", `${result.created.length} created, ${result.skipped.length} skipped`);
-                } catch (error: any) {
-                  toast.error("Could not seed shared views", error?.message);
-                } finally {
-                  setSharedViewsBusy(false);
-                }
-              }}
-            >
-              {sharedViewsBusy ? "Seeding..." : "Seed governance shared views"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head"><h2 className="card__title">Demo mode</h2></div>
         <div className="card__body col">
           <Toggle
@@ -712,50 +684,99 @@ export function SettingsPage() {
           <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
             Append <code className="mono">?demo=1</code> to any URL to force-enable, <code className="mono">?demo=0</code> to disable.
           </div>
-          <div className="row">
-            <button
-              className="btn btn--accent"
-              disabled={maintenanceBusy !== null}
-              onClick={async () => {
-                setMaintenanceBusy("seed");
-                try {
-                  const result = await seedDemoSociety();
-                  setStoredSocietyId(result.societyId);
-                  toast.success("Demo society seeded");
-                } catch (error) {
-                  toast.error(maintenanceErrorMessage(error));
-                } finally {
-                  setMaintenanceBusy(null);
-                }
-              }}
-            >
-              {maintenanceBusy === "seed" ? "Seeding..." : "Seed / reseed demo society"}
-            </button>
-            <button
-              className="btn btn--danger"
-              disabled={maintenanceBusy !== null}
-              onClick={async () => {
-                const ok = await confirm({
-                  title: "Wipe all data?",
-                  message: "Every table will be dropped. This cannot be undone.",
-                  confirmLabel: "Wipe everything",
-                  tone: "danger",
-                });
-                if (!ok) return;
-                setMaintenanceBusy("reset");
-                try {
-                  await resetDemoData();
-                  setStoredSocietyId(null);
-                  toast.success("All data wiped");
-                } catch (error) {
-                  toast.error(maintenanceErrorMessage(error));
-                } finally {
-                  setMaintenanceBusy(null);
-                }
-              }}
-            >
-              {maintenanceBusy === "reset" ? "Wiping..." : "Wipe all data"}
-            </button>
+        </div>
+      </div>
+
+      <div
+        className="card"
+        style={{ marginBottom: 16, borderColor: "var(--danger)" }}
+      >
+        <div className="card__head">
+          <AlertTriangle size={16} style={{ color: "var(--danger)", flexShrink: 0 }} />
+          <h2 className="card__title">Danger zone</h2>
+          <Badge tone="danger">Irreversible</Badge>
+        </div>
+        <div className="card__body col" style={{ gap: 20 }}>
+          <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            These actions seed or permanently remove data. Double-check before using them.
+          </div>
+
+          <div className="col" style={{ gap: 8 }}>
+            <div style={{ fontWeight: 500 }}>Workspace shared views</div>
+            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+              Seed shared governance views for board work, filings, attestations, conflicts, and grants.
+            </div>
+            <div className="row">
+              <button
+                className="btn btn--accent"
+                disabled={sharedViewsBusy}
+                onClick={async () => {
+                  setSharedViewsBusy(true);
+                  try {
+                    const result = await seedSharedViews({ societyId: society._id });
+                    toast.success("Shared views seeded", `${result.created.length} created, ${result.skipped.length} skipped`);
+                  } catch (error: any) {
+                    toast.error("Could not seed shared views", error?.message);
+                  } finally {
+                    setSharedViewsBusy(false);
+                  }
+                }}
+              >
+                {sharedViewsBusy ? "Seeding..." : "Seed governance shared views"}
+              </button>
+            </div>
+          </div>
+
+          <div className="col" style={{ gap: 8, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+            <div style={{ fontWeight: 500 }}>Demo data</div>
+            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+              Seed a fake demo society, or wipe every table in this deployment. Wiping cannot be undone.
+            </div>
+            <div className="row">
+              <button
+                className="btn btn--accent"
+                disabled={maintenanceBusy !== null}
+                onClick={async () => {
+                  setMaintenanceBusy("seed");
+                  try {
+                    const result = await seedDemoSociety();
+                    setStoredSocietyId(result.societyId);
+                    toast.success("Demo society seeded");
+                  } catch (error) {
+                    toast.error(maintenanceErrorMessage(error));
+                  } finally {
+                    setMaintenanceBusy(null);
+                  }
+                }}
+              >
+                {maintenanceBusy === "seed" ? "Seeding..." : "Seed / reseed demo society"}
+              </button>
+              <button
+                className="btn btn--danger"
+                disabled={maintenanceBusy !== null}
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: "Wipe all data?",
+                    message: "Every table will be dropped. This cannot be undone.",
+                    confirmLabel: "Wipe everything",
+                    tone: "danger",
+                  });
+                  if (!ok) return;
+                  setMaintenanceBusy("reset");
+                  try {
+                    await resetDemoData();
+                    setStoredSocietyId(null);
+                    toast.success("All data wiped");
+                  } catch (error) {
+                    toast.error(maintenanceErrorMessage(error));
+                  } finally {
+                    setMaintenanceBusy(null);
+                  }
+                }}
+              >
+                {maintenanceBusy === "reset" ? "Wiping..." : "Wipe all data"}
+              </button>
+            </div>
           </div>
         </div>
       </div>

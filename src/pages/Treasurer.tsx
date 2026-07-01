@@ -450,6 +450,7 @@ export function TreasurerPage() {
               <div className="stat__sub">closed reimbursements</div>
             </div>
           </div>
+          <div className="table-wrap">
           <table className="table treasurer-claims-table">
             <thead>
               <tr>
@@ -519,6 +520,7 @@ export function TreasurerPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
@@ -533,6 +535,7 @@ export function TreasurerPage() {
             </div>
           </div>
           <div className="card__body">
+            <div className="table-wrap">
             <table className="table treasurer-funding-table">
               <thead>
                 <tr>
@@ -569,6 +572,7 @@ export function TreasurerPage() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
 
@@ -583,6 +587,7 @@ export function TreasurerPage() {
             </button>
           </div>
           <div className="card__body">
+            <div className="table-wrap">
             <table className="table treasurer-source-table">
               <thead>
                 <tr>
@@ -636,6 +641,7 @@ export function TreasurerPage() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       </div>
@@ -645,6 +651,7 @@ export function TreasurerPage() {
           <h2 className="card__title">Funding source timeline</h2>
           <span className="card__subtitle">Manual funding events, including aggregate third-party remittances.</span>
         </div>
+        <div className="table-wrap">
         <table className="table treasurer-timeline-table">
           <thead>
             <tr>
@@ -700,6 +707,7 @@ export function TreasurerPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Budget variance */}
@@ -713,6 +721,7 @@ export function TreasurerPage() {
             <div className="muted">No budgets defined for this fiscal year. Add budgets in Financials.</div>
           )}
           {variance && variance.length > 0 && (
+            <div className="table-wrap">
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--fs-md)" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)" }}>
@@ -765,6 +774,7 @@ export function TreasurerPage() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       </div>

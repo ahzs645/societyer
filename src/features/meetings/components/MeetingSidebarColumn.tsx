@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Eye, EyeOff, FileDown, FileText, Printer } from "lucide-react";
 import { Badge, Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
@@ -339,13 +340,29 @@ export function MeetingSidebarColumn({
 
           {meeting.type === "AGM" && show("agm") && (
             <div className="card">
-              <div className="card__head"><h2 className="card__title">AGM checklist</h2></div>
+              <div className="card__head">
+                <h2 className="card__title">AGM checklist</h2>
+                <Link className="card__subtitle" to={`/app/meetings/${meeting._id}/agm`}>
+                  Open AGM workflow
+                </Link>
+              </div>
               <div className="card__body">
+                {/*
+                  This is a quick, at-a-glance summary only — it reads a few raw
+                  meeting/minutes fields, not the AGM run's step state. The AGM
+                  workflow page (linked above) tracks step-by-step completion and
+                  is the authoritative source; always defer to it over this card
+                  when the two disagree.
+                */}
                 <Check ok={!!meeting.noticeSentAt}>Notice sent 14–60 days in advance</Check>
                 <Check ok={meeting.status === "Held"}>Meeting held</Check>
                 <Check ok={!!minutes}>Minutes recorded</Check>
                 <Check ok={!!minutes?.approvedAt}>Minutes approved at next meeting</Check>
                 <Check ok={false}>Annual report filed within 30 days</Check>
+                <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>
+                  See the <Link to={`/app/meetings/${meeting._id}/agm`}>AGM workflow</Link> for the authoritative,
+                  step-by-step status of this meeting.
+                </div>
               </div>
             </div>
           )}

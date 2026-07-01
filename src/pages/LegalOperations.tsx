@@ -1161,6 +1161,12 @@ export function FormationMaintenancePage() {
         }
       />
 
+      <p className="muted">
+        Tracks formation paperwork and annual-maintenance checklist items specific to
+        incorporation upkeep. For the full filings register, see{" "}
+        <Link to="/app/filings">Filings</Link>.
+      </p>
+
       <Section title="Formation records" count={data?.formations?.length ?? 0}>
         <SimpleTable
           cols={["NUANS", "Jurisdiction", "Purpose/classes", "Staff/signing", "Status", ""]}

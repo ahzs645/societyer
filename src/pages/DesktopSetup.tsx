@@ -6,6 +6,7 @@ import {
   Download,
   FolderOpen,
   HardDrive,
+  Monitor,
   PlugZap,
   ShieldCheck,
   Upload,
@@ -21,6 +22,7 @@ import {
 } from "../lib/desktopBridge";
 import { downloadLocalWorkspaceSnapshot, importLocalWorkspaceSnapshotFile } from "../lib/localWorkspaceExport";
 import { getRuntimeDescriptor } from "../lib/runtimeMode";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const CONNECTOR_ENDPOINT_KEY = "societyer.desktop.connectorEndpoint";
 const DEFAULT_CONNECTOR_ENDPOINT = "http://127.0.0.1:8890";
@@ -171,6 +173,50 @@ export function DesktopSetupPage() {
   ];
 
   const requiredReady = bridgeAvailable && Boolean(workspace?.rootPath) && runtime.documentStorage === "local-filesystem";
+
+  if (!bridgeAvailable) {
+    const inDemo = isStaticDemoRuntime();
+    return (
+      <div className="page page--wide">
+        <PageHeader
+          title="Desktop app setup"
+          subtitle="This page configures the Societyer desktop app. You're currently using the web version."
+          icon={<Monitor size={16} />}
+          iconColor="blue"
+        />
+        <div className="card" style={{ maxWidth: 720 }}>
+          <div className="card__head">
+            <h2 className="card__title">You're using the web version</h2>
+            <span className="card__subtitle">
+              {inDemo
+                ? "This is the browser-based demo, which doesn't have a desktop bridge."
+                : "No desktop bridge was found in this browser tab."}
+            </span>
+          </div>
+          <div className="card__body col">
+            <div className="muted">
+              The desktop app unlocks local-first storage — your society's records and documents live directly on
+              your computer's file system, with offline access, local backups, and file exports/imports — but it
+              isn't required to use Societyer. You're using the web version right now, and everything else in
+              Societyer works normally here.
+            </div>
+            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+              To set up the desktop app, download and open Societyer Desktop, then revisit this page from inside
+              that app.
+            </div>
+            <div className="row" style={{ gap: 8 }}>
+              <Link to="/app/settings" className="btn btn--accent">
+                Open settings
+              </Link>
+              <Link to="/app" className="btn">
+                Back to dashboard
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page page--wide">

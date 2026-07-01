@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -126,7 +126,15 @@ export function GovernanceRegistersPage() {
       <RegisterTable
         title="People and director timeline"
         rows={roles}
-        empty="Approve board role assignment imports to build the timeline."
+        empty={
+          <>
+            No role-assignment snapshots imported yet. This register captures verified,
+            source-backed evidence of who has held which role over time — your current
+            director and role data is tracked live on <Link to="/app/directors">Directors</Link>{" "}
+            and <Link to="/app/role-holders">Role holders</Link>. Approve board role
+            assignment imports to build this timeline.
+          </>
+        }
         columns={["Person", "Role", "Group", "Start", "Status", "Actions"]}
         render={(row) => [
           <PersonCell key="p" row={row} name={row.personName} people={people} />,
@@ -140,14 +148,30 @@ export function GovernanceRegistersPage() {
       <RegisterTable
         title="Board role changes"
         rows={changes}
-        empty="Approve role-change imports to track appointments, removals, vacancies, and renamed positions."
+        empty={
+          <>
+            No role-change evidence imported yet. This tracks appointments, removals,
+            vacancies, and renamed positions as they're confirmed from source documents —
+            for the current picture, see <Link to="/app/directors">Directors</Link> and{" "}
+            <Link to="/app/role-holders">Role holders</Link>. Approve role-change imports to
+            populate this history.
+          </>
+        }
         columns={["Effective", "Change", "Role", "Person", "Status"]}
         render={(row) => [formatDate(row.effectiveDate), row.changeType, row.roleTitle, <PersonCell key="p" row={row} name={row.personName} people={people} />, <Status key="s" value={row.status} />]}
       />
       <RegisterTable
         title="Signing authorities"
         rows={signing}
-        empty="Approve signing-authority imports after source review."
+        empty={
+          <>
+            No signing-authority evidence imported yet. This register holds source-verified
+            records of who is authorized to sign for the society over time — current role
+            holders are on <Link to="/app/directors">Directors</Link> and{" "}
+            <Link to="/app/role-holders">Role holders</Link>. Approve signing-authority
+            imports after source review.
+          </>
+        }
         columns={["Effective", "Person", "Institution", "Authority", "Status"]}
         render={(row) => [formatDate(row.effectiveDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, row.institutionName ?? "-", row.authorityType, <Status key="s" value={row.status} />]}
       />
@@ -181,14 +205,29 @@ export function MeetingEvidencePage() {
       <RegisterTable
         title="Attendance"
         rows={attendance}
-        empty="Approve attendance imports to populate this register."
+        empty={
+          <>
+            No attendance evidence imported yet. This register captures verified,
+            source-backed attendance and quorum evidence extracted from minutes — the
+            underlying meeting and minutes data already lives on{" "}
+            <Link to="/app/meetings">Meetings</Link> and <Link to="/app/minutes">Minutes</Link>.
+            Approve attendance imports to populate this register.
+          </>
+        }
         columns={["Meeting", "Date", "Person", "Attendance", "Confidence"]}
         render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, row.attendanceStatus, <Confidence key="c" value={row.confidence} />]}
       />
       <RegisterTable
         title="Motion evidence"
         rows={motions}
-        empty="Approve motion-evidence imports to build a source-backed motion trail."
+        empty={
+          <>
+            No motion evidence imported yet. This builds a source-backed motion trail
+            extracted from minutes — the actual meetings and minutes are already on{" "}
+            <Link to="/app/meetings">Meetings</Link> and <Link to="/app/minutes">Minutes</Link>.
+            Approve motion-evidence imports to build this trail.
+          </>
+        }
         columns={["Meeting", "Date", "Motion", "Outcome", "Status"]}
         render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), truncate(row.motionText, 100), row.outcome, <Status key="s" value={row.status} />]}
       />
@@ -224,28 +263,60 @@ export function FinanceImportsPage() {
       <RegisterTable
         title="Budget snapshots"
         rows={budgets}
-        empty="Approve budget snapshot imports after checking OCR amounts."
+        empty={
+          <>
+            No budget snapshots imported yet. This register holds verified, source-backed
+            budget snapshots from imported documents — the society's live financial data is
+            on <Link to="/app/financials">Financials</Link> and{" "}
+            <Link to="/app/treasurer">Treasurer</Link>. Approve budget snapshot imports after
+            checking OCR amounts.
+          </>
+        }
         columns={["Fiscal year", "Title", "Income", "Expense", "Status"]}
         render={(row) => [row.fiscalYear, row.title, formatMoney(row.totalIncomeCents), formatMoney(row.totalExpenseCents), <Status key="s" value={row.status} />]}
       />
       <RegisterTable
         title="Financial statement imports"
         rows={statements}
-        empty="Approve financial statement imports only after verifying totals."
+        empty={
+          <>
+            No financial statement imports yet. This is a verified evidence layer for
+            imported statements, not the primary ledger — current financials live on{" "}
+            <Link to="/app/financials">Financials</Link> and{" "}
+            <Link to="/app/treasurer">Treasurer</Link>. Approve financial statement imports
+            only after verifying totals.
+          </>
+        }
         columns={["Period end", "Type", "Revenue", "Expenses", "Status"]}
         render={(row) => [formatDate(row.periodEnd), row.statementType, formatMoney(row.revenueCents), formatMoney(row.expensesCents), <Status key="s" value={row.status} />]}
       />
       <RegisterTable
         title="Treasurer reports"
         rows={reports}
-        empty="Approve treasurer report imports to build report history."
+        empty={
+          <>
+            No treasurer report imports yet. This builds verified report history from
+            imported documents — current treasurer reporting lives on{" "}
+            <Link to="/app/treasurer">Treasurer</Link> and{" "}
+            <Link to="/app/financials">Financials</Link>. Approve treasurer report imports to
+            build this history.
+          </>
+        }
         columns={["Date", "Title", "Cash", "Highlights", "Status"]}
         render={(row) => [formatDate(row.reportDate), row.title, formatMoney(row.cashBalanceCents), row.highlights?.length ?? 0, <Status key="s" value={row.status} />]}
       />
       <RegisterTable
         title="Transaction candidates"
         rows={transactions}
-        empty="Approve transaction candidates only inside a restricted finance review."
+        empty={
+          <>
+            No transaction candidates imported yet. This holds bank/transaction batches
+            pending restricted finance review — actual transactions are already tracked on{" "}
+            <Link to="/app/financials">Financials</Link> and{" "}
+            <Link to="/app/treasurer">Treasurer</Link>. Approve transaction candidates only
+            inside a restricted finance review.
+          </>
+        }
         columns={["Date", "Description", "Debit/Credit", "Amount", "Cheque/ref", "Balance", "Status"]}
         render={(row) => [
           formatDate(row.transactionDate),
@@ -322,7 +393,7 @@ function RegisterTable({
   rows: any[];
   columns: string[];
   render: (row: any) => any[];
-  empty: string;
+  empty: ReactNode;
 }) {
   return (
     <div className="card" style={{ marginBottom: 16 }}>

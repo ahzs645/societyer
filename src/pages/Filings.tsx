@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -186,6 +186,12 @@ export function FilingsPage() {
         }
       />
 
+      <p className="muted">
+        Related: annual jurisdiction filings are also tracked on{" "}
+        <Link to="/app/annual-filings">Annual filings</Link> and{" "}
+        <Link to="/app/formation-maintenance">Formation &amp; annual maintenance</Link>.
+      </p>
+
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="filing" />
       ) : tableData.objectMetadata ? (
@@ -194,6 +200,25 @@ export function FilingsPage() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={tableData.hydratedView}
           records={records}
+          onRecordClick={(_recordId, r) => {
+            if (r.status === "Filed") return;
+            setCompleteDraft({
+              id: r._id,
+              kind: r.kind,
+              jurisdictionCode: r.jurisdictionCode,
+              contextKind: r.contextKind,
+              sourceRegistrationId: r.sourceRegistrationId,
+              filedAt: new Date().toISOString().slice(0, 10),
+              submissionMethod: r.submissionMethod ?? "ManualPortal",
+              confirmationNumber: r.confirmationNumber ?? "",
+              feePaidDollars: centsToDollarInput(r.feePaidCents),
+              receiptDocumentId: r.receiptDocumentId ?? "",
+              stagedPacketDocumentId: r.stagedPacketDocumentId ?? "",
+              evidenceNotes: r.evidenceNotes ?? "",
+              submissionChecklist: r.submissionChecklist ?? [],
+              registryUrl: r.registryUrl ?? "",
+            });
+          }}
           onUpdate={async ({ recordId, fieldName, value }) => {
             await update({
               id: recordId as Id<"filings">,

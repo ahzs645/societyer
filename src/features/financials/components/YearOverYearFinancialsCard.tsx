@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import { Badge } from "../../../components/ui";
 import { formatDate, money } from "../../../lib/format";
 
@@ -33,6 +34,7 @@ export function YearOverYearFinancialsCard({
             <th>Restricted</th>
             <th>Audit</th>
             <th>Board approval</th>
+            <th aria-hidden="true" />
           </tr>
         </thead>
         <tbody>
@@ -48,6 +50,9 @@ export function YearOverYearFinancialsCard({
                 event.preventDefault();
                 onOpenFinancialYear(f.fiscalYear);
               }}
+              style={{ cursor: "pointer" }}
+              onMouseEnter={(event) => { event.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(event) => { event.currentTarget.style.background = ""; }}
             >
               <td><strong>{f.fiscalYear}</strong></td>
               <td className="table__cell--mono">{formatDate(f.periodEnd)}</td>
@@ -62,10 +67,13 @@ export function YearOverYearFinancialsCard({
                 {f.auditorName && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{f.auditorName}</div>}
               </td>
               <td className="table__cell--mono">{f.approvedByBoardAt ? formatDate(f.approvedByBoardAt) : "—"}</td>
+              <td className="muted" style={{ width: 20, padding: "0 8px" }}>
+                <ChevronRight size={16} aria-hidden="true" />
+              </td>
             </tr>
           ))}
           {rows.length === 0 && (
-            <tr><td colSpan={8} className="muted" style={{ textAlign: "center", padding: 24 }}>No financial statements yet.</td></tr>
+            <tr><td colSpan={9} className="muted" style={{ textAlign: "center", padding: 24 }}>No financial statements yet.</td></tr>
           )}
         </tbody>
       </table>

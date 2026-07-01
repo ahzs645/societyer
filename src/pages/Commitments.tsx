@@ -142,7 +142,10 @@ export function CommitmentsPage() {
   });
   const needsReview = activeRows.filter((row) => (row.reviewStatus ?? "NeedsReview") !== "Verified");
   const linkedEvidenceCount = (events ?? []).filter((event: any) => event.evidenceDocumentIds?.length > 0 || event.meetingId).length;
-  const tenancyWorkflow = rows.find((row) => {
+  const mostOverdue = [...overdue].sort(
+    (a, b) => new Date(a.nextDueDate).getTime() - new Date(b.nextDueDate).getTime(),
+  )[0];
+  const featuredCommitment = mostOverdue ?? rows.find((row) => {
     const source = documentsById.get(String(row.sourceDocumentId));
     const sourceTags = Array.isArray(source?.tags) ? source.tags.join(" ").toLowerCase() : "";
     return sourceTags.includes("tenancy") || row.title.toLowerCase().includes("presentation");
@@ -298,16 +301,17 @@ export function CommitmentsPage() {
         </div>
       </div>
 
-      {tenancyWorkflow && (
-        <TenancyWorkflowCard
-          commitment={tenancyWorkflow}
-          sourceDocument={documentsById.get(String(tenancyWorkflow.sourceDocumentId))}
-          events={eventsByCommitment.get(String(tenancyWorkflow._id)) ?? []}
-          openTasks={openTasksByCommitment.get(String(tenancyWorkflow._id)) ?? []}
+      {featuredCommitment && (
+        <FeaturedCommitmentCard
+          commitment={featuredCommitment}
+          isOverdue={isOverdue(featuredCommitment)}
+          sourceDocument={documentsById.get(String(featuredCommitment.sourceDocumentId))}
+          events={eventsByCommitment.get(String(featuredCommitment._id)) ?? []}
+          openTasks={openTasksByCommitment.get(String(featuredCommitment._id)) ?? []}
           documentsById={documentsById}
           meetingsById={meetingsById}
-          onRecord={() => openRecord(tenancyWorkflow)}
-          onPlanTask={() => createPreparationTask(tenancyWorkflow)}
+          onRecord={() => openRecord(featuredCommitment)}
+          onPlanTask={() => createPreparationTask(featuredCommitment)}
         />
       )}
 
@@ -743,8 +747,9 @@ function EventFormFields({
   );
 }
 
-function TenancyWorkflowCard({
+function FeaturedCommitmentCard({
   commitment,
+  isOverdue: overdue,
   sourceDocument,
   events,
   openTasks,
@@ -754,6 +759,7 @@ function TenancyWorkflowCard({
   onPlanTask,
 }: {
   commitment: any;
+  isOverdue: boolean;
   sourceDocument?: any;
   events: any[];
   openTasks: any[];
@@ -769,7 +775,7 @@ function TenancyWorkflowCard({
       <div className="card__head">
         <div>
           <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-            <Badge tone="orange">Tenancy agreement workflow</Badge>
+            <Badge tone={overdue ? "danger" : "orange"}>{overdue ? "Most overdue commitment" : "Featured commitment"}</Badge>
             <Badge tone={reviewStatusTone(commitment.reviewStatus)}>{reviewStatusLabel(commitment.reviewStatus)}</Badge>
             {typeof commitment.confidence === "number" && <Badge tone="neutral">{formatConfidence(commitment.confidence)}</Badge>}
           </div>

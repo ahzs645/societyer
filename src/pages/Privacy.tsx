@@ -379,10 +379,18 @@ export function PrivacyPage() {
             <div className="card__body">
               <div className="privacy-document-path">
                 <div className="privacy-document-path__copy">
-                  <strong>{policyDraft ? policyDraft.title : "No starter privacy policy draft yet"}</strong>
+                  <strong>
+                    {policyDraft
+                      ? policyDraft.title
+                      : adoptedPolicyDocument
+                        ? "No new draft in progress"
+                        : "No starter privacy policy draft yet"}
+                  </strong>
                   <span>
                     {adoptedPolicyDocument
-                      ? `${adoptedPolicyDocument.title} is linked as the adopted privacy policy evidence.`
+                      ? policyDraft
+                        ? `${adoptedPolicyDocument.title} is linked as the adopted privacy policy evidence. Open the draft, tailor it to the society, and link it as evidence only after approval.`
+                        : `${adoptedPolicyDocument.title} is linked as the adopted privacy policy evidence. Create a new draft only if you are planning to update the adopted policy.`
                       : policyDraft
                         ? "Open the draft, tailor it to the society, and link it as evidence only after approval."
                         : "Create a Markdown draft populated with this society's name, privacy officer fields, member-data status, and PIPA baseline sections."}

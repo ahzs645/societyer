@@ -365,7 +365,7 @@ export function GrantDossierStack({
   editorPanel?: ReactNode;
   layout?: "stack" | "tabs" | "compact";
 }) {
-  const [activeTab, setActiveTab] = useState<GrantDossierTabId>("overview");
+  const [activeTab, setActiveTab] = useState<GrantDossierTabId>(editorPanel ? "edit" : "overview");
   useEffect(() => {
     const syncHashToTab = () => {
       if (window.location.hash === "#funded-employees") setActiveTab("people");

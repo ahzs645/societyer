@@ -6,7 +6,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Field } from "../components/ui";
+import { Badge, EmptyState } from "../components/ui";
 import { Select } from "../components/Select";
 import {
   ArrowLeft,
@@ -23,8 +23,7 @@ import { formatDateTime, formatDate } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { useModuleEnabled } from "../hooks/useModules";
 import { useConfirm } from "../components/Modal";
-
-type Step = "notice" | "held" | "financialsPresented" | "electionsHeld" | "minutesApproved" | "annualReportFiled";
+import { AGM_STEP_ORDER, type AgmStep as Step } from "../features/meetings/components/MeetingDetailSupport";
 
 const STEP_ORDER: { id: Step; label: string; sub: string; icon: any }[] = [
   { id: "notice", label: "Send notice", sub: "14–60 days before meeting (7–60 if bylaws permit)", icon: Send },
@@ -34,6 +33,13 @@ const STEP_ORDER: { id: Step; label: string; sub: string; icon: any }[] = [
   { id: "minutesApproved", label: "Approve minutes", sub: "Usually at next meeting; then circulate to members", icon: Flag },
   { id: "annualReportFiled", label: "File annual report", sub: "Within the configured post-AGM filing window via Societies Online", icon: FileDown },
 ];
+
+// Keep STEP_ORDER's ids in lockstep with the shared AGM_STEP_ORDER at module
+// load time, so this page and the overview AGM checklist can never silently
+// diverge on what "done" means for a given step.
+if (STEP_ORDER.map((s) => s.id).join(",") !== AGM_STEP_ORDER.join(",")) {
+  throw new Error("AgmWorkflow STEP_ORDER has drifted from the shared AGM_STEP_ORDER.");
+}
 
 export function AgmWorkflowPage() {
   const { id } = useParams<{ id: string }>();
@@ -59,7 +65,7 @@ export function AgmWorkflowPage() {
 
   const currentIdx = useMemo(() => {
     if (!run) return 0;
-    const idx = STEP_ORDER.findIndex((s) => s.id === (run.step as Step));
+    const idx = AGM_STEP_ORDER.indexOf(run.step as Step);
     return idx < 0 ? 0 : idx;
   }, [run]);
 
@@ -67,7 +73,33 @@ export function AgmWorkflowPage() {
   if (society === null) return <SeedPrompt />;
   if (!meeting) return <PageLoading />;
   if (meeting.type !== "AGM")
-    return <div className="page">This workflow is for AGM-type meetings only.</div>;
+    return (
+      <div className="page">
+        <Link to={`/app/meetings/${meeting._id}`} className="row muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
+          <ArrowLeft size={12} /> Back to meeting
+        </Link>
+        <PageHeader
+          title="AGM workflow not available"
+          icon={<ClipboardCheck size={16} />}
+          iconColor="orange"
+          subtitle="This workflow only applies to AGM-type meetings."
+        />
+        <div className="card">
+          <div className="card__body">
+            <EmptyState
+              icon={<ClipboardCheck size={20} />}
+              title="Not an AGM meeting"
+              description={`"${meeting.title}" is a ${meeting.type} meeting, so it doesn't use the AGM workflow.`}
+              action={
+                <Link className="btn btn--accent" to={`/app/meetings/${meeting._id}`}>
+                  <ArrowLeft size={14} /> Back to meeting
+                </Link>
+              }
+            />
+          </div>
+        </div>
+      </div>
+    );
 
   const ensureInit = async () => {
     if (!run) await init({ societyId: society._id, meetingId: meeting._id });

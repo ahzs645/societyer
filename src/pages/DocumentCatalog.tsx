@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { FileText } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 
@@ -129,7 +130,10 @@ export function DocumentCatalogPage() {
       ) : templates.length === 0 ? (
         <div className="card">
           <p style={{ color: "var(--text-tertiary)" }}>
-            No document catalog seeded yet for this entity.
+            No document catalog seeded yet for this entity. This catalog is a structured,
+            generate-ready view of templates and precedents — it doesn't hold the entity's
+            actual documents. Those already exist and can be viewed on{" "}
+            <Link to="/app/documents">Documents</Link>.
           </p>
         </div>
       ) : (
