@@ -103,6 +103,8 @@
     "test:portable-live-runtime": "tsx scripts/check-portable-live-runtime.ts",
     "test:portable-convex-oracle": "tsx scripts/check-portable-convex-oracle.ts",
     "test:portable-captable": "tsx scripts/check-portable-captable.ts",
+    "manifest:portable": "node scripts/portable-manifest.mjs",
+    "test:portable-manifest": "node scripts/portable-manifest.mjs --check",
     "test:subscription-agreement": "tsx scripts/check-subscription-agreement.ts",
     "test:share-certificates": "tsx scripts/check-share-certificates.ts",
     "test:share-split": "tsx scripts/check-share-split.ts",

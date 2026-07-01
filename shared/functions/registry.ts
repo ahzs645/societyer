@@ -998,6 +998,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "apiPlatform:listIntegrationSyncStates", handler: apiPlatformFns.listIntegrationSyncStatesPortable }),
 
   // paperless
+  definePortableQuery({ name: "paperless:tagProfiles", handler: paperlessFns.tagProfilesPortable }),
   definePortableQuery({ name: "paperless:listConnection", handler: paperlessFns.listConnectionPortable }),
   definePortableQuery({ name: "paperless:recentSyncs", handler: paperlessFns.recentSyncsPortable }),
   definePortableQuery({ name: "paperless:syncForDocument", handler: paperlessFns.syncForDocumentPortable }),

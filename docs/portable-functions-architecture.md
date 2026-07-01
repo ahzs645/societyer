@@ -1,9 +1,11 @@
 # Portable Functions + `ctx.db` Repository Contract
 
 > Status: **Phases 0–3 landed** — foundation, the live local async runtime,
-> `convex-test` as a conformance oracle, and the domain port:
-> **796 functions across ~90 domains** now run as one portable handler on all
-> three runtimes (up from the first `votingPower`/`upsertRightsClass` pair),
+> `convex-test` as a conformance oracle, and the domain port: the whole portable
+> surface (exact, always-current counts in the generated
+> [`portable-manifest.json`](../shared/functions/portable-manifest.json)) now runs
+> as one portable handler on all three runtimes (up from the first
+> `votingPower`/`upsertRightsClass` pair),
 > including the role-gated write surface (portable `requireRole`), the accounting
 > double-entry money path, document/template generation, and full-text search
 > (a `withSearchIndex` contract primitive). The remaining un-ported handlers are
@@ -166,8 +168,10 @@ the concrete providers. Budget the SDK extraction as a separate investment
   (`scripts/check-portable-convex-oracle.ts`): runs the ported functions on a
   **real** Convex `ctx.db` + schema and diffs against the local engines. It is an
   **oracle, not the production engine** (it depends on `node:async_hooks`).
-- **Phase 3 — complete for the portable surface.** **773 functions across ~90
-  domains** are ported and live in `shared/functions/registry.ts` — from the seed
+- **Phase 3 — complete for the portable surface.** The portable surface (see the
+  generated **[`shared/functions/portable-manifest.json`](../shared/functions/portable-manifest.json)**
+  for exact, always-current counts) is ported and lives in
+  `shared/functions/registry.ts` — from the seed
   `votingPower`/`upsertRightsClass`/cap-table/`members` work through whole-domain
   ports of accounting (incl. the double-entry money path), assets, inventoryHub,
   grants, elections, volunteers, notifications, financialHub, communications,
@@ -192,11 +196,19 @@ the concrete providers. Budget the SDK extraction as a separate investment
     were convex-resident moved to `shared/` with thin re-export shims left behind
     (`shared/accountingCore.ts`, `shared/functions/importSessionHelpers/*`,
     `shared/accountingMappingCandidates.ts`, `shared/orgHubOptions.ts`).
-  - **The registry is generated, not hand-typed.**
+  - **The registry is authored mechanically and CI-enforced against Convex.**
     `scripts/generate-portable-registry.mjs` derives `definePortable{Query,Mutation}`
     entries from the Convex delegations (parsing `=> fn(toPortable…Ctx(ctx)` plus
     the `../shared/functions/*` imports) and dedupes against the existing registry,
-    so adding a domain is mechanical.
+    so adding a domain is mechanical. **`scripts/portable-manifest.mjs`** then closes
+    the loop: it re-scans every `convex/<module>.ts`, classifies each export
+    (`portable` / `capability-backed` / `server-only` / `static-fallback`), writes
+    the generated **[`portable-manifest.json`](../shared/functions/portable-manifest.json)**,
+    and its `--check` mode (`npm run test:portable-manifest`, wired into CI) **fails
+    when the registry drifts from Convex** — a delegation missing from the registry
+    (it would 404 on the local runtimes), or a registry entry no Convex export
+    delegates to. This replaces the hand-counted function totals with a checked-in,
+    always-current artifact.
   - **What stays on Convex — and why it's not "the desktop can't do it":** the
     remaining handlers are *capability-backed* or *server-only*, not portable-`ctx.db`.
     They fall in three buckets:
@@ -214,9 +226,10 @@ the concrete providers. Budget the SDK extraction as a separate investment
        `seedRecordTableMetadata:run/wipe`: their bodies are now in `shared/` (oracle-
        testable) but they keep a Convex-only maintenance-token gate and stay
        unregistered for the offline runtime.
-- **CI:** `.github/workflows/portable-conformance.yml` runs the four
-  `test:portable-*` suites + the parity gate + domain regressions on every push/PR,
-  so a port that breaks cross-runtime agreement fails CI.
+- **CI:** `.github/workflows/portable-conformance.yml` runs the manifest drift gate
+  (`test:portable-manifest`) + the four `test:portable-*` suites + the parity gate +
+  domain regressions on every push/PR, so a port that breaks cross-runtime agreement
+  — or a registry that drifts from the Convex delegations — fails CI.
 - **Phase 4 — partly present.** The Electron native-filesystem document provider
   already exists (`electron/documents.ts` native read/write + `src/lib/documentStorage.ts`
   adapter + preload bridge) and passes `npm run desktop:typecheck`. The local
@@ -250,6 +263,8 @@ the concrete providers. Budget the SDK extraction as a separate investment
 ## Run it
 
 ```bash
+npm run manifest:portable             # regenerate portable-manifest.json from the Convex delegations
+npm run test:portable-manifest        # gate: registry in sync with Convex (fails on drift / stale manifest)
 npm run test:portable-runtime         # Phase 0: differential conformance (MemoryDb vs LocalStoreDb)
 npm run test:portable-live-runtime    # Phase 1: the real StaticConvexClient runs portable handlers live
 npm run test:portable-convex-oracle   # Phase 2: convex-test (real Convex ctx.db) == local engines

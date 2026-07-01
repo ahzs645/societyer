@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Portable manifest drift gate
+        run: npm run test:portable-manifest
+
       - name: Portable conformance suites
         run: |
           npm run test:portable-runtime
