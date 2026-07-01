@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
@@ -278,6 +278,7 @@ export function RecordsArchivePage() {
         subtitle="Archive custody, accessions, source provenance, and restricted-source handling."
         actions={<Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>}
       />
+      <RelatedDocumentViews current="/app/records-archive" />
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Accessions" value={accessions.length} />
         <Stat label="Evidence links" value={evidence.length} />

@@ -262,7 +262,7 @@ export function CommitmentsPage() {
         title="Commitments"
         icon={<ClipboardList size={16} />}
         iconColor="green"
-        subtitle="Contract, grant, facility, and policy requirements with source documents, cadence, due dates, and completion evidence."
+        subtitle="Promises made to external parties, like grant conditions, MOUs, and vendor or landlord obligations. For internal work items, use Tasks; for dates set by law or regulation, use Deadlines."
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew}>
             <Plus size={12} /> New commitment
@@ -570,6 +570,9 @@ function CommitmentFormFields({
 }) {
   return (
     <div>
+      <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 0, marginBottom: 12 }}>
+        Use a commitment for promises made to an external party. Internal work belongs in Tasks; dates set by law or regulation belong in Deadlines.
+      </p>
       <Field label="Title" required>
         <input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
       </Field>

@@ -49,6 +49,19 @@ const CATEGORY_ICONS: Record<string, JSX.Element> = {
   Automation: <Plug size={14} />,
 };
 
+// Friendlier display labels for raw catalog "kind" enum values (e.g. "plugin_integration"
+// becomes "Plugin integration") so admins configuring a connector don't see raw snake_case.
+const KIND_LABELS: Record<string, string> = {
+  plugin_integration: "Plugin integration",
+  browser_connector: "Browser-based connector",
+  api_integration: "API integration",
+  calendar_sync: "Calendar sync",
+};
+
+function kindLabel(kind: string) {
+  return KIND_LABELS[kind] ?? kind.replace(/_/g, " ");
+}
+
 export function IntegrationMarketplacePage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -209,7 +222,7 @@ export function IntegrationMarketplacePage() {
       <SettingsShell
         routeKey="/app/integrations"
         title="Integration marketplace"
-        description="Installable capability manifests for board packs, calendar sync, office documents, CRM bridges, connector actions, scopes, health checks, and audit events."
+        description="Technical setup area. Install and configure third-party connectors — board packs, calendar sync, office documents, CRM bridges, and automation actions. This is a one-time setup step typically done by an administrator, not something a board member needs to visit."
         tabs={[
           { id: "catalog", label: "Catalog", icon: <Plug size={14} /> },
           { id: "setup", label: "Setup" },
@@ -245,7 +258,7 @@ export function IntegrationMarketplacePage() {
                     <strong style={{ fontSize: "var(--fs-md)" }}>{item.name}</strong>
                   </span>
                   <Badge tone={item.installed ? "success" : item.status === "planned" ? "warn" : "info"}>
-                    {item.installed ? "installed" : item.status}
+                    {item.installed ? "Installed" : statusLabel(item.status)}
                   </Badge>
                 </div>
                 <div className="muted">{item.summary}</div>
@@ -253,8 +266,8 @@ export function IntegrationMarketplacePage() {
               <div className="card__body" style={{ paddingTop: 0 }}>
                 <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                   <Badge>{item.category}</Badge>
-                  <Badge tone={healthTone(item.health.status)}>{item.health.status}</Badge>
-                  <Badge>{item.capabilities.length} capabilities</Badge>
+                  <Badge tone={healthTone(item.health.status)}>{healthLabel(item.health.status)}</Badge>
+                  <Badge>{item.capabilities.length} feature{item.capabilities.length === 1 ? "" : "s"}</Badge>
                 </div>
               </div>
             </button>
@@ -276,7 +289,7 @@ export function IntegrationMarketplacePage() {
                 onClick={() => install(selected)}
               >
                 {selected.installed ? <RefreshCw size={12} /> : <Plug size={12} />}
-                {selected.installed ? "Refresh manifest" : "Install"}
+                {selected.installed ? "Refresh setup" : "Install"}
               </Button>
             </>
           ) : undefined}
@@ -286,10 +299,10 @@ export function IntegrationMarketplacePage() {
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 <Badge>{selected.category}</Badge>
                 <Badge tone={selected.installed ? "success" : selected.status === "planned" ? "warn" : "info"}>
-                  {selected.installed ? "installed" : selected.status}
+                  {selected.installed ? "Installed" : statusLabel(selected.status)}
                 </Badge>
-                <Badge tone={healthTone(selected.health.status)}>{selected.health.status}</Badge>
-                <Badge>{selected.kind.replace(/_/g, " ")}</Badge>
+                <Badge tone={healthTone(selected.health.status)}>{healthLabel(selected.health.status)}</Badge>
+                <Badge>{kindLabel(selected.kind)}</Badge>
               </div>
               <p className="muted" style={{ margin: 0 }}>{selected.description}</p>
 
@@ -329,16 +342,34 @@ export function IntegrationMarketplacePage() {
 
               <IntegrationDeepLinks item={selected} />
 
-              <Section title="Capabilities" values={selected.capabilities} />
-              <Section title="Data mappings" values={selected.dataMappings} />
-              <Section title="Audit events" values={selected.auditEvents} />
-              <Section title="Actions" values={selected.actions.map((action) => `${action.label}: ${action.description}`)} />
+              <Section
+                title="What this integration can do"
+                hint="Actions this connector is allowed to perform once installed."
+                values={selected.capabilities}
+              />
+              <Section
+                title="Data it syncs"
+                hint="Societyer records this integration reads from or writes to."
+                values={selected.dataMappings}
+              />
+              <Section
+                title="Activity log entries"
+                hint="Events this integration records to the audit log for accountability."
+                values={selected.auditEvents}
+              />
+              <Section
+                title="Available actions"
+                values={selected.actions.map((action) => `${action.label}: ${action.description}`)}
+              />
 
               <div className="col" style={{ gap: 8 }}>
-                <strong style={{ fontSize: "var(--fs-sm)" }}>Setup health</strong>
+                <strong style={{ fontSize: "var(--fs-sm)" }}>Setup checklist</strong>
+                <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  Confirm each credential or connection this integration needs before relying on it.
+                </div>
                 {selected.requiredSecrets.length === 0 ? (
                   <div className="row muted" style={{ gap: 6 }}>
-                    <CheckCircle2 size={14} /> No provider secrets required.
+                    <CheckCircle2 size={14} /> No provider credentials required.
                   </div>
                 ) : (
                   selected.requiredSecrets.map((secret) => (
@@ -419,10 +450,11 @@ function integrationLinksFor(slug: string) {
   return links[slug] ?? [];
 }
 
-function Section({ title, values }: { title: string; values: string[] }) {
+function Section({ title, hint, values }: { title: string; hint?: string; values: string[] }) {
   return (
     <div className="col" style={{ gap: 6 }}>
       <strong style={{ fontSize: "var(--fs-sm)" }}>{title}</strong>
+      {hint && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{hint}</div>}
       <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
         {values.map((value) => <Badge key={value}>{value}</Badge>)}
       </div>
@@ -435,6 +467,27 @@ function healthTone(status: string) {
   if (status === "needs_setup" || status === "planned") return "warn";
   if (status === "not_installed") return "neutral";
   return "info";
+}
+
+// Friendlier display text for raw status/health enum values shown in badges.
+const STATUS_LABELS: Record<string, string> = {
+  planned: "Coming soon",
+  available: "Available",
+};
+
+function statusLabel(status: string) {
+  return STATUS_LABELS[status] ?? status.replace(/_/g, " ");
+}
+
+const HEALTH_LABELS: Record<string, string> = {
+  ready: "Ready",
+  needs_setup: "Needs setup",
+  not_installed: "Not installed",
+  planned: "Coming soon",
+};
+
+function healthLabel(status: string) {
+  return HEALTH_LABELS[status] ?? status.replace(/_/g, " ");
 }
 
 function mergeCatalogWithInstallations(installations: Installation[]): CatalogItem[] {
@@ -457,9 +510,9 @@ function mergeCatalogWithInstallations(installations: Installation[]): CatalogIt
               : manifest.status === "planned" ? "planned" : "ready",
         checkedAtISO: config.healthCheckedAtISO,
         messages: !installation
-          ? ["Install this integration to configure credentials, actions, and webhooks."]
+          ? ["Install this integration to configure credentials, actions, and connections."]
           : [
-              missingSecrets.length ? `Missing configured secret status: ${missingSecrets.join(", ")}` : "Required secret statuses are configured.",
+              missingSecrets.length ? `Still needs setup: ${missingSecrets.join(", ")}` : "All required credentials are confirmed.",
               ...(Array.isArray(config.healthMessages) ? config.healthMessages : []),
             ],
       },

@@ -101,6 +101,7 @@ const GROUP_TO_CATEGORY: Record<RouteGroup, CommandCategory> = {
   finance: "Finance",
   compliance: "Compliance",
   workflows: "System",
+  advanced: "System",
   administration: "System",
 };
 

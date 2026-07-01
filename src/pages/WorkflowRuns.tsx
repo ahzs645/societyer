@@ -25,6 +25,31 @@ import {
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
 
+/** Plain-language labels for the raw `triggeredBy` enum values. */
+const TRIGGERED_BY_LABELS: Record<string, string> = {
+  manual: "Run manually",
+  cron: "Scheduled",
+  webhook: "Started by external system",
+};
+
+function triggeredByLabel(value?: string): string {
+  if (!value) return "—";
+  return TRIGGERED_BY_LABELS[value] ?? value;
+}
+
+/** Plain-language labels for the raw run/step `status` enum values. */
+const STATUS_LABELS: Record<string, string> = {
+  ok: "Completed",
+  fail: "Failed",
+  running: "In progress",
+  skip: "Skipped",
+};
+
+function statusLabel(value?: string): string {
+  if (!value) return "—";
+  return STATUS_LABELS[value] ?? value;
+}
+
 /**
  * Workflow-run history. Read-only, like the audit log — the records
  * are written by the workflow engine, not edited by hand. The page
@@ -92,7 +117,7 @@ export function WorkflowRunsPage() {
         title="Workflow runs"
         icon={<History size={16} />}
         iconColor="gray"
-        subtitle="Step-by-step execution history for every configured workflow. Click a row for timeline detail."
+        subtitle="A history of every time your automations have run. Click a row to see the details."
       />
 
       {showMetadataWarning ? (
@@ -145,10 +170,13 @@ export function WorkflowRunsPage() {
               }
               if (field.name === "triggeredBy") {
                 return (
-                  <span className="mono" style={{ fontSize: "var(--fs-sm)" }}>
-                    {String(value ?? "")}
+                  <span style={{ fontSize: "var(--fs-sm)" }}>
+                    {triggeredByLabel(value as string | undefined)}
                   </span>
                 );
+              }
+              if (field.name === "status") {
+                return <span>{statusLabel(value as string | undefined)}</span>;
               }
               return undefined;
             }}
@@ -167,15 +195,15 @@ export function WorkflowRunsPage() {
         onClose={() => setSelectedRun(null)}
         title={
           selectedRun
-            ? `${selectedRun.workflowName} · ${selectedRun.status}`
+            ? `${selectedRun.workflowName} · ${statusLabel(selectedRun.status)}`
             : "Run detail"
         }
       >
         {selectedRun && (
           <div>
             <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 12 }}>
-              Recipe: <strong>{selectedRun.recipeLabel}</strong> · Triggered{" "}
-              <span className="mono">{selectedRun.triggeredBy}</span>
+              Automation: <strong>{selectedRun.recipeLabel}</strong> ·{" "}
+              {triggeredByLabel(selectedRun.triggeredBy)}
               {selectedRun.startedAtISO && (
                 <>
                   {" "}

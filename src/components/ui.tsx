@@ -428,7 +428,7 @@ export function TintedIconTile({
   className,
   children,
 }: {
-  tone?: "blue" | "red" | "turquoise" | "gray" | "orange" | "purple" | "green" | "pink" | "yellow";
+  tone?: "blue" | "red" | "turquoise" | "gray" | "orange" | "purple" | "green" | "pink" | "yellow" | "slate";
   size?: "sm" | "md" | "lg";
   className?: string;
   children: ReactNode;

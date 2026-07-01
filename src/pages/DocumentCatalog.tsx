@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { FileText } from "lucide-react";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 
 /** Recover the packet key from a seeded template's marker (societyer:<kind>-packet-template:<key>). */
 function packetKeyOf(t: { sourceExternalIds?: string[]; notes?: string }): string | null {
@@ -119,6 +119,8 @@ export function DocumentCatalogPage() {
         iconColor="blue"
         subtitle="The documents available to generate for this entity — its seeded template and precedent catalog. Read-only viewer."
       />
+
+      <RelatedDocumentViews current="/app/document-catalog" />
 
       {templates === undefined ? (
         <div className="card">

@@ -4,7 +4,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
-import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -193,6 +193,8 @@ export function DocumentsPage() {
           </>
         }
       />
+
+      <RelatedDocumentViews current="/app/documents" />
 
       {reviewQueues && (
         <>

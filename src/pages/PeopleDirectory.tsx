@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -122,6 +123,11 @@ export function PeopleDirectoryPage() {
           </button>
         }
       />
+
+      <p className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
+        A cross-organization contact lookup to avoid duplicate person records. To manage this organization's directors or other governance roles, see{" "}
+        <Link to="/app/directors">Directors</Link> or <Link to="/app/role-holders">Role holders</Link>.
+      </p>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <Field label="Search people">

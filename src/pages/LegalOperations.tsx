@@ -127,9 +127,15 @@ export function RoleHoldersPage() {
         icon={<UsersRound size={16} />}
         iconColor="blue"
         subtitle={
-          corporationWorkspace
-            ? `Directors, officers, shareholders, controllers, and authorized filers for ${organizationLabel(society)}.`
-            : "Canonical register for directors, officers, incorporators, attorneys for service, authorized representatives, members, rightsholders, and control relationships."
+          <>
+            {corporationWorkspace
+              ? `Directors, officers, shareholders, controllers, and authorized filers for ${organizationLabel(society)}.`
+              : "Canonical register for directors, officers, incorporators, attorneys for service, authorized representatives, members, rightsholders, and control relationships."}{" "}
+            The complete governance-role register for this organization, with full audit
+            history. For your BC director filing register specifically, see{" "}
+            <Link to="/app/directors">Directors</Link>. Looking up a person across multiple
+            organizations instead? Try the <Link to="/app/people-directory">People directory</Link>.
+          </>
         }
         actions={
           <div className="row" style={{ flexWrap: "wrap" }}>
@@ -359,7 +365,7 @@ export function RoleHoldersPage() {
             <Field label="Nature of control"><MarkdownEditor rows={4} value={draft.natureOfControl ?? ""} onChange={(markdown) => setDraft({ ...draft, natureOfControl: markdown })} /></Field>
             <StructuredAddressFields value={draft} onChange={(address) => setDraft({ ...draft, ...address })} />
             <Field label="Service address"><input className="input" value={draft.serviceStreet ?? ""} onChange={(e) => setDraft({ ...draft, serviceStreet: e.target.value })} /></Field>
-            <Field label="Related shareholder/controller IDs"><input className="input" value={draft.relatedShareholderIdsText ?? ""} onChange={(e) => setDraft({ ...draft, relatedShareholderIdsText: e.target.value })} /></Field>
+            <Field label={corporationWorkspace ? "Related shareholder/controller IDs" : "Related member/controller IDs"}><input className="input" value={draft.relatedShareholderIdsText ?? ""} onChange={(e) => setDraft({ ...draft, relatedShareholderIdsText: e.target.value })} /></Field>
             <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
           </>
         )}
@@ -734,7 +740,7 @@ export function RightsLedgerPage() {
       <Drawer
         open={Boolean(holderDrill)}
         onClose={() => setHolderDrill(null)}
-        title="Shareholder"
+        title={corporationWorkspace ? "Shareholder" : "Rights holder"}
         footer={<button className="btn" onClick={() => setHolderDrill(null)}>Close</button>}
       >
         {holderDrill && (() => {
@@ -980,7 +986,15 @@ export function TemplateEnginePage() {
         title="Template engine"
         icon={<BookTemplate size={16} />}
         iconColor="green"
-        subtitle="Reusable OrgHub-style precedents, data fields, templates, generated drafts, signing state, package runs, timelines, deliverables, terms, and price items."
+        subtitle={
+          <>
+            Technical setup area — used to configure document templates for automated packages.
+            Manage reusable precedents (pre-built document bundles, e.g. an incorporation
+            package), data fields, templates, generated drafts, signing state, package runs
+            (a specific instance of a precedent filled in with real data), timelines,
+            deliverables, terms, and price items.
+          </>
+        }
         actions={
           <div className="row" style={{ flexWrap: "wrap" }}>
             <button className="btn-action" onClick={addStarterTemplates}><FileSignature size={12} /> Starter templates</button>
@@ -1010,7 +1024,10 @@ export function TemplateEnginePage() {
         />
       </Section>
 
-      <Section title="Precedents and runs" count={(data?.precedents?.length ?? 0) + (data?.runs?.length ?? 0)}>
+      <Section
+        title="Precedents and runs (document-bundle blueprints and their filled-in instances)"
+        count={(data?.precedents?.length ?? 0) + (data?.runs?.length ?? 0)}
+      >
         <SimpleTable
           cols={["Package", "Timeline", "Deliverables", "Terms", "Status", ""]}
           rows={(data?.precedents ?? []).map((row: any) => [
@@ -1025,7 +1042,10 @@ export function TemplateEnginePage() {
         />
       </Section>
 
-      <Section title="Generated documents and signers" count={(data?.generatedDocuments?.length ?? 0) + (data?.signers?.length ?? 0)}>
+      <Section
+        title="Generated documents and signers (finished drafts and the people who need to sign them)"
+        count={(data?.generatedDocuments?.length ?? 0) + (data?.signers?.length ?? 0)}
+      >
         <SimpleTable
           cols={["Document", "Template", "Signing package", "Signers", "Status", ""]}
           rows={(data?.generatedDocuments ?? []).map((row: any) => [
@@ -1271,7 +1291,7 @@ function TemplateDraftForm({ draft, setDraft }: { draft: any; setDraft: (draft: 
         <Field label="Draft URL"><input className="input" value={draft.draftFileUrl ?? ""} onChange={(e) => setDraft({ ...draft, draftFileUrl: e.target.value })} /></Field>
         <Field label="Source template name"><input className="input" value={draft.sourceTemplateName ?? ""} onChange={(e) => setDraft({ ...draft, sourceTemplateName: e.target.value })} /></Field>
         <Field label="Effective date"><DatePicker value={draft.effectiveDate ?? ""} onChange={(value) => setDraft({ ...draft, effectiveDate: value })} /></Field>
-        <Field label="Syngrafii package ID"><input className="input mono" value={draft.syngrafiiPackageId ?? ""} onChange={(e) => setDraft({ ...draft, syngrafiiPackageId: e.target.value })} /></Field>
+        <Field label="Syngrafii package ID (our e-signature provider's reference ID for this signing package)"><input className="input mono" value={draft.syngrafiiPackageId ?? ""} onChange={(e) => setDraft({ ...draft, syngrafiiPackageId: e.target.value })} /></Field>
         <Field label="Required signer tags"><input className="input" value={draft.signerTagsRequiredText ?? ""} onChange={(e) => setDraft({ ...draft, signerTagsRequiredText: e.target.value })} /></Field>
         <Field label="Signed signer tags"><input className="input" value={draft.signerTagsSignedText ?? ""} onChange={(e) => setDraft({ ...draft, signerTagsSignedText: e.target.value })} /></Field>
       </>
@@ -1417,8 +1437,8 @@ function draftTitle(draft?: any) {
   return {
     field: "Template data field",
     template: "Legal template",
-    precedent: "Legal precedent",
-    run: "Legal package run",
+    precedent: "Legal precedent (a reusable document-bundle blueprint)",
+    run: "Legal package run (a precedent filled in with real data for one filing)",
     document: "Generated document",
     signer: "Legal signer",
   }[draft.kind] ?? "Template engine record";

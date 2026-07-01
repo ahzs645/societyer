@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -155,6 +155,8 @@ export function MinuteBookPage() {
           </>
         }
       />
+
+      <RelatedDocumentViews current="/app/minute-book" />
 
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Connected records" value={recordBundles.length} />

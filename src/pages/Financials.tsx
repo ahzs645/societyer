@@ -416,6 +416,11 @@ export function FinancialsPage() {
             <Stat label="Ledger net" value={money(ledgerRevenueCents - ledgerExpenseCents)} tone={ledgerRevenueCents - ledgerExpenseCents < 0 ? "danger" : "ok"} />
             <Stat label="Ledger assets" value={money(ledgerAssetCents)} />
           </div>
+          <p className="muted" style={{ fontSize: "var(--fs-sm)", margin: "0 16px 16px" }}>
+            Based on the posted accounting ledger (accrual basis) — this is the authoritative total once
+            transactions are reconciled. Compare with the bank-transaction view on{" "}
+            <Link to="/app/treasurer">Treasurer</Link>, which can be provisional before reconciliation.
+          </p>
         </div>
       )}
 
@@ -700,16 +705,22 @@ export function FinancialsPage() {
       )}
 
       {tab === "overview" && latest && (
-        <div className="stat-grid">
-          <Stat label={`FY ${latest.fiscalYear} revenue`} value={money(latest.revenueCents)} />
-          <Stat label="Expenses" value={money(latest.expensesCents)} />
-          <Stat
-            label="Net surplus / (deficit)"
-            value={money(latest.revenueCents - latest.expensesCents)}
-            tone={latest.revenueCents - latest.expensesCents >= 0 ? "ok" : "danger"}
-          />
-          <Stat label="Net assets" value={money(latest.netAssetsCents)} />
-        </div>
+        <>
+          <div className="stat-grid">
+            <Stat label={`FY ${latest.fiscalYear} revenue`} value={money(latest.revenueCents)} />
+            <Stat label="Expenses" value={money(latest.expensesCents)} />
+            <Stat
+              label="Net surplus / (deficit)"
+              value={money(latest.revenueCents - latest.expensesCents)}
+              tone={latest.revenueCents - latest.expensesCents >= 0 ? "ok" : "danger"}
+            />
+            <Stat label="Net assets" value={money(latest.netAssetsCents)} />
+          </div>
+          <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>
+            From the recorded year-end financial statement for FY {latest.fiscalYear} — may differ from the
+            "Internal ledger summary" above if the statement predates recent postings.
+          </p>
+        </>
       )}
 
       {tab === "overview" && <YearOverYearFinancialsCard rows={sorted} onOpenFinancialYear={openFinancialYear} />}

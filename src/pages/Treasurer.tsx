@@ -382,6 +382,11 @@ export function TreasurerPage() {
         <SummaryCard label="Expenses" value={-(pnl?.totalExpenseCents ?? 0)} icon={<TrendingDown size={14} />} color="red" />
         <SummaryCard label="Net" value={pnl?.netCents ?? 0} icon={<DollarSign size={14} />} color={pnl && pnl.netCents < 0 ? "red" : "green"} />
       </div>
+      <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: -8, marginBottom: 12 }}>
+        Based on synced bank transactions (cash basis) — totals here may be provisional and can differ from the
+        posted ledger until transactions are reconciled. See <Link to="/app/financials">Financials</Link> for the
+        ledger-based (accrual) total.
+      </p>
 
       <div className="treasurer-category-grid">
         <div className="card treasurer-category-card">

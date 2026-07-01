@@ -358,6 +358,12 @@ export function YearEndReportsPage() {
             <p className="muted">Loading…</p>
           ) : (
             <>
+              <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                Revenue, expense, and net totals use a manually-recorded, approved financial statement for this
+                fiscal year when one exists on <Link to="/app/financials">Financials</Link>; otherwise they're
+                summed from synced bank transactions (the same source as{" "}
+                <Link to="/app/treasurer">Treasurer</Link>). Either way, this is not the posted-ledger figure.
+              </p>
               <ReportActions
                 title="Annual Financial Statement"
                 filenameBase={`annual-statement-${fiscalYear}`}
@@ -375,6 +381,10 @@ export function YearEndReportsPage() {
             <p className="muted">Loading…</p>
           ) : (
             <>
+              <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                Totals here come from grant-linked transactions only, so they won't match the whole-organization
+                figures shown on the other tabs of this page or on Financials/Treasurer.
+              </p>
               <ReportActions
                 title="Statement of Restricted Funds"
                 filenameBase={`restricted-funds-${fiscalYear}`}
@@ -391,6 +401,11 @@ export function YearEndReportsPage() {
           <p className="meta">
             Organisation-wide Statement of Revenues &amp; Expenses, generated from your finance ledger for the selected
             fiscal year and split General Fund / Restricted Funds / Total.
+          </p>
+          <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            Based on synced bank transactions (cash basis) — the same source as the{" "}
+            <Link to="/app/treasurer">Treasurer</Link> dashboard. For the posted-ledger (accrual) total, see{" "}
+            <Link to="/app/financials">Financials</Link>.
           </p>
           {orgStatement === undefined ? (
             <p className="muted">Loading…</p>
