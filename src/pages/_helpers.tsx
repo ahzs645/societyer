@@ -65,6 +65,36 @@ export function SeedPrompt() {
   );
 }
 
+/**
+ * The five document/record surfaces are scattered across three different
+ * sidebar groups (Work, Governance records, Compliance) because each has a
+ * legitimate reason to sit next to its neighbours there. That makes it easy
+ * to land on one and not realize the other four exist. Rather than restructure
+ * nav, each of those five pages renders this single unobtrusive link row
+ * (right under its PageHeader) so a user can jump straight across.
+ */
+const RELATED_DOCUMENT_VIEWS = [
+  { to: "/app/documents", label: "Documents" },
+  { to: "/app/document-catalog", label: "Document catalog" },
+  { to: "/app/library", label: "Library" },
+  { to: "/app/minute-book", label: "Minute book" },
+  { to: "/app/records-archive", label: "Records archive" },
+] as const;
+
+export function RelatedDocumentViews({ current }: { current: (typeof RELATED_DOCUMENT_VIEWS)[number]["to"] }) {
+  const links = RELATED_DOCUMENT_VIEWS.filter((view) => view.to !== current);
+  return (
+    <div className="row muted" style={{ gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 16, fontSize: "var(--fs-sm)" }}>
+      <span>Related:</span>
+      {links.map((view) => (
+        <Link key={view.to} to={view.to} className="chip chip--sm">
+          {view.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 export function PageHeader({
   title,
   subtitle,

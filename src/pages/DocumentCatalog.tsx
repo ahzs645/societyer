@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { FileText } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 
 /** Recover the packet key from a seeded template's marker (societyer:<kind>-packet-template:<key>). */
 function packetKeyOf(t: { sourceExternalIds?: string[]; notes?: string }): string | null {
@@ -120,6 +121,8 @@ export function DocumentCatalogPage() {
         subtitle="The documents available to generate for this entity — its seeded template and precedent catalog. Read-only viewer."
       />
 
+      <RelatedDocumentViews current="/app/document-catalog" />
+
       {templates === undefined ? (
         <div className="card">
           <p style={{ color: "var(--text-tertiary)" }}>Loading…</p>
@@ -127,7 +130,10 @@ export function DocumentCatalogPage() {
       ) : templates.length === 0 ? (
         <div className="card">
           <p style={{ color: "var(--text-tertiary)" }}>
-            No document catalog seeded yet for this entity.
+            No document catalog seeded yet for this entity. This catalog is a structured,
+            generate-ready view of templates and precedents — it doesn't hold the entity's
+            actual documents. Those already exist and can be viewed on{" "}
+            <Link to="/app/documents">Documents</Link>.
           </p>
         </div>
       ) : (

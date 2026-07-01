@@ -90,6 +90,7 @@ import { GlobalAiAssistant, openGlobalAiAssistant } from "../features/ai/GlobalA
 import { ErrorBoundary } from "./ErrorBoundary";
 import { setStoredUserId } from "../hooks/useCurrentUser";
 import { setStoredSocietyId, useSocietySelection } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { UserPicker } from "./UserPicker";
 import { InspectorHost, InspectorProvider } from "./InspectorPanel";
 import { MenuRow, MenuSectionLabel, Pill, TintedIconTile } from "./ui";
@@ -550,6 +551,7 @@ export function Layout() {
   const pinnedNav = useMemo(() => getPinnedNav(pinnedRoutes), [pinnedRoutes]);
   const groupedNav = useMemo(() => getGroupedNav(pinnedRouteSet), [pinnedRouteSet]);
   const entityKind = useMemo(() => (society ? organizationKind(society as any) : null), [society]);
+  const { can } = usePermissions();
   // The firm-wide Portfolio rolls up multiple entities; with a single entity it
   // has nothing to aggregate, so hide its sidebar nav item (the switcher's
   // "All entities" row is gated the same way).
@@ -562,9 +564,10 @@ export function Layout() {
         (item) =>
           (!item.module || isModuleEnabled(society, item.module)) &&
           routeAllowedForEntityKind(item, entityKind) &&
-          navAllowedForEntityCount(item),
+          navAllowedForEntityCount(item) &&
+          (!item.permission || can(item.permission)),
       ),
-    [pinnedNav, society, entityKind, isMultiEntity],
+    [pinnedNav, society, entityKind, isMultiEntity, can],
   );
 
   // Resolve pinned command IDs into runnable commands. Commands whose ID isn't
@@ -586,10 +589,11 @@ export function Layout() {
         (item) =>
           (!item.module || isModuleEnabled(society, item.module)) &&
           routeAllowedForEntityKind(item, entityKind) &&
-          navAllowedForEntityCount(item),
+          navAllowedForEntityCount(item) &&
+          (!item.permission || can(item.permission)),
       ),
       })).filter((group) => group.items.length > 0),
-    [groupedNav, society, entityKind, isMultiEntity],
+    [groupedNav, society, entityKind, isMultiEntity, can],
   );
   const getNavItemLabel = (item: NavItem) => t(NAV_ITEM_LABEL_KEYS[item.label] ?? item.label, item.label);
   const isSidebarCollapsed = isMobileNav ? !mobileSidebarOpen : collapsed;

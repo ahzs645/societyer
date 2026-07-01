@@ -87,11 +87,16 @@ export function WebhooksPage() {
         iconColor="gray"
         subtitle="Send signed event notifications to external systems (n8n, Zapier, your own service). Each delivery is signed with the endpoint's secret and retried on failure."
         actions={
-          canManage ? (
-            <button className="btn-action btn-action--primary" onClick={() => setDraft({ ...EMPTY_DRAFT })}>
-              <Plus size={12} /> Add endpoint
-            </button>
-          ) : undefined
+          <>
+            <a className="btn-action" href="/api/docs" target="_blank" rel="noreferrer">
+              API docs
+            </a>
+            {canManage && (
+              <button className="btn-action btn-action--primary" onClick={() => setDraft({ ...EMPTY_DRAFT })}>
+                <Plus size={12} /> Add endpoint
+              </button>
+            )}
+          </>
         }
       />
 

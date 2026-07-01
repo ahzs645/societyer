@@ -31,6 +31,17 @@ import { RecordTableSortPopover } from "./RecordTableSortPopover";
  * owns the fetch — this component stays stateless about which views
  * exist in the society.
  */
+/**
+ * Switching view type (table/kanban/calendar) swaps in a differently-sized
+ * DOM subtree without changing the page's scroll offset, so a user scrolled
+ * partway down one view lands mid-page in the next one - e.g. the tail of a
+ * kanban board rendered above the new table's header. Reset to the top so
+ * each view always opens from a known position.
+ */
+function resetScrollForViewSwitch() {
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
 export function RecordTableToolbar({
   icon,
   label,
@@ -250,7 +261,10 @@ export function RecordTableToolbar({
           <button
             type="button"
             className={viewType === "table" ? "is-active" : ""}
-            onClick={() => handle.get().setType("table")}
+            onClick={() => {
+              handle.get().setType("table");
+              resetScrollForViewSwitch();
+            }}
             title="Table view"
           >
             <Table2 size={12} />
@@ -262,6 +276,7 @@ export function RecordTableToolbar({
               const firstField = kanbanFieldMetadataId ?? selectableKanbanFields[0]?.fieldMetadataId;
               handle.get().setType("kanban");
               if (firstField) handle.get().setKanbanFieldMetadataId(firstField);
+              resetScrollForViewSwitch();
             }}
             title="Kanban view"
           >
@@ -274,6 +289,7 @@ export function RecordTableToolbar({
               const firstField = calendarFieldMetadataId ?? selectableCalendarFields[0]?.fieldMetadataId;
               handle.get().setType("calendar");
               if (firstField) handle.get().setCalendarFieldMetadataId(firstField);
+              resetScrollForViewSwitch();
             }}
             title="Calendar view"
           >

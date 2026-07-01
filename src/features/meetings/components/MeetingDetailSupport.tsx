@@ -375,12 +375,37 @@ export function parseLines(value: string) {
     .filter(Boolean);
 }
 
-export function inferredPackageReviewStatus(materials: any[], sourceReviewStatus: string) {
-  if (getPackageReviewBlockers(materials, sourceReviewStatus).length > 0) return "needs_review";
+export function inferredPackageReviewStatus(materials: any[], sourceReviewStatus: string, meeting?: any) {
+  if (getPackageReviewBlockers(materials, sourceReviewStatus, meeting).length > 0) return "needs_review";
   return materials.length > 0 ? "ready" : "draft";
 }
 
-export function getPackageReviewBlockers(materials: any[], sourceReviewStatus: string) {
+/**
+ * These blockers describe *pre-meeting* board-package prep (source data review,
+ * required materials, document sign-off). They gate "mark package ready" while
+ * a meeting is still upcoming. Once a meeting has already been held, that prep
+ * gate is moot — nothing about "the notice binder still needs review" is
+ * actionable for a meeting that happened, possibly a long time ago — so for a
+ * held meeting we report zero *active* blockers rather than surfacing stale,
+ * seemingly-urgent warnings. Callers that want the historical detail can use
+ * `getPackageReviewHistoryNotes` instead.
+ */
+export function getPackageReviewBlockers(materials: any[], sourceReviewStatus: string, meeting?: any) {
+  if (meeting?.status === "Held") return [];
+  return computePackageReviewBlockers(materials, sourceReviewStatus);
+}
+
+/**
+ * Same underlying conditions as `getPackageReviewBlockers`, but always
+ * computed regardless of meeting status — for read-only, historical display
+ * (e.g. "this held meeting's package was marked ready without X") rather than
+ * as an active, action-demanding blocker list.
+ */
+export function getPackageReviewHistoryNotes(materials: any[], sourceReviewStatus: string) {
+  return computePackageReviewBlockers(materials, sourceReviewStatus);
+}
+
+function computePackageReviewBlockers(materials: any[], sourceReviewStatus: string) {
   const blockers: string[] = [];
   if (sourceReviewStatus === "imported_needs_review") {
     blockers.push("Imported meeting or minutes data still needs source review.");
@@ -593,4 +618,43 @@ export function Check({ ok, children }: { ok: boolean; children: React.ReactNode
       <span style={{ color: ok ? "var(--text-primary)" : "var(--text-secondary)" }}>{children}</span>
     </div>
   );
+}
+
+/**
+ * Canonical AGM step order — must mirror `STEP_ORDER` in `src/pages/AgmWorkflow.tsx`.
+ * `agmRuns.step` holds the id of the most-recently-completed step, so a step at
+ * index `i` is done once the run's step index is `>= i`. Kept here (rather than
+ * only in AgmWorkflow.tsx) so other surfaces — like the meeting overview's AGM
+ * checklist — can report the *same* completion state instead of re-deriving it
+ * from raw meeting/minutes fields and drifting out of sync.
+ */
+export const AGM_STEP_ORDER = [
+  "notice",
+  "held",
+  "financialsPresented",
+  "electionsHeld",
+  "minutesApproved",
+  "annualReportFiled",
+] as const;
+
+export type AgmStep = (typeof AGM_STEP_ORDER)[number];
+
+/** Index of the run's current step in AGM_STEP_ORDER, or -1 if there is no run yet. */
+export function agmStepIndex(run: { step?: string } | null | undefined): number {
+  if (!run) return -1;
+  const idx = AGM_STEP_ORDER.indexOf(run.step as AgmStep);
+  return idx;
+}
+
+/** Whether `step` is complete for this AGM run — matches AgmWorkflow.tsx's own `done` check. */
+export function isAgmStepDone(run: { step?: string } | null | undefined, step: AgmStep): boolean {
+  if (!run) return false;
+  const currentIdx = Math.max(agmStepIndex(run), 0);
+  const stepIdx = AGM_STEP_ORDER.indexOf(step);
+  return stepIdx <= currentIdx;
+}
+
+/** Whether the whole AGM workflow has reached its final step. */
+export function isAgmWorkflowComplete(run: { step?: string } | null | undefined): boolean {
+  return isAgmStepDone(run, AGM_STEP_ORDER[AGM_STEP_ORDER.length - 1]);
 }

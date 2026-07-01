@@ -97,7 +97,7 @@ export function DeadlinesPage() {
         title="Deadlines"
         icon={<Calendar size={16} />}
         iconColor="yellow"
-        subtitle="Rolling calendar of compliance obligations — governance, tax, payroll, privacy."
+        subtitle="Dates imposed by law or regulation, like filings, AGMs, and renewals. For internal work items, use Tasks; for promises made to funders or partners, use Commitments."
         actions={
           <>
             <Segmented<"list" | "calendar">
@@ -204,6 +204,17 @@ export function DeadlinesPage() {
                     </span>
                   );
                 }
+                if (field.name === "dueDate") {
+                  const s = statusOf(record);
+                  const isOverdue = s === "open" && record.dueDate && new Date(record.dueDate).getTime() < Date.now();
+                  if (!record.dueDate) return <span className="record-cell__empty">—</span>;
+                  return (
+                    <span style={isOverdue ? { color: "var(--danger)", fontWeight: 600 } : undefined}>
+                      {new Date(record.dueDate).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                      {isOverdue && " · Overdue"}
+                    </span>
+                  );
+                }
                 if (field.name === "title") {
                   const s = statusOf(record);
                   const isComplete = s === "complete";
@@ -265,6 +276,9 @@ export function DeadlinesPage() {
       >
         {form && (
           <div>
+            <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 0, marginBottom: 12 }}>
+              Use a deadline for dates imposed by law or regulation. Internal work belongs in Tasks; promises to funders or partners belong in Commitments.
+            </p>
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
             <Field label="Description"><MarkdownEditor rows={4} value={form.description ?? ""} onChange={(markdown) => setForm({ ...form, description: markdown })} /></Field>
             <div className="row" style={{ gap: 12 }}>

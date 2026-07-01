@@ -843,7 +843,7 @@ export function BrowserConnectorsPage() {
                 <div key={action.id} className="panel" style={{ padding: 12 }}>
                   <div className="row" style={{ justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                     <strong>{action.name}</strong>
-                    <span className="mono muted">{action.id}</span>
+                    <span className="mono muted" title="Internal action ID (for support)">{action.id}</span>
                   </div>
                   <div className="muted" style={{ marginTop: 4 }}>{action.description}</div>
                 </div>
@@ -910,7 +910,7 @@ export function BrowserConnectorsPage() {
                 <Badge tone={gcosNeedsLogin ? "warn" : "success"}>
                   {gcosNeedsLogin ? "GCOS login in progress" : "Active GCOS session"}
                 </Badge>
-                <strong>{gcosSession.profileKey}</strong>
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Browser session: <strong>{gcosSession.profileKey}</strong></span>
               </div>
               <div className="muted" style={{ marginTop: 4, overflowWrap: "anywhere" }}>
                 {gcosNeedsLogin
@@ -1015,7 +1015,7 @@ export function BrowserConnectorsPage() {
             <div className="panel" style={{ padding: 12 }}>
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 <Badge tone="success">Saved profile</Badge>
-                <strong>{savedConnection.profileKey}</strong>
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Browser session: <strong>{savedConnection.profileKey}</strong></span>
               </div>
               <div className="muted" style={{ marginTop: 4, overflowWrap: "anywhere" }}>
                 Saved {formatDateTime(savedConnection.savedAtISO)} from {savedConnection.finalUrl ?? savedConnection.currentUrl}
@@ -1028,7 +1028,7 @@ export function BrowserConnectorsPage() {
                 <Badge tone={waveNeedsLogin ? "warn" : "success"}>
                   {waveNeedsLogin ? "Wave login in progress" : "Active Wave session"}
                 </Badge>
-                <strong>{waveSession.profileKey}</strong>
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Browser session: <strong>{waveSession.profileKey}</strong></span>
               </div>
               <div className="muted" style={{ marginTop: 4 }}>
                 {waveNeedsLogin
@@ -1071,8 +1071,8 @@ export function BrowserConnectorsPage() {
         icon={<MonitorPlay size={16} />}
         iconColor="orange"
         description={workspaceConnector
-          ? `Live browser workspace for ${workspaceConnector.name}.`
-          : "Open an installed browser app for imports, downloads, and page utilities."}
+          ? `Technical setup area. Live browser workspace for ${workspaceConnector.name}.`
+          : "Technical setup area. Open an installed browser app for imports, downloads, and page utilities — typically configured once by an administrator, not a page a board member needs to visit."}
         tabs={[
           { id: "apps", label: "Apps", icon: <MonitorPlay size={14} /> },
           { id: "runtime", label: "Runtime" },
@@ -1160,7 +1160,8 @@ export function BrowserConnectorsPage() {
               </div>
               {health?.browser?.detail && <div className="alert alert--danger">{health.browser.detail}</div>}
               <div className="muted">
-                Start with <code className="mono">npm run docker:connectors</code> if the runner is unavailable.
+                If the runner is unavailable, an administrator can start it by running{" "}
+                <code className="mono">npm run docker:connectors</code> in a terminal on the server (technical — not something to run from this page).
               </div>
             </div>
           </div>
@@ -1189,7 +1190,7 @@ export function BrowserConnectorsPage() {
                     This app can use the generic browser session flow. Restart the connector runner to expose its named connector actions.
                   </div>
                 )}
-                <Field label="Browser profile">
+                <Field label="Browser session" hint="Identifies the saved login/session this app reuses. Leave the default unless you're managing multiple logins for this app.">
                   <input className="input" value={profileKey} onChange={(event) => setProfileKey(event.target.value)} />
                 </Field>
                 <Field label="Launch URL">
@@ -1311,9 +1312,11 @@ export function BrowserConnectorsPage() {
                           {sessionConnector && <Badge tone="info">{sessionConnector.name}</Badge>}
                           <strong>Active browser session</strong>
                         </div>
-                        <div className="muted mono" style={{ fontSize: "var(--fs-sm)", overflowWrap: "anywhere" }}>{session.sessionId}</div>
                         <div className="muted" style={{ marginTop: 4, overflowWrap: "anywhere", wordBreak: "break-word" }}>
                           Started {formatDateTime(session.startedAtISO)}
+                        </div>
+                        <div className="muted mono" style={{ fontSize: "var(--fs-xs)", overflowWrap: "anywhere", marginTop: 4 }}>
+                          Session ID (for support): {session.sessionId}
                         </div>
                       </div>
                       <div className="row" style={{ gap: 8, flex: "0 0 auto", flexWrap: "wrap", justifyContent: "flex-end" }}>

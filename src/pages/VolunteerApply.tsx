@@ -59,7 +59,7 @@ export function VolunteerApplyPage() {
   }, [form.email, form.firstName, form.lastName, form.roleWanted]);
 
   if (context === undefined) return <PageLoading />;
-  if (!context) {
+  if (!context || !context.society) {
     return (
       <div className="landing" style={{ minHeight: "100vh", padding: "4rem 0" }}>
         <div className="landing__container">

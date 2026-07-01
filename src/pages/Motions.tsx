@@ -207,6 +207,11 @@ export function MotionsPage() {
                           {meeting ? `${meeting.title} (${formatDate(meeting.scheduledAt)})` : "—"}
                         </td>
                         <td>
+                          {m.readOnly ? (
+                            <span className="muted" style={{ fontSize: 12 }} title="Recorded in meeting minutes — convert it to a first-class motion from the meeting's Motions tab to edit tags.">
+                              From minutes
+                            </span>
+                          ) : (
                           <div className="row" style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>
                             {(m.tags ?? []).map((tag: string) => (
                               <Badge key={tag} tone="neutral">
@@ -242,6 +247,7 @@ export function MotionsPage() {
                               <Plus size={12} />
                             </button>
                           </div>
+                          )}
                         </td>
                       </tr>
                     );

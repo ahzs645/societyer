@@ -163,8 +163,8 @@ export function BylawDiffPage() {
         const body = d.chunks
           .map((c) => {
             const t = escapeHtml(c.text);
-            if (c.kind === "add") return `<span style="background:#d4f4dd;">${t}</span>`;
-            if (c.kind === "del") return `<span style="background:#fde1e6; text-decoration:line-through;">${t}</span>`;
+            if (c.kind === "add") return `<span style="background:#d4f4dd; margin:0 1px;">${t}</span>`;
+            if (c.kind === "del") return `<span style="background:#fde1e6; text-decoration:line-through; margin:0 1px;">${t}</span>`;
             return t;
           })
           .join("");
@@ -172,11 +172,11 @@ export function BylawDiffPage() {
       })
       .join("");
     const bodyHtml = `
-      <h1>Bylaw redline${title ? ` — ${escapeHtml(title)}` : ""}</h1>
+      <h1>Bylaw amendments${title ? ` — ${escapeHtml(title)}` : ""}</h1>
       <p class="meta">Generated ${escapeHtml(new Date().toLocaleString())}</p>
       ${sectionsHtml || "<p>No section-level changes.</p>"}
     `;
-    void exportWordDocx({ filename: `bylaw-redline${title ? `-${title.replace(/\W+/g, "-")}` : ""}.docx`, title: "Bylaw redline", bodyHtml });
+    void exportWordDocx({ filename: `bylaw-amendments${title ? `-${title.replace(/\W+/g, "-")}` : ""}.docx`, title: "Bylaw amendments", bodyHtml });
   };
 
   const status = (selected?.status ?? "Draft") as Status;

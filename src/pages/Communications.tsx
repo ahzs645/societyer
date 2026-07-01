@@ -21,9 +21,46 @@ import {
   RecordTableViewToolbar,
   RecordTableFilterChips,
   RecordTableFilterPopover,
+  RecordTableEmpty,
   useObjectRecordTableData,
+  useRecordTableState,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+
+/**
+ * Distinguishes "genuinely zero records" from "filters/search narrowed a
+ * non-empty set to zero" so we don't tell someone to "clear filters" when
+ * there's nothing to clear. Must render inside a <RecordTableScope>.
+ */
+function CommunicationsEmptyState({
+  hasAnyRecords,
+  labelPlural,
+  createHint,
+}: {
+  hasAnyRecords: boolean;
+  labelPlural: string;
+  createHint: string;
+}) {
+  const filters = useRecordTableState((s) => s.filters);
+  const searchTerm = useRecordTableState((s) => s.searchTerm);
+  const isFiltered = filters.length > 0 || searchTerm.trim().length > 0;
+
+  if (hasAnyRecords && isFiltered) {
+    return (
+      <RecordTableEmpty
+        title={`No ${labelPlural} match your filters`}
+        description="Try clearing your filters or search to see all records."
+      />
+    );
+  }
+
+  return (
+    <RecordTableEmpty
+      title={`No ${labelPlural} yet`}
+      description={createHint}
+    />
+  );
+}
 
 type AudiencePreset =
   | "all_members"
@@ -467,6 +504,13 @@ export function CommunicationsPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={templatesTable.loading || templates === undefined}
+            emptyState={
+              <CommunicationsEmptyState
+                hasAnyRecords={templateRecords.length > 0}
+                labelPlural="templates"
+                createHint="Create a template to get started."
+              />
+            }
             renderCell={({ record: row, field }) => {
               if (field.name === "name") return <strong>{row.name}</strong>;
               if (field.name === "kind") return <Badge>{row.kind}</Badge>;
@@ -510,6 +554,13 @@ export function CommunicationsPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={segmentsTable.loading || segments === undefined}
+            emptyState={
+              <CommunicationsEmptyState
+                hasAnyRecords={segmentRecords.length > 0}
+                labelPlural="saved segments"
+                createHint="Create a segment to get started."
+              />
+            }
             renderCell={({ record: row, field }) => {
               if (field.name === "name") return <strong>{row.name}</strong>;
               if (field.name === "includeAudience") return <Badge>{row.includeAudience}</Badge>;
@@ -563,6 +614,13 @@ export function CommunicationsPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={campaignsTable.loading || campaigns === undefined}
+            emptyState={
+              <CommunicationsEmptyState
+                hasAnyRecords={campaignRecords.length > 0}
+                labelPlural="campaigns"
+                createHint="Send a campaign to get started."
+              />
+            }
             renderCell={({ record: row, field }) => {
               if (field.name === "subject") return <strong>{row.subject}</strong>;
               if (field.name === "audience") return <span>{row.audience}</span>;
@@ -605,6 +663,13 @@ export function CommunicationsPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={deliveriesTable.loading || deliveries === undefined}
+            emptyState={
+              <CommunicationsEmptyState
+                hasAnyRecords={deliveryRecords.length > 0}
+                labelPlural="deliveries"
+                createHint="Send a campaign to generate delivery records."
+              />
+            }
             renderCell={({ record: row, field }) => {
               if (field.name === "recipientName") return (
                 <div>
@@ -635,6 +700,7 @@ export function CommunicationsPage() {
         data={prefRows as any[]}
         rowKey={(row) => String(row.memberId)}
         searchPlaceholder="Search member or email…"
+        emptyMessage="No active members yet — add a member to manage their contact preferences."
         defaultSort={{ columnId: "name", dir: "asc" }}
         columns={[
           {

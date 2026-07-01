@@ -470,8 +470,8 @@ export function MeetingDetailPage() {
   const joinDetails = getMeetingJoinDetails(meeting, minutes);
   const packageReadiness = getPackageReadiness(packageMaterials);
   const sourceReviewStatus = meeting.sourceReviewStatus ?? minutes?.sourceReviewStatus ?? "not_applicable";
-  const packageReviewStatus = meeting.packageReviewStatus ?? inferredPackageReviewStatus(packageMaterials, sourceReviewStatus);
-  const packageReviewBlockers = getPackageReviewBlockers(packageMaterials, sourceReviewStatus);
+  const packageReviewStatus = meeting.packageReviewStatus ?? inferredPackageReviewStatus(packageMaterials, sourceReviewStatus, meeting);
+  const packageReviewBlockers = getPackageReviewBlockers(packageMaterials, sourceReviewStatus, meeting);
   const grantCandidates = materialDraft
     ? buildAccessGrantCandidates(materialDraft.grantSubjectType, {
         meeting,

@@ -50,7 +50,7 @@ export function PaperlessPage() {
         tagPrefix,
         actingUserId,
       });
-      toast.success("Paperless-ngx plugin enabled");
+      toast.success("Paperless-ngx connection enabled");
     } catch (error: any) {
       toast.error(error?.message ?? "Couldn't save Paperless-ngx settings");
     } finally {
@@ -78,14 +78,14 @@ export function PaperlessPage() {
         title="Paperless-ngx"
         icon={<Database size={16} />}
         iconColor="gray"
-        subtitle="External document storage, OCR, and tag sync for Societyer records."
+        subtitle="Technical setup area. Connects Societyer to an external document archive that automatically scans (OCR) and tags uploaded files so they're searchable — typically configured once by an administrator, not a page a board member needs to visit."
         actions={
           <>
             <button className="btn-action" disabled={busy} onClick={runTest}>
               <RefreshCw size={12} /> Test
             </button>
             <button className="btn-action btn-action--primary" disabled={busy} onClick={save}>
-              <UploadCloud size={12} /> {connected ? "Save plugin" : "Enable plugin"}
+              <UploadCloud size={12} /> {connected ? "Save connection" : "Enable connection"}
             </button>
           </>
         }
@@ -95,7 +95,7 @@ export function PaperlessPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Connection</h2>
-            <span className="card__subtitle">Credentials stay in Convex environment variables.</span>
+            <span className="card__subtitle">Server address and API token are set by an administrator in the hosting environment, not typed in here.</span>
           </div>
           <div className="card__body col" style={{ gap: 12 }}>
             <div className="row" style={{ justifyContent: "space-between" }}>
@@ -111,21 +111,21 @@ export function PaperlessPage() {
               </Badge>
             </div>
             <div className="muted">
-              URL: <code className="mono">{connection?.baseUrl ?? runtime?.baseUrl ?? "PAPERLESS_NGX_URL not set"}</code>
+              Paperless server URL: <code className="mono">{connection?.baseUrl ?? runtime?.baseUrl ?? "Not set (admin: set PAPERLESS_NGX_URL)"}</code>
             </div>
             <div className="muted">
-              Token: <code className="mono">{runtime?.configured ? "PAPERLESS_NGX_TOKEN configured" : "PAPERLESS_NGX_TOKEN not set"}</code>
+              API token: <code className="mono">{runtime?.configured ? "Configured" : "Not set (admin: set PAPERLESS_NGX_TOKEN)"}</code>
             </div>
             {connection?.apiVersion && (
               <div className="muted">
-                API: <code className="mono">{connection.apiVersion}</code>
+                Paperless version: <code className="mono">{connection.apiVersion}</code>
                 {connection.serverVersion ? ` · ${connection.serverVersion}` : ""}
               </div>
             )}
             {connection?.lastError && <div className="alert alert--danger">{connection.lastError}</div>}
             <div className="row">
               <button className="btn btn--accent" disabled={busy} onClick={save}>
-                {connected ? "Save settings" : "Enable plugin"}
+                {connected ? "Save settings" : "Enable connection"}
               </button>
               {connection && (
                 <button
@@ -133,7 +133,7 @@ export function PaperlessPage() {
                   disabled={busy}
                   onClick={async () => {
                     await disconnect({ societyId: society._id, actingUserId });
-                    toast.success("Paperless-ngx plugin disabled");
+                    toast.success("Paperless-ngx connection disabled");
                   }}
                 >
                   Disable
@@ -146,14 +146,14 @@ export function PaperlessPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Tagging</h2>
-            <span className="card__subtitle">Societyer context is converted to Paperless tags.</span>
+            <span className="card__subtitle">Controls how Societyer's document categories are labeled once they reach Paperless.</span>
           </div>
           <div className="card__body col" style={{ gap: 12 }}>
             <Toggle
               checked={autoCreateTags}
               onChange={setAutoCreateTags}
               label="Create missing Paperless tags"
-              hint="When enabled, Societyer creates tag records before upload and sends their Paperless IDs."
+              hint="When enabled, Societyer creates any tags that don't already exist in Paperless before uploading a document."
             />
             <Toggle
               checked={autoUpload}

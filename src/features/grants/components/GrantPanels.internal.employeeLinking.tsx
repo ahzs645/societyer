@@ -96,7 +96,13 @@ export function GrantFundedEmployeesPanel({
     }
   }, [canLinkMoreEmployees]);
 
-  if (!links.length && !onLinkEmployee) return null;
+  if (!links.length && !onLinkEmployee) {
+    return (
+      <DossierSection title="Funded Employees" id="funded-employees">
+        <p className="muted">No people linked to this grant yet.</p>
+      </DossierSection>
+    );
+  }
 
   const linkSelected = async () => {
     if (!selectedEmployeeId || !onLinkEmployee) return;

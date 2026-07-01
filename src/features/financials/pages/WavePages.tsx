@@ -4,7 +4,7 @@ import { useSociety } from "../../../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "../../../pages/_helpers";
 import { Badge, Flag } from "../../../components/ui";
 import { DataTable } from "../../../components/DataTable";
-import { money } from "../../../lib/format";
+import { money, relative } from "../../../lib/format";
 import { ArrowLeft, Database, ExternalLink, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
@@ -138,9 +138,9 @@ export function WaveResourceTablePage() {
         societyId: society._id,
         connectionId: activeConnection?._id,
       });
-      toast.success(`Cached ${result.resourceCount} Wave resources and ${result.structureCount} structures.`);
+      toast.success(`Synced ${result.resourceCount} Wave resources and ${result.structureCount} structures.`);
     } catch (err: any) {
-      toast.error(err?.message ?? "Wave cache refresh failed");
+      toast.error(err?.message ?? "Wave sync failed");
     } finally {
       setBusy(false);
     }
@@ -154,8 +154,8 @@ export function WaveResourceTablePage() {
         iconColor="green"
         subtitle={
           waveSummary
-            ? `${waveSummary.businessName} · ${rows.length} rows${hiddenRows > 0 ? ` · ${hiddenRows} hidden by view` : ""}`
-            : "Cached Wave resource table."
+            ? `${waveSummary.businessName} · ${rows.length} rows · Last synced from Wave ${relative(waveSummary._creationTime)}${hiddenRows > 0 ? ` · ${hiddenRows} hidden by view` : ""}`
+            : "Data pulled from your connected Wave account. Refresh to sync the latest."
         }
         actions={
           <>
@@ -176,6 +176,10 @@ export function WaveResourceTablePage() {
           </>
         }
       />
+
+      <p className="muted" style={{ fontSize: 13, marginTop: -4, marginBottom: 12 }}>
+        Wave is an external accounting tool — this shows the data it reported at last sync, before Societyer processes it into the ledger.
+      </p>
 
       {(tableResourceType === "account" || tableResourceType === "all") && (
         <WaveAccountViewControls
@@ -213,7 +217,7 @@ export function WaveResourceTablePage() {
             <ExternalLink size={12} /> Details
           </Link>
         )}
-        emptyMessage={waveSummary ? "No cached Wave rows match this account view." : "Refresh the Wave cache to load this table."}
+        emptyMessage={waveSummary ? "No Wave data matches this account view." : "Refresh to load the latest data from your connected Wave account."}
       />
 
       <WaveResourceDrawer
@@ -309,7 +313,7 @@ export function WaveAccountDetailPage() {
           title="Wave account"
           icon={<Database size={16} />}
           iconColor="green"
-          subtitle="This cached Wave account could not be found."
+          subtitle="This Wave account could not be found."
           actions={
             <Link className="btn-action" to="/app/financials/wave/account">
               <ArrowLeft size={12} /> Accounts
@@ -347,10 +351,10 @@ export function WaveAccountDetailPage() {
         iconColor="green"
         subtitle={
           isLedgerAccount
-            ? `${capitalize(accountKind)} · Cached Wave ledger row`
+            ? `${capitalize(accountKind)} · Wave ledger row`
             : activity !== undefined
             ? `${capitalize(accountKind)} · ${activity.total ?? transactions.length} ${transactionLabel}${(activity.total ?? transactions.length) === 1 ? "" : "s"}${isCategoryAccount ? ` · ${money(linkedTotalCents)}` : ""}`
-            : `Cached Wave ${accountKind} details`
+            : `Wave ${accountKind} details`
         }
         actions={
           <>
@@ -383,7 +387,7 @@ export function WaveAccountDetailPage() {
               ? `Wave pull failed: ${pullError ?? "unknown error"}`
               : pullState === "pulled"
               ? "Pulled latest available Wave data. This account is still not part of the synced financial account set, so there are no Societyer transactions to show yet."
-              : "This Wave account is available in the raw cache but is not part of the synced financial account set, so there are no Societyer transactions to show yet."}
+              : "This account was pulled from your connected Wave account, but it isn't part of the synced financial account set yet, so there are no Societyer transactions to show."}
           </Flag>
         </div>
       )}
@@ -395,7 +399,7 @@ export function WaveAccountDetailPage() {
               ? "Pulling latest available Wave activity for this account..."
               : pullState === "error"
               ? `Wave pull failed: ${pullError ?? "unknown error"}`
-              : "Pulled latest available Wave data. No synced transactions exist for this account; this Wave API connection exposes account balances but not general-ledger card/bank transaction lines."}
+              : "Pulled the latest data from Wave. No synced transactions exist for this account; Wave shares account balances here, but not individual card or bank transaction lines."}
           </Flag>
         </div>
       )}
@@ -498,7 +502,7 @@ export function WaveResourceDetailPage() {
           title="Wave resource"
           icon={<Database size={16} />}
           iconColor="green"
-          subtitle="This cached Wave resource could not be found."
+          subtitle="This Wave resource could not be found."
           actions={
             <Link className="btn-action" to={`/app/financials/wave/${tableResourceType}`}>
               <ArrowLeft size={12} /> {waveTypeLabel(tableResourceType)}
@@ -527,7 +531,7 @@ export function WaveResourceDetailPage() {
         subtitle={
           isWaveCounterpartyResource(resource)
             ? `${waveTypeLabel(resource.resourceType)} · ${activity?.total ?? 0} linked transaction${activity?.total === 1 ? "" : "s"} · ${money(linkedTotalCents)}`
-            : `${waveTypeLabel(resource.resourceType)} · Cached Wave resource`
+            : `${waveTypeLabel(resource.resourceType)} · Wave resource`
         }
         actions={
           <>

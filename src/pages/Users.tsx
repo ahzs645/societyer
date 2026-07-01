@@ -76,14 +76,19 @@ export function UsersPage() {
           </div>
           <div className="card__body">
             <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 6 }}>
-              Your role grants {permissions.length} permission{permissions.length === 1 ? "" : "s"}.
+              {roleSummary(myRole)}
               {!canManageUsers && " You can view users but not change roles."}
             </div>
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {permissions.map((p) => (
-                <code key={p} className="chip" style={{ fontSize: 11 }}>{p}</code>
-              ))}
-            </div>
+            <details>
+              <summary className="muted" style={{ fontSize: "var(--fs-sm)", cursor: "pointer" }}>
+                View all {permissions.length} permission{permissions.length === 1 ? "" : "s"}
+              </summary>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
+                {permissions.map((p) => (
+                  <code key={p} className="chip" style={{ fontSize: 11 }}>{p}</code>
+                ))}
+              </div>
+            </details>
           </div>
         </div>
       )}
@@ -268,6 +273,21 @@ export function UsersPage() {
       </Drawer>
     </div>
   );
+}
+
+function roleSummary(role?: string | null): string {
+  switch (role) {
+    case "Owner":
+      return "Owner: full access, including inviting/removing users and changing roles.";
+    case "Admin":
+      return "Admin: can manage most records and society settings, but not billing or ownership transfer.";
+    case "Director":
+      return "Director: can view and edit governance, meetings, and compliance records.";
+    case "Member":
+      return "Member: read-only access to shared society records.";
+    default:
+      return role ? `${role}: role-based access.` : "No role assigned.";
+  }
 }
 
 function InvitationsPanel({

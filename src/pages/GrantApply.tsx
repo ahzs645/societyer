@@ -71,7 +71,7 @@ export function GrantApplyPage() {
   }, [form.amountRequestedDollars, form.applicantName, form.email, form.projectSummary, form.projectTitle]);
 
   if (context === undefined) return <PageLoading />;
-  if (!context) {
+  if (!context || !context.society) {
     return (
       <div className="landing" style={{ minHeight: "100vh", padding: "4rem 0" }}>
         <div className="landing__container">

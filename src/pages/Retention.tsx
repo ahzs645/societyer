@@ -63,10 +63,10 @@ export function RetentionPage() {
   return (
     <div className="page">
       <PageHeader
-        title="Records due for review"
+        title="Records retention"
         icon={<Archive size={16} />}
         iconColor="gray"
-        subtitle="Documents past their retention period. Default: 10 years for most records, 7 years for financial (CRA), indefinite for the constitution and bylaws. Review before purging."
+        subtitle="Documents due for review, past their retention period. Default: 10 years for most records, 7 years for financial (CRA), indefinite for the constitution and bylaws. Review before purging."
       />
 
       {showMetadataWarning ? (

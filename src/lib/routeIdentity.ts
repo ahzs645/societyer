@@ -98,6 +98,7 @@ export type RouteGroup =
   | "compliance"
   | "finance"
   | "workflows"
+  | "advanced"
   | "administration";
 
 export type IconTone =
@@ -109,7 +110,8 @@ export type IconTone =
   | "purple"
   | "green"
   | "pink"
-  | "yellow";
+  | "yellow"
+  | "slate";
 
 /** Color-per-group palette. 1:1 so the tone uniquely identifies the area. */
 export const GROUP_TONES: Record<RouteGroup, IconTone> = {
@@ -121,6 +123,7 @@ export const GROUP_TONES: Record<RouteGroup, IconTone> = {
   compliance: "green",
   finance: "yellow",
   workflows: "gray",
+  advanced: "slate",
   administration: "red",
 };
 
@@ -141,6 +144,7 @@ export const TONE_CSS_VAR: Record<IconTone, string> = {
   green: "var(--green-11)",
   pink: "var(--pink-11)",
   yellow: "var(--yellow-11)",
+  slate: "var(--slate-11)",
 };
 
 /** Resolve a route group to the CSS variable expression for its tone. */
@@ -166,6 +170,13 @@ export type RouteIdentity = {
    * have no society analog). Omit for routes that apply to every entity.
    */
   entityKinds?: RouteEntityKind[];
+  /**
+   * Optional permission gate for technical/admin-only surfaces (raw integration
+   * config, automation internals) that a regular board member never needs to see.
+   * Sidebar-only convenience, same as entityKinds/module — the server is the real
+   * security boundary. Value is a permission string from convex/lib/permissions.ts.
+   */
+  permission?: string;
 };
 
 /** True when a route should be visible for an entity of the given kind. */
@@ -186,7 +197,6 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app": { icon: LayoutDashboard, group: "workspace", label: "Dashboard" },
   "/app/portfolio": { icon: Layers, group: "workspace", label: "Portfolio" },
   "/app/society": { icon: Building2, group: "workspace", label: "Society" },
-  "/app/organization-details": { icon: Info, group: "workspace", label: "Org details" },
   "/app/org-history": { icon: Newspaper, group: "workspace", label: "Org history" },
   "/app/timeline": { icon: Hourglass, group: "workspace", label: "Timeline" },
 
@@ -208,7 +218,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/commitments": { icon: ClipboardList, group: "work", label: "Commitments" },
   "/app/documents": { icon: FolderOpen, group: "work", label: "Documents" },
   "/app/document-catalog": { icon: FileText, group: "work", label: "Document catalog" },
-  "/app/post-incorporation": { icon: ListChecks, group: "work", label: "Post-incorporation" },
+  "/app/post-incorporation": { icon: ListChecks, group: "work", label: "Post-incorporation", entityKinds: ["corporation"] },
   "/app/library": { icon: BookOpen, group: "work", label: "Library" },
   "/app/communications": { icon: Mail, group: "work", label: "Communications", module: "communications" },
   "/app/outbox": { icon: Inbox, group: "work", label: "Outbox" },
@@ -243,7 +253,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/certificate-register": { icon: ScrollText, group: "records", label: "Certificate register", entityKinds: ["corporation"] },
   "/app/minute-book": { icon: BookOpen, group: "records", label: "Minute book" },
   "/app/bylaw-rules": { icon: BookMarked, group: "records", label: "Bylaw rules" },
-  "/app/bylaw-diff": { icon: GitCompare, group: "records", label: "Bylaw redline" },
+  "/app/bylaw-diff": { icon: GitCompare, group: "records", label: "Bylaw amendments" },
   "/app/bylaws-history": { icon: Scroll, group: "records", label: "Bylaws history" },
 
   // ---- Compliance ----
@@ -264,6 +274,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
 
   // ---- Finance ----
   "/app/financials": { icon: PiggyBank, group: "finance", label: "Financials" },
+  "/app/financials/accounting": { icon: Calculator, group: "finance", label: "Accounting" },
   "/app/financials/year-end": { icon: CalendarCheck, group: "finance", label: "Year-end reports" },
   "/app/finance-imports": { icon: ArrowDownToLine, group: "finance", label: "Finance imports" },
   "/app/treasurer": { icon: Landmark, group: "finance", label: "Treasurer" },
@@ -274,23 +285,26 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/receipts": { icon: Receipt, group: "finance", label: "Donation receipts", module: "donationReceipts" },
   "/app/membership": { icon: CreditCard, group: "finance", label: "Membership & billing", module: "membershipBilling" },
 
-  // ---- Workflows ----
-  "/app/integrations": { icon: Plug, group: "workflows", label: "Integrations", module: "workflows" },
-  "/app/browser-connectors": { icon: MonitorPlay, group: "workflows", label: "Browser apps", module: "browserConnectors" },
-  "/app/ai-agents": { icon: Bot, group: "workflows", label: "AI agents" },
+  // ---- Workflows (kept visible to everyone — plain-language automation a treasurer can use) ----
   "/app/workflows": { icon: Workflow, group: "workflows", label: "Workflows", module: "workflows" },
   "/app/workflow-runs": { icon: History, group: "workflows", label: "Workflow runs", module: "workflows" },
-  "/app/workflow-packages": { icon: FolderKanban, group: "workflows", label: "Workflow packages", module: "workflows" },
-  "/app/template-engine": { icon: FileCog, group: "workflows", label: "Template engine" },
   "/app/calendar-sync": { icon: CalendarClock, group: "workflows", label: "Calendar sync" },
+
+  // ---- Advanced setup (technical/admin-only — raw integration & automation internals) ----
+  "/app/integrations": { icon: Plug, group: "advanced", label: "Integrations", module: "workflows", permission: "settings:manage" },
+  "/app/browser-connectors": { icon: MonitorPlay, group: "advanced", label: "Browser apps", module: "browserConnectors", permission: "settings:manage" },
+  "/app/ai-agents": { icon: Bot, group: "advanced", label: "AI agents", permission: "settings:manage" },
+  "/app/workflow-packages": { icon: FolderKanban, group: "advanced", label: "Workflow packages", module: "workflows", permission: "settings:manage" },
+  "/app/template-engine": { icon: FileCog, group: "advanced", label: "Template engine", permission: "settings:manage" },
+  "/app/paperless": { icon: Database, group: "advanced", label: "Paperless-ngx", module: "paperless", permission: "settings:manage" },
 
   // ---- Administration ----
   "/app/notifications": { icon: Bell, group: "administration", label: "Notifications" },
   "/app/users": { icon: UserCog, group: "administration", label: "Users & roles" },
   "/app/custom-fields": { icon: Sliders, group: "administration", label: "Custom fields" },
   "/app/imports": { icon: FileJson, group: "administration", label: "Import sessions" },
-  "/app/paperless": { icon: Database, group: "administration", label: "Paperless-ngx", module: "paperless" },
   "/app/settings": { icon: Settings, group: "administration", label: "Settings" },
+  "/app/settings/api-keys": { icon: KeyRound, group: "administration", label: "API keys" },
   "/app/webhooks": { icon: Webhook, group: "administration", label: "Webhooks" },
   "/app/audit": { icon: ShieldCheck, group: "administration", label: "Audit log" },
   "/app/exports": { icon: Download, group: "administration", label: "Data export" },

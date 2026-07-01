@@ -105,7 +105,7 @@ export function WorkflowPackagesPage() {
         title="Workflow packages"
         icon={<FileJson size={16} />}
         iconColor="orange"
-        description="Legal package metadata for events, effective dates, signer rosters, supporting documents, and payment references."
+        description="Technical setup area. Legal package metadata for events, effective dates, signer rosters, supporting documents, and payment references — typically managed by an administrator, not a page a board member needs to visit."
         tabs={[
           { id: "packages", label: "Packages", icon: <Workflow size={14} /> },
           { id: "lifecycle", label: "Lifecycle" },
@@ -131,7 +131,7 @@ export function WorkflowPackagesPage() {
                 <th>Event</th>
                 <th>Workflow</th>
                 <th>Signers</th>
-                <th>Commerce</th>
+                <th>Payment</th>
                 <th>Lifecycle</th>
                 <th>Status</th>
                 <th />
@@ -159,7 +159,12 @@ export function WorkflowPackagesPage() {
                     </td>
                     <td>
                       <div>{row.priceItems?.length ? row.priceItems.join(", ") : "No price items"}</div>
-                      <div className="mono muted">{row.stripeCheckoutSessionId || row.transactionId || ""}</div>
+                      <div className="muted">{paymentStatusLabel(row.lifecycle?.paymentState)}</div>
+                      {(row.stripeCheckoutSessionId || row.transactionId) && (
+                        <div className="mono muted" style={{ fontSize: "var(--fs-xs)" }} title="Payment reference ID (for support)">
+                          {row.stripeCheckoutSessionId || row.transactionId}
+                        </div>
+                      )}
                     </td>
                     <td><PackageLifecycle lifecycle={row.lifecycle} /></td>
                     <td><Badge tone={toneForPackageStatus(row.status)}>{optionLabel("workflowPackageStatuses", row.status)}</Badge></td>
@@ -232,8 +237,12 @@ export function WorkflowPackagesPage() {
             <Field label="Signer emails"><input className="input" value={draft.signerEmailsText ?? ""} onChange={(e) => setDraft({ ...draft, signerEmailsText: e.target.value })} /></Field>
             <Field label="Signing package IDs"><input className="input mono" value={draft.signingPackageIdsText ?? ""} onChange={(e) => setDraft({ ...draft, signingPackageIdsText: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Transaction ID"><input className="input mono" value={draft.transactionId ?? ""} onChange={(e) => setDraft({ ...draft, transactionId: e.target.value })} /></Field>
-              <Field label="Stripe checkout session"><input className="input mono" value={draft.stripeCheckoutSessionId ?? ""} onChange={(e) => setDraft({ ...draft, stripeCheckoutSessionId: e.target.value })} /></Field>
+              <Field label="Payment reference (transaction ID)" hint="Optional. Raw payment record ID, useful for reconciling with bank/accounting records or support requests.">
+                <input className="input mono" value={draft.transactionId ?? ""} onChange={(e) => setDraft({ ...draft, transactionId: e.target.value })} />
+              </Field>
+              <Field label="Payment reference (checkout session)" hint="Optional. Raw Stripe checkout session ID, useful for support if a payment needs to be traced.">
+                <input className="input mono" value={draft.stripeCheckoutSessionId ?? ""} onChange={(e) => setDraft({ ...draft, stripeCheckoutSessionId: e.target.value })} />
+              </Field>
             </div>
             <Field label="Price items"><input className="input" value={draft.priceItemsText ?? ""} onChange={(e) => setDraft({ ...draft, priceItemsText: e.target.value })} /></Field>
             <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
@@ -254,6 +263,15 @@ function labelize(value?: string) {
   return String(value ?? "-").replace(/_/g, " ");
 }
 
+// Friendlier "Payment: ..." wording for the raw paymentState enum, so a viewer
+// doesn't need to know what "checkout_created" or "transaction_linked" means.
+function paymentStatusLabel(paymentState?: string) {
+  if (paymentState === "transaction_linked") return "Payment: Paid";
+  if (paymentState === "checkout_created") return "Payment: Pending";
+  if (!paymentState) return "Payment: Not started";
+  return `Payment: ${labelize(paymentState)}`;
+}
+
 function PackageLifecycle({ lifecycle }: { lifecycle?: any }) {
   if (!lifecycle) return <span className="muted">-</span>;
   return (
@@ -262,7 +280,7 @@ function PackageLifecycle({ lifecycle }: { lifecycle?: any }) {
         {labelize(lifecycle.signerState)}
       </Badge>
       <Badge tone={lifecycle.paymentState === "transaction_linked" ? "success" : lifecycle.paymentState === "checkout_created" ? "info" : "neutral"}>
-        {labelize(lifecycle.paymentState)}
+        {paymentStatusLabel(lifecycle.paymentState)}
       </Badge>
       <Badge tone={lifecycle.openTaskCount ? "warn" : "neutral"}>{lifecycle.openTaskCount ?? 0} open tasks</Badge>
       <Badge>{lifecycle.filingCount ?? 0} filings</Badge>

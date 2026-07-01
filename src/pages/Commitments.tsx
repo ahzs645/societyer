@@ -142,7 +142,10 @@ export function CommitmentsPage() {
   });
   const needsReview = activeRows.filter((row) => (row.reviewStatus ?? "NeedsReview") !== "Verified");
   const linkedEvidenceCount = (events ?? []).filter((event: any) => event.evidenceDocumentIds?.length > 0 || event.meetingId).length;
-  const tenancyWorkflow = rows.find((row) => {
+  const mostOverdue = [...overdue].sort(
+    (a, b) => new Date(a.nextDueDate).getTime() - new Date(b.nextDueDate).getTime(),
+  )[0];
+  const featuredCommitment = mostOverdue ?? rows.find((row) => {
     const source = documentsById.get(String(row.sourceDocumentId));
     const sourceTags = Array.isArray(source?.tags) ? source.tags.join(" ").toLowerCase() : "";
     return sourceTags.includes("tenancy") || row.title.toLowerCase().includes("presentation");
@@ -262,7 +265,7 @@ export function CommitmentsPage() {
         title="Commitments"
         icon={<ClipboardList size={16} />}
         iconColor="green"
-        subtitle="Contract, grant, facility, and policy requirements with source documents, cadence, due dates, and completion evidence."
+        subtitle="Promises made to external parties, like grant conditions, MOUs, and vendor or landlord obligations. For internal work items, use Tasks; for dates set by law or regulation, use Deadlines."
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew}>
             <Plus size={12} /> New commitment
@@ -298,16 +301,17 @@ export function CommitmentsPage() {
         </div>
       </div>
 
-      {tenancyWorkflow && (
-        <TenancyWorkflowCard
-          commitment={tenancyWorkflow}
-          sourceDocument={documentsById.get(String(tenancyWorkflow.sourceDocumentId))}
-          events={eventsByCommitment.get(String(tenancyWorkflow._id)) ?? []}
-          openTasks={openTasksByCommitment.get(String(tenancyWorkflow._id)) ?? []}
+      {featuredCommitment && (
+        <FeaturedCommitmentCard
+          commitment={featuredCommitment}
+          isOverdue={isOverdue(featuredCommitment)}
+          sourceDocument={documentsById.get(String(featuredCommitment.sourceDocumentId))}
+          events={eventsByCommitment.get(String(featuredCommitment._id)) ?? []}
+          openTasks={openTasksByCommitment.get(String(featuredCommitment._id)) ?? []}
           documentsById={documentsById}
           meetingsById={meetingsById}
-          onRecord={() => openRecord(tenancyWorkflow)}
-          onPlanTask={() => createPreparationTask(tenancyWorkflow)}
+          onRecord={() => openRecord(featuredCommitment)}
+          onPlanTask={() => createPreparationTask(featuredCommitment)}
         />
       )}
 
@@ -570,6 +574,9 @@ function CommitmentFormFields({
 }) {
   return (
     <div>
+      <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 0, marginBottom: 12 }}>
+        Use a commitment for promises made to an external party. Internal work belongs in Tasks; dates set by law or regulation belong in Deadlines.
+      </p>
       <Field label="Title" required>
         <input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
       </Field>
@@ -740,8 +747,9 @@ function EventFormFields({
   );
 }
 
-function TenancyWorkflowCard({
+function FeaturedCommitmentCard({
   commitment,
+  isOverdue: overdue,
   sourceDocument,
   events,
   openTasks,
@@ -751,6 +759,7 @@ function TenancyWorkflowCard({
   onPlanTask,
 }: {
   commitment: any;
+  isOverdue: boolean;
   sourceDocument?: any;
   events: any[];
   openTasks: any[];
@@ -766,7 +775,7 @@ function TenancyWorkflowCard({
       <div className="card__head">
         <div>
           <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-            <Badge tone="orange">Tenancy agreement workflow</Badge>
+            <Badge tone={overdue ? "danger" : "orange"}>{overdue ? "Most overdue commitment" : "Featured commitment"}</Badge>
             <Badge tone={reviewStatusTone(commitment.reviewStatus)}>{reviewStatusLabel(commitment.reviewStatus)}</Badge>
             {typeof commitment.confidence === "number" && <Badge tone="neutral">{formatConfidence(commitment.confidence)}</Badge>}
           </div>

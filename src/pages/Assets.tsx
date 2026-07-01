@@ -346,7 +346,7 @@ export function AssetsPage() {
         <Stat label="Assets" value={stats.total} sub={`${stats.active} active`} />
         <Stat label="Checked out" value={stats.checkedOut} sub="assigned custody" tone={stats.checkedOut ? "info" : undefined} />
         <Stat label="Review flags" value={stats.needsReview} sub="condition or status" tone={stats.needsReview ? "warn" : undefined} />
-        <Stat label="Register value" value={money(stats.valueCents)} sub={`${stats.dueMaintenance} due soon`} tone={stats.dueMaintenance ? "warn" : undefined} />
+        <Stat label="Register value" value={money(stats.valueCents)} sub={`Book value where known, else purchase price · ${stats.dueMaintenance} due soon`} tone={stats.dueMaintenance ? "warn" : undefined} />
       </div>
 
       {stats.openRun && (
@@ -391,7 +391,7 @@ export function AssetsPage() {
               if (field.name === "custodian") return <CustodyCell row={row} />;
               if (field.name === "location") return <span>{row.location}</span>;
               if (field.name === "quantityOnHand") return row.category === "Consumable" ? <span className="mono">{formatQuantity(row.quantityOnHand, row.quantityUnit)}</span> : <span className="muted">—</span>;
-              if (field.name === "value") return <span className="mono">{money(row.bookValueCents ?? row.purchaseValueCents, row.currency)}</span>;
+              if (field.name === "value") return <ValueCell row={row} />;
               if (field.name === "nextMaintenanceDate") return <DueDate date={row.nextMaintenanceDate} />;
               if (field.name === "purchaseEvidence") return <EvidenceCell row={row} documents={documents ?? []} transactions={transactions ?? []} />;
               return undefined;
@@ -655,7 +655,7 @@ export function AssetDetailPage() {
           ) : (
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
-              <button className="btn-action" onClick={() => setDrawer("custody")}><Repeat2 size={12} /> Custody</button>
+              <button className="btn-action" onClick={() => setDrawer("custody")}><Repeat2 size={12} /> Log custody change</button>
               {serviceable && <button className="btn-action" onClick={() => setDrawer("maintenance")}><Wrench size={12} /> Schedule</button>}
               <button className="btn-action" onClick={() => setDrawer("disposal")}><Trash2 size={12} /> Dispose</button>
               <button className="btn-action btn-action--primary" onClick={openEdit}><Pencil size={12} /> Edit</button>
@@ -1079,6 +1079,19 @@ function AssetCell({ row }: { row: any }) {
       <div>
         <strong>{row.name}</strong>
         <div className="muted">{[row.category, row.serialNumber].filter(Boolean).join(" · ")}</div>
+      </div>
+    </div>
+  );
+}
+
+function ValueCell({ row }: { row: any }) {
+  const usingBookValue = row.bookValueCents != null;
+  const amount = money(row.bookValueCents ?? row.purchaseValueCents, row.currency);
+  return (
+    <div>
+      <span className="mono">{amount}</span>
+      <div className="muted" style={{ fontSize: 11 }}>
+        {usingBookValue ? "Book value" : "Purchase price"}
       </div>
     </div>
   );

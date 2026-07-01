@@ -254,7 +254,7 @@ export function InsurancePage() {
           ) : (
           <div>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Kind">
+              <Field label="Kind" hint="D&O = Directors & Officers liability">
                 <Select value={form.kind} onChange={(value) => setForm({ ...form, kind: value })}
                   options={KINDS.map((k) => ({ value: k, label: kindLabel(k) }))} />
               </Field>
@@ -267,9 +267,9 @@ export function InsurancePage() {
             <Field label="Broker"><input className="input" value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} /></Field>
             <Field label="Policy number"><input className="input" value={form.policyNumber} onChange={(e) => setForm({ ...form, policyNumber: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Policy series key" hint="Groups renewals of the same policy line"><input className="input" value={form.policySeriesKey ?? ""} onChange={(e) => setForm({ ...form, policySeriesKey: e.target.value })} /></Field>
+              <Field label="Policy series key" hint="An identifier you choose to link this policy to its future renewals, e.g. the insurer's account number"><input className="input" value={form.policySeriesKey ?? ""} onChange={(e) => setForm({ ...form, policySeriesKey: e.target.value })} /></Field>
               <Field label="Policy term"><input className="input" value={form.policyTermLabel ?? ""} onChange={(e) => setForm({ ...form, policyTermLabel: e.target.value })} /></Field>
-              <Field label="Version type"><input className="input" value={form.versionType ?? ""} onChange={(e) => setForm({ ...form, versionType: e.target.value })} /></Field>
+              <Field label="Version type" hint="e.g. New, Renewal, or Amendment"><input className="input" value={form.versionType ?? ""} onChange={(e) => setForm({ ...form, versionType: e.target.value })} /></Field>
             </div>
             <Field label="Renewal of policy number"><input className="input" value={form.renewalOfPolicyNumber ?? ""} onChange={(e) => setForm({ ...form, renewalOfPolicyNumber: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -120,6 +121,11 @@ export function AnnualFilingsPage() {
           </button>
         }
       />
+
+      <p className="muted">
+        A simplified per-jurisdiction, per-year filing ledger. For detailed filing records with
+        evidence and receipts, see <Link to="/app/filings">Filings</Link>.
+      </p>
 
       {rows === undefined || juris === undefined ? (
         <div className="card">

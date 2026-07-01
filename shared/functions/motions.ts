@@ -72,11 +72,68 @@ async function patchMotion(ctx: PortableMutationCtx, motionId: any, patch: Recor
 
 // ----- queries --------------------------------------------------------------
 
+/**
+ * Read-only motions synthesized from meeting minutes that were never converted
+ * into a first-class `motions` row (conversion is a manual, on-demand action —
+ * see createFromMinutesMotionPortable in motionBacklog.ts). Without this, a
+ * meeting's recorded motions (e.g. an AGM's carried motions) are invisible on
+ * the master Motions page even though they're the actual record of what the
+ * society decided. Synthetic ids encode their source so the UI can recognize
+ * (and avoid trying to mutate) a row that has no real `motions` document yet.
+ */
+async function minutesSourcedMotions(
+  ctx: PortableQueryCtx,
+  societyId: string,
+  alreadyConverted: Set<string>,
+) {
+  const allMinutes = await ctx.db
+    .query("minutes")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  const synthesized: any[] = [];
+  for (const minutes of allMinutes) {
+    const motions = Array.isArray((minutes as any).motions) ? (minutes as any).motions : [];
+    motions.forEach((motion: any, index: number) => {
+      if (alreadyConverted.has(`${minutes._id}:${index}`)) return;
+      if (!motion?.text) return;
+      synthesized.push({
+        _id: `from-minutes:${minutes._id}:${index}`,
+        societyId,
+        text: motion.text,
+        title: motion.name,
+        movedBy: motion.movedBy,
+        secondedBy: motion.secondedBy,
+        status: motion.outcome === "Carried" || motion.outcome === "Defeated" ? "Voted" : (motion.outcome ?? "Voted"),
+        outcome: motion.outcome,
+        votesFor: motion.votesFor,
+        votesAgainst: motion.votesAgainst,
+        abstentions: motion.abstentions,
+        decidedBy: motion.decidedBy,
+        resolutionTypeLabel: motion.resolutionType,
+        primaryMeetingId: (minutes as any).meetingId,
+        tags: [],
+        createdAtISO: (minutes as any).heldAt,
+        sourceMinutesId: minutes._id,
+        sourceMotionIndex: index,
+        readOnly: true,
+      });
+    });
+  }
+  return synthesized;
+}
+
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
-  return ctx.db
+  const rows = await ctx.db
     .query("motions")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
+  const alreadyConverted = new Set(
+    rows
+      .filter((row: any) => row.sourceMinutesId != null && row.sourceMotionIndex != null)
+      .map((row: any) => `${row.sourceMinutesId}:${row.sourceMotionIndex}`),
+  );
+  const fromMinutes = await minutesSourcedMotions(ctx, societyId, alreadyConverted);
+  return [...rows, ...fromMinutes];
 }
 
 export async function listForMinutesPortable(ctx: PortableQueryCtx, { minutesId }: { minutesId: string }) {

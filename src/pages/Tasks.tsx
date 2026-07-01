@@ -34,6 +34,10 @@ const COLS = [
   { id: "Done", label: "Done", accent: "var(--success)" },
 ];
 
+export function taskStatusLabel(status: string) {
+  return COLS.find((c) => c.id === status)?.label ?? status;
+}
+
 export function TasksPage() {
   const society = useSociety();
   const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
@@ -350,7 +354,7 @@ export function TasksPage() {
         title="Tasks"
         icon={<ListTodo size={16} />}
         iconColor="turquoise"
-        subtitle="Kanban for everything in flight — linked to committees, goals, and meetings."
+        subtitle="Internal work items for your board and staff to get done. For dates set by law or regulation, use Deadlines; for promises made to funders or partners, use Commitments."
         actions={
           <>
             <Segmented
@@ -663,12 +667,19 @@ export function TasksPage() {
         }
       >
         {form && (
-          <TaskFormFields
-            value={form}
-            onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
-            data={formData}
-            mode={form._id ? "edit" : "create"}
-          />
+          <>
+            {!form._id && (
+              <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 0, marginBottom: 12 }}>
+                Use a task for internal work your board or staff needs to do. Legal or regulatory dates belong in Deadlines; promises to funders or partners belong in Commitments.
+              </p>
+            )}
+            <TaskFormFields
+              value={form}
+              onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
+              data={formData}
+              mode={form._id ? "edit" : "create"}
+            />
+          </>
         )}
       </Drawer>
     </div>

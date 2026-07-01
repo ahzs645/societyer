@@ -484,10 +484,10 @@ export function AiAgentsPage() {
               <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Validate a provider key before choosing a model or saving settings.</span>
             )}
             <div className="settings-pair">
-              <Field label="Temperature">
+              <Field label="Temperature" hint="How predictable vs. creative replies are. Lower (e.g. 0.2) is more consistent and factual; higher is more varied. Most societies should leave this at the default.">
                 <input className="input" type="number" min="0" max="2" step="0.1" value={aiSetup.temperature} onChange={(event) => setAiSetup((draft) => ({ ...draft, temperature: event.target.value }))} disabled={!setupEditable} />
               </Field>
-              <Field label="Max tool steps">
+              <Field label="Max tool steps" hint="The most lookups or actions the assistant can chain together to answer one request before it must stop and reply. Higher allows more complex requests but can take longer and cost more.">
                 <input className="input" type="number" min="1" max="12" step="1" value={aiSetup.maxSteps} onChange={(event) => setAiSetup((draft) => ({ ...draft, maxSteps: event.target.value }))} disabled={!setupEditable} />
               </Field>
             </div>
@@ -501,12 +501,12 @@ export function AiAgentsPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">AI chat</h2>
-              <span className="card__subtitle">Builds workspace prompt, loads skills, learns tools, then executes permissioned tools.</span>
+              <span className="card__subtitle">Test the assistant here: it reads workspace context, applies any active skills, then runs only the actions it's permitted to.</span>
             </div>
             <div className="card__body col" style={{ gap: 12 }}>
               <div className="col" style={{ gap: 8, maxHeight: 360, overflow: "auto" }}>
                 {(messages ?? []).length === 0 ? (
-                  <div className="muted">Start a thread to route a request through the AI skill router.</div>
+                  <div className="muted">Start a thread to send a test message to the assistant.</div>
                 ) : (
                   (messages ?? []).map((message) => (
                     <div key={message._id} className="col" style={{ gap: 4, padding: 10, border: "1px solid var(--border)", borderRadius: 8 }}>
@@ -616,8 +616,8 @@ export function AiAgentsPage() {
         <div className="settings-pair" style={{ marginBottom: 16 }}>
           <div className="card">
             <div className="card__head">
-              <h2 className="card__title">Workspace tools</h2>
-              <span className="card__subtitle">Each agent follows plan → skill → learn tools → execute tools.</span>
+              <h2 className="card__title">AI agents</h2>
+              <span className="card__subtitle">Pre-built assistants, each limited to a specific job and a fixed set of records it can read or change.</span>
             </div>
             <div className="card__body col" style={{ gap: 10 }}>
               {agentList.map((agent) => (
@@ -663,22 +663,31 @@ export function AiAgentsPage() {
                     <Badge key={skillName} tone="success">{skillName}</Badge>
                   ))}
                 </div>
-                <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                  {selectedAgent.allowedActions.map((action) => (
-                    <Badge key={action} tone="info">{action}</Badge>
-                  ))}
+                <div className="col" style={{ gap: 6 }}>
+                  <strong style={{ fontSize: "var(--fs-sm)" }}>What it's allowed to do</strong>
+                  <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                    {selectedAgent.allowedActions.map((action) => (
+                      <Badge key={action} tone="info">{action}</Badge>
+                    ))}
+                  </div>
                 </div>
                 <div className="col" style={{ gap: 6 }}>
-                  <strong style={{ fontSize: "var(--fs-sm)" }}>Allowed tools</strong>
+                  <strong style={{ fontSize: "var(--fs-sm)" }}>Data and system tools it can use</strong>
+                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                    Internal identifiers for the specific lookups/actions this agent is permitted to call. Useful for support, not typically something to edit here.
+                  </div>
                   <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                     {selectedAgent.allowedTools.map((tool) => (
-                      <Badge key={tool}>{tool}</Badge>
+                      <Badge key={tool}><span className="mono">{tool}</span></Badge>
                     ))}
                   </div>
                 </div>
                 {selectedAgentSkills.length ? (
                   <div className="col" style={{ gap: 6 }}>
                     <strong style={{ fontSize: "var(--fs-sm)" }}>Loaded skills</strong>
+                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                      Extra instructions this agent reads before responding, on top of its base behavior.
+                    </div>
                     {selectedAgentSkills.map((skill) => (
                       <div key={skill.name} className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                         <strong>{skill.label}</strong>: {skill.description}
@@ -688,7 +697,7 @@ export function AiAgentsPage() {
                 ) : null}
                 {selectedAgent.workflowModes?.length ? (
                   <div className="col" style={{ gap: 6 }}>
-                    <strong style={{ fontSize: "var(--fs-sm)" }}>Workflow modes</strong>
+                    <strong style={{ fontSize: "var(--fs-sm)" }}>Supported request types</strong>
                     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                       {selectedAgent.workflowModes.map((mode) => (
                         <Badge key={mode} tone="success">{mode}</Badge>
@@ -698,7 +707,7 @@ export function AiAgentsPage() {
                 ) : null}
                 {selectedAgent.outputContract?.length ? (
                   <div className="col" style={{ gap: 6 }}>
-                    <strong style={{ fontSize: "var(--fs-sm)" }}>Output contract</strong>
+                    <strong style={{ fontSize: "var(--fs-sm)" }}>What the reply will include</strong>
                     <ul className="muted" style={{ margin: 0, paddingLeft: 18, fontSize: "var(--fs-sm)" }}>
                       {selectedAgent.outputContract.map((field) => (
                         <li key={field}>{field}</li>
@@ -716,10 +725,10 @@ export function AiAgentsPage() {
                   />
                 </Field>
                 <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                  Required hints: {selectedAgent.requiredInputHints.join(", ")}
+                  Include: {selectedAgent.requiredInputHints.join(", ")}
                 </div>
                 <button className="btn btn--accent" disabled={busy || !input.trim()} onClick={startRun}>
-                  <Play size={12} /> {busy ? "Logging run..." : "Run bounded tool"}
+                  <Play size={12} /> {busy ? "Running..." : "Run this agent"}
                 </button>
               </div>
             )}
@@ -730,19 +739,25 @@ export function AiAgentsPage() {
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card__head">
               <h2 className="card__title">Latest output</h2>
-              <span className="card__subtitle">Skill-router guidance, logged as an agent run.</span>
+              <span className="card__subtitle">Result of the test run above, also saved to the run history below.</span>
             </div>
             <div className="card__body col" style={{ gap: 12 }}>
               <pre className="mono" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{lastResult.output}</pre>
-              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                {(lastResult.loadedSkills ?? []).map((skill: SkillDefinition) => (
-                  <Badge key={skill.name} tone="success"><BrainCircuit size={10} /> {skill.name}</Badge>
-                ))}
+              <div className="col" style={{ gap: 4 }}>
+                <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>Skills applied to this run</span>
+                <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                  {(lastResult.loadedSkills ?? []).map((skill: SkillDefinition) => (
+                    <Badge key={skill.name} tone="success"><BrainCircuit size={10} /> {skill.name}</Badge>
+                  ))}
+                </div>
               </div>
-              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                {(lastResult.plannedToolCalls ?? []).map((toolCall: any) => (
-                  <Badge key={toolCall.toolName} tone="warn"><Wrench size={10} /> {toolCall.toolName}</Badge>
-                ))}
+              <div className="col" style={{ gap: 4 }}>
+                <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>Tools this run planned to use (internal IDs)</span>
+                <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                  {(lastResult.plannedToolCalls ?? []).map((toolCall: any) => (
+                    <Badge key={toolCall.toolName} tone="warn"><Wrench size={10} /> <span className="mono">{toolCall.toolName}</span></Badge>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -753,8 +768,8 @@ export function AiAgentsPage() {
         {activeSection === "skills" && (
           <div className="card">
             <div className="card__head">
-              <h2 className="card__title">Skill router</h2>
-              <span className="card__subtitle">Skills are active workspace instructions loaded before complex tool use.</span>
+              <h2 className="card__title">Skills</h2>
+              <span className="card__subtitle">Extra instructions that get added to an agent's behavior when it's relevant to the request.</span>
             </div>
             <div className="card__body col" style={{ gap: 10 }}>
               {(visibleSkills ?? []).map((skill) => (
@@ -834,17 +849,20 @@ export function AiAgentsPage() {
         {activeSection === "catalog" && (
           <div className="card">
             <div className="card__head">
-              <h2 className="card__title">Permissioned tool catalog</h2>
-              <span className="card__subtitle">Filtered for role: {toolCatalog?.role ?? "Loading"}</span>
+              <h2 className="card__title">Available tools by role</h2>
+              <span className="card__subtitle">All actions AI agents can take, grouped by category and shown for your current role: {toolCatalog?.role ?? "Loading"}</span>
             </div>
             <div className="card__body col" style={{ gap: 12 }}>
+              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                Names below are internal tool identifiers, not menu items — hover one to see a plain-language description.
+              </div>
               {Object.entries(toolsByCategory).map(([category, tools]) => (
                 <div key={category} className="col" style={{ gap: 6 }}>
                   <strong style={{ fontSize: "var(--fs-sm)" }}>{category}</strong>
                   <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                     {tools.map((tool) => (
                       <span key={tool.name} title={tool.description}>
-                        <Badge>{tool.name}</Badge>
+                        <Badge><span className="mono">{tool.name}</span></Badge>
                       </span>
                     ))}
                   </div>

@@ -106,6 +106,36 @@ const EXPENSE_CATEGORIES = [
   "Other",
 ];
 
+// Quick entry posts straight to the ledger without asking the user to think in
+// debits/credits — each category maps to the matching account in the standard
+// chart of accounts (see SOCIETY_COA_TEMPLATE in shared/functions/accounting.ts),
+// so we can infer the right account automatically from a plain-language choice.
+const QUICK_ENTRY_INCOME_CATEGORIES = [
+  { value: "donations", label: "Donations and fundraising" },
+  { value: "grants", label: "Grant revenue" },
+  { value: "dues", label: "Membership dues" },
+  { value: "program_revenue", label: "Program fees" },
+];
+
+const QUICK_ENTRY_EXPENSE_CATEGORIES = [
+  { value: "program", label: "Program supplies" },
+  { value: "payroll", label: "Wages and benefits" },
+  { value: "facilities", label: "Facilities and utilities" },
+  { value: "insurance", label: "Insurance" },
+  { value: "professional_fees", label: "Professional fees" },
+];
+
+function newQuickEntryDraft() {
+  return {
+    type: "expense" as "income" | "expense",
+    date: todayISO(),
+    amountDollars: "",
+    category: QUICK_ENTRY_EXPENSE_CATEGORIES[0].value,
+    description: "",
+    cashAccountId: "",
+  };
+}
+
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -291,6 +321,7 @@ export function TreasurerPage() {
   const upsertExpenseReport = useMutation(api.expenseReports.upsert);
   const setExpenseStatus = useMutation(api.expenseReports.setStatus);
   const removeExpenseReport = useMutation(api.expenseReports.remove);
+  const upsertJournalEntry = useMutation(api.accounting.upsertJournalEntry);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const [payingReport, setPayingReport] = useState<{ report: any; expenseAccountId: string; bankAccountId: string } | null>(null);
@@ -298,6 +329,8 @@ export function TreasurerPage() {
   const [eventDraft, setEventDraft] = useState<any>(null);
   const [expenseDraft, setExpenseDraft] = useState<any>(null);
   const [levyImportOpen, setLevyImportOpen] = useState(false);
+  const [quickEntryDraft, setQuickEntryDraft] = useState<ReturnType<typeof newQuickEntryDraft> | null>(null);
+  const [quickEntryBusy, setQuickEntryBusy] = useState(false);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -332,6 +365,57 @@ export function TreasurerPage() {
     { total: 0, submitted: 0, approved: 0, paid: 0 },
   );
 
+  const chartAccounts = financialAccounts ?? [];
+  const cashAccounts = chartAccounts.filter((account: any) => account.subtype === "cash" || account.accountType === "Asset");
+  const defaultCashAccountId = chartAccounts.find((account: any) => account.subtype === "cash")?._id ?? cashAccounts[0]?._id ?? "";
+
+  const openQuickEntry = () => setQuickEntryDraft({ ...newQuickEntryDraft(), cashAccountId: defaultCashAccountId });
+
+  const saveQuickEntry = async () => {
+    if (!quickEntryDraft) return;
+    const amountCents = dollarInputToCents(quickEntryDraft.amountDollars);
+    if (!amountCents || amountCents <= 0) {
+      toast.warn("Enter an amount greater than zero.");
+      return;
+    }
+    if (!quickEntryDraft.cashAccountId) {
+      toast.warn("No cash/bank account found — seed your chart of accounts on the Accounting page first.");
+      return;
+    }
+    const categoryAccount = chartAccounts.find((account: any) => account.subtype === quickEntryDraft.category);
+    if (!categoryAccount) {
+      toast.warn("Couldn't find a matching ledger account for that category — seed your chart of accounts on the Accounting page first.");
+      return;
+    }
+    const categoryLabel =
+      (quickEntryDraft.type === "income" ? QUICK_ENTRY_INCOME_CATEGORIES : QUICK_ENTRY_EXPENSE_CATEGORIES).find(
+        (option) => option.value === quickEntryDraft.category,
+      )?.label ?? quickEntryDraft.category;
+    const isIncome = quickEntryDraft.type === "income";
+    setQuickEntryBusy(true);
+    try {
+      await upsertJournalEntry({
+        societyId: society._id,
+        date: quickEntryDraft.date,
+        memo: quickEntryDraft.description.trim() || categoryLabel,
+        source: "manual",
+        status: "posted",
+        fiscalYear: quickEntryDraft.date.slice(0, 4),
+        lines: [
+          { accountId: quickEntryDraft.cashAccountId as any, side: isIncome ? "debit" : "credit", amountCents },
+          { accountId: categoryAccount._id, side: isIncome ? "credit" : "debit", amountCents },
+        ],
+        actingUserId,
+      } as any);
+      toast.success("Recorded to your ledger");
+      setQuickEntryDraft(null);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Couldn't record that entry");
+    } finally {
+      setQuickEntryBusy(false);
+    }
+  };
+
   return (
     <div className="page page--wide treasurer-page">
       <PageHeader
@@ -347,6 +431,9 @@ export function TreasurerPage() {
                 { id: "new-expense-claim", label: "New expense claim", icon: <Receipt size={14} />, onSelect: () => setExpenseDraft(newExpenseDraft()) },
               ]}
             />
+            <button className="btn-action" onClick={openQuickEntry}>
+              <DollarSign size={12} /> Quick entry
+            </button>
             <button className="btn-action btn-action--primary" onClick={() => setSourceDraft(newSourceDraft())}>
               <PlusCircle size={12} /> New funding source
             </button>
@@ -382,6 +469,11 @@ export function TreasurerPage() {
         <SummaryCard label="Expenses" value={-(pnl?.totalExpenseCents ?? 0)} icon={<TrendingDown size={14} />} color="red" />
         <SummaryCard label="Net" value={pnl?.netCents ?? 0} icon={<DollarSign size={14} />} color={pnl && pnl.netCents < 0 ? "red" : "green"} />
       </div>
+      <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: -8, marginBottom: 12 }}>
+        Based on synced bank transactions (cash basis) — totals here may be provisional and can differ from the
+        posted ledger until transactions are reconciled. See <Link to="/app/financials">Financials</Link> for the
+        ledger-based (accrual) total.
+      </p>
 
       <div className="treasurer-category-grid">
         <div className="card treasurer-category-card">
@@ -445,6 +537,7 @@ export function TreasurerPage() {
               <div className="stat__sub">closed reimbursements</div>
             </div>
           </div>
+          <div className="table-wrap">
           <table className="table treasurer-claims-table">
             <thead>
               <tr>
@@ -514,6 +607,7 @@ export function TreasurerPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
@@ -528,6 +622,7 @@ export function TreasurerPage() {
             </div>
           </div>
           <div className="card__body">
+            <div className="table-wrap">
             <table className="table treasurer-funding-table">
               <thead>
                 <tr>
@@ -564,6 +659,7 @@ export function TreasurerPage() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
 
@@ -578,6 +674,7 @@ export function TreasurerPage() {
             </button>
           </div>
           <div className="card__body">
+            <div className="table-wrap">
             <table className="table treasurer-source-table">
               <thead>
                 <tr>
@@ -631,6 +728,7 @@ export function TreasurerPage() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       </div>
@@ -640,6 +738,7 @@ export function TreasurerPage() {
           <h2 className="card__title">Funding source timeline</h2>
           <span className="card__subtitle">Manual funding events, including aggregate third-party remittances.</span>
         </div>
+        <div className="table-wrap">
         <table className="table treasurer-timeline-table">
           <thead>
             <tr>
@@ -695,6 +794,7 @@ export function TreasurerPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Budget variance */}
@@ -708,6 +808,7 @@ export function TreasurerPage() {
             <div className="muted">No budgets defined for this fiscal year. Add budgets in Financials.</div>
           )}
           {variance && variance.length > 0 && (
+            <div className="table-wrap">
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--fs-md)" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)" }}>
@@ -760,6 +861,7 @@ export function TreasurerPage() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       </div>
@@ -1198,6 +1300,83 @@ export function TreasurerPage() {
         societyName={society.name}
         actingUserId={actingUserId}
       />
+
+      <Drawer
+        open={!!quickEntryDraft}
+        onClose={() => setQuickEntryDraft(null)}
+        title="Quick entry"
+        footer={
+          <>
+            <button className="btn" onClick={() => setQuickEntryDraft(null)}>Cancel</button>
+            <button className="btn btn--accent" disabled={quickEntryBusy} onClick={saveQuickEntry}>Record</button>
+          </>
+        }
+      >
+        {quickEntryDraft && (
+          <div className="col" style={{ gap: 12 }}>
+            <p className="muted">
+              Record money in or out without picking debits and credits — this posts a balanced entry to your
+              ledger automatically. For journal entries with more than two lines, use{" "}
+              <Link to="/app/financials/accounting">Accounting</Link>.
+            </p>
+            <Field label="Type">
+              <Select
+                value={quickEntryDraft.type}
+                onChange={(value) =>
+                  setQuickEntryDraft({
+                    ...quickEntryDraft,
+                    type: value as "income" | "expense",
+                    category: value === "income" ? QUICK_ENTRY_INCOME_CATEGORIES[0].value : QUICK_ENTRY_EXPENSE_CATEGORIES[0].value,
+                  })
+                }
+                options={[
+                  { value: "expense", label: "Money out (expense)" },
+                  { value: "income", label: "Money in (income)" },
+                ]}
+              />
+            </Field>
+            <Field label="Date">
+              <DatePicker value={quickEntryDraft.date} onChange={(value) => setQuickEntryDraft({ ...quickEntryDraft, date: value })} />
+            </Field>
+            <Field label="Amount">
+              <input
+                className="input"
+                type="number"
+                min="0"
+                step="0.01"
+                value={quickEntryDraft.amountDollars}
+                onChange={(e) => setQuickEntryDraft({ ...quickEntryDraft, amountDollars: e.target.value })}
+                placeholder="0.00"
+              />
+            </Field>
+            <Field label="Category">
+              <Select
+                value={quickEntryDraft.category}
+                onChange={(value) => setQuickEntryDraft({ ...quickEntryDraft, category: value })}
+                options={quickEntryDraft.type === "income" ? QUICK_ENTRY_INCOME_CATEGORIES : QUICK_ENTRY_EXPENSE_CATEGORIES}
+              />
+            </Field>
+            <Field label="Cash / bank account">
+              <Select
+                value={quickEntryDraft.cashAccountId}
+                onChange={(value) => setQuickEntryDraft({ ...quickEntryDraft, cashAccountId: value })}
+                options={[
+                  { value: "", label: cashAccounts.length ? "Choose account…" : "No accounts — seed your chart of accounts first" },
+                  ...cashAccounts.map((account: any) => ({ value: account._id, label: account.name })),
+                ]}
+              />
+            </Field>
+            <Field label="Description" hint="Optional — defaults to the category name.">
+              <input
+                className="input"
+                value={quickEntryDraft.description}
+                onChange={(e) => setQuickEntryDraft({ ...quickEntryDraft, description: e.target.value })}
+                placeholder="e.g. Venue deposit for spring fundraiser"
+              />
+            </Field>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }

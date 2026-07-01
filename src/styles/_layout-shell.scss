@@ -301,7 +301,8 @@
 .icon-chip-purple,
 .icon-chip-green,
 .icon-chip-pink,
-.icon-chip-yellow {
+.icon-chip-yellow,
+.icon-chip-slate {
   background: token('bg-muted');
   border-color: transparent;
 }
@@ -314,6 +315,7 @@
 .icon-chip-green     { color: token('green-11'); }
 .icon-chip-pink      { color: token('pink-11'); }
 .icon-chip-yellow    { color: token('yellow-11'); }
+.icon-chip-slate     { color: token('slate-11'); }
 .sidebar__count {
   margin-left: auto;
   font-variant-numeric: tabular-nums;

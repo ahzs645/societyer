@@ -242,6 +242,7 @@ type NavItem = {
   end?: boolean;
   module?: ModuleKey;
   entityKinds?: ("society" | "corporation")[];
+  permission?: string;
 };
 
 
@@ -271,6 +272,7 @@ function navItem(to: string, end?: boolean): NavItem {
     ...(end ? { end } : {}),
     ...(id.module ? { module: id.module } : {}),
     ...(id.entityKinds ? { entityKinds: id.entityKinds } : {}),
+    ...(id.permission ? { permission: id.permission } : {}),
   };
 }
 
@@ -284,7 +286,6 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app", true),
       navItem("/app/portfolio"),
       navItem("/app/society"),
-      navItem("/app/organization-details"),
       navItem("/app/corporate-history"),
       navItem("/app/org-history"),
       navItem("/app/timeline"),
@@ -388,6 +389,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Finance",
     items: [
       navItem("/app/financials"),
+      navItem("/app/financials/accounting"),
       navItem("/app/financials/year-end"),
       navItem("/app/finance-imports"),
       navItem("/app/treasurer"),
@@ -403,14 +405,21 @@ const NAV_GROUPS: NavGroup[] = [
     id: "workflows",
     label: "Workflows",
     items: [
+      navItem("/app/workflows"),
+      navItem("/app/workflow-runs"),
+      navItem("/app/calendar-sync"),
+    ],
+  },
+  {
+    id: "advanced",
+    label: "Advanced setup",
+    items: [
       navItem("/app/integrations"),
       navItem("/app/browser-connectors"),
       navItem("/app/ai-agents"),
-      navItem("/app/workflows"),
-      navItem("/app/workflow-runs"),
       navItem("/app/workflow-packages"),
       navItem("/app/template-engine"),
-      navItem("/app/calendar-sync"),
+      navItem("/app/paperless"),
     ],
   },
   {
@@ -421,8 +430,8 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/users"),
       navItem("/app/custom-fields"),
       navItem("/app/imports"),
-      navItem("/app/paperless"),
       navItem("/app/settings"),
+      navItem("/app/settings/api-keys"),
       navItem("/app/webhooks"),
       navItem("/app/audit"),
       navItem("/app/exports"),

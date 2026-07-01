@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -8,7 +9,7 @@ import { Drawer, Field, Button, Banner, SettingsShell } from "../components/ui";
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { KeyRound, Plus, Trash2, Copy, Check } from "lucide-react";
+import { ArrowLeft, KeyRound, Plus, Trash2, Copy, Check } from "lucide-react";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -140,6 +141,9 @@ export function ApiKeysPage() {
 
   return (
     <div className="page">
+      <Link to="/app/settings" className="row muted" style={{ marginBottom: 12, fontSize: 12 }}>
+        <ArrowLeft size={12} /> Back to settings
+      </Link>
       <SettingsShell
         title="API keys"
         description="Programmatic access to Societyer — create clients, then mint tokens with scoped permissions."

@@ -12,7 +12,8 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { ArrowLeft, ListTodo, Plus, Target, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
-import { goalTone, labelStatus } from "./Goals";
+import { effectiveGoalStatus, goalTone, labelStatus } from "./Goals";
+import { taskStatusLabel } from "./Tasks";
 
 export function GoalDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,7 +47,7 @@ export function GoalDetailPage() {
         actions={
           <>
             <Badge>{goal.category}</Badge>
-            <Badge tone={goalTone(goal.status)}>{labelStatus(goal.status)}</Badge>
+            <Badge tone={goalTone(effectiveGoalStatus(goal))}>{labelStatus(effectiveGoalStatus(goal))}</Badge>
             <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}`} className="btn-action">
               <ListTodo size={12} /> Tasks
             </Link>
@@ -82,7 +83,7 @@ export function GoalDetailPage() {
               <span className="card__subtitle">{goal.progressPercent}% · {doneMs}/{goal.milestones.length} milestones</span>
             </div>
             <div className="card__body">
-              <Progress value={goal.progressPercent} tone={goal.status === "AtRisk" || goal.status === "OffTrack" ? "warn" : undefined} />
+              <Progress value={goal.progressPercent} tone={effectiveGoalStatus(goal) === "AtRisk" || effectiveGoalStatus(goal) === "OffTrack" ? "warn" : undefined} />
               <div className="row" style={{ marginTop: 10, gap: 6 }}>
                 <input
                   type="range"
@@ -153,7 +154,7 @@ export function GoalDetailPage() {
                       <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}`}>{t.title}</Link>
                     </td>
                     <td>{t.assignee ?? "—"}</td>
-                    <td><Badge tone={t.status === "Done" ? "success" : t.status === "Blocked" ? "danger" : "info"}>{t.status}</Badge></td>
+                    <td><Badge tone={t.status === "Done" ? "success" : t.status === "Blocked" ? "danger" : "info"}>{taskStatusLabel(t.status)}</Badge></td>
                     <td className="table__cell--mono">{t.dueDate ? formatDate(t.dueDate) : "—"}</td>
                   </tr>
                 ))}

@@ -69,9 +69,15 @@ export function CommitteesPage() {
                 <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
                   <Badge>{c.cadence}</Badge>
                   {c.nextMeetingAt && (
-                    <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                      Next: {formatDateTime(c.nextMeetingAt)}
-                    </span>
+                    new Date(c.nextMeetingAt).getTime() < Date.now() ? (
+                      <span style={{ fontSize: "var(--fs-sm)", color: "var(--danger)", fontWeight: 600 }}>
+                        Overdue — schedule next meeting ({formatDateTime(c.nextMeetingAt)})
+                      </span>
+                    ) : (
+                      <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                        Next: {formatDateTime(c.nextMeetingAt)}
+                      </span>
+                    )
                   )}
                 </div>
                 <div className="row" style={{ gap: 16, marginTop: 4 }}>

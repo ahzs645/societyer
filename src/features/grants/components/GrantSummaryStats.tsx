@@ -3,7 +3,7 @@ import { money } from "../../../lib/format";
 export function GrantSummaryStats({ summary }: { summary: any }) {
   return (
     <div className="stat-grid" style={{ marginBottom: 16 }}>
-      <Stat label="Pipeline" value={String(summary?.pipeline ?? 0)} />
+      <Stat label="Pre-award" value={String(summary?.pipeline ?? 0)} />
       <Stat label="Active awards" value={String(summary?.active ?? 0)} />
       <Stat label="Pending intake" value={String(summary?.pendingApplications ?? 0)} />
       <Stat

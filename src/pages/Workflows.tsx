@@ -28,12 +28,87 @@ import {
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
 
+const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+/**
+ * Parse a simple "min hour * * dow" weekly cron into day-of-week +
+ * 24h time, for the friendly picker. Returns null for anything more
+ * complex (multiple days, day-of-month schedules, etc.) so the UI can
+ * fall back to the raw cron input for those cases.
+ */
+function parseWeeklyCron(cron?: string): { dayOfWeek: string; time: string } | null {
+  if (!cron) return null;
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) return null;
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+  const min = Number(minute);
+  const hr = Number(hour);
+  if (!Number.isFinite(min) || !Number.isFinite(hr)) return null;
+  if (dayOfMonth !== "*" || month !== "*") return null;
+  if (!/^[0-6]$/.test(dayOfWeek)) return null;
+  return {
+    dayOfWeek,
+    time: `${String(hr).padStart(2, "0")}:${String(min).padStart(2, "0")}`,
+  };
+}
+
+function buildWeeklyCron(dayOfWeek: string, time: string): string {
+  const [hour, minute] = time.split(":");
+  const hr = Number(hour) || 0;
+  const min = Number(minute) || 0;
+  return `${min} ${hr} * * ${dayOfWeek}`;
+}
+
+/**
+ * Turn a simple cron expression ("min hour dom mon dow") into a plain-
+ * English sentence for display, e.g. "Every Monday at 8:00 AM". Falls
+ * back to the raw expression if it doesn't match a pattern we recognize
+ * — this only needs to cover the schedules this app actually creates.
+ */
+function describeCron(cron?: string): string {
+  if (!cron) return "Scheduled";
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) return `Scheduled (${cron})`;
+  const [minute, hour, dayOfMonth, , dayOfWeek] = parts;
+
+  const min = Number(minute);
+  const hr = Number(hour);
+  if (!Number.isFinite(min) || !Number.isFinite(hr)) return `Scheduled (${cron})`;
+
+  const period = hr >= 12 ? "PM" : "AM";
+  const displayHour = hr % 12 === 0 ? 12 : hr % 12;
+  const time = `${displayHour}:${String(min).padStart(2, "0")} ${period}`;
+
+  if (dayOfWeek !== "*") {
+    const days = dayOfWeek
+      .split(",")
+      .map((d) => WEEKDAY_NAMES[Number(d)])
+      .filter(Boolean);
+    if (days.length === 1) return `Every ${days[0]} at ${time}`;
+    if (days.length > 1) return `Every ${days.join(", ")} at ${time}`;
+  }
+
+  if (dayOfMonth !== "*") {
+    return `Monthly on day ${dayOfMonth} at ${time}`;
+  }
+
+  return `Every day at ${time}`;
+}
+
 const triggerLabel = (trigger: any) =>
   trigger?.kind === "cron"
-    ? trigger.cron
+    ? describeCron(trigger.cron)
     : trigger?.kind === "date_offset"
       ? `${trigger.offset?.daysBefore}d before ${trigger.offset?.anchor}`
-      : "manual";
+      : "Manual only";
 
 type TriggerKind = "cron" | "manual" | "date_offset";
 
@@ -71,6 +146,7 @@ export function WorkflowsPage() {
   } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [setupBusy, setSetupBusy] = useState(false);
+  const [cronAdvanced, setCronAdvanced] = useState(false);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -118,6 +194,7 @@ export function WorkflowsPage() {
       anchor: selected?.config?.anchor ?? "insurancePolicies.renewalDate",
       provider: selected?.provider ?? "internal",
     });
+    setCronAdvanced(false);
     setOpen(true);
   };
 
@@ -152,7 +229,7 @@ export function WorkflowsPage() {
         title="Workflows"
         icon={<WorkflowIcon size={16} />}
         iconColor="orange"
-        subtitle="Native workflow control with Societyer context and n8n execution for external automations."
+        subtitle="Set up automations — like AGM prep reminders or filing deadline alerts — and control when they run."
         actions={
           <>
             <MoreActionsMenu
@@ -208,7 +285,7 @@ export function WorkflowsPage() {
                 },
                 {
                   id: "link-n8n-recipes",
-                  label: setupBusy ? "Linking..." : "Link n8n recipes",
+                  label: setupBusy ? "Setting up..." : "Set up governance automations",
                   icon: <WorkflowIcon size={14} />,
                   disabled: setupBusy,
                   onSelect: async () => {
@@ -218,9 +295,9 @@ export function WorkflowsPage() {
                         societyId: society._id,
                         actingUserId,
                       });
-                      toast.success("n8n governance recipes linked", `${result.created.length} created, ${result.updated.length} updated`);
+                      toast.success("Governance automations set up", `${result.created.length} created, ${result.updated.length} updated`);
                     } catch (error: any) {
-                      toast.error("Could not link n8n recipes", error?.message);
+                      toast.error("Could not set up governance automations", error?.message);
                     } finally {
                       setSetupBusy(false);
                     }
@@ -274,6 +351,12 @@ export function WorkflowsPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tableData.loading || rows === undefined}
+            renderCell={({ field, value }) => {
+              if (field.name === "provider") {
+                return <span>{value === "n8n" ? "Our automation engine" : "Societyer"}</span>;
+              }
+              return undefined;
+            }}
             renderRowActions={(r) => (
               <>
                 <Link
@@ -299,7 +382,7 @@ export function WorkflowsPage() {
                       });
                       toast.success(
                         result?.status === "running"
-                          ? "Workflow queued in n8n"
+                          ? "Workflow started — it's running now"
                           : "Workflow run complete",
                       );
                     } catch (err: any) {
@@ -360,7 +443,7 @@ export function WorkflowsPage() {
       >
         {form && (
           <>
-            <Field label="Recipe">
+            <Field label="Automation type">
               <Select
                 value={form.recipe}
                 onChange={(value) => {
@@ -395,8 +478,8 @@ export function WorkflowsPage() {
               <div className="flag flag--info" style={{ marginBottom: 12 }}>
                 <WorkflowIcon size={14} />
                 <div>
-                  This governance recipe is n8n-only. Societyer stores setup metadata, links the webhook,
-                  and records callbacks; execution logic belongs in the imported n8n template.
+                  This automation runs through our automation engine. Societyer keeps track of its setup
+                  and status here, and records the response each time it runs.
                 </div>
               </div>
             )}
@@ -407,29 +490,88 @@ export function WorkflowsPage() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </Field>
-            <Field label="Provider">
-              <input className="input" value={form.provider ?? "internal"} readOnly />
+            <Field label="Runs via">
+              <input
+                className="input"
+                value={form.provider === "n8n" ? "Our automation engine" : "Societyer"}
+                readOnly
+              />
             </Field>
-            <Field label="Trigger">
+            <Field label="When should this run?">
               <Select
                 value={form.triggerKind}
                 onChange={(value) => setForm({ ...form, triggerKind: value as TriggerKind })}
                 options={[
-                  { value: "cron", label: "Scheduled (cron)" },
+                  { value: "cron", label: "On a schedule" },
                   { value: "date_offset", label: "Days before a date" },
                   { value: "manual", label: "Manual only" },
                 ]}
               />
             </Field>
             {form.triggerKind === "cron" && (
-              <Field label="Cron expression">
-                <input
-                  className="input mono"
-                  value={form.cron}
-                  onChange={(e) => setForm({ ...form, cron: e.target.value })}
-                  placeholder="0 8 * * 1"
-                />
-              </Field>
+              <>
+                {!cronAdvanced ? (
+                  (() => {
+                    const weekly = parseWeeklyCron(form.cron) ?? { dayOfWeek: "1", time: "08:00" };
+                    return (
+                      <>
+                        <Field label="Day of the week">
+                          <Select
+                            value={weekly.dayOfWeek}
+                            onChange={(value) =>
+                              setForm({ ...form, cron: buildWeeklyCron(value, weekly.time) })
+                            }
+                            options={WEEKDAY_NAMES.map((name, i) => ({
+                              value: String(i),
+                              label: name,
+                            }))}
+                          />
+                        </Field>
+                        <Field label="Time" hint={describeCron(form.cron)}>
+                          <input
+                            className="input"
+                            type="time"
+                            value={weekly.time}
+                            onChange={(e) =>
+                              setForm({ ...form, cron: buildWeeklyCron(weekly.dayOfWeek, e.target.value) })
+                            }
+                          />
+                        </Field>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          style={{ marginBottom: 12 }}
+                          onClick={() => setCronAdvanced(true)}
+                        >
+                          Use advanced schedule…
+                        </button>
+                      </>
+                    );
+                  })()
+                ) : (
+                  <>
+                    <Field
+                      label="Schedule"
+                      hint={`${describeCron(form.cron)} — e.g. every Monday at 9am is entered as cron syntax: 0 9 * * 1`}
+                    >
+                      <input
+                        className="input mono"
+                        value={form.cron}
+                        onChange={(e) => setForm({ ...form, cron: e.target.value })}
+                        placeholder="0 8 * * 1"
+                      />
+                    </Field>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      style={{ marginBottom: 12 }}
+                      onClick={() => setCronAdvanced(false)}
+                    >
+                      Use simple day &amp; time picker…
+                    </button>
+                  </>
+                )}
+              </>
             )}
             {form.triggerKind === "date_offset" && (
               <>

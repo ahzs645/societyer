@@ -18,6 +18,7 @@ import { useRegisterCommand } from "../lib/commands";
 import { rowsToCsv } from "../lib/csv";
 import { BulkEditPanel } from "../components/BulkEditPanel";
 import { MergeRecordsModal } from "../components/MergeRecordsModal";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { StructuredAddressTextFields } from "../components/StructuredAddressFields";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -94,32 +95,34 @@ export function MembersPage() {
     });
   };
 
+  const exportMembersCsv = () => {
+    const body = rowsToCsv([
+      ["First", "Last", "Email", "Class", "Status", "Joined"],
+      ...(members ?? []).map((m: any) => [
+        m.firstName,
+        m.lastName,
+        m.email ?? "",
+        m.membershipClass,
+        m.status,
+        m.joinedAt,
+      ]),
+    ]);
+    const blob = new Blob([body], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `members-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   useRegisterCommand(
     members && members.length > 0
       ? {
           id: "members-export-csv",
           label: "Export members to CSV",
           icon: Download,
-          run: () => {
-            const body = rowsToCsv([
-              ["First", "Last", "Email", "Class", "Status", "Joined"],
-              ...(members ?? []).map((m: any) => [
-                m.firstName,
-                m.lastName,
-                m.email ?? "",
-                m.membershipClass,
-                m.status,
-                m.joinedAt,
-              ]),
-            ]);
-            const blob = new Blob([body], { type: "text/csv" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `members-${new Date().toISOString().slice(0, 10)}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-          },
+          run: exportMembersCsv,
         }
       : null,
   );
@@ -161,9 +164,16 @@ export function MembersPage() {
         iconColor="blue"
         subtitle="Register of members as required under s.20 of the Societies Act."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
-            <Plus size={12} /> New member
-          </button>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <MoreActionsMenu
+              items={[
+                { id: "export", label: "Export CSV", icon: <Download size={14} />, onSelect: exportMembersCsv },
+              ]}
+            />
+            <button className="btn-action btn-action--primary" onClick={openNew}>
+              <Plus size={12} /> New member
+            </button>
+          </div>
         }
       />
 

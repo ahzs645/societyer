@@ -134,6 +134,11 @@ export function DirectorsPage() {
         }
       />
 
+      <p className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
+        This is your BC director filing register. For a complete history of every governance role (officers, controllers, past terms), see{" "}
+        <Link to="/app/role-holders">Role holders</Link>.
+      </p>
+
       <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Active directors</div>

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -20,6 +20,45 @@ import {
   downloadMinuteBookCsv,
   type MinuteBookExportInput,
 } from "../features/meetings/lib/minuteBookExport";
+
+/**
+ * Tracks whether a horizontally-scrollable container is scrolled away from
+ * either edge, so callers can toggle the `.table-scroll` fade-shadow classes
+ * (see src/styles/_components-tables-misc.scss) that hint more content is
+ * off-screen.
+ */
+function useScrollEdges<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const { scrollLeft, scrollWidth, clientWidth } = el;
+      setEdges({
+        left: scrollLeft > 0,
+        right: scrollLeft + clientWidth < scrollWidth - 1,
+      });
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, []);
+
+  const className = [
+    "table-scroll",
+    edges.left ? "is-scrolled-left" : "",
+    edges.right ? "is-scrolled-right" : "",
+  ].filter(Boolean).join(" ");
+
+  return { ref, className };
+}
 
 export function MinuteBookPage() {
   const society = useSociety();
@@ -130,6 +169,8 @@ export function MinuteBookPage() {
     toast.success("Minute book record deleted");
   };
 
+  const recordSpineScroll = useScrollEdges<HTMLDivElement>();
+
   const items = Array.isArray(detail) ? [] : detail?.items ?? [];
   const checks = safeRows(detail, "checks");
   const recordBundles = safeRows(detail, "recordBundles");
@@ -155,6 +196,8 @@ export function MinuteBookPage() {
           </>
         }
       />
+
+      <RelatedDocumentViews current="/app/minute-book" />
 
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Connected records" value={recordBundles.length} />
@@ -194,7 +237,7 @@ export function MinuteBookPage() {
           <h2 className="card__title">Record spine</h2>
           <Badge>{items.length}</Badge>
         </div>
-        <div className="table-wrap">
+        <div ref={recordSpineScroll.ref} className={`table-wrap ${recordSpineScroll.className}`}>
           <table className="table">
             <thead>
               <tr>
@@ -250,8 +293,8 @@ export function MinuteBookPage() {
       <div className="grid two">
         <LinkedList title="Canonical documents" rows={safeRows(detail, "documents")} getTitle={(row: any) => row.title} getMeta={(row: any) => row.category} />
         <LinkedList title="Meetings and minutes" rows={safeRows(detail, "meetings")} getTitle={(row: any) => row.title} getMeta={(row: any) => `${row.type} - ${row.scheduledAt ? formatDate(row.scheduledAt) : "unscheduled"}`} />
-        <LinkedList title="Filings" rows={safeRows(detail, "filings")} getTitle={(row: any) => row.kind} getMeta={(row: any) => `${row.status} - ${row.dueDate ? formatDate(row.dueDate) : "no due date"}`} />
-        <LinkedList title="Policies and workflow packages" rows={[...safeRows(detail, "policies"), ...safeRows(detail, "workflowPackages")]} getTitle={(row: any) => row.policyName ?? row.packageName} getMeta={(row: any) => row.status ?? row.eventType} />
+        <LinkedList title="Filings" rows={safeRows(detail, "filings")} getTitle={(row: any) => humanize(row.kind)} getMeta={(row: any) => `${humanize(row.status)} - ${row.dueDate ? formatDate(row.dueDate) : "no due date"}`} />
+        <LinkedList title="Policies and workflow packages" rows={[...safeRows(detail, "policies"), ...safeRows(detail, "workflowPackages")]} getTitle={(row: any) => row.policyName ?? row.packageName} getMeta={(row: any) => humanize(row.status ?? row.eventType)} />
       </div>
 
       <Drawer
@@ -301,6 +344,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "wa
 }
 
 function RecordBundlesCard({ rows }: { rows: any[] }) {
+  const scroll = useScrollEdges<HTMLDivElement>();
   const gapCount = rows.reduce((count, row) => count + actionableGaps(row.gaps).length, 0);
   const visibleRows = rows
     .slice()
@@ -317,7 +361,7 @@ function RecordBundlesCard({ rows }: { rows: any[] }) {
         <h2 className="card__title">Connected records</h2>
         <Badge tone={gapCount ? "warn" : "success"}>{gapCount ? `${gapCount} gaps` : `${rows.length} records`}</Badge>
       </div>
-      <div className="table-wrap">
+      <div ref={scroll.ref} className={`table-wrap ${scroll.className}`}>
         <table className="table">
           <thead>
             <tr>
@@ -332,7 +376,7 @@ function RecordBundlesCard({ rows }: { rows: any[] }) {
             {visibleRows.map((row) => (
               <tr key={row.key}>
                 <td>
-                  <div>{row.href ? <Link to={row.href}><strong>{row.title}</strong></Link> : <strong>{row.title}</strong>}</div>
+                  <div>{row.href ? <Link to={row.href}><strong>{humanize(row.title)}</strong></Link> : <strong>{humanize(row.title)}</strong>}</div>
                   <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 4 }}>
                     <Badge>{labelize(row.type)}</Badge>
                     {(row.badges ?? []).slice(0, 3).map((badge: any) => <Badge key={`${row.key}:${badge.label}`} tone={badge.tone}>{badge.label}</Badge>)}
@@ -341,7 +385,7 @@ function RecordBundlesCard({ rows }: { rows: any[] }) {
                 <td><BundleLinks links={row.links ?? []} /></td>
                 <td><CountBadges counts={row.counts ?? {}} /></td>
                 <td><GapBadges gaps={row.gaps ?? []} /></td>
-                <td><Badge tone={toneForStatus(row.status)}>{row.status ?? "-"}</Badge></td>
+                <td><Badge tone={toneForStatus(row.status)}>{humanize(row.status) || "-"}</Badge></td>
               </tr>
             ))}
             {rows.length === 0 && (
@@ -469,6 +513,20 @@ function safeCount(detail: any, key: string) {
 
 function labelize(value?: string) {
   return String(value ?? "-").replace(/_/g, " ");
+}
+
+/**
+ * Some connected records (filings, policy statuses) come through as raw
+ * PascalCase identifiers (e.g. "ChangeOfDirectors", "ReviewDue") rather than
+ * human-authored titles. Insert spaces before internal capitals so they read
+ * as words; leave anything that already contains a space untouched so real
+ * titles ("2025 annual general meeting agenda") pass through unchanged.
+ */
+function humanize(value?: string) {
+  const raw = String(value ?? "");
+  if (!raw || raw.includes(" ")) return raw;
+  const spaced = raw.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 function toneForStatus(status?: string) {

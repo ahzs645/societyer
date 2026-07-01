@@ -198,9 +198,9 @@ export function VolunteersPage() {
                   <div className="muted mono" style={{ fontSize: 11 }}>{record.email}</div>
                 </div>
               );
-              if (field.name === "roleWanted") return <span>{record.roleWanted ?? "—"}</span>;
+              if (field.name === "roleWanted") return <span className={record.roleWanted ? undefined : "muted"}>{record.roleWanted ?? "Not provided"}</span>;
               if (field.name === "status") return <Badge tone={record.status === "Converted" ? "success" : record.status === "Declined" ? "danger" : "warn"}>{record.status}</Badge>;
-              if (field.name === "source") return <span className="cell-tag">{record.source}</span>;
+              if (field.name === "source") return record.source ? <span className="cell-tag">{record.source}</span> : <span className="muted">Not provided</span>;
               if (field.name === "submittedAtISO") return <span className="mono">{formatDate(record.submittedAtISO)}</span>;
               return undefined;
             }}

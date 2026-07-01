@@ -7,38 +7,40 @@
   gap: token('s-4');
   align-items: start;
 }
-.pdf-page {
-  min-height: 420px;
-  padding: token('s-5');
-  border: 1px solid token('border');
-  border-radius: token('r-sm');
-  background: token('bg-base');
-  box-shadow: inset 0 0 0 1px token('bg-subtle');
-}
-.pdf-line {
-  height: 10px;
-  margin-bottom: token('s-3');
-  border-radius: token('r-sm');
-  background: token('bg-subtle');
-}
-.pdf-line.short {
-  width: 62%;
-}
 .pdf-side {
   display: grid;
   gap: token('s-3');
 }
-.signature-box {
-  min-height: 72px;
-  margin-top: token('s-6');
-  border: 1px dashed token('border-strong');
+.document-preview-pane {
+  position: relative;
+  min-height: 420px;
+  max-height: 80vh;
+  overflow: auto;
+  padding: token('s-4');
+  border: 1px solid token('border');
   border-radius: token('r-sm');
-  display: grid;
-  place-items: center;
-  padding: token('s-3');
-  color: token('text-tertiary');
-  text-align: center;
-  font-size: token('fs-sm');
+  background: token('bg-app');
+  color-scheme: light;
+}
+.document-preview-pane__pdf {
+  width: 100%;
+  height: 74vh;
+  min-height: 420px;
+  border: none;
+  border-radius: token('r-sm');
+  background: token('bg-base');
+}
+// Tame docx-preview's default gray wrapper the same way the minutes preview
+// does (see .minutes-docx-preview .docx-wrapper) — our own container already
+// provides the backdrop, keep only the per-page paper it draws.
+.document-preview-pane .docx-wrapper {
+  background: transparent;
+  padding: 0;
+  gap: token('s-3');
+}
+.document-preview-pane .docx-wrapper > section.docx {
+  margin: 0 auto;
+  box-shadow: token('shadow-md');
 }
 .attendance-list {
   display: grid;

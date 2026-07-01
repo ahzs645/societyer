@@ -17,6 +17,35 @@ import {
   type SignificantIndividual,
 } from "../significantIndividuals";
 
+/**
+ * Director/member rows shaped for the as-of-date readers below, sourced
+ * straight from the live `directors`/`members` registers. The canonical
+ * `roleHolders` register is a separate, import-populated table that is
+ * routinely empty (it has its own onboarding step) even when the society's
+ * actual director/member registers are fully populated — without this
+ * fallback, the point-in-time register would wrongly answer "nobody held
+ * office" for a society with a live, populated board.
+ */
+async function directorsAsOfFallback(ctx: PortableQueryCtx, societyId: string, asOf: string) {
+  const rows = await ctx.db
+    .query("directors")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  return activeAsOf(rows as IntervalRow[], asOf, { start: "termStart", end: "termEnd" }).map(
+    (row: any) => ({ _id: row._id, fullName: `${row.firstName} ${row.lastName}`.trim(), startDate: row.termStart }),
+  );
+}
+
+async function membersAsOfFallback(ctx: PortableQueryCtx, societyId: string, asOf: string) {
+  const rows = await ctx.db
+    .query("members")
+    .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .collect();
+  return activeAsOf(rows as IntervalRow[], asOf, { start: "joinedAt", end: "leftAt" }).map(
+    (row: any) => ({ _id: row._id, fullName: `${row.firstName} ${row.lastName}`.trim(), startDate: row.joinedAt }),
+  );
+}
+
 /** Role-holders of a given type that were active on a specific ISO date. */
 export async function roleHoldersAsOfDatePortable(
   ctx: PortableQueryCtx,
@@ -26,6 +55,11 @@ export async function roleHoldersAsOfDatePortable(
     .query("roleHolders")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
+  const hasRoleTypeCoverage = rows.some((row) => row.roleType === roleType);
+  if (!hasRoleTypeCoverage) {
+    if (roleType === "director") return directorsAsOfFallback(ctx, societyId, asOf);
+    if (roleType === "member") return membersAsOfFallback(ctx, societyId, asOf);
+  }
   return roleHoldersAsOf(rows as IntervalRow[], asOf, roleType);
 }
 
@@ -58,6 +92,7 @@ export async function directorsAsOfPortable(
     .query("roleHolders")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
+  if (!rows.some((row) => row.roleType === "director")) return directorsAsOfFallback(ctx, societyId, asOf);
   return roleHoldersAsOf(rows as IntervalRow[], asOf, "director");
 }
 
