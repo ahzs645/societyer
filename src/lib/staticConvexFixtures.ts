@@ -1140,6 +1140,8 @@ const documents = [
     flaggedForDeletion: false,
     tags: ["bylaws", "corporate register", "public"],
     public: true,
+    fileName: "current-bylaws.pdf",
+    mimeType: "application/pdf",
   },
   {
     _id: DOCUMENT_POLICY_ID,
@@ -1355,6 +1357,30 @@ const documents = [
     createdAtISO: "2025-06-19T18:00:00.000Z",
     flaggedForDeletion: false,
     tags: ["org-history", "org-history-item", "budget"],
+  },
+];
+
+// A minimal, hand-built one-page PDF (valid xref table, no external deps) so
+// the Documents preview pane has one real, renderable file to demonstrate
+// against in the demo — every other seed document is metadata-only by design.
+const SAMPLE_BYLAWS_PDF_DATA_URL =
+  "data:application/pdf;base64,JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA0IDAgUiA+PiA+PiAvTWVkaWFCb3ggWzAgMCAzOTYgMjE2XSAvQ29udGVudHMgNSAwIFIgPj4KZW5kb2JqCjQgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNhID4+CmVuZG9iago1IDAgb2JqCjw8IC9MZW5ndGggODEgPj4Kc3RyZWFtCkJUIC9GMSAxNCBUZiAzNiAxNjAgVGQgKFNvY2lldHllciBzYW1wbGUgZG9jdW1lbnQgcHJldmlldyAtIEN1cnJlbnQgYnlsYXdzKSBUaiBFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAwOSAwMDAwMCBuIAowMDAwMDAwMDU4IDAwMDAwIG4gCjAwMDAwMDAxMTUgMDAwMDAgbiAKMDAwMDAwMDI0MSAwMDAwMCBuIAowMDAwMDAwMzExIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKNDQyCiUlRU9G";
+
+const documentVersions = [
+  {
+    _id: "static_document_version_bylaws_v1",
+    societyId: SOCIETY_ID,
+    documentId: DOCUMENT_BYLAWS_ID,
+    version: 1,
+    storageProvider: "generated-inline",
+    storageKey: SAMPLE_BYLAWS_PDF_DATA_URL,
+    fileName: "current-bylaws.pdf",
+    mimeType: "application/pdf",
+    fileSizeBytes: SAMPLE_BYLAWS_PDF_DATA_URL.length,
+    uploadedByName: "Societyer",
+    uploadedAtISO: "2025-06-25T17:00:00.000Z",
+    changeNote: "Initial version.",
+    isCurrent: true,
   },
 ];
 
@@ -2831,7 +2857,7 @@ const tables: Record<string, any[]> = {
   directors,
   documents,
   documentComments,
-  documentVersions: [],
+  documentVersions,
   expenseReports,
   paperlessConnections,
   paperlessDocumentSyncs,

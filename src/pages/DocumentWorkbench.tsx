@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
+import { renderAsync } from "docx-preview";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
@@ -18,6 +19,8 @@ import {
   Download,
   ExternalLink,
   FileText,
+  FileWarning,
+  Loader2,
   MessageSquare,
   PenLine,
   Save,
@@ -140,19 +143,13 @@ export function DocumentWorkbenchPage() {
             </div>
             <div className="card__body">
               <div className="pdf-layout">
-                <div className="pdf-page">
-                  <div className="pdf-line short" />
-                  <div className="pdf-line" />
-                  <div className="pdf-line" />
-                  <div className="pdf-line short" />
-                  <br />
-                  <div className="pdf-line" />
-                  <div className="pdf-line" />
-                  <div className="pdf-line short" />
-                  <div className="signature-box">
-                    {document.fileName ?? document.title}
-                  </div>
-                </div>
+                <DocumentPreviewPane
+                  getDownloadTarget={getDownloadTarget}
+                  versionId={latest?._id}
+                  fallbackUrl={legacyUrl ?? document.url ?? null}
+                  fileName={document.fileName ?? undefined}
+                  hasAnyFile={downloadAvailable}
+                />
                 <aside className="pdf-side">
                   <div className="card" style={{ padding: 12, border: "1px solid var(--border)" }}>
                     <h3 style={{ marginTop: 0, fontSize: "var(--fs-md)" }}>Document state</h3>
@@ -307,6 +304,132 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
     <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
       <span className="muted">{label}</span>
       <span>{children}</span>
+    </div>
+  );
+}
+
+type PreviewStatus = "loading" | "pdf" | "docx" | "unsupported" | "unavailable" | "error";
+
+/**
+ * Renders the real file inline where possible instead of a static placeholder:
+ * PDFs via a browser-native iframe, .docx via the same docx-preview library the
+ * minutes preview already uses (rendering the actual uploaded bytes, not a
+ * built-from-HTML approximation). Everything else falls back to a clear
+ * "use Open file" message rather than pretending to show content it can't.
+ */
+function DocumentPreviewPane({
+  getDownloadTarget,
+  versionId,
+  fallbackUrl,
+  fileName,
+  hasAnyFile,
+}: {
+  getDownloadTarget: (args: { versionId: Id<"documentVersions"> }) => Promise<any>;
+  versionId: Id<"documentVersions"> | undefined;
+  fallbackUrl: string | null;
+  fileName: string | undefined;
+  hasAnyFile: boolean;
+}) {
+  const [status, setStatus] = useState<PreviewStatus>("loading");
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const renderRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let createdBlobUrl: string | null = null;
+    setStatus("loading");
+    setPdfBlobUrl(null);
+    if (!hasAnyFile) {
+      setStatus("unavailable");
+      return;
+    }
+    (async () => {
+      try {
+        let url = fallbackUrl;
+        let mimeType: string | undefined;
+        if (versionId) {
+          const target = await getDownloadTarget({ versionId });
+          if (target?.kind === "url") {
+            url = target.url ?? url;
+            mimeType = target.mimeType;
+          }
+        }
+        if (cancelled) return;
+        if (!url || url.startsWith("demo://")) {
+          setStatus("unavailable");
+          return;
+        }
+        const lowerName = (fileName ?? "").toLowerCase();
+        const isPdf = mimeType?.includes("pdf") || lowerName.endsWith(".pdf");
+        const isDocx = mimeType?.includes("wordprocessingml") || lowerName.endsWith(".docx");
+        if (!isPdf && !isDocx) {
+          setStatus("unsupported");
+          return;
+        }
+        // Fetch and re-host as a same-origin blob: URL rather than framing the
+        // storage URL directly — keeps the CSP's frame-src scoped to
+        // 'self' data: blob: instead of needing to allowlist every possible
+        // storage host, and works identically for data: URLs (demo) and real
+        // remote storage URLs (hosted deployments).
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Couldn't load the file");
+        const blob = await response.blob();
+        if (cancelled) return;
+        if (isPdf) {
+          createdBlobUrl = URL.createObjectURL(blob);
+          setPdfBlobUrl(createdBlobUrl);
+          setStatus("pdf");
+          return;
+        }
+        const container = renderRef.current;
+        if (!container) throw new Error("Preview container missing");
+        container.replaceChildren();
+        await renderAsync(blob, container);
+        if (cancelled) return;
+        setStatus("docx");
+      } catch (error) {
+        console.error("Failed to render document preview", error);
+        if (!cancelled) setStatus("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
+    };
+  }, [getDownloadTarget, versionId, fallbackUrl, fileName, hasAnyFile]);
+
+  return (
+    <div className="document-preview-pane">
+      {status === "loading" && (
+        <div className="minutes-docx-preview__status">
+          <Loader2 size={18} className="minutes-docx-preview__spinner" aria-hidden />
+          <span>Loading preview…</span>
+        </div>
+      )}
+      {status === "pdf" && pdfBlobUrl && (
+        <iframe src={pdfBlobUrl} title="Document preview" className="document-preview-pane__pdf" />
+      )}
+      {status === "unsupported" && (
+        <div className="minutes-docx-preview__status">
+          <span>Preview isn't available for this file type — use "Open file" above to view or download it.</span>
+        </div>
+      )}
+      {status === "unavailable" && (
+        <div className="minutes-docx-preview__status">
+          <span>{hasAnyFile ? "No previewable file could be loaded." : "No file is attached to this document — it's a metadata-only record."}</span>
+        </div>
+      )}
+      {status === "error" && (
+        <div className="minutes-docx-preview__status">
+          <FileWarning size={18} aria-hidden />
+          <span>Couldn't render a preview — "Open file" above still works.</span>
+        </div>
+      )}
+      <div
+        ref={renderRef}
+        className="minutes-docx-preview__render"
+        style={{ display: status === "docx" ? "block" : "none" }}
+      />
     </div>
   );
 }
