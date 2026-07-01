@@ -12,7 +12,9 @@
  *
  * Emits, to stdout, the import lines and definePortableQuery/Mutation entries to
  * paste into shared/functions/registry.ts. This is a one-shot authoring aid, not
- * a build step — the registry stays hand-checked-in.
+ * a build step — the registry stays hand-checked-in. The checked-in registry is
+ * then enforced against the Convex delegations by scripts/portable-manifest.mjs
+ * (`npm run test:portable-manifest`), which fails CI on any drift.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
