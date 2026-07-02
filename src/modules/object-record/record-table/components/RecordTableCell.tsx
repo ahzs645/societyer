@@ -99,7 +99,11 @@ export function RecordTableCell({
           <FieldDisplay value={value} record={record} field={recordField.field} />
         )}
       </div>
-      {(isHovered || isFocused) && !isEditing && (
+      {/* Only render the overlay when it has at least one action — an empty
+          container shows up as a tiny floating box over the cell. */}
+      {(isHovered || isFocused) &&
+        !isEditing &&
+        (secondaryActions.length > 0 || (canEdit && !isLabelIdentifier)) && (
         <div className="record-table__cell-actions" onClick={(event) => event.stopPropagation()}>
           {secondaryActions.map((action) => (
             <button

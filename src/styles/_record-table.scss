@@ -926,6 +926,7 @@ select.record-table__menu-select,
 
 .record-table__cell-action {
   @include inline-flex-center;
+  justify-content: center;
   width: 22px;
   height: 22px;
   padding: 0;
@@ -992,15 +993,16 @@ select.record-table__menu-select,
 // here — that breaks dark mode.
 $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink", "violet");
 
-// Table-cell chip — Twenty-style: 20px tall, 4px radius, 8px horiz
-// padding. No icon slot here; use `<Tag />` when you need one.
+// Table-cell chip — 20px tall, pill radius (matches `.badge`/`.pill` so
+// every chip across the app shares one shape), 8px horiz padding. No icon
+// slot here; use `<Tag />` when you need one.
 .record-cell__chip {
   @include inline-flex-center;
   height: 20px;
   padding: 0 8px;
   font-size: 12px;
   font-weight: 500;
-  border-radius: 4px;
+  border-radius: token('r-pill');
   border: 1px solid transparent;
   line-height: 1;
   max-width: 100%;
@@ -1037,7 +1039,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   padding: 0 8px;
   font-size: 12px;
   line-height: 1;
-  border-radius: 4px;
+  border-radius: token('r-pill');
   border: 1px solid transparent;
   max-width: 100%;
 }
@@ -1305,11 +1307,17 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 
 /* ----- per-row actions (sticky right column) ----- */
 
+/* The actions column pins to the right edge — on wide tables it would
+ * otherwise sit past the viewport and rows would appear to have no
+ * actions at all until the user horizontally scrolled. */
 .record-table__row-actions-head {
   width: 1%;
   min-width: 60px;
   padding: 0;
-  background: inherit;
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: token('bg-subtle');
 }
 
 .record-table__row-actions-cell {
@@ -1318,6 +1326,18 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   padding: 0 8px;
   vertical-align: middle;
   text-align: right;
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: token('bg-base');
+}
+
+.record-table__row:hover .record-table__row-actions-cell {
+  background: token('bg-hover');
+}
+
+.record-table__footer-cell.record-table__row-actions-cell {
+  background: token('bg-subtle');
 }
 
 .record-table__row-actions {

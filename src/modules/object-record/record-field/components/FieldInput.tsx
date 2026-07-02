@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from
 import type { BooleanFieldConfig, FieldMetadata, SelectFieldConfig } from "../../types";
 import { FIELD_TYPES } from "../../types";
 import { Select } from "@/components/Select";
+import { DatePicker } from "@/components/DatePicker";
+import { DateTimeInput } from "@/components/DateTimeInput";
 import type { TagColor } from "@/components/Tag";
 
 /**
@@ -149,35 +151,78 @@ function SelectInput({ value, onCommit, onCancel, field }: FieldInputProps) {
   );
 }
 
+/** "YYYY-MM-DD" in local time, or "" when the value can't be parsed. */
+function toDateDraft(value: unknown): string {
+  if (value == null || value === "") return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value) && !value.includes("T")) {
+    return value.slice(0, 10);
+  }
+  const d = new Date(value as any);
+  if (Number.isNaN(d.getTime())) return "";
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const da = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mo}-${da}`;
+}
+
+/** "YYYY-MM-DDTHH:mm" in local time (datetime-local shape), or "". */
+function toDateTimeDraft(value: unknown): string {
+  if (value == null || value === "") return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return value;
+  const d = new Date(value as any);
+  if (Number.isNaN(d.getTime())) return "";
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const da = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${d.getFullYear()}-${mo}-${da}T${hh}:${mm}`;
+}
+
+/**
+ * DATE / DATE_TIME inline editor — the same styled calendar popover used in
+ * drawers (DatePicker / DateTimeInput), opened immediately. Commits when the
+ * popover closes; if the user closed it without changing anything we cancel
+ * instead so no spurious update is written.
+ */
 function DateInput({ value, onCommit, onCancel, field }: FieldInputProps) {
-  const initial =
-    value == null
-      ? ""
-      : typeof value === "string"
-        ? value.slice(0, 10)
-        : new Date(value as any).toISOString().slice(0, 10);
-  const [draft, setDraft] = useState(initial);
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    ref.current?.focus();
-  }, []);
-  return (
-    <input
-      ref={ref}
-      type="date"
-      className="record-cell__input"
+  const isDateTime = field.fieldType === FIELD_TYPES.DATE_TIME;
+  const [draft, setDraft] = useState(() =>
+    isDateTime ? toDateTimeDraft(value) : toDateDraft(value),
+  );
+  const draftRef = useRef(draft);
+  const dirtyRef = useRef(false);
+
+  const handleChange = (next: string) => {
+    dirtyRef.current = true;
+    draftRef.current = next;
+    setDraft(next);
+  };
+
+  const handleClose = () => {
+    if (!dirtyRef.current) {
+      onCancel();
+      return;
+    }
+    const next = draftRef.current;
+    onCommit(next === "" && field.isNullable ? null : next);
+  };
+
+  return isDateTime ? (
+    <DateTimeInput
       value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => onCommit(draft === "" && field.isNullable ? null : draft)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          onCommit(draft === "" && field.isNullable ? null : draft);
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          onCancel();
-        }
-      }}
+      onChange={handleChange}
+      defaultOpen
+      onClose={handleClose}
+      size="sm"
+      clearable={field.isNullable}
+    />
+  ) : (
+    <DatePicker
+      value={draft}
+      onChange={handleChange}
+      defaultOpen
+      onClose={handleClose}
+      size="sm"
+      clearable={field.isNullable}
     />
   );
 }

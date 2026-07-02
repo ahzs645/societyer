@@ -16,6 +16,10 @@ type Props = {
   className?: string;
   style?: React.CSSProperties;
   id?: string;
+  /** Open the calendar popover immediately on mount (inline cell editors). */
+  defaultOpen?: boolean;
+  /** Fires whenever the popover closes (Done, outside click, Escape). */
+  onClose?: () => void;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean;
 };
@@ -54,12 +58,19 @@ export function DateTimeInput({
   className,
   style,
   id,
+  defaultOpen = false,
+  onClose,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
 }: Props) {
   const parsed = parse(value);
   const today = new Date();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  const wasOpenRef = useRef(defaultOpen);
+  useEffect(() => {
+    if (wasOpenRef.current && !open) onClose?.();
+    wasOpenRef.current = open;
+  }, [open, onClose]);
   const [view, setView] = useState(() => {
     const base = parsed.date ?? today;
     return new Date(base.getFullYear(), base.getMonth(), 1);

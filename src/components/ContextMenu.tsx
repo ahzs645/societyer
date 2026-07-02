@@ -62,12 +62,18 @@ export function ContextMenu({ position, sections, onClose, minWidth = 200 }: Pro
         }
       }
     };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("contextmenu", onDoc);
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
-    document.addEventListener("keydown", onKey);
+    // Defer attaching dismiss listeners by a tick: React can mount this menu
+    // while the opening `contextmenu` event is still bubbling toward
+    // document, and catching that same event would close the menu instantly.
+    const timer = window.setTimeout(() => {
+      document.addEventListener("mousedown", onDoc);
+      document.addEventListener("contextmenu", onDoc);
+      window.addEventListener("scroll", onScroll, true);
+      window.addEventListener("resize", onScroll);
+      document.addEventListener("keydown", onKey);
+    }, 0);
     return () => {
+      window.clearTimeout(timer);
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("contextmenu", onDoc);
       window.removeEventListener("scroll", onScroll, true);

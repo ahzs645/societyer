@@ -1,4 +1,4 @@
-import { forwardRef, type ReactNode, useEffect, useMemo, useRef } from "react";
+import { forwardRef, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 // NOTE: if you're adding another hook to this file, it MUST go above all the
 // early returns (`if (loading) ...`, etc). React's rules of hooks require a
 // stable call order on every render. An earlier iteration had a useMemo
@@ -17,6 +17,8 @@ import { useIsMobile } from "../../../../lib/useIsMobile";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { CalendarView } from "../../../../components/CalendarView";
 import { RecordBoard, type RecordBoardColumn } from "../../../../components/RecordBoard";
+import { ContextMenu } from "../../../../components/ContextMenu";
+import type { MenuSection } from "../../../../components/Menu";
 import { FIELD_TYPES, type FieldMetadata, type RecordField } from "../../types";
 
 // react-virtuoso attaches refs to the four table subcomponents so it can
@@ -42,11 +44,28 @@ const VirtuosoTableBody = forwardRef<HTMLTableSectionElement, React.HTMLAttribut
   },
 );
 
-const VirtuosoTableRow = forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement> & { item?: unknown }>(
-  function VirtuosoTableRow({ item: _item, ...props }, ref) {
-    return <tr ref={ref} {...props} className="record-table__row" />;
-  },
-);
+type RowContextMenuHandler = (event: React.MouseEvent, record: any) => void;
+
+const VirtuosoTableRow = forwardRef<
+  HTMLTableRowElement,
+  React.HTMLAttributes<HTMLTableRowElement> & {
+    item?: unknown;
+    context?: { onRowContextMenu?: RowContextMenuHandler };
+  }
+>(function VirtuosoTableRow({ item, context, ...props }, ref) {
+  return (
+    <tr
+      ref={ref}
+      {...props}
+      className="record-table__row"
+      onContextMenu={
+        context?.onRowContextMenu && item != null
+          ? (event) => context.onRowContextMenu!(event, item)
+          : undefined
+      }
+    />
+  );
+});
 
 /**
  * Opt-in escape hatch for pages that need a custom cell renderer on
@@ -73,6 +92,7 @@ export function RecordTable({
   loading = false,
   virtualizeAbove = 40,
   renderRowActions,
+  rowMenuSections,
   renderCell,
   keyboardNavigation = true,
   showAggregateFooter = true,
@@ -88,6 +108,12 @@ export function RecordTable({
    * actions belong in RecordTableBulkBar instead.
    */
   renderRowActions?: (record: any) => ReactNode;
+  /**
+   * Preferred way to expose per-row actions: menu sections rendered both
+   * behind a trailing "…" kebab button and on row right-click (context
+   * menu). Keeps rows clean instead of a strip of inline buttons.
+   */
+  rowMenuSections?: (record: any) => MenuSection[];
   /**
    * Optional per-cell renderer override. Return undefined to fall
    * through to the default metadata-driven display. Use sparingly —
@@ -109,10 +135,24 @@ export function RecordTable({
   const handle = useRecordTableStoreHandle();
   const tableRootRef = useRef<HTMLDivElement>(null);
   const virtuosoRef = useRef<TableVirtuosoHandle>(null);
+  const [rowContextMenu, setRowContextMenu] = useState<{ x: number; y: number; record: any } | null>(null);
 
   const visibleColumns = useMemo(() => columns.filter((c) => c.isVisible), [columns]);
   const hasOpenRecordAction = !!onRecordClick;
-  const hasRowActions = !!renderRowActions || hasOpenRecordAction;
+  const hasRowActions = !!renderRowActions || !!rowMenuSections || hasOpenRecordAction;
+  const onRowContextMenu: RowContextMenuHandler | undefined = rowMenuSections
+    ? (event, record) => {
+        event.preventDefault();
+        setRowContextMenu({ x: event.clientX, y: event.clientY, record });
+      }
+    : undefined;
+  const rowContextMenuElement = rowMenuSections ? (
+    <ContextMenu
+      position={rowContextMenu ? { x: rowContextMenu.x, y: rowContextMenu.y } : null}
+      sections={rowContextMenu ? rowMenuSections(rowContextMenu.record) : []}
+      onClose={() => setRowContextMenu(null)}
+    />
+  ) : null;
   // On phones we drop the selection column so the first data column (the
   // record name) sits flush left and can be frozen while the rest of the
   // table scrolls horizontally — the Twenty-style narrow-screen table.
@@ -142,7 +182,9 @@ export function RecordTable({
       const root = tableRootRef.current;
       const target = event.target as HTMLElement | null;
       if (!root || root.contains(event.target as Node)) return;
-      if (target?.closest(".record-table__cell-editor-popover")) return;
+      // Inline editors portal their popovers (select menus, calendars) to
+      // <body>; interacting with them must not tear the editor down.
+      if (target?.closest(".record-table__cell-editor-popover, .menu, .calendar")) return;
       handle.get().setFocusedCell(null);
       handle.get().setEditingInitialValue(undefined);
       handle.get().setEditingCell(null);
@@ -298,6 +340,7 @@ export function RecordTable({
                 key={String(record._id)}
                 className="record-table__row"
                 data-row-index={i}
+                onContextMenu={onRowContextMenu ? (event) => onRowContextMenu(event, record) : undefined}
               >
                 <RecordTableRow
                   record={record}
@@ -305,6 +348,7 @@ export function RecordTable({
                   selectable={effectiveSelectable}
                   showDragHandle={showDragHandle}
                   renderRowActions={renderRowActions}
+                  rowMenuSections={rowMenuSections}
                   showOpenRecordAction={hasOpenRecordAction}
                   renderCell={renderCell}
                 />
@@ -315,6 +359,7 @@ export function RecordTable({
             <RecordTableAggregateFooter selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
           )}
         </table>
+        {rowContextMenuElement}
       </div>
     );
   }
@@ -328,6 +373,7 @@ export function RecordTable({
       <TableVirtuoso
         ref={virtuosoRef}
         data={filtered}
+        context={{ onRowContextMenu }}
         className={`record-table__virtuoso ${densityClass}`}
         style={{ height: 600 }}
         components={{
@@ -346,11 +392,13 @@ export function RecordTable({
             selectable={effectiveSelectable}
             showDragHandle={showDragHandle}
             renderRowActions={renderRowActions}
+            rowMenuSections={rowMenuSections}
             showOpenRecordAction={hasOpenRecordAction}
             renderCell={renderCell}
           />
         )}
       />
+      {rowContextMenuElement}
     </div>
   );
 }

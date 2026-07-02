@@ -15,6 +15,8 @@ import {
   Calendar,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   ClipboardCheck,
   ExternalLink,
   FileCheck2,
@@ -278,6 +280,7 @@ export function Dashboard() {
                   aria-expanded={showComplianceDetails}
                 >
                   {showComplianceDetails ? "Hide details" : "View details"}
+                  {showComplianceDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                 </button>
               </div>
 
@@ -322,14 +325,14 @@ export function Dashboard() {
                         {f.remediationActions.map((action: any) => {
                           const disabled = busyRemediationAction === `${f.ruleId}:${action.id}`;
                           return action.intent === "navigate" ? (
-                            <Link key={action.id} className="btn btn--ghost btn--sm" to={action.to}>
+                            <Link key={action.id} className="btn btn--sm" to={action.to}>
                               {action.label}
                             </Link>
                           ) : (
                             <button
                               key={action.id}
                               type="button"
-                              className="btn btn--ghost btn--sm"
+                              className="btn btn--sm"
                               disabled={disabled}
                               onClick={() => runRemediationAction(f, action)}
                             >

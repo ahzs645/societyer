@@ -33,6 +33,7 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DataTable } from "../components/DataTable";
 import { Tabs } from "../components/primitives";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { type MenuSection } from "../components/Menu";
 import { Select as StyledSelect } from "../components/Select";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
@@ -318,6 +319,54 @@ export function AssetsPage() {
     }
   };
 
+  const assetMenuSections = (row: any): MenuSection[] => [
+    {
+      id: "actions",
+      items: [
+        {
+          id: "open",
+          label: "Open",
+          icon: <ExternalLink size={14} />,
+          onSelect: () => navigate(`/app/assets/${row._id}`),
+        },
+        ...(row.category === "Consumable" && society.consumableIntakeCountPromptEnabled
+          ? [
+              {
+                id: "stock",
+                label: "Add stock",
+                icon: <ClipboardList size={14} />,
+                onSelect: () => openStockIntake(row),
+              },
+            ]
+          : []),
+        {
+          id: "receipt",
+          label: "Link receipt item",
+          icon: <Link2 size={14} />,
+          onSelect: () => openReceiptLineLink(row),
+        },
+        {
+          id: "edit",
+          label: "Edit",
+          icon: <Pencil size={14} />,
+          onSelect: () => openEdit(row),
+        },
+      ],
+    },
+    {
+      id: "danger",
+      items: [
+        {
+          id: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          destructive: true,
+          onSelect: () => { void removeAsset(row); },
+        },
+      ],
+    },
+  ];
+
   return (
     <div className="page">
       <PageHeader
@@ -396,24 +445,7 @@ export function AssetsPage() {
               if (field.name === "purchaseEvidence") return <EvidenceCell row={row} documents={documents ?? []} transactions={transactions ?? []} />;
               return undefined;
             }}
-            renderRowActions={(row) => (
-              <>
-                {row.category === "Consumable" && society.consumableIntakeCountPromptEnabled && (
-                  <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openStockIntake(row); }}>
-                    <ClipboardList size={12} /> Add stock
-                  </button>
-                )}
-                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openReceiptLineLink(row); }}>
-                  <Link2 size={12} /> Link receipt item
-                </button>
-                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>
-                  <Pencil size={12} /> Edit
-                </button>
-                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete ${row.assetTag}`} onClick={(e) => { e.stopPropagation(); removeAsset(row); }}>
-                  <Trash2 size={12} />
-                </button>
-              </>
-            )}
+            rowMenuSections={assetMenuSections}
           />
         </RecordTableScope>
       ) : null}
@@ -425,6 +457,17 @@ export function AssetsPage() {
         size="wide"
         footer={
           <>
+            <button
+              className="btn btn--ghost btn--sm"
+              style={{ marginRight: "auto" }}
+              disabled={saving}
+              onClick={() => {
+                const row = rows.find((r) => r._id === editingId);
+                if (row) openReceiptLineLink(row);
+              }}
+            >
+              <Link2 size={12} /> Link receipt item
+            </button>
             <button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button>
             <button className="btn btn--accent" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save asset"}</button>
           </>
