@@ -1839,6 +1839,10 @@ export class StaticConvexClient {
   // value synchronously, and `portableListeners` re-renders subscribers on resolve.
   private portableCache = new Map<string, unknown>();
   private portableListeners = new Set<() => void>();
+  /** Every portable query ever watched, so store-level updates (hydration,
+   *  mutations) can refresh the cache without depending on React's
+   *  subscription timing. */
+  private portableWatchSpecs = new Map<string, { name: string; args?: StaticArgs }>();
 
   private emitPortable() {
     for (const listener of this.portableListeners) listener();
@@ -1854,6 +1858,16 @@ export class StaticConvexClient {
       // buildLocalCapabilities is the seam where native Electron capabilities wire in.
       capabilities: buildLocalCapabilities(),
     }).registerAll(PORTABLE_FUNCTIONS);
+    // Client-level refresh: whenever the underlying store changes (a mutation
+    // committed, or the async Dexie hydration finished), re-run every watched
+    // portable query. Watch-level subscriptions alone race React's effect
+    // timing — a hydration that completes between a component's render and its
+    // onUpdate subscription would otherwise leave that query stale.
+    this.store.onUpdate(() => {
+      for (const [cacheKey, spec] of this.portableWatchSpecs) {
+        this.recomputePortable(cacheKey, spec.name, spec.args);
+      }
+    });
     // Seed the Twenty-style record-table metadata for the demo society up front,
     // so RecordTable pages (members, assets, …) render immediately instead of
     // showing the "Metadata not seeded" empty state on first visit. Idempotent.
@@ -1899,25 +1913,32 @@ export class StaticConvexClient {
    * Until the first async result resolves, the existing synchronous mirror path
    * supplies an instant value, so there is no loading flash for ported queries.
    */
+  private recomputePortable(cacheKey: string, name: string, args?: StaticArgs) {
+    this.portable
+      .runQuery(name, args ?? {})
+      .then((next) => {
+        const prev = this.portableCache.get(cacheKey);
+        if (!this.portableCache.has(cacheKey) || JSON.stringify(next) !== JSON.stringify(prev)) {
+          this.portableCache.set(cacheKey, next);
+          this.emitPortable();
+        }
+      })
+      .catch((error) => {
+        console.warn(`[societyer-local] portable query ${name} failed`, error);
+      });
+  }
+
   private watchPortableQuery(name: string, args?: StaticArgs) {
     const store = this.store;
-    const portable = this.portable;
     const cacheKey = `${name}|${JSON.stringify(args ?? {})}`;
+    // Registered so the client-level store subscription (see constructor) can
+    // refresh EVERY watched query on any store change — including the async
+    // Dexie hydration finishing before any React subscriber attached. Without
+    // this, a query that first resolved against the pre-hydration fixture
+    // cache could stay stale until the next unrelated re-render.
+    this.portableWatchSpecs.set(cacheKey, { name, args });
 
-    const recompute = () => {
-      portable
-        .runQuery(name, args ?? {})
-        .then((next) => {
-          const prev = this.portableCache.get(cacheKey);
-          if (!this.portableCache.has(cacheKey) || JSON.stringify(next) !== JSON.stringify(prev)) {
-            this.portableCache.set(cacheKey, next);
-            this.emitPortable();
-          }
-        })
-        .catch((error) => {
-          console.warn(`[societyer-local] portable query ${name} failed`, error);
-        });
-    };
+    const recompute = () => this.recomputePortable(cacheKey, name, args);
     recompute();
 
     return {

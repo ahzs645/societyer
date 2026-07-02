@@ -217,21 +217,41 @@ export class LocalStoreDb implements PortableDbWriter {
     this.overlayFor(table).set(id, null);
   }
 
+  /** Tail of the transaction queue — see transaction() below. */
+  private txQueue: Promise<unknown> = Promise.resolve();
+
   /**
    * Atomic transaction. Writes accumulate in an overlay; on success they flush
    * as one batch; on throw the overlay is discarded — nothing partially commits.
+   *
+   * Transactions are SERIALIZED. Concurrent independent mutations used to be
+   * mistaken for "nested" ones (detected via overlay presence) and joined the
+   * in-flight transaction's overlay: their writes then committed, rolled back,
+   * or were silently dropped with the OUTER mutation while their own promise
+   * resolved successfully — real user saves racing background backfill
+   * mutations lost data. Genuinely nested calls (ctx.runMutation inside a
+   * handler) no longer come through here; PortableRuntime runs them directly
+   * inside the current transaction.
    */
   async transaction<T>(body: () => Promise<T>): Promise<T> {
-    if (this.overlay) return body(); // nested -> join the outer transaction
-    this.overlay = new Map();
-    try {
-      const result = await body();
-      const ops = this.drainOverlay();
-      await this.store.commitBatch(ops);
-      return result;
-    } finally {
-      this.overlay = null;
-    }
+    const run = async (): Promise<T> => {
+      this.overlay = new Map();
+      try {
+        const result = await body();
+        const ops = this.drainOverlay();
+        await this.store.commitBatch(ops);
+        return result;
+      } finally {
+        this.overlay = null;
+      }
+    };
+    const result = this.txQueue.then(run, run);
+    // Keep the queue alive regardless of this transaction's outcome.
+    this.txQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   private drainOverlay(): RowStoreOp[] {

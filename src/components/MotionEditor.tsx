@@ -63,6 +63,14 @@ export type Motion = {
   decidedBy?: DecidedBy;
   sectionIndex?: number;
   sectionTitle?: string;
+  /** Which minutes record this motion adopts. When the motion carries, the
+   *  referenced minutes are automatically stamped approved (backend). */
+  adoptsMinutesId?: string;
+};
+
+export type MotionAdoptionTarget = {
+  id: string;
+  label: string;
 };
 
 export type MotionPerson = {
@@ -282,6 +290,10 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
    * "open with text". Lets parents reflect the pending state in their own
    * UI (e.g. an outer Save button that should also flush the draft). */
   onPendingDraftChange?: (hasPending: boolean) => void;
+  /** Prior meetings' minutes this meeting could adopt. When provided, motions
+   * get an "Adopts minutes of" picker; a carried adoption motion auto-stamps
+   * the referenced minutes approved. */
+  adoptionTargets?: MotionAdoptionTarget[];
 }>(function MotionEditor({
   motions,
   onChange,
@@ -292,6 +304,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   hideInlineAdd = false,
   sectionScope,
   onPendingDraftChange,
+  adoptionTargets = [],
 }, ref) {
   const scopedSectionTitle = sectionScope == null ? "" : agendaSectionTitle(agendaSections[sectionScope]);
   const isAdjournmentScope = sectionScope != null && isAdjournmentSectionTitle(scopedSectionTitle);
@@ -438,6 +451,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           directorNames={directorNames}
           people={people}
           agendaSections={agendaSections}
+          adoptionTargets={adoptionTargets}
           expanded={editingIndex === i}
           onSetExpanded={(next) => setEditingIndex(next ? i : null)}
           onPatch={(diff) => patch(i, diff)}
@@ -536,6 +550,17 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
               </Field>
             )}
 
+            {adoptionTargets.length > 0 && (
+              <Field label="Adopts minutes of" hint="When this motion carries, the linked minutes are marked approved automatically.">
+                <Select
+                  value={draft.adoptsMinutesId ?? ""}
+                  onChange={(value) => setDraft({ ...draft, adoptsMinutesId: value || undefined })}
+                  options={adoptionTargetOptions(adoptionTargets, draft.adoptsMinutesId)}
+                  size="sm"
+                />
+              </Field>
+            )}
+
             <OutcomePicker stretch value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
 
             <div className="motion-draft__votes">
@@ -612,6 +637,7 @@ function MotionRow({
   directorNames,
   people,
   agendaSections,
+  adoptionTargets = [],
   procedural = false,
   expanded = false,
   onSetExpanded,
@@ -625,6 +651,7 @@ function MotionRow({
   directorNames: string[];
   people: MotionPerson[];
   agendaSections: Array<string | MotionAgendaSection>;
+  adoptionTargets?: MotionAdoptionTarget[];
   procedural?: boolean;
   expanded?: boolean;
   onSetExpanded?: (next: boolean) => void;
@@ -849,6 +876,15 @@ function MotionRow({
               />
             </Field>
           )}
+          {(adoptionTargets.length > 0 || motion.adoptsMinutesId) && (
+            <Field label="Adopts minutes of" hint="When this motion carries, the linked minutes are marked approved automatically.">
+              <Select
+                value={motion.adoptsMinutesId ?? ""}
+                onChange={(value) => onPatch({ adoptsMinutesId: value || undefined })}
+                options={adoptionTargetOptions(adoptionTargets, motion.adoptsMinutesId)}
+              />
+            </Field>
+          )}
           <OutcomePicker stretch value={motion.outcome} onChange={(v) => onPatch({ outcome: v })} />
           <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
             <VoteStepper label="For" value={motion.votesFor ?? 0} onChange={(n) => onSetVote("votesFor", n)} tone="success" />
@@ -991,6 +1027,22 @@ function agendaSectionOptions(agendaSections: Array<string | MotionAgendaSection
       label: `${index + 1}. ${agendaSectionTitle(section) || "Untitled section"}`,
     })),
   ];
+}
+
+function adoptionTargetOptions(
+  targets: MotionAdoptionTarget[],
+  currentId: string | undefined,
+): SelectOption<string>[] {
+  const options: SelectOption<string>[] = [
+    { value: "", label: "Not linked" },
+    ...targets.map((target) => ({ value: target.id, label: target.label })),
+  ];
+  // A stored link to minutes that are no longer offered as a target (e.g. the
+  // meeting was deleted) still needs to show as selected rather than blank.
+  if (currentId && !targets.some((target) => target.id === currentId)) {
+    options.push({ value: currentId, label: "Linked minutes (no longer on record)" });
+  }
+  return options;
 }
 
 function agendaSectionSearchText(section: string | MotionAgendaSection) {

@@ -19,6 +19,7 @@ const templateItem = v.object({
   details: v.optional(v.string()),
   motionTemplateId: v.optional(v.id("motionTemplates")),
   motionText: v.optional(v.string()),
+  adoptsPreviousMinutes: v.optional(v.boolean()),
 });
 
 export const list = query({

@@ -1189,7 +1189,10 @@
   .meeting-minutes-section-editor-screen {
     position: fixed;
     inset: 0;
-    z-index: 1200;
+    // Must stay BELOW the Modal layer (baseZ 1000 in Modal.tsx): the editor's
+    // Remove/Reassign actions open confirm dialogs that have to render on top
+    // of this full-screen takeover.
+    z-index: 950;
     display: block;
     overflow: auto;
     background: token('bg-base');

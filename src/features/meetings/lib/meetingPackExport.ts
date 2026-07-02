@@ -66,7 +66,7 @@ export function renderMeetingPackHtml({
     <div class="meta">${escapeHtml(meeting.type)} - ${escapeHtml(formatDateTime(meeting.scheduledAt))} - ${escapeHtml(meeting.location ?? "")}</div>
     <section>
       <h2>Join Details</h2>
-      ${joinDetails.url ? `<p><a href="${escapeHtml(joinDetails.url)}">${escapeHtml(joinDetails.url)}</a></p>` : "<p>No remote meeting link saved.</p>"}
+      ${joinDetails.url ? (isSafeLinkUrl(joinDetails.url) ? `<p><a href="${escapeHtml(joinDetails.url)}">${escapeHtml(joinDetails.url)}</a></p>` : `<p>${escapeHtml(joinDetails.url)}</p>`) : "<p>No remote meeting link saved.</p>"}
       ${joinDetails.meetingId ? `<p>Meeting ID: ${escapeHtml(joinDetails.meetingId)}</p>` : ""}
       ${joinDetails.passcode ? `<p>Passcode: ${escapeHtml(joinDetails.passcode)}</p>` : ""}
       ${joinDetails.instructions ? `<p>${escapeHtml(joinDetails.instructions)}</p>` : ""}
@@ -96,5 +96,12 @@ function escapeHtml(value: unknown) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Only linkify http(s) URLs — a saved `javascript:` "join link" must render as
+// plain text, not an executable anchor in the exported pack.
+function isSafeLinkUrl(value: unknown) {
+  return /^https?:\/\//i.test(String(value ?? "").trim());
 }

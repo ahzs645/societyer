@@ -92,6 +92,10 @@ test.describe("Meeting agenda minutes workflow", () => {
 
     await page.goto("/demo/app/meetings/static_meeting_board_q2", { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Agenda & minutes" }).click();
+    // Wait for demo data to hydrate from IndexedDB before editing — starting
+    // the edit against a not-yet-loaded agenda record makes the save create a
+    // duplicate agenda instead of updating the fixture one.
+    await expect(page.getByRole("button", { name: "Privacy program review" })).toBeVisible();
     await page.getByRole("button", { name: "Edit agenda", exact: true }).click();
     await page.getByRole("button", { name: "Add item" }).click();
     await page.locator(".meeting-minutes-agenda-editor input.input").last().fill("Volunteer program update");
@@ -101,12 +105,27 @@ test.describe("Meeting agenda minutes workflow", () => {
     await expect(page.getByRole("button", { name: "Volunteer program update" })).toBeVisible();
     await expect(page.locator("#meeting-minutes-section-3")).toContainText("Volunteer program update");
 
-    await page.goto("/demo/app/agendas", { waitUntil: "networkidle" });
+    // Give IndexedDB persistence a beat before the HARD navigation below —
+    // tearing the document down in the same tick as the save can abort the
+    // storage transaction. Real users navigate client-side (document persists).
+    await page.waitForTimeout(1500);
+    // NOT networkidle: demo mode keeps a background request retry loop alive
+    // that can make networkidle hang until the test times out.
+    await page.goto("/demo/app/agendas", { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: /Q2 board meeting agenda.*Apr 23, 2026.*Draft/ }).click();
-    const agendaInputValues = await page.locator("input.input").evaluateAll((inputs) =>
-      inputs.map((input) => (input as HTMLInputElement).value),
-    );
-    expect(agendaInputValues).toContain("Volunteer program update");
+    // Load once and POLL the same expansion: the builder first seeds its
+    // editable rows from the pre-hydration fixture cache, then re-seeds when
+    // the IndexedDB-hydrated query result arrives. Reloading between reads
+    // would reset that cycle and always observe the pre-hydration seed.
+    await expect
+      .poll(
+        () =>
+          page.locator("input.input").evaluateAll((inputs) =>
+            inputs.map((input) => (input as HTMLInputElement).value),
+          ),
+        { timeout: 15_000 },
+      )
+      .toContain("Volunteer program update");
 
     expect(errors).toEqual([]);
   });

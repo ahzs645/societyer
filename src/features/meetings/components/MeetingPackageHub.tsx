@@ -1,24 +1,9 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ClipboardCheck, Download, ExternalLink, FileText, ListChecks, Plus, ShieldCheck, Unlink } from "lucide-react";
+import { AlertTriangle, ClipboardCheck, Download, ExternalLink, FileText, ShieldCheck } from "lucide-react";
 import { Badge } from "../../../components/ui";
-import { Select } from "../../../components/Select";
+import { Menu } from "../../../components/Menu";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
-import { Segmented } from "../../../components/primitives";
-import { QuickAddTaskForm } from "../../tasks/QuickAddTaskForm";
 import { formatDate } from "../../../lib/format";
-
-const TASK_STATUS_ITEMS: { id: string; label: string }[] = [
-  { id: "Todo", label: "To do" },
-  { id: "InProgress", label: "In progress" },
-  { id: "Blocked", label: "Blocked" },
-  { id: "Done", label: "Done" },
-];
-function priorityTone(priority?: string) {
-  if (priority === "High") return "danger" as const;
-  if (priority === "Medium") return "warn" as const;
-  return "neutral" as const;
-}
 import {
   accessLevelLabel,
   availabilityLabel,
@@ -30,22 +15,24 @@ import {
   syncTone,
 } from "../lib/meetingMaterialAccess";
 import {
-  Detail,
   packageReviewLabel,
   packageReviewTone,
   sourceReviewLabel,
   sourceReviewTone,
 } from "./MeetingDetailSupport";
 
+/**
+ * The meeting Materials tab: per-agenda-topic documents with access control,
+ * a compact review-status strip (source + board package readiness), and the
+ * distribution downloads. Task linking intentionally does NOT live here —
+ * tasks are managed from the minutes section editor and the Tasks page.
+ */
 export function MeetingPackageHub({
   meeting,
   minutes,
   agenda,
   packageMaterials,
-  linkedTasks,
-  linkableTasks,
   joinDetails,
-  packageReadiness,
   sourceReviewStatus,
   packageReviewStatus,
   packageReviewBlockers,
@@ -62,19 +49,12 @@ export function MeetingPackageHub({
   markPackageReady,
   sendPackageBackToReview,
   removeMeetingMaterial,
-  setLinkedTaskStatus,
-  linkTaskToMeeting,
-  unlinkTaskFromMeeting,
-  createTaskForMeeting,
 }: {
   meeting: any;
   minutes: any;
   agenda: string[];
   packageMaterials: any[];
-  linkedTasks: any[];
-  linkableTasks: any[];
   joinDetails: any;
-  packageReadiness: any;
   sourceReviewStatus: string;
   packageReviewStatus: string;
   packageReviewBlockers: string[];
@@ -91,29 +71,7 @@ export function MeetingPackageHub({
   markPackageReady: () => void | Promise<void>;
   sendPackageBackToReview: () => void | Promise<void>;
   removeMeetingMaterial: (args: { id: any }) => void | Promise<void>;
-  setLinkedTaskStatus: (taskId: string, status: string) => void | Promise<void>;
-  linkTaskToMeeting: (taskId: string) => void | Promise<void>;
-  unlinkTaskFromMeeting: (taskId: string) => void | Promise<void>;
-  createTaskForMeeting: (input: { title: string; priority: string; status: string; dueDate?: string }) => Promise<string | undefined | void> | string | undefined | void;
 }) {
-  const [pickerValue, setPickerValue] = useState("");
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const sortedLinkedTasks = [...linkedTasks].sort((a, b) => {
-    if (a.status === "Done" && b.status !== "Done") return 1;
-    if (b.status === "Done" && a.status !== "Done") return -1;
-    return String(a.dueDate ?? "").localeCompare(String(b.dueDate ?? ""));
-  });
-  const taskCounts = {
-    Todo: linkedTasks.filter((task) => task.status === "Todo").length,
-    InProgress: linkedTasks.filter((task) => task.status === "InProgress").length,
-    Blocked: linkedTasks.filter((task) => task.status === "Blocked").length,
-    Done: linkedTasks.filter((task) => task.status === "Done").length,
-  };
-  const handlePick = async (value: string) => {
-    setPickerValue("");
-    if (!value) return;
-    await linkTaskToMeeting(value);
-  };
   const topics = Array.from(new Set(agenda.length ? agenda : ["General materials"]));
   const materialsForTopic = (topic: string) =>
     packageMaterials.filter((material: any) => (material.agendaLabel || "General materials") === topic);
@@ -128,9 +86,9 @@ export function MeetingPackageHub({
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
           <div>
-            <h2 className="card__title">Meeting package hub</h2>
+            <h2 className="card__title">Meeting materials</h2>
             <p className="card__subtitle">
-              Agenda topics, linked materials, attendees, join details, minutes, and open actions.
+              Documents for this meeting's board package, grouped by agenda topic, plus review status and distribution.
             </p>
           </div>
           <div className="row" style={{ gap: 6, flexWrap: "wrap", marginLeft: "auto" }}>
@@ -140,41 +98,160 @@ export function MeetingPackageHub({
             <button className="btn-action" onClick={startJoinEdit}>
               <ExternalLink size={12} /> {joinDetails.url ? "Edit join link" : "Add join link"}
             </button>
-            <button className="btn-action btn-action--primary" onClick={downloadMeetingPack}>
-              <Download size={12} /> Download pack
-            </button>
-            <button className="btn-action btn-action--primary" onClick={downloadOutboxPackage}>
-              <Download size={12} /> Outbox ZIP
-            </button>
+            <Menu
+              align="right"
+              minWidth={280}
+              sections={[
+                {
+                  id: "distribute",
+                  items: [
+                    {
+                      id: "pack",
+                      label: "Meeting pack (ZIP)",
+                      hint: "Printable HTML pack, agenda text, and an attachment manifest.",
+                      icon: <Download size={14} />,
+                      onSelect: downloadMeetingPack,
+                    },
+                    {
+                      id: "outbox",
+                      label: "Email outbox (ZIP)",
+                      hint: "Openable .eml email draft with the materials attached, ready to send.",
+                      icon: <Download size={14} />,
+                      onSelect: downloadOutboxPackage,
+                    },
+                  ],
+                },
+              ]}
+              trigger={
+                <button className="btn-action btn-action--primary" type="button">
+                  <Download size={12} /> Distribute
+                </button>
+              }
+            />
           </div>
         </div>
         <div className="card__body meeting-package-body">
-          <div className="meeting-package-stack">
+          <div className="meeting-package-materials">
+            <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
+              <div>
+                <strong>Agenda materials</strong>
+                <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
+                  {packageMaterials.length
+                    ? `${packageMaterials.length} linked material${packageMaterials.length === 1 ? "" : "s"}`
+                    : "No materials linked yet."}
+                </div>
+              </div>
+            </div>
+
+            {topicsWithMaterials.map((topic, topicIndex) => (
+              <div key={`${topicIndex}-${topic}`} className="meeting-package-topic">
+                <div className="meeting-package-topic__head">
+                  <strong>{topic}</strong>
+                  <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(topic)}>Add</button>
+                </div>
+                <div className="col" style={{ gap: 6 }}>
+                  {materialsForTopic(topic).map((material: any) => {
+                    const status = materialEffectiveStatus(material);
+                    return (
+                      <div key={material._id} className="meeting-package-material-row">
+                        <FileText size={12} />
+                        <div className="meeting-package-material-row__main">
+                          <Link to={`/app/documents/${material.document?._id}`}>
+                            {material.label || material.document?.title || "Document"}
+                          </Link>
+                          <span>{materialAccessSummary(material)}</span>
+                        </div>
+                        <Badge tone={availabilityTone(status)}>{availabilityLabel(status)}</Badge>
+                        {material.syncStatus && <Badge tone={syncTone(material.syncStatus)}>{syncLabel(material.syncStatus)}</Badge>}
+                        {material.requiredForMeeting && <Badge tone="warn">Required</Badge>}
+                        {material.expiresAtISO && (
+                          <Badge tone={isMaterialExpired(material) ? "danger" : "neutral"}>
+                            Expires {formatDate(material.expiresAtISO)}
+                          </Badge>
+                        )}
+                        <Badge tone={(material.accessGrants ?? []).length ? "info" : "neutral"}>
+                          {(material.accessGrants ?? []).length ? `${material.accessGrants.length} grant${material.accessGrants.length === 1 ? "" : "s"}` : accessLevelLabel(material.accessLevel)}
+                        </Badge>
+                        <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(material.agendaLabel, material)}>
+                          Edit
+                        </button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => removeMeetingMaterial({ id: material._id })}>
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {unmappedMaterials.length > 0 && (
+              <div className="meeting-package-topic">
+                <div className="meeting-package-topic__head"><strong>Other materials</strong></div>
+                <div className="col" style={{ gap: 6 }}>
+                  {unmappedMaterials.map((material: any) => {
+                    const status = materialEffectiveStatus(material);
+                    return (
+                      <div key={material._id} className="meeting-package-material-row">
+                        <FileText size={12} />
+                        <div className="meeting-package-material-row__main">
+                          <Link to={`/app/documents/${material.document?._id}`}>
+                            {material.label || material.document?.title || "Document"}
+                          </Link>
+                          <span>{materialAccessSummary(material)}</span>
+                        </div>
+                        <Badge tone={availabilityTone(status)}>{availabilityLabel(status)}</Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {packageMaterials.length === 0 && (
+              <div className="meeting-package-empty">
+                <FileText size={14} />
+                <div>
+                  <strong>No materials linked yet.</strong>
+                  <p>Add only the documents needed for this meeting. Agenda topics stay collapsed until you need to map materials.</p>
+                </div>
+              </div>
+            )}
+
+            {emptyTopics.length > 0 && (
+              <details className="meeting-package-empty-topics">
+                <summary>{emptyTopics.length} agenda topic{emptyTopics.length === 1 ? "" : "s"} without linked materials</summary>
+                <div className="meeting-package-topic-list">
+                  {emptyTopics.map((topic, topicIndex) => (
+                    <div key={`${topicIndex}-${topic}`} className="meeting-package-topic-pill">
+                      <span>{topic}</span>
+                      <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(topic)}>Add</button>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+
           <div className="panel meeting-package-gate">
             <div className="row" style={{ gap: 8, justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap" }}>
               <div>
                 <strong>
                   <ShieldCheck size={13} style={{ verticalAlign: -2, marginRight: 4 }} />
-                  Governance review gate
+                  Review status
                 </strong>
                 <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
-                  Source data, required materials, and board package readiness.
+                  Imported source data and board-package readiness before distribution.
                 </div>
               </div>
-              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                {(sourceReviewStatus === "imported_needs_review" ||
-                  sourceReviewStatus === "rejected" ||
-                  sourceReviewStatus === "source_reviewed") && (
-                  <Badge tone={sourceReviewTone(sourceReviewStatus)}>{sourceReviewLabel(sourceReviewStatus)}</Badge>
-                )}
-                <Badge tone={packageReviewTone(packageReviewStatus)}>{packageReviewLabel(packageReviewStatus)}</Badge>
-                {packageReviewBlockers.length > 0 && (
-                  <Badge tone="warn">
-                    <AlertTriangle size={10} style={{ marginRight: 3, verticalAlign: -1 }} />
-                    {packageReviewBlockers.length} blocker{packageReviewBlockers.length === 1 ? "" : "s"}
-                  </Badge>
-                )}
-              </div>
+              {/* Per-review status chips live on the drawer rows below — only the
+                  blockers count (shown nowhere else) belongs up here. */}
+              {packageReviewBlockers.length > 0 && (
+                <Badge tone="warn">
+                  <AlertTriangle size={10} style={{ marginRight: 3, verticalAlign: -1 }} />
+                  {packageReviewBlockers.length} blocker{packageReviewBlockers.length === 1 ? "" : "s"}
+                </Badge>
+              )}
             </div>
 
             <div className="meeting-package-drawers">
@@ -252,199 +329,7 @@ export function MeetingPackageHub({
                   </div>
                 </div>
               </details>
-
-              {joinDetails.url && (
-                <a className="btn btn--accent btn--sm meeting-package-join" href={joinDetails.url} target="_blank" rel="noreferrer">
-                  <ExternalLink size={12} /> Join meeting
-                </a>
-              )}
-
-              <details className="meeting-package-drawer" open={linkedTasks.length > 0}>
-                <summary className="meeting-package-drawer__summary">
-                  <span className="meeting-package-drawer__title">
-                    <ListChecks size={12} style={{ verticalAlign: -2, marginRight: 6 }} />
-                    Linked tasks
-                  </span>
-                  <span className="meeting-package-task-counts">
-                    <Badge tone="neutral">
-                      {taskCounts.Todo} To do · {taskCounts.InProgress} In progress · {taskCounts.Blocked} Blocked · {taskCounts.Done} Done
-                    </Badge>
-                  </span>
-                </summary>
-                <div className="meeting-package-drawer__body">
-                  {sortedLinkedTasks.length === 0 ? (
-                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                      No tasks linked to this meeting yet. Link an existing task or create a new one — status updates here flow back to the kanban.
-                    </div>
-                  ) : (
-                    <div className="meeting-package-task-list">
-                      {sortedLinkedTasks.map((task: any) => {
-                        const overdue = task.dueDate && task.status !== "Done" && task.dueDate < todayISO;
-                        return (
-                          <div key={task._id} className="meeting-package-task-row">
-                            <div className="meeting-package-task-row__main">
-                              <Link to="/app/tasks" className="meeting-package-task-row__title">
-                                {task.title}
-                              </Link>
-                              <div className="row" style={{ gap: 6, flexWrap: "wrap", fontSize: "var(--fs-sm)" }}>
-                                <Badge tone={priorityTone(task.priority)}>{task.priority || "—"}</Badge>
-                                {task.assignee && <span className="muted">· {task.assignee}</span>}
-                                {task.dueDate && (
-                                  <span style={{ color: overdue ? "var(--danger)" : "var(--text-tertiary)" }}>
-                                    · Due {formatDate(task.dueDate)}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <Segmented
-                              value={task.status}
-                              onChange={(next) => { void setLinkedTaskStatus(task._id, next); }}
-                              items={TASK_STATUS_ITEMS}
-                            />
-                            <button
-                              className="btn-action btn-action--icon"
-                              type="button"
-                              title="Unlink from meeting"
-                              aria-label={`Unlink ${task.title}`}
-                              onClick={() => { void unlinkTaskFromMeeting(task._id); }}
-                            >
-                              <Unlink size={12} />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    {linkableTasks.length > 0 ? (
-                      <Select
-                        style={{ flex: 1, minWidth: 200 }}
-                        value={pickerValue}
-                        onChange={(value) => { void handlePick(value); }}
-                        options={[
-                          { value: "", label: "Link existing task…" },
-                          ...linkableTasks.map((task: any) => ({
-                            value: task._id,
-                            label: `${task.title}${task.priority ? ` · ${task.priority}` : ""}`,
-                          })),
-                        ]}
-                      />
-                    ) : (
-                      <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>No unlinked tasks available.</span>
-                    )}
-                  </div>
-
-                  <QuickAddTaskForm onSubmit={createTaskForMeeting} />
-                </div>
-              </details>
             </div>
-          </div>
-          </div>
-
-          <div className="meeting-package-materials">
-            <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
-              <div>
-                <strong>Agenda materials</strong>
-                <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>
-                  {packageMaterials.length
-                    ? `${packageMaterials.length} linked material${packageMaterials.length === 1 ? "" : "s"}`
-                    : "No materials linked yet."}
-                </div>
-              </div>
-              <button className="btn-action" onClick={() => openMaterialDrawer()}>
-                <FileText size={12} /> Add material
-              </button>
-            </div>
-
-            {topicsWithMaterials.map((topic, topicIndex) => (
-              <div key={`${topicIndex}-${topic}`} className="meeting-package-topic">
-                <div className="meeting-package-topic__head">
-                  <strong>{topic}</strong>
-                  <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(topic)}>Add</button>
-                </div>
-                <div className="col" style={{ gap: 6 }}>
-                  {materialsForTopic(topic).map((material: any) => {
-                    const status = materialEffectiveStatus(material);
-                    return (
-                      <div key={material._id} className="meeting-package-material-row">
-                        <FileText size={12} />
-                        <div className="meeting-package-material-row__main">
-                          <Link to={`/app/documents/${material.document?._id}`}>
-                            {material.label || material.document?.title || "Document"}
-                          </Link>
-                          <span>{materialAccessSummary(material)}</span>
-                        </div>
-                        <Badge tone={availabilityTone(status)}>{availabilityLabel(status)}</Badge>
-                        {material.syncStatus && <Badge tone={syncTone(material.syncStatus)}>{syncLabel(material.syncStatus)}</Badge>}
-                        {material.requiredForMeeting && <Badge tone="warn">Required</Badge>}
-                        {material.expiresAtISO && (
-                          <Badge tone={isMaterialExpired(material) ? "danger" : "neutral"}>
-                            Expires {formatDate(material.expiresAtISO)}
-                          </Badge>
-                        )}
-                        <Badge tone={(material.accessGrants ?? []).length ? "info" : "neutral"}>
-                          {(material.accessGrants ?? []).length ? `${material.accessGrants.length} grant${material.accessGrants.length === 1 ? "" : "s"}` : accessLevelLabel(material.accessLevel)}
-                        </Badge>
-                        <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(material.agendaLabel, material)}>
-                          Edit
-                        </button>
-                        <button className="btn btn--ghost btn--sm" onClick={() => removeMeetingMaterial({ id: material._id })}>
-                          Remove
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-
-            {unmappedMaterials.length > 0 && (
-              <div className="meeting-package-topic">
-                <div className="meeting-package-topic__head"><strong>Other materials</strong></div>
-                <div className="col" style={{ gap: 6 }}>
-                  {unmappedMaterials.map((material: any) => {
-                    const status = materialEffectiveStatus(material);
-                    return (
-                      <div key={material._id} className="meeting-package-material-row">
-                        <FileText size={12} />
-                        <div className="meeting-package-material-row__main">
-                          <Link to={`/app/documents/${material.document?._id}`}>
-                            {material.label || material.document?.title || "Document"}
-                          </Link>
-                          <span>{materialAccessSummary(material)}</span>
-                        </div>
-                        <Badge tone={availabilityTone(status)}>{availabilityLabel(status)}</Badge>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {packageMaterials.length === 0 && (
-              <div className="meeting-package-empty">
-                <FileText size={14} />
-                <div>
-                  <strong>No package materials linked.</strong>
-                  <p>Add only the documents needed for this meeting package. Agenda topics stay collapsed until you need to map materials.</p>
-                </div>
-              </div>
-            )}
-
-            {emptyTopics.length > 0 && (
-              <details className="meeting-package-empty-topics">
-                <summary>{emptyTopics.length} agenda topic{emptyTopics.length === 1 ? "" : "s"} without linked materials</summary>
-                <div className="meeting-package-topic-list">
-                  {emptyTopics.map((topic, topicIndex) => (
-                    <div key={`${topicIndex}-${topic}`} className="meeting-package-topic-pill">
-                      <span>{topic}</span>
-                      <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(topic)}>Add</button>
-                    </div>
-                  ))}
-                </div>
-              </details>
-            )}
           </div>
         </div>
       </div>

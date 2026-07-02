@@ -370,12 +370,80 @@ export async function createPortable(ctx: PortableMutationCtx, args: any) {
   return id;
 }
 
+function isCarriedOutcome(outcome: unknown) {
+  return String(outcome ?? "").trim().toLowerCase() === "carried";
+}
+
+/** When an adoption motion (adoptsMinutesId) newly carries, stamp the
+ *  referenced minutes approved: approvedAt = the adopting meeting's date,
+ *  approvedInMeetingId = the adopting meeting. Idempotent and conservative —
+ *  already-approved targets, cross-society references, and motions that were
+ *  already carried before this save are all left untouched. Never *clears*
+ *  an approval: flipping the motion back off Carried is ambiguous (was the
+ *  approval also recorded manually?), so undoing is left to the explicit
+ *  "Clear approval" action. */
+async function applyAdoptionApprovals(
+  ctx: PortableMutationCtx,
+  minutes: any,
+  nextMotions: any[],
+) {
+  const before: any[] = Array.isArray(minutes.motions) ? minutes.motions : [];
+  const previouslyCarried = new Set(
+    before
+      .filter((motion) => motion?.adoptsMinutesId && isCarriedOutcome(motion.outcome))
+      .map((motion) => String(motion.adoptsMinutesId)),
+  );
+  const stamped = new Set<string>();
+  for (const motion of nextMotions) {
+    const targetId = motion?.adoptsMinutesId;
+    if (!targetId || !isCarriedOutcome(motion.outcome)) continue;
+    const key = String(targetId);
+    if (previouslyCarried.has(key) || stamped.has(key)) continue;
+    if (key === String(minutes._id)) continue;
+    const target = await ctx.db.get(targetId);
+    if (!target || target.approvedAt) continue;
+    if (String(target.societyId) !== String(minutes.societyId)) continue;
+    const now = new Date().toISOString();
+    const targetPatch: Record<string, unknown> = {
+      approvedAt: minutes.heldAt || now,
+      approvedInMeetingId: minutes.meetingId,
+    };
+    // Mirror the snapshot-on-approval freeze from updatePortable — this patch
+    // bypasses that path, and the approved record must be frozen either way.
+    if (!target.motionSnapshots) {
+      targetPatch.motionSnapshots = target.motions ?? [];
+      targetPatch.motionSnapshotAtISO = now;
+    }
+    await ctx.db.patch(target._id, targetPatch);
+    stamped.add(key);
+    const targetMeeting = target.meetingId ? await ctx.db.get(target.meetingId) : null;
+    await ctx.db.insert("activity", {
+      societyId: minutes.societyId,
+      actor: "You",
+      entityType: "minutes",
+      entityId: String(target._id),
+      action: "approved",
+      summary: `Marked minutes${targetMeeting ? ` of ${targetMeeting.title}` : ""} approved — adoption motion carried`,
+      createdAtISO: now,
+    });
+  }
+}
+
 export async function updatePortable(
   ctx: PortableMutationCtx,
-  { id, patch }: { id: string; patch: any },
+  { id, patch: rawPatch }: { id: string; patch: any },
 ) {
   const minutes = await ctx.db.get(id);
   if (!minutes) throw new Error("Minutes not found");
+  // `undefined` fields are stripped from the wire, so unsetting approval
+  // arrives as explicit clear flags (mirrors meetings.clearNoticeSent).
+  const { clearApproval, clearApprovedInMeeting, ...patch } = rawPatch;
+  if (clearApproval) {
+    patch.approvedAt = undefined;
+    patch.approvedInMeetingId = undefined;
+  } else if (clearApprovedInMeeting) {
+    patch.approvedInMeetingId = undefined;
+  }
   if (patch.motions) {
     await assertMotionPersonLinksBelongToSociety(ctx, String(minutes.societyId), patch.motions);
   }
@@ -391,6 +459,13 @@ export async function updatePortable(
       motionSnapshots: frozen,
       motionSnapshotAtISO: new Date().toISOString(),
     });
+  }
+
+  // Adoption carry-through: when an "adopt previous minutes" motion
+  // (adoptsMinutesId) newly records as Carried, stamp the referenced minutes
+  // approved — the step people forget after the vote in the room.
+  if (Array.isArray(patch.motions)) {
+    await applyAdoptionApprovals(ctx, minutes, patch.motions);
   }
 
   // Dual-write: re-mirror only when the motions array was part of this patch.

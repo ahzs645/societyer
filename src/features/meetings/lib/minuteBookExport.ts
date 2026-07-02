@@ -233,12 +233,12 @@ function triggerDownload(filename: string, content: string, type: string) {
 
 /** Download the minute book index as a printable HTML document (print-to-PDF). */
 export function downloadMinuteBookHtml(input: MinuteBookExportInput) {
-  const date = new Date().toISOString().slice(0, 10);
+  const date = new Date().toLocaleDateString("en-CA");
   triggerDownload(`${safeFileBase(input.society)}-minute-book-${date}.html`, renderMinuteBookHtml(input), "text/html;charset=utf-8");
 }
 
 /** Download the minute book index as a CSV register. */
 export function downloadMinuteBookCsv(input: MinuteBookExportInput) {
-  const date = new Date().toISOString().slice(0, 10);
+  const date = new Date().toLocaleDateString("en-CA");
   triggerDownload(`${safeFileBase(input.society)}-minute-book-${date}.csv`, buildMinuteBookCsv(input), "text/csv;charset=utf-8");
 }

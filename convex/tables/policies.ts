@@ -43,6 +43,12 @@ export const policyTables = {
     // so declarations can be captured per-meeting and rendered into the minutes.
     meetingId: v.optional(v.id("meetings")),
     motionIndex: v.optional(v.number()),
+    // Snapshot of the motion's text at declaration time. minutes.motions is a
+    // positional array that gets reordered/deleted, so the index alone can go
+    // stale; render-time resolution matches by this text and falls back to
+    // showing the snapshot rather than attributing the recusal to the wrong
+    // motion (this is a legal record).
+    motionText: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_society_resolved", ["societyId", "resolvedAt"])
