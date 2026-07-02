@@ -45,6 +45,7 @@ import {
   remapMotionsByIndexOrder,
   normalize,
 } from "./MeetingMinutesColumn.internal";
+import { agendaSequenceLabel } from "../lib/agendaNumbering";
 import type {
   AgendaNumberingMode,
   SectionDraft,
@@ -449,13 +450,13 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                           rootIndex += 1;
                           childIndex = 0;
                           // Collect contiguous following children for this root.
-                          const children: { entry: AgendaItemEntry; sectionIndex: number; letter: string }[] = [];
+                          const children: { entry: AgendaItemEntry; sectionIndex: number; label: string }[] = [];
                           for (let j = i + 1; j < agendaTree.length && agendaTree[j].depth === 1; j += 1) {
                             childIndex += 1;
                             children.push({
                               entry: agendaTree[j],
                               sectionIndex: j,
-                              letter: String.fromCharCode(96 + childIndex),
+                              label: agendaSequenceLabel(rootIndex + 1, childIndex, agendaNumberingMode),
                             });
                           }
                           rendered.push(
@@ -477,7 +478,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                         onClick={() => openAgendaSection(child.sectionIndex)}
                                       >
                                         <span className="meeting-minutes-agenda-list__child-index">
-                                          {`${rootIndex + 1}${child.letter}.`}
+                                          {child.label}
                                         </span>
                                         {" "}{formatSourceReferences(child.entry.title)}
                                       </button>

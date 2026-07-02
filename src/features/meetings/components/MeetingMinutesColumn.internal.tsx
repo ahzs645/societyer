@@ -18,6 +18,12 @@ import { DatePicker } from "../../../components/DatePicker";
 import { SignaturePanel } from "../../../components/SignaturePanel";
 import { QuickAddTaskForm } from "../../tasks/QuickAddTaskForm";
 import {
+  AGENDA_NUMBERING_PREF_KEY,
+  agendaAlphaLabel,
+  readStoredAgendaNumberingMode,
+  type AgendaNumberingMode,
+} from "../lib/agendaNumbering";
+import {
   AttendanceDetails,
   formatSourceReferences,
   personLinkCandidates,
@@ -34,11 +40,6 @@ const SECTION_TASK_STATUS_ITEMS: { id: string; label: string }[] = [
 
 
 type SectionTypeId = "discussion" | "motion" | "report" | "decision" | "other";
-
-type AgendaNumberingMode = "letters" | "decimal";
-
-
-const AGENDA_NUMBERING_PREF_KEY = "societyer.meetingAgendaNumberingMode";
 
 
 const SECTION_TYPE_OPTIONS: { value: SectionTypeId; label: string }[] = [
@@ -64,24 +65,6 @@ const AGENDA_NUMBERING_ITEMS: { id: AgendaNumberingMode; label: string }[] = [
   { id: "letters", label: "1.a" },
   { id: "decimal", label: "1.1" },
 ];
-
-
-function readStoredAgendaNumberingMode(): AgendaNumberingMode {
-  if (typeof window === "undefined") return "letters";
-  return window.localStorage.getItem(AGENDA_NUMBERING_PREF_KEY) === "decimal" ? "decimal" : "letters";
-}
-
-
-function agendaAlphaLabel(index: number) {
-  let n = index + 1;
-  let label = "";
-  while (n > 0) {
-    n -= 1;
-    label = String.fromCharCode(65 + (n % 26)) + label;
-    n = Math.floor(n / 26);
-  }
-  return label;
-}
 
 
 function agendaNumberingLabel(rootIndex: number, childIndex: number, mode: AgendaNumberingMode) {

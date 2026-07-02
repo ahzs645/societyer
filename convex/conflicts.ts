@@ -33,6 +33,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
     meetingId: v.optional(v.id("meetings")),
     motionIndex: v.optional(v.number()),
+    motionText: v.optional(v.string()),
   },
   returns: v.any(),
   handler: (ctx, args) => conflictsCreatePortable(toPortableMutationCtx(ctx), args),

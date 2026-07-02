@@ -16,6 +16,7 @@ import { MinutesDocumentPreview } from "../components/MinutesDocumentPreview";
 import { getQuorumSnapshot, personLinkCandidates } from "../components/MeetingDetailSupport";
 import { motionPersonDisplayName } from "../../../components/MotionEditor";
 import { agendaEntriesFromRecord } from "../lib/meetingDetailHelpers";
+import { readStoredAgendaNumberingMode } from "../lib/agendaNumbering";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "../lib/minutesExportStyles";
 import {
   MINUTES_EXPORT_PREF_PREFIX,
@@ -137,6 +138,9 @@ export function MeetingMinutesPreviewPage() {
       includeApprovalBlock: includeApprovalInExport,
       includeSignatures: includeSignaturesInExport,
       includePlaceholders: includePlaceholdersInExport,
+      // Match the agenda editor's numbering preference so exported headings
+      // read the same as the on-screen section list.
+      agendaNumberingMode: readStoredAgendaNumberingMode(),
     },
   });
 

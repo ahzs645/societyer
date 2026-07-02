@@ -7,8 +7,9 @@ import { Select } from "../../../components/Select";
 import { useToast } from "../../../components/Toast";
 import { formatDate } from "../../../lib/format";
 import { ShieldAlert, Trash2, Check, RotateCcw } from "lucide-react";
+import { resolveConflictMotion } from "../lib/conflictMotions";
 
-type MotionOption = { index: number; label: string };
+type MotionOption = { index: number; label: string; text: string };
 
 function directorName(director: any): string {
   return `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim() || "Unnamed director";
@@ -59,8 +60,26 @@ export function MeetingConflictsCard({
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const motionLabel = (index?: number) =>
-    index == null ? null : motions.find((m) => m.index === index)?.label ?? `Motion ${index + 1}`;
+  // Sparse array keyed by each motion's ORIGINAL index in minutes.motions —
+  // resolveConflictMotion needs positional lookup, and `motions` here is the
+  // adjournment-filtered picklist that keeps raw indexes.
+  const motionsByRawIndex = useMemo(() => {
+    const sparse: Array<{ text: string; label: string }> = [];
+    for (const option of motions) sparse[option.index] = { text: option.text, label: option.label };
+    return sparse;
+  }, [motions]);
+
+  // Resolve the declaration's motion link by text snapshot, not raw index —
+  // the motions array gets reordered/deleted and indexes go stale.
+  const conflictMotionBadge = (conflict: any): { label: string; stale: boolean } | null => {
+    const resolution = resolveConflictMotion(conflict, motionsByRawIndex);
+    if (!resolution) return null;
+    if (resolution.kind === "resolved") {
+      const entry = motionsByRawIndex[resolution.index];
+      return { label: entry?.label ?? `Motion ${resolution.index + 1}`, stale: false };
+    }
+    return { label: `Motion no longer on record: "${resolution.motionText}"`, stale: true };
+  };
 
   const save = async () => {
     if (saving) return;
@@ -81,6 +100,12 @@ export function MeetingConflictsCard({
         leftRoom: draft.leftRoom,
         notes: draft.notes.trim() || undefined,
         motionIndex: draft.motionIndex === "" ? undefined : Number(draft.motionIndex),
+        // Snapshot the motion text so the link survives reorders/deletes of
+        // the positional motions array (see resolveConflictMotion).
+        motionText:
+          draft.motionIndex === ""
+            ? undefined
+            : motions.find((m) => m.index === Number(draft.motionIndex))?.text || undefined,
       });
     } finally {
       setSaving(false);
@@ -122,7 +147,11 @@ export function MeetingConflictsCard({
                   <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{conflict.natureOfInterest}</div>
                 ) : null}
                 <div className="meeting-conflict-row__badges">
-                  {conflict.motionIndex != null && <Badge tone="warn">{motionLabel(conflict.motionIndex)}</Badge>}
+                  {(() => {
+                    const badge = conflictMotionBadge(conflict);
+                    if (!badge) return null;
+                    return <Badge tone={badge.stale ? "danger" : "warn"}>{badge.label}</Badge>;
+                  })()}
                   {conflict.abstainedFromVote && <Badge tone="success">Abstained</Badge>}
                   {conflict.leftRoom && <Badge tone="success">Left room</Badge>}
                   {conflict.resolvedAt ? (

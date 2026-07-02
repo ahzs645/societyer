@@ -7,6 +7,7 @@
 import { escapeHtml } from "../../../lib/html";
 import { renderMarkdownInline } from "../../../lib/markdown";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "./minutesExportStyles";
+import { agendaSequenceLabel } from "./agendaNumbering";
 
 export type { MinutesExportStyleId };
 export { MINUTES_EXPORT_STYLES };
@@ -46,6 +47,10 @@ export type MinutesExportOptions = {
   includeSignatures?: boolean;
   includePlaceholders?: boolean;
   includeGeneratedFooter?: boolean;
+  /** How sub-items are numbered in styles with numbered headings: "letters"
+   *  renders 1. / 1a., "decimal" renders 1. / 1.1. Mirrors the agenda-editor
+   *  preference so exports match what the user sees on screen. */
+  agendaNumberingMode?: "letters" | "decimal";
   /** Captured e-signatures. When present, the signature block lists the actual
    *  signers + dates instead of blank Chair/Secretary signature lines. */
   signatures?: MinutesSignatureLine[];
@@ -194,6 +199,7 @@ const DEFAULT_MINUTES_EXPORT_OPTIONS: Required<MinutesExportOptions> = {
   includeSignatures: true,
   includePlaceholders: false,
   includeGeneratedFooter: true,
+  agendaNumberingMode: "letters",
   signatures: [],
   conflicts: [],
   proxies: [],
@@ -628,15 +634,13 @@ function renderNumberedAgendaMinutes({
       let childCount = 0;
       return sections.map(({ section, originalIndex }) => {
         const depth: 0 | 1 = section?.depth === 1 ? 1 : 0;
-        let label: string;
         if (depth === 0 || rootCount === 0) {
           rootCount += 1;
           childCount = 0;
-          label = `${rootCount}.`;
         } else {
           childCount += 1;
-          label = `${rootCount}${String.fromCharCode(96 + childCount)}.`;
         }
+        const label = agendaSequenceLabel(rootCount, childCount, options.agendaNumberingMode);
         return renderNumberedAgendaSection(label, originalIndex, section, minutes, topicMotions, options, depth);
       }).join("");
     })()}
@@ -710,25 +714,47 @@ function renderBoardPublicMinutes({
   minutes,
 }: MinutesRenderArgs, options: Required<MinutesExportOptions>): string {
   const eh = escapeHtml;
-  const agenda = (minutes.sections ?? []).length ? (minutes.sections ?? []).map((section) => section.title) : meeting.agendaItems ?? [];
-  const sections = agenda.length ? agenda : ["Call to order", "Approval of the Agenda", "Minutes", "Reports", "Other Business", "Adjournment"];
+  // Render full recorded sections (discussion, decisions, action items, and
+  // the motions that belong to each) rather than bare headings with content
+  // hardcoded under positions 1 and 3 of whatever the agenda happens to be.
+  const sectionRecords: Array<NonNullable<MinutesRenderArgs["minutes"]["sections"]>[number] | { title: string }> =
+    (minutes.sections ?? []).length
+      ? (minutes.sections ?? [])
+      : ((meeting.agendaItems ?? []).length
+          ? (meeting.agendaItems ?? []).map((title) => ({ title }))
+          : ["Call to order", "Approval of the Agenda", "Minutes", "Reports", "Other Business", "Adjournment"].map((title) => ({ title })));
   const callTime = displayDateOrText(minutes.calledToOrderAt) ?? formatTime(minutes.heldAt);
+  const callToOrderSentence = `<p>${eh(minutes.chairName ?? placeholder("presiding officer", options))} called the meeting to order at ${eh(callTime)}.</p>`;
+  // Attach the call-to-order line to the section actually about it, not
+  // blindly to whichever section renders first.
+  const callToOrderIndex = sectionRecords.findIndex((section) =>
+    /\b(call(?:ed)? to order|welcome|opening)\b/i.test(String(section.title ?? "")),
+  );
+  // Motions no section claims still need to appear once — previously ALL
+  // motions re-rendered in a trailing "Motions" block, duplicating any that
+  // also matched a section.
+  const unplacedMotions = minutes.motions.filter(
+    (motion) =>
+      !isAdjournmentMotionForExport(motion) &&
+      !sectionRecords.some((section, sectionIndex) =>
+        motionBelongsToAgendaSection(motion, sectionIndex, section.title, agendaSectionSearchText(section)),
+      ),
+  );
   return `
     <h1>${eh(meeting.title)}</h1>
     <p><strong>Public Session Minutes</strong></p>
     <p class="meta">${eh(formatLongDate(minutes.heldAt))} · ${eh(formatTime(minutes.heldAt))}${meeting.location ? ` · ${eh(meeting.location)}` : ""}</p>
     <p class="meta">${eh(society.name)}${society.incorporationNumber ? ` · ${eh(society.incorporationNumber)}` : ""}</p>
     ${renderSessionSegments(minutes.sessionSegments)}
+    ${callToOrderIndex === -1 ? callToOrderSentence : ""}
 
-    ${sections.map((section, index) => `
-      <h2>${index + 1} – ${eh(section)}</h2>
-      ${index === 0 ? `<p>${eh(minutes.chairName ?? placeholder("presiding officer", options))} called the meeting to order at ${eh(callTime)}.</p>` : ""}
-      ${index === 2 ? renderPreviousMinutesMotions(minutes) : ""}
-    `).join("")}
+    ${sectionRecords.map((section, index) =>
+      renderBoardPublicSection(index, section, minutes, options, index === callToOrderIndex ? callToOrderSentence : ""),
+    ).join("")}
 
     ${options.includeDiscussionSummary ? renderOptionalSection("Discussion", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options) : ""}
 
-    ${renderOptionalSection("Motions", minutes.motions.filter((motion) => !isAdjournmentMotionForExport(motion)).map(renderBoardMotion).join(""), minutes.motions.some((motion) => !isAdjournmentMotionForExport(motion)), options)}
+    ${unplacedMotions.length ? `<h2>Other Motions</h2>${unplacedMotions.map(renderBoardMotion).join("")}` : ""}
 
     ${renderOptionalSection("Decisions", renderDecisionsList(minutes.decisions, options), minutes.decisions.length > 0, options)}
 
@@ -741,6 +767,40 @@ function renderBoardPublicMinutes({
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
     ${renderFooter(options)}
+  `;
+}
+
+function renderBoardPublicSection(
+  index: number,
+  section: NonNullable<MinutesRenderArgs["minutes"]["sections"]>[number] | { title: string },
+  minutes: MinutesRenderArgs["minutes"],
+  options: Required<MinutesExportOptions>,
+  lead: string,
+) {
+  const eh = escapeHtml;
+  // Explicit motion→section assignments win over keyword matching, so an
+  // assigned motion never renders under the wrong heading or twice.
+  const searchText = agendaSectionSearchText(section);
+  const matchingMotions = minutes.motions.filter((motion) =>
+    motionBelongsToAgendaSection(motion, index, section.title, searchText),
+  );
+  const presenter = "presenter" in section ? section.presenter ?? "" : "";
+  const discussion = "discussion" in section ? section.discussion ?? "" : "";
+  const decisions = "decisions" in section ? section.decisions ?? [] : [];
+  const actionItems = "actionItems" in section ? section.actionItems ?? [] : [];
+  const parts = [
+    lead,
+    presenter ? `<p><strong>Presenter:</strong> ${eh(presenter)}</p>` : "",
+    discussion ? renderMinutesMarkdownHtml(discussion) : "",
+    decisions.length ? `<ul>${decisions.map((decision) => `<li>${eh(decision)}</li>`).join("")}</ul>` : "",
+    matchingMotions.map(renderBoardMotion).join(""),
+    options.includeActionItems && actionItems.length
+      ? `<p><strong>Action Items:</strong></p><ul>${actionItems.map((item) => `<li>${eh(item.assignee ? `${item.assignee}: ${item.text}` : item.text)}${item.dueDate ? ` (${eh(item.dueDate)})` : ""}</li>`).join("")}</ul>`
+      : "",
+  ].filter(Boolean).join("");
+  return `
+    <h2>${index + 1} – ${eh(section.title)}</h2>
+    ${parts}
   `;
 }
 
@@ -921,12 +981,6 @@ function renderActionTableCell(
     }`;
   }
   return placeholderParagraph("group action", options);
-}
-
-function renderPreviousMinutesMotions(minutes: MinutesRenderArgs["minutes"]) {
-  const motions = minutes.motions.filter((motion) => /minute/i.test(motion.text));
-  if (!motions.length) return "";
-  return motions.map(renderBoardMotion).join("");
 }
 
 function renderBoardMotion(motion: MinutesRenderArgs["minutes"]["motions"][number]) {

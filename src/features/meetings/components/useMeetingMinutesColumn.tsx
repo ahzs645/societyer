@@ -48,6 +48,7 @@ import {
   remapMotionsByIndexOrder,
   normalize,
 } from "./MeetingMinutesColumn.internal";
+import { agendaSequenceLabel } from "../lib/agendaNumbering";
 import type {
   AgendaNumberingMode,
   SectionDraft,
@@ -642,7 +643,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     | { kind: "preview"; title: string; depth: 0 | 1; label: string };
   const mergedSectionRows = useMemo<MergedRow[]>(() => {
     const computeLabel = (rootCount: number, childCount: number) =>
-      childCount === 0 ? `${rootCount}.` : `${rootCount}${String.fromCharCode(96 + childCount)}.`;
+      agendaSequenceLabel(rootCount, childCount, agendaNumberingMode);
 
     if (agendaEdit === null) {
       const rows: MergedRow[] = [];
@@ -725,7 +726,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       });
     });
     return rows;
-  }, [agendaEdit, sections]);
+  }, [agendaEdit, agendaNumberingMode, sections]);
   // Hide children whose parent is collapsed, so the parent's `<details>`
   // disclosure also gates its sub-items — matches outline-tree intuition.
   // Previews (in-flight agenda additions) are always shown since they have no

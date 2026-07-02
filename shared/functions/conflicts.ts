@@ -18,6 +18,9 @@ export interface ConflictCreateArgs {
   notes?: string;
   meetingId?: string;
   motionIndex?: number;
+  /** Snapshot of the motion's text at declaration time — used to re-resolve
+   *  the link after the positional motions array is reordered or edited. */
+  motionText?: string;
 }
 
 export async function conflictsListPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {

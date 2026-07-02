@@ -45,6 +45,8 @@ import {
   slugifyFilePart,
 } from "../features/meetings/lib/meetingDetailHelpers";
 import { renderMeetingPackHtml } from "../features/meetings/lib/meetingPackExport";
+import { resolveConflictMotion } from "../features/meetings/lib/conflictMotions";
+import { readStoredAgendaNumberingMode } from "../features/meetings/lib/agendaNumbering";
 import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMaterialDrawer";
 import { MeetingPackageHub } from "../features/meetings/components/MeetingPackageHub";
 import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMinutesColumn";
@@ -897,6 +899,9 @@ export function MeetingDetailPage() {
         includeApprovalBlock: includeApprovalInExport,
         includeSignatures: includeSignaturesInExport,
         includePlaceholders: includePlaceholdersInExport,
+        // Match the agenda editor's numbering preference so exported headings
+        // read the same as the on-screen section list.
+        agendaNumberingMode: readStoredAgendaNumberingMode(),
         signatures: (minutesSignatures ?? []).map((signature: any) => ({
           signerName: signature.signerName,
           signerRole: signature.signerRole,
@@ -905,8 +910,15 @@ export function MeetingDetailPage() {
         })),
         conflicts: (meetingConflicts ?? []).map((conflict: any) => {
           const director = (directors ?? []).find((d: any) => d._id === conflict.directorId);
-          const motion =
-            conflict.motionIndex == null ? undefined : (minutes?.motions ?? [])[conflict.motionIndex];
+          // Resolve by text snapshot, not raw index — the motions array gets
+          // reordered/deleted, and exported minutes are a legal record.
+          const resolution = resolveConflictMotion(conflict, (minutes?.motions ?? []) as any[]);
+          const motionLabel =
+            resolution?.kind === "resolved"
+              ? resolution.motion.name || resolution.motion.text
+              : resolution?.kind === "stale"
+                ? `[motion no longer on record: "${resolution.motionText}"]`
+                : undefined;
           return {
             directorName: director
               ? `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim()
@@ -915,7 +927,7 @@ export function MeetingDetailPage() {
             natureOfInterest: conflict.natureOfInterest,
             abstainedFromVote: conflict.abstainedFromVote,
             leftRoom: conflict.leftRoom,
-            motionLabel: motion ? motion.name || motion.text : undefined,
+            motionLabel,
           };
         }),
         proxies: (meetingProxies ?? []).map((proxy: any) => ({
@@ -2006,6 +2018,7 @@ export function MeetingDetailPage() {
                       .map(({ motion, index }) => ({
                         index,
                         label: motion.name || motion.text || `Motion ${index + 1}`,
+                        text: motion.text ?? "",
                       }))}
                   />
                 </div>
