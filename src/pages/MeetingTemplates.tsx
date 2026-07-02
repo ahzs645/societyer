@@ -24,6 +24,10 @@ type TemplateItemDraft = {
   details: string;
   motionTemplateId: string;
   motionText: string;
+  /** Marks this item as the "adopt previous minutes" motion — meetings created
+   *  from the template link the seeded motion to the actual previous meeting's
+   *  minutes record, and carrying it stamps those minutes approved. */
+  adoptsPreviousMinutes: boolean;
 };
 
 type TemplateDraft = {
@@ -42,6 +46,7 @@ const EMPTY_ITEM: TemplateItemDraft = {
   details: "",
   motionTemplateId: "",
   motionText: "",
+  adoptsPreviousMinutes: false,
 };
 
 const STANDARD_MOTIONS = {
@@ -101,6 +106,7 @@ const AGENDA_ITEM_LIBRARY: AgendaLibraryEntry[] = [
         depth: 1,
         sectionType: "motion",
         motionText: "BE IT RESOLVED THAT the minutes of {{previousMeetingTitle}} of {{previousMeetingDate}}, as presented, be approved.",
+        adoptsPreviousMinutes: true,
       },
     ],
   },
@@ -189,7 +195,7 @@ function newDraft(): TemplateDraft {
     items: [
       { ...EMPTY_ITEM, title: "Welcome and call to order" },
       { ...EMPTY_ITEM, title: "Adopt agenda", sectionType: "motion", motionText: STANDARD_MOTIONS.adoptAgenda },
-      { ...EMPTY_ITEM, title: "Adopt previous minutes", sectionType: "motion", motionText: STANDARD_MOTIONS.adoptPreviousMinutes },
+      { ...EMPTY_ITEM, title: "Adopt previous minutes", sectionType: "motion", motionText: STANDARD_MOTIONS.adoptPreviousMinutes, adoptsPreviousMinutes: true },
       { ...EMPTY_ITEM, title: "Adjournment", sectionType: "motion", motionText: STANDARD_MOTIONS.adjournment },
     ],
   };
@@ -470,6 +476,7 @@ export function MeetingTemplateBuilderPage() {
         details: item.details ?? "",
         motionTemplateId: item.motionTemplateId ? String(item.motionTemplateId) : "",
         motionText: item.motionText ?? "",
+        adoptsPreviousMinutes: item.adoptsPreviousMinutes === true,
       })),
     });
   }, [isNew, template]);
@@ -727,6 +734,23 @@ export function MeetingTemplateBuilderPage() {
                                 placeholder={selectedMotion ? "Using library wording" : "Optional recurring motion text"}
                               />
                             </Field>
+                            <label className="row" style={{ gap: 8, alignItems: "flex-start" }}>
+                              <input
+                                type="checkbox"
+                                checked={item.adoptsPreviousMinutes}
+                                onChange={(event) => updateItem(index, { adoptsPreviousMinutes: event.target.checked })}
+                                style={{ marginTop: 3 }}
+                              />
+                              <span>
+                                Adopts the previous meeting's minutes
+                                <span className="muted" style={{ display: "block", fontSize: "var(--fs-xs)" }}>
+                                  Meetings created from this template link this motion to the actual
+                                  previous meeting's minutes; recording it as Carried marks those
+                                  minutes approved. Use {"{{previousMeetingTitle}}"} and {"{{previousMeetingDate}}"} in
+                                  the wording to fill in the real title and date.
+                                </span>
+                              </span>
+                            </label>
                           </div>
                         )}
                         <div className="meeting-template-section-editor__actions">
@@ -817,6 +841,7 @@ function cleanItems(items: TemplateItemDraft[]) {
       details: item.details.trim() || undefined,
       motionTemplateId: item.motionTemplateId || undefined,
       motionText: item.motionText.trim() || undefined,
+      adoptsPreviousMinutes: item.adoptsPreviousMinutes || undefined,
     });
     if (depth === 0) hasRoot = true;
   }

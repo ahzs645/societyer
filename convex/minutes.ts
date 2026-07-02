@@ -38,6 +38,9 @@ const motion = v.object({
   // the stored array through update, or every such save is rejected.
   motionTemplateId: v.optional(v.id("motionTemplates")),
   motionId: v.optional(v.id("motions")),
+  // Which minutes record this motion adopts; carrying the motion auto-stamps
+  // the referenced minutes' approval (see shared/functions/minutes.ts).
+  adoptsMinutesId: v.optional(v.id("minutes")),
 });
 
 const actionItem = v.object({

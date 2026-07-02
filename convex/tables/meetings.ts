@@ -60,6 +60,10 @@ export const meetingTables = {
         details: v.optional(v.string()),
         motionTemplateId: v.optional(v.id("motionTemplates")),
         motionText: v.optional(v.string()),
+        // Marks this item as the "adopt previous meeting's minutes" motion.
+        // Resolved at meeting-creation time into a live `adoptsMinutesId` link
+        // on the seeded motion (the template can't know which minutes yet).
+        adoptsPreviousMinutes: v.optional(v.boolean()),
       }),
     ),
     createdAtISO: v.string(),
@@ -164,6 +168,10 @@ export const meetingTables = {
         sectionTitle: v.optional(v.string()),
         motionTemplateId: v.optional(v.id("motionTemplates")),
         motionId: v.optional(v.id("motions")),
+        // Which minutes record this motion adopts (the "approval of previous
+        // minutes" motion). When the motion carries, the referenced minutes are
+        // automatically stamped approvedAt/approvedInMeetingId.
+        adoptsMinutesId: v.optional(v.id("minutes")),
       }),
     ),
     // Immutable snapshot of motions[] frozen when the minutes are approved, so
@@ -190,6 +198,7 @@ export const meetingTables = {
           sectionTitle: v.optional(v.string()),
           motionTemplateId: v.optional(v.id("motionTemplates")),
           motionId: v.optional(v.id("motions")),
+          adoptsMinutesId: v.optional(v.id("minutes")),
         }),
       ),
     ),

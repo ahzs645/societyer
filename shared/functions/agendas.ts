@@ -672,6 +672,9 @@ function cleanMotion(motion: any) {
   if (motion?.sectionTitle !== undefined) clean.sectionTitle = motion.sectionTitle;
   if (motion?.motionTemplateId !== undefined) clean.motionTemplateId = motion.motionTemplateId;
   if (motion?.motionId !== undefined) clean.motionId = motion.motionId;
+  if (motion?.adoptsMinutesId !== undefined) clean.adoptsMinutesId = motion.adoptsMinutesId;
+  if (motion?.name !== undefined) clean.name = motion.name;
+  if (motion?.decidedBy !== undefined) clean.decidedBy = motion.decidedBy;
   return clean;
 }
 

@@ -202,7 +202,59 @@ type TemplateItem = {
   details?: string;
   motionTemplateId?: any;
   motionText?: string;
+  adoptsPreviousMinutes?: boolean;
 };
+
+/** Governance grouping for "previous meeting" resolution: a board meeting
+ *  adopts the previous BOARD meeting's minutes, and general meetings (AGM/SGM)
+ *  adopt the previous GENERAL meeting's minutes — not just whatever meeting
+ *  happened most recently. */
+export function meetingTypeCategory(type: string | undefined | null): string {
+  const value = String(type ?? "").trim().toLowerCase();
+  if (value === "agm" || value === "sgm") return "general";
+  return value || "other";
+}
+
+/** The meeting whose minutes a new meeting of `meetingType` would adopt: the
+ *  most recent prior non-cancelled meeting, preferring the same type category
+ *  and falling back to any prior meeting when the society has no history in
+ *  that category yet. Exported for unit testing. */
+export function pickPreviousMeeting(
+  meetings: Array<{ scheduledAt?: string; status?: string; type?: string }>,
+  scheduledAt: string,
+  meetingType?: string,
+) {
+  const scheduledTs = new Date(scheduledAt).getTime();
+  // Compare as timestamps, not strings — stored values mix naive local
+  // ("2026-07-15T19:00") and UTC ("...Z") formats, which don't sort together.
+  const candidates = meetings
+    .filter((meeting) => {
+      if (meeting.status === "Cancelled" || !meeting.scheduledAt) return false;
+      const ts = new Date(meeting.scheduledAt).getTime();
+      return Number.isFinite(ts) && Number.isFinite(scheduledTs) && ts < scheduledTs;
+    })
+    .sort((a, b) => new Date(b.scheduledAt!).getTime() - new Date(a.scheduledAt!).getTime());
+  const category = meetingTypeCategory(meetingType);
+  return candidates.find((meeting) => meetingTypeCategory(meeting.type) === category) ?? candidates[0];
+}
+
+/** Whether a template/agenda item is the "adopt the previous meeting's
+ *  minutes" motion. Explicit flag wins; legacy items are detected from their
+ *  wording (placeholder tokens or adopt/approve + previous + minutes). */
+export function isPreviousMinutesAdoptionItem(item: {
+  adoptsPreviousMinutes?: boolean;
+  motionText?: string;
+  title?: string;
+}): boolean {
+  if (item?.adoptsPreviousMinutes === true) return true;
+  const text = `${item?.title ?? ""} ${item?.motionText ?? ""}`.toLowerCase();
+  if (!text.includes("minute")) return false;
+  if (text.includes("{{previousmeetingtitle}}") || text.includes("{{previousmeetingdate}}")) return true;
+  const referencesPrevious =
+    text.includes("previous") || text.includes("prior meeting") || text.includes("last meeting") || text.includes("last agm");
+  const adopts = text.includes("adopt") || text.includes("approv");
+  return referencesPrevious && adopts;
+}
 
 function normalizeTemplateItems(items: any[]): TemplateItem[] {
   const normalized: TemplateItem[] = [];
@@ -219,6 +271,7 @@ function normalizeTemplateItems(items: any[]): TemplateItem[] {
       details: item?.details || undefined,
       motionTemplateId: item?.motionTemplateId,
       motionText: item?.motionText || undefined,
+      adoptsPreviousMinutes: item?.adoptsPreviousMinutes === true || undefined,
     });
     if (depth === 0) hasRoot = true;
   }
@@ -230,7 +283,7 @@ function normalizeAgendaJsonItems(agendaJson?: string) {
   try {
     const parsed = JSON.parse(agendaJson);
     const values = Array.isArray(parsed) ? parsed : [];
-    const items: Array<{ title: string; depth: 0 | 1; type?: string; details?: string; presenter?: string; motionTemplateId?: any; motionText?: string }> = [];
+    const items: Array<{ title: string; depth: 0 | 1; type?: string; details?: string; presenter?: string; motionTemplateId?: any; motionText?: string; adoptsMinutesId?: string }> = [];
     let hasRoot = false;
     for (const value of values) {
       const title = typeof value === "string" ? value.trim() : String(value?.title ?? "").trim();
@@ -244,6 +297,9 @@ function normalizeAgendaJsonItems(agendaJson?: string) {
         presenter: typeof value === "object" ? value?.presenter : undefined,
         motionTemplateId: typeof value === "object" ? value?.motionTemplateId : undefined,
         motionText: typeof value === "object" ? value?.motionText : undefined,
+        // Not stored on the agendaItems row — consumed when seeding the
+        // adoption motion into minutes.motions below.
+        adoptsMinutesId: typeof value === "object" ? value?.adoptsMinutesId : undefined,
       });
       if (depth === 0) hasRoot = true;
     }
@@ -253,7 +309,12 @@ function normalizeAgendaJsonItems(agendaJson?: string) {
   }
 }
 
-async function buildTemplateMotions(ctx: any, items: TemplateItem[], templateContext: Record<string, string>) {
+async function buildTemplateMotions(
+  ctx: any,
+  items: TemplateItem[],
+  templateContext: Record<string, string>,
+  previousMinutesId?: string,
+) {
   const motions: any[] = [];
   const now = new Date().toISOString();
   for (let index = 0; index < items.length; index++) {
@@ -273,42 +334,58 @@ async function buildTemplateMotions(ctx: any, items: TemplateItem[], templateCon
     }
     text = resolveTemplateText(text, templateContext);
     if (!text?.trim()) continue;
-    motions.push({
+    const motion: any = {
       text: text.trim(),
       outcome: "Pending",
       resolutionType,
       sectionIndex: index,
       sectionTitle: item.title,
-    });
+    };
+    // The "adopt previous minutes" item resolves to a live reference to the
+    // actual minutes record being adopted; carrying the motion later stamps
+    // that record's approval automatically.
+    if (previousMinutesId && isPreviousMinutesAdoptionItem(item)) {
+      motion.adoptsMinutesId = previousMinutesId;
+    }
+    motions.push(motion);
   }
   return motions;
 }
 
-async function buildTemplateContext(ctx: any, societyId: any, scheduledAt: string) {
+type TemplateContextResult = {
+  context: Record<string, string>;
+  /** The minutes record an "adopt previous minutes" motion should link to. */
+  previousMinutesId?: string;
+};
+
+async function buildTemplateContext(
+  ctx: any,
+  societyId: any,
+  scheduledAt: string,
+  meetingType?: string,
+): Promise<TemplateContextResult> {
   const meetings = await ctx.db
     .query("meetings")
     .withIndex("by_society_date", (q: any) => q.eq("societyId", societyId))
     .order("desc")
     .collect();
-  // Compare as timestamps, not strings — stored values mix naive local
-  // ("2026-07-15T19:00") and UTC ("...Z") formats, which don't sort together.
-  const scheduledTs = new Date(scheduledAt).getTime();
-  const candidates = meetings
-    .filter((meeting: any) => {
-      if (meeting.status === "Cancelled" || !meeting.scheduledAt) return false;
-      const ts = new Date(meeting.scheduledAt).getTime();
-      return Number.isFinite(ts) && Number.isFinite(scheduledTs) && ts < scheduledTs;
-    })
-    .sort(
-      (a: any, b: any) =>
-        new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime(),
-    );
-  const previous = candidates[0];
+  const previous = pickPreviousMeeting(meetings, scheduledAt, meetingType);
+  let previousMinutesId: string | undefined;
+  if (previous) {
+    const rows = await ctx.db
+      .query("minutes")
+      .withIndex("by_meeting", (q: any) => q.eq("meetingId", (previous as any)._id))
+      .collect();
+    previousMinutesId = rows[0]?._id ? String(rows[0]._id) : undefined;
+  }
   return {
-    previousMeetingTitle: previous?.title ?? "previous meeting",
-    previousMeetingDate: previous?.scheduledAt ? formatLongDate(previous.scheduledAt) : "the previous meeting date",
-    calledToOrderTime: "[time]",
-    adjournedAt: "[time]",
+    context: {
+      previousMeetingTitle: (previous as any)?.title ?? "previous meeting",
+      previousMeetingDate: previous?.scheduledAt ? formatLongDate(previous.scheduledAt) : "the previous meeting date",
+      calledToOrderTime: "[time]",
+      adjournedAt: "[time]",
+    },
+    previousMinutesId,
   };
 }
 
@@ -415,11 +492,17 @@ export async function createPortable(
     throw new Error("Meeting template belongs to a different society.");
   }
   const templateItems = template ? normalizeTemplateItems(template.items) : [];
-  const templateContext = template
-    ? await buildTemplateContext(ctx, args.societyId, args.scheduledAt)
-    : {};
+  // Resolved even without a template: the agendaJson path ("Schedule next
+  // meeting") can also seed an adoption motion, and both need the previous
+  // same-category meeting's minutes id.
+  const { context: templateContext, previousMinutesId } = await buildTemplateContext(
+    ctx,
+    args.societyId,
+    args.scheduledAt,
+    args.type,
+  );
   const templateMotions = template
-    ? await buildTemplateMotions(ctx, templateItems, templateContext)
+    ? await buildTemplateMotions(ctx, templateItems, templateContext, previousMinutesId)
     : [];
   const templateSnapshotJson = template
     ? JSON.stringify({
@@ -446,6 +529,7 @@ export async function createPortable(
     quorumComputedAtISO:
       args.quorumComputedAtISO ?? snapshot.quorumComputedAtISO,
   });
+  const agendaJsonItems = !templateItems.length ? normalizeAgendaJsonItems(args.agendaJson) : [];
   if (templateItems.length > 0 || args.agendaJson) {
     const agendaId = await ctx.db.insert("agendas", {
       societyId: args.societyId,
@@ -465,7 +549,7 @@ export async function createPortable(
           motionTemplateId: item.motionTemplateId,
           motionText: item.motionText ? resolveTemplateText(item.motionText, templateContext) : undefined,
         }))
-      : normalizeAgendaJsonItems(args.agendaJson);
+      : agendaJsonItems;
     for (let order = 0; order < initialAgendaItems.length; order++) {
       const item = initialAgendaItems[order];
       await ctx.db.insert("agendaItems", {
@@ -483,6 +567,30 @@ export async function createPortable(
       });
     }
   }
+  // agendaJson items carrying motion text (e.g. the adoption-of-minutes item
+  // seeded by "Schedule next meeting") become real motions immediately, same
+  // as template items do — otherwise they'd only materialize on the first
+  // agenda re-save. `adoptsMinutesId` may be supplied explicitly by the caller
+  // or fall back to the resolved previous same-category meeting's minutes.
+  const agendaJsonMotions = agendaJsonItems
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => String(item.motionText ?? "").trim())
+    .map(({ item, index }) => {
+      const motion: any = {
+        text: String(item.motionText).trim(),
+        outcome: "Pending",
+        resolutionType: "Ordinary",
+        sectionIndex: index,
+        sectionTitle: item.title,
+      };
+      const adoptsId =
+        item.adoptsMinutesId ??
+        (previousMinutesId && isPreviousMinutesAdoptionItem({ title: item.title, motionText: item.motionText })
+          ? previousMinutesId
+          : undefined);
+      if (adoptsId) motion.adoptsMinutesId = adoptsId;
+      return motion;
+    });
   // Resolve attendees. Explicit form input wins; otherwise auto-snapshot
   // current directors for Board meetings. One-shot at create time only —
   // edits never re-seed, so the user can manage the list freely afterwards.
@@ -534,7 +642,7 @@ export async function createPortable(
           depth: item.depth,
         }))
       : [],
-    motions: templateMotions,
+    motions: templateMotions.length ? templateMotions : agendaJsonMotions,
     decisions: [],
     actionItems: [],
   });
@@ -569,8 +677,13 @@ export async function applyTemplatePortable(
   if (templateItems.length === 0) {
     throw new Error("This template has no agenda items to apply.");
   }
-  const templateContext = await buildTemplateContext(ctx, meeting.societyId, meeting.scheduledAt);
-  const templateMotions = await buildTemplateMotions(ctx, templateItems, templateContext);
+  const { context: templateContext, previousMinutesId } = await buildTemplateContext(
+    ctx,
+    meeting.societyId,
+    meeting.scheduledAt,
+    meeting.type,
+  );
+  const templateMotions = await buildTemplateMotions(ctx, templateItems, templateContext, previousMinutesId);
   const now = new Date().toISOString();
 
   // Resolve (or create) the meeting's agenda.

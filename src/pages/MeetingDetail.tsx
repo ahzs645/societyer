@@ -47,6 +47,9 @@ import {
 import { renderMeetingPackHtml } from "../features/meetings/lib/meetingPackExport";
 import { resolveConflictMotion } from "../features/meetings/lib/conflictMotions";
 import { readStoredAgendaNumberingMode } from "../features/meetings/lib/agendaNumbering";
+import { meetingTypeCategory } from "../../shared/functions/meetings";
+import { PendingAdoptionsCard, type PendingAdoption } from "../features/meetings/components/PendingAdoptionsCard";
+import type { MotionAdoptionTarget } from "../components/MotionEditor";
 import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMaterialDrawer";
 import { MeetingPackageHub } from "../features/meetings/components/MeetingPackageHub";
 import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMinutesColumn";
@@ -122,6 +125,9 @@ export function MeetingDetailPage() {
   // Sibling meetings power the "approved at meeting" picker — minutes are
   // typically adopted at a later meeting, so we let the user point at it.
   const allMeetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
+  // All minutes records: powers the "minutes awaiting adoption" card and the
+  // adoption-target picker on motions.
+  const allMinutes = useQuery(api.minutes.list, society ? { societyId: society._id } : "skip");
   // Captured e-signatures on these minutes — surfaced in the signing panel and
   // rendered into the export's signature block.
   const minutesSignatures = useQuery(
@@ -422,6 +428,40 @@ export function MeetingDetailPage() {
     : null;
   const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
   const legalGuideDateISO = minutes?.heldAt ?? meeting.scheduledAt;
+
+  // Prior meetings of the same governance category (board↔board, general↔general)
+  // whose minutes exist — the pool a "previous minutes" adoption draws from.
+  const currentMeetingTs = new Date(meeting.scheduledAt).getTime();
+  const minutesByMeetingId = new Map((allMinutes ?? []).map((rec: any) => [String(rec.meetingId), rec]));
+  const priorMeetingsWithMinutes = (allMeetings ?? [])
+    .filter((m: any) => {
+      if (m._id === meeting._id || m.status === "Cancelled") return false;
+      const ts = new Date(m.scheduledAt).getTime();
+      return Number.isFinite(ts) && Number.isFinite(currentMeetingTs) && ts < currentMeetingTs;
+    })
+    .sort((a: any, b: any) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime())
+    .map((m: any) => ({ meeting: m, record: minutesByMeetingId.get(String(m._id)) }))
+    .filter(({ record }: any) => record);
+  const pendingAdoptions: PendingAdoption[] = priorMeetingsWithMinutes
+    .filter(({ meeting: m, record }: any) =>
+      meetingTypeCategory(m.type) === meetingTypeCategory(meeting.type) && !record.approvedAt,
+    )
+    .map(({ meeting: m, record }: any) => ({
+      minutesId: String(record._id),
+      meetingId: String(m._id),
+      meetingTitle: m.title,
+      meetingType: m.type,
+      scheduledAt: m.scheduledAt,
+      motionExists: ((minutes?.motions ?? []) as any[]).some(
+        (motion) => String(motion.adoptsMinutesId ?? "") === String(record._id),
+      ),
+    }));
+  const adoptionTargets: MotionAdoptionTarget[] = priorMeetingsWithMinutes.map(
+    ({ meeting: m, record }: any) => ({
+      id: String(record._id),
+      label: `${m.title} — ${formatDate(m.scheduledAt)}${record.approvedAt ? " (approved)" : ""}`,
+    }),
+  );
   const quorumLegalGuides = getLegalGuideRules({
     jurisdictionCode: resolveJurisdictionCode(society),
     dateISO: legalGuideDateISO,
@@ -666,10 +706,19 @@ export function MeetingDetailPage() {
     if (!society || !nextMeetingDraft || !nextMeetingDraft.title.trim()) return;
     setSchedulingNext(true);
     try {
-      // Seed the next agenda with approval of these minutes. Carried-forward
-      // (Tabled/Deferred) business is added separately below as tracked backlog
-      // records linked onto the new agenda.
-      const agendaSeed: { title: string }[] = [{ title: `Approval of minutes — ${meeting.title}` }];
+      // Seed the next agenda with approval of these minutes — carrying a real
+      // reference to the minutes record, so recording the motion as Carried on
+      // the next meeting stamps these minutes approved automatically.
+      // Carried-forward (Tabled/Deferred) business is added separately below
+      // as tracked backlog records linked onto the new agenda.
+      const agendaSeed = [
+        {
+          title: `Approval of minutes — ${meeting.title}`,
+          type: "motion",
+          motionText: `BE IT RESOLVED THAT the minutes of ${meeting.title} held ${formatDate(meeting.scheduledAt)} be approved as circulated.`,
+          adoptsMinutesId: minutes?._id ? String(minutes._id) : undefined,
+        },
+      ];
       const meetingId = await createMeeting({
         societyId: society._id,
         type: nextMeetingDraft.type,
@@ -1058,7 +1107,61 @@ export function MeetingDetailPage() {
   const saveMotions = async (next: Motion[]) => {
     const minutesId = minutes?._id ?? (await ensureMinutes());
     if (!minutesId) return;
+    // Detect adoption motions newly recorded as Carried BEFORE saving — the
+    // backend stamps the linked minutes approved as part of this update, and
+    // the user deserves to hear that it happened.
+    const before = (minutes?.motions ?? []) as any[];
+    const previouslyCarried = new Set(
+      before
+        .filter((m) => m.adoptsMinutesId && String(m.outcome ?? "").toLowerCase() === "carried")
+        .map((m) => String(m.adoptsMinutesId)),
+    );
+    const newlyCarriedAdoptions = (next as any[]).filter(
+      (m) =>
+        m.adoptsMinutesId &&
+        String(m.outcome ?? "").toLowerCase() === "carried" &&
+        !previouslyCarried.has(String(m.adoptsMinutesId)),
+    );
     await updateMinutes({ id: minutesId, patch: { motions: next } });
+    for (const m of newlyCarriedAdoptions) {
+      const target = (allMinutes ?? []).find((rec: any) => String(rec._id) === String(m.adoptsMinutesId));
+      if (!target || target.approvedAt) continue;
+      const targetMeeting = (allMeetings ?? []).find((mm: any) => mm._id === target.meetingId);
+      toast.success(
+        "Minutes marked approved",
+        targetMeeting
+          ? `${targetMeeting.title} — adoption motion carried.`
+          : "The linked minutes were approved because the adoption motion carried.",
+      );
+    }
+  };
+
+  // One-click seed from the "minutes awaiting adoption" card: a Pending motion
+  // linked to the outstanding minutes. Carrying it later stamps the approval.
+  const addAdoptionMotion = async (entry: PendingAdoption) => {
+    const minutesId = minutes?._id ?? (await ensureMinutes());
+    if (!minutesId) return;
+    const existing = (minutes?.motions ?? []) as any[];
+    if (existing.some((motion) => String(motion.adoptsMinutesId ?? "") === entry.minutesId)) {
+      toast.info("An adoption motion for those minutes is already on this meeting.");
+      return;
+    }
+    await updateMinutes({
+      id: minutesId,
+      patch: {
+        motions: [
+          ...existing,
+          {
+            name: `Adopt minutes — ${entry.meetingTitle}`,
+            text: `BE IT RESOLVED THAT the minutes of ${entry.meetingTitle} held ${formatDate(entry.scheduledAt)} be adopted as circulated.`,
+            outcome: "Pending",
+            resolutionType: "Ordinary",
+            adoptsMinutesId: entry.minutesId as Id<"minutes">,
+          },
+        ] as any,
+      },
+    });
+    toast.success("Adoption motion added", entry.meetingTitle);
   };
 
   const saveMinuteSections = async (next: any[]) => {
@@ -2120,6 +2223,8 @@ export function MeetingDetailPage() {
         )}
 
         {activeTab === "motions" && (
+          <>
+          <PendingAdoptionsCard pending={pendingAdoptions} onAddAdoptionMotion={addAdoptionMotion} />
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">
@@ -2167,9 +2272,11 @@ export function MeetingDetailPage() {
                 onChange={saveMotions}
                 onAddToBacklog={addMotionToBacklog}
                 hideInlineAdd
+                adoptionTargets={adoptionTargets}
               />
             </div>
           </div>
+          </>
         )}
 
         {activeTab === "package" && (
