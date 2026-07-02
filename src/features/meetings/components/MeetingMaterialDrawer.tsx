@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { LockKeyhole } from "lucide-react";
 import { Badge, Drawer, Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
@@ -36,9 +36,21 @@ export function MeetingMaterialDrawer({
   agenda: string[];
   grantCandidates: GrantCandidate[];
   onClose: () => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
   onAddAccessGrant: () => void;
 }) {
+  // Guard against double-clicks: with no id, each save inserts a new material
+  // row, so a slow network + double-click would attach the document twice.
+  const [saving, setSaving] = useState(false);
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSave();
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <Drawer
       open={!!materialDraft}
@@ -47,7 +59,9 @@ export function MeetingMaterialDrawer({
       footer={
         <>
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn--accent" onClick={onSave}>{materialDraft?.id ? "Save" : "Attach"}</button>
+          <button className="btn btn--accent" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : materialDraft?.id ? "Save" : "Attach"}
+          </button>
         </>
       }
     >
@@ -76,7 +90,7 @@ export function MeetingMaterialDrawer({
           <Field label="Label">
             <input className="input" value={materialDraft.label} onChange={(event) => setMaterialDraft({ ...materialDraft, label: event.target.value })} placeholder="Optional display label" />
           </Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="row" style={{ gap: 12 }}>
             <Field label="Order">
               <input className="input" type="number" min="1" value={materialDraft.order} onChange={(event) => setMaterialDraft({ ...materialDraft, order: event.target.value })} />
             </Field>
@@ -91,7 +105,7 @@ export function MeetingMaterialDrawer({
                 ]} />
             </Field>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="row" style={{ gap: 12 }}>
             <Field label="Availability">
               <Select value={materialDraft.availabilityStatus} onChange={(value) => setMaterialDraft({ ...materialDraft, availabilityStatus: value })}
                 options={AVAILABILITY_OPTIONS.map((option) => ({ value: option.value, label: option.label }))} />
@@ -114,7 +128,7 @@ export function MeetingMaterialDrawer({
                 {(materialDraft.accessGrants ?? []).length} grant{(materialDraft.accessGrants ?? []).length === 1 ? "" : "s"}
               </span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div className="row" style={{ gap: 8 }}>
               <Field label="Target type">
                 <Select
                   value={materialDraft.grantSubjectType}

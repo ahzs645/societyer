@@ -82,6 +82,9 @@ export const update = mutation({
       completedAt: v.optional(v.string()),
       completedByUserId: v.optional(v.id("users")),
       completionNote: v.optional(v.string()),
+      // Convex strips `undefined` patch fields from the wire, so unlinking a
+      // task from its meeting needs an explicit flag.
+      clearMeetingId: v.optional(v.boolean()),
     }),
   },
   returns: v.any(),

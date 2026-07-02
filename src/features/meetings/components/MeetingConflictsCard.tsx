@@ -57,27 +57,34 @@ export function MeetingConflictsCard({
   };
   const [draft, setDraft] = useState(blankDraft);
   const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const motionLabel = (index?: number) =>
     index == null ? null : motions.find((m) => m.index === index)?.label ?? `Motion ${index + 1}`;
 
   const save = async () => {
+    if (saving) return;
     if (!draft.directorId || !draft.contractOrMatter.trim()) {
       toast.error("Pick a director and describe the matter.");
       return;
     }
-    await createConflict({
-      societyId,
-      meetingId,
-      directorId: draft.directorId as Id<"directors">,
-      declaredAt: new Date().toISOString(),
-      contractOrMatter: draft.contractOrMatter.trim(),
-      natureOfInterest: draft.natureOfInterest.trim(),
-      abstainedFromVote: draft.abstainedFromVote,
-      leftRoom: draft.leftRoom,
-      notes: draft.notes.trim() || undefined,
-      motionIndex: draft.motionIndex === "" ? undefined : Number(draft.motionIndex),
-    });
+    setSaving(true);
+    try {
+      await createConflict({
+        societyId,
+        meetingId,
+        directorId: draft.directorId as Id<"directors">,
+        declaredAt: new Date().toISOString(),
+        contractOrMatter: draft.contractOrMatter.trim(),
+        natureOfInterest: draft.natureOfInterest.trim(),
+        abstainedFromVote: draft.abstainedFromVote,
+        leftRoom: draft.leftRoom,
+        notes: draft.notes.trim() || undefined,
+        motionIndex: draft.motionIndex === "" ? undefined : Number(draft.motionIndex),
+      });
+    } finally {
+      setSaving(false);
+    }
     setDraft(blankDraft);
     setAdding(false);
     toast.success("Conflict declared", "Recorded against this meeting.");
@@ -218,7 +225,9 @@ export function MeetingConflictsCard({
             </div>
             <div className="row" style={{ gap: 6, justifyContent: "flex-end", marginTop: 8 }}>
               <button className="btn" onClick={() => { setAdding(false); setDraft(blankDraft); }}>Cancel</button>
-              <button className="btn btn--accent" onClick={save}>Save declaration</button>
+              <button className="btn btn--accent" onClick={save} disabled={saving}>
+                {saving ? "Saving…" : "Save declaration"}
+              </button>
             </div>
           </div>
         )}

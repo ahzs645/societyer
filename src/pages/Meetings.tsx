@@ -27,8 +27,9 @@ import type { ToneVariant } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { NameAutocomplete } from "../components/NameAutocomplete";
 import { Menu, type MenuSection } from "../components/Menu";
-import { ContextMenu } from "../components/ContextMenu";
 import { useConfirm } from "../components/Modal";
+import { hasStartedMinutesDraft } from "../features/meetings/lib/meetingDetailHelpers";
+import { daysUntil, isGeneralMeeting, meetsNoticeWindow } from "../features/meetings/lib/noticeWindow";
 import { useHiddenSuggestions, looksLikeLink } from "../lib/hiddenSuggestions";
 import type { Doc } from "../../convex/_generated/dataModel";
 
@@ -73,6 +74,9 @@ export function MeetingsPage() {
     api.meetingTemplates.list,
     society ? { societyId: society._id } : "skip",
   ) as Doc<"meetingTemplates">[] | undefined;
+  const minutesList = useQuery(api.minutes.list, society ? { societyId: society._id } : "skip") as
+    | Doc<"minutes">[]
+    | undefined;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<MeetingDraft | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
@@ -88,9 +92,6 @@ export function MeetingsPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const [editingId, setEditingId] = useState<Doc<"meetings">["_id"] | null>(null);
-  const [contextMenu, setContextMenu] = useState<
-    { x: number; y: number; meeting: Doc<"meetings"> } | null
-  >(null);
   const [currentViewId, setCurrentViewId] = useState<Doc<"views">["_id"] | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
   const tableData = useObjectRecordTableData({
@@ -106,6 +107,11 @@ export function MeetingsPage() {
   const effectiveNoticeMaxDays = effectiveRules?.generalNoticeMaxDays ?? noticeMaxDays;
 
   const conflicts = useMemo(() => computeConflicts(meetings ?? []), [meetings]);
+  const minutesByMeeting = useMemo(() => {
+    const map = new Map<string, Doc<"minutes">>();
+    for (const record of minutesList ?? []) map.set(String(record.meetingId), record);
+    return map;
+  }, [minutesList]);
   const { hide: hideLocationSuggestion, isHidden: isHiddenLocation } = useHiddenSuggestions("meeting-location");
   const recentLocations = useMemo(() => {
     const sorted = (meetings ?? [])
@@ -161,12 +167,12 @@ export function MeetingsPage() {
   };
 
   const handleDelete = async (meeting: Doc<"meetings">) => {
-    const hasMinutes = !!meeting.minutesId;
+    const hasMinutes = hasStartedMinutesDraft(minutesByMeeting.get(String(meeting._id)));
     const ok = await confirm({
       title: `Delete "${meeting.title}"?`,
       message: hasMinutes
-        ? "This meeting has recorded minutes attached. Deleting it removes the meeting record but the minutes document will be orphaned."
-        : "This will remove the meeting from the schedule. This action cannot be undone.",
+        ? "This meeting has minutes with recorded content. Deleting it also deletes its agenda and minutes. This action cannot be undone."
+        : "This will remove the meeting along with its agenda and minutes scaffolding. This action cannot be undone.",
       confirmLabel: "Delete",
       tone: "danger",
     });
@@ -232,9 +238,16 @@ export function MeetingsPage() {
   if (society === null) return <SeedPrompt />;
   const save = async () => {
     if (!form) return;
-    if (isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays)) {
-      toast.error(`General meetings need ${effectiveNoticeMinDays}–${effectiveNoticeMaxDays} days of notice.`);
-      return;
+    // Only hard-block on creation with less than the minimum notice — the notice
+    // window governs when notice is sent, not how far ahead a meeting may be
+    // scheduled, and edits to past/held meetings must stay possible. Scheduling
+    // beyond the max is allowed; the drawer shows an advisory warning instead.
+    if (!editingId && isGeneralMeeting(form.type)) {
+      const days = daysUntil(form.scheduledAt);
+      if (days == null || days < effectiveNoticeMinDays) {
+        toast.error(`General meetings need at least ${effectiveNoticeMinDays} days of notice.`);
+        return;
+      }
     }
     if (editingId) {
       await updateMeeting({
@@ -280,7 +293,7 @@ export function MeetingsPage() {
                 Notice: {noticeMinDays}–{noticeMaxDays} days
               </Pill>
             </Tooltip>
-            <div className="segmented" role="tablist" aria-label="Meeting view">
+            <div className="segmented" role="group" aria-label="Meeting view">
               <button
                 type="button"
                 className={`segmented__btn${viewMode === "list" ? " is-active" : ""}`}
@@ -399,7 +412,13 @@ export function MeetingsPage() {
                   );
                 }
                 if (field.name === "status") return <Badge tone={meetingStatusTone(record.status)}>{record.status}</Badge>;
-                if (field.name === "minutes") return record.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>;
+                if (field.name === "minutes") {
+                  const minutesRecord = minutesByMeeting.get(String(record._id));
+                  if (minutesRecord?.approvedAt) return <Badge tone="success">Approved</Badge>;
+                  if (hasStartedMinutesDraft(minutesRecord)) return <Badge tone="info">Draft</Badge>;
+                  if (record.status === "Held") return <Badge tone="warn">Needs minutes</Badge>;
+                  return <span className="muted">—</span>;
+                }
                 return undefined;
               }}
               renderRowActions={(row) => (
@@ -425,7 +444,9 @@ export function MeetingsPage() {
       >
         {form && (
           <div>
-            {isGeneralMeeting(form.type) && !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays) ? (
+            {isGeneralMeeting(form.type) &&
+            (daysUntil(form.scheduledAt) ?? 0) >= 0 &&
+            !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays) ? (
               <div className="flag flag--warn" style={{ marginBottom: 12 }}>
                 <AlertTriangle />
                 <div>
@@ -469,6 +490,15 @@ export function MeetingsPage() {
                 <DateTimeInput value={form.scheduledAt} onChange={(v) => setForm({ ...form, scheduledAt: v })} />
               </Field>
             </div>
+            {editingId && (
+              <Field label="Status">
+                <Select
+                  value={form.status}
+                  onChange={(v) => setForm({ ...form, status: v })}
+                  options={["Scheduled", "Held", "Cancelled"].map((s) => ({ value: s, label: s }))}
+                />
+              </Field>
+            )}
             <Field label="Venue / link">
               <NameAutocomplete
                 value={form.location}
@@ -511,6 +541,7 @@ export function MeetingsPage() {
               if (!Number.isFinite(draftTs)) return null;
               const overlaps = (meetings ?? []).filter(
                 (m) =>
+                  m._id !== editingId &&
                   m.status !== "Cancelled" &&
                   Math.abs(new Date(m.scheduledAt).getTime() - draftTs) <= OVERLAP_WINDOW_MS,
               );
@@ -541,27 +572,8 @@ export function MeetingsPage() {
           </div>
         )}
       </Drawer>
-
-      <ContextMenu
-        position={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
-        sections={contextMenu ? meetingMenuSections(contextMenu.meeting) : []}
-        onClose={() => setContextMenu(null)}
-      />
     </div>
   );
-}
-
-function isGeneralMeeting(type: string) {
-  return type === "AGM" || type === "SGM";
-}
-
-function meetsNoticeWindow(value: string, minDays: number, maxDays: number) {
-  const scheduled = new Date(value).getTime();
-  if (!Number.isFinite(scheduled)) return false;
-  const now = Date.now();
-  const min = now + minDays * 864e5;
-  const max = now + maxDays * 864e5;
-  return scheduled >= min && scheduled <= max;
 }
 
 function numberOrUndefined(value: unknown) {

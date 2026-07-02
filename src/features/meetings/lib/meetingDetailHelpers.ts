@@ -14,9 +14,11 @@ export function slugifyFilePart(value: string) {
  * the Draft Minutes picker (hide started drafts) and the picker's auto-draft
  * handoff (don't clobber existing work).
  *
- * Top-level `motions` is intentionally not checked: meeting templates can
- * pre-populate motions, so non-empty `motions` doesn't always mean the user
- * has started drafting.
+ * Top-level `motions` presence alone is intentionally not checked: meeting
+ * templates can pre-populate motions, so a non-empty `motions` array doesn't
+ * always mean the user has started drafting. But a motion carrying recorded
+ * state — an outcome, a vote tally, or a mover/seconder — is user work and
+ * must count, or a re-draft could silently wipe recorded votes.
  */
 export function hasStartedMinutesDraft(record: any): boolean {
   if (!record) return false;
@@ -29,6 +31,14 @@ export function hasStartedMinutesDraft(record: any): boolean {
     if ((section.decisions?.length ?? 0) > 0) return true;
     if ((section.actionItems?.length ?? 0) > 0) return true;
     if (String(section.motionText ?? "").trim().length > 0) return true;
+  }
+  for (const motion of record.motions ?? []) {
+    const outcome = String(motion?.outcome ?? "").trim().toLowerCase();
+    if (outcome && outcome !== "pending") return true;
+    if (motion?.votesFor != null || motion?.votesAgainst != null || motion?.abstentions != null) return true;
+    if (motion?.movedBy || motion?.secondedBy) return true;
+    if (motion?.movedByMemberId || motion?.movedByDirectorId) return true;
+    if (motion?.secondedByMemberId || motion?.secondedByDirectorId) return true;
   }
   return false;
 }

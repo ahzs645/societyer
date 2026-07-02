@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "convex/react";
+import { api } from "@/lib/convexApi";
 import { Eye, EyeOff, FileDown, FileText, Printer } from "lucide-react";
 import { Badge, Field } from "../../../components/ui";
 import { Select } from "../../../components/Select";
@@ -16,6 +18,7 @@ import {
   SourceDocumentRow,
   gapStatusLabel,
   gapStatusTone,
+  isAgmStepDone,
   sourceLabelForExternalId,
 } from "./MeetingDetailSupport";
 import { MeetingTranscriptCard } from "./MeetingTranscriptCard";
@@ -134,6 +137,10 @@ export function MeetingSidebarColumn({
   draftingFromTranscript?: boolean;
 }) {
   const show = (panel: NonNullable<typeof visiblePanels>[number]) => visiblePanels.includes(panel);
+  const agmRun = useQuery(
+    api.agm.runForMeeting,
+    meeting?.type === "AGM" && show("agm") ? { meetingId: meeting._id } : "skip",
+  );
   return (
         <div className="col" style={{ gap: 16 }}>
           {show("details") && (
@@ -146,7 +153,7 @@ export function MeetingSidebarColumn({
                 <span className="meeting-detail-location-value">{meeting.location ?? "—"}</span>
               </Detail>
               <Detail label="Electronic">{meeting.electronic ? "Yes" : "No"}</Detail>
-              <Detail label="Notice sent">{meeting.noticeSentAt ?? "—"}</Detail>
+              <Detail label="Notice sent">{meeting.noticeSentAt ? formatDate(meeting.noticeSentAt) : "—"}</Detail>
               <Detail label="Quorum required">{quorumSnapshot.required ?? meeting.quorumRequired ?? "—"}</Detail>
               <Detail label="Quorum rule">{quorumSnapshot.label || meeting.quorumSourceLabel || "—"}</Detail>
               <Detail label="Legal guide">
@@ -358,7 +365,7 @@ export function MeetingSidebarColumn({
                 <Check ok={meeting.status === "Held"}>Meeting held</Check>
                 <Check ok={!!minutes}>Minutes recorded</Check>
                 <Check ok={!!minutes?.approvedAt}>Minutes approved at next meeting</Check>
-                <Check ok={false}>Annual report filed within 30 days</Check>
+                <Check ok={isAgmStepDone(agmRun, "annualReportFiled")}>Annual report filed within 30 days</Check>
                 <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>
                   See the <Link to={`/app/meetings/${meeting._id}/agm`}>AGM workflow</Link> for the authoritative,
                   step-by-step status of this meeting.

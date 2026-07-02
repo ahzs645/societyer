@@ -888,7 +888,11 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                             </summary>
 
                             <div className="meeting-minutes-section-item__body">
-                              {sectionEditIndex === index && sectionDraft ? renderSectionEditor("inline") : (
+                              {/* On mobile the editor renders once, in the
+                                  full-screen portal below — mounting a second
+                                  hidden instance here would steal the editor
+                                  refs and drop unflushed edits on save. */}
+                              {sectionEditIndex === index && sectionDraft && !isMobileSectionEditor ? renderSectionEditor("inline") : (
                                 <>
                                   {section.presenter && <p><strong>Presenter:</strong> {section.presenter}</p>}
                                   {section.discussion ? (

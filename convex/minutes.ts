@@ -33,6 +33,11 @@ const motion = v.object({
   decidedBy: v.optional(v.string()),
   sectionIndex: v.optional(v.number()),
   sectionTitle: v.optional(v.string()),
+  // Present on stored motions written by the agenda sync
+  // (shared/functions/agendas.ts); must be accepted when clients round-trip
+  // the stored array through update, or every such save is rejected.
+  motionTemplateId: v.optional(v.id("motionTemplates")),
+  motionId: v.optional(v.id("motions")),
 });
 
 const actionItem = v.object({
@@ -65,6 +70,11 @@ const minuteSection = v.object({
   type: v.optional(v.string()),
   presenter: v.optional(v.string()),
   discussion: v.optional(v.string()),
+  // Written into stored sections by the agenda sync; accepted here so clients
+  // can round-trip stored sections through update without validation errors.
+  motionText: v.optional(v.string()),
+  motionTemplateId: v.optional(v.id("motionTemplates")),
+  motionId: v.optional(v.id("motions")),
   reportSubmitted: v.optional(v.boolean()),
   decisions: v.optional(v.array(v.string())),
   actionItems: v.optional(v.array(actionItem)),
@@ -202,6 +212,10 @@ export const update = mutation({
       sourceReviewedAtISO: v.optional(v.string()),
       sourceReviewedByUserId: v.optional(v.id("users")),
       draftTranscript: v.optional(v.string()),
+      // Convex strips `undefined` patch fields from the wire, so unsetting
+      // approval needs explicit flags (same pattern as meetings.clearNoticeSent).
+      clearApproval: v.optional(v.boolean()),
+      clearApprovedInMeeting: v.optional(v.boolean()),
     }),
   },
   returns: v.any(),
@@ -281,7 +295,12 @@ export const generateDraft = action({
       detailedAttendance: draft.detailedAttendance,
       attendees: draft.attendees.length ? draft.attendees : meeting.attendeeIds,
       absent: draft.absent,
-      quorumMet: draft.attendees.length >= (meeting.quorumRequired ?? 0),
+      // Unknown quorum requirement means quorum is NOT established — every
+      // other creation path treats it that way (see meetings createPortable).
+      quorumMet:
+        meeting.quorumRequired == null
+          ? false
+          : draft.attendees.length >= meeting.quorumRequired,
       discussion: draft.discussion,
       sections: draft.sections,
       motions: draft.motions,

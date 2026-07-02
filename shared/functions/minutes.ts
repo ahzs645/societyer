@@ -372,10 +372,19 @@ export async function createPortable(ctx: PortableMutationCtx, args: any) {
 
 export async function updatePortable(
   ctx: PortableMutationCtx,
-  { id, patch }: { id: string; patch: any },
+  { id, patch: rawPatch }: { id: string; patch: any },
 ) {
   const minutes = await ctx.db.get(id);
   if (!minutes) throw new Error("Minutes not found");
+  // `undefined` fields are stripped from the wire, so unsetting approval
+  // arrives as explicit clear flags (mirrors meetings.clearNoticeSent).
+  const { clearApproval, clearApprovedInMeeting, ...patch } = rawPatch;
+  if (clearApproval) {
+    patch.approvedAt = undefined;
+    patch.approvedInMeetingId = undefined;
+  } else if (clearApprovedInMeeting) {
+    patch.approvedInMeetingId = undefined;
+  }
   if (patch.motions) {
     await assertMotionPersonLinksBelongToSociety(ctx, String(minutes.societyId), patch.motions);
   }

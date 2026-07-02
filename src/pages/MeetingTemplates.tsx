@@ -11,8 +11,10 @@ import { useToast } from "../components/Toast";
 import { ArrowLeft, BookOpen, CalendarPlus, ChevronDown, Copy, MinusCircle, Pencil, Plus, Save, Sparkles, Star, Trash2, X } from "lucide-react";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DateTimeInput } from "../components/DateTimeInput";
-import { Modal } from "../components/Modal";
+import { Modal, useConfirm } from "../components/Modal";
 import { toDateTimeLocalValue } from "../lib/format";
+import { useBylawRules } from "../hooks/useBylawRules";
+import { daysUntil, isGeneralMeeting } from "../features/meetings/lib/noticeWindow";
 
 type TemplateItemDraft = {
   title: string;
@@ -197,11 +199,26 @@ export function MeetingTemplatesPage() {
   const society = useSociety();
   const toast = useToast();
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const { rules } = useBylawRules();
   const templates = useQuery(api.meetingTemplates.list, society ? { societyId: society._id } : "skip");
   const remove = useMutation(api.meetingTemplates.remove);
   const duplicate = useMutation(api.meetingTemplates.duplicate);
   const seed = useMutation(api.meetingTemplates.seedDefaults);
   const createMeeting = useMutation(api.meetings.create);
+  const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
+
+  const handleDeleteTemplate = async (template: any) => {
+    const ok = await confirm({
+      title: `Delete "${template.name}"?`,
+      message: "Meetings already created from this template keep their agendas; new meetings will no longer be able to use it. This action cannot be undone.",
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
+    await remove({ templateId: template._id });
+    toast.success("Template deleted", template.name);
+  };
 
   // Schedule-from-template modal: prefilled from the chosen template, then
   // creates a meeting seeded with the template's agenda (meetings.create seeds
@@ -226,6 +243,15 @@ export function MeetingTemplatesPage() {
 
   const confirmSchedule = async () => {
     if (!society || !scheduleDraft || !scheduleDraft.title.trim()) return;
+    // Same guard as the Meetings page: creating a general meeting with less
+    // than the minimum notice is a compliance failure, so block it here too.
+    if (isGeneralMeeting(scheduleDraft.type)) {
+      const days = daysUntil(scheduleDraft.scheduledAt);
+      if (days == null || days < noticeMinDays) {
+        toast.error(`General meetings need at least ${noticeMinDays} days of notice.`);
+        return;
+      }
+    }
     setScheduling(true);
     try {
       const meetingId = await createMeeting({
@@ -266,7 +292,11 @@ export function MeetingTemplatesPage() {
                 type="button"
                 onClick={async () => {
                   const result = await seed({ societyId: society._id });
-                  toast.success(`Added ${result.inserted} starter template`);
+                  if (result.inserted > 0) {
+                    toast.success(`Added ${result.inserted} starter template${result.inserted === 1 ? "" : "s"}`);
+                  } else {
+                    toast.info("Starter templates already exist.");
+                  }
                 }}
               >
                 <Sparkles size={12} /> Seed starter
@@ -338,7 +368,7 @@ export function MeetingTemplatesPage() {
                     >
                       <Copy size={12} />
                     </button>
-                    <button className="btn-action btn-action--icon" type="button" onClick={() => remove({ templateId: template._id })} title="Delete template" aria-label={`Delete ${template.name}`}>
+                    <button className="btn-action btn-action--icon" type="button" onClick={() => { void handleDeleteTemplate(template); }} title="Delete template" aria-label={`Delete ${template.name}`}>
                       <Trash2 size={12} />
                     </button>
                   </div>
@@ -382,10 +412,10 @@ export function MeetingTemplatesPage() {
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Type">
-                <input
-                  className="input"
+                <Select
                   value={scheduleDraft.type}
-                  onChange={(event) => setScheduleDraft({ ...scheduleDraft, type: event.target.value })}
+                  onChange={(value) => setScheduleDraft({ ...scheduleDraft, type: value })}
+                  options={MEETING_TYPES.map((meetingType) => ({ value: meetingType, label: meetingType }))}
                 />
               </Field>
               <Field label="Date & time">
@@ -632,7 +662,7 @@ export function MeetingTemplateBuilderPage() {
 
                     <div className="meeting-minutes-section-item__body">
                       <div className="meeting-minutes-section-editor">
-                        <div className="meeting-minutes-section-editor__tabs" role="tablist" aria-label="Template agenda item editor">
+                        <div className="meeting-minutes-section-editor__tabs" role="group" aria-label="Template agenda item editor">
                           <button type="button" className={`meeting-minutes-section-editor-tab${activeItemTab === "details" ? " is-active" : ""}`} onClick={() => setActiveItemTab("details")}>
                             Details
                           </button>

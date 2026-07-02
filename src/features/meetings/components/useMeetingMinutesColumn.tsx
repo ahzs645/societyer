@@ -824,13 +824,21 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     // draft instead of the persisted section — otherwise unsaved notes,
     // decisions, or task changes would be silently discarded.
     const isEditingThis = sectionEditIndex === index && !!sectionDraft;
-    const sectionEmpty =
-      !section?.discussion &&
-      !section?.presenter &&
-      !(section?.decisions ?? []).length &&
-      !(section?.actionItems ?? []).length &&
-      !(section?.linkedTaskIds ?? []).length &&
-      !(motionMatchesBySection[index]?.length);
+    const sectionContentEmpty = (candidate: any, candidateIndex: number) =>
+      !candidate?.discussion &&
+      !candidate?.presenter &&
+      !(candidate?.decisions ?? []).length &&
+      !(candidate?.actionItems ?? []).length &&
+      !(candidate?.linkedTaskIds ?? []).length &&
+      !(motionMatchesBySection[candidateIndex]?.length);
+    // Removing a root cascades to its trailing sub-sections (see removeSection),
+    // so their content must count toward "is anything being lost?" too.
+    const childIndexes: number[] = [];
+    if ((section?.depth ?? 0) === 0) {
+      for (let i = index + 1; (sections[i]?.depth ?? 0) === 1; i += 1) childIndexes.push(i);
+    }
+    const childrenWithContent = childIndexes.filter((i) => !sectionContentEmpty(sections[i], i));
+    const sectionEmpty = sectionContentEmpty(section, index) && childrenWithContent.length === 0;
     const draftEmpty = !isEditingThis || (
       !sectionDraft?.discussion &&
       !sectionDraft?.presenter &&
@@ -845,11 +853,14 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     }
     const hasUnsavedDraftChanges = isEditingThis && !draftEmpty;
     const titleForPrompt = (isEditingThis ? sectionDraft?.title : section.title) || "Untitled section";
+    const childWarning = childIndexes.length
+      ? ` Its ${childIndexes.length} sub-item${childIndexes.length === 1 ? "" : "s"} will be removed too${childrenWithContent.length ? ", including recorded content" : ""}.`
+      : "";
     const ok = await confirm({
       title: `Delete "${titleForPrompt}"?`,
       message: hasUnsavedDraftChanges
-        ? "This section has unsaved changes. Removing it will discard those edits along with any existing notes, decisions, and action items."
-        : "Notes, decisions, and action items in this section will be removed.",
+        ? `This section has unsaved changes. Removing it will discard those edits along with any existing notes, decisions, and action items.${childWarning}`
+        : `Notes, decisions, and action items in this section will be removed.${childWarning}`,
       confirmLabel: "Delete section",
       tone: "danger",
     });
@@ -1164,7 +1175,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
           </>
         )}
 
-        <div className="meeting-minutes-section-editor__tabs" role="tablist" aria-label="Section editor areas">
+        <div className="meeting-minutes-section-editor__tabs" role="group" aria-label="Section editor areas">
           <button type="button" className={`meeting-minutes-section-editor-tab${sectionEditorTab === "notes" ? " is-active" : ""}`} onClick={() => setSectionEditorTab("notes")}>
             Notes
           </button>
@@ -1197,8 +1208,11 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               </span>
             </button>
             <Field label="Discussion notes" hint="Discussion/report points only. Use the toolbar for headings, lists, and more.">
+              {/* Exactly one editor instance is mounted at a time (inline on
+                  desktop, portal on mobile), so the flush ref always attaches
+                  to the visible editor. */}
               <MarkdownEditor
-                ref={isMobile ? undefined : sectionDiscussionRef}
+                ref={sectionDiscussionRef}
                 rows={8}
                 value={sectionDraft.discussion}
                 onChange={(markdown) => setSectionDraft({ ...sectionDraft, discussion: markdown })}

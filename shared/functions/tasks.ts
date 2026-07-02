@@ -99,17 +99,24 @@ export async function taskUpdate(
       completedAt?: string;
       completedByUserId?: string;
       completionNote?: string;
+      clearMeetingId?: boolean;
     };
   },
 ): Promise<void> {
   const task = await ctx.db.get(id);
   if (!task) return;
-  const next = { ...patch };
+  const { clearMeetingId, ...rest } = patch;
+  const next: Record<string, unknown> = { ...rest };
+  // `undefined` fields are stripped from the wire, so unlinking arrives as an
+  // explicit flag and is converted to an unset here.
+  if (clearMeetingId) next.meetingId = undefined;
   if (patch.status === "Done" && !task.completedAt) {
     next.completedAt = new Date().toISOString();
   }
   if (patch.status && patch.status !== "Done" && task.completedAt) {
-    next.completedAt = undefined as any;
+    next.completedAt = undefined;
+    next.completedByUserId = undefined;
+    next.completionNote = undefined;
   }
   await ctx.db.patch(id, next);
   if (patch.status) {

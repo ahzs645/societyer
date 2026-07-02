@@ -53,16 +53,19 @@ export function MeetingProxiesCard({
   const [holder, setHolder] = useState("");
   const [instructions, setInstructions] = useState("");
   const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const activeProxies = (proxies ?? []).filter((proxy: any) => !proxy.revokedAtISO);
   const effective = presentCount + activeProxies.length;
   const quorumMet = quorumRequired != null ? effective >= quorumRequired : null;
 
   const save = async () => {
+    if (saving) return;
     if (!grantor.trim() || !holder.trim()) {
       toast.error("Enter both the grantor and the proxy holder.");
       return;
     }
+    setSaving(true);
     try {
       await createProxy({
         societyId,
@@ -83,6 +86,8 @@ export function MeetingProxiesCard({
       // Surface bylaw-rule violations (proxy voting disabled, holder must be a
       // member, per-grantor limit) raised by the mutation.
       toast.error(error?.message ? String(error.message).replace(/^.*Error:\s*/, "") : "Could not appoint proxy.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -173,7 +178,9 @@ export function MeetingProxiesCard({
             </Field>
             <div className="row" style={{ gap: 6, justifyContent: "flex-end", marginTop: 8 }}>
               <button className="btn" onClick={() => { setAdding(false); }}>Cancel</button>
-              <button className="btn btn--accent" onClick={save}>Appoint</button>
+              <button className="btn btn--accent" onClick={save} disabled={saving}>
+                {saving ? "Appointing…" : "Appoint"}
+              </button>
             </div>
           </div>
         )}

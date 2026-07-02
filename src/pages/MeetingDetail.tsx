@@ -6,15 +6,15 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Drawer, EmptyState, Field } from "../components/ui";
 import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
 import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BookMarked, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
+import { ArrowLeft, BookMarked, Calendar, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
-import { isPostponedOutcome } from "../lib/motionGovernance";
+import { isPostponedOutcome, normalizeMotionOutcome } from "../lib/motionGovernance";
 import { escapeHtml } from "../lib/html";
 import { exportWordDocx } from "../lib/docx";
 import { exportPdfDownload, printPdfDocument } from "../lib/pdf";
@@ -386,7 +386,23 @@ export function MeetingDetailPage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!meeting) return <PageLoading />;
+  if (meeting === undefined) return <PageLoading />;
+  if (meeting === null) {
+    return (
+      <div className="page">
+        <EmptyState
+          icon={<Calendar size={18} />}
+          title="Meeting not found"
+          description="This meeting may have been deleted, or the link is out of date."
+          action={
+            <Link className="btn btn--accent" to="/app/meetings">
+              Back to meetings
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? [];
   const canonicalAgendaItems = agendaItemsFromRecord(agendaRecord);
@@ -554,8 +570,20 @@ export function MeetingDetailPage() {
     }
   };
 
-  const markHeld = () => updateMeeting({ id: meeting._id, patch: { status: "Held" } });
-  const reopenMeeting = () => updateMeeting({ id: meeting._id, patch: { status: "Scheduled" } });
+  const markHeld = async () => {
+    try {
+      await updateMeeting({ id: meeting._id, patch: { status: "Held" } });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not mark the meeting held");
+    }
+  };
+  const reopenMeeting = async () => {
+    try {
+      await updateMeeting({ id: meeting._id, patch: { status: "Scheduled" } });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not reopen the meeting");
+    }
+  };
 
   // Notice tracking for regular meetings (the AGM workflow has its own step).
   // Toggling is reversible, so no confirm. Clearing uses an explicit flag
@@ -582,7 +610,11 @@ export function MeetingDetailPage() {
   const startApprovalEdit = () => {
     if (!minutes) return;
     setApprovalEdit({
-      approvedAt: (minutes.approvedAt ?? new Date().toISOString()).slice(0, 10),
+      // Derive the date-picker value in LOCAL time — slicing the UTC ISO string
+      // walks the date back a day for users east of UTC on every edit cycle.
+      approvedAt: minutes.approvedAt
+        ? toDateTimeLocalValue(new Date(minutes.approvedAt)).slice(0, 10)
+        : toDateTimeLocalValue(new Date()).slice(0, 10),
       approvedInMeetingId: (minutes.approvedInMeetingId as string | undefined) ?? "",
     });
   };
@@ -592,9 +624,11 @@ export function MeetingDetailPage() {
       id: minutes._id,
       patch: {
         approvedAt: new Date(`${approvalEdit.approvedAt}T00:00:00`).toISOString(),
-        approvedInMeetingId: approvalEdit.approvedInMeetingId
-          ? (approvalEdit.approvedInMeetingId as Id<"meetings">)
-          : undefined,
+        // Convex strips `undefined` patch fields, so "Not specified" must be an
+        // explicit clear flag or a previously-set link can never be removed.
+        ...(approvalEdit.approvedInMeetingId
+          ? { approvedInMeetingId: approvalEdit.approvedInMeetingId as Id<"meetings"> }
+          : { clearApprovedInMeeting: true }),
       },
     });
     setApprovalEdit(null);
@@ -602,7 +636,7 @@ export function MeetingDetailPage() {
   };
   const clearApproval = async () => {
     if (!minutes) return;
-    await updateMinutes({ id: minutes._id, patch: { approvedAt: undefined, approvedInMeetingId: undefined } });
+    await updateMinutes({ id: minutes._id, patch: { clearApproval: true } });
     setApprovalEdit(null);
     toast.success("Approval cleared", "These minutes are no longer marked approved.");
   };
@@ -911,10 +945,15 @@ export function MeetingDetailPage() {
     };
   };
 
-  const exportToWord = () => {
+  const exportToWord = async () => {
     const args = buildExportArgs("docx");
     if (!args) return;
-    void exportWordDocx(args);
+    try {
+      await exportWordDocx(args);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Word export failed");
+      return;
+    }
     toast.success(
       publicCopyMode ? "Public minutes exported" : "Minutes exported",
       publicCopyMode
@@ -1625,7 +1664,8 @@ export function MeetingDetailPage() {
     toast.success("Task linked to meeting");
   };
   const unlinkTaskFromMeeting = async (taskId: string) => {
-    await updateTask({ id: taskId as Id<"tasks">, patch: { meetingId: undefined } });
+    // `meetingId: undefined` is stripped from the wire — use the explicit flag.
+    await updateTask({ id: taskId as Id<"tasks">, patch: { clearMeetingId: true } });
     toast.success("Task unlinked");
   };
   const applyTaskUpdate = async (taskId: string, patch: { status?: string; completionNote?: string }) => {
@@ -1977,12 +2017,17 @@ export function MeetingDetailPage() {
                     meetingId={meeting._id}
                     members={members ?? []}
                     presentCount={
-                      ((minutes?.detailedAttendance ?? []) as any[]).filter(
-                        (row) => row.quorumCounted !== false && row.status === "present",
-                      ).length || (minutes?.attendees?.length ?? 0)
+                      // When detailed attendance has been recorded, trust it —
+                      // even a legitimate 0 present. Only fall back to the plain
+                      // attendee list when no detailed roll call exists.
+                      ((minutes?.detailedAttendance ?? []) as any[]).length
+                        ? ((minutes?.detailedAttendance ?? []) as any[]).filter(
+                            (row) => row.quorumCounted !== false && row.status === "present",
+                          ).length
+                        : (minutes?.attendees?.length ?? 0)
                     }
                     quorumRequired={
-                      (quorumSnapshot as any)?.quorumRequired ??
+                      quorumSnapshot.required ??
                       meeting.quorumRequired ??
                       (minutes?.quorumRequired as number | undefined)
                     }
@@ -2070,14 +2115,16 @@ export function MeetingDetailPage() {
               </h2>
               {businessMotions.length ? (
                 <span className="card__subtitle">
-                  {businessMotions.filter((motion: any) => motion.outcome === "Carried").length} carried
+                  {/* Normalize before tallying — legacy data stores lowercase
+                      outcomes, which the carry-forward logic already accepts. */}
+                  {businessMotions.filter((motion: any) => normalizeMotionOutcome(motion.outcome) === "Carried").length} carried
                   {" / "}
-                  {businessMotions.filter((motion: any) => motion.outcome === "Defeated").length} defeated
+                  {businessMotions.filter((motion: any) => normalizeMotionOutcome(motion.outcome) === "Defeated").length} defeated
                   {" / "}
-                  {businessMotions.filter((motion: any) => motion.outcome === "Tabled" || motion.outcome === "Deferred").length} tabled/deferred
+                  {businessMotions.filter((motion: any) => isPostponedOutcome(motion.outcome)).length} tabled/deferred
                   {(() => {
                     const pending = businessMotions.filter(
-                      (motion: any) => !motion.outcome || motion.outcome === "Pending",
+                      (motion: any) => !motion.outcome || normalizeMotionOutcome(motion.outcome) === "Pending",
                     ).length;
                     return pending ? ` / ${pending} pending` : "";
                   })()}
@@ -2228,7 +2275,7 @@ export function MeetingDetailPage() {
             <Field label="Remote meeting URL">
               <input className="input" value={joinEdit.remoteUrl} onChange={(event) => setJoinEdit({ ...joinEdit, remoteUrl: event.target.value })} placeholder="https://..." />
             </Field>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="row" style={{ gap: 12 }}>
               <Field label="Meeting ID">
                 <input className="input" value={joinEdit.remoteMeetingId} onChange={(event) => setJoinEdit({ ...joinEdit, remoteMeetingId: event.target.value })} />
               </Field>

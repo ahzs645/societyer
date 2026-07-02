@@ -39,15 +39,21 @@ export function MinutesPage() {
   const records: any[] = useMemo(() => {
     return (minutes ?? []).map((m: any) => {
       const meeting = byId.get(m.meetingId);
+      // A minutes stub is auto-created for every meeting, so minutes for a
+      // meeting that hasn't been held yet aren't "Not met" / "Pending" — they
+      // just haven't happened. Render those neutrally instead of as failures.
+      const notHeldYet = meeting ? meeting.status === "Scheduled" : false;
       return {
         ...m,
-        meeting: meeting?.title ?? "Meeting",
+        meetingDeleted: !meeting,
+        meeting: meeting?.title ?? "Deleted meeting",
         meetingType: meeting?.type ?? "",
+        notHeldYet,
         motionCount: m.motions?.length ?? 0,
         pendingActions: (m.actionItems ?? []).filter((a: any) => !a.done).length,
-        quorum: m.quorumMet ? "Met" : "Not met",
+        quorum: notHeldYet ? "Not held yet" : m.quorumMet ? "Met" : "Not met",
         actions: (m.actionItems ?? []).filter((a: any) => !a.done).length > 0 ? "Open" : "Done",
-        approved: m.approvedAt ? formatDate(m.approvedAt) : "Pending",
+        approved: m.approvedAt ? formatDate(m.approvedAt) : notHeldYet ? "—" : "Pending",
       };
     });
   }, [minutes, byId]);
@@ -102,6 +108,9 @@ export function MinutesPage() {
             loading={tableData.loading || minutes === undefined}
             renderCell={({ record, field }) => {
               if (field.name === "meeting") {
+                if (record.meetingDeleted) {
+                  return <span className="muted">Deleted meeting</span>;
+                }
                 return (
                   <>
                     <RecordChip
@@ -116,9 +125,15 @@ export function MinutesPage() {
                 );
               }
               if (field.name === "heldAt") return <span className="mono">{formatDate(record.heldAt)}</span>;
-              if (field.name === "quorum") return record.quorumMet ? <Badge tone="success">Met</Badge> : <Badge tone="danger">Not met</Badge>;
+              if (field.name === "quorum") {
+                if (record.notHeldYet) return <Badge tone="neutral">Not held yet</Badge>;
+                return record.quorumMet ? <Badge tone="success">Met</Badge> : <Badge tone="danger">Not met</Badge>;
+              }
               if (field.name === "actions") return record.pendingActions > 0 ? <Badge tone="warn">{record.pendingActions} open</Badge> : <Badge tone="success">All done</Badge>;
-              if (field.name === "approved") return record.approvedAt ? <Badge tone="success">{formatDate(record.approvedAt)}</Badge> : <Badge tone="warn">Pending</Badge>;
+              if (field.name === "approved") {
+                if (record.approvedAt) return <Badge tone="success">{formatDate(record.approvedAt)}</Badge>;
+                return record.notHeldYet ? <span className="muted">—</span> : <Badge tone="warn">Pending</Badge>;
+              }
               return undefined;
             }}
           />

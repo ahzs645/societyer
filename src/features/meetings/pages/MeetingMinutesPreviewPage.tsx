@@ -13,7 +13,8 @@ import { exportWordDocx } from "../../../lib/docx";
 import { exportPdfDownload, printPdfDocument } from "../../../lib/pdf";
 import { renderMinutesHtml } from "../lib/minutesRenderer";
 import { MinutesDocumentPreview } from "../components/MinutesDocumentPreview";
-import { getQuorumSnapshot } from "../components/MeetingDetailSupport";
+import { getQuorumSnapshot, personLinkCandidates } from "../components/MeetingDetailSupport";
+import { motionPersonDisplayName } from "../../../components/MotionEditor";
 import { agendaEntriesFromRecord } from "../lib/meetingDetailHelpers";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "../lib/minutesExportStyles";
 import {
@@ -28,6 +29,10 @@ export function MeetingMinutesPreviewPage() {
   const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const agendaRecord = useQuery(api.agendas.getForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  // Needed to resolve ID-linked movers/seconders to display names, so this
+  // page's exports match the meeting-detail Export tab output.
+  const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
+  const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
@@ -56,12 +61,21 @@ export function MeetingMinutesPreviewPage() {
     includeTranscriptInExport,
   ]);
 
-  if (society === undefined || !meeting || minutes === undefined) return <div className="page">Loading…</div>;
+  if (society === undefined || meeting === undefined || minutes === undefined) return <div className="page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
+  if (meeting === null) {
+    return (
+      <div className="page">
+        Meeting not found — it may have been deleted.{" "}
+        <Link to="/app/meetings">Back to meetings</Link>
+      </div>
+    );
+  }
   if (!minutes) return <div className="page">No minutes recorded for this meeting.</div>;
 
   const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? [];
   const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
+  const motionPeople = personLinkCandidates(members, directors);
   const selectedMinutesExportStyle =
     MINUTES_EXPORT_STYLES.find((style) => style.id === minutesExportStyle) ??
     MINUTES_EXPORT_STYLES[0];
@@ -99,7 +113,11 @@ export function MeetingMinutesPreviewPage() {
       quorumSourceLabel: quorumSnapshot.label,
       discussion: minutes.discussion,
       sections: minutes.sections ?? null,
-      motions: minutes.motions as any,
+      motions: (minutes.motions as any[]).map((m: any) => ({
+        ...m,
+        movedBy: motionPersonDisplayName(m.movedBy, motionPeople, { memberId: m.movedByMemberId, directorId: m.movedByDirectorId }),
+        secondedBy: motionPersonDisplayName(m.secondedBy, motionPeople, { memberId: m.secondedByMemberId, directorId: m.secondedByDirectorId }),
+      })) as any,
       decisions: minutes.decisions,
       actionItems: minutes.actionItems as any,
       approvedAt: minutes.approvedAt ?? null,

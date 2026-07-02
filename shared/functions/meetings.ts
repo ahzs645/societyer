@@ -290,11 +290,20 @@ async function buildTemplateContext(ctx: any, societyId: any, scheduledAt: strin
     .withIndex("by_society_date", (q: any) => q.eq("societyId", societyId))
     .order("desc")
     .collect();
-  const previous = meetings.find((meeting: any) => {
-    if (meeting.status === "Cancelled") return false;
-    if (!meeting.scheduledAt || meeting.scheduledAt >= scheduledAt) return false;
-    return true;
-  });
+  // Compare as timestamps, not strings — stored values mix naive local
+  // ("2026-07-15T19:00") and UTC ("...Z") formats, which don't sort together.
+  const scheduledTs = new Date(scheduledAt).getTime();
+  const candidates = meetings
+    .filter((meeting: any) => {
+      if (meeting.status === "Cancelled" || !meeting.scheduledAt) return false;
+      const ts = new Date(meeting.scheduledAt).getTime();
+      return Number.isFinite(ts) && Number.isFinite(scheduledTs) && ts < scheduledTs;
+    })
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime(),
+    );
+  const previous = candidates[0];
   return {
     previousMeetingTitle: previous?.title ?? "previous meeting",
     previousMeetingDate: previous?.scheduledAt ? formatLongDate(previous.scheduledAt) : "the previous meeting date",
@@ -701,7 +710,26 @@ export async function updatePortable(
   const { clearNoticeSent, ...rest } = patch;
   const next: Record<string, unknown> = { ...rest };
   if (clearNoticeSent) next.noticeSentAt = undefined;
+  const existing = rest.scheduledAt !== undefined ? await ctx.db.get(id) : null;
   await ctx.db.patch(id, next);
+  // Rescheduling: keep the auto-created minutes stub in step. Only touch
+  // minutes whose heldAt still mirrors the old scheduledAt and that aren't
+  // approved — a manually recorded or approved heldAt must never move.
+  if (
+    existing &&
+    rest.scheduledAt &&
+    rest.scheduledAt !== existing.scheduledAt
+  ) {
+    const minutesRows = await ctx.db
+      .query("minutes")
+      .withIndex("by_meeting", (q) => q.eq("meetingId", id))
+      .collect();
+    for (const row of minutesRows) {
+      if (!row.approvedAt && row.heldAt === existing.scheduledAt) {
+        await ctx.db.patch(row._id, { heldAt: rest.scheduledAt });
+      }
+    }
+  }
 }
 
 export async function markSourceReviewPortable(
@@ -791,6 +819,25 @@ export async function setPackageReviewStatusPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  // Cascade to the scaffolding created alongside the meeting so deletes don't
+  // leave orphan minutes/agendas that render as broken links elsewhere.
+  const agendas = await ctx.db
+    .query("agendas")
+    .withIndex("by_meeting", (q) => q.eq("meetingId", id))
+    .collect();
+  for (const agenda of agendas) {
+    const items = await ctx.db
+      .query("agendaItems")
+      .withIndex("by_agenda", (q) => q.eq("agendaId", agenda._id))
+      .collect();
+    for (const item of items) await ctx.db.delete(item._id);
+    await ctx.db.delete(agenda._id);
+  }
+  const minutesRows = await ctx.db
+    .query("minutes")
+    .withIndex("by_meeting", (q) => q.eq("meetingId", id))
+    .collect();
+  for (const row of minutesRows) await ctx.db.delete(row._id);
   await ctx.db.delete(id);
 }
 

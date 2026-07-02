@@ -103,10 +103,18 @@ test.describe("Meeting agenda minutes workflow", () => {
 
     await page.goto("/demo/app/agendas", { waitUntil: "networkidle" });
     await page.getByRole("button", { name: /Q2 board meeting agenda.*Apr 23, 2026.*Draft/ }).click();
-    const agendaInputValues = await page.locator("input.input").evaluateAll((inputs) =>
-      inputs.map((input) => (input as HTMLInputElement).value),
-    );
-    expect(agendaInputValues).toContain("Volunteer program update");
+    // Demo-mode data hydrates from IndexedDB asynchronously after page load —
+    // the first render shows the fixture seed, then the persisted overlay
+    // arrives. Poll instead of a one-shot read so we don't race hydration.
+    await expect
+      .poll(
+        () =>
+          page.locator("input.input").evaluateAll((inputs) =>
+            inputs.map((input) => (input as HTMLInputElement).value),
+          ),
+        { timeout: 10_000 },
+      )
+      .toContain("Volunteer program update");
 
     expect(errors).toEqual([]);
   });
