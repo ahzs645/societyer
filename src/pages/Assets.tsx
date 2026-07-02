@@ -329,7 +329,7 @@ export function AssetsPage() {
           icon: <ExternalLink size={14} />,
           onSelect: () => navigate(`/app/assets/${row._id}`),
         },
-        ...(row.category === "Consumable" && society.consumableIntakeCountPromptEnabled
+        ...(row.category === "Consumable"
           ? [
               {
                 id: "stock",
@@ -495,9 +495,17 @@ export function AssetsPage() {
         }
       >
         <div className="form-grid">
-          <Field label="Current amount left" hint="Count what is still on hand before adding the new stock.">
-            <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={stockForm.observedQuantityBefore} onChange={(event) => setStockForm({ ...stockForm, observedQuantityBefore: event.target.value })} />
-          </Field>
+          {/* The count prompt is a society setting: when off, we trust the
+              register's current on-hand instead of asking for a recount. */}
+          {society.consumableIntakeCountPromptEnabled ? (
+            <Field label="Current amount left" hint="Count what is still on hand before adding the new stock.">
+              <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={stockForm.observedQuantityBefore} onChange={(event) => setStockForm({ ...stockForm, observedQuantityBefore: event.target.value })} />
+            </Field>
+          ) : (
+            <Field label="Current on hand">
+              <input className="input" readOnly value={stockForm.observedQuantityBefore || "0"} />
+            </Field>
+          )}
           <Field label="Amount being added">
             <input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={stockForm.quantityAdded} onChange={(event) => setStockForm({ ...stockForm, quantityAdded: event.target.value })} />
           </Field>

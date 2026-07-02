@@ -333,6 +333,13 @@
   font-size: token('fs-xs');
 }
 .chip--rounded { border-radius: token('r-pill'); }
+/* Code-ish values (webhook event types, permission keys) read better as
+ * crisp squares than pills — keep any <code class="chip"> square. */
+code.chip,
+.chip--square {
+  border-radius: token('r-sm');
+  font-family: token('font-mono');
+}
 .chip--transparent {
   background: transparent;
   border-color: transparent;
