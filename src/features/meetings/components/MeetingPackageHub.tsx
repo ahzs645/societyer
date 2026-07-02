@@ -244,20 +244,14 @@ export function MeetingPackageHub({
                   Imported source data and board-package readiness before distribution.
                 </div>
               </div>
-              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                {(sourceReviewStatus === "imported_needs_review" ||
-                  sourceReviewStatus === "rejected" ||
-                  sourceReviewStatus === "source_reviewed") && (
-                  <Badge tone={sourceReviewTone(sourceReviewStatus)}>{sourceReviewLabel(sourceReviewStatus)}</Badge>
-                )}
-                <Badge tone={packageReviewTone(packageReviewStatus)}>{packageReviewLabel(packageReviewStatus)}</Badge>
-                {packageReviewBlockers.length > 0 && (
-                  <Badge tone="warn">
-                    <AlertTriangle size={10} style={{ marginRight: 3, verticalAlign: -1 }} />
-                    {packageReviewBlockers.length} blocker{packageReviewBlockers.length === 1 ? "" : "s"}
-                  </Badge>
-                )}
-              </div>
+              {/* Per-review status chips live on the drawer rows below — only the
+                  blockers count (shown nowhere else) belongs up here. */}
+              {packageReviewBlockers.length > 0 && (
+                <Badge tone="warn">
+                  <AlertTriangle size={10} style={{ marginRight: 3, verticalAlign: -1 }} />
+                  {packageReviewBlockers.length} blocker{packageReviewBlockers.length === 1 ? "" : "s"}
+                </Badge>
+              )}
             </div>
 
             <div className="meeting-package-drawers">
