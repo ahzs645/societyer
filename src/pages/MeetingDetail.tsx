@@ -188,7 +188,17 @@ export function MeetingDetailPage() {
   const [busy, setBusy] = useState(false);
   const [pipelineBusy, setPipelineBusy] = useState(false);
   const [transcriptEdit, setTranscriptEdit] = useState<string | null>(null);
-  const [agendaEdit, setAgendaEdit] = useState<AgendaItemEntry[] | null>(null);
+  const [agendaEdit, setAgendaEditState] = useState<AgendaItemEntry[] | null>(null);
+  // Synchronous mirror of agendaEdit. "Save agenda" can be clicked in the same
+  // frame as the last keystroke (fast typists, automation); the button's
+  // onClick is a closure over the PREVIOUS render's state, so reading state
+  // there can silently drop the just-typed row. The ref is written at set time
+  // (not on commit), so saveAgenda always sees the latest rows.
+  const agendaEditRef = useRef<AgendaItemEntry[] | null>(null);
+  const setAgendaEdit = (value: AgendaItemEntry[] | null) => {
+    agendaEditRef.current = value;
+    setAgendaEditState(value);
+  };
   const [attendanceEdit, setAttendanceEdit] = useState<{
     people: { name: string; status: "present" | "absent" }[];
     quorumMet: boolean;
@@ -1232,11 +1242,13 @@ export function MeetingDetailPage() {
 
   const saveAgenda = async () => {
    try {
+    // Read the ref, not the state — see agendaEditRef above.
+    const editedRows = agendaEditRef.current ?? agendaEdit;
     // Clean: drop empty titles and force any leading depth-1 entry to depth 0
     // (a child without a preceding root is impossible on save).
     const cleaned: AgendaItemEntry[] = [];
     let hasRoot = false;
-    for (const entry of agendaEdit ?? []) {
+    for (const entry of editedRows ?? []) {
       const title = entry.title.trim();
       if (!title) continue;
       const depth: 0 | 1 = entry.depth === 1 && hasRoot ? 1 : 0;
@@ -2210,6 +2222,7 @@ export function MeetingDetailPage() {
             saveMinuteSections={saveMinuteSections}
             saveMinuteMotions={saveMotions}
             addSectionToBacklog={addSectionToBacklog}
+            adoptionTargets={adoptionTargets}
             onOpenMotions={() => setActiveTab("motions")}
             meetingTasks={linkedTasks}
             applyTaskUpdate={applyTaskUpdate}

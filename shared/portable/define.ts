@@ -100,8 +100,22 @@ export class PortableRuntime {
       db: this.db,
       capabilities: this.capabilities,
       runQuery: (name, args) => this.runQuery(name, args),
-      runMutation: (name, args) => this.runMutation(name, args),
+      // Nested mutations (ctx.runMutation inside a handler) run the child
+      // handler directly inside the CURRENT transaction rather than opening a
+      // new db.transaction(). Nesting must be a property of the call chain,
+      // not guessed from shared mutable state — the old overlay-presence check
+      // in LocalStoreDb let an unrelated concurrent mutation silently join
+      // (and possibly lose its writes with) whatever transaction happened to
+      // be in flight.
+      runMutation: (name, args) => this.runMutationNested(name, args),
     };
+  }
+
+  private async runMutationNested<Result = unknown>(name: string, args: Record<string, any> = {}): Promise<Result> {
+    const def = this.registry.get(name);
+    if (!def) throw new Error(`Portable function not registered locally: ${name}`);
+    if (def.kind !== "mutation") throw new Error(`${name} is a ${def.kind}, not a mutation`);
+    return def.handler(this.mutationCtx(), args) as Promise<Result>;
   }
 
   async runQuery<Result = unknown>(name: string, args: Record<string, any> = {}): Promise<Result> {

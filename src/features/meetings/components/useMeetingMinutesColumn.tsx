@@ -12,7 +12,7 @@ import { useConfirm } from "../../../components/Modal";
 import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline } from "../../../components/LegalGuide";
 import { Segmented } from "../../../components/primitives";
-import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../../../components/MotionEditor";
+import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionAdoptionTarget, type MotionEditorHandle } from "../../../components/MotionEditor";
 import { NameAutocomplete } from "../../../components/NameAutocomplete";
 import { DatePicker } from "../../../components/DatePicker";
 import { SignaturePanel } from "../../../components/SignaturePanel";
@@ -85,6 +85,9 @@ export type MeetingMinutesColumnProps = {
   setTranscriptEdit: (value: string | null) => void;
   saveTranscriptEditText: () => Promise<void> | void;
   savingTranscript: boolean;
+  /** Prior meetings' minutes offered by the "Adopts minutes of" picker on the
+   *  section editor's embedded motion editor. */
+  adoptionTargets?: MotionAdoptionTarget[];
 };
 
 export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
@@ -116,6 +119,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   setTranscriptEdit,
   saveTranscriptEditText,
   savingTranscript,
+  adoptionTargets,
   } = props;
   const sections = Array.isArray(minutes?.sections) ? minutes.sections : [];
   const motions = Array.isArray(minutes?.motions) ? minutes.motions as Motion[] : [];
@@ -1245,6 +1249,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               onChange={(next) => { void saveMinuteMotions(next); }}
               directorNames={assigneeOptions}
               people={motionPeople}
+              adoptionTargets={adoptionTargets}
               agendaSections={sections.map((section: any) => ({
                 title: section.title || "Untitled section",
                 discussion: section.discussion ?? "",
