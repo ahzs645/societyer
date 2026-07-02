@@ -29,7 +29,6 @@ import { redactText, RedactOptions } from "../lib/redactPii";
 import { getLegalGuideRules, resolveJurisdictionCode } from "../lib/jurisdictionGuideTracks";
 import {
   buildAccessGrantCandidates,
-  getPackageReadiness,
   grantKey,
   materialEffectiveStatus,
 } from "../features/meetings/lib/meetingMaterialAccess";
@@ -162,7 +161,6 @@ export function MeetingDetailPage() {
   const syncAgendaForMeeting = useMutation(api.agendas.syncForMeeting);
   const updateTask = useMutation(api.tasks.update);
   const createTask = useMutation(api.tasks.create);
-  const societyTasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
   const backfillMinutesQuorum = useMutation(api.minutes.backfillQuorumSnapshot);
   const createBacklogFromMinutesMotion = useMutation(api.motionBacklog.createFromMinutesMotion);
   const createBacklogFromMinutesSection = useMutation(api.motionBacklog.createFromMinutesSection);
@@ -533,10 +531,8 @@ export function MeetingDetailPage() {
       : "warn";
   const packageMaterials = meetingPackage?.materials ?? [];
   const linkedTasks = meetingPackage?.tasks ?? [];
-  const linkableTasks = ((societyTasks ?? []) as any[]).filter((task: any) => !task.meetingId);
   const currentDirectors = ((directors ?? []) as any[]).filter(isCurrentDirector);
   const joinDetails = getMeetingJoinDetails(meeting, minutes);
-  const packageReadiness = getPackageReadiness(packageMaterials);
   const sourceReviewStatus = meeting.sourceReviewStatus ?? minutes?.sourceReviewStatus ?? "not_applicable";
   const packageReviewStatus = meeting.packageReviewStatus ?? inferredPackageReviewStatus(packageMaterials, sourceReviewStatus, meeting);
   const packageReviewBlockers = getPackageReviewBlockers(packageMaterials, sourceReviewStatus, meeting);
@@ -1776,25 +1772,6 @@ export function MeetingDetailPage() {
     );
   };
 
-  const setLinkedTaskStatus = async (taskId: string, status: string) => {
-    await updateTask({
-      id: taskId as Id<"tasks">,
-      patch: {
-        status,
-        completedByUserId: status === "Done" && actingUserId ? actingUserId : undefined,
-      },
-    });
-  };
-  const linkTaskToMeeting = async (taskId: string) => {
-    if (!meeting?._id) return;
-    await updateTask({ id: taskId as Id<"tasks">, patch: { meetingId: meeting._id as Id<"meetings"> } });
-    toast.success("Task linked to meeting");
-  };
-  const unlinkTaskFromMeeting = async (taskId: string) => {
-    // `meetingId: undefined` is stripped from the wire — use the explicit flag.
-    await updateTask({ id: taskId as Id<"tasks">, patch: { clearMeetingId: true } });
-    toast.success("Task unlinked");
-  };
   const applyTaskUpdate = async (taskId: string, patch: { status?: string; completionNote?: string }) => {
     const update: any = { ...patch };
     if (patch.status === "Done" && actingUserId) update.completedByUserId = actingUserId;
@@ -2046,7 +2023,7 @@ export function MeetingDetailPage() {
           { id: "overview", label: "Overview", icon: <ClipboardCheck size={12} /> },
           { id: "minutes", label: "Agenda & minutes", icon: <FileText size={12} /> },
           { id: "motions", label: "Motions", count: businessMotions.length, icon: <Gavel size={12} /> },
-          { id: "package", label: "Package", count: packageMaterials.length, icon: <PackageCheck size={12} /> },
+          { id: "package", label: "Materials", count: packageMaterials.length, icon: <PackageCheck size={12} /> },
           { id: "export", label: "Export", icon: <Settings2 size={12} /> },
           { id: "sources", label: "Sources", count: linkedSourceCount, icon: <Download size={12} /> },
         ]}
@@ -2298,10 +2275,7 @@ export function MeetingDetailPage() {
             minutes={minutes}
             agenda={agenda}
             packageMaterials={packageMaterials}
-            linkedTasks={linkedTasks}
-            linkableTasks={linkableTasks}
             joinDetails={joinDetails}
-            packageReadiness={packageReadiness}
             sourceReviewStatus={sourceReviewStatus}
             packageReviewStatus={packageReviewStatus}
             packageReviewBlockers={packageReviewBlockers}
@@ -2318,10 +2292,6 @@ export function MeetingDetailPage() {
             markPackageReady={markPackageReady}
             sendPackageBackToReview={sendPackageBackToReview}
             removeMeetingMaterial={removeMeetingMaterial}
-            setLinkedTaskStatus={setLinkedTaskStatus}
-            linkTaskToMeeting={linkTaskToMeeting}
-            unlinkTaskFromMeeting={unlinkTaskFromMeeting}
-            createTaskForMeeting={createTaskForMeeting}
           />
         )}
 
