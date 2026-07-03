@@ -25,7 +25,10 @@
   font-weight: 500;
   color: token('text-secondary');
   border: 1px solid token('border');
-  background: transparent;
+  /* A visible surface + hairline shadow so these read as buttons, not
+   * labels — flat transparent chips kept being missed as clickable. */
+  background: token('bg-base');
+  box-shadow: token('shadow-xs');
   white-space: nowrap;
   transition: background 0.08s ease, color 0.08s ease;
 }
@@ -36,6 +39,7 @@
   background: token('bg-base');
   border-color: token('border-strong');
   color: token('text-primary');
+  font-weight: 600;
 }
 
 /* Semantic tints — used by vote/outcome actions in MotionEditor */

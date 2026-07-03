@@ -14,6 +14,10 @@ type Props = {
   className?: string;
   style?: React.CSSProperties;
   id?: string;
+  /** Open the calendar popover immediately on mount (inline cell editors). */
+  defaultOpen?: boolean;
+  /** Fires whenever the popover closes (pick, outside click, Escape). */
+  onClose?: () => void;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean;
 };
@@ -58,12 +62,19 @@ export function DatePicker({
   className,
   style,
   id,
+  defaultOpen = false,
+  onClose,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
 }: Props) {
   const selected = parseISO(value);
   const today = new Date();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
+  const wasOpenRef = useRef(defaultOpen);
+  useEffect(() => {
+    if (wasOpenRef.current && !open) onClose?.();
+    wasOpenRef.current = open;
+  }, [open, onClose]);
   const [viewMonth, setViewMonth] = useState(() => {
     const d = selected ?? today;
     return new Date(d.getFullYear(), d.getMonth(), 1);

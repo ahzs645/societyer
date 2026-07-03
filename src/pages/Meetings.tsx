@@ -19,14 +19,13 @@ import { DateTimeInput } from "../components/DateTimeInput";
 import { Toggle } from "../components/Controls";
 import { Tooltip } from "../components/Tooltip";
 import { useToast } from "../components/Toast";
-import { Plus, Calendar, Tag, AlertTriangle, BookMarked, Monitor, MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Calendar, AlertTriangle, BookMarked, Monitor, Pencil, Trash2, ExternalLink } from "lucide-react";
 import { formatDateTime, toDateTimeLocalValue } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
-import { CalendarView } from "../components/CalendarView";
 import type { ToneVariant } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { NameAutocomplete } from "../components/NameAutocomplete";
-import { Menu, type MenuSection } from "../components/Menu";
+import { type MenuSection } from "../components/Menu";
 import { useConfirm } from "../components/Modal";
 import { hasStartedMinutesDraft } from "../features/meetings/lib/meetingDetailHelpers";
 import { daysUntil, isGeneralMeeting, meetsNoticeWindow } from "../features/meetings/lib/noticeWindow";
@@ -79,7 +78,6 @@ export function MeetingsPage() {
     | undefined;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<MeetingDraft | null>(null);
-  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [params, setParams] = useSearchParams();
   const formRules = useQuery(
     api.bylawRules.getForDate,
@@ -293,24 +291,6 @@ export function MeetingsPage() {
                 Notice: {noticeMinDays}–{noticeMaxDays} days
               </Pill>
             </Tooltip>
-            <div className="segmented" role="group" aria-label="Meeting view">
-              <button
-                type="button"
-                className={`segmented__btn${viewMode === "list" ? " is-active" : ""}`}
-                aria-pressed={viewMode === "list"}
-                onClick={() => setViewMode("list")}
-              >
-                List
-              </button>
-              <button
-                type="button"
-                className={`segmented__btn${viewMode === "calendar" ? " is-active" : ""}`}
-                aria-pressed={viewMode === "calendar"}
-                onClick={() => setViewMode("calendar")}
-              >
-                Calendar
-              </button>
-            </div>
             <button className="btn-action btn-action--primary" type="button" onClick={() => openNew()}>
               <Plus size={12} /> New meeting
             </button>
@@ -318,25 +298,7 @@ export function MeetingsPage() {
         }
       />
 
-      {viewMode === "calendar" ? (
-        <div className="card">
-          <div className="card__head">
-            <h2 className="card__title">Meeting calendar</h2>
-            <span className="card__subtitle">Click a meeting to open its hub.</span>
-          </div>
-          <div className="card__body">
-            <CalendarView
-              items={meetings ?? []}
-              getDate={(meeting) => meeting.scheduledAt}
-              getLabel={(meeting) => `${meetingTimeLabel(meeting.scheduledAt)} ${meeting.title}`}
-              getTone={(meeting) => meetingStatusTone(meeting.status)}
-              getId={(meeting) => meeting._id}
-              onSelect={(meeting) => navigate(`/app/meetings/${meeting._id}`)}
-            />
-          </div>
-        </div>
-      ) : (
-        showMetadataWarning ? (
+      {showMetadataWarning ? (
           <RecordTableMetadataEmpty societyId={society?._id} objectLabel="meeting" />
         ) : tableData.objectMetadata ? (
           <RecordTableScope
@@ -344,7 +306,7 @@ export function MeetingsPage() {
             objectMetadata={tableData.objectMetadata}
             hydratedView={tableData.hydratedView}
             records={meetings ?? []}
-            onRecordClick={(_recordId, record) => openEdit(record)}
+            onRecordClick={(recordId) => navigate(`/app/meetings/${recordId}`)}
             onUpdate={async ({ recordId, fieldName, value }) => {
               if (fieldName === "minutes") return;
               await updateMeeting({ id: recordId as Doc<"meetings">["_id"], patch: { [fieldName]: value } as any });
@@ -421,22 +383,10 @@ export function MeetingsPage() {
                 }
                 return undefined;
               }}
-              renderRowActions={(row) => (
-                <Menu
-                  align="right"
-                  minWidth={180}
-                  sections={meetingMenuSections(row)}
-                  trigger={
-                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Actions for ${row.title}`} onClick={(e) => e.stopPropagation()}>
-                      <MoreHorizontal size={14} />
-                    </button>
-                  }
-                />
-              )}
+              rowMenuSections={meetingMenuSections}
             />
           </RecordTableScope>
-        ) : null
-      )}
+        ) : null}
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title={editingId ? "Edit meeting" : "Schedule meeting"}
@@ -586,12 +536,6 @@ function meetingStatusTone(status: string): ToneVariant {
   if (status === "Held") return "success";
   if (status === "Cancelled") return "danger";
   return "warn";
-}
-
-function meetingTimeLabel(value: string) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "";
-  return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 function templateSummary(template: any) {

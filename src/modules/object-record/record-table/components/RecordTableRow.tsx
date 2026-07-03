@@ -1,5 +1,6 @@
 import { type ReactNode, useMemo } from "react";
-import { GripVertical, PanelRightOpen } from "lucide-react";
+import { GripVertical, MoreHorizontal, PanelRightOpen } from "lucide-react";
+import { Menu, type MenuSection } from "../../../../components/Menu";
 import { RecordTableRowContext } from "../contexts/RecordTableRowContext";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
@@ -12,6 +13,7 @@ export function RecordTableRow({
   selectable,
   showDragHandle = false,
   renderRowActions,
+  rowMenuSections,
   showOpenRecordAction = false,
   renderCell,
 }: {
@@ -20,6 +22,9 @@ export function RecordTableRow({
   selectable: boolean;
   showDragHandle?: boolean;
   renderRowActions?: (record: any) => ReactNode;
+  /** Menu sections rendered behind a trailing "…" kebab (and, via
+   * RecordTable, on row right-click). */
+  rowMenuSections?: (record: any) => MenuSection[];
   showOpenRecordAction?: boolean;
   renderCell?: RecordTableCellRenderer;
 }) {
@@ -76,7 +81,7 @@ export function RecordTableRow({
           renderCell={renderCell}
         />
       ))}
-      {(showOpenRecordAction || renderRowActions) && (
+      {(showOpenRecordAction || renderRowActions || rowMenuSections) && (
         <td
           className="record-table__row-actions-cell"
           onClick={(e) => e.stopPropagation()}
@@ -94,6 +99,27 @@ export function RecordTableRow({
               </button>
             )}
             {renderRowActions?.(record)}
+            {rowMenuSections && (
+              <Menu
+                align="right"
+                minWidth={180}
+                sections={rowMenuSections(record)}
+                trigger={
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm btn--icon"
+                    aria-label={`Actions for this ${objectMetadata.labelSingular?.toLowerCase() ?? "record"}`}
+                    // Focusing this button can nudge the table's scroll
+                    // container (focus scroll-into-view), and the menu
+                    // dismisses itself on scroll — so the first click would
+                    // open-then-instantly-close the menu.
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    <MoreHorizontal size={14} />
+                  </button>
+                }
+              />
+            )}
           </div>
         </td>
       )}

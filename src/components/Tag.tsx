@@ -6,7 +6,8 @@ import type { ReactNode } from "react";
  * badges in menus, etc).
  *
  * Modelled after Twenty CRM's `<Tag />`:
- *   - Fixed 20px height, 4px radius (crisp, not pillshaped).
+ *   - Fixed 20px height, pill radius (matches `.badge`/`.pill` so chips
+ *     share one shape everywhere).
  *   - 8px horizontal padding, 4px internal gap.
  *   - Three variants: `solid` (tonal bg), `outline` (dashed border), `border`
  *     (solid border). Outline is used for the "no value / clear" row in a

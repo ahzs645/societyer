@@ -317,7 +317,7 @@
   gap: 6px;
   padding: 2px 8px;
   height: 22px;
-  border-radius: token('r-sm');
+  border-radius: token('r-pill');
   background: token('bg-subtle');
   color: token('text-primary');
   border: 1px solid token('border');
@@ -333,6 +333,13 @@
   font-size: token('fs-xs');
 }
 .chip--rounded { border-radius: token('r-pill'); }
+/* Code-ish values (webhook event types, permission keys) read better as
+ * crisp squares than pills — keep any <code class="chip"> square. */
+code.chip,
+.chip--square {
+  border-radius: token('r-sm');
+  font-family: token('font-mono');
+}
 .chip--transparent {
   background: transparent;
   border-color: transparent;
@@ -432,11 +439,14 @@
   font-size: token('fs-sm');
   line-height: 1.45;
 }
-.card__body.col > .row > :first-child:not(.btn):not(.btn-action):not(.badge):not(.pill):not(.chip):not(.field) {
+/* Composite children (`.col` stacks, avatars) are list-item content, not
+ * label/value pairs — exclude them so e.g. a directors list row without a
+ * trailing badge doesn't get its name block right-aligned. */
+.card__body.col > .row > :first-child:not(.btn):not(.btn-action):not(.badge):not(.pill):not(.chip):not(.field):not(.col):not(.activity-item__avatar) {
   flex-shrink: 0;
   color: token('text-tertiary');
 }
-.card__body.col > .row > :last-child:not(.btn):not(.btn-action):not(.badge):not(.pill):not(.chip):not(.field) {
+.card__body.col > .row > :last-child:not(.btn):not(.btn-action):not(.badge):not(.pill):not(.chip):not(.field):not(.col):not(.activity-item__avatar) {
   min-width: 0;
   text-align: right;
   overflow-wrap: anywhere;
