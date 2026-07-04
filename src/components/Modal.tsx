@@ -65,7 +65,10 @@ export function Modal({
   const titleId = useStableDomId("modal-title");
   const dialogRef = useDialogFocus<HTMLDivElement>(open, onClose);
   const stackSlot = useDialogStackSlot(open);
-  const wantResizable = resizable ?? (size === "lg" || size === "xl");
+  // Default: everything but the small confirmation/quick-pick size is a form
+  // worth resizing. Small `sm` dialogs (and the single-field Prompt below) stay
+  // compact. Any call site can override with the explicit `resizable` prop.
+  const wantResizable = resizable ?? size !== "sm";
   const resize = useResizableDialog({
     enabled: wantResizable,
     open,
@@ -248,6 +251,7 @@ export function PromptProvider({ children }: { children: ReactNode }) {
           onClose={() => close(null)}
           title={state.title}
           size="md"
+          resizable={false}
           footer={
             <>
               <button className="btn" onClick={() => close(null)}>

@@ -454,6 +454,43 @@ body.modal-resizing {
   user-select: none;
 }
 
+// A form (wrapped in `.task-form`) can opt a field into filling the dialog's
+// spare vertical space by marking it `field--grow` — e.g. a long Description
+// that should stretch as the dialog is enlarged. Scoped to resizable dialogs
+// that actually contain such a field, so edit pages and non-resizable dialogs
+// keep the field at its natural (rows-based) height.
+.modal--resizable .modal__body:has(.field--grow) {
+  display: flex;
+  flex-direction: column;
+
+  > .task-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+  }
+
+  // Grow to fill spare vertical space, but DON'T set `min-height: 0` on this
+  // chain: that would let the flex layout squeeze the Crepe editor to zero when
+  // the form is taller than the dialog (e.g. many fields), collapsing its input
+  // box. Falling back to min-content keeps the editor at its ~4-row floor and
+  // lets the dialog body scroll instead when things are cramped.
+  .field--grow {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+  }
+
+  .field--grow > .markdown-editor {
+    flex: 1 1 auto;
+  }
+
+  // The field already fills the dialog, so the editor's manual drag grip would
+  // just fight the auto-grow — hide it in this context.
+  .field--grow .markdown-editor__body {
+    resize: none;
+  }
+}
+
 .modal__head {
   @include flex-center;
   gap: 8px;

@@ -107,7 +107,7 @@ export function TaskFormFields({
 }) {
   const { committees, goals, users, filings, workflows, documents, commitments } = data;
   return (
-    <div>
+    <div className="task-form">
       <Field label="Title">
         <input
           className="input"
@@ -116,7 +116,7 @@ export function TaskFormFields({
           onChange={(e) => onChange({ title: e.target.value })}
         />
       </Field>
-      <Field label="Description">
+      <Field label="Description" className="field--grow">
         <MarkdownEditor
           rows={4}
           value={value.description}
