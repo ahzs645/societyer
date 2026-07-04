@@ -34,6 +34,7 @@ import { useToast } from "./Toast";
 import { api } from "../lib/convexApi";
 import { Select } from "./Select";
 import { NameAutocomplete } from "./NameAutocomplete";
+import { useScrollEdgeShadows } from "../lib/useScrollEdgeShadows";
 
 
 const EMPTY_ARR: string[] = [];
@@ -454,28 +455,7 @@ function TableScrollWrap({
   stickyFirst: boolean;
   children: ReactNode;
 }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [edges, setEdges] = useState({ left: false, right: false });
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const update = () => {
-      const { scrollLeft, scrollWidth, clientWidth } = el;
-      setEdges({
-        left: scrollLeft > 0,
-        right: scrollLeft + clientWidth < scrollWidth - 1,
-      });
-    };
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => {
-      el.removeEventListener("scroll", update);
-      ro.disconnect();
-    };
-  }, []);
+  const { edges, ref } = useScrollEdgeShadows();
 
   const classes = ["table-scroll"];
   if (stickyFirst) classes.push("table-scroll--sticky");

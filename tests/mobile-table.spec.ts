@@ -63,4 +63,23 @@ test.describe("record table mobile view", () => {
     // A sticky column keeps its on-screen x position as the body scrolls.
     expect(Math.abs((after!.x ?? 0) - (before!.x ?? 0))).toBeLessThan(2);
   });
+
+  test("shows an edge-fade affordance so a wide table reads as scrollable, not cut off", async ({ page }) => {
+    await page.setViewportSize(PHONE);
+
+    const members = new MembersPage(page);
+    await members.gotoDemo();
+
+    const table = new RecordTablePage(page);
+    const frame = table.scrollFrame();
+
+    // At rest there is more content off the right edge — the right fade shows.
+    await expect(frame).toHaveClass(/is-scrolled-right/);
+    await expect(frame).not.toHaveClass(/is-scrolled-left/);
+
+    // Scroll to the far right: the right fade clears and the left one appears.
+    await table.scrollTableToEnd();
+    await expect(frame).toHaveClass(/is-scrolled-left/);
+    await expect(frame).not.toHaveClass(/is-scrolled-right/);
+  });
 });

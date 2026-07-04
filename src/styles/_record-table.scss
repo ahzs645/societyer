@@ -579,6 +579,39 @@ select.record-table__menu-select,
   overflow-x: auto;
 }
 
+// Non-scrolling wrapper that hosts the edge-fade overlays. The fades must sit
+// on this frame (not inside the scroller) so they stay pinned to the visible
+// edge while the table scrolls underneath. They appear only when the table can
+// scroll further in that direction — classes toggled by useScrollEdgeShadows.
+// Without this cue a frozen-first-column table reads as truncated rather than
+// scrollable, most noticeably on a phone where the frozen name column eats
+// most of the width and the next column only peeks past the right edge.
+.record-table__scroll-frame {
+  position: relative;
+}
+.record-table__scroll-frame::after,
+.record-table__scroll-frame::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 5;
+}
+.record-table__scroll-frame::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.14), transparent);
+}
+.record-table__scroll-frame::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.14), transparent);
+}
+.record-table__scroll-frame.is-scrolled-left::before { opacity: 1; }
+.record-table__scroll-frame.is-scrolled-right::after { opacity: 1; }
+
 .record-table__virtuoso {
   height: 600px;
   background: token('bg-panel');

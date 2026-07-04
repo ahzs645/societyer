@@ -102,6 +102,16 @@ export class RecordTablePage {
     return this.page.locator(".record-table__scroll").first();
   }
 
+  scrollFrame() {
+    return this.page.locator(".record-table__scroll-frame").first();
+  }
+
+  async scrollTableToEnd() {
+    await this.scrollContainer().evaluate((el) => {
+      el.scrollLeft = el.scrollWidth;
+    });
+  }
+
   async scrollContainerOverflowX() {
     return this.scrollContainer().evaluate((el) => getComputedStyle(el).overflowX);
   }

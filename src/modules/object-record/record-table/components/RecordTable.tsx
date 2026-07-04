@@ -1,4 +1,4 @@
-import { forwardRef, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 // NOTE: if you're adding another hook to this file, it MUST go above all the
 // early returns (`if (loading) ...`, etc). React's rules of hooks require a
 // stable call order on every render. An earlier iteration had a useMemo
@@ -15,6 +15,7 @@ import { RecordTableAggregateFooter } from "./RecordTableAggregateFooter";
 import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboardNavigation";
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { getMobileTableLayout } from "../../../../lib/mobileTableLayout";
+import { useScrollEdgeShadows } from "../../../../lib/useScrollEdgeShadows";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { CalendarView } from "../../../../components/CalendarView";
 import { RecordBoard, type RecordBoardColumn } from "../../../../components/RecordBoard";
@@ -134,7 +135,7 @@ export function RecordTable({
   const filtered = useFilteredRecords();
   const { objectMetadata, onRecordClick, onUpdate } = useRecordTableContextOrThrow();
   const handle = useRecordTableStoreHandle();
-  const tableRootRef = useRef<HTMLDivElement>(null);
+  const tableRootRef = useRef<HTMLDivElement | null>(null);
   const virtuosoRef = useRef<TableVirtuosoHandle>(null);
   const [rowContextMenu, setRowContextMenu] = useState<{ x: number; y: number; record: any } | null>(null);
 
@@ -160,6 +161,19 @@ export function RecordTable({
   const isMobile = useIsMobile();
   const { showSelectionColumn: effectiveSelectable, showDragHandle } =
     getMobileTableLayout({ isMobile, selectable, hasDragHandle: true });
+  // In the non-virtualized branch the scroll container is the horizontal
+  // scroller, so these edge flags drive the "there's more →" fade shadows that
+  // keep a frozen-first-column table from looking cut off on a phone. The
+  // scroller node feeds both `tableRootRef` (used for focus/outside-click
+  // queries) and the shadow hook's callback ref.
+  const { edges: scrollEdges, ref: scrollShadowRef } = useScrollEdgeShadows();
+  const setScrollNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      tableRootRef.current = node;
+      scrollShadowRef(node);
+    },
+    [scrollShadowRef],
+  );
   useRecordTableKeyboardNavigation({ enabled: keyboardNavigation });
 
   useEffect(() => {
@@ -330,36 +344,40 @@ export function RecordTable({
   // react-virtuoso.
   if (filtered.length <= virtualizeAbove) {
     return (
-      <div ref={tableRootRef} className={`record-table__scroll ${densityClass}`}>
-        <table className="record-table">
-          <thead className="record-table__thead">
-            <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
-          </thead>
-          <tbody className="record-table__tbody">
-            {filtered.map((record: any, i: number) => (
-              <tr
-                key={String(record._id)}
-                className="record-table__row"
-                data-row-index={i}
-                onContextMenu={onRowContextMenu ? (event) => onRowContextMenu(event, record) : undefined}
-              >
-                <RecordTableRow
-                  record={record}
-                  rowIndex={i}
-                  selectable={effectiveSelectable}
-                  showDragHandle={showDragHandle}
-                  renderRowActions={renderRowActions}
-                  rowMenuSections={rowMenuSections}
-                  showOpenRecordAction={hasOpenRecordAction}
-                  renderCell={renderCell}
-                />
-              </tr>
-            ))}
-          </tbody>
-          {showAggregateFooter && (
-            <RecordTableAggregateFooter selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
-          )}
-        </table>
+      <div
+        className={`record-table__scroll-frame${scrollEdges.left ? " is-scrolled-left" : ""}${scrollEdges.right ? " is-scrolled-right" : ""}`}
+      >
+        <div ref={setScrollNode} className={`record-table__scroll ${densityClass}`}>
+          <table className="record-table">
+            <thead className="record-table__thead">
+              <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
+            </thead>
+            <tbody className="record-table__tbody">
+              {filtered.map((record: any, i: number) => (
+                <tr
+                  key={String(record._id)}
+                  className="record-table__row"
+                  data-row-index={i}
+                  onContextMenu={onRowContextMenu ? (event) => onRowContextMenu(event, record) : undefined}
+                >
+                  <RecordTableRow
+                    record={record}
+                    rowIndex={i}
+                    selectable={effectiveSelectable}
+                    showDragHandle={showDragHandle}
+                    renderRowActions={renderRowActions}
+                    rowMenuSections={rowMenuSections}
+                    showOpenRecordAction={hasOpenRecordAction}
+                    renderCell={renderCell}
+                  />
+                </tr>
+              ))}
+            </tbody>
+            {showAggregateFooter && (
+              <RecordTableAggregateFooter selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
+            )}
+          </table>
+        </div>
         {rowContextMenuElement}
       </div>
     );
