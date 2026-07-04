@@ -64,6 +64,22 @@ test.describe("record table mobile view", () => {
     expect(Math.abs((after!.x ?? 0) - (before!.x ?? 0))).toBeLessThan(2);
   });
 
+  test("caps the frozen first column so it doesn't dominate the phone width", async ({ page }) => {
+    await page.setViewportSize(PHONE);
+
+    const members = new MembersPage(page);
+    await members.gotoDemo();
+
+    const table = new RecordTablePage(page);
+    const box = await table.firstBodyCell().boundingBox();
+    expect(box).not.toBeNull();
+    // The column carries an inline width from the field size (e.g. 240px). On a
+    // 390px phone that would swallow the viewport; it must be capped to well
+    // under half so the other columns get room. Still wide enough to be usable.
+    expect(box!.width).toBeLessThan(PHONE.width * 0.55);
+    expect(box!.width).toBeGreaterThan(60);
+  });
+
   test("shows an edge-fade affordance so a wide table reads as scrollable, not cut off", async ({ page }) => {
     await page.setViewportSize(PHONE);
 
