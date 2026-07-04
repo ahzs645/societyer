@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, EmptyState, Field, Pill } from "../components/ui";
+import { Badge, Drawer, EmptyState, Pill } from "../components/ui";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -14,25 +14,25 @@ import {
   RecordTableFilterPopover,
   useObjectRecordTableData,
 } from "@/modules/object-record";
-import { Select } from "../components/Select";
-import { DateTimeInput } from "../components/DateTimeInput";
-import { Toggle } from "../components/Controls";
 import { Tooltip } from "../components/Tooltip";
 import { useToast } from "../components/Toast";
-import { Plus, Calendar, AlertTriangle, BookMarked, Monitor, Pencil, Trash2, ExternalLink } from "lucide-react";
-import { formatDateTime, toDateTimeLocalValue } from "../lib/format";
-import { useBylawRules } from "../hooks/useBylawRules";
+import { Plus, Calendar, AlertTriangle, Monitor, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { formatDateTime } from "../lib/format";
 import type { ToneVariant } from "../components/ui";
-import { MarkdownEditor } from "../components/MarkdownEditor";
-import { NameAutocomplete } from "../components/NameAutocomplete";
 import { type MenuSection } from "../components/Menu";
 import { useConfirm } from "../components/Modal";
 import { hasStartedMinutesDraft } from "../features/meetings/lib/meetingDetailHelpers";
-import { daysUntil, isGeneralMeeting, meetsNoticeWindow } from "../features/meetings/lib/noticeWindow";
-import { useHiddenSuggestions, looksLikeLink } from "../lib/hiddenSuggestions";
+import { daysUntil, isGeneralMeeting } from "../features/meetings/lib/noticeWindow";
+import {
+  MeetingFormFields,
+  makeMeetingDraft,
+  meetingToDraft,
+  numberOrUndefined,
+  useMeetingFormData,
+  OVERLAP_WINDOW_MS,
+  type MeetingDraft,
+} from "../features/meetings/components/MeetingFormFields";
 import type { Doc } from "../../convex/_generated/dataModel";
-
-const OVERLAP_WINDOW_MS = 2 * 60 * 60 * 1000; // within 2 hours counts as concurrent
 
 function computeConflicts(meetings: Doc<"meetings">[]): Map<string, string[]> {
   const byTime = meetings
@@ -50,39 +50,17 @@ function computeConflicts(meetings: Doc<"meetings">[]): Map<string, string[]> {
   return out;
 }
 
-type MeetingDraft = {
-  type: string;
-  title: string;
-  scheduledAt: string;
-  location: string;
-  electronic: boolean;
-  quorumRequired: string;
-  status: string;
-  attendeeIds: string[];
-  meetingTemplateId: string;
-  notes?: string;
-};
-
 export function MeetingsPage() {
   const society = useSociety();
-  const { rules } = useBylawRules();
-  const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip") as
-    | Doc<"meetings">[]
-    | undefined;
-  const meetingTemplates = useQuery(
-    api.meetingTemplates.list,
-    society ? { societyId: society._id } : "skip",
-  ) as Doc<"meetingTemplates">[] | undefined;
-  const minutesList = useQuery(api.minutes.list, society ? { societyId: society._id } : "skip") as
-    | Doc<"minutes">[]
-    | undefined;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<MeetingDraft | null>(null);
   const [params, setParams] = useSearchParams();
-  const formRules = useQuery(
-    api.bylawRules.getForDate,
-    society && form?.scheduledAt ? { societyId: society._id, dateISO: form.scheduledAt } : "skip",
-  );
+  const data = useMeetingFormData(society?._id, form?.scheduledAt);
+  const meetings = data.meetings;
+  const meetingTemplates = data.meetingTemplates;
+  const minutesList = useQuery(api.minutes.list, society ? { societyId: society._id } : "skip") as
+    | Doc<"minutes">[]
+    | undefined;
   const create = useMutation(api.meetings.create);
   const updateMeeting = useMutation(api.meetings.update);
   const removeMeeting = useMutation(api.meetings.remove);
@@ -98,11 +76,9 @@ export function MeetingsPage() {
     viewId: currentViewId,
   });
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
-  const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
-  const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
-  const effectiveRules = formRules ?? rules;
-  const effectiveNoticeMinDays = effectiveRules?.generalNoticeMinDays ?? noticeMinDays;
-  const effectiveNoticeMaxDays = effectiveRules?.generalNoticeMaxDays ?? noticeMaxDays;
+  const noticeMinDays = data.noticeMinDays;
+  const noticeMaxDays = data.noticeMaxDays;
+  const effectiveNoticeMinDays = data.effectiveNoticeMinDays;
 
   const conflicts = useMemo(() => computeConflicts(meetings ?? []), [meetings]);
   const minutesByMeeting = useMemo(() => {
@@ -110,57 +86,16 @@ export function MeetingsPage() {
     for (const record of minutesList ?? []) map.set(String(record.meetingId), record);
     return map;
   }, [minutesList]);
-  const { hide: hideLocationSuggestion, isHidden: isHiddenLocation } = useHiddenSuggestions("meeting-location");
-  const recentLocations = useMemo(() => {
-    const sorted = (meetings ?? [])
-      .filter((m) => m.location && m.location.trim())
-      .sort((a, b) => (b.scheduledAt ?? "").localeCompare(a.scheduledAt ?? ""));
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const m of sorted) {
-      const loc = m.location!.trim();
-      const key = loc.toLowerCase();
-      if (seen.has(key)) continue;
-      if (looksLikeLink(loc)) continue;
-      if (isHiddenLocation(loc)) continue;
-      seen.add(key);
-      out.push(loc);
-    }
-    return out;
-  }, [meetings, isHiddenLocation]);
-  const defaultTemplate =
-    (meetingTemplates ?? []).find((template) => template.isDefault) ?? (meetingTemplates ?? [])[0];
 
   const openNew = (overrides: Partial<MeetingDraft> = {}) => {
     setEditingId(null);
-    setForm({
-      type: "Board", title: "",
-      scheduledAt: toDateTimeLocalValue(new Date(Date.now() + noticeMinDays * 864e5)),
-      location: "",
-      electronic: !!rules?.allowElectronicMeetings,
-      quorumRequired: "",
-      status: "Scheduled",
-      attendeeIds: [],
-      meetingTemplateId: defaultTemplate?._id ? String(defaultTemplate._id) : "",
-      ...overrides,
-    });
+    setForm(makeMeetingDraft(data, overrides));
     setOpen(true);
   };
 
   const openEdit = (meeting: Doc<"meetings">) => {
     setEditingId(meeting._id);
-    setForm({
-      type: meeting.type,
-      title: meeting.title,
-      scheduledAt: meeting.scheduledAt ? toDateTimeLocalValue(new Date(meeting.scheduledAt)) : "",
-      location: meeting.location ?? "",
-      electronic: !!meeting.electronic,
-      quorumRequired: meeting.quorumRequired != null ? String(meeting.quorumRequired) : "",
-      status: meeting.status,
-      attendeeIds: meeting.attendeeIds ?? [],
-      meetingTemplateId: meeting.meetingTemplateId ? String(meeting.meetingTemplateId) : "",
-      notes: meeting.notes ?? "",
-    });
+    setForm(meetingToDraft(meeting));
     setOpen(true);
   };
 
@@ -393,154 +328,20 @@ export function MeetingsPage() {
         footer={<><button className="btn" type="button" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" type="button" onClick={save}>{editingId ? "Save" : "Schedule"}</button></>}
       >
         {form && (
-          <div>
-            {isGeneralMeeting(form.type) &&
-            (daysUntil(form.scheduledAt) ?? 0) >= 0 &&
-            !meetsNoticeWindow(form.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays) ? (
-              <div className="flag flag--warn" style={{ marginBottom: 12 }}>
-                <AlertTriangle />
-                <div>
-                  General meetings should be scheduled with {effectiveNoticeMinDays}–{effectiveNoticeMaxDays} days of notice under the rule set effective on this meeting date.
-                </div>
-              </div>
-            ) : null}
-            {!editingId && <div className="meeting-template-picker">
-              <Field label="Template">
-                <Select
-                  value={form.meetingTemplateId}
-                  onChange={(v) => setForm({ ...form, meetingTemplateId: v })}
-                  options={[
-                    { value: "", label: "Blank meeting" },
-                    ...(meetingTemplates ?? []).map((template) => ({
-                      value: String(template._id),
-                      label: `${template.name}${template.isDefault ? " (default)" : ""}`,
-                    })),
-                  ]}
-                />
-              </Field>
-              {form.meetingTemplateId ? (
-                <p className="meeting-template-picker__summary">
-                  <BookMarked size={12} style={{ verticalAlign: -2, marginRight: 4 }} />
-                  {templateSummary((meetingTemplates ?? []).find((template) => String(template._id) === form.meetingTemplateId))}
-                </p>
-              ) : (
-                <p className="meeting-template-picker__summary">Start with an empty agenda and add sections from the meeting page.</p>
-              )}
-            </div>}
-            <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-            <div className="row" style={{ gap: 12 }}>
-              <Field label="Type">
-                <Select
-                  value={form.type}
-                  onChange={(v) => setForm({ ...form, type: v })}
-                  options={["Board", "Committee", "AGM", "SGM"].map((t) => ({ value: t, label: t }))}
-                />
-              </Field>
-              <Field label="Scheduled">
-                <DateTimeInput value={form.scheduledAt} onChange={(v) => setForm({ ...form, scheduledAt: v })} />
-              </Field>
-            </div>
-            {editingId && (
-              <Field label="Status">
-                <Select
-                  value={form.status}
-                  onChange={(v) => setForm({ ...form, status: v })}
-                  options={["Scheduled", "Held", "Cancelled"].map((s) => ({ value: s, label: s }))}
-                />
-              </Field>
-            )}
-            <Field label="Venue / link">
-              <NameAutocomplete
-                value={form.location}
-                onChange={(v) => setForm({ ...form, location: v })}
-                options={recentLocations}
-                onRemoveOption={hideLocationSuggestion}
-                placeholder={form.electronic ? "Zoom, Teams, or join link…" : "Where is it being held?"}
-                ariaLabel="Venue or join link"
-              />
-            </Field>
-            <Toggle
-              checked={form.electronic}
-              onChange={(v) => setForm({ ...form, electronic: v })}
-              disabled={!effectiveRules?.allowElectronicMeetings}
-              label="Electronic participation permitted"
-            />
-            <Field label="Quorum required">
-              <input
-                className="input"
-                type="number"
-                placeholder={
-                  effectiveRules?.quorumType === "fixed"
-                    ? String(effectiveRules?.quorumValue ?? "")
-                    : "Computed for AGM/SGM"
-                }
-                value={form.quorumRequired ?? ""}
-                onChange={(e) => setForm({ ...form, quorumRequired: e.target.value })}
-              />
-            </Field>
-            <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
-            {form.type === "AGM" && (
-              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                Reminder: AGM notice must be sent {effectiveNoticeMinDays}–{effectiveNoticeMaxDays} days in advance.
-                {effectiveRules?.requireAgmFinancialStatements ? " Financial statements must be presented." : ""}
-                {effectiveRules?.requireAgmElections ? " Elections are expected under the effective rule set." : ""}
-              </div>
-            )}
-            {(() => {
-              const draftTs = form.scheduledAt ? new Date(form.scheduledAt).getTime() : NaN;
-              if (!Number.isFinite(draftTs)) return null;
-              const overlaps = (meetings ?? []).filter(
-                (m) =>
-                  m._id !== editingId &&
-                  m.status !== "Cancelled" &&
-                  Math.abs(new Date(m.scheduledAt).getTime() - draftTs) <= OVERLAP_WINDOW_MS,
-              );
-              if (overlaps.length === 0) return null;
-              return (
-                <div
-                  style={{
-                    marginTop: 8,
-                    padding: 10,
-                    border: "1px solid var(--border)",
-                    borderRadius: 6,
-                    background: "var(--bg-subtle)",
-                    fontSize: 13,
-                  }}
-                >
-                  <AlertTriangle size={12} style={{ verticalAlign: -1, color: "var(--warn, #c78b00)", marginRight: 4 }} />
-                  <strong>Schedule conflict:</strong> {overlaps.length} other meeting{overlaps.length === 1 ? "" : "s"} within 2h of this time:
-                  <ul style={{ margin: "4px 0 0 20px" }}>
-                    {overlaps.map((m) => (
-                      <li key={m._id} className="muted">
-                        {m.title} — {formatDateTime(m.scheduledAt)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })()}
-          </div>
+          <MeetingFormFields
+            value={form}
+            onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
+            data={data}
+            editingId={editingId}
+          />
         )}
       </Drawer>
     </div>
   );
 }
 
-function numberOrUndefined(value: unknown) {
-  if (value === "" || value == null) return undefined;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : undefined;
-}
-
 function meetingStatusTone(status: string): ToneVariant {
   if (status === "Held") return "success";
   if (status === "Cancelled") return "danger";
   return "warn";
-}
-
-function templateSummary(template: any) {
-  if (!template) return "Template details are loading.";
-  const items = Array.isArray(template.items) ? template.items : [];
-  const motionCount = items.filter((item: any) => item.motionTemplateId || item.motionText).length;
-  return `${items.length} agenda item${items.length === 1 ? "" : "s"}${motionCount ? `, ${motionCount} recurring motion${motionCount === 1 ? "" : "s"}` : ""}. New meetings receive a snapshot.`;
 }
