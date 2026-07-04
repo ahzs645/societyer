@@ -65,6 +65,9 @@ export function RecordTableToolbar({
    * `usePersistView().saveCurrentView`.
    */
   onSaveView?: () => void | Promise<void>;
+  // Also gated on the view being dirty — on a pristine view there is nothing
+  // new to fork off, so "Save as" stays hidden until the user changes
+  // something (filters, sort, columns, density).
   onSaveAsView?: (name: string) => void | Promise<unknown>;
   actions?: ReactNode;
 }) {
@@ -241,7 +244,7 @@ export function RecordTableToolbar({
           </>
         )}
 
-        {onSaveAsView && (
+        {onSaveAsView && isDirty && (
           <button
             type="button"
             className="record-table__toolbar-button"
