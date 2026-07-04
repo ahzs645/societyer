@@ -16,6 +16,7 @@ import {
 import { AdvancedFilterModal } from "./AdvancedFilter";
 import { MenuRow, MenuSectionLabel, Pill, Skeleton } from "./ui";
 import { mobileCardMediaQuery } from "../lib/breakpoints";
+import { getMobileTableLayout } from "../lib/mobileTableLayout";
 import {
   makeViewId,
   readSavedViews,
@@ -170,8 +171,12 @@ export function DataTable<T extends { _id?: string } & Record<string, any>>(prop
   } = useDataTable(props);
   // On phones: drop the selection column (so the first data column is flush
   // left) and always freeze that first column while the rest scroll sideways.
-  const showSelectCol = selectable && !isMobile;
-  const stickyFirst = isMobile || visibleColumns.length >= 6;
+  const { showSelectionColumn: showSelectCol, freezeFirstColumn: stickyFirst } =
+    getMobileTableLayout({
+      isMobile,
+      selectable,
+      visibleColumnCount: visibleColumns.length,
+    });
   return (
     <div className="table-wrap" style={{ position: "relative" }}>
       <ViewBar

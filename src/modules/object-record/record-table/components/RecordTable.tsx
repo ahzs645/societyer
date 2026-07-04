@@ -14,6 +14,7 @@ import { RecordTableEmpty } from "./RecordTableEmpty";
 import { RecordTableAggregateFooter } from "./RecordTableAggregateFooter";
 import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboardNavigation";
 import { useIsMobile } from "../../../../lib/useIsMobile";
+import { getMobileTableLayout } from "../../../../lib/mobileTableLayout";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { CalendarView } from "../../../../components/CalendarView";
 import { RecordBoard, type RecordBoardColumn } from "../../../../components/RecordBoard";
@@ -157,8 +158,8 @@ export function RecordTable({
   // record name) sits flush left and can be frozen while the rest of the
   // table scrolls horizontally — the Twenty-style narrow-screen table.
   const isMobile = useIsMobile();
-  const effectiveSelectable = selectable && !isMobile;
-  const showDragHandle = !isMobile;
+  const { showSelectionColumn: effectiveSelectable, showDragHandle } =
+    getMobileTableLayout({ isMobile, selectable, hasDragHandle: true });
   useRecordTableKeyboardNavigation({ enabled: keyboardNavigation });
 
   useEffect(() => {

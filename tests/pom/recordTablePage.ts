@@ -75,4 +75,34 @@ export class RecordTablePage {
     await this.page.keyboard.press("Enter");
     await expect(this.page.locator(".record-table__cell-editor-popover input, .record-table__cell-editor-popover textarea, .record-table__cell-editor-popover select").first()).toBeVisible();
   }
+
+  // --- Mobile-treatment helpers ---------------------------------------------
+  // On a phone the record table drops its leading structural columns (the
+  // selection checkbox and drag handle) and freezes the first data column.
+
+  bodySelectionCheckboxes() {
+    return this.page.locator(".record-table__tbody .record-table__checkbox-cell");
+  }
+
+  dragHandles() {
+    return this.page.locator(".record-table__drag-cell");
+  }
+
+  firstBodyCell() {
+    return this.page.locator(
+      ".record-table__row[data-row-index='0'] .record-table__cell[data-column-index='0']",
+    );
+  }
+
+  async firstBodyCellPosition() {
+    return this.firstBodyCell().evaluate((el) => getComputedStyle(el).position);
+  }
+
+  scrollContainer() {
+    return this.page.locator(".record-table__scroll").first();
+  }
+
+  async scrollContainerOverflowX() {
+    return this.scrollContainer().evaluate((el) => getComputedStyle(el).overflowX);
+  }
 }
