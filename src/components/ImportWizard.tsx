@@ -160,7 +160,7 @@ export function ImportWizard({
   };
 
   return (
-    <Modal open={open} onClose={close} title={`Import ${target.label}`} size="lg">
+    <Modal open={open} onClose={close} title={`Import ${target.label}`} size="lg" resizeKey="import-wizard">
       <div className="import-wizard">
         <ol className="import-wizard__steps">
           <li className={`import-wizard__step${step === "upload" ? " is-active" : ""}`}>

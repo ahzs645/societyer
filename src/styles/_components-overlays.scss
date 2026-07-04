@@ -399,6 +399,61 @@
   from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
   to { opacity: 1; transform: translate(-50%, -50%); }
 }
+
+// Drag-to-resize dialogs are positioned with explicit top/left/width/height
+// (set inline), so they can't use the translate-based open animation.
+.modal--resizable {
+  animation: fadeIn 0.12s ease-out;
+
+  // Explicit height is applied inline; let the body take the remaining space
+  // and scroll so the header/footer stay pinned.
+  .modal__body {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+}
+
+// Frame handles straddle the border so the whole edge is easy to grab. Shown
+// only on resizable dialogs (desktop); hidden at the bottom-sheet breakpoint.
+.modal__resize {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+.modal__resize--n,
+.modal__resize--s { left: 12px; right: 12px; height: 9px; cursor: ns-resize; }
+.modal__resize--n { top: -4px; }
+.modal__resize--s { bottom: -4px; }
+.modal__resize--e,
+.modal__resize--w { top: 12px; bottom: 12px; width: 9px; cursor: ew-resize; }
+.modal__resize--e { right: -4px; }
+.modal__resize--w { left: -4px; }
+.modal__resize--ne,
+.modal__resize--nw,
+.modal__resize--se,
+.modal__resize--sw { width: 16px; height: 16px; z-index: 4; }
+.modal__resize--ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.modal__resize--nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.modal__resize--se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+.modal__resize--sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+
+// Subtle grip affordance on the primary (bottom-right) corner.
+.modal__resize--se::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid token('border');
+  border-bottom: 2px solid token('border');
+  opacity: 0.8;
+}
+
+body.modal-resizing {
+  user-select: none;
+}
+
 .modal__head {
   @include flex-center;
   gap: 8px;
