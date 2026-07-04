@@ -774,6 +774,7 @@ export function Field({
   error,
   required,
   id,
+  className,
   children,
 }: {
   label: string;
@@ -781,6 +782,8 @@ export function Field({
   error?: ReactNode;
   required?: boolean;
   id?: string;
+  /** Extra class on the field wrapper (e.g. `field--grow` to fill spare space). */
+  className?: string;
   children: ReactNode;
 }) {
   const generatedId = useStableDomId("field");
@@ -790,7 +793,7 @@ export function Field({
   const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined;
 
   return (
-    <div className="field">
+    <div className={`field${className ? ` ${className}` : ""}`}>
       <label className="field__label" htmlFor={fieldId}>
         {label}
         {required && <span className="field__required" aria-hidden="true"> *</span>}

@@ -65,7 +65,7 @@ export function MergeRecordsModal<T extends { _id: string }>({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={`Merge ${rows.length} ${label}`} size="xl">
+    <Modal open={open} onClose={onClose} title={`Merge ${rows.length} ${label}`} size="xl" resizeKey="merge-records">
       <div className="merge-modal">
         <Banner tone="warn">
           Merging deletes the non-winning records. Pick which record to keep and the winning value for each field.

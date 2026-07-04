@@ -40,7 +40,9 @@ export function useStaticCommands(): StaticCommand[] {
         id: "action-create-meeting",
         label: "Create meeting",
         icon: Calendar,
-        run: () => navigate("/app/meetings?intent=create&type=Board"),
+        // The GlobalMeetingCreate popup (mounted in Layout) listens for this
+        // event and pops the meeting-creation form from anywhere.
+        run: () => window.dispatchEvent(new Event("quickaction:create-meeting")),
       },
       {
         id: "action-mark-filing-filed",

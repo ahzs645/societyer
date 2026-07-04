@@ -406,6 +406,7 @@ export function WorkflowDetailPage() {
         onClose={() => setIntakeOpen(false)}
         title={`Launch ${workflow.name}`}
         size="lg"
+        resizeKey="workflow-launch-intake"
         footer={
           <>
             <button className="btn" disabled={busy} onClick={() => setIntakeOpen(false)}>
