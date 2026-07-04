@@ -579,6 +579,39 @@ select.record-table__menu-select,
   overflow-x: auto;
 }
 
+// Non-scrolling wrapper that hosts the edge-fade overlays. The fades must sit
+// on this frame (not inside the scroller) so they stay pinned to the visible
+// edge while the table scrolls underneath. They appear only when the table can
+// scroll further in that direction — classes toggled by useScrollEdgeShadows.
+// Without this cue a frozen-first-column table reads as truncated rather than
+// scrollable, most noticeably on a phone where the frozen name column eats
+// most of the width and the next column only peeks past the right edge.
+.record-table__scroll-frame {
+  position: relative;
+}
+.record-table__scroll-frame::after,
+.record-table__scroll-frame::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 5;
+}
+.record-table__scroll-frame::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.14), transparent);
+}
+.record-table__scroll-frame::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.14), transparent);
+}
+.record-table__scroll-frame.is-scrolled-left::before { opacity: 1; }
+.record-table__scroll-frame.is-scrolled-right::after { opacity: 1; }
+
 .record-table__virtuoso {
   height: 600px;
   background: token('bg-panel');
@@ -1397,12 +1430,24 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
     -webkit-overflow-scrolling: touch;
   }
 
+  /* Cap the frozen first column so it doesn't dominate the screen. Every cell
+   * — header, body AND footer — carries an inline `width`/`min-width` from
+   * `recordField.size` (e.g. 240px). On a ~390px phone that leaves almost no
+   * room for the other columns, so the table reads as "one huge column,
+   * everything else cut off". Force a fraction of the viewport (min-width: 0
+   * drops the inline floor) and cap the inner label/content below so a long
+   * value truncates with an ellipsis instead of stretching the column back out.
+   * All three row groups must be covered: an auto-layout column is as wide as
+   * its widest cell, so leaving out (say) the footer lets its inline width hold
+   * the whole column at 240px. */
   .record-table__scroll .record-table > thead > tr > th:first-child,
   .record-table__virtuoso .record-table > thead > tr > th:first-child {
     position: sticky;
     left: 0;
     z-index: 4;
     background: token('bg-subtle');
+    width: 46vw !important;
+    min-width: 0 !important;
   }
   .record-table__scroll .record-table > tbody > tr > td:first-child,
   .record-table__virtuoso .record-table > tbody > tr > td:first-child {
@@ -1410,13 +1455,36 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
     left: 0;
     z-index: 1;
     background: token('bg-panel');
-    max-width: 48vw;
+    width: 46vw !important;
+    min-width: 0 !important;
+  }
+  .record-table__scroll .record-table > tfoot > tr > td:first-child,
+  .record-table__virtuoso .record-table > tfoot > tr > td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: token('bg-subtle');
+    width: 46vw !important;
+    min-width: 0 !important;
+  }
+  /* Enforce the cap on the inner content: bounding its max-width bounds the
+   * column's intrinsic width, so a long title truncates instead of stretching
+   * the frozen column across the whole viewport. */
+  .record-table__scroll .record-table > tbody > tr > td:first-child .record-table__cell-content,
+  .record-table__virtuoso .record-table > tbody > tr > td:first-child .record-table__cell-content {
+    max-width: 42vw;
+  }
+  .record-table__scroll .record-table > thead > tr > th:first-child .record-table__header-cell-label,
+  .record-table__virtuoso .record-table > thead > tr > th:first-child .record-table__header-cell-label {
+    max-width: 34vw;
   }
   /* Hairline divider so the frozen column reads as pinned while scrolling. */
   .record-table__scroll .record-table > thead > tr > th:first-child::after,
   .record-table__scroll .record-table > tbody > tr > td:first-child::after,
+  .record-table__scroll .record-table > tfoot > tr > td:first-child::after,
   .record-table__virtuoso .record-table > thead > tr > th:first-child::after,
-  .record-table__virtuoso .record-table > tbody > tr > td:first-child::after {
+  .record-table__virtuoso .record-table > tbody > tr > td:first-child::after,
+  .record-table__virtuoso .record-table > tfoot > tr > td:first-child::after {
     content: "";
     position: absolute;
     top: 0;

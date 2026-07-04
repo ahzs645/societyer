@@ -98,4 +98,21 @@ test.describe("record table controls", () => {
     await expect(page.getByRole("button", { name: "Move right" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Hide field" })).toBeVisible();
   });
+
+  test("'Save as' stays hidden on a pristine view and appears only once the view is dirty", async ({ page }) => {
+    const members = new MembersPage(page);
+    await members.gotoDemo();
+
+    const saveAs = page.getByRole("button", { name: /^Save as$/ });
+    // Nothing has changed yet — there is no divergence to fork into a new view.
+    await expect(saveAs).toBeHidden();
+
+    // Make the view dirty by sorting a column from its header menu.
+    await page.locator(".record-table__header-menu-trigger").first().click();
+    await page.getByRole("button", { name: "Sort ascending" }).click();
+
+    // Both save affordances surface together once the view diverges.
+    await expect(saveAs).toBeVisible();
+    await expect(page.getByRole("button", { name: /Save changes/ })).toBeVisible();
+  });
 });
