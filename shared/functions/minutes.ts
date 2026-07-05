@@ -236,7 +236,7 @@ function statusFromEmbeddedOutcome(raw?: string): { status: string; outcome?: st
  *  Delete-and-reinsert keeps the mirror consistent during the dual-write phase:
  *  reads still come from the embedded array, so motion ids are not yet relied
  *  upon. Reconcile-by-identity replaces this when reads are flipped. */
-async function syncMotionsForMinutes(
+export async function syncMotionsForMinutes(
   ctx: PortableMutationCtx,
   args: { societyId: any; minutesId: any; meetingId?: any; motions?: any[] },
 ) {
@@ -251,6 +251,7 @@ async function syncMotionsForMinutes(
     for (const row of existing) await ctx.db.delete(row._id);
 
     const now = new Date().toISOString();
+    const motionIds: any[] = [];
     for (const m of args.motions ?? []) {
       const { status, outcome } = statusFromEmbeddedOutcome(m.outcome);
       const note = KNOWN_EMBEDDED_OUTCOMES.has(String(m.outcome ?? "").trim().toLowerCase())
@@ -274,7 +275,7 @@ async function syncMotionsForMinutes(
       const decidedBy =
         m.decidedBy ??
         defaultDecidedByFor({ text: m.text, sectionTitle: m.sectionTitle });
-      await ctx.db.insert(
+      const insertedId = await ctx.db.insert(
         "motions",
         stripUndefined({
           societyId: args.societyId,
@@ -318,7 +319,13 @@ async function syncMotionsForMinutes(
           updatedAtISO: now,
         }),
       );
+      motionIds.push(insertedId);
     }
+    // Maintain the ordered id references on the minutes alongside the embedded
+    // array (same best-effort block as the mirror rows: on a throw, motionIds
+    // stays as-is and is corrected on the next save). Reads flip onto it in
+    // Phase 2 of docs/motions-migration-finish-scope.md.
+    await ctx.db.patch(args.minutesId, { motionIds });
   } catch (err) {
     console.warn(
       `[motions] dual-write sync failed for minutes ${String(args.minutesId)}: ${String(err)}`,
