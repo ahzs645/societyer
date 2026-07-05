@@ -24,3 +24,74 @@ export function minutesMotionsForDisplay<M>(
   }
   return minutes.motions ?? [];
 }
+
+/**
+ * Reconstruct a minutes' embedded `outcome` string from a first-class `motions`
+ * row's explicit (status, outcome) split — the inverse of
+ * `statusFromEmbeddedOutcome` (shared/functions/minutes.ts). Used by the
+ * table→embedded adapter so display code that keys off `outcome`
+ * (normalizeMotionOutcome, isPostponedOutcome, "carried/defeated/tabled" counts)
+ * behaves identically whether it reads the embedded array or the table.
+ */
+export function embeddedOutcomeFromMotionRow(
+  row: { status?: string | null; outcome?: string | null } | null | undefined,
+): string {
+  if (!row) return "";
+  const status = String(row.status ?? "").trim();
+  const outcome = row.outcome ? String(row.outcome) : "";
+  switch (status) {
+    case "Voted":
+      return outcome || "Carried"; // Voted always carries a recorded outcome
+    case "Tabled":
+      return "Tabled";
+    case "Deferred":
+      return "Deferred";
+    case "Withdrawn":
+      return "Withdrawn";
+    case "Moved":
+    case "Draft":
+    case "Agenda":
+    case "Backlog":
+    case "":
+      return "Pending";
+    default:
+      // Archived / unknown lifecycle states — prefer the explicit outcome.
+      return outcome || "Pending";
+  }
+}
+
+/**
+ * Map a first-class `motions` table row back to the embedded motion shape that
+ * minutes rendering/export/analytics expect. The inverse of the dual-write
+ * (syncMotionsForMinutes): `title`→`name`, `resolutionTypeLabel`→`resolutionType`,
+ * (status, outcome)→`outcome`, and the table row `_id` surfaced as `motionId`.
+ * Enriched fields the embedded array never carried (decidedBy, proceduralKind)
+ * pass through additively. Undefined keys are dropped to match the embedded
+ * array's optional-field shape. Pure — the seam Phase 2 reads flip onto.
+ */
+export function motionRowToEmbedded(row: any): any {
+  if (!row) return row;
+  const out: Record<string, any> = {
+    name: row.title,
+    text: row.text ?? "",
+    movedBy: row.movedBy,
+    movedByMemberId: row.movedByMemberId,
+    movedByDirectorId: row.movedByDirectorId,
+    secondedBy: row.secondedBy,
+    secondedByMemberId: row.secondedByMemberId,
+    secondedByDirectorId: row.secondedByDirectorId,
+    outcome: embeddedOutcomeFromMotionRow(row),
+    votesFor: row.votesFor,
+    votesAgainst: row.votesAgainst,
+    abstentions: row.abstentions,
+    resolutionType: row.resolutionTypeLabel,
+    decidedBy: row.decidedBy,
+    sectionIndex: row.sectionIndex,
+    sectionTitle: row.sectionTitle,
+    motionTemplateId: row.motionTemplateId,
+    motionId: row._id,
+    adoptsMinutesId: row.adoptsMinutesId,
+  };
+  for (const key of Object.keys(out)) if (out[key] === undefined) delete out[key];
+  return out;
+}

@@ -21,6 +21,7 @@ import {
   classifyProceduralMotion,
   defaultDecidedByFor,
 } from "../proceduralMotions";
+import { motionRowToEmbedded } from "../minutesMotions";
 
 // ----- portable quorum-snapshot helpers (copied from convex/lib/bylawRules) --
 
@@ -301,6 +302,7 @@ export async function syncMotionsForMinutes(
           sectionIndex: m.sectionIndex,
           sectionTitle: m.sectionTitle,
           motionTemplateId: m.motionTemplateId,
+          adoptsMinutesId: m.adoptsMinutesId,
           source: "minutes",
           history: [
             stripUndefined({
@@ -351,6 +353,32 @@ export async function getByMeetingPortable(
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
     .collect();
   return rows[0] ?? null;
+}
+
+/**
+ * Resolve a minutes' motions for DISPLAY from the single source of truth — the
+ * async, table-backed counterpart to the pure `minutesMotionsForDisplay`.
+ *
+ * Approved minutes render from the frozen `motionSnapshots[]` (immutable legal
+ * record). A draft resolves its ordered `motionIds` → first-class `motions`
+ * rows → embedded display shape (`motionRowToEmbedded`). Falls back to the
+ * embedded `motions[]` when `motionIds` is absent (data from before Phase 1, or
+ * mid-transition) so a read never regresses.
+ *
+ * Phase 2 routes read sites that carry a `ctx` onto this; the write/edit path
+ * stays on the live embedded array. See docs/motions-migration-finish-scope.md.
+ */
+export async function resolveMinutesMotions(ctx: PortableQueryCtx, minutes: any): Promise<any[]> {
+  if (!minutes) return [];
+  if (Array.isArray(minutes.motionSnapshots) && minutes.motionSnapshots.length > 0) {
+    return minutes.motionSnapshots;
+  }
+  const ids: any[] = Array.isArray(minutes.motionIds) ? minutes.motionIds : [];
+  if (ids.length === 0) {
+    return Array.isArray(minutes.motions) ? minutes.motions : [];
+  }
+  const rows = await Promise.all(ids.map((id) => ctx.db.get(id)));
+  return rows.filter(Boolean).map(motionRowToEmbedded);
 }
 
 // ----- mutations ------------------------------------------------------------
