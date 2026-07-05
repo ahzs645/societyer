@@ -21,6 +21,8 @@ import {
 import { runPortable } from "../shared/functions/seed";
 import { listPortable, resolveMinutesMotions, syncMotionsForMinutes } from "../shared/functions/minutes";
 import { minutesMotionsForDisplay } from "../shared/minutesMotions";
+import { listPortable as orgHistoryListPortable } from "../shared/functions/organizationHistory";
+import { summaryPortable as annualCycleSummaryPortable } from "../shared/functions/annualCycle";
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
@@ -177,5 +179,21 @@ for (const m of listed) {
   }
 }
 console.log(`✓ query boundary attaches displayMotions + accessor prefers it (table-sourced) across ${listed.length} minutes`);
+
+// 5) Backend consumers (Phase 2C) run end-to-end and surface table-sourced motions.
+const orgHistory: any = await rt()
+  .register(definePortableQuery({ name: "orgHistory", handler: (ctx: any, a: any) => orgHistoryListPortable(ctx, a) }))
+  .runQuery("orgHistory", { societyId });
+assert.ok(Array.isArray(orgHistory.motions), "organizationHistory returned a motions array");
+assert.ok(
+  JSON.stringify(orgHistory.motions).includes("financial statements"),
+  "organizationHistory surfaces a seeded minutes motion (routed through resolveMinutesMotions)",
+);
+
+const cycle: any = await rt()
+  .register(definePortableQuery({ name: "annualCycle", handler: (ctx: any, a: any) => annualCycleSummaryPortable(ctx, a) }))
+  .runQuery("annualCycle", { societyId, year: 2025 });
+assert.ok(cycle && typeof cycle === "object", "annualCycle.summary ran without error and returned a checklist");
+console.log("✓ backend consumers (organizationHistory + annualCycle) run and surface table-sourced motions");
 
 console.log("\nmotions resolve-parity checks passed.");
