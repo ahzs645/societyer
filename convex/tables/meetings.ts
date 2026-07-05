@@ -203,6 +203,12 @@ export const meetingTables = {
       ),
     ),
     motionSnapshotAtISO: v.optional(v.string()),
+    // Ordered references into the first-class `motions` table, maintained by the
+    // dual-write (syncMotionsForMinutes) alongside the embedded motions[]. The
+    // array preserves render order. Phase 1 of finishing the motions migration
+    // (docs/motions-migration-finish-scope.md, Option A); reads flip onto it in
+    // Phase 2. Optional until the reseed populates every minutes.
+    motionIds: v.optional(v.array(v.id("motions"))),
     decisions: v.array(v.string()),
     actionItems: v.array(
       v.object({

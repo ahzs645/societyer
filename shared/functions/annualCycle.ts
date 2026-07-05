@@ -16,6 +16,7 @@
 
 import type { PortableQueryCtx } from "../portable/ctx";
 import { minutesMotionsForDisplay } from "../minutesMotions";
+import { resolveMinutesMotions } from "./minutes";
 
 type ItemStatus = "complete" | "attention" | "blocked" | "upcoming";
 
@@ -100,8 +101,14 @@ export async function summaryPortable(
     agms.find((meeting) => new Date(meeting.scheduledAt).getTime() >= now.getTime()) ??
     agms[agms.length - 1] ??
     null;
-  const minutes = selectedAgm
+  const minutesRaw = selectedAgm
     ? minutesRows.find((row) => String(row.meetingId) === String(selectedAgm._id)) ?? null
+    : null;
+  // Flip the AGM-cycle motion reads onto the first-class table (Phase 2C): attach
+  // resolved displayMotions so the minutesMotionsForDisplay() counts below read the
+  // table. No-op on data without motionIds (falls back to the embedded array).
+  const minutes: any = minutesRaw
+    ? { ...minutesRaw, displayMotions: await resolveMinutesMotions(ctx, minutesRaw) }
     : null;
   const agmRun = selectedAgm
     ? agmRuns.find((row) => String(row.meetingId) === String(selectedAgm._id)) ?? null

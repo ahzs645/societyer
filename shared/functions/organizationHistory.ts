@@ -16,6 +16,7 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { minutesMotionsForDisplay } from "../minutesMotions";
+import { resolveMinutesMotions } from "./minutes";
 
 const HISTORY_TAG = "org-history";
 const SOURCE_TAG = "org-history-source";
@@ -66,12 +67,19 @@ export async function listPortable(
     if (record.kind === "budget") budgets.push(record);
   }
 
+  // Flip the org-history motion reads onto the first-class table (Phase 2C):
+  // attach resolved displayMotions to each minutes row so mergeMotionRecords'
+  // minutesMotionsForDisplay() call reads the table. No-op without motionIds.
+  const minutesRowsForDisplay = await Promise.all(
+    minutesRows.map(async (row: any) => ({ ...row, displayMotions: await resolveMinutesMotions(ctx, row) })),
+  );
+
   return {
     sources: sources.sort((a, b) => (a.sourceDate ?? "").localeCompare(b.sourceDate ?? "")),
     facts: facts.sort((a, b) => String(a.label ?? "").localeCompare(String(b.label ?? ""))),
     events: events.sort((a, b) => String(a.eventDate ?? "").localeCompare(String(b.eventDate ?? ""))),
     boardTerms: boardTerms.sort((a, b) => String(a.startDate ?? "").localeCompare(String(b.startDate ?? ""))),
-    motions: mergeMotionRecords(motions, minutesRows, meetingRows, sources),
+    motions: mergeMotionRecords(motions, minutesRowsForDisplay, meetingRows, sources),
     budgets: budgets.sort((a, b) => String(a.fiscalYear ?? "").localeCompare(String(b.fiscalYear ?? ""))),
   };
 }

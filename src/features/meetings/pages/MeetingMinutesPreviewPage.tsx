@@ -12,6 +12,7 @@ import { formatDate } from "../../../lib/format";
 import { exportWordDocx } from "../../../lib/docx";
 import { exportPdfDownload, printPdfDocument } from "../../../lib/pdf";
 import { renderMinutesHtml } from "../lib/minutesRenderer";
+import { minutesMotionsForDisplay } from "../../../../shared/minutesMotions";
 import { MinutesDocumentPreview } from "../components/MinutesDocumentPreview";
 import { getQuorumSnapshot, personLinkCandidates } from "../components/MeetingDetailSupport";
 import { motionPersonDisplayName } from "../../../components/MotionEditor";
@@ -114,7 +115,7 @@ export function MeetingMinutesPreviewPage() {
       quorumSourceLabel: quorumSnapshot.label,
       discussion: minutes.discussion,
       sections: minutes.sections ?? null,
-      motions: (minutes.motions as any[]).map((m: any) => ({
+      motions: minutesMotionsForDisplay(minutes).map((m: any) => ({
         ...m,
         movedBy: motionPersonDisplayName(m.movedBy, motionPeople, { memberId: m.movedByMemberId, directorId: m.movedByDirectorId }),
         secondedBy: motionPersonDisplayName(m.secondedBy, motionPeople, { memberId: m.secondedByMemberId, directorId: m.secondedByDirectorId }),

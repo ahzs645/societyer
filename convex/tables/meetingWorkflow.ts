@@ -123,6 +123,12 @@ export const meetingWorkflowTables = {
     primaryMeetingId: v.optional(v.id("meetings")), // where it was last considered
     targetMeetingId: v.optional(v.id("meetings")), // where it's planned to go
     minutesId: v.optional(v.id("minutes")),
+    // The "approval of previous minutes" link: which minutes this motion adopts.
+    // Mirrored from the embedded motion so a table-backed read can restore the
+    // adoption relationship (drives the pending-adoptions "already recorded"
+    // check). Part of finishing the motions migration; see
+    // docs/motions-migration-finish-scope.md.
+    adoptsMinutesId: v.optional(v.id("minutes")),
     // Transitional positional link to minutes.sections[] mirrored from the
     // embedded motion during dual-write. Superseded by an agenda/section motionId
     // reference once reads are flipped, but kept so section grouping survives.

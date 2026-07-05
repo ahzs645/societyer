@@ -11,6 +11,7 @@ import {
   runsForFilingPortable,
   getRunPortable,
 } from "../shared/functions/filingBot";
+import { resolveMinutesMotions } from "../shared/functions/minutes";
 
 const STEP_DEFINITIONS: Record<string, { label: string; note?: string }[]> = {
   AnnualReport: [
@@ -161,8 +162,14 @@ export const buildFilingPacket = query({
     const lastAgm = meetings
       .filter((m) => m.type === "AGM" && m.status === "Held")
       .sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt))[0];
-    const lastAgmMinutes = lastAgm
+    const lastAgmMinutesRaw = lastAgm
       ? minutes.find((mn) => mn.meetingId === lastAgm._id)
+      : undefined;
+    // Flip the filing-packet motion read onto the first-class table (Phase 2C):
+    // attach resolved displayMotions so minutesMotionsForDisplay() below reads the
+    // table. No-op on data without motionIds (falls back to the embedded array).
+    const lastAgmMinutes = lastAgmMinutesRaw
+      ? { ...lastAgmMinutesRaw, displayMotions: await resolveMinutesMotions(toPortableQueryCtx(ctx), lastAgmMinutesRaw) }
       : undefined;
 
     if (kind === "AnnualReport") {

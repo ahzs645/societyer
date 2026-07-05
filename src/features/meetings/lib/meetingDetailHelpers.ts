@@ -1,4 +1,5 @@
 import { formatDateTime } from "../../../lib/format";
+import { minutesMotionsForDisplay } from "../../../../shared/minutesMotions";
 
 export type MeetingAgendaItemEntry = { title: string; depth: 0 | 1 };
 
@@ -32,7 +33,7 @@ export function hasStartedMinutesDraft(record: any): boolean {
     if ((section.actionItems?.length ?? 0) > 0) return true;
     if (String(section.motionText ?? "").trim().length > 0) return true;
   }
-  for (const motion of record.motions ?? []) {
+  for (const motion of minutesMotionsForDisplay(record) as any[]) {
     const outcome = String(motion?.outcome ?? "").trim().toLowerCase();
     if (outcome && outcome !== "pending") return true;
     if (motion?.votesFor != null || motion?.votesAgainst != null || motion?.abstentions != null) return true;

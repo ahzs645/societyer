@@ -47,6 +47,7 @@ import { renderMeetingPackHtml } from "../features/meetings/lib/meetingPackExpor
 import { resolveConflictMotion } from "../features/meetings/lib/conflictMotions";
 import { readStoredAgendaNumberingMode } from "../features/meetings/lib/agendaNumbering";
 import { meetingTypeCategory } from "../../shared/functions/meetings";
+import { minutesMotionsForDisplay } from "../../shared/minutesMotions";
 import { PendingAdoptionsCard, type PendingAdoption } from "../features/meetings/components/PendingAdoptionsCard";
 import type { MotionAdoptionTarget } from "../components/MotionEditor";
 import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMaterialDrawer";
@@ -459,7 +460,7 @@ export function MeetingDetailPage() {
   const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? [];
   const canonicalAgendaItems = agendaItemsFromRecord(agendaRecord);
   const agenda = agendaTree.map((entry) => entry.title);
-  const businessMotions = ((minutes?.motions ?? []) as Motion[]).filter((motion) => !isAdjournmentMotion(motion));
+  const businessMotions = (minutesMotionsForDisplay(minutes) as Motion[]).filter((motion) => !isAdjournmentMotion(motion));
   const minutesSourceExternalIds = sourceExternalIdsForMinutes(minutes);
   const linkedSourceCount = (sourceDocuments ?? []).length || minutesSourceExternalIds.length;
   const minutesDraftTranscript = minutes?.draftTranscript ?? "";
@@ -496,7 +497,7 @@ export function MeetingDetailPage() {
       meetingTitle: m.title,
       meetingType: m.type,
       scheduledAt: m.scheduledAt,
-      motionExists: ((minutes?.motions ?? []) as any[]).some(
+      motionExists: (minutesMotionsForDisplay(minutes) as any[]).some(
         (motion) => String(motion.adoptsMinutesId ?? "") === String(record._id),
       ),
     }));
@@ -546,7 +547,7 @@ export function MeetingDetailPage() {
       quorumSourceLabel: quorumSnapshot.label,
       discussion: minutes?.discussion ?? "",
       sections: minutes?.sections ?? null,
-      motions: (minutes?.motions ?? []) as any,
+      motions: minutesMotionsForDisplay(minutes) as any,
       decisions: minutes?.decisions ?? [],
       actionItems: (minutes?.actionItems ?? []) as any,
       approvedAt: minutes?.approvedAt ?? null,
@@ -832,9 +833,10 @@ export function MeetingDetailPage() {
       if (!hiddenIndices.has(i)) sectionIndexRemap.set(i, nextSectionIndex++);
     });
     const visibleSections = rawSections.filter((_, i) => !hiddenIndices.has(i));
+    const displayMotions = minutesMotionsForDisplay(minutes) as any[];
     const visibleMotions = publicOnly
-      ? (minutes.motions as any[]).filter((m) => m.sectionIndex == null || !hiddenIndices.has(m.sectionIndex))
-      : (minutes.motions as any[]);
+      ? displayMotions.filter((m) => m.sectionIndex == null || !hiddenIndices.has(m.sectionIndex))
+      : displayMotions;
     return {
       heldAt: minutes.heldAt,
       chairName: tx(minutes.chairName),
@@ -944,7 +946,7 @@ export function MeetingDetailPage() {
       (section.decisions ?? []).some((d: string) => (d ?? "").trim()) ||
       (section.actionItems ?? []).length > 0,
     )) return true;
-    if (((minutes.motions ?? []) as any[]).length > 0) return true;
+    if ((minutesMotionsForDisplay(minutes) as any[]).length > 0) return true;
     if (((minutes.decisions ?? []) as string[]).some((d) => (d ?? "").trim())) return true;
     if (((minutes.actionItems ?? []) as any[]).length > 0) return true;
     return false;
@@ -1003,7 +1005,7 @@ export function MeetingDetailPage() {
           const director = (directors ?? []).find((d: any) => d._id === conflict.directorId);
           // Resolve by text snapshot, not raw index — the motions array gets
           // reordered/deleted, and exported minutes are a legal record.
-          const resolution = resolveConflictMotion(conflict, (minutes?.motions ?? []) as any[]);
+          const resolution = resolveConflictMotion(conflict, minutesMotionsForDisplay(minutes) as any[]);
           const motionLabel =
             resolution?.kind === "resolved"
               ? resolution.motion.name || resolution.motion.text
@@ -2140,7 +2142,7 @@ export function MeetingDetailPage() {
                     societyId={society._id}
                     meetingId={meeting._id}
                     directors={directors ?? []}
-                    motions={((minutes?.motions ?? []) as any[])
+                    motions={(minutesMotionsForDisplay(minutes) as any[])
                       .map((motion, index) => ({ motion, index }))
                       .filter(({ motion }) => !isAdjournmentMotion(motion))
                       .map(({ motion, index }) => ({

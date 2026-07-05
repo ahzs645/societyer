@@ -12,6 +12,7 @@
 
 import type { PortableMutationCtx } from "../portable/ctx";
 import { riversideGamingProgramStatement } from "../programStatement";
+import { syncMotionsForMinutes } from "./minutes";
 
 // Seed the demo society "Riverside Community Society".
 // Idempotent-ish: if a society already exists, it wipes everything first.
@@ -1724,6 +1725,24 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
     notes: "Queued by workflow UNBC Affiliate ID Request · node notify",
   });
 
+  // Phase 1 of the motions migration (docs/motions-migration-finish-scope.md):
+  // route every seeded minutes through the same dual-write a real save uses, so
+  // demo data carries first-class `motions` rows and the ordered `motionIds`
+  // that Phase 2 reads flip onto. Done as one uniform pass rather than at each
+  // insert site.
+  const seededMinutes = await ctx.db
+    .query("minutes")
+    .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+    .collect();
+  for (const rec of seededMinutes) {
+    await syncMotionsForMinutes(ctx, {
+      societyId,
+      minutesId: rec._id,
+      meetingId: rec.meetingId,
+      motions: rec.motions ?? [],
+    });
+  }
+
   return { societyId: String(societyId) };
 }
 
@@ -1754,6 +1773,7 @@ async function wipe(ctx: PortableMutationCtx) {
     "workflowRuns",
     "workflows",
     "minutes",
+    "motions",
     "transcripts",
     "transcriptionJobs",
     "agendaItems",

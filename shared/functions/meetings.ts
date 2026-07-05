@@ -13,6 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { resolveMinutesMotions } from "./minutes";
 
 /* ----------------------- Inlined bylaw / quorum helpers ----------------------- */
 
@@ -750,7 +751,10 @@ export async function applyTemplatePortable(
   if (meeting.minutesId) {
     const minutes = await ctx.db.get(meeting.minutesId);
     const hasSections = Array.isArray(minutes?.sections) && minutes.sections.length > 0;
-    const hasMotions = Array.isArray(minutes?.motions) && minutes.motions.length > 0;
+    // Read motions from the first-class table (Phase 2C) so this "don't clobber
+    // recorded minutes" guard still detects motions once the embedded array is
+    // dropped. No-op on data without motionIds (falls back to the embedded array).
+    const hasMotions = (await resolveMinutesMotions(ctx, minutes)).length > 0;
     if (minutes && (replace || (!hasSections && !hasMotions))) {
       await ctx.db.patch(meeting.minutesId, {
         sections: templateItems.map((item) => ({

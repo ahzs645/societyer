@@ -122,6 +122,8 @@
     "backup:runtime": "./scripts/backup-runtime-data.sh",
     "test:bank-csv": "tsx scripts/check-bank-csv.ts",
     "test:motion-governance": "tsx scripts/check-motion-governance.ts",
+    "test:motions-resolve-parity": "tsx scripts/check-motions-resolve-parity.ts",
+    "test:motions-reconcile": "tsx scripts/check-motions-reconcile.ts",
     "test:bylaw-sections": "tsx scripts/check-bylaw-sections.ts",
     "test:grant-feed-parsers": "tsx scripts/check-grant-feed-parsers.ts"
   },
