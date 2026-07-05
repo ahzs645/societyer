@@ -487,6 +487,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "signatures:saveProfile", handler: signaturesFns.saveProfilePortable }),
   definePortableMutation({ name: "signatures:sign", handler: signaturesFns.signPortable }),
   definePortableMutation({ name: "signatures:revoke", handler: signaturesFns.revokePortable }),
+  definePortableMutation({ name: "signatures:deleteProfile", handler: signaturesFns.deleteProfilePortable }),
 
   // bylawRules
   definePortableQuery({ name: "bylawRules:getActive", handler: bylawRulesFns.getActivePortable }),
