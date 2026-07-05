@@ -48,8 +48,22 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     steps:
+      # GitHub's Pages publish backend intermittently returns "Deployment failed,
+      # try again later" on the first attempt and succeeds on a plain retry. The
+      # action does not self-retry that status, so we attempt twice: the first is
+      # continue-on-error (a flaky failure does NOT fail the job/run), and the
+      # second only runs if the first failed. The run is green whenever either
+      # attempt succeeds — no red runs, no manual re-runs.
       - name: Deploy to GitHub Pages
         id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Wait before retrying
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 20
+      - name: Deploy to GitHub Pages (retry)
+        id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
