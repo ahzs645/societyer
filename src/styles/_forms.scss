@@ -95,6 +95,14 @@
   gap: 2px;
 }
 
+/* The Replace + Remove buttons sit in the third grid column, laid out in a
+   row (overriding the column direction of the generic `> div` rule above). */
+.signature-profile-preview > .signature-profile-preview__actions {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
 .signature-profile-preview__img,
 .signature-upload-preview {
   display: block;
@@ -163,6 +171,19 @@
   object-fit: contain;
   justify-self: start;
 }
+/* Typed signatures have no image — render the name in the same cursive style as
+   the saved-profile preview so a "basic" typed sign-off still looks signed. */
+.signature-list-row__typed {
+  display: inline-flex;
+  align-items: center;
+  font-family: "Segoe Script", "Brush Script MT", cursive;
+  font-size: token('fs-lg');
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 .signature-list-row__head {
   grid-area: head;
   display: flex;
@@ -180,8 +201,14 @@
   grid-area: meta;
   font-size: token('fs-xs');
 }
-.signature-list-row__trash {
+.signature-list-row__actions {
   grid-area: trash;
+  align-self: start;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.signature-list-row__trash {
   align-self: start;
 }
 @container (min-width: 360px) {

@@ -5,7 +5,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { Badge, Field } from "./ui";
 import { useToast } from "./Toast";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pen, Trash2, Upload } from "lucide-react";
+import { Pen, Trash2, Upload, UserX } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { NameAutocomplete } from "./NameAutocomplete";
 import { SignaturePad } from "./SignaturePad";
@@ -99,6 +99,7 @@ export function SignaturePanel({
   const signatureProfiles = useQuery(api.signatures.listProfilesForSociety, { societyId });
   const sign = useMutation(api.signatures.sign);
   const revoke = useMutation(api.signatures.revoke);
+  const deleteProfile = useMutation(api.signatures.deleteProfile);
   const members = useQuery(api.members.list, { societyId });
   const directors = useQuery(api.directors.list, { societyId });
   const user = useCurrentUser();
@@ -197,7 +198,12 @@ export function SignaturePanel({
       selectedSigner.name.toLowerCase() === user.displayName?.trim().toLowerCase())
       ? user._id
       : undefined;
-  const useSavedProfile = !!selectedProfile && !customizeSignature;
+  // Switching to Draw/Upload signals intent to capture a NEW signature, so it
+  // takes priority over any saved signature the signer has on file. Without
+  // this, a signer with a saved (typically typed) signature would keep getting
+  // the saved one even after drawing a fresh signature.
+  const capturingNewSignature = signMode === "drawn" || signMode === "uploaded";
+  const useSavedProfile = !!selectedProfile && !customizeSignature && !capturingNewSignature;
   const activeImageDataUrl =
     useSavedProfile ? selectedProfile.imageDataUrl :
       signMode === "drawn" ? drawnDataUrl ?? undefined :
@@ -228,6 +234,25 @@ export function SignaturePanel({
     setSignMode("typed");
   };
 
+  // The saved profile (if any) behind a signed row — prefer the explicit link,
+  // otherwise fall back to matching the signer by director/member/name. Used to
+  // offer "remove this person's saved signature" separately from revoking the
+  // sign-off on this document.
+  const profileForSignature = (s: any) => {
+    const profiles = signatureProfiles ?? [];
+    if (s.signatureProfileId) {
+      const byId = profiles.find((profile: any) => profile._id === s.signatureProfileId);
+      if (byId) return byId;
+    }
+    return profiles.find((profile: any) =>
+      profileMatchesSigner(
+        profile,
+        { name: s.signerName, role: s.signerRole ?? "", directorId: s.directorId, memberId: s.memberId },
+        s.signerName,
+      ),
+    );
+  };
+
   return (
     <div className="card">
       <div className="card__head">
@@ -237,7 +262,9 @@ export function SignaturePanel({
         </h3>
       </div>
       <div className="card__body signature-panel__body">
-        {displayedSignatures.map((s) => (
+        {displayedSignatures.map((s) => {
+          const savedProfile = profileForSignature(s);
+          return (
           <div className="signature-list-row" key={s._id}>
             {s.imageDataUrl ? (
               <img
@@ -245,7 +272,11 @@ export function SignaturePanel({
                 src={s.imageDataUrl}
                 alt={`${s.signerName} signature`}
               />
-            ) : <span className="signature-list-row__img" aria-hidden />}
+            ) : (
+              <span className="signature-list-row__img signature-list-row__typed" aria-hidden>
+                {s.typedName ?? s.signerName}
+              </span>
+            )}
             <div className="signature-list-row__head">
               <span className="signature-list-row__name">{s.signerName}</span>
               {s.signerRole && <Badge>{s.signerRole}</Badge>}
@@ -253,28 +284,55 @@ export function SignaturePanel({
             <span className="signature-list-row__meta muted mono">
               {formatDateTime(s.signedAtISO)}
             </span>
-            <button
-              className="signature-list-row__trash btn btn--ghost btn--sm btn--icon"
-              aria-label={`Revoke signature from ${s.signerName}`}
-              onClick={async () => {
-                if (s.localOnly) {
-                  setLocalSignatures((current) => current.filter((signature) => signature._id !== s._id));
-                  return;
-                }
-                try {
-                  await revoke({ id: s._id, actingUserId: user?._id });
-                  setLocalSignatures((current) => current.filter((signature) => signature._id !== s._id));
-                } catch (error) {
-                  console.error("[signatures.revoke]", error);
-                  toast.error("Couldn't revoke signature", error instanceof Error ? error.message : String(error));
-                }
-              }}
-              title="Revoke"
-            >
-              <Trash2 size={12} />
-            </button>
+            <div className="signature-list-row__actions">
+              {savedProfile && (
+                <button
+                  className="btn btn--ghost btn--sm btn--icon"
+                  aria-label={`Remove ${s.signerName}'s saved signature from their account`}
+                  title="Remove saved signature from this person's account (keeps their sign-off on this document)"
+                  onClick={async () => {
+                    try {
+                      await deleteProfile({
+                        id: savedProfile._id as Id<"signatureProfiles">,
+                        actingUserId: user?._id,
+                      });
+                      toast.success("Saved signature removed", `Removed ${s.signerName}'s saved signature from their account`);
+                    } catch (error) {
+                      console.error("[signatures.deleteProfile]", error);
+                      toast.error(
+                        "Couldn't remove saved signature",
+                        error instanceof Error ? error.message : String(error),
+                      );
+                    }
+                  }}
+                >
+                  <UserX size={12} />
+                </button>
+              )}
+              <button
+                className="signature-list-row__trash btn btn--ghost btn--sm btn--icon"
+                aria-label={`Remove ${s.signerName}'s sign-off from this document`}
+                onClick={async () => {
+                  if (s.localOnly) {
+                    setLocalSignatures((current) => current.filter((signature) => signature._id !== s._id));
+                    return;
+                  }
+                  try {
+                    await revoke({ id: s._id, actingUserId: user?._id });
+                    setLocalSignatures((current) => current.filter((signature) => signature._id !== s._id));
+                  } catch (error) {
+                    console.error("[signatures.revoke]", error);
+                    toast.error("Couldn't remove sign-off", error instanceof Error ? error.message : String(error));
+                  }
+                }}
+                title="Remove sign-off from this document"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
           </div>
-        ))}
+          );
+        })}
 
         <div className="signature-form-row">
           <Field label={signerScope === "directors" ? "Director who signed" : "Person who signed"}>
@@ -335,6 +393,7 @@ export function SignaturePanel({
                     signerName: name,
                     signerRole,
                     imageDataUrl: activeImageDataUrl,
+                    typedName: activeTypedName,
                     signedAtISO: new Date().toISOString(),
                     userId: selectedSignerUserId,
                     localOnly: !signatureId,
@@ -352,21 +411,45 @@ export function SignaturePanel({
           </button>
         </div>
 
-        {selectedProfile && !customizeSignature && (
+        {useSavedProfile && (
           <div className="signature-profile-preview">
             <div>
               <span className="muted">Saved profile signature</span>
               <strong>{selectedProfile.signerName}</strong>
             </div>
             {profilePreview(selectedProfile, typedName.trim())}
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCustomizeSignature(true)}>
-              Replace
-            </button>
+            <div className="signature-profile-preview__actions">
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm btn--icon"
+                aria-label={`Delete ${selectedProfile.signerName}'s saved signature`}
+                title="Delete saved signature (removes it from this person, not this document)"
+                onClick={async () => {
+                  try {
+                    await deleteProfile({
+                      id: selectedProfile._id as Id<"signatureProfiles">,
+                      actingUserId: user?._id,
+                    });
+                    setCustomizeSignature(true);
+                    toast.success("Saved signature removed", selectedProfile.signerName);
+                  } catch (error) {
+                    console.error("[signatures.deleteProfile]", error);
+                    toast.error(
+                      "Couldn't remove saved signature",
+                      error instanceof Error ? error.message : String(error),
+                    );
+                  }
+                }}
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
           </div>
         )}
 
-        {(!selectedProfile || customizeSignature) && (
-          <>
+        {/* Capture a signature. Always available so drawing/uploading works even
+            when the signer has a saved signature — a fresh draw/upload wins. */}
+        <>
             <div className="signature-mode-toggle" role="tablist" aria-label="Signature method">
               <button
                 type="button"
@@ -437,7 +520,6 @@ export function SignaturePanel({
               <span>Save this signature to the signer profile</span>
             </label>
           </>
-        )}
 
         {nameOptions.length === 0 && (
           <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>

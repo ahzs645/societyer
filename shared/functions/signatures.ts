@@ -253,3 +253,24 @@ export async function revokePortable(
     createdAtISO: new Date().toISOString(),
   });
 }
+
+export async function deleteProfilePortable(
+  ctx: PortableMutationCtx,
+  { id, actingUserId }: { id: string; actingUserId?: string },
+) {
+  const profile = await ctx.db.get(id);
+  if (!profile) return;
+  // Same actor rule as revoke(): only enforced when an actor is provided and
+  // the saved signature is linked to a specific user — an admin may remove
+  // another user's saved signature, otherwise you can only remove your own.
+  if (actingUserId) {
+    const actor = await ctx.db.get(actingUserId);
+    if (!actor || actor.societyId !== profile.societyId) {
+      throw new Error("Signature actor is not part of this society.");
+    }
+    if (profile.userId && profile.userId !== actingUserId && !canActAs(actor.role as Role, "Admin")) {
+      throw new Error("Only an admin can remove another user's saved signature.");
+    }
+  }
+  await ctx.db.delete(id);
+}

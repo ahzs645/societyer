@@ -6,6 +6,7 @@ import {
   saveProfilePortable,
   signPortable,
   revokePortable,
+  deleteProfilePortable,
 } from "../shared/functions/signatures";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
@@ -66,4 +67,10 @@ export const revoke = mutation({
   args: { id: v.id("signatures"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: (ctx, args) => revokePortable(toPortableMutationCtx(ctx), args),
+});
+
+export const deleteProfile = mutation({
+  args: { id: v.id("signatureProfiles"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
+  handler: (ctx, args) => deleteProfilePortable(toPortableMutationCtx(ctx), args),
 });
