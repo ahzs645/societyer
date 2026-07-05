@@ -233,10 +233,13 @@ function statusFromEmbeddedOutcome(raw?: string): { status: string; outcome?: st
   return { status: "Moved" }; // unknown → caller preserves the raw value in `note`
 }
 
-/** Mirror one minutes doc's embedded `motions[]` into the motions table.
- *  Delete-and-reinsert keeps the mirror consistent during the dual-write phase:
- *  reads still come from the embedded array, so motion ids are not yet relied
- *  upon. Reconcile-by-identity replaces this when reads are flipped. */
+/** Mirror one minutes doc's embedded `motions[]` into the motions table by
+ *  RECONCILE-BY-IDENTITY: an embedded motion carrying a `motionId` updates that
+ *  row in place (stable id across saves), a new one is inserted, and rows whose
+ *  motion was removed are deleted. The stable id is back-linked into
+ *  `minutes.motions[]` and the ordered `minutes.motionIds`, so references
+ *  (motionIds, history, future links) survive edits instead of churning on every
+ *  save. Reads come from the table via resolveMinutesMotions. */
 export async function syncMotionsForMinutes(
   ctx: PortableMutationCtx,
   args: { societyId: any; minutesId: any; meetingId?: any; motions?: any[] },
@@ -249,10 +252,12 @@ export async function syncMotionsForMinutes(
       .query("motions")
       .withIndex("by_minutes", (q) => q.eq("minutesId", args.minutesId))
       .collect();
-    for (const row of existing) await ctx.db.delete(row._id);
+    const existingById = new Map(existing.map((row: any) => [String(row._id), row]));
+    const keptIds = new Set<string>();
 
     const now = new Date().toISOString();
     const motionIds: any[] = [];
+    const backlinkedMotions: any[] = [];
     for (const m of args.motions ?? []) {
       const { status, outcome } = statusFromEmbeddedOutcome(m.outcome);
       const note = KNOWN_EMBEDDED_OUTCOMES.has(String(m.outcome ?? "").trim().toLowerCase())
@@ -276,58 +281,78 @@ export async function syncMotionsForMinutes(
       const decidedBy =
         m.decidedBy ??
         defaultDecidedByFor({ text: m.text, sectionTitle: m.sectionTitle });
-      const insertedId = await ctx.db.insert(
-        "motions",
-        stripUndefined({
-          societyId: args.societyId,
-          minutesId: args.minutesId,
-          primaryMeetingId: args.meetingId,
-          title: m.name,
-          text: m.text ?? "",
-          movedBy: m.movedBy,
-          movedByMemberId: m.movedByMemberId,
-          movedByDirectorId: m.movedByDirectorId,
-          secondedBy: m.secondedBy,
-          secondedByMemberId: m.secondedByMemberId,
-          secondedByDirectorId: m.secondedByDirectorId,
-          resolutionTypeLabel: m.resolutionType,
-          status,
-          outcome,
-          decidedBy,
-          proceduralKind: kind?.key,
-          tags: tags.length ? tags : undefined,
-          votesFor: m.votesFor,
-          votesAgainst: m.votesAgainst,
-          abstentions: m.abstentions,
-          sectionIndex: m.sectionIndex,
-          sectionTitle: m.sectionTitle,
-          motionTemplateId: m.motionTemplateId,
-          adoptsMinutesId: m.adoptsMinutesId,
-          source: "minutes",
-          history: [
-            stripUndefined({
-              at: now,
-              minutesId: args.minutesId,
-              meetingId: args.meetingId,
-              status,
-              outcome,
-              votesFor: m.votesFor,
-              votesAgainst: m.votesAgainst,
-              abstentions: m.abstentions,
-              note,
-            }),
-          ],
+      const historyEntry = stripUndefined({
+        at: now,
+        minutesId: args.minutesId,
+        meetingId: args.meetingId,
+        status,
+        outcome,
+        votesFor: m.votesFor,
+        votesAgainst: m.votesAgainst,
+        abstentions: m.abstentions,
+        note,
+      });
+      const fields = stripUndefined({
+        societyId: args.societyId,
+        minutesId: args.minutesId,
+        primaryMeetingId: args.meetingId,
+        title: m.name,
+        text: m.text ?? "",
+        movedBy: m.movedBy,
+        movedByMemberId: m.movedByMemberId,
+        movedByDirectorId: m.movedByDirectorId,
+        secondedBy: m.secondedBy,
+        secondedByMemberId: m.secondedByMemberId,
+        secondedByDirectorId: m.secondedByDirectorId,
+        resolutionTypeLabel: m.resolutionType,
+        status,
+        outcome,
+        decidedBy,
+        proceduralKind: kind?.key,
+        tags: tags.length ? tags : undefined,
+        votesFor: m.votesFor,
+        votesAgainst: m.votesAgainst,
+        abstentions: m.abstentions,
+        sectionIndex: m.sectionIndex,
+        sectionTitle: m.sectionTitle,
+        motionTemplateId: m.motionTemplateId,
+        adoptsMinutesId: m.adoptsMinutesId,
+        source: "minutes",
+      });
+      // Reconcile by identity: an embedded motion that already links a row of
+      // this minutes updates it in place (replace() overwrites the whole row so
+      // fields cleared in the editor don't linger); otherwise insert a fresh row.
+      const linkId = m.motionId != null && existingById.has(String(m.motionId)) ? m.motionId : null;
+      let rowId: any;
+      if (linkId) {
+        const prev: any = existingById.get(String(linkId));
+        await ctx.db.replace(linkId, {
+          ...fields,
+          history: [historyEntry],
+          createdAtISO: prev?.createdAtISO ?? now,
+          updatedAtISO: now,
+        });
+        rowId = linkId;
+      } else {
+        rowId = await ctx.db.insert("motions", {
+          ...fields,
+          history: [historyEntry],
           createdAtISO: now,
           updatedAtISO: now,
-        }),
-      );
-      motionIds.push(insertedId);
+        });
+      }
+      keptIds.add(String(rowId));
+      motionIds.push(rowId);
+      backlinkedMotions.push({ ...m, motionId: rowId });
     }
-    // Maintain the ordered id references on the minutes alongside the embedded
-    // array (same best-effort block as the mirror rows: on a throw, motionIds
-    // stays as-is and is corrected on the next save). Reads flip onto it in
-    // Phase 2 of docs/motions-migration-finish-scope.md.
-    await ctx.db.patch(args.minutesId, { motionIds });
+    // Drop rows whose motion was removed from the embedded array this save.
+    for (const row of existing) {
+      if (!keptIds.has(String(row._id))) await ctx.db.delete(row._id);
+    }
+    // Back-link the stable row id into each embedded motion and maintain the
+    // ordered id references, so the next save reconciles in place instead of
+    // regenerating rows. Same best-effort block as the mirror writes.
+    await ctx.db.patch(args.minutesId, { motions: backlinkedMotions, motionIds });
   } catch (err) {
     console.warn(
       `[motions] dual-write sync failed for minutes ${String(args.minutesId)}: ${String(err)}`,
