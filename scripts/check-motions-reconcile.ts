@@ -14,6 +14,7 @@ import {
 } from "../shared/portable/index";
 import { runPortable } from "../shared/functions/seed";
 import { syncMotionsForMinutes } from "../shared/functions/minutes";
+import { syncForMeetingPortable as agendaSyncForMeeting } from "../shared/functions/agendas";
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
@@ -105,4 +106,33 @@ assert.deepEqual(after2.ids, idsAfterFirst, "re-saving the same array keeps ever
 assert.equal(after2.rowCount, idsAfterFirst.length, "no row churn on an idempotent save");
 
 console.log(`✓ reconcile-by-identity: stable ids across edit/add/remove + idempotent re-save (${idsAfterFirst.length} motions)`);
+
+// The agenda-sync path (agendas.ts) now routes through the same shared reconcile
+// dual-write, so re-syncing an agenda must keep motion-row ids stable (a
+// delete-and-reinsert copy would regenerate them all).
+const meetingPick: any = await query("meetingPick", async (ctx: any) => {
+  const minutes = (await ctx.db.query("minutes").collect()).find((m: any) => (m.motions ?? []).length >= 1);
+  return minutes ? { societyId: minutes.societyId, meetingId: minutes.meetingId, minutesId: minutes._id } : null;
+});
+assert.ok(meetingPick, "found a minutes + meeting for the agenda-sync test");
+
+const agendaItems = [{ title: "Reconcile probe motion", type: "motion", motionText: "BE IT RESOLVED THAT reconcile is stable." }];
+const idsForMinutes = (name: string) =>
+  query(name, async (ctx: any) => {
+    const rows = await ctx.db.query("motions").withIndex("by_minutes", (q: any) => q.eq("minutesId", meetingPick.minutesId)).collect();
+    return rows.map((r: any) => String(r._id)).sort();
+  });
+
+await mutate("agendaSync1", async (ctx: any) => {
+  await agendaSyncForMeeting(ctx, { societyId: meetingPick.societyId, meetingId: meetingPick.meetingId, items: agendaItems });
+});
+const idsAfterSync1: any = await idsForMinutes("afterSync1");
+await mutate("agendaSync2", async (ctx: any) => {
+  await agendaSyncForMeeting(ctx, { societyId: meetingPick.societyId, meetingId: meetingPick.meetingId, items: agendaItems });
+});
+const idsAfterSync2: any = await idsForMinutes("afterSync2");
+assert.ok(idsAfterSync1.length > 0, "agenda sync produced motion rows");
+assert.deepEqual(idsAfterSync2, idsAfterSync1, "agenda re-sync reconciles in place (motion-row ids stable)");
+console.log(`✓ agenda-sync path keeps motion-row ids stable across re-sync (${idsAfterSync1.length} rows)`);
+
 console.log("\nmotions reconcile checks passed.");

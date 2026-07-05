@@ -5,144 +5,15 @@
  *  startMinutesFromAgenda / removeItem / reorderItems).
  *
  * Reads/writes the `agendas` and `agendaItems` tables (plus `meetings`,
- * `minutes`, `motions`, `motionTemplates`) over `ctx.db`. `syncMotionsForMinutes`
- * is a portable copy of `convex/motions.ts`'s dual-write helper (it only touches
- * `ctx.db`, so it lives here rather than reaching into the Convex-typed module).
+ * `minutes`, `motions`, `motionTemplates`) over `ctx.db`. The minutes→motions
+ * dual-write is the shared `syncMotionsForMinutes` from `./minutes`
+ * (reconcile-by-identity, so agenda syncs keep stable motion-row ids too).
  * Each handler runs unchanged on hosted Convex, the local Dexie runtime, and the
  * convex-test oracle.
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import {
-  applyProceduralTags,
-  classifyProceduralMotion,
-  defaultDecidedByFor,
-} from "../proceduralMotions";
-
-// ----- portable motions dual-write helper (copied from convex/motions.ts) ----
-
-function stripUndefined(obj: Record<string, any>) {
-  const out: Record<string, any> = {};
-  for (const [k, val] of Object.entries(obj)) if (val !== undefined) out[k] = val;
-  return out;
-}
-
-const KNOWN_EMBEDDED_OUTCOMES = new Set([
-  "",
-  "pending",
-  "carried",
-  "defeated",
-  "tabled",
-  "deferred",
-  "withdrawn",
-]);
-
-/** Map a legacy embedded `outcome` string to the explicit (status, outcome)
- *  split. See the backfill map in docs/motions-first-class-object-design.md. */
-function statusFromEmbeddedOutcome(raw?: string): { status: string; outcome?: string } {
-  const value = String(raw ?? "").trim().toLowerCase();
-  if (!value || value === "pending") return { status: "Moved" };
-  if (value === "carried") return { status: "Voted", outcome: "Carried" };
-  if (value === "defeated") return { status: "Voted", outcome: "Defeated" };
-  if (value === "tabled") return { status: "Tabled" };
-  if (value === "deferred") return { status: "Deferred" };
-  if (value === "withdrawn") return { status: "Withdrawn" };
-  return { status: "Moved" }; // unknown → caller preserves the raw value in `note`
-}
-
-/** Mirror one minutes doc's embedded `motions[]` into the motions table.
- *  Delete-and-reinsert keeps the mirror consistent during the dual-write phase:
- *  reads still come from the embedded array, so motion ids are not yet relied
- *  upon. Reconcile-by-identity replaces this when reads are flipped. */
-async function syncMotionsForMinutes(
-  ctx: PortableMutationCtx,
-  args: { societyId: any; minutesId: any; meetingId?: any; motions?: any[] },
-) {
-  // Best-effort: a mirror failure must never roll back the minutes save that
-  // triggered it. A stale mirror is corrected by the step-2 backfill or the
-  // next edit; a broken minutes save is a user-facing regression.
-  try {
-    const existing = await ctx.db
-      .query("motions")
-      .withIndex("by_minutes", (q) => q.eq("minutesId", args.minutesId))
-      .collect();
-    for (const row of existing) await ctx.db.delete(row._id);
-
-    const now = new Date().toISOString();
-    for (const m of args.motions ?? []) {
-      const { status, outcome } = statusFromEmbeddedOutcome(m.outcome);
-      const note = KNOWN_EMBEDDED_OUTCOMES.has(String(m.outcome ?? "").trim().toLowerCase())
-        ? undefined
-        : `legacy outcome: ${m.outcome}`;
-      // Classify recurring procedural motions (adjournment, approve-minutes,
-      // approve-agenda, recess, receive-reports) from their wording and stamp
-      // the first-class record with an explicit kind + label, so the master
-      // list filters by a stored tag instead of regex-matching every render.
-      // Default the "decided by" axis from the catalogue (most procedural
-      // motions pass by general consent, carrying without a recorded tally).
-      const kind = classifyProceduralMotion({
-        text: m.text,
-        sectionTitle: m.sectionTitle,
-        resolutionType: m.resolutionType,
-      });
-      const tags = applyProceduralTags(m.tags, {
-        text: m.text,
-        sectionTitle: m.sectionTitle,
-      });
-      const decidedBy =
-        m.decidedBy ??
-        defaultDecidedByFor({ text: m.text, sectionTitle: m.sectionTitle });
-      await ctx.db.insert(
-        "motions",
-        stripUndefined({
-          societyId: args.societyId,
-          minutesId: args.minutesId,
-          primaryMeetingId: args.meetingId,
-          title: m.name,
-          text: m.text ?? "",
-          movedBy: m.movedBy,
-          movedByMemberId: m.movedByMemberId,
-          movedByDirectorId: m.movedByDirectorId,
-          secondedBy: m.secondedBy,
-          secondedByMemberId: m.secondedByMemberId,
-          secondedByDirectorId: m.secondedByDirectorId,
-          resolutionTypeLabel: m.resolutionType,
-          status,
-          outcome,
-          decidedBy,
-          proceduralKind: kind?.key,
-          tags: tags.length ? tags : undefined,
-          votesFor: m.votesFor,
-          votesAgainst: m.votesAgainst,
-          abstentions: m.abstentions,
-          sectionIndex: m.sectionIndex,
-          sectionTitle: m.sectionTitle,
-          motionTemplateId: m.motionTemplateId,
-          source: "minutes",
-          history: [
-            stripUndefined({
-              at: now,
-              minutesId: args.minutesId,
-              meetingId: args.meetingId,
-              status,
-              outcome,
-              votesFor: m.votesFor,
-              votesAgainst: m.votesAgainst,
-              abstentions: m.abstentions,
-              note,
-            }),
-          ],
-          createdAtISO: now,
-          updatedAtISO: now,
-        }),
-      );
-    }
-  } catch (err) {
-    console.warn(
-      `[motions] dual-write sync failed for minutes ${String(args.minutesId)}: ${String(err)}`,
-    );
-  }
-}
+import { syncMotionsForMinutes } from "./minutes";
 
 // ----- queries --------------------------------------------------------------
 
