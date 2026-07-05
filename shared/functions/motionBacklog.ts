@@ -181,6 +181,7 @@ export async function createPortable(
     societyId: string;
     title: string;
     motionText: string;
+    tags?: string[];
     category?: string;
     priority?: string;
     source?: string;
@@ -191,7 +192,11 @@ export async function createPortable(
     societyId: args.societyId,
     title: args.title,
     text: args.motionText,
-    category: args.category ?? "governance",
+    // Labels replace the old fixed "category" enum. `category` is still accepted
+    // for back-compat callers but no longer defaulted, so new backlog motions
+    // carry free-form tags only (procedural tags are merged by insertMotion).
+    tags: args.tags,
+    category: args.category,
     status: "Backlog",
     backlogPriority: args.priority ?? "normal",
     source: args.source ?? "manual",

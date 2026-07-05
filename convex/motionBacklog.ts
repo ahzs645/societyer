@@ -41,6 +41,7 @@ export const create = mutation({
     societyId: v.id("societies"),
     title: v.string(),
     motionText: v.string(),
+    tags: v.optional(v.array(v.string())),
     category: v.optional(v.string()),
     priority: v.optional(v.string()),
     source: v.optional(v.string()),

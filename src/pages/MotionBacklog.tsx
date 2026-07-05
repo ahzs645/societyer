@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { BookOpen, CalendarPlus, ClipboardList, FileText, Plus, Sparkles, Trash2 } from "lucide-react";
+import { BookOpen, CalendarPlus, ClipboardList, FileText, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -14,7 +14,7 @@ import { formatDate } from "../lib/format";
 const EMPTY_FORM = {
   title: "",
   motionText: "",
-  category: "governance",
+  tags: [] as string[],
   priority: "normal",
   notes: "",
 };
@@ -23,6 +23,7 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
   const society = useSociety();
   const toast = useToast();
   const [form, setForm] = useState(EMPTY_FORM);
+  const [tagDraft, setTagDraft] = useState("");
   const [isAddingBacklogMotion, setIsAddingBacklogMotion] = useState(false);
   const [agendaTargets, setAgendaTargets] = useState<Record<string, string>>({});
   const [minutesMeetingId, setMinutesMeetingId] = useState("");
@@ -55,13 +56,21 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
       societyId: society._id,
       title: form.title.trim(),
       motionText: form.motionText.trim(),
-      category: form.category,
+      tags: form.tags,
       priority: form.priority,
       notes: form.notes.trim() || undefined,
     });
     setForm(EMPTY_FORM);
+    setTagDraft("");
     setIsAddingBacklogMotion(false);
     toast.success("Motion added to backlog");
+  };
+
+  const addComposerTag = () => {
+    const value = tagDraft.trim().toLowerCase();
+    setTagDraft("");
+    if (!value || form.tags.includes(value)) return;
+    setForm({ ...form, tags: [...form.tags, value] });
   };
 
   const addPrivacySetupMotions = async () => {
@@ -145,16 +154,38 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
                       placeholder="BE IT RESOLVED THAT..."
                     />
                   </Field>
-                  <div className="two-col" style={{ gap: 12 }}>
-                    <Field label="Category">
-                      <Select value={form.category} onChange={(value) => setForm({ ...form, category: value })}
-                        options={["privacy", "governance", "finance", "membership", "operations", "bylaws", "other"].map((category) => ({ value: category, label: formatLabel(category) }))} />
-                    </Field>
-                    <Field label="Priority">
-                      <Select value={form.priority} onChange={(value) => setForm({ ...form, priority: value })}
-                        options={[{ value: "high", label: "High" }, { value: "normal", label: "Normal" }, { value: "low", label: "Low" }]} />
-                    </Field>
-                  </div>
+                  <Field label="Labels">
+                    <div className="row" style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+                      {form.tags.map((tag) => (
+                        <Badge key={tag} tone="neutral">
+                          <span className="row" style={{ gap: 2, alignItems: "center" }}>
+                            {tag}
+                            <button
+                              className="btn btn--ghost btn--icon"
+                              style={{ padding: 0, height: 14 }}
+                              aria-label={`Remove label ${tag}`}
+                              onClick={() => setForm({ ...form, tags: form.tags.filter((t) => t !== tag) })}
+                            >
+                              <X size={10} />
+                            </button>
+                          </span>
+                        </Badge>
+                      ))}
+                      <input
+                        className="input"
+                        style={{ width: 120, height: 28, fontSize: 12 }}
+                        value={tagDraft}
+                        onChange={(event) => setTagDraft(event.target.value)}
+                        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addComposerTag(); } }}
+                        placeholder="+ label"
+                        aria-label="Add label"
+                      />
+                    </div>
+                  </Field>
+                  <Field label="Priority">
+                    <Select value={form.priority} onChange={(value) => setForm({ ...form, priority: value })}
+                      options={[{ value: "high", label: "High" }, { value: "normal", label: "Normal" }, { value: "low", label: "Low" }]} />
+                  </Field>
                   <Field label="Notes">
                     <input
                       className="input"
@@ -197,7 +228,10 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
                           <strong>{item.title}</strong>
                           <div className="motion-backlog__badges">
                             <Badge tone={statusTone(item.status)}>{item.status}</Badge>
-                            {item.category && <Badge tone="neutral">{formatLabel(item.category)}</Badge>}
+                            {(item.tags ?? []).map((tag: string) => (
+                              <Badge key={tag} tone="neutral">{tag}</Badge>
+                            ))}
+                            {!item.tags?.length && item.category && <Badge tone="neutral">{formatLabel(item.category)}</Badge>}
                             {item.priority && <Badge tone={item.priority === "high" ? "warn" : "neutral"}>{formatLabel(item.priority)}</Badge>}
                           </div>
                         </div>
