@@ -8,6 +8,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { resolveMinutesMotions } from "./minutes";
 
 export async function seedDefaultsPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }) {
   const existing = await ctx.db
@@ -161,7 +162,10 @@ export async function createFromMeetingPortable(
     .query("minutes")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
     .first();
-  const motions = minutes?.motions ?? [];
+  // Read motions from the first-class table (Phase 2C) so a template captured
+  // from these minutes keeps its motion text once the embedded array is dropped.
+  // No-op on data without motionIds (falls back to the embedded array).
+  const motions = await resolveMinutesMotions(ctx, minutes);
   const agenda = await getCanonicalAgendaEntries(ctx, meetingId);
   const items = agenda.map((entry, index) => {
     const motion = motions.find((candidate: any) => candidate.sectionIndex === index);
