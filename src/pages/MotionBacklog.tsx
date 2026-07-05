@@ -197,7 +197,7 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
                           <strong>{item.title}</strong>
                           <div className="motion-backlog__badges">
                             <Badge tone={statusTone(item.status)}>{item.status}</Badge>
-                            <Badge tone="neutral">{formatLabel(item.category)}</Badge>
+                            {item.category && <Badge tone="neutral">{formatLabel(item.category)}</Badge>}
                             {item.priority && <Badge tone={item.priority === "high" ? "warn" : "neutral"}>{formatLabel(item.priority)}</Badge>}
                           </div>
                         </div>
@@ -271,7 +271,8 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
   );
 }
 
-function formatLabel(value: string) {
+function formatLabel(value?: string) {
+  if (!value) return "";
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
