@@ -1,32 +1,79 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { CalendarPlus, ClipboardList, Gavel, Plus, Tag, X } from "lucide-react";
+import { CalendarPlus, ClipboardList, Gavel, Pencil, Plus, Tag as TagIcon, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
+import type { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Field } from "../components/ui";
+import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { isRoutineMotion } from "../lib/motionGovernance";
+import { ROUTINE_MOTION_TAGS } from "../../shared/proceduralMotions";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/modules/object-record";
 
-// Master list of every first-class motion (the referenceable record the society
-// decisions live in). The "Default" view hides routine motions (adjournment,
-// approve-previous-minutes, or anything tagged routine); switch to "All" to see
-// them. Tags drive the filtering and are editable inline.
+const MOTION_STATUSES = ["Backlog", "Draft", "Agenda", "Moved", "Tabled", "Deferred", "Withdrawn", "Voted", "Archived"];
+const MOTION_OUTCOMES = [
+  { value: "", label: "—" },
+  { value: "Carried", label: "Carried" },
+  { value: "Defeated", label: "Defeated" },
+];
+
+type MotionForm = {
+  title: string;
+  text: string;
+  status: string;
+  outcome: string;
+  movedBy: string;
+  secondedBy: string;
+  votesFor: string;
+  votesAgainst: string;
+  abstentions: string;
+};
+
+// A motion is safely editable from this master page only if it's a genuine
+// first-class row. Motions that mirror a meeting's minutes (`minutesId` set) get
+// overwritten on the next minutes sync, and synthetic "from minutes" rows aren't
+// real rows — both must be edited in the meeting instead (via the meeting link).
+function canEditMotion(m: any): boolean {
+  return !m.readOnly && !m.minutesId;
+}
+
+// Master list of every first-class motion (the referenceable record the society's
+// decisions live in), rendered on the object-record RecordTable. The seeded
+// "Motions" view hides routine bookkeeping (adjournment, accept-previous-minutes,
+// …) via a notIn filter on the labels field; switch to "All motions" to see them.
+// Labels are free-form and editable inline.
 export function MotionsPage() {
   const society = useSociety();
   const toast = useToast();
-  const [view, setView] = useState<"default" | "all">("default");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [tagFilter, setTagFilter] = useState("all");
-  const [search, setSearch] = useState("");
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [tagDraft, setTagDraft] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<any | null>(null);
+  const [form, setForm] = useState<MotionForm | null>(null);
 
   const motions = useQuery(api.motions.list, society ? { societyId: society._id } : "skip");
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const setTags = useMutation(api.motions.setTags);
+  const update = useMutation(api.motions.update);
+
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "motion",
+    viewId: currentViewId,
+  });
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   const meetingById = useMemo(() => {
     const map = new Map<string, any>();
@@ -34,66 +81,91 @@ export function MotionsPage() {
     return map;
   }, [meetings]);
 
-  const allStatuses = useMemo<string[]>(
-    () => {
-      const set = new Set<string>();
-      (motions ?? []).forEach((m: any) => {
-        const s = String(m.status ?? "");
-        if (s) set.add(s);
-      });
-      return Array.from(set).sort();
-    },
-    [motions],
-  );
-  const allTags = useMemo<string[]>(
-    () => {
-      const set = new Set<string>();
-      (motions ?? []).forEach((m: any) => (m.tags ?? []).forEach((t: string) => set.add(String(t))));
-      return Array.from(set).sort();
-    },
-    [motions],
-  );
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return (motions ?? []).filter((m: any) => {
-      if (view === "default" && isRoutineMotion(m)) return false;
-      if (statusFilter !== "all" && m.status !== statusFilter) return false;
-      if (tagFilter !== "all" && !(m.tags ?? []).map((t: string) => String(t)).includes(tagFilter)) {
-        return false;
-      }
-      if (q) {
-        const hay = `${m.title ?? ""} ${m.text ?? ""} ${m.movedBy ?? ""} ${m.secondedBy ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
+  const records = useMemo(() => {
+    return (motions ?? []).map((m: any) => {
+      const tags = Array.isArray(m.tags) ? m.tags.map(String) : [];
+      // Ensure routine motions carry a routine label so the seeded default view's
+      // notIn(tags) filter hides them — parity with the old isRoutineMotion(),
+      // which also classified by proceduralKind/wording, not just stored tags
+      // (e.g. synthetic "from minutes" motions that were never tagged).
+      const tagsForFilter =
+        isRoutineMotion(m) && !tags.some((t: string) => ROUTINE_MOTION_TAGS.includes(t))
+          ? [...tags, "routine"]
+          : tags;
+      const meeting = m.primaryMeetingId ? meetingById.get(String(m.primaryMeetingId)) : null;
+      return {
+        ...m,
+        _hasTitle: !!(m.title && String(m.title).trim()),
+        title: m.title ?? "",
+        tags: tagsForFilter,
+        meeting: meeting ? `${meeting.title} (${formatDate(meeting.scheduledAt)})` : "",
+      };
     });
-  }, [motions, view, statusFilter, tagFilter, search]);
+  }, [motions, meetingById]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const hiddenCount =
-    view === "default" ? (motions ?? []).filter((m: any) => isRoutineMotion(m)).length : 0;
-
-  const addTag = async (motion: any) => {
-    const value = (tagDraft[String(motion._id)] ?? "").trim().toLowerCase();
+  const addTag = async (row: any) => {
+    const value = (tagDraft[String(row._id)] ?? "").trim().toLowerCase();
     if (!value) return;
-    const next = Array.from(new Set([...(motion.tags ?? []).map((t: string) => String(t)), value]));
-    setTagDraft({ ...tagDraft, [String(motion._id)]: "" });
+    const next = Array.from(new Set([...(row.tags ?? []).map((t: string) => String(t)), value]));
+    setTagDraft({ ...tagDraft, [String(row._id)]: "" });
     try {
-      await setTags({ motionId: motion._id, tags: next });
+      await setTags({ motionId: row._id, tags: next });
     } catch (err: any) {
-      toast.error(err?.message ?? "Could not update tags");
+      toast.error(err?.message ?? "Could not update labels");
+    }
+  };
+  const removeTag = async (row: any, tag: string) => {
+    const next = (row.tags ?? []).map((t: string) => String(t)).filter((t: string) => t !== tag);
+    try {
+      await setTags({ motionId: row._id, tags: next });
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not update labels");
     }
   };
 
-  const removeTag = async (motion: any, tag: string) => {
-    const next = (motion.tags ?? []).map((t: string) => String(t)).filter((t: string) => t !== tag);
+  const openEdit = (row: any) => {
+    setEditing(row);
+    setForm({
+      title: row.title ?? "",
+      text: row.text ?? "",
+      status: row.status ?? "Draft",
+      outcome: row.outcome ?? "",
+      movedBy: row.movedBy ?? "",
+      secondedBy: row.secondedBy ?? "",
+      votesFor: row.votesFor != null ? String(row.votesFor) : "",
+      votesAgainst: row.votesAgainst != null ? String(row.votesAgainst) : "",
+      abstentions: row.abstentions != null ? String(row.abstentions) : "",
+    });
+  };
+  const closeEdit = () => {
+    setEditing(null);
+    setForm(null);
+  };
+  const saveEdit = async () => {
+    if (!editing || !form) return;
+    const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
     try {
-      await setTags({ motionId: motion._id, tags: next });
+      await update({
+        motionId: editing._id as Id<"motions">,
+        patch: {
+          title: form.title.trim() || undefined,
+          text: form.text.trim(),
+          status: form.status,
+          outcome: form.outcome || undefined,
+          movedBy: form.movedBy.trim() || undefined,
+          secondedBy: form.secondedBy.trim() || undefined,
+          votesFor: num(form.votesFor),
+          votesAgainst: num(form.votesAgainst),
+          abstentions: num(form.abstentions),
+        },
+      });
+      toast.success("Motion updated");
+      closeEdit();
     } catch (err: any) {
-      toast.error(err?.message ?? "Could not update tags");
+      toast.error(err?.message ?? "Could not update motion");
     }
   };
 
@@ -116,148 +188,187 @@ export function MotionsPage() {
         )}
       />
 
-      <div className="card">
-        <div className="card__head">
-          <h2 className="card__title">All motions</h2>
-          <span className="card__subtitle">
-            {filtered.length} shown{hiddenCount ? ` · ${hiddenCount} routine hidden` : ""}
-          </span>
-          <div className="row" style={{ gap: 8, marginLeft: "auto", flexWrap: "wrap", alignItems: "end" }}>
-            <Field label="View">
-              <Select
-                value={view}
-                onChange={(value) => setView(value as "default" | "all")}
-                options={[
-                  { value: "default", label: "Default (hide routine)" },
-                  { value: "all", label: "All" },
-                ]}
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="motion" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="motions"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<Gavel size={14} />}
+            label="Motions"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((x) => !x)}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || motions === undefined}
+            renderCell={({ record: row, field }) => {
+              if (field.name === "title") return (
+                <div>
+                  <strong>{row.title || truncate(row.text, 70)}</strong>
+                  {row._hasTitle && row.text && (
+                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{truncate(row.text, 120)}</div>
+                  )}
+                </div>
+              );
+              if (field.name === "meeting") {
+                if (!row.primaryMeetingId) return <span className="muted">—</span>;
+                return (
+                  <Link
+                    to={`/app/meetings/${row.primaryMeetingId}?tab=motions&motion=${encodeURIComponent(String(row._id))}`}
+                    className="row"
+                    style={{ gap: 4, alignItems: "center" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <CalendarPlus size={12} /> {row.meeting || "Open meeting"}
+                  </Link>
+                );
+              }
+              if (field.name === "tags") {
+                if (row.readOnly) return (
+                  <span
+                    className="muted"
+                    style={{ fontSize: 12 }}
+                    title="Recorded in meeting minutes — convert it to a first-class motion from the meeting's Motions tab to edit labels."
+                  >
+                    From minutes
+                  </span>
+                );
+                return (
+                  <div
+                    className="row"
+                    style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {(row.tags ?? []).map((tag: string) => (
+                      <Badge key={tag} tone="neutral">
+                        <span className="row" style={{ gap: 2, alignItems: "center" }}>
+                          <TagIcon size={10} /> {tag}
+                          <button
+                            className="btn btn--ghost btn--icon"
+                            style={{ padding: 0, height: 14 }}
+                            aria-label={`Remove label ${tag}`}
+                            onClick={() => removeTag(row, tag)}
+                          >
+                            <X size={10} />
+                          </button>
+                        </span>
+                      </Badge>
+                    ))}
+                    <input
+                      className="input"
+                      style={{ width: 90, height: 24, fontSize: 12 }}
+                      value={tagDraft[String(row._id)] ?? ""}
+                      onChange={(e) => setTagDraft({ ...tagDraft, [String(row._id)]: e.target.value })}
+                      onKeyDown={(e) => { if (e.key === "Enter") addTag(row); }}
+                      placeholder="+ label"
+                      aria-label="Add label"
+                    />
+                    <button className="btn btn--ghost btn--icon" aria-label="Add label" onClick={() => addTag(row)}>
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                );
+              }
+              return undefined;
+            }}
+            renderRowActions={(row) =>
+              canEditMotion(row) ? (
+                <button
+                  className="btn btn--ghost btn--sm"
+                  onClick={(e) => { e.stopPropagation(); openEdit(row); }}
+                >
+                  <Pencil size={12} /> Edit
+                </button>
+              ) : row.primaryMeetingId ? (
+                <Link
+                  className="btn btn--ghost btn--sm"
+                  to={`/app/meetings/${row.primaryMeetingId}?tab=motions&motion=${encodeURIComponent(String(row._id))}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Open meeting
+                </Link>
+              ) : null
+            }
+          />
+        </RecordTableScope>
+      ) : (
+        <PageLoading />
+      )}
+
+      <Drawer
+        open={!!editing}
+        onClose={closeEdit}
+        title="Edit motion"
+        footer={
+          <>
+            <button className="btn" onClick={closeEdit}>Cancel</button>
+            <button className="btn btn--accent" onClick={saveEdit} disabled={!form?.text.trim()}>
+              Save
+            </button>
+          </>
+        }
+      >
+        {form && (
+          <div>
+            <Field label="Title (optional)">
+              <input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            </Field>
+            <Field label="Motion text" required>
+              <textarea
+                className="input"
+                rows={3}
+                value={form.text}
+                onChange={(e) => setForm({ ...form, text: e.target.value })}
               />
             </Field>
-            <Field label="Status">
-              <Select
-                value={statusFilter}
-                onChange={setStatusFilter}
-                options={[{ value: "all", label: "All statuses" }, ...allStatuses.map((s) => ({ value: s, label: s }))]}
-              />
-            </Field>
-            {allTags.length > 0 && (
-              <Field label="Tag">
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Status">
                 <Select
-                  value={tagFilter}
-                  onChange={setTagFilter}
-                  options={[{ value: "all", label: "All tags" }, ...allTags.map((t) => ({ value: t, label: t }))]}
+                  value={form.status}
+                  onChange={(value) => setForm({ ...form, status: value })}
+                  options={MOTION_STATUSES.map((s) => ({ value: s, label: s }))}
                 />
               </Field>
-            )}
-            <input
-              className="input"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search motions…"
-              style={{ flex: "1 1 180px", minWidth: 0 }}
-            />
+              <Field label="Outcome">
+                <Select
+                  value={form.outcome}
+                  onChange={(value) => setForm({ ...form, outcome: value })}
+                  options={MOTION_OUTCOMES}
+                />
+              </Field>
+            </div>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Moved by">
+                <input className="input" value={form.movedBy} onChange={(e) => setForm({ ...form, movedBy: e.target.value })} />
+              </Field>
+              <Field label="Seconded by">
+                <input className="input" value={form.secondedBy} onChange={(e) => setForm({ ...form, secondedBy: e.target.value })} />
+              </Field>
+            </div>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="For">
+                <input className="input" type="number" min={0} value={form.votesFor} onChange={(e) => setForm({ ...form, votesFor: e.target.value })} />
+              </Field>
+              <Field label="Against">
+                <input className="input" type="number" min={0} value={form.votesAgainst} onChange={(e) => setForm({ ...form, votesAgainst: e.target.value })} />
+              </Field>
+              <Field label="Abstain">
+                <input className="input" type="number" min={0} value={form.abstentions} onChange={(e) => setForm({ ...form, abstentions: e.target.value })} />
+              </Field>
+            </div>
           </div>
-        </div>
-        <div className="card__body">
-          {(motions ?? []).length === 0 ? (
-            <div className="empty-state empty-state--sm">
-              <Gavel size={18} />
-              <strong>No motions recorded yet.</strong>
-              <span className="muted">
-                Motions appear here as they are moved in meeting minutes, or after running the
-                backfill.
-              </span>
-            </div>
-          ) : (
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Motion</th>
-                    <th>Status</th>
-                    <th>Votes</th>
-                    <th>Moved / seconded</th>
-                    <th>Meeting</th>
-                    <th>Tags</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((m: any) => {
-                    const meeting = m.primaryMeetingId ? meetingById.get(String(m.primaryMeetingId)) : null;
-                    return (
-                      <tr key={m._id}>
-                        <td>
-                          <strong>{m.title || truncate(m.text, 70)}</strong>
-                          {m.title && <div className="muted">{truncate(m.text, 90)}</div>}
-                        </td>
-                        <td>
-                          <Badge tone={statusTone(m.status)}>{m.status}</Badge>
-                          {m.outcome && <div className="muted">{m.outcome}</div>}
-                        </td>
-                        <td className="muted">
-                          {m.votesFor != null || m.votesAgainst != null
-                            ? `${m.votesFor ?? 0}/${m.votesAgainst ?? 0}/${m.abstentions ?? 0}`
-                            : decidedByLabel(m.decidedBy)}
-                        </td>
-                        <td className="muted">
-                          {m.movedBy || "—"}
-                          {m.secondedBy ? ` · ${m.secondedBy}` : ""}
-                        </td>
-                        <td className="muted">
-                          {meeting ? `${meeting.title} (${formatDate(meeting.scheduledAt)})` : "—"}
-                        </td>
-                        <td>
-                          {m.readOnly ? (
-                            <span className="muted" style={{ fontSize: 12 }} title="Recorded in meeting minutes — convert it to a first-class motion from the meeting's Motions tab to edit tags.">
-                              From minutes
-                            </span>
-                          ) : (
-                          <div className="row" style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-                            {(m.tags ?? []).map((tag: string) => (
-                              <Badge key={tag} tone="neutral">
-                                <span className="row" style={{ gap: 2, alignItems: "center" }}>
-                                  <Tag size={10} /> {tag}
-                                  <button
-                                    className="btn btn--ghost btn--icon"
-                                    style={{ padding: 0, height: 14 }}
-                                    aria-label={`Remove tag ${tag}`}
-                                    onClick={() => removeTag(m, tag)}
-                                  >
-                                    <X size={10} />
-                                  </button>
-                                </span>
-                              </Badge>
-                            ))}
-                            <input
-                              className="input"
-                              style={{ width: 90, height: 24, fontSize: 12 }}
-                              value={tagDraft[String(m._id)] ?? ""}
-                              onChange={(e) => setTagDraft({ ...tagDraft, [String(m._id)]: e.target.value })}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") addTag(m);
-                              }}
-                              placeholder="+ tag"
-                              aria-label="Add tag"
-                            />
-                            <button
-                              className="btn btn--ghost btn--icon"
-                              aria-label="Add tag"
-                              onClick={() => addTag(m)}
-                            >
-                              <Plus size={12} />
-                            </button>
-                          </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
+        )}
+      </Drawer>
     </div>
   );
 }
@@ -265,19 +376,4 @@ export function MotionsPage() {
 function truncate(value: string | undefined, max: number) {
   const text = String(value ?? "").trim();
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
-
-// A motion with no tally was either decided by general consent (the common case
-// for adjournment / approving the previous minutes) or closed automatically.
-function decidedByLabel(decidedBy: string | undefined): string {
-  if (decidedBy === "consent") return "By consent";
-  if (decidedBy === "automatic") return "Automatic";
-  return "—";
-}
-
-function statusTone(status: string): "success" | "warn" | "info" | "neutral" {
-  if (status === "Voted") return "success";
-  if (status === "Agenda" || status === "Moved") return "info";
-  if (status === "Tabled" || status === "Deferred") return "warn";
-  return "neutral";
 }

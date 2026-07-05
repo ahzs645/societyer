@@ -446,6 +446,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
       {businessMotionRows.map(({ motion: m, index: i }) => (
         <MotionRow
           key={i}
+          anchorId={`motion-${i}`}
           motion={m}
           nameOptions={nameOptions}
           directorNames={directorNames}
@@ -645,6 +646,7 @@ function MotionRow({
   onSetVote,
   onDelete,
   onAddToBacklog,
+  anchorId,
 }: {
   motion: Motion;
   nameOptions: string[];
@@ -659,6 +661,8 @@ function MotionRow({
   onSetVote: (k: "votesFor" | "votesAgainst" | "abstentions", next: number) => void;
   onDelete: () => void;
   onAddToBacklog?: () => void | Promise<void>;
+  /** DOM id for scroll-to deep-linking (e.g. from the Motions master page). */
+  anchorId?: string;
 }) {
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const confirm = useConfirm();
@@ -719,6 +723,7 @@ function MotionRow({
 
   return (
     <div
+      id={anchorId}
       className="motion"
       style={isPending ? { borderStyle: "dotted", borderColor: "var(--warn)" } : undefined}
     >

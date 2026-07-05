@@ -244,6 +244,42 @@ export function MeetingDetailPage() {
       { replace: true },
     );
   };
+  // Deep-link support: `?tab=motions&motion=<id>` scrolls to and briefly
+  // highlights a specific motion (e.g. from the Motions master page). Synthetic
+  // "from-minutes:<minutesId>:<index>" ids carry the index; first-class motions
+  // resolve via listForMeeting and match on text (unique within a meeting, since
+  // the dual-write doesn't back-link motionId into minutes.motions[]).
+  const focusMotionParam = searchParams.get("motion");
+  const isSyntheticFocus = !!focusMotionParam?.startsWith("from-minutes:");
+  const focusMotions = useQuery(
+    api.motions.listForMeeting,
+    id && focusMotionParam && !isSyntheticFocus ? { meetingId: id as Id<"meetings"> } : "skip",
+  );
+  const scrolledMotionParamRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeTab !== "motions" || !focusMotionParam || !minutes) return;
+    if (scrolledMotionParamRef.current === focusMotionParam) return;
+    const rows = (minutes.motions ?? []) as any[];
+    let index = -1;
+    if (isSyntheticFocus) {
+      index = Number(focusMotionParam.split(":").pop());
+    } else if (focusMotions) {
+      const target = (focusMotions as any[]).find((m) => String(m._id) === focusMotionParam);
+      const text = String(target?.text ?? "").trim();
+      if (text) index = rows.findIndex((mm) => String(mm.text ?? "").trim() === text);
+    }
+    if (!Number.isInteger(index) || index < 0) return;
+    const timer = window.setTimeout(() => {
+      const el = document.getElementById(`motion-${index}`);
+      if (!el) return;
+      scrolledMotionParamRef.current = focusMotionParam;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("motion--flash");
+      window.setTimeout(() => el.classList.remove("motion--flash"), 1800);
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, focusMotionParam, isSyntheticFocus, focusMotions, minutes]);
+
   const [materialDraft, setMaterialDraft] = useState<any | null>(null);
   const [joinEdit, setJoinEdit] = useState<any | null>(null);
   const [sourceReviewNote, setSourceReviewNote] = useState("");

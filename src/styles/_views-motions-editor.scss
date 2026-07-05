@@ -534,3 +534,18 @@
 .motion-adjournment__head > button {
   flex: 0 0 auto;
 }
+
+/* Deep-link highlight — briefly flashes a motion scrolled into view from the
+   Motions master page (?tab=motions&motion=...). */
+.motion.motion--flash {
+  animation: motion-flash 1.8s ease-out;
+}
+@keyframes motion-flash {
+  0%, 60% {
+    box-shadow: 0 0 0 3px token('accent');
+    border-color: token('accent');
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
