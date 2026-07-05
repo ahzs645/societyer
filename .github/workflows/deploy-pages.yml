@@ -11,9 +11,13 @@ permissions:
   pages: write
   id-token: write
 
+# Serialize Pages deploys: let an in-progress deploy finish before the next one
+# starts, rather than cancelling it mid-publish. Cancelling during the Pages
+# publish step left the backend in a bad state and produced spurious
+# "Deployment failed, try again later" errors on rapid successive pushes.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
