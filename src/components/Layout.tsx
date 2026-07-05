@@ -85,6 +85,7 @@ import { DraftMinutesPicker } from "./DraftMinutesPicker";
 import { GlobalTaskCreate } from "./GlobalTaskCreate";
 import { GlobalAssetCreate } from "./GlobalAssetCreate";
 import { GlobalMeetingCreate } from "./GlobalMeetingCreate";
+import { GlobalCommitmentCreate } from "./GlobalCommitmentCreate";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { NotificationBell } from "./NotificationBell";
 import { GlobalAiAssistant, openGlobalAiAssistant } from "../features/ai/GlobalAiAssistant";
@@ -833,6 +834,7 @@ export function Layout() {
       <GlobalTaskCreate />
       <GlobalAssetCreate />
       <GlobalMeetingCreate />
+      <GlobalCommitmentCreate />
       <ShortcutHelp />
       <div className={shellClassName}>
         {isMobileNav && mobileSidebarOpen && (

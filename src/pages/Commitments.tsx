@@ -33,33 +33,16 @@ import {
   Trash2,
 } from "lucide-react";
 import { formatDate, relative } from "../lib/format";
+import {
+  CommitmentFormFields,
+  commitmentFormFromRow,
+  commitmentPayload,
+  makeCommitmentFormDefaults,
+  reviewStatusLabel,
+  type CommitmentFormValue,
+} from "../features/commitments/CommitmentFormFields";
 
-const CATEGORIES = ["Contract", "Grant", "Facility", "Governance", "Privacy", "Funding", "Other"] as const;
-const CADENCES = ["Once", "Monthly", "Quarterly", "Annual", "Every 2 years", "Custom"] as const;
-const STATUSES = ["Active", "Watching", "Paused", "Closed"] as const;
-const REVIEW_STATUSES = ["NeedsReview", "Verified", "Rejected"] as const;
 const EVIDENCE_STATUSES = ["NeedsReview", "Verified", "Rejected"] as const;
-
-type CommitmentForm = {
-  _id?: string;
-  title: string;
-  category: string;
-  sourceDocumentId?: string;
-  sourceLabel?: string;
-  sourceExcerpt?: string;
-  counterparty?: string;
-  requirement: string;
-  cadence: string;
-  nextDueDate?: string;
-  dueDateBasis?: string;
-  noticeLeadDays?: number | "";
-  owner?: string;
-  status: string;
-  reviewStatus?: string;
-  confidence?: number | "";
-  uncertaintyNote?: string;
-  notes?: string;
-};
 
 type EventForm = {
   commitment: any;
@@ -88,7 +71,8 @@ export function CommitmentsPage() {
   const createTask = useMutation(api.tasks.create);
   const confirm = useConfirm();
   const toast = useToast();
-  const [form, setForm] = useState<CommitmentForm | null>(null);
+  const [form, setForm] = useState<CommitmentFormValue | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState<EventForm | null>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -152,40 +136,18 @@ export function CommitmentsPage() {
   }) ?? rows[0];
 
   const openNew = () => {
-    setForm({
-      title: "",
-      category: "Contract",
-      requirement: "",
-      cadence: "Annual",
-      nextDueDate: new Date().toISOString().slice(0, 10),
-      noticeLeadDays: 30,
-      status: "Active",
-      reviewStatus: "NeedsReview",
-      confidence: "",
-    });
+    setEditingId(null);
+    setForm(makeCommitmentFormDefaults());
   };
 
   const openEdit = (row: any) => {
-    setForm({
-      _id: row._id,
-      title: row.title,
-      category: row.category,
-      sourceDocumentId: row.sourceDocumentId,
-      sourceLabel: row.sourceLabel,
-      sourceExcerpt: row.sourceExcerpt,
-      counterparty: row.counterparty,
-      requirement: row.requirement,
-      cadence: row.cadence,
-      nextDueDate: row.nextDueDate,
-      dueDateBasis: row.dueDateBasis,
-      noticeLeadDays: row.noticeLeadDays ?? "",
-      owner: row.owner,
-      status: row.status,
-      reviewStatus: row.reviewStatus ?? "NeedsReview",
-      confidence: row.confidence ?? "",
-      uncertaintyNote: row.uncertaintyNote,
-      notes: row.notes,
-    });
+    setEditingId(row._id);
+    setForm(commitmentFormFromRow(row));
+  };
+
+  const closeForm = () => {
+    setForm(null);
+    setEditingId(null);
   };
 
   const openRecord = (row: any) => {
@@ -203,14 +165,14 @@ export function CommitmentsPage() {
   const saveCommitment = async () => {
     if (!form) return;
     const payload = commitmentPayload(form);
-    if (form._id) {
-      await update({ id: form._id as any, patch: payload });
+    if (editingId) {
+      await update({ id: editingId as any, patch: payload });
       toast.success("Commitment updated");
     } else {
       await create({ societyId: society._id, ...payload });
       toast.success("Commitment added");
     }
-    setForm(null);
+    closeForm();
   };
 
   const saveEvent = async () => {
@@ -517,11 +479,11 @@ export function CommitmentsPage() {
 
       <Drawer
         open={!!form}
-        onClose={() => setForm(null)}
-        title={form?._id ? "Edit commitment" : "Add commitment"}
+        onClose={closeForm}
+        title={editingId ? "Edit commitment" : "Add commitment"}
         footer={
           <>
-            <button className="btn" onClick={() => setForm(null)}>Cancel</button>
+            <button className="btn" onClick={closeForm}>Cancel</button>
             <button className="btn btn--accent" onClick={saveCommitment} disabled={!form?.title.trim() || !form?.requirement.trim()}>
               Save
             </button>
@@ -530,9 +492,9 @@ export function CommitmentsPage() {
       >
         {form && (
           <CommitmentFormFields
-            form={form}
-            setForm={setForm}
-            documents={(documents ?? []) as any[]}
+            value={form}
+            onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
+            data={{ documents }}
           />
         )}
       </Drawer>
@@ -559,102 +521,6 @@ export function CommitmentsPage() {
           />
         )}
       </Drawer>
-    </div>
-  );
-}
-
-function CommitmentFormFields({
-  form,
-  setForm,
-  documents,
-}: {
-  form: CommitmentForm;
-  setForm: (form: CommitmentForm) => void;
-  documents: any[];
-}) {
-  return (
-    <div>
-      <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 0, marginBottom: 12 }}>
-        Use a commitment for promises made to an external party. Internal work belongs in Tasks; dates set by law or regulation belong in Deadlines.
-      </p>
-      <Field label="Title" required>
-        <input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-      </Field>
-      <Field label="Requirement" required hint="What the contract, policy, grant, or agreement requires the organization to do.">
-        <MarkdownEditor rows={4} value={form.requirement} onChange={(markdown) => setForm({ ...form, requirement: markdown })} />
-      </Field>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Category">
-          <Select value={form.category} onChange={(value) => setForm({ ...form, category: value })} options={CATEGORIES.map((value) => ({ value, label: value }))} />
-        </Field>
-        <Field label="Status">
-          <Select value={form.status} onChange={(value) => setForm({ ...form, status: value })} options={STATUSES.map((value) => ({ value, label: value }))} />
-        </Field>
-      </div>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Source review">
-          <Select value={form.reviewStatus ?? "NeedsReview"} onChange={(value) => setForm({ ...form, reviewStatus: value })} options={REVIEW_STATUSES.map((value) => ({ value, label: reviewStatusLabel(value) }))} />
-        </Field>
-        <Field label="Confidence">
-          <input
-            className="input"
-            type="number"
-            min={0}
-            max={100}
-            value={form.confidence === "" || form.confidence == null ? "" : Math.round(form.confidence * 100)}
-            onChange={(e) => setForm({ ...form, confidence: e.target.value === "" ? "" : Number(e.target.value) / 100 })}
-          />
-        </Field>
-      </div>
-      <Field label="Source document">
-        <Select
-          value={form.sourceDocumentId ?? ""}
-          onChange={(value) => setForm({ ...form, sourceDocumentId: value || undefined })}
-          clearable
-          searchable
-          options={documents.map((doc) => ({ value: String(doc._id), label: doc.title, hint: doc.category }))}
-        />
-      </Field>
-      <Field label="Source excerpt" hint="Clause or paragraph text that created this obligation.">
-        <MarkdownEditor rows={4} value={form.sourceExcerpt ?? ""} onChange={(markdown) => setForm({ ...form, sourceExcerpt: markdown })} />
-      </Field>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Source label">
-          <input className="input" value={form.sourceLabel ?? ""} placeholder="Clause 8, Schedule B, award letter..." onChange={(e) => setForm({ ...form, sourceLabel: e.target.value })} />
-        </Field>
-        <Field label="Counterparty">
-          <input className="input" value={form.counterparty ?? ""} placeholder="Landlord, funder, ministry..." onChange={(e) => setForm({ ...form, counterparty: e.target.value })} />
-        </Field>
-      </div>
-      <div className="row" style={{ gap: 12 }}>
-        <Field label="Cadence">
-          <Select value={form.cadence} onChange={(value) => setForm({ ...form, cadence: value })} options={CADENCES.map((value) => ({ value, label: value }))} />
-        </Field>
-        <Field label="Next due">
-          <DatePicker value={form.nextDueDate ?? ""} onChange={(value) => setForm({ ...form, nextDueDate: value })} />
-        </Field>
-        <Field label="Lead time">
-          <input
-            className="input"
-            type="number"
-            min={0}
-            value={form.noticeLeadDays ?? ""}
-            onChange={(e) => setForm({ ...form, noticeLeadDays: e.target.value === "" ? "" : Number(e.target.value) })}
-          />
-        </Field>
-      </div>
-      <Field label="Due date basis">
-        <input className="input" value={form.dueDateBasis ?? ""} placeholder="Annual anniversary, fiscal year end, fixed contract date..." onChange={(e) => setForm({ ...form, dueDateBasis: e.target.value })} />
-      </Field>
-      <Field label="Owner">
-        <input className="input" value={form.owner ?? ""} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
-      </Field>
-      <Field label="Uncertainty or review note">
-        <MarkdownEditor rows={4} value={form.uncertaintyNote ?? ""} onChange={(markdown) => setForm({ ...form, uncertaintyNote: markdown })} />
-      </Field>
-      <Field label="Notes">
-        <MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} />
-      </Field>
     </div>
   );
 }
@@ -877,28 +743,6 @@ function DueBadge({ row }: { row: any }) {
   );
 }
 
-function commitmentPayload(form: CommitmentForm) {
-  return stripEmpty({
-    title: form.title.trim(),
-    category: form.category,
-    sourceDocumentId: form.sourceDocumentId,
-    sourceLabel: form.sourceLabel,
-    sourceExcerpt: form.sourceExcerpt,
-    counterparty: form.counterparty,
-    requirement: form.requirement.trim(),
-    cadence: form.cadence,
-    nextDueDate: form.nextDueDate,
-    dueDateBasis: form.dueDateBasis,
-    noticeLeadDays: form.noticeLeadDays === "" ? undefined : form.noticeLeadDays,
-    owner: form.owner,
-    status: form.status,
-    reviewStatus: form.reviewStatus,
-    confidence: form.confidence === "" ? undefined : form.confidence,
-    uncertaintyNote: form.uncertaintyNote,
-    notes: form.notes,
-  });
-}
-
 function nextDueDate(cadence: string, from: string) {
   if (!from || cadence === "Once" || cadence === "Custom") return undefined;
   const date = new Date(`${from}T00:00:00`);
@@ -908,15 +752,6 @@ function nextDueDate(cadence: string, from: string) {
   if (cadence === "Annual") date.setFullYear(date.getFullYear() + 1);
   if (cadence === "Every 2 years") date.setFullYear(date.getFullYear() + 2);
   return date.toISOString().slice(0, 10);
-}
-
-function stripEmpty<T extends Record<string, any>>(value: T) {
-  const out: Record<string, any> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (entry === "" || entry == null) continue;
-    out[key] = entry;
-  }
-  return out as T;
 }
 
 function emptyToUndefined(value?: string) {
@@ -943,15 +778,6 @@ function statusTone(status: string) {
     case "Paused": return "warn" as const;
     case "Closed": return "neutral" as const;
     default: return "neutral" as const;
-  }
-}
-
-function reviewStatusLabel(status?: string) {
-  switch (status) {
-    case "Verified": return "Verified";
-    case "Rejected": return "Rejected";
-    case "NeedsReview":
-    default: return "Needs review";
   }
 }
 
