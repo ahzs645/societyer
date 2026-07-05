@@ -332,8 +332,6 @@ const NAV_GROUPS: NavGroup[] = [
       navItem("/app/meeting-templates"),
       navItem("/app/agendas"),
       navItem("/app/motions"),
-      navItem("/app/motion-backlog"),
-      navItem("/app/motion-library"),
       navItem("/app/minutes"),
       navItem("/app/meeting-evidence"),
       navItem("/app/proposals"),

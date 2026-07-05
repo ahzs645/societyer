@@ -19,7 +19,7 @@ const EMPTY_FORM = {
   notes: "",
 };
 
-export function MotionBacklogPage() {
+export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } = {}) {
   const society = useSociety();
   const toast = useToast();
   const [form, setForm] = useState(EMPTY_FORM);
@@ -96,23 +96,25 @@ export function MotionBacklogPage() {
   };
 
   return (
-    <div className="page motion-backlog">
-      <PageHeader
-        title="Motion backlog"
-        icon={<ClipboardList size={16} />}
-        iconColor="orange"
-        subtitle="Draft motions before a meeting, seed them into an agenda, then carry agenda motions into minutes."
-        actions={(
-          <>
-            <button className="btn-action btn-action--primary" onClick={addPrivacySetupMotions}>
-              <Sparkles size={12} /> Add PIPA setup motions
-            </button>
-            <Link className="btn-action" to="/app/agendas">
-              <CalendarPlus size={12} /> Agendas
-            </Link>
-          </>
-        )}
-      />
+    <div className={embedded ? "motion-backlog" : "page motion-backlog"}>
+      {!embedded && (
+        <PageHeader
+          title="Motion backlog"
+          icon={<ClipboardList size={16} />}
+          iconColor="orange"
+          subtitle="Draft motions before a meeting, seed them into an agenda, then carry agenda motions into minutes."
+          actions={(
+            <>
+              <button className="btn-action btn-action--primary" onClick={addPrivacySetupMotions}>
+                <Sparkles size={12} /> Add PIPA setup motions
+              </button>
+              <Link className="btn-action" to="/app/agendas">
+                <CalendarPlus size={12} /> Agendas
+              </Link>
+            </>
+          )}
+        />
+      )}
 
       <div className="two-col">
         <div className="col" style={{ gap: 16 }}>

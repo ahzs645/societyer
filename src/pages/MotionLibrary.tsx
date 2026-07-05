@@ -34,7 +34,7 @@ function templateTags(t: any): string[] {
   return t.category ? [String(t.category)] : [];
 }
 
-export function MotionLibraryPage() {
+export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } = {}) {
   const society = useSociety();
   const toast = useToast();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -116,26 +116,28 @@ export function MotionLibraryPage() {
   });
 
   return (
-    <div className="page motion-library">
-      <PageHeader
-        title="Motion library"
-        icon={<BookOpen size={16} />}
-        iconColor="purple"
-        subtitle="Reusable motion templates for agenda building."
-        actions={
-          (templates?.length ?? 0) === 0 && (
-            <button
-              className="btn-action"
-              onClick={async () => {
-                const res = await seed({ societyId: society._id });
-                toast.success(`Added ${res.inserted} starter motions`);
-              }}
-            >
-              <Sparkles size={12} /> Seed starter motions
-            </button>
-          )
-        }
-      />
+    <div className={embedded ? "motion-library" : "page motion-library"}>
+      {!embedded && (
+        <PageHeader
+          title="Motion library"
+          icon={<BookOpen size={16} />}
+          iconColor="purple"
+          subtitle="Reusable motion templates for agenda building."
+          actions={
+            (templates?.length ?? 0) === 0 && (
+              <button
+                className="btn-action"
+                onClick={async () => {
+                  const res = await seed({ societyId: society._id });
+                  toast.success(`Added ${res.inserted} starter motions`);
+                }}
+              >
+                <Sparkles size={12} /> Seed starter motions
+              </button>
+            )
+          }
+        />
+      )}
 
       <div className="motion-library__layout">
         <div className="card motion-library__editor">

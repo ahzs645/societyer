@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { CalendarPlus, ClipboardList, Gavel, Pencil, Plus, Tag as TagIcon, X } from "lucide-react";
+import { BookOpen, CalendarPlus, Gavel, Layers, Pencil, Plus, Tag as TagIcon, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
@@ -21,6 +21,9 @@ import {
   RecordTableFilterPopover,
   useObjectRecordTableData,
 } from "@/modules/object-record";
+import { Tabs } from "../components/primitives";
+import { MotionBacklogPage } from "./MotionBacklog";
+import { MotionLibraryPage } from "./MotionLibrary";
 
 const MOTION_STATUSES = ["Backlog", "Draft", "Agenda", "Moved", "Tabled", "Deferred", "Withdrawn", "Voted", "Archived"];
 const MOTION_OUTCOMES = [
@@ -49,12 +52,55 @@ function canEditMotion(m: any): boolean {
   return !m.readOnly && !m.minutesId;
 }
 
-// Master list of every first-class motion (the referenceable record the society's
-// decisions live in), rendered on the object-record RecordTable. The seeded
-// "Motions" view hides routine bookkeeping (adjournment, accept-previous-minutes,
-// …) via a notIn filter on the labels field; switch to "All motions" to see them.
-// Labels are free-form and editable inline.
+const MOTIONS_TABS = ["motions", "tabled", "templates"] as const;
+type MotionsTab = (typeof MOTIONS_TABS)[number];
+
+// The Motions area consolidates the master motions table, the Tabled/backlog
+// workflow, and the template library into one tabbed page (driven by ?tab=).
 export function MotionsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get("tab") as MotionsTab | null;
+  const tab: MotionsTab = tabFromUrl && MOTIONS_TABS.includes(tabFromUrl) ? tabFromUrl : "motions";
+  const setTab = (next: MotionsTab) =>
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === "motions") params.delete("tab");
+        else params.set("tab", next);
+        return params;
+      },
+      { replace: true },
+    );
+
+  return (
+    <div className="page motions">
+      <PageHeader
+        title="Motions"
+        icon={<Gavel size={16} />}
+        iconColor="orange"
+        subtitle="Every decision your society has moved — a referenceable record across all meetings."
+      />
+      <Tabs<MotionsTab>
+        value={tab}
+        onChange={setTab}
+        items={[
+          { id: "motions", label: "Motions", icon: <Gavel size={13} /> },
+          { id: "tabled", label: "Tabled", icon: <Layers size={13} /> },
+          { id: "templates", label: "Templates", icon: <BookOpen size={13} /> },
+        ]}
+      />
+      {tab === "motions" && <MotionsTableTab />}
+      {tab === "tabled" && <MotionBacklogPage embedded />}
+      {tab === "templates" && <MotionLibraryPage embedded />}
+    </div>
+  );
+}
+
+// The master motions table (object-record RecordTable). The seeded "Motions"
+// view hides routine bookkeeping (adjournment, accept-previous-minutes, …) via a
+// notIn filter on the labels field; switch to "All motions" to see them. Labels
+// are free-form and editable inline.
+function MotionsTableTab() {
   const society = useSociety();
   const toast = useToast();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
@@ -170,24 +216,7 @@ export function MotionsPage() {
   };
 
   return (
-    <div className="page motions">
-      <PageHeader
-        title="Motions"
-        icon={<Gavel size={16} />}
-        iconColor="orange"
-        subtitle="Every decision your society has moved — a referenceable record across all meetings."
-        actions={(
-          <>
-            <Link className="btn-action" to="/app/motion-backlog">
-              <ClipboardList size={12} /> Backlog
-            </Link>
-            <Link className="btn-action" to="/app/motion-library">
-              <CalendarPlus size={12} /> Library
-            </Link>
-          </>
-        )}
-      />
-
+    <>
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="motion" />
       ) : tableData.objectMetadata ? (
@@ -369,7 +398,7 @@ export function MotionsPage() {
           </div>
         )}
       </Drawer>
-    </div>
+    </>
   );
 }
 
