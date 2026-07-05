@@ -19,7 +19,8 @@ import {
   makeCapabilities,
 } from "../shared/portable/index";
 import { runPortable } from "../shared/functions/seed";
-import { resolveMinutesMotions, syncMotionsForMinutes } from "../shared/functions/minutes";
+import { listPortable, resolveMinutesMotions, syncMotionsForMinutes } from "../shared/functions/minutes";
+import { minutesMotionsForDisplay } from "../shared/minutesMotions";
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
@@ -27,9 +28,10 @@ const rt = () => new PortableRuntime({ db, capabilities: caps });
 
 // 1) Seed. The Phase 1 finalization routes every seeded minutes through the
 //    dual-write, so each carries ordered motionIds + mirror rows.
-await rt()
+const seedResult: any = await rt()
   .register(definePortableMutation({ name: "seed", handler: (ctx: any) => runPortable(ctx) }))
   .runMutation("seed", {});
+const societyId = seedResult.societyId;
 
 // Display-relevant projection: the fields minutes rendering/analytics key off.
 // Outcome is normalized (""/"pending"/"Pending" are one state); table-only
@@ -149,5 +151,31 @@ assert.equal(
   "adoptsMinutesId survived embedded -> table (dual-write) -> embedded (adapter)",
 );
 console.log("✓ adoptsMinutesId round-trips through the dual-write + adapter (data gap closed)");
+
+// 4) Query boundary (listPortable) attaches displayMotions; the accessor prefers
+//    it; the result is genuinely table-sourced; the live embedded array is kept.
+const listed: any = await rt()
+  .register(definePortableQuery({ name: "minutes:list", handler: (ctx: any, a: any) => listPortable(ctx, a) }))
+  .runQuery("minutes:list", { societyId });
+assert.ok(listed.length > 0, "listPortable returned minutes");
+for (const m of listed) {
+  assert.ok(Array.isArray(m.displayMotions), `displayMotions attached for minutes ${m._id}`);
+  assert.deepEqual(minutesMotionsForDisplay(m), m.displayMotions, `accessor prefers displayMotions for minutes ${m._id}`);
+  assert.deepEqual(
+    m.displayMotions.map(proj),
+    (m.motions ?? []).map(proj),
+    `displayMotions projection == embedded for minutes ${m._id}`,
+  );
+  assert.ok(Array.isArray(m.motions), `live embedded motions kept on the row for minutes ${m._id}`);
+  // Every seeded minutes has motionIds, so display must be TABLE-sourced: each
+  // resolved motion carries its table row id as motionId (the embedded array did not).
+  if ((m.motions ?? []).length > 0) {
+    assert.ok(
+      minutesMotionsForDisplay(m).every((mm: any) => mm.motionId),
+      `display motions are table-sourced (motionId present) for minutes ${m._id}`,
+    );
+  }
+}
+console.log(`✓ query boundary attaches displayMotions + accessor prefers it (table-sourced) across ${listed.length} minutes`);
 
 console.log("\nmotions resolve-parity checks passed.");

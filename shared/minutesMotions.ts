@@ -16,9 +16,18 @@
  * paths can use it. NOT for the editor, which mutates the live `motions[]`.
  */
 export function minutesMotionsForDisplay<M>(
-  minutes: { motions?: M[] | null; motionSnapshots?: M[] | null } | null | undefined,
+  minutes:
+    | { motions?: M[] | null; motionSnapshots?: M[] | null; displayMotions?: M[] | null }
+    | null
+    | undefined,
 ): M[] {
   if (!minutes) return [];
+  // Populated at the query boundary (listPortable/getByMeetingPortable) once reads
+  // are flipped: the already-resolved motions — table-sourced for drafts, frozen
+  // snapshots for approved. Prefer it so the flip is transparent to every caller
+  // that was routed through this accessor in Phase 0. Callers that read a raw
+  // minutes row (backend consumers, pre-flip) fall through to the old behaviour.
+  if (minutes.displayMotions != null) return minutes.displayMotions;
   if (minutes.motionSnapshots && minutes.motionSnapshots.length > 0) {
     return minutes.motionSnapshots;
   }

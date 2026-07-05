@@ -338,10 +338,17 @@ export async function syncMotionsForMinutes(
 // ----- queries --------------------------------------------------------------
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
-  return ctx.db
+  const rows = await ctx.db
     .query("minutes")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
+  // Attach the resolved display motions at the query boundary so every frontend
+  // display read (all routed through minutesMotionsForDisplay in Phase 0) becomes
+  // table-sourced transparently. The live embedded `motions[]` stays untouched on
+  // the row for the editor's write path. See docs/motions-migration-finish-scope.md.
+  return Promise.all(
+    rows.map(async (m) => ({ ...m, displayMotions: await resolveMinutesMotions(ctx, m) })),
+  );
 }
 
 export async function getByMeetingPortable(
@@ -352,7 +359,9 @@ export async function getByMeetingPortable(
     .query("minutes")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
     .collect();
-  return rows[0] ?? null;
+  const m = rows[0];
+  if (!m) return null;
+  return { ...m, displayMotions: await resolveMinutesMotions(ctx, m) };
 }
 
 /**
