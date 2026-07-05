@@ -6,6 +6,8 @@
  * demo can bundle it safely.
  */
 
+import { ROUTINE_MOTION_TAGS } from "../shared/proceduralMotions";
+
 // Field types the registry understands — keep in sync with
 // src/modules/object-record/types/FieldType.ts
 export const FIELD_TYPES = {
@@ -38,6 +40,19 @@ export type SeedField = {
   isReadOnly?: boolean;
 };
 
+export type SeedViewColumn = { fieldName: string; size?: number; position?: number };
+
+/** A seeded view filter, expressed by field NAME (resolved to fieldMetadataId at
+ * seed time). Mirrors the runtime ViewFilter shape in
+ * src/modules/object-record/types/View.ts. */
+export type SeedViewFilter = { fieldName: string; operator: string; value: unknown };
+
+export type SeedView = {
+  name: string;
+  columns?: SeedViewColumn[];
+  filters?: SeedViewFilter[];
+};
+
 export type SeedObject = {
   nameSingular: string;
   namePlural: string;      // must match the Convex table name
@@ -50,8 +65,13 @@ export type SeedObject = {
   fields: SeedField[];
   defaultView: {
     name: string;
-    columns: { fieldName: string; size?: number; position?: number }[];
+    columns: SeedViewColumn[];
+    filters?: SeedViewFilter[];
   };
+  /** Additional seeded shared views beyond the default (e.g. an unfiltered
+   * "All" view). Seeded idempotently by name; columns default to the default
+   * view's columns. */
+  extraViews?: SeedView[];
 };
 
 /* --------------------------- Object definitions --------------------------- */
@@ -2451,5 +2471,131 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "spendingToDateCents", size: 140 },
       ],
     },
+  },
+  {
+    nameSingular: "motion",
+    namePlural: "motions",
+    labelSingular: "Motion",
+    labelPlural: "Motions",
+    icon: "Gavel",
+    iconColor: "orange",
+    routePath: "/app/motions",
+    labelIdentifierFieldName: "title",
+    fields: [
+      { name: "title", label: "Motion", fieldType: FIELD_TYPES.TEXT, icon: "Gavel", isSystem: true },
+      { name: "text", label: "Motion text", fieldType: FIELD_TYPES.TEXT, icon: "FileText" },
+      {
+        name: "status",
+        label: "Status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Activity",
+        config: {
+          options: [
+            { value: "Backlog", label: "Backlog", color: "gray" },
+            { value: "Draft", label: "Draft", color: "gray" },
+            { value: "Agenda", label: "Agenda", color: "blue" },
+            { value: "Moved", label: "Moved", color: "teal" },
+            { value: "Tabled", label: "Tabled", color: "amber" },
+            { value: "Deferred", label: "Deferred", color: "orange" },
+            { value: "Withdrawn", label: "Withdrawn", color: "gray" },
+            { value: "Voted", label: "Voted", color: "green" },
+            { value: "Archived", label: "Archived", color: "gray" },
+          ],
+        },
+      },
+      {
+        name: "outcome",
+        label: "Outcome",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "CheckCircle2",
+        config: {
+          options: [
+            { value: "Carried", label: "Carried", color: "green" },
+            { value: "Defeated", label: "Defeated", color: "red" },
+          ],
+        },
+      },
+      {
+        name: "tags",
+        label: "Labels",
+        fieldType: FIELD_TYPES.MULTI_SELECT,
+        icon: "Tag",
+        description:
+          "Free-form labels. Adjournment and 'accept previous minutes' are auto-applied and hidden by the default view.",
+        config: {
+          options: [
+            { value: "governance", label: "governance", color: "purple" },
+            { value: "finance", label: "finance", color: "green" },
+            { value: "membership", label: "membership", color: "blue" },
+            { value: "operations", label: "operations", color: "teal" },
+            { value: "bylaws", label: "bylaws", color: "amber" },
+            { value: "privacy", label: "privacy", color: "pink" },
+            { value: "adjournment", label: "adjournment", color: "gray" },
+            { value: "previous-minutes", label: "previous-minutes", color: "gray" },
+            { value: "approve-agenda", label: "approve-agenda", color: "gray" },
+            { value: "receive-reports", label: "receive-reports", color: "gray" },
+            { value: "recess", label: "recess", color: "gray" },
+            { value: "routine", label: "routine", color: "gray" },
+          ],
+        },
+      },
+      { name: "resolutionTypeLabel", label: "Resolution type", fieldType: FIELD_TYPES.TEXT, icon: "Scale" },
+      {
+        name: "decidedBy",
+        label: "Decided by",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Vote",
+        config: {
+          options: [
+            { value: "vote", label: "Vote", color: "blue" },
+            { value: "consent", label: "Consent", color: "teal" },
+            { value: "automatic", label: "Automatic", color: "gray" },
+          ],
+        },
+      },
+      { name: "movedBy", label: "Moved by", fieldType: FIELD_TYPES.TEXT, icon: "User" },
+      { name: "secondedBy", label: "Seconded by", fieldType: FIELD_TYPES.TEXT, icon: "User" },
+      { name: "votesFor", label: "For", fieldType: FIELD_TYPES.NUMBER, icon: "Vote" },
+      { name: "votesAgainst", label: "Against", fieldType: FIELD_TYPES.NUMBER, icon: "Vote" },
+      { name: "abstentions", label: "Abstain", fieldType: FIELD_TYPES.NUMBER, icon: "Vote" },
+      {
+        name: "backlogPriority",
+        label: "Priority",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Flag",
+        config: {
+          options: [
+            { value: "high", label: "High", color: "red" },
+            { value: "normal", label: "Normal", color: "blue" },
+            { value: "low", label: "Low", color: "gray" },
+          ],
+        },
+      },
+      // Derived in the Phase-2 record adapter (meeting title from primaryMeetingId).
+      { name: "meeting", label: "Meeting", fieldType: FIELD_TYPES.TEXT, icon: "Calendar", isReadOnly: true },
+      { name: "source", label: "Source", fieldType: FIELD_TYPES.TEXT, icon: "Link", isReadOnly: true },
+      { name: "createdAtISO", label: "Created", fieldType: FIELD_TYPES.DATE, icon: "Clock", isReadOnly: true },
+    ],
+    defaultView: {
+      name: "Motions",
+      // Hide routine bookkeeping (adjournment, accept-previous-minutes, etc.) by
+      // default; the "All motions" view below shows everything. The value stays
+      // in sync with the procedural catalogue via ROUTINE_MOTION_TAGS.
+      filters: [{ fieldName: "tags", operator: "notIn", value: ROUTINE_MOTION_TAGS }],
+      columns: [
+        { fieldName: "title", size: 320 },
+        { fieldName: "status", size: 120 },
+        { fieldName: "outcome", size: 110 },
+        { fieldName: "tags", size: 200 },
+        { fieldName: "resolutionTypeLabel", size: 150 },
+        { fieldName: "movedBy", size: 150 },
+        { fieldName: "meeting", size: 180 },
+        { fieldName: "createdAtISO", size: 140 },
+      ],
+    },
+    extraViews: [
+      // Unfiltered — shows routine motions too.
+      { name: "All motions" },
+    ],
   },
 ];

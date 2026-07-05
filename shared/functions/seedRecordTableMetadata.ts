@@ -108,6 +108,31 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
       }
     }
 
+    // Field lookup for view columns + filters (all fields exist at this point).
+    const seededFields = await ctx.db
+      .query("fieldMetadata")
+      .withIndex("by_object", (q) => q.eq("objectMetadataId", objectRow._id))
+      .collect();
+    const fieldByName = new Map(seededFields.map((f: any) => [f.name, f]));
+    const liveFieldIds = new Set(seededFields.map((f: any) => String(f._id)));
+
+    // Resolve seed view filters (expressed by field name) into the stored
+    // filtersJson shape (fieldMetadataId-keyed). Undefined for no filters.
+    const buildFiltersJson = (
+      filters?: { fieldName: string; operator: string; value: unknown }[],
+    ): string | undefined => {
+      if (!filters?.length) return undefined;
+      const resolved = filters
+        .map((f) => {
+          const field: any = fieldByName.get(f.fieldName);
+          return field
+            ? { fieldMetadataId: String(field._id), operator: f.operator, value: f.value }
+            : null;
+        })
+        .filter(Boolean);
+      return resolved.length ? JSON.stringify(resolved) : undefined;
+    };
+
     // Seed the default view (and its columns) if missing.
     const existingViews = await ctx.db
       .query("views")
@@ -124,18 +149,13 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
         isShared: true,
         isSystem: true,
         position: 0,
+        filtersJson: buildFiltersJson(obj.defaultView.filters),
         createdAtISO: now,
         updatedAtISO: now,
       });
-      // Look up fields again, now that they exist.
-      const allFields = await ctx.db
-        .query("fieldMetadata")
-        .withIndex("by_object", (q) => q.eq("objectMetadataId", objectRow._id))
-        .collect();
-      const byName = new Map(allFields.map((f: any) => [f.name, f]));
       for (let i = 0; i < obj.defaultView.columns.length; i++) {
         const col = obj.defaultView.columns[i];
-        const field: any = byName.get(col.fieldName);
+        const field: any = fieldByName.get(col.fieldName);
         if (!field) continue;
         await ctx.db.insert("viewFields", {
           societyId,
@@ -154,12 +174,7 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
       // longer exists (orphaned, e.g. after a field was removed above). Columns
       // for still-existing fields are left untouched so user reordering/resizing
       // of the system view survives a reseed.
-      const allFields = await ctx.db
-        .query("fieldMetadata")
-        .withIndex("by_object", (q) => q.eq("objectMetadataId", objectRow._id))
-        .collect();
-      const byName = new Map(allFields.map((f: any) => [f.name, f]));
-      const liveFieldIds = new Set(allFields.map((f: any) => String(f._id)));
+      const byName = fieldByName;
       const currentColumns = await ctx.db
         .query("viewFields")
         .withIndex("by_view", (q) => q.eq("viewId", systemView._id))
@@ -184,6 +199,47 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
       // Drop dangling columns (field deleted) to avoid stale view columns.
       for (const vf of currentColumns) {
         if (!liveFieldIds.has(String(vf.fieldMetadataId))) await ctx.db.delete(vf._id);
+      }
+    }
+
+    // Seed any extra views (e.g. an unfiltered "All" view) beyond the default.
+    // Idempotent by name; columns default to the default view's columns.
+    for (const extra of (obj.extraViews ?? []) as any[]) {
+      const viewsForObject = await ctx.db
+        .query("views")
+        .withIndex("by_object", (q) => q.eq("objectMetadataId", objectRow._id))
+        .collect();
+      if (viewsForObject.some((v: any) => v.name === extra.name)) continue;
+      const nextPosition =
+        viewsForObject.reduce((max: number, v: any) => Math.max(max, v.position ?? 0), -1) + 1;
+      const extraViewId = await ctx.db.insert("views", {
+        societyId,
+        objectMetadataId: objectRow._id,
+        name: extra.name,
+        type: "table",
+        density: "compact",
+        isShared: true,
+        isSystem: false,
+        position: nextPosition,
+        filtersJson: buildFiltersJson(extra.filters),
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      const columns = (extra.columns ?? obj.defaultView.columns) as any[];
+      for (let i = 0; i < columns.length; i++) {
+        const col = columns[i];
+        const field: any = fieldByName.get(col.fieldName);
+        if (!field) continue;
+        await ctx.db.insert("viewFields", {
+          societyId,
+          viewId: extraViewId,
+          fieldMetadataId: field._id,
+          isVisible: true,
+          position: col.position ?? i,
+          size: col.size ?? 160,
+          createdAtISO: now,
+          updatedAtISO: now,
+        });
       }
     }
   }
