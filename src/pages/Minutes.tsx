@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { minutesMotionsForDisplay } from "../../shared/minutesMotions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, RecordChip } from "../components/ui";
@@ -49,7 +50,7 @@ export function MinutesPage() {
         meeting: meeting?.title ?? "Deleted meeting",
         meetingType: meeting?.type ?? "",
         notHeldYet,
-        motionCount: m.motions?.length ?? 0,
+        motionCount: minutesMotionsForDisplay(m).length,
         pendingActions: (m.actionItems ?? []).filter((a: any) => !a.done).length,
         quorum: notHeldYet ? "Not held yet" : m.quorumMet ? "Met" : "Not met",
         actions: (m.actionItems ?? []).filter((a: any) => !a.done).length > 0 ? "Open" : "Done",
