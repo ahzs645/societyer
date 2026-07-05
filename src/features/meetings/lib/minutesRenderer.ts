@@ -8,6 +8,7 @@ import { escapeHtml } from "../../../lib/html";
 import { renderMarkdownInline } from "../../../lib/markdown";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "./minutesExportStyles";
 import { agendaSequenceLabel } from "./agendaNumbering";
+import { minutesMotionsForDisplay } from "../../../../shared/minutesMotions";
 
 export type { MinutesExportStyleId };
 export { MINUTES_EXPORT_STYLES };
@@ -254,7 +255,7 @@ export function getMinutesStyleGaps({
   minutes: MinutesRenderArgs["minutes"];
 }): MinutesDataGap[] {
   const agendaItems = meeting.agendaItems ?? [];
-  const businessMotions = minutes.motions.filter((motion) => !isAdjournmentMotionForExport(motion));
+  const businessMotions = minutesMotionsForDisplay(minutes).filter((motion) => !isAdjournmentMotionForExport(motion));
   const motionHasVoteLanguage = businessMotions.some(
     (motion) =>
       motion.votesFor != null ||
@@ -391,7 +392,7 @@ function renderStandardMinutes({
     weekday: "long", year: "numeric", month: "long", day: "numeric",
     hour: "numeric", minute: "2-digit",
   });
-  const businessMotions = minutes.motions.filter((motion) => !isAdjournmentMotionForExport(motion));
+  const businessMotions = minutesMotionsForDisplay(minutes).filter((motion) => !isAdjournmentMotionForExport(motion));
 
   const motionRow = (m: typeof minutes.motions[number]) => {
     const meta = [
@@ -468,8 +469,8 @@ function renderFormalAgmMinutes({
   const secretary = minutes.secretaryName ?? minutes.recorderName ?? placeholder("Secretary", options);
   const callTime = displayDateOrText(minutes.calledToOrderAt) ?? formatTime(minutes.heldAt);
   const adjournedAt = displayDateOrText(minutes.adjournedAt);
-  const adjournmentMotion = minutes.motions.find((motion) => /adjourn/i.test(motion.text));
-  const nonAdjournmentMotions = minutes.motions.filter((motion) => motion !== adjournmentMotion);
+  const adjournmentMotion = minutesMotionsForDisplay(minutes).find((motion) => /adjourn/i.test(motion.text));
+  const nonAdjournmentMotions = minutesMotionsForDisplay(minutes).filter((motion) => motion !== adjournmentMotion);
 
   return `
     <h1>MINUTES OF THE ${eh(meetingKind.toUpperCase())} OF MEMBERS</h1>
@@ -528,7 +529,7 @@ function renderExecutiveAgendaMinutes({
   const callTime = displayDateOrText(minutes.calledToOrderAt) ?? formatTime(minutes.heldAt);
   const adjournedAt = displayDateOrText(minutes.adjournedAt);
   // Motions that no section claims still need to appear somewhere.
-  const unplacedMotions = minutes.motions.filter(
+  const unplacedMotions = minutesMotionsForDisplay(minutes).filter(
     (motion) =>
       !isAdjournmentMotionForExport(motion) &&
       !sectionRecords.some((section, sectionIndex) =>
@@ -594,8 +595,8 @@ function renderNumberedAgendaMinutes({
   const location = meeting.location || minutes.nextMeetingLocation || placeholder("location", options);
   const presentLine = minutes.attendees.length ? minutes.attendees.join(", ") : placeholder("attendees", options);
   const absentLine = minutes.absent.length ? minutes.absent.join(", ") : "";
-  const adjournmentMotion = minutes.motions.find((motion) => /adjourn/i.test(motion.text));
-  const topicMotions = minutes.motions.filter((motion) => motion !== adjournmentMotion);
+  const adjournmentMotion = minutesMotionsForDisplay(minutes).find((motion) => /adjourn/i.test(motion.text));
+  const topicMotions = minutesMotionsForDisplay(minutes).filter((motion) => motion !== adjournmentMotion);
   const sectionTitles = new Set(sections.map(({ section }) => section.title));
   const extraSections = recordedSections
     .filter(({ section }) => !sectionTitles.has(section.title))
@@ -733,7 +734,7 @@ function renderBoardPublicMinutes({
   // Motions no section claims still need to appear once — previously ALL
   // motions re-rendered in a trailing "Motions" block, duplicating any that
   // also matched a section.
-  const unplacedMotions = minutes.motions.filter(
+  const unplacedMotions = minutesMotionsForDisplay(minutes).filter(
     (motion) =>
       !isAdjournmentMotionForExport(motion) &&
       !sectionRecords.some((section, sectionIndex) =>
@@ -781,7 +782,7 @@ function renderBoardPublicSection(
   // Explicit motion→section assignments win over keyword matching, so an
   // assigned motion never renders under the wrong heading or twice.
   const searchText = agendaSectionSearchText(section);
-  const matchingMotions = minutes.motions.filter((motion) =>
+  const matchingMotions = minutesMotionsForDisplay(minutes).filter((motion) =>
     motionBelongsToAgendaSection(motion, index, section.title, searchText),
   );
   const presenter = "presenter" in section ? section.presenter ?? "" : "";
@@ -833,7 +834,7 @@ function renderExecutiveSection(
   // before falling back to keyword matching, so an assigned motion never
   // renders under the wrong heading or twice.
   const sectionSearchText = agendaSectionSearchText(section);
-  const matchingMotions = minutes.motions.filter(
+  const matchingMotions = minutesMotionsForDisplay(minutes).filter(
     (motion) => motionBelongsToAgendaSection(motion, sectionIndex, section.title, sectionSearchText),
   );
   const presenter = "presenter" in section ? section.presenter ?? "" : "";
@@ -964,7 +965,7 @@ function renderActionTableCell(
     ].join("<br/>");
   }
   if (index === 1) {
-    const motions = minutes.motions.slice(0, 4);
+    const motions = minutesMotionsForDisplay(minutes).slice(0, 4);
     if (motions.length) {
       return motions.map((motion) => `Motion to ${eh(stripMotionLeadIn(motion.text))}<br/><strong>${eh(motion.outcome)}</strong>`).join("<br/><br/>");
     }
