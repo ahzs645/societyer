@@ -15,6 +15,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { minutesMotionsForDisplay } from "../minutesMotions";
 
 const HISTORY_TAG = "org-history";
 const SOURCE_TAG = "org-history-source";
@@ -1135,7 +1136,7 @@ function mergeMotionRecords(historyMotions: any[], minutesRows: any[], meetingRo
       ...sourceExternalIds.map((externalId) => sourceIdByExternalId.get(externalId)).filter(Boolean),
     ]);
 
-    for (const [index, motion] of arrayOf(minutesRow.motions).entries()) {
+    for (const [index, motion] of arrayOf(minutesMotionsForDisplay(minutesRow)).entries()) {
       const motionText = optionalText(motion?.text);
       if (!motionText) continue;
 

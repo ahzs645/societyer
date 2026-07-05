@@ -15,6 +15,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { minutesMotionsForDisplay } from "../minutesMotions";
 
 type ItemStatus = "complete" | "attention" | "blocked" | "upcoming";
 
@@ -273,9 +274,9 @@ export async function summaryPortable(
       phase: "during",
       title: "Capture votes and minutes",
       detail: minutes
-        ? `${minutes.motions?.length ?? 0} motion${(minutes.motions?.length ?? 0) === 1 ? "" : "s"} and ${minutes.decisions?.length ?? 0} decision${(minutes.decisions?.length ?? 0) === 1 ? "" : "s"} recorded.`
+        ? `${minutesMotionsForDisplay(minutes as any).length} motion${(minutesMotionsForDisplay(minutes as any).length) === 1 ? "" : "s"} and ${minutes.decisions?.length ?? 0} decision${(minutes.decisions?.length ?? 0) === 1 ? "" : "s"} recorded.`
         : "No AGM minutes are linked yet.",
-      status: minutes ? ((minutes.motions?.length ?? 0) > 0 || (minutes.decisions?.length ?? 0) > 0 ? "complete" : "attention") : agmHeld ? "blocked" : "upcoming",
+      status: minutes ? ((minutesMotionsForDisplay(minutes as any).length) > 0 || (minutes.decisions?.length ?? 0) > 0 ? "complete" : "attention") : agmHeld ? "blocked" : "upcoming",
       evidence: ["Draft minutes", "Motion outcomes", "Vote tallies and abstentions", "Election evidence"],
       to: selectedAgm ? `/meetings/${selectedAgm._id}` : "/minutes",
       actionLabel: "Open minutes",

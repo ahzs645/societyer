@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { v } from "convex/values";
+import { minutesMotionsForDisplay } from "../shared/minutesMotions";
 import { query, internalMutation, mutation, action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
@@ -190,9 +191,9 @@ export const buildFilingPacket = query({
       };
     }
     if (kind === "BylawAmendment") {
-      const specialResolutions = lastAgmMinutes?.motions.filter((m) =>
+      const specialResolutions = minutesMotionsForDisplay(lastAgmMinutes).filter((m) =>
         /special resolution|bylaw/i.test(m.text),
-      ) ?? [];
+      );
       return {
         form: "BC-Societies-BylawAmendment",
         society: { name: society.name, incorporationNumber: society.incorporationNumber },
