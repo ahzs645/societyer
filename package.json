@@ -124,6 +124,7 @@
     "test:motion-governance": "tsx scripts/check-motion-governance.ts",
     "test:motions-resolve-parity": "tsx scripts/check-motions-resolve-parity.ts",
     "test:motions-reconcile": "tsx scripts/check-motions-reconcile.ts",
+    "test:motions-carryforward": "tsx scripts/check-motions-carryforward.ts",
     "test:motions-master-list": "tsx scripts/check-motions-master-list.ts",
     "test:bylaw-sections": "tsx scripts/check-bylaw-sections.ts",
     "test:grant-feed-parsers": "tsx scripts/check-grant-feed-parsers.ts"
