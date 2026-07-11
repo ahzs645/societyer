@@ -72,68 +72,19 @@ async function patchMotion(ctx: PortableMutationCtx, motionId: any, patch: Recor
 
 // ----- queries --------------------------------------------------------------
 
-/**
- * Read-only motions synthesized from meeting minutes that were never converted
- * into a first-class `motions` row (conversion is a manual, on-demand action —
- * see createFromMinutesMotionPortable in motionBacklog.ts). Without this, a
- * meeting's recorded motions (e.g. an AGM's carried motions) are invisible on
- * the master Motions page even though they're the actual record of what the
- * society decided. Synthetic ids encode their source so the UI can recognize
- * (and avoid trying to mutate) a row that has no real `motions` document yet.
- */
-async function minutesSourcedMotions(
-  ctx: PortableQueryCtx,
-  societyId: string,
-  alreadyConverted: Set<string>,
-) {
-  const allMinutes = await ctx.db
-    .query("minutes")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
-  const synthesized: any[] = [];
-  for (const minutes of allMinutes) {
-    const motions = Array.isArray((minutes as any).motions) ? (minutes as any).motions : [];
-    motions.forEach((motion: any, index: number) => {
-      if (alreadyConverted.has(`${minutes._id}:${index}`)) return;
-      if (!motion?.text) return;
-      synthesized.push({
-        _id: `from-minutes:${minutes._id}:${index}`,
-        societyId,
-        text: motion.text,
-        title: motion.name,
-        movedBy: motion.movedBy,
-        secondedBy: motion.secondedBy,
-        status: motion.outcome === "Carried" || motion.outcome === "Defeated" ? "Voted" : (motion.outcome ?? "Voted"),
-        outcome: motion.outcome,
-        votesFor: motion.votesFor,
-        votesAgainst: motion.votesAgainst,
-        abstentions: motion.abstentions,
-        decidedBy: motion.decidedBy,
-        resolutionTypeLabel: motion.resolutionType,
-        primaryMeetingId: (minutes as any).meetingId,
-        tags: [],
-        createdAtISO: (minutes as any).heldAt,
-        sourceMinutesId: minutes._id,
-        sourceMotionIndex: index,
-        readOnly: true,
-      });
-    });
-  }
-  return synthesized;
-}
-
+// The master motions list is now purely the first-class `motions` table. Every
+// minutes motion has a mirror row (the dual-write on save + `backfillFromLegacy`),
+// so the old `minutesSourcedMotions` synthesizer is redundant. After the read-flip
+// it was worse than redundant: it double-counted a mirrored motion — once as its
+// real row and again as a synthetic `from-minutes:<minutesId>:<index>` entry,
+// because mirror rows carry `minutesId` but not `sourceMinutesId`, so they never
+// landed in the `alreadyConverted` dedupe set. See Phase 4A in
+// docs/motions-migration-finish-scope.md.
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
-  const rows = await ctx.db
+  return ctx.db
     .query("motions")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
-  const alreadyConverted = new Set(
-    rows
-      .filter((row: any) => row.sourceMinutesId != null && row.sourceMotionIndex != null)
-      .map((row: any) => `${row.sourceMinutesId}:${row.sourceMotionIndex}`),
-  );
-  const fromMinutes = await minutesSourcedMotions(ctx, societyId, alreadyConverted);
-  return [...rows, ...fromMinutes];
 }
 
 export async function listForMinutesPortable(ctx: PortableQueryCtx, { minutesId }: { minutesId: string }) {
