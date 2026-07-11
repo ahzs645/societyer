@@ -1741,6 +1741,9 @@ export async function runPortable(ctx: PortableMutationCtx): Promise<{ societyId
       meetingId: rec.meetingId,
       motions: rec.motions ?? [],
     });
+    // Phase 4: the embedded minutes.motions[] is deprecated — materialize it into
+    // the table above, then clear it so no seeded doc carries it.
+    await ctx.db.patch(rec._id, { motions: undefined });
   }
 
   return { societyId: String(societyId) };

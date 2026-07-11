@@ -7,31 +7,31 @@
  * every call site.
  *
  * Rule: an APPROVED minutes renders from its frozen `motionSnapshots[]` (an
- * immutable legal record), a draft renders its live `motions[]`. Snapshots are
- * frozen from `motions[]` at approval time, so today this is a no-op for
- * well-behaved data — but it is the correct behaviour once live motions come
- * from the mutable `motions` table.
+ * immutable legal record); a draft renders the resolved motions attached as
+ * `displayMotions` at the query boundary (table-sourced). The embedded
+ * `minutes.motions[]` is retired (Phase 4).
  *
  * Pure module (no imports) so both the frontend renderer and the Convex export
  * paths can use it. NOT for the editor, which mutates the live `motions[]`.
  */
 export function minutesMotionsForDisplay<M>(
   minutes:
+    // `motions` is accepted for back-compat with callers that pass a raw minutes
+    // row, but it is no longer read — the embedded array is retired (Phase 4).
     | { motions?: M[] | null; motionSnapshots?: M[] | null; displayMotions?: M[] | null }
     | null
     | undefined,
 ): M[] {
   if (!minutes) return [];
-  // Populated at the query boundary (listPortable/getByMeetingPortable) once reads
-  // are flipped: the already-resolved motions — table-sourced for drafts, frozen
-  // snapshots for approved. Prefer it so the flip is transparent to every caller
-  // that was routed through this accessor in Phase 0. Callers that read a raw
-  // minutes row (backend consumers, pre-flip) fall through to the old behaviour.
+  // Populated at the query boundary (listPortable/getByMeetingPortable): the
+  // already-resolved motions — table-sourced for drafts, frozen snapshots for
+  // approved. Backend consumers resolve via resolveMinutesMotions. The embedded
+  // minutes.motions[] is retired (Phase 4), so there is no fallback.
   if (minutes.displayMotions != null) return minutes.displayMotions;
   if (minutes.motionSnapshots && minutes.motionSnapshots.length > 0) {
     return minutes.motionSnapshots;
   }
-  return minutes.motions ?? [];
+  return [];
 }
 
 /**

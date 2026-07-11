@@ -145,7 +145,10 @@ export const meetingTables = {
         }),
       ),
     ),
-    motions: v.array(
+    // DEPRECATED (Phase 4): the motions table + minutes.motionIds are the source
+    // of truth. No longer written or read; the seed clears it so no doc carries
+    // it. Kept as an empty optional pass-through pending its final removal.
+    motions: v.optional(v.array(
       v.object({
         name: v.optional(v.string()),
         text: v.string(),
@@ -173,7 +176,7 @@ export const meetingTables = {
         // automatically stamped approvedAt/approvedInMeetingId.
         adoptsMinutesId: v.optional(v.id("minutes")),
       }),
-    ),
+    )),
     // Immutable snapshot of motions[] frozen when the minutes are approved, so
     // later edits to the (now first-class) motions never rewrite the approved
     // legal record. See docs/motions-first-class-object-design.md.
