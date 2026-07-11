@@ -8,6 +8,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { syncMotionsForMinutes } from "./minutes";
 import {
   SESSION_TAG,
   RECORD_TAG,
@@ -424,6 +425,15 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
       { _id: meetingId, societyId: session.societyId, title },
       importedMeetingAgenda(title, group.map(({ payload }) => payload), sourceExternalIds),
     );
+    const importedMotions = group.map(({ payload }) => ({
+      text: cleanText(payload.motionText) || "Imported motion",
+      movedBy: cleanText(payload.movedByName),
+      secondedBy: cleanText(payload.secondedByName),
+      outcome: cleanText(payload.outcome) || "Unknown",
+      votesFor: numberOrUndefined(payload.votesFor),
+      votesAgainst: numberOrUndefined(payload.votesAgainst),
+      abstentions: numberOrUndefined(payload.abstentions),
+    }));
     const minutesId = await ctx.db.insert("minutes", {
       societyId: session.societyId,
       meetingId,
@@ -432,15 +442,6 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
       absent: [],
       quorumMet: false,
       discussion: "Imported from converted Paperless meeting-minute motions. Review the source document before approving these minutes.",
-      motions: group.map(({ payload }) => ({
-        text: cleanText(payload.motionText) || "Imported motion",
-        movedBy: cleanText(payload.movedByName),
-        secondedBy: cleanText(payload.secondedByName),
-        outcome: cleanText(payload.outcome) || "Unknown",
-        votesFor: numberOrUndefined(payload.votesFor),
-        votesAgainst: numberOrUndefined(payload.votesAgainst),
-        abstentions: numberOrUndefined(payload.abstentions),
-      })),
       decisions: [],
       actionItems: [],
       sourceDocumentIds,
@@ -455,6 +456,11 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
       }),
     });
     await ctx.db.patch(meetingId, { minutesId });
+    // Materialize the imported motions into the table (Phase 4C — not stored on
+    // the minutes row); reads resolve from motionIds.
+    if (importedMotions.length) {
+      await syncMotionsForMinutes(ctx, { societyId: session.societyId, minutesId, meetingId, motions: importedMotions });
+    }
     for (const { record } of group) {
       await patchRecordImportTarget(ctx, record, "meetings", { meetingId, minutesId });
     }
@@ -498,6 +504,7 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
         ? payload.agendaItems
         : importedMeetingAgenda(title, payload.motions, sourceExternalIds),
     );
+    const importedMotions = payload.motions.map(minutesMotionFromPayload);
     const minutesId = await ctx.db.insert("minutes", {
       societyId: session.societyId,
       meetingId,
@@ -507,7 +514,6 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
       quorumMet: payload.quorumMet,
       discussion: payload.discussion || "Imported from Paperless meeting minutes. Review the source document before approving these minutes.",
       ...structuredMinutesPatchFromPayload(payload),
-      motions: payload.motions.map(minutesMotionFromPayload),
       decisions: payload.decisions,
       actionItems: payload.actionItems,
       sourceDocumentIds,
@@ -535,6 +541,11 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
       }),
     });
     await ctx.db.patch(meetingId, { minutesId });
+    // Materialize the imported motions into the table (Phase 4C — not stored on
+    // the minutes row); reads resolve from motionIds.
+    if (importedMotions.length) {
+      await syncMotionsForMinutes(ctx, { societyId: session.societyId, minutesId, meetingId, motions: importedMotions });
+    }
     await patchRecordImportTarget(ctx, record, "meetings", { meetingId, minutesId });
     meetings += 1;
     minutes += 1;
