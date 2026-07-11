@@ -29,7 +29,6 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 // public mutations stay in lockstep with the table definition.
 const motionContent = {
   title: v.optional(v.string()),
-  category: v.optional(v.string()),
   movedBy: v.optional(v.string()),
   movedByMemberId: v.optional(v.id("members")),
   movedByDirectorId: v.optional(v.id("directors")),

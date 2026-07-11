@@ -231,7 +231,6 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
                             {(item.tags ?? []).map((tag: string) => (
                               <Badge key={tag} tone="neutral">{tag}</Badge>
                             ))}
-                            {!item.tags?.length && item.category && <Badge tone="neutral">{formatLabel(item.category)}</Badge>}
                             {item.priority && <Badge tone={item.priority === "high" ? "warn" : "neutral"}>{formatLabel(item.priority)}</Badge>}
                           </div>
                         </div>

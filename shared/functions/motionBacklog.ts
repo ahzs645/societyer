@@ -30,36 +30,28 @@ const PIPA_SETUP_MOTIONS = [
     seededKey: "pipa-designate-privacy-officer",
     title: "Designate privacy officer",
     motionText:
-      "BE IT RESOLVED THAT the Society designate [role or name] as privacy officer for purposes of privacy questions, access requests, correction requests, complaints, and privacy-program upkeep, and that the privacy officer maintain a monitored privacy contact address.",
-    category: "privacy",
-    priority: "high",
+      "BE IT RESOLVED THAT the Society designate [role or name] as privacy officer for purposes of privacy questions, access requests, correction requests, complaints, and privacy-program upkeep, and that the privacy officer maintain a monitored privacy contact address.",    priority: "high",
     notes: "Use once the role/name and monitored email address are known.",
   },
   {
     seededKey: "pipa-adopt-privacy-policy",
     title: "Adopt PIPA privacy policy and complaint process",
     motionText:
-      "BE IT RESOLVED THAT the Society adopt the PIPA privacy policy, privacy practices, access and correction process, complaint process, safeguards, and retention approach presented to the meeting, effective [date], and authorize the privacy officer to maintain the working copy and evidence record.",
-    category: "privacy",
-    priority: "high",
+      "BE IT RESOLVED THAT the Society adopt the PIPA privacy policy, privacy practices, access and correction process, complaint process, safeguards, and retention approach presented to the meeting, effective [date], and authorize the privacy officer to maintain the working copy and evidence record.",    priority: "high",
     notes: "Use after the draft policy has been reviewed and is ready for approval.",
   },
   {
     seededKey: "pipa-member-data-gap-memo",
     title: "Approve member-data access gap memo",
     motionText:
-      "BE IT RESOLVED THAT the Society approve the member-data access gap memo presented to the meeting, recording which member or eligibility records are controlled by the Society, which records are held by the university or other institution, and how privacy and records requests will be handled.",
-    category: "privacy",
-    priority: "normal",
+      "BE IT RESOLVED THAT the Society approve the member-data access gap memo presented to the meeting, recording which member or eligibility records are controlled by the Society, which records are held by the university or other institution, and how privacy and records requests will be handled.",    priority: "normal",
     notes: "Useful where the university or parent body does not share the full member list.",
   },
   {
     seededKey: "pipa-training-review-cycle",
     title: "Set annual privacy and CASL training review",
     motionText:
-      "BE IT RESOLVED THAT the Society establish an annual privacy and CASL training review for directors, officers, staff, and volunteers with access to personal information or electronic communications systems, and that completion evidence be kept with the Society's privacy records.",
-    category: "privacy",
-    priority: "normal",
+      "BE IT RESOLVED THAT the Society establish an annual privacy and CASL training review for directors, officers, staff, and volunteers with access to personal information or electronic communications systems, and that completion evidence be kept with the Society's privacy records.",    priority: "normal",
     notes: "Use if the society wants the training cadence approved as part of setup.",
   },
 ];
@@ -183,7 +175,6 @@ export async function createPortable(
     title: string;
     motionText: string;
     tags?: string[];
-    category?: string;
     priority?: string;
     source?: string;
     notes?: string;
@@ -193,11 +184,10 @@ export async function createPortable(
     societyId: args.societyId,
     title: args.title,
     text: args.motionText,
-    // Labels replace the old fixed "category" enum. `category` is still accepted
-    // for back-compat callers but no longer defaulted, so new backlog motions
-    // carry free-form tags only (procedural tags are merged by insertMotion).
+    // Free-form tags replaced the old fixed "category" enum; category is no
+    // longer written to motion rows (Phase 4E). Procedural tags are merged by
+    // insertMotion.
     tags: args.tags,
-    category: args.category,
     status: "Backlog",
     backlogPriority: args.priority ?? "normal",
     source: args.source ?? "manual",
@@ -210,9 +200,7 @@ export async function updatePortable(
   { backlogId, motionText, priority, ...rest }: {
     backlogId: string;
     title?: string;
-    motionText?: string;
-    category?: string;
-    status?: string;
+    motionText?: string;    status?: string;
     priority?: string;
     notes?: string;
   },
@@ -233,9 +221,7 @@ export async function createFromMinutesMotionPortable(
   args: {
     minutesId: string;
     motionIndex: number;
-    title?: string;
-    category?: string;
-    priority?: string;
+    title?: string;    priority?: string;
     notes?: string;
   },
 ) {
@@ -263,9 +249,7 @@ export async function createFromMinutesMotionPortable(
   const backlogId = await insertMotion(ctx, {
     societyId: minutes.societyId,
     title: args.title?.trim() || summarizeMotionTitle(motion.text),
-    text: motion.text,
-    category: args.category ?? "governance",
-    status: "Deferred",
+    text: motion.text,    status: "Deferred",
     backlogPriority: args.priority ?? "normal",
     source: "minutes-motion",
     notes: [
@@ -285,9 +269,7 @@ export async function createFromMinutesSectionPortable(
     minutesId: string;
     sectionIndex: number;
     title?: string;
-    motionText?: string;
-    category?: string;
-    priority?: string;
+    motionText?: string;    priority?: string;
     notes?: string;
   },
 ) {
@@ -316,9 +298,7 @@ export async function createFromMinutesSectionPortable(
   const backlogId = await insertMotion(ctx, {
     societyId: minutes.societyId,
     title,
-    text: args.motionText?.trim() || `Discuss and decide next steps for ${title}.`,
-    category: args.category ?? "governance",
-    status: "Deferred",
+    text: args.motionText?.trim() || `Discuss and decide next steps for ${title}.`,    status: "Deferred",
     backlogPriority: args.priority ?? "normal",
     source: "minutes-section",
     notes: [
@@ -345,7 +325,6 @@ export async function seedPipaSetupPortable(ctx: PortableMutationCtx, { societyI
       societyId,
       title: motion.title,
       text: motion.motionText,
-      category: motion.category,
       status: "Backlog",
       backlogPriority: motion.priority,
       source: "pipa-setup",
@@ -484,7 +463,6 @@ export async function carryForwardToMeetingPortable(
         societyId: minutes.societyId,
         title,
         text: motion.text,
-        category: "governance",
         status: "Deferred",
         backlogPriority: "normal",
         source: "minutes-motion",
