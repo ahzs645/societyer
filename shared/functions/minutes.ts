@@ -507,6 +507,14 @@ export async function updatePortable(
   if (clearApproval) {
     patch.approvedAt = undefined;
     patch.approvedInMeetingId = undefined;
+    // Un-approving reverts the minutes to an editable draft, so drop the frozen
+    // motion snapshot too. Otherwise resolveMinutesMotions keeps serving the
+    // stale approved set (snapshots take precedence over the live table): later
+    // motion edits wouldn't show, and a re-approval couldn't re-freeze (the
+    // snapshot-on-approval guard below skips when a snapshot already exists).
+    // Invariant: motionSnapshots exists iff the minutes are approved.
+    patch.motionSnapshots = undefined;
+    patch.motionSnapshotAtISO = undefined;
   } else if (clearApprovedInMeeting) {
     patch.approvedInMeetingId = undefined;
   }

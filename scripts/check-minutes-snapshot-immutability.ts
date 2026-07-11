@@ -87,4 +87,33 @@ assert.ok(afterEdit.rowTexts.some((t: string) => t.includes("Third motion added"
 assert.ok(!afterEdit.rowTexts.some((t: string) => t === "Second motion"), "the dropped motion was removed from the table");
 
 console.log("✓ approval freezes motionSnapshots from the table; post-approval edits change the rows, not the frozen record");
+
+// Un-approve (the "Clear approval" button → patch { clearApproval: true }). This
+// must drop the frozen snapshot so the minutes revert to an editable draft that
+// resolves from the LIVE table — otherwise the stale approved set keeps showing.
+await mutate("clearApproval", (ctx: any) => updatePortable(ctx, { id: setup.minutesId, patch: { clearApproval: true } }));
+
+const unapproved: any = await query("unapproved", async (ctx: any) => {
+  const m: any = await ctx.db.get(setup.minutesId);
+  return { approvedAt: m.approvedAt ?? null, snapshots: m.motionSnapshots ?? null, resolved: await resolveMinutesMotions(ctx, m) };
+});
+assert.equal(unapproved.approvedAt, null, "clearApproval unset approvedAt");
+assert.ok(!unapproved.snapshots || unapproved.snapshots.length === 0, "clearApproval dropped the frozen motionSnapshots");
+// The display now reflects the post-approval table edits, NOT the frozen snapshot.
+const liveTexts = unapproved.resolved.map((m: any) => String(m.text)).sort();
+assert.ok(liveTexts.some((t: string) => t.includes("EDITED")), "un-approved minutes resolve the live (edited) table motions");
+assert.ok(liveTexts.some((t: string) => t.includes("Third motion added")), "un-approved minutes show the motion added after approval");
+assert.ok(!liveTexts.some((t: string) => t === "First motion"), "un-approved minutes no longer serve the stale frozen record");
+
+// Re-approving must re-freeze from the CURRENT table state (the edited set), not
+// resurrect the old snapshot — proving the guard was reset by the un-approve.
+await mutate("reApprove", (ctx: any) => updatePortable(ctx, { id: setup.minutesId, patch: { approvedAt: "2026-03-05T00:00:00.000Z" } }));
+const reApproved: any = await query("reApproved", async (ctx: any) => {
+  const m: any = await ctx.db.get(setup.minutesId);
+  return { snapshots: m.motionSnapshots, resolved: await resolveMinutesMotions(ctx, m) };
+});
+assert.deepEqual(reApproved.resolved.map((m: any) => String(m.text)).sort(), liveTexts, "re-approval re-froze the current (edited) motions");
+assert.notDeepEqual(reApproved.snapshots?.map((m: any) => String(m.text)).sort(), frozenTexts, "re-approval did not resurrect the original stale snapshot");
+console.log("✓ clearApproval drops the snapshot; un-approved minutes resolve the live table; re-approval re-freezes the current set");
+
 console.log("\nminutes snapshot-immutability checks passed.");
