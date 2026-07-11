@@ -75,7 +75,11 @@ export function RecordTableCell({
         (isFocused ? " record-table__cell--focused" : "")
       }
       style={{ width: recordField.size, minWidth: recordField.size }}
-      onDoubleClick={startEdit}
+      // The identifier column opens the record on a single click, so double-click
+      // must NOT also try to edit it (the first click already navigates away —
+      // that mismatch is what made renaming feel janky). Edit it via the hover
+      // pencil instead. Other editable columns keep double-click-to-edit.
+      onDoubleClick={isLabelIdentifier && tableCtx.onRecordClick ? undefined : startEdit}
       onMouseEnter={() => handle.get().setHoverPosition({ rowIndex, columnIndex })}
       onMouseLeave={() => {
         const latest = handle.get().hoverPosition;
@@ -85,6 +89,10 @@ export function RecordTableCell({
       }}
       onClick={(e) => {
         handle.get().setFocusedCell({ rowIndex, columnIndex });
+        // The identifier (first) column opens the record on click. Editing the
+        // identifier is still possible via the hover edit pencil (whose click
+        // stops propagation, so it edits instead of opening). Other editable
+        // columns edit via the pencil / double-click / Enter.
         if (isLabelIdentifier && tableCtx.onRecordClick) {
           e.stopPropagation();
           tableCtx.onRecordClick(recordId, record);
@@ -103,7 +111,7 @@ export function RecordTableCell({
           container shows up as a tiny floating box over the cell. */}
       {(isHovered || isFocused) &&
         !isEditing &&
-        (secondaryActions.length > 0 || (canEdit && !isLabelIdentifier)) && (
+        (secondaryActions.length > 0 || canEdit) && (
         <div className="record-table__cell-actions" onClick={(event) => event.stopPropagation()}>
           {secondaryActions.map((action) => (
             <button
@@ -117,11 +125,10 @@ export function RecordTableCell({
               {action.icon}
             </button>
           ))}
-          {/* The "open record" affordance lives once per row in the trailing
-              actions column (RecordTableRow). The identifier cell itself is a
-              link (click to open), so we don't repeat the open icon here —
-              only the inline edit pencil for editable non-identifier cells. */}
-          {canEdit && !isLabelIdentifier ? (
+          {/* Inline edit pencil for any editable cell, including the identifier
+              (title) column — the "open record" affordance lives once per row in
+              the trailing actions column (RecordTableRow). */}
+          {canEdit ? (
             <button
               type="button"
               className="record-table__cell-action"

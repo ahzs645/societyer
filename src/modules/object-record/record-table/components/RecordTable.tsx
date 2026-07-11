@@ -159,8 +159,12 @@ export function RecordTable({
   // record name) sits flush left and can be frozen while the rest of the
   // table scrolls horizontally — the Twenty-style narrow-screen table.
   const isMobile = useIsMobile();
+  // Drag-to-reorder was never wired up (the grip was a decorative <span> with no
+  // handlers), so we don't show a handle that does nothing. The scaffolding
+  // (drag cells/header/footer behind `showDragHandle`) stays in place so real
+  // reorder can be turned back on later by flipping hasDragHandle + wiring it.
   const { showSelectionColumn: effectiveSelectable, showDragHandle } =
-    getMobileTableLayout({ isMobile, selectable, hasDragHandle: true });
+    getMobileTableLayout({ isMobile, selectable, hasDragHandle: false });
   // In the non-virtualized branch the scroll container is the horizontal
   // scroller, so these edge flags drive the "there's more →" fade shadows that
   // keep a frozen-first-column table from looking cut off on a phone. The
