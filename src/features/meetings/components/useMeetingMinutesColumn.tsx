@@ -971,11 +971,14 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       sectionDiscussionRef.current?.getMarkdown() ?? sectionDraft.discussion;
     const existing = sections[sectionEditIndex] ?? {};
     const next = [...sections];
-    // Build the section explicitly rather than spreading `existing` so we don't
-    // pass through fields the `update` mutation validator doesn't accept
-    // (motionText/motionTemplateId/motionId etc. live on storage but not
-    // on the mutation arg). `depth` and `reportSubmitted` are the only legacy
-    // fields we need to preserve.
+    // Build the section explicitly rather than spreading `existing`, but preserve
+    // the stored fields this editor doesn't manage. The agenda sync writes
+    // motionText/motionTemplateId/motionId onto the section
+    // (shared/functions/agendas.ts) and the `update` validator DOES accept them
+    // (convex/minutes.ts `minuteSection`, added precisely so stored sections
+    // round-trip). Dropping them here silently wiped the section↔motion linkage
+    // and the `hasStartedMinutesDraft` motionText signal on every section save.
+    // depth/reportSubmitted are likewise preserved.
     next[sectionEditIndex] = {
       title: sectionDraft.title.trim() || existing.title || "Untitled section",
       type: sectionDraft.type.trim() || undefined,
@@ -983,6 +986,9 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       discussion: cleanOptional(latestDiscussion),
       reportSubmitted: existing.reportSubmitted,
       depth: existing.depth,
+      motionText: existing.motionText,
+      motionTemplateId: existing.motionTemplateId,
+      motionId: existing.motionId,
       decisions: sectionDraft.decisions.map((d) => d.trim()).filter(Boolean),
       actionItems: sectionDraft.actionItems
         .map((item) => ({
