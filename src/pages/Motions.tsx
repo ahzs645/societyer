@@ -45,11 +45,11 @@ type MotionForm = {
 };
 
 // A motion is safely editable from this master page only if it's a genuine
-// first-class row. Motions that mirror a meeting's minutes (`minutesId` set) get
-// overwritten on the next minutes sync, and synthetic "from minutes" rows aren't
-// real rows — both must be edited in the meeting instead (via the meeting link).
+// first-class row that doesn't mirror a meeting's minutes: motions with
+// `minutesId` set get overwritten on the next minutes sync, so they must be
+// edited in the meeting instead (via the meeting link).
 function canEditMotion(m: any): boolean {
-  return !m.readOnly && !m.minutesId;
+  return !m.minutesId;
 }
 
 const MOTIONS_TABS = ["motions", "tabled", "templates"] as const;
@@ -133,7 +133,7 @@ function MotionsTableTab() {
       // Ensure routine motions carry a routine label so the seeded default view's
       // notIn(tags) filter hides them — parity with the old isRoutineMotion(),
       // which also classified by proceduralKind/wording, not just stored tags
-      // (e.g. synthetic "from minutes" motions that were never tagged).
+      // (a safety net for any imported/legacy row missing procedural tags).
       const tagsForFilter =
         isRoutineMotion(m) && !tags.some((t: string) => ROUTINE_MOTION_TAGS.includes(t))
           ? [...tags, "routine"]
@@ -263,15 +263,6 @@ function MotionsTableTab() {
                 );
               }
               if (field.name === "tags") {
-                if (row.readOnly) return (
-                  <span
-                    className="muted"
-                    style={{ fontSize: 12 }}
-                    title="Recorded in meeting minutes — convert it to a first-class motion from the meeting's Motions tab to edit labels."
-                  >
-                    From minutes
-                  </span>
-                );
                 return (
                   <div
                     className="row"
