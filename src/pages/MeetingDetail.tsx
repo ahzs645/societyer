@@ -248,8 +248,7 @@ export function MeetingDetailPage() {
   // Deep-link support: `?tab=motions&motion=<id>` scrolls to and briefly
   // highlights a specific motion (e.g. from the Motions master page). Synthetic
   // "from-minutes:<minutesId>:<index>" ids carry the index; first-class motions
-  // resolve via listForMeeting and match on text (unique within a meeting, since
-  // the dual-write doesn't back-link motionId into minutes.motions[]).
+  // resolve via listForMeeting and match on text (unique within a meeting).
   const focusMotionParam = searchParams.get("motion");
   const isSyntheticFocus = !!focusMotionParam?.startsWith("from-minutes:");
   const focusMotions = useQuery(
@@ -260,7 +259,9 @@ export function MeetingDetailPage() {
   useEffect(() => {
     if (activeTab !== "motions" || !focusMotionParam || !minutes) return;
     if (scrolledMotionParamRef.current === focusMotionParam) return;
-    const rows = (minutes.motions ?? []) as any[];
+    // Index into the SAME resolved list the editor renders (its motion-${i} DOM
+    // ids are keyed on that order), so the scroll target lines up. See Phase 4B.
+    const rows = minutesMotionsForDisplay(minutes) as any[];
     let index = -1;
     if (isSyntheticFocus) {
       index = Number(focusMotionParam.split(":").pop());
@@ -727,9 +728,10 @@ export function MeetingDetailPage() {
   };
 
   // Business motions that were Tabled/Deferred at this meeting — the unfinished
-  // business that should roll onto the next meeting's agenda. Keep each motion's
-  // real index in minutes.motions so the backlog carry-forward can reference it.
-  const carriedForwardMotions = ((minutes?.motions ?? []) as Motion[])
+  // business that should roll onto the next meeting's agenda. Index into the
+  // RESOLVED list so `motionIndexes` line up with what carryForwardToMeeting
+  // resolves on the backend (resolveMinutesMotions). See Phase 4B.
+  const carriedForwardMotions = (minutesMotionsForDisplay(minutes) as Motion[])
     .map((motion, index) => ({ motion, index }))
     .filter(({ motion }) => !isAdjournmentMotion(motion) && isPostponedOutcome(motion.outcome));
 
@@ -1154,7 +1156,7 @@ export function MeetingDetailPage() {
     // Detect adoption motions newly recorded as Carried BEFORE saving — the
     // backend stamps the linked minutes approved as part of this update, and
     // the user deserves to hear that it happened.
-    const before = (minutes?.motions ?? []) as any[];
+    const before = minutesMotionsForDisplay(minutes) as any[];
     const previouslyCarried = new Set(
       before
         .filter((m) => m.adoptsMinutesId && String(m.outcome ?? "").toLowerCase() === "carried")
@@ -1185,7 +1187,7 @@ export function MeetingDetailPage() {
   const addAdoptionMotion = async (entry: PendingAdoption) => {
     const minutesId = minutes?._id ?? (await ensureMinutes());
     if (!minutesId) return;
-    const existing = (minutes?.motions ?? []) as any[];
+    const existing = minutesMotionsForDisplay(minutes) as any[];
     if (existing.some((motion) => String(motion.adoptsMinutesId ?? "") === entry.minutesId)) {
       toast.info("An adoption motion for those minutes is already on this meeting.");
       return;
@@ -1358,7 +1360,7 @@ export function MeetingDetailPage() {
     // preserved as orphans so we never silently destroy recorded minutes.
     if (minutes) {
       const existingSections = ((minutes.sections ?? []) as any[]);
-      const existingMotions = ((minutes.motions ?? []) as Motion[]);
+      const existingMotions = (minutesMotionsForDisplay(minutes) as Motion[]);
       const normalize = (title: string) => title.trim().toLowerCase();
       const sectionHasDetails = (section: any) =>
         !!(
@@ -2289,7 +2291,7 @@ export function MeetingDetailPage() {
             <div className="card__body">
               <MotionEditor
                 ref={motionEditorRef}
-                motions={(minutes?.motions ?? []) as Motion[]}
+                motions={minutesMotionsForDisplay(minutes) as Motion[]}
                 directorNames={directorNames}
                 people={motionPeople}
                 agendaSections={(minutes?.sections ?? []).map((section: any) => ({

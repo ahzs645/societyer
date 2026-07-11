@@ -13,6 +13,7 @@ import { Checkbox } from "../../../components/Controls";
 import { LegalGuideInline } from "../../../components/LegalGuide";
 import { Segmented } from "../../../components/primitives";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionAdoptionTarget, type MotionEditorHandle } from "../../../components/MotionEditor";
+import { minutesMotionsForDisplay } from "../../../../shared/minutesMotions";
 import { NameAutocomplete } from "../../../components/NameAutocomplete";
 import { DatePicker } from "../../../components/DatePicker";
 import { SignaturePanel } from "../../../components/SignaturePanel";
@@ -122,7 +123,11 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   adoptionTargets,
   } = props;
   const sections = Array.isArray(minutes?.sections) ? minutes.sections : [];
-  const motions = Array.isArray(minutes?.motions) ? minutes.motions as Motion[] : [];
+  // Resolved motions (table-sourced for drafts, snapshots for approved) so the
+  // section editor + its index-based remaps operate on the same list the rest of
+  // the UI shows and the backend resolves. See Phase 4B. Each carries motionId,
+  // so save-remaps reconcile in place instead of regenerating rows.
+  const motions = minutesMotionsForDisplay(minutes) as Motion[];
   const sectionHasDetails = (section: any) =>
     !!(
       section?.discussion ||

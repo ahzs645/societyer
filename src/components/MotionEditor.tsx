@@ -45,6 +45,11 @@ import { Tooltip } from "./Tooltip";
 import { Modal, useConfirm } from "./Modal";
 
 export type Motion = {
+  /** Stable id of the backing `motions` table row, back-linked into the display
+   *  shape by the resolver (motionRowToEmbedded). Present on saved motions,
+   *  absent on newly-added ones; the reconcile dual-write keys on it to update a
+   *  row in place instead of regenerating it. */
+  motionId?: string;
   name?: string;
   text: string;
   movedBy?: string;
