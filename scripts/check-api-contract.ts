@@ -70,5 +70,16 @@ try {
       else reject(error);
     });
   });
-  rmSync(process.env.AUTH_DB_PATH!, { force: true });
+  // Best-effort temp-file cleanup. The better-auth SQLite handle opened by the
+  // gateway (server/auth-config.ts) is a module-level singleton that stays open
+  // for the life of the process. Windows refuses to unlink a file with an open
+  // handle (EBUSY/EPERM); POSIX allows it, which is why this only bit on Windows.
+  // The DB is a throwaway in tmpdir and the OS releases the lock on exit, so a
+  // failed delete here must never fail an otherwise-passing contract check.
+  try {
+    rmSync(process.env.AUTH_DB_PATH!, { force: true });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "EBUSY" && code !== "EPERM") throw error;
+  }
 }
