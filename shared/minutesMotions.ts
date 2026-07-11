@@ -28,7 +28,10 @@ export function minutesMotionsForDisplay<M>(
   // approved. Backend consumers resolve via resolveMinutesMotions. The embedded
   // minutes.motions[] is retired (Phase 4), so there is no fallback.
   if (minutes.displayMotions != null) return minutes.displayMotions;
-  if (minutes.motionSnapshots && minutes.motionSnapshots.length > 0) {
+  // Presence (an array), not length, marks a frozen approved record — an approved
+  // minutes with no motions freezes an empty []. Mirrors resolveMinutesMotions so
+  // both read paths agree on "snapshot present ⇒ approved (frozen)".
+  if (Array.isArray(minutes.motionSnapshots)) {
     return minutes.motionSnapshots;
   }
   return [];

@@ -402,7 +402,13 @@ export async function getByMeetingPortable(
  */
 export async function resolveMinutesMotions(ctx: PortableQueryCtx, minutes: any): Promise<any[]> {
   if (!minutes) return [];
-  if (Array.isArray(minutes.motionSnapshots) && minutes.motionSnapshots.length > 0) {
+  // Presence of the array — NOT its length — marks an approved (frozen) minutes.
+  // A minutes approved with zero motions freezes an empty [] and must stay empty;
+  // treating [] as "no snapshot" would fall through to the live motionIds→rows
+  // path and leak any motion added after approval into the immutable record.
+  // Matches the freeze guards in updatePortable/applyAdoptionApprovals
+  // (`!minutes.motionSnapshots`), which already treat [] as present.
+  if (Array.isArray(minutes.motionSnapshots)) {
     return minutes.motionSnapshots;
   }
   const ids: any[] = Array.isArray(minutes.motionIds) ? minutes.motionIds : [];

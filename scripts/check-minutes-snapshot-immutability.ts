@@ -116,4 +116,34 @@ assert.deepEqual(reApproved.resolved.map((m: any) => String(m.text)).sort(), liv
 assert.notDeepEqual(reApproved.snapshots?.map((m: any) => String(m.text)).sort(), frozenTexts, "re-approval did not resurrect the original stale snapshot");
 console.log("✓ clearApproval drops the snapshot; un-approved minutes resolve the live table; re-approval re-freezes the current set");
 
+// Empty-snapshot immutability: approving a minutes with ZERO motions freezes an
+// empty []. Presence of the snapshot (not its length) marks it approved, so a
+// motion added afterward must hit the table but NOT leak into the frozen record.
+const empty: any = await mutate("emptySetup", async (ctx: any) => {
+  const meetingId = await ctx.db.insert("meetings", { societyId: setup.societyId, title: "No-motion mtg", status: "Complete", heldAt: "2026-04-01" });
+  const minutesId = await ctx.db.insert("minutes", { societyId: setup.societyId, meetingId, status: "Draft", attendees: [], heldAt: "2026-04-01" });
+  await syncMotionsForMinutes(ctx, { societyId: setup.societyId, minutesId, meetingId, motions: [] });
+  await updatePortable(ctx, { id: minutesId, patch: { approvedAt: "2026-04-02T00:00:00.000Z" } });
+  return { minutesId };
+});
+const emptyApproved: any = await query("emptyApproved", async (ctx: any) => {
+  const m: any = await ctx.db.get(empty.minutesId);
+  return { snapshots: m.motionSnapshots ?? null, resolved: await resolveMinutesMotions(ctx, m) };
+});
+assert.ok(Array.isArray(emptyApproved.snapshots) && emptyApproved.snapshots.length === 0, "approving a zero-motion minutes freezes an empty snapshot");
+assert.equal(emptyApproved.resolved.length, 0, "empty approved minutes resolve to no motions");
+
+await mutate("addAfterEmptyApproval", (ctx: any) => updatePortable(ctx, {
+  id: empty.minutesId,
+  patch: { motions: [{ name: "Sneaky", text: "Added after approval", outcome: "Carried" }] },
+}));
+const emptyAfter: any = await query("emptyAfter", async (ctx: any) => {
+  const m: any = await ctx.db.get(empty.minutesId);
+  const rows = await ctx.db.query("motions").withIndex("by_minutes", (q: any) => q.eq("minutesId", empty.minutesId)).collect();
+  return { resolved: await resolveMinutesMotions(ctx, m), rowCount: rows.length };
+});
+assert.equal(emptyAfter.resolved.length, 0, "a motion added after approval must NOT leak into the frozen empty record");
+assert.equal(emptyAfter.rowCount, 1, "the added motion still reached the underlying motions table");
+console.log("✓ approving a zero-motion minutes freezes an empty snapshot; later additions hit the table, not the frozen record");
+
 console.log("\nminutes snapshot-immutability checks passed.");
