@@ -11,7 +11,7 @@
 import { useMemo } from "react";
 import { useMutation } from "convex/react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, ClipboardList, Download, Eye, FileCheck2, FileCog, ListTodo, Package, PenLine, Settings, ShieldCheck, Sparkles } from "lucide-react";
+import { Calendar, ClipboardList, Download, Eye, FileCheck2, FileCog, FilePlus, Gavel, ListTodo, Package, PenLine, Settings, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
 import type { ComponentType } from "react";
 import { api } from "./convexApi";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
@@ -51,6 +51,13 @@ export function useStaticCommands(): StaticCommand[] {
         run: () => navigate("/app/filings?intent=mark-filed"),
       },
       {
+        id: "action-add-filing",
+        label: "Add filing",
+        icon: FilePlus,
+        // The Filings page opens its "Add filing" form on ?intent=add.
+        run: () => navigate("/app/filings?intent=add"),
+      },
+      {
         id: "action-generate-agm-package",
         label: "Generate AGM package",
         icon: FileCog,
@@ -63,6 +70,13 @@ export function useStaticCommands(): StaticCommand[] {
         // Open the picker so the user explicitly chooses which meeting to
         // draft for. The picker (mounted in Layout) listens for this event.
         run: () => window.dispatchEvent(new Event("quickaction:draft-minutes")),
+      },
+      {
+        id: "action-add-motion",
+        label: "Add motion",
+        icon: Gavel,
+        // Opens the motion backlog composer (Motions → Tabled) on ?intent=add.
+        run: () => navigate("/app/motions?tab=tabled&intent=add"),
       },
       {
         id: "action-add-task",
@@ -87,6 +101,13 @@ export function useStaticCommands(): StaticCommand[] {
         // The GlobalAssetCreate modal (mounted in Layout) listens for this
         // event and pops the asset-creation form.
         run: () => window.dispatchEvent(new Event("quickaction:add-asset")),
+      },
+      {
+        id: "action-invite-teammate",
+        label: "Invite teammate",
+        icon: UserPlus,
+        // The Users page opens its "Invite a user" form on ?intent=invite.
+        run: () => navigate("/app/users?intent=invite"),
       },
       {
         id: "action-request-director-attestation",

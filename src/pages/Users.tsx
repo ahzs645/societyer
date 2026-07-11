@@ -7,7 +7,8 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { UserCog, PlusCircle, Trash2, KeyRound, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../auth/AuthProvider";
 import { useConfirm } from "../components/Modal";
@@ -302,7 +303,26 @@ function InvitationsPanel({
   const revokeInvite = useMutation(api.invitations.revoke);
   const toast = useToast();
   const confirm = useConfirm();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [form, setForm] = useState<{ email: string; role: string } | null>(null);
+
+  // ?intent=invite (from the "Invite teammate" command palette action) opens
+  // the invite form.
+  const inviteIntentHandled = useRef(false);
+  useEffect(() => {
+    if (searchParams.get("intent") !== "invite") {
+      inviteIntentHandled.current = false;
+      return;
+    }
+    if (inviteIntentHandled.current) return;
+    inviteIntentHandled.current = true;
+    setForm({ email: "", role: "Member" });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const invite = async () => {
     if (!form?.email.trim()) return;

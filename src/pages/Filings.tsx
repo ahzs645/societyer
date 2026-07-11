@@ -115,6 +115,33 @@ export function FilingsPage() {
     });
   }, [filings, params, setParams, society, toast]);
 
+  // ?intent=add (from the "Add filing" command palette action) opens the
+  // new-filing form. Mirrors the mark-filed handler above.
+  const addIntentHandled = useRef(false);
+  useEffect(() => {
+    if (params.get("intent") !== "add") {
+      addIntentHandled.current = false;
+      return;
+    }
+    if (addIntentHandled.current) return;
+    if (!society) return;
+    addIntentHandled.current = true;
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+    setForm({
+      kind: jurisdictionFilingKinds[0]?.kind ?? "AnnualReport",
+      periodLabel: "",
+      dueDate: new Date().toISOString().slice(0, 10),
+      status: "Upcoming",
+      jurisdictionCode: society.jurisdictionCode,
+      contextKind: "home",
+    });
+    setOpen(true);
+  }, [params, setParams, society, jurisdictionFilingKinds]);
+
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 

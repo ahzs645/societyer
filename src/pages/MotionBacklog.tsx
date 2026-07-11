@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { BookOpen, CalendarPlus, ClipboardList, FileText, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
@@ -22,9 +22,11 @@ const EMPTY_FORM = {
 export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } = {}) {
   const society = useSociety();
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [form, setForm] = useState(EMPTY_FORM);
   const [tagDraft, setTagDraft] = useState("");
   const [isAddingBacklogMotion, setIsAddingBacklogMotion] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const [agendaTargets, setAgendaTargets] = useState<Record<string, string>>({});
   const [minutesMeetingId, setMinutesMeetingId] = useState("");
 
@@ -43,6 +45,26 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
     (meetings ?? []).forEach((meeting: any) => map.set(String(meeting._id), meeting));
     return map;
   }, [meetings]);
+
+  // ?intent=add (from the "Add motion" command palette action) opens the
+  // composer and focuses its title field.
+  const addIntentHandled = useRef(false);
+  useEffect(() => {
+    if (searchParams.get("intent") !== "add") {
+      addIntentHandled.current = false;
+      return;
+    }
+    if (addIntentHandled.current) return;
+    addIntentHandled.current = true;
+    setIsAddingBacklogMotion(true);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+    // Focus the title once the composer has mounted.
+    requestAnimationFrame(() => titleInputRef.current?.focus());
+  }, [searchParams, setSearchParams]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -140,6 +162,7 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
                 <div className="motion-backlog__composer col" style={{ gap: 12 }}>
                   <Field label="Title">
                     <input
+                      ref={titleInputRef}
                       className="input"
                       value={form.title}
                       onChange={(event) => setForm({ ...form, title: event.target.value })}
