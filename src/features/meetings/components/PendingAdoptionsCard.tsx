@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookCheck, Plus } from "lucide-react";
+import { BookCheck, Plus, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "../../../components/ui";
 import { RecordChip } from "../../../components/ui";
 import { formatDate } from "../../../lib/format";
@@ -21,6 +21,10 @@ export type PendingAdoption = {
  * missed-meeting case naturally: every outstanding set of minutes is listed,
  * not just the single most recent one. One click seeds a linked adoption
  * motion; carrying that motion stamps the minutes approved automatically.
+ *
+ * Rendered BELOW the motions editor and collapsed by default so it stays out of
+ * the way; the header keeps the count (and how many still need an adoption
+ * motion) visible so nothing is missed while collapsed.
  */
 export function PendingAdoptionsCard({
   pending,
@@ -30,59 +34,82 @@ export function PendingAdoptionsCard({
   onAddAdoptionMotion: (entry: PendingAdoption) => Promise<void> | void;
 }) {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   if (!pending.length) return null;
+  const toAdd = pending.filter((entry) => !entry.motionExists).length;
   return (
-    <div className="card" style={{ marginBottom: 12 }}>
-      <div className="card__head">
+    <div className="card" style={{ marginTop: 12 }}>
+      <div
+        className="card__head"
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setOpen((prev) => !prev);
+          }
+        }}
+        style={{ cursor: "pointer" }}
+      >
+        {open ? (
+          <ChevronDown size={14} className="muted" style={{ verticalAlign: -2, marginRight: 2 }} />
+        ) : (
+          <ChevronRight size={14} className="muted" style={{ verticalAlign: -2, marginRight: 2 }} />
+        )}
         <h3 className="card__title" style={{ fontSize: "var(--fs-md)" }}>
           <BookCheck size={13} style={{ verticalAlign: -1, marginRight: 6 }} />
           Minutes awaiting adoption
         </h3>
         <span className="card__subtitle">
-          {pending.length} prior meeting{pending.length === 1 ? "" : "s"} with unapproved minutes
+          {pending.length} prior meeting{pending.length === 1 ? "" : "s"}
+          {toAdd ? ` · ${toAdd} to add` : ""}
         </span>
       </div>
-      <div className="card__body">
-        {pending.map((entry) => (
-          <div key={entry.minutesId} className="meeting-conflict-row">
-            <div className="meeting-conflict-row__main">
-              <RecordChip
-                to={`/app/meetings/${entry.meetingId}`}
-                tone={entry.meetingType === "AGM" ? "purple" : "gray"}
-                avatar={(entry.meetingType || "MT").slice(0, 2).toUpperCase()}
-                label={<strong>{entry.meetingTitle}</strong>}
-              />
-              <span className="muted"> · {formatDate(entry.scheduledAt)}</span>
-              <div className="meeting-conflict-row__badges">
-                <Badge tone="warn">Not yet approved</Badge>
-                {entry.motionExists && <Badge tone="info">Adoption motion on this agenda</Badge>}
+      {open && (
+        <div className="card__body">
+          {pending.map((entry) => (
+            <div key={entry.minutesId} className="meeting-conflict-row">
+              <div className="meeting-conflict-row__main">
+                <RecordChip
+                  to={`/app/meetings/${entry.meetingId}`}
+                  tone={entry.meetingType === "AGM" ? "purple" : "gray"}
+                  avatar={(entry.meetingType || "MT").slice(0, 2).toUpperCase()}
+                  label={<strong>{entry.meetingTitle}</strong>}
+                />
+                <span className="muted"> · {formatDate(entry.scheduledAt)}</span>
+                <div className="meeting-conflict-row__badges">
+                  <Badge tone="warn">Not yet approved</Badge>
+                  {entry.motionExists && <Badge tone="info">Adoption motion on this agenda</Badge>}
+                </div>
+              </div>
+              <div className="meeting-conflict-row__actions">
+                {!entry.motionExists && (
+                  <button
+                    className="btn-action"
+                    type="button"
+                    disabled={busyId === entry.minutesId}
+                    onClick={async () => {
+                      setBusyId(entry.minutesId);
+                      try {
+                        await onAddAdoptionMotion(entry);
+                      } finally {
+                        setBusyId(null);
+                      }
+                    }}
+                  >
+                    <Plus size={12} /> {busyId === entry.minutesId ? "Adding…" : "Add adoption motion"}
+                  </button>
+                )}
               </div>
             </div>
-            <div className="meeting-conflict-row__actions">
-              {!entry.motionExists && (
-                <button
-                  className="btn-action"
-                  type="button"
-                  disabled={busyId === entry.minutesId}
-                  onClick={async () => {
-                    setBusyId(entry.minutesId);
-                    try {
-                      await onAddAdoptionMotion(entry);
-                    } finally {
-                      setBusyId(null);
-                    }
-                  }}
-                >
-                  <Plus size={12} /> {busyId === entry.minutesId ? "Adding…" : "Add adoption motion"}
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-        <p className="muted" style={{ fontSize: "var(--fs-xs)", margin: "8px 0 0" }}>
-          Recording an adoption motion as Carried marks the linked minutes approved automatically.
-        </p>
-      </div>
+          ))}
+          <p className="muted" style={{ fontSize: "var(--fs-xs)", margin: "8px 0 0" }}>
+            Recording an adoption motion as Carried marks the linked minutes approved automatically.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

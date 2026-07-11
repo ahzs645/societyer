@@ -500,7 +500,9 @@ export function MeetingDetailPage() {
       motionExists: (minutesMotionsForDisplay(minutes) as any[]).some(
         (motion) => String(motion.adoptsMinutesId ?? "") === String(record._id),
       ),
-    }));
+    }))
+    // Oldest unapproved minutes first — the longest-overdue adoption at the top.
+    .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
   const adoptionTargets: MotionAdoptionTarget[] = priorMeetingsWithMinutes.map(
     ({ meeting: m, record }: any) => ({
       id: String(record._id),
@@ -2252,7 +2254,6 @@ export function MeetingDetailPage() {
 
         {activeTab === "motions" && (
           <>
-          <PendingAdoptionsCard pending={pendingAdoptions} onAddAdoptionMotion={addAdoptionMotion} />
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">
@@ -2304,6 +2305,7 @@ export function MeetingDetailPage() {
               />
             </div>
           </div>
+          <PendingAdoptionsCard pending={pendingAdoptions} onAddAdoptionMotion={addAdoptionMotion} />
           </>
         )}
 
