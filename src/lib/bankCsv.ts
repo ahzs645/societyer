@@ -75,9 +75,15 @@ export function parseBankCsv(text: string): ParsedCsvRow[] {
     header.findIndex((h) => needles.some((n) => h.includes(n)));
   const dateIdx = find("date");
   const descIdx = find("description", "memo", "payee", "name", "details", "narrative");
-  const amountIdx = find("amount", "value");
   const debitIdx = find("debit", "withdrawal", "money out");
   const creditIdx = find("credit", "deposit", "money in");
+  // A "Debit Amount"/"Credit Amount" header also contains "amount", so detect the
+  // signed-amount column AFTER debit/credit and exclude those columns — otherwise
+  // the debit column is read as a signed amount (flipping withdrawal signs) and
+  // blank-cell deposit rows drop out (toCents("") === null → skipped below).
+  const amountIdx = header.findIndex(
+    (h, i) => i !== debitIdx && i !== creditIdx && (h.includes("amount") || h.includes("value")),
+  );
   if (dateIdx < 0) throw new Error("CSV needs a date column.");
 
   const rows: ParsedCsvRow[] = [];

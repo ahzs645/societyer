@@ -39,6 +39,17 @@ const dc = parseBankCsv(
 assert.equal(dc[0].amountCents, -50000, "debit -> negative");
 assert.equal(dc[1].amountCents, 250000, "credit -> positive");
 
+// --- parseBankCsv: "Debit Amount"/"Credit Amount" headers (both contain
+// "amount", so the generic amount-column detection must not swallow them —
+// otherwise debits are read as positive signed amounts and blank-debit deposit
+// rows drop out). Common naming on Canadian bank exports. ---
+const dcAmount = parseBankCsv(
+  ["Date,Description,Debit Amount,Credit Amount", "2026-02-01,Rent payment,500.00,", "2026-02-02,Grant received,,2500.00"].join("\n"),
+);
+assert.equal(dcAmount.length, 2, "both debit-amount/credit-amount rows kept");
+assert.equal(dcAmount[0].amountCents, -50000, "'Debit Amount' -> negative (not misread as +signed amount)");
+assert.equal(dcAmount[1].amountCents, 250000, "'Credit Amount' -> positive (blank-debit deposit row not dropped)");
+
 // --- parseBankCsv: missing description falls back, dedupe of blank lines ---
 const fallback = parseBankCsv(["date,amount", "2026-03-01,10.00", "", "  "].join("\n"));
 assert.equal(fallback.length, 1, "blank lines skipped");
