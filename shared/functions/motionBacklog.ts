@@ -20,6 +20,7 @@ import {
   applyProceduralTags,
   classifyProceduralMotion,
 } from "../proceduralMotions";
+import { resolveMinutesMotions } from "./minutes";
 
 // Lifecycle statuses that make a motion show up in the backlog UI.
 const BACKLOG_STATUSES = new Set(["Backlog", "Tabled", "Deferred", "Agenda"]);
@@ -240,7 +241,12 @@ export async function createFromMinutesMotionPortable(
 ) {
   const minutes = await ctx.db.get(args.minutesId);
   if (!minutes) throw new Error("Minutes not found.");
-  const motion = Array.isArray(minutes.motions) ? minutes.motions[args.motionIndex] : undefined;
+  // Index into the RESOLVED motions (snapshots for approved, table rows for
+  // drafts) — the same list the frontend indexed to produce `motionIndex`, so
+  // the positional basis matches and this survives the embedded array being
+  // dropped in Phase 4. See docs/motions-migration-finish-scope.md.
+  const resolvedMotions = await resolveMinutesMotions(ctx, minutes);
+  const motion = resolvedMotions[args.motionIndex];
   if (!motion?.text) throw new Error("Motion not found.");
 
   const existing = await ctx.db
@@ -456,7 +462,10 @@ export async function carryForwardToMeetingPortable(
   );
   let order = agendaItems.length;
 
-  const motions = Array.isArray(minutes.motions) ? minutes.motions : [];
+  // Resolve from the single source of truth (snapshots for approved, table rows
+  // for drafts) so `motionIndexes` line up with the list the frontend indexed
+  // and the read survives Phase 4. See docs/motions-migration-finish-scope.md.
+  const motions = await resolveMinutesMotions(ctx, minutes);
   let created = 0;
   let reused = 0;
   for (const motionIndex of motionIndexes) {
