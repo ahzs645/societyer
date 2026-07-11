@@ -69,7 +69,6 @@ export const meetingWorkflowTables = {
     // Identity / content
     title: v.optional(v.string()),
     text: v.string(),
-    category: v.optional(v.string()), // governance | finance | membership | operations | bylaws | privacy | other
 
     // Movers — denormalized display name + optional structured refs
     movedBy: v.optional(v.string()),

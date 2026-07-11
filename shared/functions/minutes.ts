@@ -394,12 +394,11 @@ export async function getByMeetingPortable(
  *
  * Approved minutes render from the frozen `motionSnapshots[]` (immutable legal
  * record). A draft resolves its ordered `motionIds` → first-class `motions`
- * rows → embedded display shape (`motionRowToEmbedded`). Falls back to the
- * embedded `motions[]` when `motionIds` is absent (data from before Phase 1, or
- * mid-transition) so a read never regresses.
+ * rows → embedded display shape (`motionRowToEmbedded`). The embedded
+ * `minutes.motions[]` is retired (Phase 4) — the table is the single source of
+ * truth, so there is no embedded fallback.
  *
- * Phase 2 routes read sites that carry a `ctx` onto this; the write/edit path
- * stays on the live embedded array. See docs/motions-migration-finish-scope.md.
+ * See docs/motions-migration-finish-scope.md.
  */
 export async function resolveMinutesMotions(ctx: PortableQueryCtx, minutes: any): Promise<any[]> {
   if (!minutes) return [];
@@ -407,9 +406,6 @@ export async function resolveMinutesMotions(ctx: PortableQueryCtx, minutes: any)
     return minutes.motionSnapshots;
   }
   const ids: any[] = Array.isArray(minutes.motionIds) ? minutes.motionIds : [];
-  if (ids.length === 0) {
-    return Array.isArray(minutes.motions) ? minutes.motions : [];
-  }
   const rows = await Promise.all(ids.map((id) => ctx.db.get(id)));
   return rows.filter(Boolean).map(motionRowToEmbedded);
 }

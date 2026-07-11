@@ -87,18 +87,21 @@ let checkedMinutes = 0;
 let checkedMotions = 0;
 let viaTable = 0;
 for (const rec of parity) {
-  assert.deepEqual(
-    rec.resolved.map(proj),
-    rec.embedded.map(proj),
-    `resolver output != embedded minutes.motions for minutes ${rec.id}`,
-  );
   checkedMinutes += 1;
-  checkedMotions += rec.embedded.length;
-  if (rec.hasIds && rec.embedded.length > 0) viaTable += 1;
+  checkedMotions += rec.resolved.length;
+  // Phase 4: the embedded minutes.motions[] is retired — the seed clears it, so
+  // it is empty on every doc. Any minutes that resolves motions must do so
+  // through the ordered motionIds -> table rows path (approved minutes via
+  // frozen snapshots resolve without motionIds; none of the seed's are approved).
+  assert.deepEqual(rec.embedded, [], `minutes ${rec.id} still carries a retired embedded motions[] array`);
+  if (rec.resolved.length > 0) {
+    assert.ok(rec.hasIds, `minutes ${rec.id} resolves motions but not via motionIds (the table)`);
+    viaTable += 1;
+  }
 }
 assert.ok(viaTable > 0, "expected at least one minutes to resolve through the motionIds -> table path");
 console.log(
-  `✓ resolver == embedded array across ${checkedMinutes} seeded minutes / ${checkedMotions} motions (${viaTable} via the table path)`,
+  `✓ resolver reads the table across ${checkedMinutes} seeded minutes / ${checkedMotions} motions (${viaTable} via motionIds, embedded array retired)`,
 );
 
 // 3) adoptsMinutesId survives embedded -> table (dual-write) -> embedded (adapter).
@@ -155,7 +158,7 @@ assert.equal(
 console.log("✓ adoptsMinutesId round-trips through the dual-write + adapter (data gap closed)");
 
 // 4) Query boundary (listPortable) attaches displayMotions; the accessor prefers
-//    it; the result is genuinely table-sourced; the live embedded array is kept.
+//    it; the result is genuinely table-sourced; the retired embedded array is gone.
 const listed: any = await rt()
   .register(definePortableQuery({ name: "minutes:list", handler: (ctx: any, a: any) => listPortable(ctx, a) }))
   .runQuery("minutes:list", { societyId });
@@ -163,15 +166,11 @@ assert.ok(listed.length > 0, "listPortable returned minutes");
 for (const m of listed) {
   assert.ok(Array.isArray(m.displayMotions), `displayMotions attached for minutes ${m._id}`);
   assert.deepEqual(minutesMotionsForDisplay(m), m.displayMotions, `accessor prefers displayMotions for minutes ${m._id}`);
-  assert.deepEqual(
-    m.displayMotions.map(proj),
-    (m.motions ?? []).map(proj),
-    `displayMotions projection == embedded for minutes ${m._id}`,
-  );
-  assert.ok(Array.isArray(m.motions), `live embedded motions kept on the row for minutes ${m._id}`);
-  // Every seeded minutes has motionIds, so display must be TABLE-sourced: each
-  // resolved motion carries its table row id as motionId (the embedded array did not).
-  if ((m.motions ?? []).length > 0) {
+  // (The seed clears the retired embedded motions[] — asserted on the seeded
+  // minutes in section 2. This section may also include test-constructed minutes.)
+  // Every seeded minutes has motionIds, so display is TABLE-sourced: each resolved
+  // motion carries its table row id as motionId.
+  if (m.displayMotions.length > 0) {
     assert.ok(
       minutesMotionsForDisplay(m).every((mm: any) => mm.motionId),
       `display motions are table-sourced (motionId present) for minutes ${m._id}`,
