@@ -417,6 +417,16 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     patch(idx, { [key]: Math.max(0, next) } as Partial<Motion>);
   };
 
+  // Remove the motion at index `i`. editingIndex is an index into `motions`, so
+  // when a lower-indexed row is removed the open editor must follow the same
+  // motion down — otherwise it collapses, or (rows key by array index) retargets
+  // and silently edits the wrong motion. Clearing only on `i === editingIndex`
+  // left editingIndex stale for any earlier deletion.
+  const deleteMotionAt = (i: number) => {
+    setEditingIndex((cur) => (cur == null ? cur : cur === i ? null : i < cur ? cur - 1 : cur));
+    onChange(motions.filter((_, j) => j !== i));
+  };
+
   const addAdjournmentRecord = () => {
     onChange([
       ...motions,
@@ -466,10 +476,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           onSetExpanded={(next) => setEditingIndex(next ? i : null)}
           onPatch={(diff) => patch(i, diff)}
           onSetVote={(k, n) => setVote(i, k, n)}
-          onDelete={() => {
-            if (editingIndex === i) setEditingIndex(null);
-            onChange(motions.filter((_, j) => j !== i));
-          }}
+          onDelete={() => deleteMotionAt(i)}
           onAddToBacklog={onAddToBacklog ? () => onAddToBacklog(m, i) : undefined}
         />
       ))}
@@ -629,10 +636,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
             onSetExpanded={(next) => setEditingIndex(next ? i : null)}
             onPatch={(diff) => patch(i, diff)}
             onSetVote={(k, n) => setVote(i, k, n)}
-            onDelete={() => {
-              if (editingIndex === i) setEditingIndex(null);
-              onChange(motions.filter((_, j) => j !== i));
-            }}
+            onDelete={() => deleteMotionAt(i)}
           />
         ))}
       </div>
