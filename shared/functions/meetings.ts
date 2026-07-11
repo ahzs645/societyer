@@ -13,7 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { resolveMinutesMotions } from "./minutes";
+import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
 
 /* ----------------------- Inlined bylaw / quorum helpers ----------------------- */
 
@@ -615,6 +615,9 @@ export async function createPortable(
   }
 
   const quorumRequired = args.quorumRequired ?? snapshot.quorumRequired;
+  // Motions are materialized into the table (Phase 4C — not stored on the minutes
+  // row); reads resolve from motionIds.
+  const scaffoldedMotions = templateMotions.length ? templateMotions : agendaJsonMotions;
   const minutesId = await ctx.db.insert("minutes", {
     societyId: args.societyId,
     meetingId,
@@ -643,11 +646,18 @@ export async function createPortable(
           depth: item.depth,
         }))
       : [],
-    motions: templateMotions.length ? templateMotions : agendaJsonMotions,
     decisions: [],
     actionItems: [],
   });
   await ctx.db.patch(meetingId, { minutesId });
+  if (scaffoldedMotions.length) {
+    await syncMotionsForMinutes(ctx, {
+      societyId: args.societyId,
+      minutesId,
+      meetingId,
+      motions: scaffoldedMotions,
+    });
+  }
   return meetingId;
 }
 
@@ -766,8 +776,16 @@ export async function applyTemplatePortable(
           actionItems: [],
           depth: item.depth,
         })),
-        motions: templateMotions,
       });
+      // Materialize the scaffolded motions into the table (Phase 4C).
+      if (templateMotions.length) {
+        await syncMotionsForMinutes(ctx, {
+          societyId: meeting.societyId,
+          minutesId: meeting.minutesId,
+          meetingId,
+          motions: templateMotions,
+        });
+      }
       minutesScaffolded = true;
     }
   }
