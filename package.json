@@ -52,6 +52,7 @@
     "test:api-contract": "tsx scripts/check-api-contract.ts",
     "test:static-parity": "tsx scripts/check-static-convex-parity.ts",
     "test:accounting-core": "tsx scripts/check-accounting-core.ts",
+    "test:accounting-csv-injection": "tsx scripts/check-accounting-csv-injection.ts",
     "test:corporation-equity": "tsx scripts/check-corporation-equity-ledger.ts && tsx scripts/check-static-corporation-people-register.ts",
     "test:corporation-packets": "tsx scripts/check-corporation-document-packets.ts",
     "test:corporation-mvp": "tsx scripts/check-corporation-mvp-flow.ts",

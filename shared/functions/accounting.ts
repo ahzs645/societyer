@@ -81,7 +81,16 @@ async function assertPeriodOpen(ctx: any, args: { societyId: string; fiscalPerio
 }
 
 function csvEscape(value: unknown) {
-  const text = String(value ?? "");
+  let text = String(value ?? "");
+  // Formula-injection guard: a spreadsheet treats a cell starting with = + - @
+  // (or tab/CR) as a formula, so a crafted memo / line description / account
+  // name in an exported accounting CSV could execute when the treasurer opens it
+  // in Excel/Sheets. Prefix a zero-width non-joiner so it renders as text.
+  // Scoped to string cells so numeric columns (amount_cents) stay numeric.
+  // Mirrors src/lib/csv.ts sanitizeCsvCell, which shared/ cannot import.
+  if (typeof value === "string" && /^[=+\-@\t\r]/.test(text)) {
+    text = String.fromCharCode(0x200c) + text;
+  }
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
