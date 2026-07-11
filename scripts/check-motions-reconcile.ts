@@ -1,8 +1,10 @@
-// Write-side conformance for the reconcile-by-identity dual-write
-// (docs/motions-migration-finish-scope.md). Proves syncMotionsForMinutes keeps
-// motion-row ids STABLE across editor saves (edit in place, insert new, delete
-// removed) and is idempotent - the prerequisite for the table being a real
-// source of truth. Runs on a MemoryDb; no live backend.
+// Write-side conformance for the reconcile-by-identity materialization, POST-4C
+// (docs/motions-migration-finish-scope.md). Since Phase 4C the embedded
+// minutes.motions[] is NO LONGER written — the motions table + minutes.motionIds
+// are the record. The editor reads RESOLVED motions (resolveMinutesMotions, each
+// carrying its table motionId) and submits those; syncMotionsForMinutes keeps
+// motion-row ids STABLE across saves (edit in place, insert new, delete removed)
+// and is idempotent. Runs on a MemoryDb; no live backend.
 
 import assert from "node:assert/strict";
 import {
@@ -13,7 +15,7 @@ import {
   makeCapabilities,
 } from "../shared/portable/index";
 import { runPortable } from "../shared/functions/seed";
-import { syncMotionsForMinutes } from "../shared/functions/minutes";
+import { syncMotionsForMinutes, resolveMinutesMotions } from "../shared/functions/minutes";
 import { syncForMeetingPortable as agendaSyncForMeeting } from "../shared/functions/agendas";
 
 const db = new MemoryDb({ seed: {} });
@@ -24,15 +26,24 @@ const mutate = (name: string, handler: any) => rt().register(definePortableMutat
 
 await mutate("seed", (ctx: any) => runPortable(ctx));
 
-// A seeded minutes with >= 2 motions. After seed, its embedded motions must
-// already carry a back-linked motionId (the reconcile write's back-link).
+// A seeded DRAFT minutes with >= 2 motions resolved from the table (motionIds
+// present, not an approved/snapshotted record). The resolved motions carry a
+// motionId; minutes.motions[] is no longer maintained (4C).
 const pick: any = await query("pick", async (ctx: any) => {
   const all = await ctx.db.query("minutes").collect();
-  const m = all.find((x: any) => (x.motions ?? []).length >= 2);
-  return m ? { minutesId: m._id, societyId: m.societyId, meetingId: m.meetingId, motions: m.motions } : null;
+  for (const m of all) {
+    if ((m.motionIds ?? []).length >= 2 && !(m.motionSnapshots?.length)) {
+      const resolved = await resolveMinutesMotions(ctx, m);
+      return {
+        minutesId: m._id, societyId: m.societyId, meetingId: m.meetingId,
+        motions: resolved, rawBefore: m.motions ?? null,
+      };
+    }
+  }
+  return null;
 });
-assert.ok(pick, "found a seeded minutes with >= 2 motions");
-assert.ok(pick.motions.every((mm: any) => mm.motionId), "seed back-linked motionId into every minutes.motions entry");
+assert.ok(pick, "found a seeded draft minutes with >= 2 table-resolved motions");
+assert.ok(pick.motions.every((mm: any) => mm.motionId), "resolved motions carry a motionId from the table");
 const idsBefore: string[] = pick.motions.map((mm: any) => String(mm.motionId));
 
 const rowsBefore: any = await query("rowsBefore", async (ctx: any) => {
@@ -41,8 +52,8 @@ const rowsBefore: any = await query("rowsBefore", async (ctx: any) => {
 });
 assert.equal(rowsBefore.length, pick.motions.length, "one row per motion before edit");
 
-// Simulate an editor save: flip motion[0]'s outcome (edit in place), remove the
-// last motion, append a brand-new motion (no motionId).
+// Simulate an editor save on the RESOLVED motions: flip motion[0]'s outcome,
+// remove the last motion, append a brand-new motion (no motionId).
 const removedId = String(pick.motions[pick.motions.length - 1].motionId);
 const nextMotions = [
   ...pick.motions
@@ -57,10 +68,12 @@ await mutate("save", async (ctx: any) => {
 
 const after: any = await query("after", async (ctx: any) => {
   const minutes: any = await ctx.db.get(pick.minutesId);
+  const resolved = await resolveMinutesMotions(ctx, minutes);
   const rows = await ctx.db.query("motions").withIndex("by_minutes", (q: any) => q.eq("minutesId", pick.minutesId)).collect();
   return {
-    motions: minutes.motions,
+    motions: resolved,
     motionIds: (minutes.motionIds ?? []).map(String),
+    rawMotions: minutes.motions ?? null,
     rows: rows.map((r: any) => ({ id: String(r._id), text: r.text, outcome: r.outcome })),
   };
 });
@@ -80,41 +93,48 @@ for (let i = 1; i < pick.motions.length - 1; i += 1) {
 // 3) The removed motion's row is gone.
 assert.ok(!after.rows.some((r: any) => r.id === removedId), "removed motion's row was deleted");
 
-// 4) The new motion got a fresh id, back-linked, with its row inserted.
+// 4) The new motion got a fresh id, materialized into the table, resolvable.
 const newMotion = after.motions[after.motions.length - 1];
-assert.ok(newMotion.motionId && !idsBefore.includes(String(newMotion.motionId)), "new motion got a fresh back-linked id");
+assert.ok(newMotion.motionId && !idsBefore.includes(String(newMotion.motionId)), "new motion got a fresh row id");
 assert.ok(
   after.rows.some((r: any) => r.id === String(newMotion.motionId) && String(r.text).includes("Newly added")),
   "new motion row was inserted",
 );
 
-// 5) motionIds order matches the embedded order; one row per motion (no orphans).
-assert.deepEqual(after.motionIds, after.motions.map((mm: any) => String(mm.motionId)), "motionIds order matches embedded order");
+// 5) motionIds order matches the resolved order; one row per motion (no orphans).
+assert.deepEqual(after.motionIds, after.motions.map((mm: any) => String(mm.motionId)), "motionIds order matches resolved order");
 assert.equal(after.rows.length, after.motions.length, "one row per motion after reconcile (no orphans/dupes)");
 
-// 6) Idempotence: re-saving the same (back-linked) array churns no ids or rows.
+// 6) Phase 4C: the sync did NOT write minutes.motions[] — the raw array is left
+// exactly as it was (reads come from motionIds, not the embedded array).
+assert.deepEqual(after.rawMotions, pick.rawBefore, "minutes.motions[] is not rewritten by the sync (Phase 4C)");
+
+// 7) Idempotence: re-saving the same (resolved) array churns no ids or rows.
 const idsAfterFirst: string[] = after.motions.map((mm: any) => String(mm.motionId));
 await mutate("save2", async (ctx: any) => {
   await syncMotionsForMinutes(ctx, { societyId: pick.societyId, minutesId: pick.minutesId, meetingId: pick.meetingId, motions: after.motions });
 });
 const after2: any = await query("after2", async (ctx: any) => {
   const minutes: any = await ctx.db.get(pick.minutesId);
+  const resolved = await resolveMinutesMotions(ctx, minutes);
   const rows = await ctx.db.query("motions").withIndex("by_minutes", (q: any) => q.eq("minutesId", pick.minutesId)).collect();
-  return { ids: minutes.motions.map((mm: any) => String(mm.motionId)), rowCount: rows.length };
+  return { ids: resolved.map((mm: any) => String(mm.motionId)), rowCount: rows.length };
 });
 assert.deepEqual(after2.ids, idsAfterFirst, "re-saving the same array keeps every row id stable (idempotent)");
 assert.equal(after2.rowCount, idsAfterFirst.length, "no row churn on an idempotent save");
 
-console.log(`✓ reconcile-by-identity: stable ids across edit/add/remove + idempotent re-save (${idsAfterFirst.length} motions)`);
+console.log(`✓ reconcile-by-identity (4C): stable ids across edit/add/remove + idempotent, resolved from the table (${idsAfterFirst.length} motions)`);
 
-// The agenda-sync path (agendas.ts) now routes through the same shared reconcile
-// dual-write, so re-syncing an agenda must keep motion-row ids stable (a
-// delete-and-reinsert copy would regenerate them all).
+// The agenda-sync path (agendas.ts) also sources existing motions from the
+// resolver now, so re-syncing an agenda must keep motion-row ids stable (reading
+// the retired minutes.motions[] would have lost the motionId thread and churned).
 const meetingPick: any = await query("meetingPick", async (ctx: any) => {
-  const minutes = (await ctx.db.query("minutes").collect()).find((m: any) => (m.motions ?? []).length >= 1);
+  const minutes = (await ctx.db.query("minutes").collect()).find(
+    (m: any) => (m.motionIds ?? []).length >= 1 && !(m.motionSnapshots?.length),
+  );
   return minutes ? { societyId: minutes.societyId, meetingId: minutes.meetingId, minutesId: minutes._id } : null;
 });
-assert.ok(meetingPick, "found a minutes + meeting for the agenda-sync test");
+assert.ok(meetingPick, "found a draft minutes + meeting for the agenda-sync test");
 
 const agendaItems = [{ title: "Reconcile probe motion", type: "motion", motionText: "BE IT RESOLVED THAT reconcile is stable." }];
 const idsForMinutes = (name: string) =>
