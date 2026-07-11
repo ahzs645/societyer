@@ -916,6 +916,8 @@ select.record-table__menu-select,
 }
 
 .record-table__cell--identifier {
+  // Primary column: click opens the record (the hover edit pencil handles
+  // inline editing). Bold + link-style hover signals the click-to-open.
   font-weight: 600;
   color: token('text-primary');
   cursor: pointer;
