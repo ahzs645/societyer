@@ -3,7 +3,6 @@ import { v } from "convex/values";
 import {
   applyProceduralTags,
   classifyProceduralMotion,
-  defaultDecidedByFor,
 } from "../shared/proceduralMotions";
 import {
   listPortable,
@@ -17,6 +16,7 @@ import {
   recordVotePortable,
   removePortable,
 } from "../shared/functions/motions";
+import { syncMotionsForMinutes } from "../shared/functions/minutes";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 // Standalone first-class motion store. See
@@ -64,139 +64,17 @@ const motionContent = {
   sourceExternalIds: v.optional(v.array(v.string())),
 };
 
-function stripUndefined(obj: Record<string, any>) {
-  const out: Record<string, any> = {};
-  for (const [k, val] of Object.entries(obj)) if (val !== undefined) out[k] = val;
-  return out;
-}
-
-// ----- dual-write: mirror embedded minutes.motions[] into the table ---------
-
-const KNOWN_EMBEDDED_OUTCOMES = new Set([
-  "",
-  "pending",
-  "carried",
-  "defeated",
-  "tabled",
-  "deferred",
-  "withdrawn",
-]);
-
-/** Map a legacy embedded `outcome` string to the explicit (status, outcome)
- *  split. See the backfill map in docs/motions-first-class-object-design.md. */
-export function statusFromEmbeddedOutcome(raw?: string): { status: string; outcome?: string } {
-  const value = String(raw ?? "").trim().toLowerCase();
-  if (!value || value === "pending") return { status: "Moved" };
-  if (value === "carried") return { status: "Voted", outcome: "Carried" };
-  if (value === "defeated") return { status: "Voted", outcome: "Defeated" };
-  if (value === "tabled") return { status: "Tabled" };
-  if (value === "deferred") return { status: "Deferred" };
-  if (value === "withdrawn") return { status: "Withdrawn" };
-  return { status: "Moved" }; // unknown → caller preserves the raw value in `note`
-}
-
-/** Mirror one minutes doc's embedded `motions[]` into the motions table.
- *  Delete-and-reinsert keeps the mirror consistent during the dual-write phase:
- *  reads still come from the embedded array, so motion ids are not yet relied
- *  upon. Reconcile-by-identity replaces this when reads are flipped. */
-export async function syncMotionsForMinutes(
-  ctx: any,
-  args: { societyId: any; minutesId: any; meetingId?: any; motions?: any[] },
-) {
-  // Best-effort: a mirror failure must never roll back the minutes save that
-  // triggered it. A stale mirror is corrected by the step-2 backfill or the
-  // next edit; a broken minutes save is a user-facing regression.
-  try {
-    const existing = await ctx.db
-      .query("motions")
-      .withIndex("by_minutes", (q: any) => q.eq("minutesId", args.minutesId))
-      .collect();
-    for (const row of existing) await ctx.db.delete(row._id);
-
-    const now = new Date().toISOString();
-    for (const m of args.motions ?? []) {
-      const { status, outcome } = statusFromEmbeddedOutcome(m.outcome);
-      const note = KNOWN_EMBEDDED_OUTCOMES.has(String(m.outcome ?? "").trim().toLowerCase())
-        ? undefined
-        : `legacy outcome: ${m.outcome}`;
-      // Classify recurring procedural motions (adjournment, approve-minutes,
-      // approve-agenda, recess, receive-reports) from their wording and stamp
-      // the first-class record with an explicit kind + label, so the master
-      // list filters by a stored tag instead of regex-matching every render.
-      // Default the "decided by" axis from the catalogue (most procedural
-      // motions pass by general consent, carrying without a recorded tally).
-      const kind = classifyProceduralMotion({
-        text: m.text,
-        sectionTitle: m.sectionTitle,
-        resolutionType: m.resolutionType,
-      });
-      const tags = applyProceduralTags(m.tags, {
-        text: m.text,
-        sectionTitle: m.sectionTitle,
-      });
-      const decidedBy =
-        m.decidedBy ??
-        defaultDecidedByFor({ text: m.text, sectionTitle: m.sectionTitle });
-      await ctx.db.insert(
-        "motions",
-        stripUndefined({
-          societyId: args.societyId,
-          minutesId: args.minutesId,
-          primaryMeetingId: args.meetingId,
-          title: m.name,
-          text: m.text ?? "",
-          movedBy: m.movedBy,
-          movedByMemberId: m.movedByMemberId,
-          movedByDirectorId: m.movedByDirectorId,
-          secondedBy: m.secondedBy,
-          secondedByMemberId: m.secondedByMemberId,
-          secondedByDirectorId: m.secondedByDirectorId,
-          resolutionTypeLabel: m.resolutionType,
-          status,
-          outcome,
-          decidedBy,
-          proceduralKind: kind?.key,
-          tags: tags.length ? tags : undefined,
-          votesFor: m.votesFor,
-          votesAgainst: m.votesAgainst,
-          abstentions: m.abstentions,
-          sectionIndex: m.sectionIndex,
-          sectionTitle: m.sectionTitle,
-          motionTemplateId: m.motionTemplateId,
-          source: "minutes",
-          history: [
-            stripUndefined({
-              at: now,
-              minutesId: args.minutesId,
-              meetingId: args.meetingId,
-              status,
-              outcome,
-              votesFor: m.votesFor,
-              votesAgainst: m.votesAgainst,
-              abstentions: m.abstentions,
-              note,
-            }),
-          ],
-          createdAtISO: now,
-          updatedAtISO: now,
-        }),
-      );
-    }
-  } catch (err) {
-    console.warn(
-      `[motions] dual-write sync failed for minutes ${String(args.minutesId)}: ${String(err)}`,
-    );
-  }
-}
-
 // ----- Phase 2 backfill -----------------------------------------------------
 
 /** One-off Phase 2 migration: populate the first-class motions table from the
  *  legacy embedded minutes.motions[] blobs (the motionBacklog table has been
  *  retired — its rows ARE motions now, so there is nothing left to migrate).
  *
- *  Idempotent: minutes are mirrored via syncMotionsForMinutes (delete-by-minutes
- *  + reinsert), so re-running re-mirrors cleanly.
+ *  Delegates to the shared reconcile-by-identity `syncMotionsForMinutes`
+ *  (shared/functions/minutes.ts) — the same dual-write the live save path uses.
+ *  Idempotent: the first pass inserts rows and back-links their stable ids into
+ *  minutes.motions[] + minutes.motionIds, so re-running reconciles in place
+ *  instead of churning rows.
  *
  *  Scope to one society with `societyId`, or omit to backfill all. Pass
  *  `dryRun: true` to count without writing. */
@@ -223,7 +101,7 @@ export const backfillFromLegacy = internalMutation({
       minutesProcessed += 1;
       minutesMotions += motions.length;
       if (!dryRun) {
-        await syncMotionsForMinutes(ctx, {
+        await syncMotionsForMinutes(toPortableMutationCtx(ctx), {
           societyId: minutes.societyId,
           minutesId: minutes._id,
           meetingId: minutes.meetingId,
