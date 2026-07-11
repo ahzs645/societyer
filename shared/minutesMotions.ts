@@ -98,6 +98,7 @@ export function motionRowToEmbedded(row: any): any {
     sectionIndex: row.sectionIndex,
     sectionTitle: row.sectionTitle,
     motionTemplateId: row.motionTemplateId,
+    tags: row.tags,
     motionId: row._id,
     adoptsMinutesId: row.adoptsMinutesId,
   };

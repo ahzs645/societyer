@@ -68,6 +68,10 @@ export type Motion = {
   decidedBy?: DecidedBy;
   sectionIndex?: number;
   sectionTitle?: string;
+  /** Free-form labels on the first-class motion row, used for filtering on the
+   *  Motions page. Editable here; the save path preserves them (procedural tags
+   *  are merged in automatically by the backend). */
+  tags?: string[];
   /** Which minutes record this motion adopts. When the motion carries, the
    *  referenced minutes are automatically stamped approved (backend). */
   adoptsMinutesId?: string;
@@ -901,6 +905,40 @@ function MotionRow({
             <VoteStepper label="Against" value={motion.votesAgainst ?? 0} onChange={(n) => onSetVote("votesAgainst", n)} tone="danger" />
             <VoteStepper label="Abstain" value={motion.abstentions ?? 0} onChange={(n) => onSetVote("abstentions", n)} tone="warn" />
           </div>
+          <Field label="Labels" hint="Tag this motion for filtering on the Motions page (e.g. finance, bylaws). Routine labels are added automatically.">
+            <div className="row" style={{ gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+              {(motion.tags ?? []).map((tag) => (
+                <Badge key={tag} tone="neutral">
+                  <span className="row" style={{ gap: 2, alignItems: "center" }}>
+                    {tag}
+                    <button
+                      className="btn btn--ghost btn--icon"
+                      style={{ padding: 0, height: 14 }}
+                      aria-label={`Remove label ${tag}`}
+                      onClick={() => onPatch({ tags: (motion.tags ?? []).filter((t) => t !== tag) })}
+                    >
+                      <X size={10} />
+                    </button>
+                  </span>
+                </Badge>
+              ))}
+              <input
+                className="input"
+                style={{ width: 120, height: 24, fontSize: 12 }}
+                placeholder="Add label…"
+                aria-label="Add label"
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  const value = event.currentTarget.value.trim().toLowerCase();
+                  event.currentTarget.value = "";
+                  if (value && !(motion.tags ?? []).includes(value)) {
+                    onPatch({ tags: [...(motion.tags ?? []), value] });
+                  }
+                }}
+              />
+            </div>
+          </Field>
           <div className="row" style={{ gap: 6, justifyContent: "flex-end", marginTop: 10 }}>
             <button className="btn-action btn-action--primary" onClick={() => onSetExpanded?.(false)}>
               <Check size={12} /> Done

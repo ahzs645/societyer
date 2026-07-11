@@ -38,6 +38,10 @@ const motion = v.object({
   // the stored array through update, or every such save is rejected.
   motionTemplateId: v.optional(v.id("motionTemplates")),
   motionId: v.optional(v.id("motions")),
+  // Free-form labels on the first-class motion row. Round-tripped through the
+  // editor (displayMotions carries them), so this must be accepted or every save
+  // of a labelled motion is rejected.
+  tags: v.optional(v.array(v.string())),
   // Which minutes record this motion adopts; carrying the motion auto-stamps
   // the referenced minutes' approval (see shared/functions/minutes.ts).
   adoptsMinutesId: v.optional(v.id("minutes")),
