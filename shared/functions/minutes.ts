@@ -257,7 +257,6 @@ export async function syncMotionsForMinutes(
 
     const now = new Date().toISOString();
     const motionIds: any[] = [];
-    const backlinkedMotions: any[] = [];
     for (const m of args.motions ?? []) {
       const { status, outcome } = statusFromEmbeddedOutcome(m.outcome);
       const note = KNOWN_EMBEDDED_OUTCOMES.has(String(m.outcome ?? "").trim().toLowerCase())
@@ -343,16 +342,16 @@ export async function syncMotionsForMinutes(
       }
       keptIds.add(String(rowId));
       motionIds.push(rowId);
-      backlinkedMotions.push({ ...m, motionId: rowId });
     }
     // Drop rows whose motion was removed from the embedded array this save.
     for (const row of existing) {
       if (!keptIds.has(String(row._id))) await ctx.db.delete(row._id);
     }
-    // Back-link the stable row id into each embedded motion and maintain the
-    // ordered id references, so the next save reconciles in place instead of
-    // regenerating rows. Same best-effort block as the mirror writes.
-    await ctx.db.patch(args.minutesId, { motions: backlinkedMotions, motionIds });
+    // Maintain the ordered id references only — the embedded `minutes.motions[]`
+    // is NO LONGER written (the table + motionIds ARE the record now, Phase 4C).
+    // Reconcile keys on the motionId the caller carries in each submitted motion
+    // (the editor supplies it from displayMotions; agenda sync from the resolver).
+    await ctx.db.patch(args.minutesId, { motionIds });
   } catch (err) {
     console.warn(
       `[motions] dual-write sync failed for minutes ${String(args.minutesId)}: ${String(err)}`,
@@ -423,13 +422,15 @@ export async function createPortable(ctx: PortableMutationCtx, args: any) {
   const snapshot = meeting
     ? await quorumSnapshotForMeeting(ctx, meeting, args.quorumRequired)
     : null;
+  // The motions table is the single source of truth; the minutes row no longer
+  // stores the embedded motions[] (syncMotionsForMinutes materializes the rows +
+  // maintains motionIds below). See Phase 4C.
+  const { motions: _motions, ...minutesFields } = args;
   const id = await ctx.db.insert("minutes", {
-    ...args,
+    ...minutesFields,
     ...minutesSnapshotFields(args, snapshot),
   });
   await ctx.db.patch(args.meetingId, { minutesId: id });
-  // Dual-write: mirror into the standalone motions table (reads still use the
-  // embedded array; see docs/motions-first-class-object-design.md).
   await syncMotionsForMinutes(ctx, {
     societyId: args.societyId,
     minutesId: id,
@@ -456,7 +457,7 @@ async function applyAdoptionApprovals(
   minutes: any,
   nextMotions: any[],
 ) {
-  const before: any[] = Array.isArray(minutes.motions) ? minutes.motions : [];
+  const before: any[] = await resolveMinutesMotions(ctx, minutes);
   const previouslyCarried = new Set(
     before
       .filter((motion) => motion?.adoptsMinutesId && isCarriedOutcome(motion.outcome))
@@ -480,7 +481,7 @@ async function applyAdoptionApprovals(
     // Mirror the snapshot-on-approval freeze from updatePortable — this patch
     // bypasses that path, and the approved record must be frozen either way.
     if (!target.motionSnapshots) {
-      targetPatch.motionSnapshots = target.motions ?? [];
+      targetPatch.motionSnapshots = await resolveMinutesMotions(ctx, target);
       targetPatch.motionSnapshotAtISO = now;
     }
     await ctx.db.patch(target._id, targetPatch);
@@ -506,16 +507,18 @@ export async function updatePortable(
   if (!minutes) throw new Error("Minutes not found");
   // `undefined` fields are stripped from the wire, so unsetting approval
   // arrives as explicit clear flags (mirrors meetings.clearNoticeSent).
-  const { clearApproval, clearApprovedInMeeting, ...patch } = rawPatch;
+  const { clearApproval, clearApprovedInMeeting, motions: submittedMotions, ...patch } = rawPatch;
   if (clearApproval) {
     patch.approvedAt = undefined;
     patch.approvedInMeetingId = undefined;
   } else if (clearApprovedInMeeting) {
     patch.approvedInMeetingId = undefined;
   }
-  if (patch.motions) {
-    await assertMotionPersonLinksBelongToSociety(ctx, String(minutes.societyId), patch.motions);
+  if (submittedMotions) {
+    await assertMotionPersonLinksBelongToSociety(ctx, String(minutes.societyId), submittedMotions);
   }
+  // `motions` is NOT written back to the minutes row (Phase 4C) — it flows only
+  // to syncMotionsForMinutes below, which materializes the table + motionIds.
   await ctx.db.patch(id, patch);
 
   // Snapshot-on-approval: the first time minutes become approved, freeze the
@@ -523,7 +526,9 @@ export async function updatePortable(
   // record. Skipped if a snapshot already exists (idempotent).
   const newlyApproved = !!patch.approvedAt && !minutes.approvedAt;
   if (newlyApproved && !minutes.motionSnapshots) {
-    const frozen = patch.motions ?? minutes.motions ?? [];
+    // Freeze the approved motion set from the single source of truth: the motions
+    // submitted with this save, else whatever the table currently resolves to.
+    const frozen = submittedMotions ?? (await resolveMinutesMotions(ctx, minutes));
     await ctx.db.patch(id, {
       motionSnapshots: frozen,
       motionSnapshotAtISO: new Date().toISOString(),
@@ -533,17 +538,17 @@ export async function updatePortable(
   // Adoption carry-through: when an "adopt previous minutes" motion
   // (adoptsMinutesId) newly records as Carried, stamp the referenced minutes
   // approved — the step people forget after the vote in the room.
-  if (Array.isArray(patch.motions)) {
-    await applyAdoptionApprovals(ctx, minutes, patch.motions);
+  if (Array.isArray(submittedMotions)) {
+    await applyAdoptionApprovals(ctx, minutes, submittedMotions);
   }
 
-  // Dual-write: re-mirror only when the motions array was part of this patch.
-  if (patch.motions) {
+  // Materialize the table + motionIds when motions were part of this save.
+  if (submittedMotions) {
     await syncMotionsForMinutes(ctx, {
       societyId: minutes.societyId,
       minutesId: id,
       meetingId: minutes.meetingId,
-      motions: patch.motions,
+      motions: submittedMotions,
     });
   }
 }
@@ -556,8 +561,11 @@ export async function upsertFromDraftPortable(ctx: PortableMutationCtx, args: an
     ? await quorumSnapshotForMeeting(ctx, meeting, args.quorumRequired)
     : null;
   const quorumRequired = args.quorumRequired ?? snapshot?.quorumRequired;
+  // Motions are materialized into the table by syncMotionsForMinutes below, not
+  // stored on the minutes row (Phase 4C).
+  const { motions: _motions, ...argsFields } = args;
   const payload = {
-    ...args,
+    ...argsFields,
     ...minutesSnapshotFields(args, snapshot),
     quorumMet:
       quorumRequired == null

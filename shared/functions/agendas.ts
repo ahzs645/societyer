@@ -13,7 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { syncMotionsForMinutes } from "./minutes";
+import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
 
 // ----- queries --------------------------------------------------------------
 
@@ -466,7 +466,10 @@ async function syncMeetingAndMinutesFromAgenda(ctx: PortableMutationCtx, meeting
     if (sectionHasDetails(section)) nextSections.push(cleanMinutesSection(section));
   }
 
-  const existingMotions: any[] = Array.isArray(minutes.motions) ? minutes.motions.map(cleanMotion) : [];
+  // Source existing motions from the table (via the resolver) so each carries its
+  // motionId — agenda re-sync then reconciles rows in place instead of churning
+  // them, and no longer reads the retired embedded minutes.motions[]. Phase 4C.
+  const existingMotions: any[] = (await resolveMinutesMotions(ctx, minutes)).map(cleanMotion);
   const agendaMotions = motionsFromAgendaItems(items);
   const agendaMotionKeys = new Set(agendaMotions.map((motion) => normalizeTitle(String(motion.text ?? ""))));
   const existingMotionByText = new Map<string, any>();
@@ -483,9 +486,10 @@ async function syncMeetingAndMinutesFromAgenda(ctx: PortableMutationCtx, meeting
     return !agendaMotionKeys.has(key);
   });
   const nextMotions = [...mergedAgendaMotions, ...preservedMotions.map(cleanMotion)];
+  // Only sections are stored on the minutes row now; motions are materialized
+  // into the table by syncMotionsForMinutes (which maintains motionIds). Phase 4C.
   await ctx.db.patch(minutes._id, {
     sections: nextSections,
-    motions: nextMotions,
   });
   await syncMotionsForMinutes(ctx, {
     societyId: minutes.societyId,

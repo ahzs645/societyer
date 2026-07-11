@@ -126,6 +126,8 @@
     "test:motions-reconcile": "tsx scripts/check-motions-reconcile.ts",
     "test:motions-carryforward": "tsx scripts/check-motions-carryforward.ts",
     "test:motions-master-list": "tsx scripts/check-motions-master-list.ts",
+    "test:minutes-snapshot-immutability": "tsx scripts/check-minutes-snapshot-immutability.ts",
+    "test:motions-seed-to-minutes": "tsx scripts/check-motions-seed-to-minutes.ts",
     "test:bylaw-sections": "tsx scripts/check-bylaw-sections.ts",
     "test:grant-feed-parsers": "tsx scripts/check-grant-feed-parsers.ts"
   },
