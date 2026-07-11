@@ -20,7 +20,7 @@ import {
   applyProceduralTags,
   classifyProceduralMotion,
 } from "../proceduralMotions";
-import { resolveMinutesMotions } from "./minutes";
+import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
 
 // Lifecycle statuses that make a motion show up in the backlog UI.
 const BACKLOG_STATUSES = new Set(["Backlog", "Tabled", "Deferred", "Agenda"]);
@@ -553,31 +553,51 @@ export async function seedToMinutesPortable(ctx: PortableMutationCtx, { meetingI
     .flat()
     .filter((item) => item.type === "motion" && item.motionId && item.motionText);
 
-  const existingMotions = Array.isArray(minutes.motions) ? minutes.motions : [];
+  // The agenda items reference existing backlog motion ROWS (item.motionId). Seed
+  // them into the minutes by LINKING those rows — stamp minutesId + append to
+  // minutes.motionIds — instead of copying text into the retired minutes.motions[]
+  // (Phase 4C: the table is the single source of truth). Dedup by resolved text
+  // and by already-linked id, so the linked row IS the minutes motion (no copy,
+  // no duplicate in the master list).
+  const existingMotions = await resolveMinutesMotions(ctx, minutes);
   const existingTexts = new Set(existingMotions.map((motion: any) => comparableMotionText(motion.text)));
-  const motionsToAdd = agendaItems
-    .filter((item) => !existingTexts.has(comparableMotionText(item.motionText)))
-    .map((item) => ({
-      text: item.motionText!,
-      outcome: "Pending",
-    }));
+  const existingIds = new Set((minutes.motionIds ?? []).map((id: any) => String(id)));
+  const itemsToLink = agendaItems.filter(
+    (item) =>
+      !existingIds.has(String(item.motionId)) &&
+      !existingTexts.has(comparableMotionText(item.motionText)),
+  );
 
-  if (motionsToAdd.length > 0) {
-    await ctx.db.patch(minutes._id, {
-      motions: [...existingMotions, ...motionsToAdd],
+  // Materialize the minutes' current motions first when they haven't been (a
+  // template/import minutes carries embedded motions but no motionIds), so
+  // appending links never drops the existing ones.
+  let motionIds: any[] = Array.isArray(minutes.motionIds) ? [...minutes.motionIds] : [];
+  if (motionIds.length === 0 && existingMotions.length > 0) {
+    await syncMotionsForMinutes(ctx, {
+      societyId: minutes.societyId,
+      minutesId: minutes._id,
+      meetingId: minutes.meetingId,
+      motions: existingMotions,
     });
+    const refreshed: any = await ctx.db.get(minutes._id);
+    motionIds = Array.isArray(refreshed?.motionIds) ? [...refreshed.motionIds] : [];
   }
 
-  for (const item of agendaItems) {
+  for (const item of itemsToLink) {
     // Seeded into a minutes draft but not yet voted — the closest unified
     // lifecycle stage is Draft.
     await patchMotion(ctx, item.motionId!, {
       status: "Draft",
       minutesId: minutes._id,
+      primaryMeetingId: minutes.meetingId,
     });
+    motionIds.push(item.motionId);
+  }
+  if (itemsToLink.length > 0) {
+    await ctx.db.patch(minutes._id, { motionIds });
   }
 
-  return { inserted: motionsToAdd.length, considered: agendaItems.length, minutesId: minutes._id };
+  return { inserted: itemsToLink.length, considered: agendaItems.length, minutesId: minutes._id };
 }
 
 function compareBacklogItems(a: any, b: any) {
