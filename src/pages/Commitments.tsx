@@ -749,11 +749,26 @@ function nextDueDate(cadence: string, from: string) {
   if (!from || cadence === "Once" || cadence === "Custom") return undefined;
   const date = new Date(`${from}T00:00:00`);
   if (Number.isNaN(date.getTime())) return undefined;
-  if (cadence === "Monthly") date.setMonth(date.getMonth() + 1);
-  if (cadence === "Quarterly") date.setMonth(date.getMonth() + 3);
-  if (cadence === "Annual") date.setFullYear(date.getFullYear() + 1);
-  if (cadence === "Every 2 years") date.setFullYear(date.getFullYear() + 2);
-  return date.toISOString().slice(0, 10);
+  const months =
+    cadence === "Monthly" ? 1 :
+    cadence === "Quarterly" ? 3 :
+    cadence === "Annual" ? 12 :
+    cadence === "Every 2 years" ? 24 : 0;
+  if (months === 0) return undefined;
+  // Shift by whole months, clamping the day to the target month's last valid
+  // day. Setting the day to 1 first prevents setMonth() from overflowing a
+  // month-end date into the following month (e.g. Jan 31 + 1mo -> Mar 3).
+  const day = date.getDate();
+  date.setDate(1);
+  date.setMonth(date.getMonth() + months);
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(day, lastDay));
+  // Format from local components so the local calendar date is preserved
+  // regardless of the runtime timezone.
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function emptyToUndefined(value?: string) {
