@@ -15,6 +15,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { useThemePreference } from "../hooks/useThemePreference";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
 import { Link } from "react-router-dom";
@@ -167,6 +168,10 @@ export function OrgChartPage() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  // React Flow otherwise forces color-scheme: light on its subtree, which flips
+  // the app's light-dark() theme vars (node backgrounds, Controls) back to light
+  // even in dark mode. Match its colorMode to the resolved app theme.
+  const { resolvedTheme } = useThemePreference();
 
   // Recompute the graph whenever the structure (people / assignments / date)
   // changes. Drag positions are kept by ReactFlow between recomputes of the
@@ -263,6 +268,7 @@ export function OrgChartPage() {
       <div style={{ display: "flex", gap: 16, alignItems: "stretch" }}>
         <div style={{ flex: 1, height: 620, border: "1px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
           <ReactFlow
+            colorMode={resolvedTheme}
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
