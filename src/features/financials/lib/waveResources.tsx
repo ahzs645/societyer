@@ -294,11 +294,14 @@ export function WaveResourceValue({ row }: { row: any }) {
 }
 
 function waveResourceValueSort(row: any) {
+  // amountValue is a dollar figure (see formatWaveValue), while the linked
+  // totals are cents — normalize the cents branches to dollars so every row
+  // sorts in the same unit.
   if (isWaveCounterpartyResource(row) && row.externalId) {
-    return Number(row.linkedTransactionTotalCents ?? 0);
+    return Number(row.linkedTransactionTotalCents ?? 0) / 100;
   }
   if (isWaveCategoryAccount(row) && row.externalId && row.amountValue == null) {
-    return Number(row.linkedCategoryTransactionTotalCents ?? 0);
+    return Number(row.linkedCategoryTransactionTotalCents ?? 0) / 100;
   }
   return Number(row.amountValue ?? 0);
 }
