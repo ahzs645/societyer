@@ -73,9 +73,10 @@ const nodeTypes = { orgPerson: OrgNode };
 const ROW_GAP = 170;
 const COL_GAP = 240;
 
+// Did this director hold office on the given date? Pure term-interval check:
+// present-day `status` must NOT gate a historical query, or a since-resigned
+// director wrongly vanishes from the chart for the dates they actually served.
 function directorActiveOn(d: any, dateISO: string): boolean {
-  const status = String(d?.status ?? "").toLowerCase();
-  if (status && !["active", "current", "verified"].includes(status)) return false;
   const start = d?.termStart ? String(d.termStart).slice(0, 10) : "";
   const end = (d?.termEnd || d?.resignedAt) ? String(d.termEnd || d.resignedAt).slice(0, 10) : "";
   if (start && start > dateISO) return false;
@@ -91,7 +92,18 @@ function employeeActiveOn(e: any, dateISO: string): boolean {
   return true;
 }
 
+// Volunteers carry no tenure interval, so a past date can only be approximated:
+// include those who had joined by then (approved/applied on or before the date).
+// Departures can't be reconstructed from the data, so this over-includes rather
+// than inventing an end date.
+function volunteerActiveOn(v: any, dateISO: string): boolean {
+  const start = String(v?.approvedAtISO ?? v?.applicationReceivedAtISO ?? "").slice(0, 10);
+  return !start || start <= dateISO;
+}
+
 function isCurrentDirector(d: any): boolean {
+  const status = String(d?.status ?? "").toLowerCase();
+  if (status && !["active", "current", "verified"].includes(status)) return false;
   return directorActiveOn(d, new Date().toISOString().slice(0, 10));
 }
 
@@ -137,7 +149,9 @@ export function OrgChartPage() {
         note: employee.notes,
       }));
     const volunteerPeople: OrgPerson[] = ((volunteers ?? []) as any[])
-      .filter((v) => ["Active", "Applied", "NeedsReview"].includes(v.status))
+      .filter((v) =>
+        asOf ? volunteerActiveOn(v, dateForFilter) : ["Active", "Applied", "NeedsReview"].includes(v.status),
+      )
       .map((volunteer) => ({
         type: "volunteer",
         id: String(volunteer._id),
