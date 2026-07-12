@@ -15,6 +15,7 @@ import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Pencil, Plus, Search, ListTodo, Trash2, X } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { useIsMobile } from "../lib/useIsMobile";
 import {
   TaskFormFields,
   makeTaskFormDefaults,
@@ -57,6 +58,10 @@ export function TasksPage() {
   const requestedCommitteeId = searchParams.get("committeeId") ?? "";
   const openNewFromUrl = searchParams.get("new") === "1";
   const [view, setView] = useState<"kanban" | "list">("kanban");
+  // On phones the board/table don't fit, so we render a single-column card list
+  // regardless of the desktop view toggle, and tuck the filters behind a toggle.
+  const isMobile = useIsMobile();
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [q, setQ] = useState("");
   const [filterCommittee, setFilterCommittee] = useState<string>(requestedCommitteeId);
   const [filterGoal, setFilterGoal] = useState<string>(requestedGoalId);
@@ -357,14 +362,16 @@ export function TasksPage() {
         subtitle="Internal work items for your board and staff to get done. For dates set by law or regulation, use Deadlines; for promises made to funders or partners, use Commitments."
         actions={
           <>
-            <Segmented
-              value={view}
-              onChange={setView}
-              items={[
-                { id: "kanban", label: "Kanban" },
-                { id: "list", label: "List" },
-              ]}
-            />
+            {!isMobile && (
+              <Segmented
+                value={view}
+                onChange={setView}
+                items={[
+                  { id: "kanban", label: "Kanban" },
+                  { id: "list", label: "List" },
+                ]}
+              />
+            )}
             <button className="btn-action btn-action--primary" onClick={openNew}>
               <Plus size={12} /> New task
             </button>
@@ -373,51 +380,151 @@ export function TasksPage() {
       />
 
       <div className="row" style={{ marginBottom: 16, gap: 8 }}>
-        <div className="table-toolbar__search" style={{ maxWidth: 280 }}>
+        <div
+          className="table-toolbar__search"
+          style={isMobile ? { flex: "1 1 auto" } : { maxWidth: 280 }}
+        >
           <Search />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tasks…" />
         </div>
-        <Select
-          value={filterCommittee}
-          onChange={setFilterCommittee}
-          clearable
-          clearLabel="All committees"
-          placeholder="All committees"
-          style={{ width: 200, maxWidth: "100%" }}
-          options={(committees ?? []).map((c: any) => ({ value: c._id, label: c.name }))}
-        />
-        <Select
-          value={filterGoal}
-          onChange={changeGoalFilter}
-          clearable
-          clearLabel="All goals"
-          placeholder="All goals"
-          style={{ width: 220, maxWidth: "100%" }}
-          options={(goals ?? []).map((g: any) => ({ value: g._id, label: g.title }))}
-        />
-        <Select
-          value={filterLink}
-          onChange={setFilterLink}
-          clearable
-          clearLabel="All links"
-          placeholder="All links"
-          style={{ width: 180, maxWidth: "100%" }}
-          options={[
-            { value: "linked", label: "Any linked record" },
-            { value: "goal", label: "Goal linked" },
-            { value: "filing", label: "Filing linked" },
-            { value: "workflow", label: "Workflow linked" },
-            { value: "document", label: "Document linked" },
-            { value: "commitment", label: "Commitment linked" },
-            { value: "event", label: "Event linked" },
-          ]}
-        />
-        <div className="muted" style={{ marginLeft: "auto", fontSize: "var(--fs-sm)" }}>
+        {isMobile && (
+          <button
+            type="button"
+            className="btn btn--sm"
+            style={{ flexShrink: 0 }}
+            onClick={() => setFiltersOpen((v) => !v)}
+            aria-expanded={filtersOpen}
+          >
+            Filters{[filterCommittee, filterGoal, filterLink].filter(Boolean).length
+              ? ` (${[filterCommittee, filterGoal, filterLink].filter(Boolean).length})`
+              : ""}
+          </button>
+        )}
+        {(!isMobile || filtersOpen) && (
+          <>
+            <Select
+              value={filterCommittee}
+              onChange={setFilterCommittee}
+              clearable
+              clearLabel="All committees"
+              placeholder="All committees"
+              style={{ width: isMobile ? "100%" : 200, maxWidth: "100%" }}
+              options={(committees ?? []).map((c: any) => ({ value: c._id, label: c.name }))}
+            />
+            <Select
+              value={filterGoal}
+              onChange={changeGoalFilter}
+              clearable
+              clearLabel="All goals"
+              placeholder="All goals"
+              style={{ width: isMobile ? "100%" : 220, maxWidth: "100%" }}
+              options={(goals ?? []).map((g: any) => ({ value: g._id, label: g.title }))}
+            />
+            <Select
+              value={filterLink}
+              onChange={setFilterLink}
+              clearable
+              clearLabel="All links"
+              placeholder="All links"
+              style={{ width: isMobile ? "100%" : 180, maxWidth: "100%" }}
+              options={[
+                { value: "linked", label: "Any linked record" },
+                { value: "goal", label: "Goal linked" },
+                { value: "filing", label: "Filing linked" },
+                { value: "workflow", label: "Workflow linked" },
+                { value: "document", label: "Document linked" },
+                { value: "commitment", label: "Commitment linked" },
+                { value: "event", label: "Event linked" },
+              ]}
+            />
+          </>
+        )}
+        <div className="muted" style={{ marginLeft: isMobile ? 0 : "auto", fontSize: "var(--fs-sm)", flexShrink: 0 }}>
           {filtered.length} of {tasks?.length ?? 0}
         </div>
       </div>
 
-      {view === "kanban" ? (
+      {isMobile ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map((t: any) => {
+            const committee = committeeById.get(t.committeeId);
+            const goal = goalById.get(t.goalId);
+            const responsible = userNames(t.responsibleUserIds, userById) || t.assignee;
+            const overdue = t.dueDate && new Date(t.dueDate).getTime() < Date.now() && t.status !== "Done";
+            return (
+              <div
+                key={t._id}
+                className="card"
+                style={{ padding: 12, cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openEdit(t)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEdit(t); }
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <span className={`priority-dot priority-${t.priority}`} style={{ marginTop: 6, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong>{t.title}</strong>
+                    {t.description && (
+                      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t.description}</div>
+                    )}
+                    <div
+                      className="row"
+                      style={{ gap: 6, flexWrap: "wrap", marginTop: 6, fontSize: "var(--fs-sm)", color: "var(--text-tertiary)" }}
+                    >
+                      <span>{t.priority}</span>
+                      {responsible && <span>· {responsible}</span>}
+                      {committee && (
+                        <span className="row" style={{ gap: 4 }}>
+                          <span>·</span>
+                          <span className="color-chip" style={{ background: committee.color }} />
+                          {committee.name}
+                        </span>
+                      )}
+                      {goal && <span>· {goal.title}</span>}
+                      {t.dueDate && (
+                        <span style={{ color: overdue ? "var(--danger)" : undefined }}>· {formatDate(t.dueDate)}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div
+                  className="row"
+                  style={{ marginTop: 10, gap: 8, alignItems: "center" }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Select
+                    size="sm"
+                    value={t.status}
+                    onChange={(v) => update({
+                      id: t._id,
+                      patch: {
+                        status: v,
+                        completedByUserId: v === "Done" && currentUserId ? currentUserId : undefined,
+                      },
+                    })}
+                    style={{ width: 150 }}
+                    options={COLS.map((c) => ({ value: c.id, label: c.label }))}
+                  />
+                  <button
+                    className="btn btn--ghost btn--sm btn--icon"
+                    style={{ marginLeft: "auto" }}
+                    aria-label={`Delete task ${t.title}`}
+                    onClick={() => confirmDelete(t._id, t.title)}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="muted" style={{ textAlign: "center", padding: 24 }}>No tasks.</div>
+          )}
+        </div>
+      ) : view === "kanban" ? (
         <Kanban
           columns={columns}
           onItemClick={(t: any) => openEdit(t)}
