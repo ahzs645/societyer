@@ -39,7 +39,13 @@ export function GoalsPage() {
   const all = goals ?? [];
   const filtered = all.filter((g: any) => {
     if (filter === "active") return g.status !== "Completed";
-    if (filter === "atrisk") return g.status === "AtRisk" || g.status === "OffTrack";
+    if (filter === "atrisk") {
+      // Match the status the UI actually shows (cards/board badge), which
+      // promotes past-target-date goals to "AtRisk" — otherwise the At-risk
+      // filter hides exactly the overdue goals it exists to surface.
+      const s = effectiveGoalStatus(g);
+      return s === "AtRisk" || s === "OffTrack";
+    }
     if (filter === "done") return g.status === "Completed";
     return true;
   });
