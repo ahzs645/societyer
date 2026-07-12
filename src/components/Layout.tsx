@@ -935,14 +935,19 @@ export function Layout() {
               >
                 <Search size={14} />
               </button>
-              <button
-                className="sidebar__icon-btn sidebar__toggle"
-                onClick={toggleSidebar}
-                title={`${isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")} ${isMobileNav ? t("sidebar.navigation") : t("sidebar.sidebar")} (⌘\\)`}
-                aria-label={`${isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")} ${isMobileNav ? t("sidebar.navigation") : t("sidebar.sidebar")}`}
-              >
-                <PanelLeftClose size={14} />
-              </button>
+              {/* On mobile the drawer closes via the scrim, a left-swipe, or
+                * Escape, so this collapse toggle is redundant — dropping it also
+                * unclutters the cramped top bar. */}
+              {!isMobileNav && (
+                <button
+                  className="sidebar__icon-btn sidebar__toggle"
+                  onClick={toggleSidebar}
+                  title={`${isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")} ${t("sidebar.sidebar")} (⌘\\)`}
+                  aria-label={`${isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")} ${t("sidebar.sidebar")}`}
+                >
+                  <PanelLeftClose size={14} />
+                </button>
+              )}
             </div>
           </div>
           {!operationsDeskHidden && (

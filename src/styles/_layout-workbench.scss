@@ -290,6 +290,20 @@
     padding: token('s-3') token('s-5');
     height: auto;
     min-height: token('topbar-h');
+    /* Stack the workspace switcher above its action icons so the society name
+     * gets the full width instead of being squeezed (and truncated) by a row of
+     * icons crammed alongside it. */
+    flex-direction: column;
+    align-items: stretch;
+    gap: token('s-2');
+  }
+  .app-shell.is-mobile .sidebar__workspace {
+    /* Column layout would otherwise stretch this button vertically. */
+    flex: 0 0 auto;
+  }
+  .app-shell.is-mobile .sidebar__brand-actions {
+    justify-content: flex-start;
+    gap: token('s-2');
   }
   .app-shell.is-mobile .sidebar__identity,
   .app-shell.is-mobile .sidebar__spotlight {
