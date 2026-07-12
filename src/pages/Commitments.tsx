@@ -29,6 +29,7 @@ import {
   FolderOpen,
   Link as LinkIcon,
   ListTodo,
+  Pencil,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -379,37 +380,38 @@ export function CommitmentsPage() {
               if (field.name === "status") return <Badge tone={statusTone(row.status)}>{row.status}</Badge>;
               return undefined;
             }}
-            renderRowActions={(row) => (
-              <>
-                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openRecord(row); }}>
-                  <CheckCircle2 size={12} /> Record
-                </button>
-                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); createPreparationTask(row); }}>
-                  <ListTodo size={12} /> Task
-                </button>
-                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>
-                  Edit
-                </button>
-                <button
-                  className="btn btn--ghost btn--sm btn--icon"
-                  aria-label={`Delete commitment ${row.title}`}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    const ok = await confirm({
-                      title: "Delete commitment?",
-                      message: `"${row.title}" and ${eventsByCommitment.get(String(row._id))?.length ?? 0} completion record(s) will be removed.`,
-                      confirmLabel: "Delete",
-                      tone: "danger",
-                    });
-                    if (!ok) return;
-                    await remove({ id: row._id });
-                    toast.success("Commitment deleted");
-                  }}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </>
-            )}
+            rowMenuSections={(row) => [
+              {
+                id: "actions",
+                items: [
+                  { id: "record", label: "Record completion", icon: <CheckCircle2 size={14} />, onSelect: () => openRecord(row) },
+                  { id: "task", label: "Create preparation task", icon: <ListTodo size={14} />, onSelect: () => createPreparationTask(row) },
+                  { id: "edit", label: "Edit", icon: <Pencil size={14} />, onSelect: () => openEdit(row) },
+                ],
+              },
+              {
+                id: "danger",
+                items: [
+                  {
+                    id: "delete",
+                    label: "Delete",
+                    icon: <Trash2 size={14} />,
+                    destructive: true,
+                    onSelect: async () => {
+                      const ok = await confirm({
+                        title: "Delete commitment?",
+                        message: `"${row.title}" and ${eventsByCommitment.get(String(row._id))?.length ?? 0} completion record(s) will be removed.`,
+                        confirmLabel: "Delete",
+                        tone: "danger",
+                      });
+                      if (!ok) return;
+                      await remove({ id: row._id });
+                      toast.success("Commitment deleted");
+                    },
+                  },
+                ],
+              },
+            ]}
           />
         </RecordTableScope>
       ) : null}
