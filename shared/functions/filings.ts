@@ -126,6 +126,9 @@ export async function updatePortable(
       periodLabel?: string;
       dueDate?: string;
       status?: string;
+      filedAt?: string;
+      confirmationNumber?: string;
+      feePaidCents?: number;
       submissionMethod?: string;
       submittedByUserId?: string;
       receiptDocumentId?: string;
