@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
-import type { BooleanFieldConfig, FieldMetadata, SelectFieldConfig } from "../../types";
+import type { BooleanFieldConfig, CurrencyFieldConfig, FieldMetadata, SelectFieldConfig } from "../../types";
 import { FIELD_TYPES } from "../../types";
 import { Select } from "@/components/Select";
 import { DatePicker } from "@/components/DatePicker";
@@ -69,6 +69,62 @@ function NumberInput({ value, onCommit, onCancel, field, initialValue }: FieldIn
     <input
       ref={ref}
       type="number"
+      className="record-cell__input"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+    />
+  );
+}
+
+/**
+ * CURRENCY inline editor. Edits in the *display* unit (dollars) and stores in
+ * the *underlying* unit. For `isCents` fields the cell shows CA$40.00 for a
+ * stored 4000, so the editor must show 40 and write back 4000 — a plain
+ * NumberInput would instead edit the raw 4000 and turn a typed "40" into $0.40.
+ */
+function CurrencyInput({ value, onCommit, onCancel, field, initialValue }: FieldInputProps) {
+  const config = (field.config ?? {}) as CurrencyFieldConfig;
+  const isCents = Boolean(config.isCents);
+  const toDisplay = (v: unknown): string => {
+    if (v == null || v === "") return "";
+    const n = Number(v);
+    if (Number.isNaN(n)) return "";
+    return String(isCents ? n / 100 : n);
+  };
+  const [draft, setDraft] = useState<string>(initialValue ?? toDisplay(value));
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+  const commit = () => {
+    if (draft === "") {
+      onCommit(field.isNullable ? null : 0);
+      return;
+    }
+    const amount = Number(draft);
+    if (Number.isNaN(amount)) {
+      onCancel();
+      return;
+    }
+    onCommit(isCents ? Math.round(amount * 100) : amount);
+  };
+  return (
+    <input
+      ref={ref}
+      type="number"
+      step="0.01"
+      inputMode="decimal"
       className="record-cell__input"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
@@ -397,7 +453,7 @@ const INPUT_BY_TYPE: Partial<Record<FieldMetadata["fieldType"], InputComponent>>
   [FIELD_TYPES.LINK]: TextInput,
   [FIELD_TYPES.UUID]: TextInput,
   [FIELD_TYPES.NUMBER]: NumberInput,
-  [FIELD_TYPES.CURRENCY]: NumberInput,
+  [FIELD_TYPES.CURRENCY]: CurrencyInput,
   [FIELD_TYPES.RATING]: NumberInput,
   [FIELD_TYPES.SELECT]: SelectInput,
   [FIELD_TYPES.MULTI_SELECT]: MultiSelectInput,
