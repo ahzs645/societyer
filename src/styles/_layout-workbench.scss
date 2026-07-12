@@ -359,15 +359,16 @@
 @media (max-width: 768px) {
   .app-shell.is-mobile .sidebar,
   .app-shell.is-mobile.is-collapsed .sidebar {
-    /* Full-width drawer on phones (twenty's StyledAnimatedContainer @ 768px).
-     * The backdrop sits on top and is dismissed by tapping anywhere. */
-    width: 100vw;
-    max-width: 100vw;
+    /* Not quite full-width: leave a scrim strip on the side so the drawer has an
+     * "outside" to tap (and room to swipe it away). A full-width drawer hid the
+     * backdrop entirely, leaving the tiny top-right button as the only exit. */
+    width: min(360px, 88vw);
+    max-width: 88vw;
   }
   .app-shell.is-mobile.is-mobile-nav-open .sidebar-backdrop {
-    /* Drawer covers the whole screen — no content peeking through behind. */
+    /* Full-screen scrim behind the drawer; the exposed strip dims the page and
+     * is tappable to dismiss (default .sidebar-backdrop background = scrim). */
     left: 0;
-    background: transparent;
   }
 
   /* Nav items scale up to font size LG (19.7px) with taller rows for

@@ -164,6 +164,8 @@ export function Layout() {
     window.matchMedia(mobileSidebarMediaQuery).matches,
   );
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  // Tracks a touch on the mobile drawer so a decisive left-swipe can dismiss it.
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const [collapsed, setCollapsed] = useState(
     () => !isStaticDemoRuntime() && localStorage.getItem(COLLAPSE_KEY) === "1",
   );
@@ -852,7 +854,25 @@ export function Layout() {
         >
           <PanelLeftOpen size={14} />
         </button>
-        <aside className="sidebar" ref={sidebarRef} aria-label={t("sidebar.navigation")}>
+        <aside
+          className="sidebar"
+          ref={sidebarRef}
+          aria-label={t("sidebar.navigation")}
+          onTouchStart={isMobileNav ? (e) => {
+            const touch = e.touches[0];
+            swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+          } : undefined}
+          onTouchEnd={isMobileNav ? (e) => {
+            const start = swipeStartRef.current;
+            swipeStartRef.current = null;
+            if (!start || !mobileSidebarOpen) return;
+            const touch = e.changedTouches[0];
+            const dx = touch.clientX - start.x;
+            const dy = touch.clientY - start.y;
+            // A decisive left-swipe (more horizontal than vertical) closes it.
+            if (dx < -60 && Math.abs(dx) > Math.abs(dy)) setMobileSidebarOpen(false);
+          } : undefined}
+        >
           <div className="sidebar__brand">
             <button
               ref={workspaceButtonRef}
