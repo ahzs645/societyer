@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { BooleanFieldConfig, CurrencyFieldConfig, FieldMetadata, SelectFieldConfig } from "../../types";
 import { FIELD_TYPES } from "../../types";
 import { Select } from "@/components/Select";
@@ -49,6 +49,16 @@ function TextInput({ value, onCommit, onCancel, field, initialValue }: FieldInpu
   );
 }
 
+// Block any printable key that isn't part of a number. `type="number"` still
+// accepts "e"/"E"/"+" (scientific notation) and, in some engines, stray
+// letters — so guard at the keystroke. Multi-char keys (Backspace, ArrowLeft,
+// Enter…) and shortcut combos (Ctrl/Cmd/Alt) pass through untouched.
+function isNonNumericKey(e: ReactKeyboardEvent): boolean {
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
+  if (e.key.length !== 1) return false;
+  return !/[0-9.\-]/.test(e.key);
+}
+
 function NumberInput({ value, onCommit, onCancel, field, initialValue }: FieldInputProps) {
   const [draft, setDraft] = useState<string>(initialValue ?? (value == null ? "" : String(value)));
   const ref = useRef<HTMLInputElement>(null);
@@ -74,7 +84,9 @@ function NumberInput({ value, onCommit, onCancel, field, initialValue }: FieldIn
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {
-        if (e.key === "Enter") {
+        if (isNonNumericKey(e)) {
+          e.preventDefault();
+        } else if (e.key === "Enter") {
           e.preventDefault();
           commit();
         } else if (e.key === "Escape") {
@@ -130,7 +142,9 @@ function CurrencyInput({ value, onCommit, onCancel, field, initialValue }: Field
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {
-        if (e.key === "Enter") {
+        if (isNonNumericKey(e)) {
+          e.preventDefault();
+        } else if (e.key === "Enter") {
           e.preventDefault();
           commit();
         } else if (e.key === "Escape") {
