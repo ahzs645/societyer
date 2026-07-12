@@ -63,6 +63,34 @@ export async function profitAndLossPortable(
   };
 }
 
+/**
+ * Resolve a fiscal-year label to its inclusive [start, end] date window for
+ * this society. Accepts both label shapes the app uses — a 4-digit fiscal-year
+ * END year ("2027", the Treasurer default) and a hyphenated span ("2024-2025")
+ * — and anchors the window on the society's actual fiscal year end ("MM-DD",
+ * default 12-31) rather than assuming a calendar year. The window runs from the
+ * day after the prior year's fiscal end through the label's fiscal end, so a
+ * March-31 society's "2027" resolves to 2026-04-01 … 2027-03-31.
+ */
+function fiscalWindow(
+  fiscalYear: string,
+  fiscalYearEnd: string | undefined,
+): { start: string; end: string } {
+  const label = String(fiscalYear ?? "").trim();
+  const span = /^(\d{4})\s*-\s*(\d{4})$/.exec(label);
+  const endYear = span ? Number(span[2]) : /^\d{4}$/.test(label) ? Number(label) : NaN;
+  if (Number.isNaN(endYear)) return { start: "0000-01-01", end: "9999-12-31" };
+
+  const fye = /^\d{2}-\d{2}$/.test(String(fiscalYearEnd ?? "")) ? (fiscalYearEnd as string) : "12-31";
+  const [month, day] = fye.split("-").map(Number);
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  const end = `${endYear}-${pad(month)}-${pad(day)}`;
+  // Day after the previous fiscal-year end; UTC math handles month/day rollover.
+  const start = new Date(Date.UTC(endYear - 1, month - 1, day + 1)).toISOString().slice(0, 10);
+  return { start, end };
+}
+
 export async function budgetVariancePortable(
   ctx: PortableQueryCtx,
   { societyId, fiscalYear }: { societyId: string; fiscalYear: string },
@@ -74,8 +102,8 @@ export async function budgetVariancePortable(
     )
     .collect();
 
-  const yearStart = fiscalYear.includes("-") ? fiscalYear : `${fiscalYear}-01-01`;
-  const yearEnd = fiscalYear.includes("-") ? `${fiscalYear.slice(0, 4)}-12-31` : `${fiscalYear}-12-31`;
+  const society: any = await ctx.db.get(societyId);
+  const { start: yearStart, end: yearEnd } = fiscalWindow(fiscalYear, society?.fiscalYearEnd);
 
   const txns = await ctx.db
     .query("financialTransactions")
