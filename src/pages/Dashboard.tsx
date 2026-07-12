@@ -61,6 +61,9 @@ export function Dashboard() {
   const markPrivacyProgramReviewed = useMutation(api.dashboardRemediation.markPrivacyProgramReviewed);
   const markMemberDataAccessReviewed = useMutation(api.dashboardRemediation.markMemberDataAccessReviewed);
   const [showComplianceDetails, setShowComplianceDetails] = useState(false);
+  const [showEvidenceDetails, setShowEvidenceDetails] = useState(false);
+  // null = follow the completion-based default; true/false = user override this session.
+  const [onboardingExpandedOverride, setOnboardingExpandedOverride] = useState<boolean | null>(null);
   const [busyRemediationAction, setBusyRemediationAction] = useState<string | null>(null);
   const [hiddenOnboardingFlowSocietyIds, setHiddenOnboardingFlowSocietyIds] = useState(readHiddenOnboardingFlowSocietyIds);
 
@@ -74,6 +77,12 @@ export function Dashboard() {
   const nextOnboardingStep = onboardingSteps.find((step) => !step.complete) ?? onboardingSteps[onboardingSteps.length - 1];
   const onboardingProgress = Math.round((completedOnboardingSteps / onboardingSteps.length) * 100);
   const onboardingFlowHidden = hiddenOnboardingFlowSocietyIds.includes(society._id);
+  const allOnboardingComplete = completedOnboardingSteps === onboardingSteps.length;
+  // Once past halfway, the full 8-tile grid is mostly green checks — collapse to a
+  // slim strip by default so it stops dominating the page. Auto-hide once fully done.
+  const onboardingCollapsedByDefault = completedOnboardingSteps / onboardingSteps.length >= 0.5;
+  const onboardingExpanded = onboardingExpandedOverride ?? !onboardingCollapsedByDefault;
+  const showOnboarding = !onboardingFlowHidden && !allOnboardingComplete;
 
   const setOnboardingFlowHidden = (hidden: boolean) => {
     const nextIds = hidden
@@ -159,7 +168,7 @@ export function Dashboard() {
         subtitle="Compliance posture, upcoming obligations, and governance snapshot."
       />
 
-      {!onboardingFlowHidden && (
+      {showOnboarding && onboardingExpanded && (
         <section className="onboarding-flow" aria-labelledby="onboarding-flow-title">
           <div className="onboarding-flow__story">
             <div>
@@ -174,6 +183,14 @@ export function Dashboard() {
                 <span className="mono">{completedOnboardingSteps}/{onboardingSteps.length}</span>
                 <span>setup checks complete</span>
               </div>
+              <button
+                type="button"
+                className="btn-action"
+                onClick={() => setOnboardingExpandedOverride(false)}
+                aria-expanded={true}
+              >
+                Hide steps <ChevronUp size={12} />
+              </button>
               <button
                 type="button"
                 className="onboarding-flow__dismiss"
@@ -222,6 +239,45 @@ export function Dashboard() {
                 </Link>
               );
             })}
+          </div>
+        </section>
+      )}
+
+      {showOnboarding && !onboardingExpanded && (
+        <section className="onboarding-flow" aria-labelledby="onboarding-flow-title">
+          <div className="onboarding-flow__story">
+            <div>
+              <h2 id="onboarding-flow-title">{jurisdictionCopy.goodStandingTitle}</h2>
+              <p style={{ margin: "4px 0 0" }}>
+                Next: <strong>{nextOnboardingStep.title}</strong> — {nextOnboardingStep.description}
+              </p>
+            </div>
+            <div className="onboarding-flow__actions" style={{ flexWrap: "wrap", alignItems: "center" }}>
+              <div className="onboarding-flow__status">
+                <span className="mono">{completedOnboardingSteps}/{onboardingSteps.length}</span>
+                <span>setup checks complete</span>
+              </div>
+              <Link to={nextOnboardingStep.to} className="btn-action btn-action--primary">
+                Open <ArrowRight size={12} />
+              </Link>
+              <button
+                type="button"
+                className="btn-action"
+                onClick={() => setOnboardingExpandedOverride(true)}
+                aria-expanded={false}
+              >
+                Show steps <ChevronDown size={12} />
+              </button>
+              <button
+                type="button"
+                className="onboarding-flow__dismiss"
+                onClick={hideOnboardingFlow}
+                title="Hide setup guide"
+                aria-label="Hide setup guide"
+              >
+                <X size={14} />
+              </button>
+            </div>
           </div>
         </section>
       )}
@@ -352,6 +408,18 @@ export function Dashboard() {
             <div className="card__head">
               <h2 className="card__title">Why this is green</h2>
               <span className="card__subtitle">Proof chains for completed compliance work</span>
+              {(evidenceChains ?? []).length > 0 && (
+                <button
+                  type="button"
+                  className="btn-action"
+                  style={{ marginLeft: "auto" }}
+                  onClick={() => setShowEvidenceDetails((v) => !v)}
+                  aria-expanded={showEvidenceDetails}
+                >
+                  {showEvidenceDetails ? "Hide details" : "View details"}
+                  {showEvidenceDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                </button>
+              )}
             </div>
             <div className="card__body evidence-chains">
               {(evidenceChains ?? []).map((chain: any) => (
@@ -370,17 +438,19 @@ export function Dashboard() {
                       </Link>
                     )}
                   </div>
-                  <ol className="evidence-chain__nodes">
-                    {chain.nodes.map((node: any, index: number) => (
-                      <li className={`evidence-chain__node evidence-chain__node--${node.status}`} key={`${chain.id}-${node.label}-${index}`}>
-                        <span className="evidence-chain__dot"><Link2 size={12} /></span>
-                        <div>
-                          <span>{node.label}</span>
-                          {node.href ? <Link to={node.href}>{node.value}</Link> : <strong>{node.value}</strong>}
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
+                  {showEvidenceDetails && (
+                    <ol className="evidence-chain__nodes">
+                      {chain.nodes.map((node: any, index: number) => (
+                        <li className={`evidence-chain__node evidence-chain__node--${node.status}`} key={`${chain.id}-${node.label}-${index}`}>
+                          <span className="evidence-chain__dot"><Link2 size={12} /></span>
+                          <div>
+                            <span>{node.label}</span>
+                            {node.href ? <Link to={node.href}>{node.value}</Link> : <strong>{node.value}</strong>}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
                 </article>
               ))}
               {(!evidenceChains || evidenceChains.length === 0) && (
