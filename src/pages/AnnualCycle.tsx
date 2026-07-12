@@ -236,9 +236,14 @@ function CycleCard({ item }: { item: CycleItem }) {
       <div className="row" style={{ alignItems: "flex-start", gap: 8 }}>
         <Icon size={16} style={{ marginTop: 2, color: statusColor(item.status) }} />
         <div className="col" style={{ flex: 1, gap: 6 }}>
-          <div className="row" style={{ justifyContent: "space-between", gap: 8 }}>
+          <div
+            className="row"
+            style={{ justifyContent: "space-between", gap: 8, alignItems: "flex-start", flexWrap: "nowrap" }}
+          >
             <strong>{item.title}</strong>
-            <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+            <span style={{ flexShrink: 0 }}>
+              <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+            </span>
           </div>
           <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{item.detail}</div>
           {item.dueDate && (
@@ -246,11 +251,13 @@ function CycleCard({ item }: { item: CycleItem }) {
               Due {formatDate(item.dueDate)} · {relative(item.dueDate)}
             </div>
           )}
-          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-            {item.evidence.slice(0, 3).map((evidence) => (
-              <Badge key={evidence}>{evidence}</Badge>
-            ))}
-          </div>
+          {item.evidence.length > 0 && (
+            <div className="muted" style={{ fontSize: "var(--fs-xs)", lineHeight: 1.5 }}>
+              <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>Evidence:</span>{" "}
+              {item.evidence.slice(0, 3).join(" · ")}
+              {item.evidence.length > 3 && ` · +${item.evidence.length - 3} more`}
+            </div>
+          )}
           <Link to={appPath(item.to)} className="btn-action" style={{ alignSelf: "flex-start" }}>
             {item.actionLabel} <ArrowRight size={12} />
           </Link>
