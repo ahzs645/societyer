@@ -366,7 +366,9 @@ export function TreasurerPage() {
   );
 
   const chartAccounts = financialAccounts ?? [];
-  const cashAccounts = chartAccounts.filter((account: any) => account.subtype === "cash" || account.accountType === "Asset");
+  // Cash/bank accounts only — `accountType === "Asset"` also covers receivable,
+  // prepaid, and capital assets, which don't belong in a cash-entry picker.
+  const cashAccounts = chartAccounts.filter((account: any) => account.subtype === "cash");
   const defaultCashAccountId = chartAccounts.find((account: any) => account.subtype === "cash")?._id ?? cashAccounts[0]?._id ?? "";
 
   const openQuickEntry = () => setQuickEntryDraft({ ...newQuickEntryDraft(), cashAccountId: defaultCashAccountId });
