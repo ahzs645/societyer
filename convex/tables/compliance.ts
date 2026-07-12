@@ -13,6 +13,9 @@ export const complianceTables = {
     ),
     done: v.optional(v.boolean()),
     recurrence: v.optional(v.string()),
+    // Inclusive bound on a recurring deadline: once the next occurrence would
+    // fall after this date, completing stops spawning further occurrences.
+    recurrenceEndDate: v.optional(v.string()),
     linkedFilingId: v.optional(v.id("filings")),
   })
     .index("by_society", ["societyId"])

@@ -56,14 +56,33 @@ function advanceDueDate(dueDate: string, months: number): string | null {
     : next.toISOString();
 }
 
+/** True when the next occurrence would fall after the (inclusive) recurrence
+ *  end bound, i.e. the series should stop. An absent/unparseable bound means no
+ *  limit. Compared by UTC calendar day so a date-only bound isn't tripped by a
+ *  time component on the due date. */
+function isPastRecurrenceEnd(nextDue: string, endDate?: string): boolean {
+  const bound = String(endDate ?? "").trim();
+  if (!bound) return false;
+  const next = new Date(nextDue);
+  const end = new Date(bound);
+  if (Number.isNaN(next.getTime()) || Number.isNaN(end.getTime())) return false;
+  return next.toISOString().slice(0, 10) > end.toISOString().slice(0, 10);
+}
+
 /** When a recurring deadline is completed, create the next occurrence so the
- *  obligation keeps being tracked. Idempotent: skips if a matching future
- *  occurrence already exists, so completing twice never duplicates. */
-async function spawnNextOccurrence(ctx: any, doc: any): Promise<string | null> {
+ *  obligation keeps being tracked — unless an optional `recurrenceEndDate` bound
+ *  says the series is over. Idempotent: skips if a matching future occurrence
+ *  already exists, so completing twice never duplicates. Returns the new row's
+ *  id and due date (so callers can surface/undo it), or null when nothing spawned. */
+async function spawnNextOccurrence(
+  ctx: any,
+  doc: any,
+): Promise<{ spawnedId: string; spawnedDue: string } | null> {
   const months = recurrenceMonths(doc?.recurrence);
   if (months === 0) return null;
   const nextDue = advanceDueDate(doc.dueDate, months);
   if (!nextDue) return null;
+  if (isPastRecurrenceEnd(nextDue, doc?.recurrenceEndDate)) return null;
 
   const siblings = await ctx.db
     .query("deadlines")
@@ -79,7 +98,7 @@ async function spawnNextOccurrence(ctx: any, doc: any): Promise<string | null> {
   );
   if (already) return null;
 
-  await ctx.db.insert("deadlines", {
+  const spawnedId = await ctx.db.insert("deadlines", {
     societyId: doc.societyId,
     title: doc.title,
     description: doc.description,
@@ -88,9 +107,10 @@ async function spawnNextOccurrence(ctx: any, doc: any): Promise<string | null> {
     status: "open",
     done: false,
     recurrence: doc.recurrence,
+    recurrenceEndDate: doc.recurrenceEndDate,
     linkedFilingId: doc.linkedFilingId,
   });
-  return nextDue;
+  return { spawnedId: String(spawnedId), spawnedDue: nextDue };
 }
 
 /** Patch a deadline's status and, when it transitions into "complete", roll a
@@ -105,10 +125,10 @@ async function applyStatusTransition(
   await ctx.db.patch(id, { status: nextStatus, done: nextStatus === "complete", ...extraPatch });
   const wasComplete = before ? deriveStatus(before) === "complete" : false;
   if (before && nextStatus === "complete" && !wasComplete) {
-    const spawnedDue = await spawnNextOccurrence(ctx, { ...before, ...extraPatch });
-    return { spawnedDue };
+    const spawned = await spawnNextOccurrence(ctx, { ...before, ...extraPatch });
+    return { spawnedDue: spawned?.spawnedDue ?? null, spawnedId: spawned?.spawnedId ?? null };
   }
-  return { spawnedDue: null };
+  return { spawnedDue: null, spawnedId: null };
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
@@ -133,6 +153,7 @@ export async function createPortable(
     category: string;
     status?: "open" | "complete" | "closed";
     recurrence?: string;
+    recurrenceEndDate?: string;
     linkedFilingId?: string;
   },
 ) {
@@ -174,6 +195,7 @@ export async function updatePortable(
       status?: "open" | "complete" | "closed";
       done?: boolean;
       recurrence?: string;
+      recurrenceEndDate?: string;
       linkedFilingId?: string;
     };
   },
@@ -190,10 +212,10 @@ export async function updatePortable(
   const wasComplete = before ? deriveStatus(before) === "complete" : false;
   const nowComplete = next.status === "complete";
   if (before && nowComplete && !wasComplete) {
-    const spawnedDue = await spawnNextOccurrence(ctx, { ...before, ...next });
-    return { spawnedDue };
+    const spawned = await spawnNextOccurrence(ctx, { ...before, ...next });
+    return { spawnedDue: spawned?.spawnedDue ?? null, spawnedId: spawned?.spawnedId ?? null };
   }
-  return { spawnedDue: null };
+  return { spawnedDue: null, spawnedId: null };
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {

@@ -10,6 +10,7 @@ import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { Checkbox } from "../components/Controls";
 import { useConfirm } from "../components/Modal";
+import { useToast } from "../components/Toast";
 import { Plus, Trash2, Calendar, Archive, RotateCcw } from "lucide-react";
 import { patchInList } from "../lib/optimistic";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -49,6 +50,7 @@ export function DeadlinesPage() {
   const update = useMutation(api.deadlines.update);
   const remove = useMutation(api.deadlines.remove);
   const confirm = useConfirm();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [view, setView] = useState<"list" | "calendar">("list");
@@ -75,7 +77,18 @@ export function DeadlinesPage() {
     setForm({ title: "", dueDate: new Date().toISOString().slice(0, 10), category: "Governance", recurrence: "None" });
     setOpen(true);
   };
-  const save = async () => { await create({ societyId: society._id, ...form }); setOpen(false); };
+  const save = async () => {
+    const { recurrenceEndDate, ...rest } = form;
+    await create({
+      societyId: society._id,
+      ...rest,
+      // Only send a bound when the deadline actually recurs and one was picked.
+      ...(rest.recurrence && rest.recurrence !== "None" && recurrenceEndDate
+        ? { recurrenceEndDate }
+        : {}),
+    });
+    setOpen(false);
+  };
 
   const handleDelete = async (record: any) => {
     const ok = await confirm({
@@ -86,6 +99,45 @@ export function DeadlinesPage() {
     });
     if (!ok) return;
     await remove({ id: record._id });
+  };
+
+  // Reopen the completed deadline and drop the occurrence its completion spawned.
+  const undoComplete = async (id: Id<"deadlines">, spawnedId: string | null) => {
+    await setStatus({ id, status: "open" });
+    if (spawnedId) {
+      try {
+        await remove({ id: spawnedId as Id<"deadlines"> });
+      } catch {
+        // The spawned occurrence may already be gone; nothing to undo.
+      }
+    }
+  };
+
+  // Complete a deadline and make the outcome visible: a recurring one silently
+  // rolls forward, so surface the next date (with an Undo) instead of it looking
+  // like nothing changed.
+  const completeAndNotify = async (record: any) => {
+    const id = record._id as Id<"deadlines">;
+    const res: any = await setStatus({ id, status: "complete" });
+    const spawnedDue: string | null = res?.spawnedDue ?? null;
+    const spawnedId: string | null = res?.spawnedId ?? null;
+    if (spawnedDue) {
+      const when = new Date(spawnedDue).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+      toast.success("Deadline completed", {
+        description: `Next occurrence added for ${when}.`,
+        action: { label: "Undo", onClick: () => undoComplete(id, spawnedId) },
+      });
+    } else if (String(record?.recurrence ?? "None") !== "None") {
+      toast.success("Deadline completed", {
+        description: "This was the last occurrence — the recurrence has ended.",
+      });
+    } else {
+      toast.success("Deadline completed");
+    }
   };
 
   const now = Date.now();
@@ -157,10 +209,13 @@ export function DeadlinesPage() {
             records={records}
             onUpdate={async ({ recordId, fieldName, value }) => {
               if (fieldName === "status") {
-                await setStatus({
-                  id: recordId as Id<"deadlines">,
-                  status: value as DeadlineStatus,
-                });
+                const nextStatus = value as DeadlineStatus;
+                const rec = allRecords.find((r) => r._id === recordId);
+                if (nextStatus === "complete" && rec && statusOf(rec) !== "complete") {
+                  await completeAndNotify(rec);
+                } else {
+                  await setStatus({ id: recordId as Id<"deadlines">, status: nextStatus });
+                }
                 return;
               }
               await update({
@@ -193,12 +248,13 @@ export function DeadlinesPage() {
                     <span onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={s === "complete"}
-                        onChange={() =>
-                          setStatus({
-                            id: record._id,
-                            status: s === "complete" ? "open" : "complete",
-                          })
-                        }
+                        onChange={() => {
+                          if (s === "complete") {
+                            setStatus({ id: record._id, status: "open" });
+                          } else {
+                            completeAndNotify(record);
+                          }
+                        }}
                         bare
                       />
                     </span>
@@ -295,11 +351,31 @@ export function DeadlinesPage() {
               <Field label="Recurrence">
                 <Select
                   value={form.recurrence}
-                  onChange={(v) => setForm({ ...form, recurrence: v })}
+                  onChange={(v) =>
+                    setForm({
+                      ...form,
+                      recurrence: v,
+                      recurrenceEndDate: v === "None" ? undefined : form.recurrenceEndDate,
+                    })
+                  }
                   options={["None", "Monthly", "Quarterly", "Annual"].map((r) => ({ value: r, label: r }))}
                 />
               </Field>
             </div>
+            {form.recurrence && form.recurrence !== "None" && (
+              <Field label="Repeat until (optional)">
+                <DatePicker
+                  value={form.recurrenceEndDate ?? ""}
+                  min={form.dueDate}
+                  placeholder="No end date"
+                  onChange={(v) => setForm({ ...form, recurrenceEndDate: v || undefined })}
+                />
+                <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>
+                  After this date, completing the deadline won't create another occurrence. Leave
+                  empty to repeat indefinitely.
+                </p>
+              </Field>
+            )}
           </div>
         )}
       </Drawer>
