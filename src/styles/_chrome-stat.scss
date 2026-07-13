@@ -2,6 +2,7 @@
 @use "mixins" as *;
 
 .stat {
+  position: relative;
   background: token('bg-panel');
   border: 1px solid token('border');
   border-radius: token('r-md');
@@ -9,6 +10,34 @@
   @include flex-column;
   gap: 2px;
   min-width: 0;
+}
+.stat--has-tooltip .stat__label {
+  padding-right: 22px;
+}
+.stat__info {
+  position: absolute;
+  top: token('s-2');
+  right: token('s-2');
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: help;
+}
+.stat__info:hover,
+.stat__info:focus-visible {
+  background: token('bg-transparent-light');
+  color: token('text-primary');
+}
+.stat__info:focus-visible {
+  outline: 2px solid token('accent');
+  outline-offset: 1px;
 }
 .stat__label {
   font-size: token('fs-xs');
@@ -35,9 +64,7 @@
 /* Mobile: collapse the stat grid into a single flat panel with a 2-col grid
  * of quieter cells. Removes per-stat borders so the four KPIs read as one
  * unit instead of four separate cards — matches twenty's compact dashboard
- * chrome on phones. The helper-text (.stat__sub) is hidden to save vertical
- * space. Tap a stat to toggle the description via the `.is-expanded` class
- * (wired up in Dashboard.tsx). */
+ * chrome on phones. */
 @media (max-width: 760px) {
   .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -76,29 +103,12 @@
     font-size: token('fs-md');
     line-height: 1.15;
   }
-  /* Hide the descriptive sub-text on phones by default — the KPI number is
-   * the signal, the long explanation is noise on a 360px viewport. The stat
-   * becomes tap-to-expand to reveal the full context when the user wants it. */
-  .stat--expandable {
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .stat--expandable:active {
-    background: token('bg-transparent-light');
-  }
   .stat__sub {
     display: none;
   }
-  .stat.is-expanded {
-    /* Span the full width when open so the description can breathe. */
-    grid-column: 1 / -1;
-    border-right: 0;
-    background: token('bg-subtle');
-  }
-  .stat.is-expanded .stat__sub {
-    display: block;
-    margin-top: 4px;
-    line-height: 1.4;
+  .stat__info {
+    top: 4px;
+    right: 6px;
   }
 }
 

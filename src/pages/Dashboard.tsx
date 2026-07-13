@@ -20,6 +20,7 @@ import {
   ClipboardCheck,
   ExternalLink,
   FileCheck2,
+  Info,
   Link2,
   ShieldCheck,
   UploadCloud,
@@ -30,6 +31,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
+import { Tooltip } from "../components/Tooltip";
 
 const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
 
@@ -287,13 +289,13 @@ export function Dashboard() {
           label="Active members"
           value={counts.members}
           icon={<Users size={14} />}
-          sub="with voting rights counted separately in members list"
+          tooltip="with voting rights counted separately in members list"
         />
         <Stat
           label="Active directors"
           value={counts.directors}
           icon={<UserCog size={14} />}
-          sub={
+          tooltip={
             society.isMemberFunded
               ? `${counts.bcResidents} BC resident${counts.bcResidents === 1 ? "" : "s"} (s.197 exception)`
               : `${counts.bcResidents} BC resident${counts.bcResidents === 1 ? "" : "s"} (s.40 requires >= 1)`
@@ -775,43 +777,38 @@ function relativeShort(iso: string) {
 function Stat({
   label,
   value,
-  sub,
+  tooltip,
   tone,
   icon,
 }: {
   label: string;
   value: number | string;
-  sub?: string;
+  tooltip?: string;
   tone?: "danger" | "ok";
   icon?: React.ReactNode;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  // The description (`sub`) is hidden on mobile by CSS and revealed when the
-  // user taps the cell. Desktop users see it inline as before — the handler
-  // still toggles `.is-expanded` but has no visual effect above 760px.
-  const expandable = Boolean(sub);
-  const handleToggle = expandable ? () => setExpanded((v) => !v) : undefined;
   return (
-    <div
-      className={`stat${expandable ? " stat--expandable" : ""}${expanded ? " is-expanded" : ""}`}
-      onClick={handleToggle}
-      onKeyDown={expandable ? (e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded((v) => !v); }
-      } : undefined}
-      role={expandable ? "button" : undefined}
-      tabIndex={expandable ? 0 : undefined}
-      aria-expanded={expandable ? expanded : undefined}
-    >
+    <div className={`stat${tooltip ? " stat--has-tooltip" : ""}`}>
       <div className="stat__label">
         {icon} {label}
       </div>
+      {tooltip && (
+        <Tooltip content={tooltip} placement="top" delay={150}>
+          <button
+            type="button"
+            className="stat__info"
+            aria-label={`${label}: ${tooltip}`}
+          >
+            <Info size={14} aria-hidden="true" />
+          </button>
+        </Tooltip>
+      )}
       <div
         className="stat__value"
         style={{ color: tone === "danger" ? "var(--danger)" : undefined }}
       >
         {value}
       </div>
-      {sub && <div className="stat__sub">{sub}</div>}
     </div>
   );
 }
