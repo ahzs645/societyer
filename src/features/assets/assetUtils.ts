@@ -66,6 +66,28 @@ export function money(cents?: number | null, currency = "CAD") {
   }).format(cents / 100);
 }
 
+/** Keep asset pickers focused on expenses that plausibly created a physical
+ * or licensed item. Rent, payroll, utilities, and other service expenses still
+ * remain available in accounting, but are not presented as asset purchases. */
+export function isAssetPurchaseTransaction(transaction: any) {
+  if (transaction?.amountCents >= 0) return false;
+  return /equipment|suppl|inventory|material|software|licen[cs]e|computer|furniture|vehicle|tool|device|projector/i.test(
+    `${transaction?.category ?? ""} ${transaction?.description ?? ""}`,
+  );
+}
+
+export function assetCategoryFromTransaction(transaction: any) {
+  const text = `${transaction?.category ?? ""} ${transaction?.description ?? ""}`.toLowerCase();
+  if (/software|licen[cs]e|subscription/.test(text)) return "Software/license";
+  if (/computer|laptop|tablet|phone|technology|\bit\b/.test(text)) return "IT";
+  if (/furniture|desk|chair|cabinet/.test(text)) return "Furniture";
+  if (/vehicle|car|van|truck/.test(text)) return "Vehicle";
+  if (/suppl|material|consumable/.test(text)) return "Consumable";
+  if (/facility|building|renovation/.test(text)) return "Facilities";
+  if (/equipment|projector|device|tool/.test(text)) return "Program equipment";
+  return "Other";
+}
+
 export function todayDate() {
   return new Date().toISOString().slice(0, 10);
 }

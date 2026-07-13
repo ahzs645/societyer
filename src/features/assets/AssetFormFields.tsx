@@ -30,6 +30,8 @@ import {
   ASSET_STATUSES,
   CUSTODIAN_TYPES,
   categorySupportsMaintenance,
+  centsToInput,
+  isAssetPurchaseTransaction,
   money,
   nextAssetTag,
   type AssetResourceLink,
@@ -159,21 +161,41 @@ export function AssetFormFields({
   const receiptDocuments = (documents ?? []).filter(
     (doc: any) =>
       doc.category === "Receipt" ||
-      doc.category === "FinancialStatement" ||
-      (doc.tags ?? []).some((tag: string) => /receipt|invoice|finance/i.test(tag)),
+      (doc.tags ?? []).some((tag: string) => /receipt|invoice/i.test(tag)),
   );
-  const purchaseTransactions = (transactions ?? []).filter((txn: any) => txn.amountCents < 0);
+  const purchaseTransactions = (transactions ?? []).filter(isAssetPurchaseTransaction);
+  const selectedPurchaseTransaction = purchaseTransactions.find(
+    (txn: any) => String(txn._id) === value.purchaseTransactionId,
+  );
+
+  const selectPurchaseTransaction = (transactionId: string, overwrite = false) => {
+    const transaction = purchaseTransactions.find((txn: any) => String(txn._id) === transactionId);
+    if (!transaction) {
+      onChange({ purchaseTransactionId: transactionId });
+      return;
+    }
+    onChange({
+      purchaseTransactionId: transactionId,
+      ...((overwrite || !value.purchaseDate) ? { purchaseDate: transaction.date ?? "" } : {}),
+      ...((overwrite || !value.purchaseValue) ? { purchaseValue: centsToInput(Math.abs(transaction.amountCents)) } : {}),
+      ...(transaction.counterparty && (overwrite || !value.supplier) ? { supplier: transaction.counterparty } : {}),
+    });
+  };
 
   return (
     <div className="form-grid">
-      <div style={{ gridColumn: "1 / -1" }}>
-        <ImageUploadField
-          label="Photo"
-          hint="Upload a picture of the asset, or paste an image URL."
-          value={value.image}
-          onChange={(image) => onChange({ image })}
-        />
+      <div className="asset-form__section-title">
+        <strong>Basics</strong>
+        <span>What this item is and how it appears in the register.</span>
       </div>
+      <Field label="Name" required>
+        <input
+          className="input"
+          autoFocus={autoFocusName}
+          value={value.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+        />
+      </Field>
       <Field label="Asset tag" required>
         <input
           className="input"
@@ -186,14 +208,6 @@ export function AssetFormFields({
           value={value.preferredLabelType}
           onChange={(v) => onChange({ preferredLabelType: v })}
           options={ASSET_LABEL_TYPES.map((type) => ({ value: type.value, label: type.label }))}
-        />
-      </Field>
-      <Field label="Name" required>
-        <input
-          className="input"
-          autoFocus={autoFocusName}
-          value={value.name}
-          onChange={(e) => onChange({ name: e.target.value })}
         />
       </Field>
       <Field label="Category">
@@ -224,6 +238,19 @@ export function AssetFormFields({
           options={ASSET_CONDITIONS.map((c) => ({ value: c, label: c }))}
         />
       </Field>
+      <div style={{ gridColumn: "1 / -1" }}>
+        <ImageUploadField
+          label="Photo"
+          hint="Optional. Upload a picture of the asset, or paste an image URL."
+          value={value.image}
+          onChange={(image) => onChange({ image })}
+        />
+      </div>
+
+      <div className="asset-form__section-title">
+        <strong>Location &amp; custody</strong>
+        <span>Where the item is and who is responsible for it.</span>
+      </div>
       <Field label="Location">
         <input
           className="input"
@@ -258,6 +285,49 @@ export function AssetFormFields({
           onChange={(v) => onChange({ expectedReturnDate: v })}
         />
       </Field>
+
+      <div className="asset-form__section-title">
+        <strong>Purchase &amp; accounting</strong>
+        <span>Connect the physical item to the expense and receipt that paid for it.</span>
+      </div>
+      <Field
+        label="Accounting purchase"
+        hint="Choose the matching expense. Empty date, supplier, and amount fields are filled automatically."
+      >
+        <Select
+          value={value.purchaseTransactionId}
+          onChange={(v) => selectPurchaseTransaction(v)}
+          clearable
+          searchable
+          clearLabel="No accounting purchase linked"
+          options={purchaseTransactions.map((txn: any) => ({
+            value: txn._id,
+            label: purchaseTransactionLabel(txn),
+          }))}
+        />
+      </Field>
+      <Field label="Receipt or invoice">
+        <Select
+          value={value.receiptDocumentId}
+          onChange={(v) => onChange({ receiptDocumentId: v })}
+          clearable
+          searchable
+          clearLabel="No receipt linked"
+          options={receiptDocuments.map((doc: any) => ({ value: doc._id, label: doc.title }))}
+        />
+      </Field>
+      {selectedPurchaseTransaction && (
+        <div className="asset-form__purchase-link">
+          <Link2 size={15} />
+          <div>
+            <strong>Linked to accounting</strong>
+            <span>{purchaseTransactionLabel(selectedPurchaseTransaction)}</span>
+          </div>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => selectPurchaseTransaction(value.purchaseTransactionId, true)}>
+            Use purchase details
+          </button>
+        </div>
+      )}
       <Field label="Supplier">
         <input
           className="input"
@@ -286,6 +356,11 @@ export function AssetFormFields({
           options={ASSET_CURRENCIES.map((c) => ({ value: c, label: c }))}
         />
       </Field>
+
+      <div className="asset-form__section-title">
+        <strong>Value &amp; inventory</strong>
+        <span>Optional book value, stock count, funding, and capitalization details.</span>
+      </div>
       {value.category === "Consumable" && (
         <>
           <Field label="Quantity on hand" hint="Starting count for this consumable.">
@@ -316,29 +391,6 @@ export function AssetFormFields({
           onChange={(e) => onChange({ bookValue: e.target.value })}
         />
       </Field>
-      <Field label="Purchase receipt">
-        <Select
-          value={value.receiptDocumentId}
-          onChange={(v) => onChange({ receiptDocumentId: v })}
-          clearable
-          searchable
-          clearLabel="No receipt linked"
-          options={receiptDocuments.map((doc: any) => ({ value: doc._id, label: doc.title }))}
-        />
-      </Field>
-      <Field label="Finance transaction">
-        <Select
-          value={value.purchaseTransactionId}
-          onChange={(v) => onChange({ purchaseTransactionId: v })}
-          clearable
-          searchable
-          clearLabel="No transaction linked"
-          options={purchaseTransactions.map((txn: any) => ({
-            value: txn._id,
-            label: `${txn.date} · ${txn.description} · ${money(Math.abs(txn.amountCents))}`,
-          }))}
-        />
-      </Field>
       <Field label="Capitalized">
         <label className="checkbox">
           <input
@@ -349,21 +401,26 @@ export function AssetFormFields({
           Track as fixed asset
         </label>
       </Field>
-      <Field label="Depreciation">
-        <input
-          className="input"
-          value={value.depreciationMethod}
-          onChange={(e) => onChange({ depreciationMethod: e.target.value })}
-        />
-      </Field>
-      <Field label="Useful life months">
-        <input
-          className="input"
-          inputMode="numeric"
-          value={value.usefulLifeMonths}
-          onChange={(e) => onChange({ usefulLifeMonths: e.target.value })}
-        />
-      </Field>
+      {value.capitalized && (
+        <>
+          <Field label="Depreciation method">
+            <input
+              className="input"
+              value={value.depreciationMethod}
+              onChange={(e) => onChange({ depreciationMethod: e.target.value })}
+              placeholder="e.g. Straight line"
+            />
+          </Field>
+          <Field label="Useful life months">
+            <input
+              className="input"
+              inputMode="numeric"
+              value={value.usefulLifeMonths}
+              onChange={(e) => onChange({ usefulLifeMonths: e.target.value })}
+            />
+          </Field>
+        </>
+      )}
       <Field label="Funding source">
         <input
           className="input"
@@ -377,6 +434,10 @@ export function AssetFormFields({
           onChange={(v) => onChange({ retentionUntil: v })}
         />
       </Field>
+      <div className="asset-form__section-title">
+        <strong>Lifecycle &amp; records</strong>
+        <span>Maintenance dates, supporting documents, restrictions, and notes.</span>
+      </div>
       {serviceable ? (
         <>
           <Field label="Warranty expires">
@@ -456,6 +517,11 @@ export function AssetFormFields({
       </div>
     </div>
   );
+}
+
+export function purchaseTransactionLabel(txn: any) {
+  const context = [txn.counterparty, txn.category].filter(Boolean).join(" · ");
+  return `${txn.date} · ${txn.description} · ${money(Math.abs(txn.amountCents))}${context ? ` — ${context}` : ""}`;
 }
 
 /**

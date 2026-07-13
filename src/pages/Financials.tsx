@@ -13,7 +13,7 @@ import { isDemoMode } from "../lib/demoMode";
 import { parseBankCsv, type ParsedCsvRow } from "../lib/bankCsv";
 import { Database, Link2, PiggyBank, PlusCircle, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import {
   WaveHealthPanel,
@@ -44,10 +44,13 @@ import {
   useObjectRecordTableData,
 } from "@/modules/object-record";
 import type { Id } from "../../convex/_generated/dataModel";
+import { openGlobalAssetCreate } from "../components/GlobalAssetCreate";
+import { assetCategoryFromTransaction, isAssetPurchaseTransaction } from "../features/assets/assetUtils";
 
 export function FinancialsPage() {
   const society = useSociety();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const items = useQuery(api.financials.list, society ? { societyId: society._id } : "skip");
   const orgHistory = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
   const connections = useQuery(
@@ -94,9 +97,13 @@ export function FinancialsPage() {
   const updateTransaction = useMutation(api.financialHub.updateTransaction);
   const inventoryItems = useQuery(api.inventoryHub.items, society ? { societyId: society._id } : "skip");
   const inventoryLinks = useQuery(api.inventoryHub.receiptLinks, society ? { societyId: society._id } : "skip");
+  const assets = useQuery(api.assets.list, society ? { societyId: society._id } : "skip");
   const linkInventoryReceipt = useMutation(api.inventoryHub.linkReceipt);
   const unlinkInventoryReceipt = useMutation(api.inventoryHub.unlinkReceipt);
+  const updateAsset = useMutation(api.assets.update);
   const [linkTxn, setLinkTxn] = useState<any>(null);
+  const [linkTargetType, setLinkTargetType] = useState<"asset" | "inventory">("asset");
+  const [linkAssetId, setLinkAssetId] = useState("");
   const [linkItemId, setLinkItemId] = useState("");
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
@@ -113,7 +120,10 @@ export function FinancialsPage() {
   const [hideZeroWaveAccounts, setHideZeroWaveAccounts] = useState(false);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [tab, setTab] = useState<"overview" | "transactions" | "wave" | "subscriptions">("overview");
+  const [tab, setTab] = useState<"overview" | "transactions" | "wave" | "subscriptions">(() => {
+    const requested = searchParams.get("tab");
+    return requested === "transactions" || requested === "wave" || requested === "subscriptions" ? requested : "overview";
+  });
   const waveResources = useQuery(
     api.waveCache.resources,
     society
@@ -150,22 +160,70 @@ export function FinancialsPage() {
     }
     return map;
   }, [inventoryLinks]);
+  const assetsByTransactionId = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const asset of (assets ?? []) as any[]) {
+      if (!asset.purchaseTransactionId) continue;
+      const rows = map.get(String(asset.purchaseTransactionId)) ?? [];
+      rows.push(asset);
+      map.set(String(asset.purchaseTransactionId), rows);
+    }
+    return map;
+  }, [assets]);
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
     nameSingular: "financialTransaction",
     viewId: currentViewId,
   });
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const financialHydratedView = useMemo(() => tableData.hydratedView ? {
+    ...tableData.hydratedView,
+    columns: tableData.hydratedView.columns.map((column) => column.field.name === "items" ? {
+      ...column,
+      field: { ...column.field, label: "Purchase links" },
+    } : column),
+  } : null, [tableData.hydratedView]);
+  const focusedTransactionId = searchParams.get("transaction");
+  const focusedTransaction = (transactions ?? []).find((row: any) => String(row._id) === focusedTransactionId);
   const records = useMemo(
-    () => (transactions ?? []).map((t: any) => ({
+    () => (transactions ?? []).filter((t: any) => !focusedTransactionId || String(t._id) === focusedTransactionId).map((t: any) => ({
       ...t,
       account: (accounts ?? []).find((a) => a._id === t.accountId)?.name ?? "",
-      items: linksByTransactionId.get(t._id)?.length ?? 0,
+      items: new Set([
+        ...(linksByTransactionId.get(t._id) ?? []).map((link: any) => String(link.assetId ?? link.inventoryItemId ?? link._id)),
+        ...(assetsByTransactionId.get(t._id) ?? []).map((asset: any) => String(asset._id)),
+      ]).size,
     })),
-    [transactions, accounts, linksByTransactionId],
+    [transactions, accounts, linksByTransactionId, assetsByTransactionId, focusedTransactionId],
   );
-  const saveInventoryLink = async () => {
-    if (!linkTxn || !linkItemId) {
+  const closePurchaseLink = () => {
+    setLinkTxn(null);
+    setLinkAssetId("");
+    setLinkItemId("");
+    setLinkTargetType("asset");
+  };
+  const savePurchaseLink = async () => {
+    if (!linkTxn) return;
+    if (linkTargetType === "asset") {
+      const asset = (assets ?? []).find((row: any) => String(row._id) === linkAssetId) as any;
+      if (!asset) {
+        toast.error("Choose an asset to link.");
+        return;
+      }
+      await updateAsset({
+        id: asset._id,
+        patch: {
+          purchaseTransactionId: linkTxn._id,
+          ...(!asset.purchaseDate ? { purchaseDate: linkTxn.date } : {}),
+          ...(asset.purchaseValueCents == null ? { purchaseValueCents: Math.abs(linkTxn.amountCents) } : {}),
+          ...(!asset.supplier && linkTxn.counterparty ? { supplier: linkTxn.counterparty } : {}),
+        },
+      } as any);
+      toast.success("Accounting purchase linked to asset", asset.name);
+      closePurchaseLink();
+      return;
+    }
+    if (!linkItemId) {
       toast.error("Choose an inventory item to link.");
       return;
     }
@@ -175,9 +233,8 @@ export function FinancialsPage() {
       financialTransactionId: linkTxn._id,
       createdByUserId: actingUserId as any,
     } as any);
-    toast.success("Inventory item linked to transaction");
-    setLinkTxn(null);
-    setLinkItemId("");
+    toast.success("Accounting purchase linked to inventory item");
+    closePurchaseLink();
   };
   const waveLive = oauth?.live === true;
   const waveDemoAvailable = !waveLive && isDemoMode() && oauth?.demoAvailable === true;
@@ -618,7 +675,18 @@ export function FinancialsPage() {
       )}
 
       {tab === "transactions" && activeConnection && transactions && transactions.length > 0 && (
-        showMetadataWarning ? (
+        <>
+        {focusedTransaction && (
+          <div className="callout callout--info">
+            <Link2 size={16} />
+            <div>
+              <strong>Linked accounting purchase</strong>
+              <div className="muted">{focusedTransaction.date} · {focusedTransaction.description} · {money(Math.abs(focusedTransaction.amountCents))}</div>
+            </div>
+            <button className="btn btn--sm" onClick={() => navigate("/app/financials?tab=transactions")}>Show all transactions</button>
+          </div>
+        )}
+        {showMetadataWarning ? (
           <div style={{ marginBottom: 16 }}>
             <RecordTableMetadataEmpty societyId={society?._id} objectLabel="financial transaction" />
           </div>
@@ -627,7 +695,7 @@ export function FinancialsPage() {
             <RecordTableScope
               tableId="financialTransactions"
               objectMetadata={tableData.objectMetadata}
-              hydratedView={tableData.hydratedView}
+              hydratedView={financialHydratedView}
               records={records}
               onUpdate={async ({ recordId, fieldName, value }) => {
                 await updateTransaction({
@@ -658,23 +726,28 @@ export function FinancialsPage() {
                   if (field.name === "amountCents") return <span className="mono" style={{ color: t.amountCents < 0 ? "var(--danger)" : "var(--success)" }}>{money(t.amountCents)}</span>;
                   if (field.name === "items") {
                     const links = linksByTransactionId.get(t._id) ?? [];
+                    const linkedAssetIds = new Set(links.map((link: any) => String(link.assetId ?? "")).filter(Boolean));
+                    const directlyLinkedAssets = (assetsByTransactionId.get(t._id) ?? []).filter((asset: any) => !linkedAssetIds.has(String(asset._id)));
                     return (
                       <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                         {links.map((link: any) => (
                           <span key={link._id} className="row" style={{ gap: 4, alignItems: "center" }}>
-                            <Link to="/app/inventory" onClick={(e) => e.stopPropagation()}>{link.inventoryItem?.name ?? link.asset?.name ?? link.receiptLineLabel ?? "Linked item"}</Link>
-                            <button
-                              className="btn btn--ghost btn--sm btn--icon"
-                              aria-label="Unlink item"
-                              onClick={async (e) => { e.stopPropagation(); await unlinkInventoryReceipt({ id: link._id }); toast.success("Item unlinked"); }}
-                            >
-                              <Trash2 size={12} />
-                            </button>
+                            <Link to={link.asset ? `/app/assets/${link.asset._id}` : "/app/inventory"} onClick={(e) => e.stopPropagation()}>{link.asset?.name ?? link.inventoryItem?.name ?? link.receiptLineLabel ?? "Linked item"}</Link>
+                            {!link.asset && <button
+                                className="btn btn--ghost btn--sm btn--icon"
+                                aria-label="Unlink inventory item"
+                                onClick={async (e) => { e.stopPropagation(); await unlinkInventoryReceipt({ id: link._id }); toast.success("Inventory item unlinked"); }}
+                              >
+                                <Trash2 size={12} />
+                              </button>}
                           </span>
                         ))}
-                        <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setLinkTxn(t); setLinkItemId(""); }}>
-                          <Link2 size={12} /> Link item
-                        </button>
+                        {directlyLinkedAssets.map((asset: any) => (
+                          <Link key={asset._id} to={`/app/assets/${asset._id}`} onClick={(e) => e.stopPropagation()}>{asset.name}</Link>
+                        ))}
+                        {isAssetPurchaseTransaction(t) && <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setLinkTxn(t); setLinkAssetId(""); setLinkItemId(""); }}>
+                          <Link2 size={12} /> Link purchase
+                        </button>}
                       </div>
                     );
                   }
@@ -683,7 +756,8 @@ export function FinancialsPage() {
               />
             </RecordTableScope>
           </div>
-        ) : null
+        ) : null}
+        </>
       )}
 
       {tab === "transactions" && !activeConnection && (
@@ -866,27 +940,75 @@ export function FinancialsPage() {
 
       <Drawer
         open={Boolean(linkTxn)}
-        onClose={() => setLinkTxn(null)}
-        title="Link inventory item"
-        footer={<button className="btn btn--accent" onClick={saveInventoryLink}>Link item</button>}
+        onClose={closePurchaseLink}
+        title="Link accounting purchase"
+        footer={
+          <>
+            <button className="btn" onClick={closePurchaseLink}>Cancel</button>
+            <button className="btn btn--accent" onClick={savePurchaseLink}>Link purchase</button>
+          </>
+        }
       >
         {linkTxn && (
           <div className="form-grid">
             <Field label="Transaction">
-              <input className="input" readOnly value={`${linkTxn.date} · ${linkTxn.description} · ${money(linkTxn.amountCents)}`} />
+              <input className="input" readOnly value={`${linkTxn.date} · ${linkTxn.description} · ${money(Math.abs(linkTxn.amountCents))}`} />
             </Field>
-            <Field label="Inventory item" hint="Back-link an item from inventory to this purchase.">
+            <Field label="Connect to">
               <Select
-                value={linkItemId}
-                onChange={setLinkItemId}
-                placeholder="Choose an item"
-                searchable
-                options={((inventoryItems ?? []) as any[]).map((item) => ({ value: item._id, label: item.sku ? `${item.name} (${item.sku})` : item.name }))}
+                value={linkTargetType}
+                onChange={(value) => setLinkTargetType(value as "asset" | "inventory")}
+                options={[
+                  { value: "asset", label: "Asset register" },
+                  { value: "inventory", label: "Inventory item" },
+                ]}
               />
             </Field>
-            <p className="muted">
-              Need a new item first? <Link to="/app/inventory">Open inventory →</Link>
-            </p>
+            {linkTargetType === "asset" ? (
+              <>
+                <Field label="Asset" hint="The asset will show this transaction as its accounting purchase.">
+                  <Select
+                    value={linkAssetId}
+                    onChange={setLinkAssetId}
+                    placeholder="Choose an asset"
+                    searchable
+                    options={((assets ?? []) as any[]).map((asset) => ({ value: asset._id, label: `${asset.assetTag} · ${asset.name}` }))}
+                  />
+                </Field>
+                <div className="accounting-purchase-create">
+                  <span className="muted">The purchased item is not in the register yet?</span>
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={() => {
+                      openGlobalAssetCreate({
+                        name: linkTxn.description ?? "",
+                        category: assetCategoryFromTransaction(linkTxn),
+                        supplier: linkTxn.counterparty ?? "",
+                        purchaseDate: linkTxn.date ?? "",
+                        purchaseValue: (Math.abs(linkTxn.amountCents) / 100).toFixed(2),
+                        purchaseTransactionId: String(linkTxn._id),
+                      });
+                      closePurchaseLink();
+                    }}
+                  >
+                    <PlusCircle size={12} /> Create asset from purchase
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <Field label="Inventory item" hint="Back-link a stocked item to this purchase.">
+                  <Select
+                    value={linkItemId}
+                    onChange={setLinkItemId}
+                    placeholder="Choose an item"
+                    searchable
+                    options={((inventoryItems ?? []) as any[]).map((item) => ({ value: item._id, label: item.sku ? `${item.name} (${item.sku})` : item.name }))}
+                  />
+                </Field>
+                <p className="muted">Need a new stocked item first? <Link to="/app/inventory">Open inventory →</Link></p>
+              </>
+            )}
           </div>
         )}
       </Drawer>
