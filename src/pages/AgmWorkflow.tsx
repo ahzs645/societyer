@@ -24,6 +24,7 @@ import { useBylawRules } from "../hooks/useBylawRules";
 import { useModuleEnabled } from "../hooks/useModules";
 import { useConfirm } from "../components/Modal";
 import { AGM_STEP_ORDER, type AgmStep as Step } from "../features/meetings/components/MeetingDetailSupport";
+import { calendarDaysBetween, daysUntil } from "../features/meetings/lib/noticeWindow";
 
 const STEP_ORDER: { id: Step; label: string; sub: string; icon: any }[] = [
   { id: "notice", label: "Send notice", sub: "14–60 days before meeting (7–60 if bylaws permit)", icon: Send },
@@ -126,9 +127,14 @@ export function AgmWorkflowPage() {
     await advance(step, patch);
   };
 
-  const daysToMeeting = Math.floor(
-    (new Date(meeting.scheduledAt).getTime() - Date.now()) / 86_400_000,
-  );
+  const daysToMeeting = daysUntil(meeting.scheduledAt) ?? 0;
+  const noticeDaysBeforeMeeting = calendarDaysBetween(
+    meeting.scheduledAt,
+    meeting.noticeSentAt ?? new Date(),
+  ) ?? 0;
+  const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
+  const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
+  const noticeWithinWindow = noticeDaysBeforeMeeting >= noticeMinDays && noticeDaysBeforeMeeting <= noticeMaxDays;
 
   return (
     <div className="page">
@@ -147,17 +153,11 @@ export function AgmWorkflowPage() {
         <div className="card__body col" style={{ gap: 8 }}>
           <Item label="Notice window"
             value={
-              daysToMeeting >= (rules?.generalNoticeMinDays ?? 14) &&
-              daysToMeeting <= (rules?.generalNoticeMaxDays ?? 60)
-                ? `Within ${rules?.generalNoticeMinDays ?? 14}–${rules?.generalNoticeMaxDays ?? 60} day range`
-                : `Outside the ${rules?.generalNoticeMinDays ?? 14}–${rules?.generalNoticeMaxDays ?? 60} day range`
+              noticeWithinWindow
+                ? `Within ${noticeMinDays}–${noticeMaxDays} day range${meeting.noticeSentAt ? ` · sent ${noticeDaysBeforeMeeting} days before` : ""}`
+                : `Outside the ${noticeMinDays}–${noticeMaxDays} day range`
             }
-            tone={
-              daysToMeeting >= (rules?.generalNoticeMinDays ?? 14) &&
-              daysToMeeting <= (rules?.generalNoticeMaxDays ?? 60)
-                ? "success"
-                : "warn"
-            }
+            tone={noticeWithinWindow ? "success" : "warn"}
           />
           <Item label="Meeting electronic"
             value={meeting.electronic ? "Yes — notice must explain how to participate" : "No"}
@@ -174,8 +174,15 @@ export function AgmWorkflowPage() {
         <div className="card__head"><h2 className="card__title">Steps</h2></div>
         <div className="card__body" style={{ padding: 0 }}>
           {STEP_ORDER.map((s, i) => {
-            const done = i <= currentIdx && run != null;
-            const active = run && s.id === (run.step as Step);
+            const doneFromRun = i <= currentIdx && run != null;
+            const doneFromRecord =
+              (s.id === "notice" && Boolean(meeting.noticeSentAt)) ||
+              (s.id === "held" && meeting.status === "Held") ||
+              (s.id === "financialsPresented" && minutes?.agmDetails?.financialStatementsPresented === true) ||
+              (s.id === "electionsHeld" && meetingElections.some((e: any) => ["Closed", "Tallied"].includes(e.status))) ||
+              (s.id === "minutesApproved" && Boolean(minutes?.approvedAt));
+            const done = doneFromRun || doneFromRecord;
+            const active = !done && ((!run && i === 0) || (run != null && i === currentIdx + 1));
             const Icon = s.icon;
             return (
               <div key={s.id} style={{
@@ -196,7 +203,8 @@ export function AgmWorkflowPage() {
                   </div>
                   <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>{s.sub}</div>
                   <div className="row" style={{ gap: 6, marginTop: 8 }}>
-                    {s.id === "notice" && (
+                    {done && <Badge tone="success">Completed</Badge>}
+                    {!done && s.id === "notice" && (
                       <>
                         {communicationsEnabled ? (
                           <>
@@ -244,17 +252,17 @@ export function AgmWorkflowPage() {
                         )}
                       </>
                     )}
-                    {s.id === "held" && (
+                    {!done && s.id === "held" && (
                       <button className="btn-action" onClick={() => advanceWithReview("held", { quorumCheckedAtISO: new Date().toISOString() }, "Confirm attendance, quorum, chair, voting rights, and electronic participation details have been recorded in the minutes.")}>
                         <CheckCircle2 size={12} /> Mark meeting held
                       </button>
                     )}
-                    {s.id === "financialsPresented" && (
+                    {!done && s.id === "financialsPresented" && (
                       <button className="btn-action" onClick={() => advanceWithReview("financialsPresented", { financialsPresentedAt: new Date().toISOString() }, "Confirm the financial statements and any auditor or reviewer report were presented and are attached or referenced in the AGM record.")}>
                         <FileText size={12} /> Mark financials presented
                       </button>
                     )}
-                    {s.id === "electionsHeld" && (
+                    {!done && s.id === "electionsHeld" && (
                       <div className="col" style={{ gap: 8, width: "100%" }}>
                         {meetingElections.length > 0 && (
                           <div className="col" style={{ gap: 4 }}>
@@ -277,7 +285,7 @@ export function AgmWorkflowPage() {
                         </div>
                       </div>
                     )}
-                    {s.id === "minutesApproved" && (
+                    {!done && s.id === "minutesApproved" && (
                       <>
                         <Link to={`/app/meetings/${meeting._id}/preview`} className="btn-action">
                           <FileText size={12} /> {minutes?.approvedAt ? "View approved minutes" : "Open minutes"}
@@ -287,7 +295,7 @@ export function AgmWorkflowPage() {
                         </button>
                       </>
                     )}
-                    {s.id === "annualReportFiled" && (
+                    {!done && s.id === "annualReportFiled" && (
                       <>
                         <Link to="/app/filings" className="btn-action">Go to filings</Link>
                         <button className="btn-action btn-action--primary" onClick={() => advanceWithReview("annualReportFiled", { annualReportFiledAt: new Date().toISOString() }, `Only complete this after the annual report filing record has the filed date, confirmation number or evidence, and the ${rules?.annualReportDueDaysAfterMeeting ?? 30}-day post-AGM deadline has been checked.`)}>

@@ -137,7 +137,7 @@ function readStoredInspectorWidth() {
   return Math.max(INSPECTOR_MIN_WIDTH, Math.min(INSPECTOR_MAX_WIDTH, value));
 }
 
-export function InspectorHost() {
+export function InspectorHost({ onOpenChange }: { onOpenChange?: (isOpen: boolean) => void } = {}) {
   const inspector = useInspectorPanel();
   const isOpen = Boolean(inspector?.activePanelId);
   const [inspectorWidth, setInspectorWidth] = useState<number>(
@@ -149,6 +149,10 @@ export function InspectorHost() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(INSPECTOR_WIDTH_STORAGE_KEY, String(inspectorWidth));
   }, [inspectorWidth]);
+
+  useEffect(() => {
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
 
   const onResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;

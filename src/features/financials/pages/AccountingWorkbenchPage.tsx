@@ -366,29 +366,38 @@ export function AccountingWorkbenchPage() {
         actions={<Link className="btn-action" to="/app/financials"><ArrowLeft size={12} /> Financials</Link>}
       />
 
-      <div className="accounting-action-bar">
-        <button className="btn-action btn-action--primary" disabled={busy} onClick={() => run(async () => { await seedChart({ societyId: society._id, actingUserId }); }, "Chart of accounts seeded")}>
-          <Landmark size={12} /> Seed chart
-        </button>
-        <button className="btn-action" onClick={() => setDrawer("period")}><PlusCircle size={12} /> Fiscal period</button>
-        <button className="btn-action" onClick={() => setDrawer("opening")}><FileSpreadsheet size={12} /> Opening balances</button>
-        <button className="btn-action" onClick={() => setDrawer("journal")}><GitCompareArrows size={12} /> Journal entry</button>
-        <button className="btn-action" onClick={() => setDrawer("candidate")}><Split size={12} /> Post candidate</button>
-        <button className="btn-action" onClick={() => setDrawer("reconciliation")}><Scale size={12} /> Reconcile</button>
-        <button className="btn-action" disabled={busy} onClick={() => run(async () => {
-          const result = await backfillTransactions({ societyId: society._id, fiscalYear: currentYear(), actingUserId });
-          toast.success(`Backfilled ${result.posted} transaction${result.posted === 1 ? "" : "s"}`);
-        })}>
-          <FileSpreadsheet size={12} /> Backfill imports
-        </button>
-        <Link className="btn-action" to="/app/reconciliation"><GitCompareArrows size={12} /> Bank reconciliation</Link>
+      <div className="accounting-action-panel">
+        <div className="accounting-action-panel__heading">
+          <strong>Accounting tools</strong>
+          <span>Set up, post, and reconcile the ledger.</span>
+        </div>
+        <div className="accounting-action-bar" role="group" aria-label="Accounting tools">
+          <button className="btn-action btn-action--primary" disabled={busy} onClick={() => run(async () => { await seedChart({ societyId: society._id, actingUserId }); }, "Chart of accounts seeded")}>
+            <Landmark size={12} /> Seed chart
+          </button>
+          <button className="btn-action" onClick={() => setDrawer("period")}><PlusCircle size={12} /> Fiscal period</button>
+          <button className="btn-action" onClick={() => setDrawer("opening")}><FileSpreadsheet size={12} /> Opening balances</button>
+          <button className="btn-action" onClick={() => setDrawer("journal")}><GitCompareArrows size={12} /> Journal entry</button>
+          <button className="btn-action" onClick={() => setDrawer("candidate")}><Split size={12} /> Post candidate</button>
+          <button className="btn-action" onClick={() => setDrawer("reconciliation")}><Scale size={12} /> Reconcile</button>
+          <button className="btn-action" disabled={busy} onClick={() => run(async () => {
+            const result = await backfillTransactions({ societyId: society._id, fiscalYear: currentYear(), actingUserId });
+            toast.success(`Backfilled ${result.posted} transaction${result.posted === 1 ? "" : "s"}`);
+          })}>
+            <FileSpreadsheet size={12} /> Backfill imports
+          </button>
+          <Link className="btn-action" to="/app/reconciliation"><GitCompareArrows size={12} /> Bank reconciliation</Link>
+        </div>
       </div>
 
-      <div className="muted" style={{ marginTop: 8, marginBottom: 8, fontSize: "var(--fs-sm)" }}>
-        Two reconciliation surfaces work together: <Link to="/app/reconciliation">Bank reconciliation</Link> matches
-        imported bank lines to records, while ledger reconciliation here checks the journal against a statement balance.
-        Use <strong>Backfill imports</strong> to post synced/manual bank transactions into the journal so both agree.
-      </div>
+      <details className="accounting-reconciliation-note">
+        <summary>How reconciliation works</summary>
+        <div className="muted">
+          <Link to="/app/reconciliation">Bank reconciliation</Link> matches imported bank lines to records, while ledger
+          reconciliation here checks the journal against a statement balance. Use <strong>Backfill imports</strong> to post
+          synced/manual bank transactions into the journal so both agree.
+        </div>
+      </details>
 
       <div className="stat-grid">
         <div className="stat"><div className="stat__label">Chart accounts</div><div className="stat__value">{accounts?.length ?? 0}</div></div>

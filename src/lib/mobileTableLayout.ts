@@ -13,8 +13,9 @@ export type MobileTableLayoutInput = {
   isMobile: boolean;
   // Whether the table would show a selection column at all on a wide screen.
   selectable: boolean;
-  // Whether the table supports a leading drag handle at all. DataTable has
-  // none; RecordTable does. Ignored on phones (the handle is always dropped).
+  // Whether the table supports a functional leading drag handle. Current
+  // tables leave this off until row reordering is wired end to end. Ignored on
+  // phones (the handle is always dropped).
   hasDragHandle?: boolean;
   // Visible data-column count, used only for the wide-desktop freeze heuristic.
   visibleColumnCount?: number;

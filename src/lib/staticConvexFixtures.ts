@@ -652,6 +652,15 @@ const committees = [
   },
 ];
 
+const committeeMembers = [
+  { _id: "static_committee_member_finance_jordan", committeeId: "static_committee_finance", societyId: SOCIETY_ID, name: "Jordan Lee", role: "Chair", directorId: "static_director_jordan", joinedAt: "2025-06-19" },
+  { _id: "static_committee_member_finance_mina", committeeId: "static_committee_finance", societyId: SOCIETY_ID, name: "Mina Patel", role: "Member", directorId: "static_director_mina", joinedAt: "2025-06-19" },
+  { _id: "static_committee_member_finance_sam", committeeId: "static_committee_finance", societyId: SOCIETY_ID, name: "Sam Nguyen", role: "Member", directorId: "static_director_sam", joinedAt: "2026-03-15" },
+  { _id: "static_committee_member_governance_priya", committeeId: "static_committee_governance", societyId: SOCIETY_ID, name: "Priya Sharma", role: "Chair", directorId: "static_director_priya", joinedAt: "2025-06-19" },
+  { _id: "static_committee_member_governance_devon", committeeId: "static_committee_governance", societyId: SOCIETY_ID, name: "Devon Clarke", role: "Member", directorId: "static_director_devon", joinedAt: "2025-06-19" },
+  { _id: "static_committee_member_governance_hannah", committeeId: "static_committee_governance", societyId: SOCIETY_ID, name: "Hannah Goldberg", role: "Member", directorId: "static_director_hannah", joinedAt: "2025-06-19" },
+];
+
 const meetings = [
   {
     _id: MEETING_BOARD_ID,
@@ -682,7 +691,7 @@ const meetings = [
     scheduledAt: "2025-06-19T18:30:00.000Z",
     location: "Riverside Community Hall",
     electronic: false,
-    quorumRequired: 20,
+    quorumRequired: 4,
     bylawRuleSetId: "static_bylaw_rules",
     quorumRuleVersion: 1,
     quorumRuleEffectiveFromISO: "2025-06-01T00:00:00.000Z",
@@ -690,6 +699,7 @@ const meetings = [
     quorumComputedAtISO: "2025-06-19T18:30:00.000Z",
     attendeeIds: [],
     status: "Held",
+    noticeSentAt: "2025-06-01T16:00:00.000Z",
     sourceReviewStatus: "source_reviewed",
     sourceReviewNotes: "Demo source minutes checked against the local record.",
     sourceReviewedAtISO: "2025-07-10T18:00:00.000Z",
@@ -738,12 +748,20 @@ const agendaItems = [
     depth: 0 as const,
     createdAtISO: "2026-04-16T16:00:00.000Z",
   })),
-  ...["Annual report", "Financial statements", "Director elections"].map((title, order) => ({
+  ...[
+    "Call to order and adoption of the agenda",
+    "Adoption of the 2024 AGM minutes",
+    "Annual report",
+    "Financial statements",
+    "Appointment of the reviewer",
+    "Director elections",
+    "New business",
+  ].map((title, order) => ({
     _id: `static_agenda_item_agm_${order}`,
     societyId: SOCIETY_ID,
     agendaId: AGENDA_AGM_ID,
     order,
-    type: title.toLowerCase().includes("election") ? "motion" : title.toLowerCase().includes("financial") ? "report" : "report",
+    type: title.toLowerCase().includes("election") ? "motion" : title.toLowerCase().includes("report") || title.toLowerCase().includes("financial") || title.toLowerCase().includes("reviewer") ? "report" : "discussion",
     title,
     depth: 0 as const,
     createdAtISO: "2025-06-01T16:00:00.000Z",
@@ -835,7 +853,7 @@ const minutes = [
     attendees: ["Mina Patel", "Jordan Lee", "Devon Clarke", "Avery Santos"],
     absent: ["Sam Nguyen"],
     quorumMet: true,
-    quorumRequired: 20,
+    quorumRequired: 4,
     bylawRuleSetId: "static_bylaw_rules",
     quorumRuleVersion: 1,
     quorumRuleEffectiveFromISO: "2025-06-01T00:00:00.000Z",
@@ -993,6 +1011,39 @@ const minutes = [
         { name: "Devon Clarke", roleTitle: "Director", term: "2025-2026", consentRecorded: true, elected: true, status: "Confirmed" },
       ],
     },
+  },
+];
+
+const agmRuns = [
+  {
+    _id: "static_agm_run_2025",
+    societyId: SOCIETY_ID,
+    meetingId: MEETING_AGM_ID,
+    step: "minutesApproved",
+    noticeSentAt: "2025-06-01T16:00:00.000Z",
+    noticeRecipientCount: 13,
+    quorumCheckedAtISO: "2025-06-19T18:32:00.000Z",
+    financialsPresentedAt: "2025-06-19T19:00:00.000Z",
+    electionsCompletedAt: "2025-06-19T19:35:00.000Z",
+    minutesApprovedAt: "2025-07-10T18:30:00.000Z",
+    updatedAtISO: "2025-07-10T18:30:00.000Z",
+  },
+];
+
+const noticeDeliveries = [
+  {
+    _id: "static_notice_delivery_agm_mina",
+    societyId: SOCIETY_ID,
+    meetingId: MEETING_AGM_ID,
+    recipientName: "Mina Patel",
+    recipientEmail: "mina@riverside.example",
+    memberId: "static_member_mina",
+    channel: "email",
+    provider: "demo",
+    subject: "Notice of 2025 annual general meeting",
+    sentAtISO: "2025-06-01T16:00:00.000Z",
+    proofOfNotice: "demo:email:2025-06-01",
+    status: "sent",
   },
 ];
 
@@ -1482,18 +1533,19 @@ const elections = [
     _id: ELECTION_ID,
     societyId: SOCIETY_ID,
     meetingId: MEETING_AGM_ID,
-    title: "2026 board slate approval",
+    title: "2025 board slate approval",
     description: "Demo electronic ballot for approving the incoming director slate.",
-    status: "Open",
-    opensAtISO: "2026-04-16T16:00:00.000Z",
-    closesAtISO: "2026-04-30T23:59:00.000Z",
-    nominationsOpenAtISO: "2026-04-01T16:00:00.000Z",
-    nominationsCloseAtISO: "2026-04-10T23:59:00.000Z",
+    status: "Tallied",
+    opensAtISO: "2025-06-19T18:30:00.000Z",
+    closesAtISO: "2025-06-19T19:30:00.000Z",
+    nominationsOpenAtISO: "2025-05-20T16:00:00.000Z",
+    nominationsCloseAtISO: "2025-06-12T23:59:00.000Z",
     anonymousBallot: true,
     scrutineerUserIds: [USER_OWNER_ID, USER_SECRETARY_ID],
     createdByUserId: USER_SECRETARY_ID,
-    createdAtISO: "2026-03-25T18:00:00.000Z",
-    updatedAtISO: "2026-04-16T16:00:00.000Z",
+    talliedAtISO: "2025-06-19T19:40:00.000Z",
+    createdAtISO: "2025-05-20T18:00:00.000Z",
+    updatedAtISO: "2025-06-19T19:40:00.000Z",
   },
 ];
 
@@ -2521,6 +2573,47 @@ const motions = [
   },
 ];
 
+const meetingTemplates = [
+  {
+    _id: "static_meeting_template_board",
+    societyId: SOCIETY_ID,
+    name: "Regular board meeting",
+    description: "Baseline recurring board agenda with standard procedural motions.",
+    meetingType: "Board",
+    isDefault: true,
+    items: [
+      { title: "Welcome and call to order", depth: 0, sectionType: "discussion" },
+      { title: "Adopt agenda", depth: 0, sectionType: "motion", motionText: "BE IT RESOLVED THAT the agenda for this meeting be adopted as presented." },
+      { title: "Adopt previous minutes", depth: 0, sectionType: "motion", motionText: "BE IT RESOLVED THAT the minutes of {{previousMeetingTitle}} of {{previousMeetingDate}}, as circulated, be approved.", adoptsPreviousMinutes: true },
+      { title: "Reports", depth: 0, sectionType: "report" },
+      { title: "New business", depth: 0, sectionType: "discussion" },
+      { title: "Adjournment", depth: 0, sectionType: "motion", motionText: "BE IT RESOLVED THAT the meeting be adjourned." },
+    ],
+    createdAtISO: "2026-01-05T12:00:00.000Z",
+    updatedAtISO: "2026-01-05T12:00:00.000Z",
+  },
+  {
+    _id: "static_meeting_template_agm",
+    societyId: SOCIETY_ID,
+    name: "Annual general meeting",
+    description: "Governance-ready AGM agenda covering notice, financial statements, elections, prior minutes, and adjournment.",
+    meetingType: "AGM",
+    isDefault: true,
+    items: [
+      { title: "Call to order", depth: 0, sectionType: "discussion" },
+      { title: "Notice and quorum confirmation", depth: 0, sectionType: "discussion", details: "Confirm notice delivery, quorum, and participation arrangements." },
+      { title: "Approval of agenda", depth: 0, sectionType: "motion", motionText: "BE IT RESOLVED THAT the agenda for this annual general meeting be adopted as presented." },
+      { title: "Approval of prior minutes", depth: 0, sectionType: "motion", motionText: "BE IT RESOLVED THAT the minutes of {{previousMeetingTitle}} of {{previousMeetingDate}}, as circulated, be approved.", adoptsPreviousMinutes: true },
+      { title: "Financial statements and annual report", depth: 0, sectionType: "report", details: "Present annual financial statements and the auditor's report, if applicable." },
+      { title: "Election of directors", depth: 0, sectionType: "discussion", details: "Record nominations, elections, appointments, and resulting terms." },
+      { title: "New business", depth: 0, sectionType: "discussion" },
+      { title: "Adjournment", depth: 0, sectionType: "motion", motionText: "BE IT RESOLVED THAT the annual general meeting be adjourned." },
+    ],
+    createdAtISO: "2026-01-05T12:00:00.000Z",
+    updatedAtISO: "2026-01-05T12:00:00.000Z",
+  },
+];
+
 const tables: Record<string, any[]> = {
   activity: [
     {
@@ -2849,6 +2942,7 @@ const tables: Record<string, any[]> = {
     },
   ],
   committees,
+  committeeMembers,
   conflicts,
   commitments,
   commitmentEvents,
@@ -3653,6 +3747,9 @@ const tables: Record<string, any[]> = {
     },
   ],
   meetings,
+  meetingTemplates,
+  agmRuns,
+  noticeDeliveries,
   agendas,
   agendaItems,
   memberProposals: [],
@@ -3873,7 +3970,11 @@ export {
   fundingSources,
   fundingSourceEvents,
   committees,
+  committeeMembers,
   meetings,
+  meetingTemplates,
+  agmRuns,
+  noticeDeliveries,
   agendas,
   agendaItems,
   minutes,

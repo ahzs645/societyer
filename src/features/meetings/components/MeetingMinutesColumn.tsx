@@ -46,6 +46,7 @@ import {
   normalize,
 } from "./MeetingMinutesColumn.internal";
 import { agendaSequenceLabel } from "../lib/agendaNumbering";
+import { computedQuorumMet } from "../lib/meetingDetailHelpers";
 import type {
   AgendaNumberingMode,
   SectionDraft,
@@ -67,8 +68,10 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     setAttendanceEdit,
     startAttendanceEdit,
     autofillCurrentDirectors,
+    attendanceAutofillLabel,
     saveAttendance,
     quorumSnapshot,
+    activeProxyCount,
     quorumLegalGuides,
     members,
     directors,
@@ -533,13 +536,27 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                       onChange={(next) => setAttendanceEdit({ ...attendanceEdit, people: next })}
                     />
                     <button className="btn-action" type="button" onClick={autofillCurrentDirectors}>
-                      Add current directors
+                      {attendanceAutofillLabel}
                     </button>
-                    <Checkbox
-                      checked={attendanceEdit.quorumMet}
-                      onChange={(quorumMet) => setAttendanceEdit({ ...attendanceEdit, quorumMet })}
-                      label="Quorum met"
-                    />
+                    {(() => {
+                      const preview = computedQuorumMet({
+                        presentCount: attendancePresentCount,
+                        activeProxyCount,
+                        required: quorumSnapshot.required,
+                      });
+                      return (
+                        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                          <Badge tone={preview ? "success" : "warn"}>
+                            {preview == null ? "Quorum requirement unavailable" : preview ? "Quorum will be met" : "Quorum will not be met"}
+                          </Badge>
+                          <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                            {attendancePresentCount} present
+                            {activeProxyCount ? ` + ${activeProxyCount} active ${activeProxyCount === 1 ? "proxy" : "proxies"}` : ""}
+                            {quorumSnapshot.required != null ? ` / ${quorumSnapshot.required} required` : ""}
+                          </span>
+                        </div>
+                      );
+                    })()}
                     <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
                       <button className="btn-action" onClick={() => setAttendanceEdit(null)}>Cancel</button>
                       <button className="btn-action btn-action--primary" onClick={saveAttendance}>

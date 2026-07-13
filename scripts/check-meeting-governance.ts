@@ -12,9 +12,132 @@ import {
   isAdjournmentMotion,
   isPostponedOutcome,
   normalizeMotionOutcome,
+  motionCompletionGaps,
   MOTION_OUTCOMES,
 } from "../src/lib/motionGovernance";
 import { redactText } from "../src/lib/redactPii";
+import {
+  computedQuorumMet,
+  formalMinutesExportBlockers,
+  hasRecordedMeetingMinutes,
+  normalizedMeetingTitle,
+  quorumPresentCount,
+} from "../src/features/meetings/lib/meetingDetailHelpers";
+import { calendarDaysBetween, daysUntil, meetingScheduleConflicts } from "../src/features/meetings/lib/noticeWindow";
+import { renderMinutesHtml } from "../src/features/meetings/lib/minutesRenderer";
+import { agmRuns, agendaItems, committeeMembers, meetingTemplates, meetings, minutes, noticeDeliveries } from "../src/lib/staticConvexFixtures";
+
+assert.equal(normalizedMeetingTitle("  Board meeting  "), "Board meeting", "meeting titles are trimmed");
+assert.equal(normalizedMeetingTitle("   "), "", "blank meeting titles remain invalid after normalization");
+assert.equal(
+  computedQuorumMet({ presentCount: 3, activeProxyCount: 1, required: 4 }),
+  true,
+  "active proxies participate in quorum math",
+);
+assert.equal(
+  computedQuorumMet({ presentCount: 3, activeProxyCount: 0, required: 4 }),
+  false,
+  "attendance below the requirement does not meet quorum",
+);
+assert.equal(computedQuorumMet({ presentCount: 3, required: null }), null, "unknown quorum requirements stay unknown");
+
+const demoAgm = meetings.find((meeting) => meeting._id === "static_meeting_agm_2025");
+const demoAgmMinutes = minutes.find((record) => record.meetingId === demoAgm?._id);
+assert.ok(demoAgm && demoAgmMinutes, "demo AGM and minutes exist");
+assert.equal(
+  computedQuorumMet({
+    presentCount: quorumPresentCount(demoAgmMinutes),
+    activeProxyCount: 2,
+    required: demoAgmMinutes.quorumRequired,
+  }),
+  true,
+  "demo AGM attendance, proxies, and requirement agree that quorum was met",
+);
+assert.equal(
+  agendaItems.filter((item) => item.agendaId === "static_agenda_agm_2025").length,
+  demoAgmMinutes.sections.length,
+  "demo AGM agenda topics match the structured minutes sections",
+);
+assert.equal(agmRuns.find((run) => run.meetingId === demoAgm._id)?.step, "minutesApproved", "demo AGM workflow reflects approved minutes");
+assert.ok(noticeDeliveries.some((delivery) => delivery.meetingId === demoAgm._id), "demo AGM includes notice delivery evidence");
+
+assert.equal(
+  daysUntil("2026-07-27T09:00:00", "2026-07-13T17:45:00"),
+  14,
+  "notice checks use calendar dates rather than truncating elapsed hours",
+);
+assert.equal(
+  calendarDaysBetween("2026-07-27T09:00:00", "2026-07-13T23:59:00"),
+  14,
+  "notice delivery day math ignores clock time",
+);
+assert.equal(
+  hasRecordedMeetingMinutes({ status: "Held" }, { sections: [], attendees: [], absent: [], decisions: [], actionItems: [], displayMotions: [] }),
+  false,
+  "an auto-created empty minutes row is not marked recorded",
+);
+assert.equal(
+  hasRecordedMeetingMinutes({ status: "Held" }, { sections: [{ title: "Business", discussion: "Budget reviewed." }], attendees: [], absent: [], decisions: [], actionItems: [], displayMotions: [] }),
+  true,
+  "authored minute content completes the recorded checklist item",
+);
+assert.deepEqual(
+  motionCompletionGaps({ text: "Approve budget", outcome: "Carried" }),
+  ["mover", "seconder", "vote totals"],
+  "a substantive carried motion exposes every missing formal field",
+);
+assert.deepEqual(
+  motionCompletionGaps({ text: "Adjourn the meeting", outcome: "Carried", decidedBy: "consent" }),
+  [],
+  "procedural consent records do not require a counted tally",
+);
+assert.ok(
+  formalMinutesExportBlockers({
+    meeting: { status: "Held" },
+    minutes: { attendees: [], sections: [], chairName: "", secretaryName: "", recorderName: "" },
+    agendaItemCount: 0,
+    motions: [{ text: "Approve budget", outcome: "Carried" }],
+  }).length >= 4,
+  "final export is blocked when attendance, agenda, officers, and motion governance are incomplete",
+);
+assert.equal(
+  meetingScheduleConflicts(
+    [{ _id: "meeting-1", status: "Scheduled", scheduledAt: "2026-08-01T10:00:00", title: "Board" } as any],
+    "2026-08-01T11:30:00",
+  ).length,
+  1,
+  "meetings inside the two-hour window require conflict acknowledgment",
+);
+const agmTemplate = meetingTemplates.find((template) => template.meetingType === "AGM");
+assert.ok(agmTemplate, "the seeded data includes an AGM template");
+for (const expected of ["Notice", "Financial", "Election", "prior minutes", "Adjournment"]) {
+  assert.ok(
+    agmTemplate!.items.some((item: any) => String(item.title).toLowerCase().includes(expected.toLowerCase())),
+    `AGM template includes ${expected}`,
+  );
+}
+assert.equal(
+  committeeMembers.filter((member) => member.committeeId === "static_committee_finance").length,
+  3,
+  "demo committee attendance is scoped to the linked committee roster",
+);
+const renderedMotionText = "Approve the committee work plan";
+const renderedMinutes = renderMinutesHtml({
+  society: { name: "Test Society" },
+  meeting: { title: "Committee meeting", type: "Committee", scheduledAt: "2026-07-13T10:00:00", agendaItems: [] },
+  minutes: {
+    heldAt: "2026-07-13T10:00:00",
+    attendees: ["Alex Recorder"],
+    absent: [],
+    quorumMet: true,
+    discussion: "",
+    sections: [],
+    motions: [{ text: renderedMotionText, movedBy: "Alex Recorder", secondedBy: "Sam Member", outcome: "Carried", votesFor: 2 }],
+    decisions: [],
+    actionItems: [],
+  },
+});
+assert.match(renderedMinutes, new RegExp(renderedMotionText), "carried motions appear in minutes export HTML");
 
 // ---------------------------------------------------------------------------
 // thresholdFor — resolution thresholds per the Societies Act
@@ -258,6 +381,4 @@ assert.ok(typed.includes("[email]"), "typeLabels renders a typed placeholder");
 const untouched = redactText("Nothing sensitive here");
 assert.equal(untouched, "Nothing sensitive here", "clean text is returned unchanged");
 
-console.log(
-  "Checked meeting governance logic: thresholds, vote tallies, adjournment heuristic, outcome vocabulary, and minutes redaction.",
-);
+console.log("Checked meeting governance, notice dates, templates, conflicts, export blockers, motion rendering, and redaction.");

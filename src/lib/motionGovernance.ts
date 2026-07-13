@@ -321,3 +321,30 @@ export const ROUTINE_MOTION_TAGS = SHARED_ROUTINE_MOTION_TAGS;
 export function isRoutineMotion(motion: ClassifiableMotion): boolean {
   return sharedIsRoutineMotion(motion);
 }
+
+/** Missing governance fields on a formally decided motion. Routine procedural
+ * records adopted by consent/automatic close are exempt because they do not
+ * require a mover, seconder, or counted tally. */
+export function motionCompletionGaps(motion: {
+  text?: string;
+  outcome?: string;
+  movedBy?: string;
+  secondedBy?: string;
+  votesFor?: number;
+  votesAgainst?: number;
+  abstentions?: number;
+  decidedBy?: string;
+  resolutionType?: string;
+  tags?: string[];
+  sectionTitle?: string;
+}): string[] {
+  const outcome = String(motion.outcome ?? "").trim().toLowerCase();
+  if (outcome !== "carried" && outcome !== "defeated") return [];
+  if (classifyProceduralMotion(motion) && isDecidedWithoutVote(motion.decidedBy)) return [];
+  const gaps: string[] = [];
+  if (!String(motion.movedBy ?? "").trim()) gaps.push("mover");
+  if (!String(motion.secondedBy ?? "").trim()) gaps.push("seconder");
+  const tally = (motion.votesFor ?? 0) + (motion.votesAgainst ?? 0) + (motion.abstentions ?? 0);
+  if (tally === 0) gaps.push("vote totals");
+  return gaps;
+}

@@ -11,7 +11,7 @@ import { Tabs } from "../components/primitives";
 import { Menu } from "../components/Menu";
 import { formatDate, formatDateTime, toDateTimeLocalValue } from "../lib/format";
 import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, BookMarked, Calendar, ClipboardCheck, Download, ExternalLink, FileDown, FileText, Gavel, MoreHorizontal, PackageCheck, Plus, Printer, RotateCcw, Settings2 } from "lucide-react";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../components/MotionEditor";
 import { isPostponedOutcome, normalizeMotionOutcome } from "../lib/motionGovernance";
@@ -38,8 +38,12 @@ import {
   attendanceRowsForDirectors,
   buildEmlMessage,
   buildMeetingOutboxEmail,
+  computedQuorumMet,
+  formalMinutesExportBlockers,
+  hasRecordedMeetingMinutes,
   hasStartedMinutesDraft,
   isCurrentDirector,
+  quorumPresentCount,
   sanitizeAttachmentFileName,
   slugifyFilePart,
 } from "../features/meetings/lib/meetingDetailHelpers";
@@ -47,7 +51,7 @@ import { renderMeetingPackHtml } from "../features/meetings/lib/meetingPackExpor
 import { resolveConflictMotion } from "../features/meetings/lib/conflictMotions";
 import { readStoredAgendaNumberingMode } from "../features/meetings/lib/agendaNumbering";
 import { meetingTypeCategory } from "../../shared/functions/meetings";
-import { minutesMotionsForDisplay } from "../../shared/minutesMotions";
+import { minutesMotionsForDisplay, motionRowToEmbedded } from "../../shared/minutesMotions";
 import { PendingAdoptionsCard, type PendingAdoption } from "../features/meetings/components/PendingAdoptionsCard";
 import type { MotionAdoptionTarget } from "../components/MotionEditor";
 import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMaterialDrawer";
@@ -91,6 +95,18 @@ export function MeetingDetailPage() {
   const actingUserId = useCurrentUserId() ?? undefined;
   const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const liveMotionRows = useQuery(
+    api.motions.listForMinutes,
+    minutes ? { minutesId: minutes._id } : "skip",
+  );
+  const displayMotions = useMemo(() => {
+    if (!minutes) return [] as Motion[];
+    if (minutes.approvedAt || Array.isArray(minutes.motionSnapshots)) {
+      return minutesMotionsForDisplay(minutes) as Motion[];
+    }
+    if (liveMotionRows !== undefined) return (liveMotionRows as any[]).map(motionRowToEmbedded) as Motion[];
+    return minutesMotionsForDisplay(minutes) as Motion[];
+  }, [minutes, liveMotionRows]);
   const agendaRecord = useQuery(api.agendas.getForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const meetingPackage = useQuery(
     api.meetingMaterials.packageForMeeting,
@@ -120,6 +136,10 @@ export function MeetingDetailPage() {
   const committees = useQuery(
     api.committees.list,
     society ? { societyId: society._id } : "skip",
+  );
+  const meetingCommitteeDetail = useQuery(
+    api.committees.detail,
+    meeting?.committeeId ? { id: meeting.committeeId } : "skip",
   );
   const allDocuments = useQuery(api.documents.list, society ? { societyId: society._id, actingUserId } : "skip");
   // Sibling meetings power the "approved at meeting" picker — minutes are
@@ -200,7 +220,6 @@ export function MeetingDetailPage() {
   };
   const [attendanceEdit, setAttendanceEdit] = useState<{
     people: { name: string; status: "present" | "absent" }[];
-    quorumMet: boolean;
   } | null>(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -261,7 +280,7 @@ export function MeetingDetailPage() {
     if (scrolledMotionParamRef.current === focusMotionParam) return;
     // Index into the SAME resolved list the editor renders (its motion-${i} DOM
     // ids are keyed on that order), so the scroll target lines up. See Phase 4B.
-    const rows = minutesMotionsForDisplay(minutes) as any[];
+    const rows = displayMotions as any[];
     let index = -1;
     if (isSyntheticFocus) {
       index = Number(focusMotionParam.split(":").pop());
@@ -280,7 +299,7 @@ export function MeetingDetailPage() {
       window.setTimeout(() => el.classList.remove("motion--flash"), 1800);
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [activeTab, focusMotionParam, isSyntheticFocus, focusMotions, minutes]);
+  }, [activeTab, focusMotionParam, isSyntheticFocus, focusMotions, minutes, displayMotions]);
 
   const [materialDraft, setMaterialDraft] = useState<any | null>(null);
   const [joinEdit, setJoinEdit] = useState<any | null>(null);
@@ -461,7 +480,7 @@ export function MeetingDetailPage() {
   const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? [];
   const canonicalAgendaItems = agendaItemsFromRecord(agendaRecord);
   const agenda = agendaTree.map((entry) => entry.title);
-  const businessMotions = (minutesMotionsForDisplay(minutes) as Motion[]).filter((motion) => !isAdjournmentMotion(motion));
+  const businessMotions = displayMotions.filter((motion) => !isAdjournmentMotion(motion));
   const minutesSourceExternalIds = sourceExternalIdsForMinutes(minutes);
   const linkedSourceCount = (sourceDocuments ?? []).length || minutesSourceExternalIds.length;
   const minutesDraftTranscript = minutes?.draftTranscript ?? "";
@@ -473,6 +492,13 @@ export function MeetingDetailPage() {
     ? transcriptRecord?.provider ?? (minutesDraftTranscript ? "manual" : null)
     : null;
   const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
+  const presentCountForQuorum = quorumPresentCount(minutes);
+  const activeProxyCount = (meetingProxies ?? []).filter((proxy: any) => !proxy.revokedAtISO).length;
+  const calculatedQuorumMet = computedQuorumMet({
+    presentCount: presentCountForQuorum,
+    activeProxyCount,
+    required: quorumSnapshot.required ?? meeting.quorumRequired,
+  });
   const legalGuideDateISO = minutes?.heldAt ?? meeting.scheduledAt;
 
   // Prior meetings of the same governance category (board↔board, general↔general)
@@ -498,7 +524,7 @@ export function MeetingDetailPage() {
       meetingTitle: m.title,
       meetingType: m.type,
       scheduledAt: m.scheduledAt,
-      motionExists: (minutesMotionsForDisplay(minutes) as any[]).some(
+      motionExists: (displayMotions as any[]).some(
         (motion) => String(motion.adoptsMinutesId ?? "") === String(record._id),
       ),
     }))
@@ -550,7 +576,7 @@ export function MeetingDetailPage() {
       quorumSourceLabel: quorumSnapshot.label,
       discussion: minutes?.discussion ?? "",
       sections: minutes?.sections ?? null,
-      motions: minutesMotionsForDisplay(minutes) as any,
+      motions: displayMotions as any,
       decisions: minutes?.decisions ?? [],
       actionItems: (minutes?.actionItems ?? []) as any,
       approvedAt: minutes?.approvedAt ?? null,
@@ -660,6 +686,15 @@ export function MeetingDetailPage() {
 
   const markHeld = async () => {
     try {
+      if (calculatedQuorumMet === false) {
+        const ok = await confirm({
+          title: "Mark meeting held without quorum?",
+          message: `${presentCountForQuorum + activeProxyCount} participant${presentCountForQuorum + activeProxyCount === 1 ? "" : "s"} count toward quorum, but ${quorumSnapshot.required ?? meeting.quorumRequired} are required. Record the meeting as held only if no quorum-dependent business was transacted.`,
+          confirmLabel: "Mark held without quorum",
+          tone: "warn",
+        });
+        if (!ok) return;
+      }
       await updateMeeting({ id: meeting._id, patch: { status: "Held" } });
     } catch (err: any) {
       toast.error(err?.message ?? "Could not mark the meeting held");
@@ -733,7 +768,7 @@ export function MeetingDetailPage() {
   // business that should roll onto the next meeting's agenda. Index into the
   // RESOLVED list so `motionIndexes` line up with what carryForwardToMeeting
   // resolves on the backend (resolveMinutesMotions). See Phase 4B.
-  const carriedForwardMotions = (minutesMotionsForDisplay(minutes) as Motion[])
+  const carriedForwardMotions = displayMotions
     .map((motion, index) => ({ motion, index }))
     .filter(({ motion }) => !isAdjournmentMotion(motion) && isPostponedOutcome(motion.outcome));
 
@@ -837,7 +872,6 @@ export function MeetingDetailPage() {
       if (!hiddenIndices.has(i)) sectionIndexRemap.set(i, nextSectionIndex++);
     });
     const visibleSections = rawSections.filter((_, i) => !hiddenIndices.has(i));
-    const displayMotions = minutesMotionsForDisplay(minutes) as any[];
     const visibleMotions = publicOnly
       ? displayMotions.filter((m) => m.sectionIndex == null || !hiddenIndices.has(m.sectionIndex))
       : displayMotions;
@@ -883,8 +917,8 @@ export function MeetingDetailPage() {
       motions: visibleMotions.map((m) => ({
         ...m,
         text: tx(m.text) ?? "",
-        movedBy: tx(motionPersonDisplayName(m.movedBy, motionPeople, { memberId: m.movedByMemberId, directorId: m.movedByDirectorId })),
-        secondedBy: tx(motionPersonDisplayName(m.secondedBy, motionPeople, { memberId: m.secondedByMemberId, directorId: m.secondedByDirectorId })),
+        movedBy: tx(motionPersonDisplayName(m.movedBy, motionPeople, { memberId: m.movedByMemberId, directorId: m.movedByDirectorId })) ?? undefined,
+        secondedBy: tx(motionPersonDisplayName(m.secondedBy, motionPeople, { memberId: m.secondedByMemberId, directorId: m.secondedByDirectorId })) ?? undefined,
         sectionIndex: publicOnly && m.sectionIndex != null ? sectionIndexRemap.get(m.sectionIndex) : m.sectionIndex,
       })),
       decisions: redact ? minutes.decisions.map(redact) : minutes.decisions,
@@ -950,11 +984,18 @@ export function MeetingDetailPage() {
       (section.decisions ?? []).some((d: string) => (d ?? "").trim()) ||
       (section.actionItems ?? []).length > 0,
     )) return true;
-    if ((minutesMotionsForDisplay(minutes) as any[]).length > 0) return true;
+    if (displayMotions.length > 0) return true;
     if (((minutes.decisions ?? []) as string[]).some((d) => (d ?? "").trim())) return true;
     if (((minutes.actionItems ?? []) as any[]).length > 0) return true;
     return false;
   })();
+  const formalExportBlockers = formalMinutesExportBlockers({
+    meeting,
+    minutes,
+    agendaItemCount: agendaTree.length,
+    motions: displayMotions,
+  });
+  const minutesRecorded = hasRecordedMeetingMinutes(meeting, minutes, displayMotions);
 
   const renderExportBody = (redact?: (value: string) => string, publicOnly = false) => {
     const payload = minutesRenderPayload(redact, publicOnly);
@@ -1009,7 +1050,7 @@ export function MeetingDetailPage() {
           const director = (directors ?? []).find((d: any) => d._id === conflict.directorId);
           // Resolve by text snapshot, not raw index — the motions array gets
           // reordered/deleted, and exported minutes are a legal record.
-          const resolution = resolveConflictMotion(conflict, minutesMotionsForDisplay(minutes) as any[]);
+          const resolution = resolveConflictMotion(conflict, displayMotions as any[]);
           const motionLabel =
             resolution?.kind === "resolved"
               ? resolution.motion.name || resolution.motion.text
@@ -1055,6 +1096,10 @@ export function MeetingDetailPage() {
   };
 
   const exportToWord = async () => {
+    if (formalExportBlockers.length) {
+      toast.error("Final minutes export is blocked", formalExportBlockers.join(" "));
+      return;
+    }
     const args = buildExportArgs("docx");
     if (!args) return;
     try {
@@ -1072,6 +1117,10 @@ export function MeetingDetailPage() {
   };
 
   const exportToPdf = async () => {
+    if (formalExportBlockers.length) {
+      toast.error("Final minutes export is blocked", formalExportBlockers.join(" "));
+      return;
+    }
     const args = buildExportArgs("pdf");
     if (!args) return;
     await exportPdfDownload(args);
@@ -1084,12 +1133,20 @@ export function MeetingDetailPage() {
   };
 
   const printMinutes = async () => {
+    if (formalExportBlockers.length) {
+      toast.error("Final minutes export is blocked", formalExportBlockers.join(" "));
+      return;
+    }
     const args = buildExportArgs("pdf");
     if (!args) return;
     await printPdfDocument(args);
   };
 
   const openMinutesPreviewPage = () => {
+    if (meeting.status !== "Held") {
+      toast.error("Mark the meeting held before opening formal minutes.");
+      return;
+    }
     if (!meeting || !minutes) return;
     window.open(`/app/meetings/${meeting._id}/preview`, "_blank", "noopener,noreferrer");
   };
@@ -1158,7 +1215,7 @@ export function MeetingDetailPage() {
     // Detect adoption motions newly recorded as Carried BEFORE saving — the
     // backend stamps the linked minutes approved as part of this update, and
     // the user deserves to hear that it happened.
-    const before = minutesMotionsForDisplay(minutes) as any[];
+    const before = displayMotions as any[];
     const previouslyCarried = new Set(
       before
         .filter((m) => m.adoptsMinutesId && String(m.outcome ?? "").toLowerCase() === "carried")
@@ -1189,7 +1246,7 @@ export function MeetingDetailPage() {
   const addAdoptionMotion = async (entry: PendingAdoption) => {
     const minutesId = minutes?._id ?? (await ensureMinutes());
     if (!minutesId) return;
-    const existing = minutesMotionsForDisplay(minutes) as any[];
+    const existing = displayMotions as any[];
     if (existing.some((motion) => String(motion.adoptsMinutesId ?? "") === entry.minutesId)) {
       toast.info("An adoption motion for those minutes is already on this meeting.");
       return;
@@ -1362,7 +1419,7 @@ export function MeetingDetailPage() {
     // preserved as orphans so we never silently destroy recorded minutes.
     if (minutes) {
       const existingSections = ((minutes.sections ?? []) as any[]);
-      const existingMotions = (minutesMotionsForDisplay(minutes) as Motion[]);
+      const existingMotions = displayMotions;
       const normalize = (title: string) => title.trim().toLowerCase();
       const sectionHasDetails = (section: any) =>
         !!(
@@ -1455,24 +1512,36 @@ export function MeetingDetailPage() {
     ];
     setAttendanceEdit({
       people: existing,
-      quorumMet: minutes.quorumMet,
     });
   };
 
   const autofillCurrentDirectors = () => {
-    const directorRows = attendanceRowsForDirectors(currentDirectors);
-    if (!directorRows.length) {
-      toast.info("No current directors found", "Directors must be active and not past their end date.");
+    const isCommitteeMeeting = meeting.type === "Committee";
+    const expectedRows = isCommitteeMeeting
+      ? ((meetingCommitteeDetail?.members ?? []) as any[])
+          .map((member) => ({ name: String(member.name ?? "").trim(), status: "present" as const }))
+          .filter((person) => person.name)
+      : attendanceRowsForDirectors(currentDirectors);
+    if (!expectedRows.length) {
+      toast.info(
+        isCommitteeMeeting ? "No committee members found" : "No current directors found",
+        isCommitteeMeeting
+          ? "Link this meeting to a committee with members before filling attendance."
+          : "Directors must be active and not past their end date.",
+      );
       return;
     }
     const existing = attendanceEdit?.people ?? [];
     const existingNames = new Set(existing.map((person: any) => person.name.trim().toLowerCase()).filter(Boolean));
-    const additions = directorRows.filter((person) => !existingNames.has(person.name.toLowerCase()));
+    const additions = expectedRows.filter((person) => !existingNames.has(person.name.toLowerCase()));
     setAttendanceEdit({
       people: [...existing, ...additions],
-      quorumMet: attendanceEdit?.quorumMet ?? minutes?.quorumMet ?? false,
     });
-    toast.success("Current directors added", `${additions.length} director${additions.length === 1 ? "" : "s"} added to attendance.`);
+    const noun = isCommitteeMeeting ? "committee member" : "director";
+    toast.success(
+      isCommitteeMeeting ? "Committee members added" : "Current directors added",
+      `${additions.length} ${noun}${additions.length === 1 ? "" : "s"} added to attendance.`,
+    );
   };
 
   const saveAttendance = async () => {
@@ -1486,9 +1555,31 @@ export function MeetingDetailPage() {
         .filter((p) => p.status === "absent")
         .map((p) => p.name.trim())
         .filter(Boolean);
+      const required = quorumSnapshot.required ?? meeting.quorumRequired;
+      const quorumMet = computedQuorumMet({
+        presentCount: attendees.length,
+        activeProxyCount,
+        required,
+      }) ?? false;
+      const priorDetailedByName = new Map(
+        ((minutes.detailedAttendance ?? []) as any[]).map((row) => [String(row.name).trim().toLowerCase(), row]),
+      );
+      const detailedAttendance = attendanceEdit.people
+        .map((person) => {
+          const name = person.name.trim();
+          if (!name) return null;
+          const prior = priorDetailedByName.get(name.toLowerCase()) ?? {};
+          return {
+            ...prior,
+            name,
+            status: person.status === "present" ? "present" : "regrets",
+            quorumCounted: person.status === "present",
+          };
+        })
+        .filter(Boolean);
       await updateMinutes({
         id: minutes._id,
-        patch: { attendees, absent, quorumMet: attendanceEdit.quorumMet },
+        patch: { attendees, absent, detailedAttendance, quorumMet },
       });
       await updateMeeting({
         id: meeting._id,
@@ -1873,6 +1964,8 @@ export function MeetingDetailPage() {
     publicCopyMode,
     setPublicCopyMode,
     minutesExportGaps,
+    formalExportBlockers,
+    minutesRecorded,
     quorumSnapshot,
     quorumLegalGuides,
     legalGuideDateISO,
@@ -1976,7 +2069,7 @@ export function MeetingDetailPage() {
                       id: "record-approval",
                       label: minutes?.approvedAt ? "Edit minutes approval" : "Record minutes approval",
                       icon: <FileText size={12} />,
-                      disabled: !minutes,
+                      disabled: !minutes || meeting.status !== "Held",
                       onSelect: startApprovalEdit,
                     },
                   ],
@@ -2007,21 +2100,21 @@ export function MeetingDetailPage() {
                       id: "preview-page",
                       label: "Open preview page",
                       icon: <ExternalLink size={12} />,
-                      disabled: !minutes,
+                      disabled: !minutes || meeting.status !== "Held",
                       onSelect: openMinutesPreviewPage,
                     },
                     {
                       id: "word",
                       label: "Export to Word",
                       icon: <FileDown size={12} />,
-                      disabled: !minutes,
+                      disabled: !minutes || meeting.status !== "Held",
                       onSelect: exportToWord,
                     },
                     {
                       id: "pdf",
                       label: "Download PDF",
                       icon: <FileDown size={12} />,
-                      disabled: !minutes,
+                      disabled: !minutes || meeting.status !== "Held",
                       onSelect: exportToPdf,
                     },
                     {
@@ -2146,7 +2239,7 @@ export function MeetingDetailPage() {
                     societyId={society._id}
                     meetingId={meeting._id}
                     directors={directors ?? []}
-                    motions={(minutesMotionsForDisplay(minutes) as any[])
+                    motions={(displayMotions as any[])
                       .map((motion, index) => ({ motion, index }))
                       .filter(({ motion }) => !isAdjournmentMotion(motion))
                       .map(({ motion, index }) => ({
@@ -2164,14 +2257,7 @@ export function MeetingDetailPage() {
                     meetingId={meeting._id}
                     members={members ?? []}
                     presentCount={
-                      // When detailed attendance has been recorded, trust it —
-                      // even a legitimate 0 present. Only fall back to the plain
-                      // attendee list when no detailed roll call exists.
-                      ((minutes?.detailedAttendance ?? []) as any[]).length
-                        ? ((minutes?.detailedAttendance ?? []) as any[]).filter(
-                            (row) => row.quorumCounted !== false && row.status === "present",
-                          ).length
-                        : (minutes?.attendees?.length ?? 0)
+                      presentCountForQuorum
                     }
                     quorumRequired={
                       quorumSnapshot.required ??
@@ -2233,13 +2319,16 @@ export function MeetingDetailPage() {
             setAttendanceEdit={setAttendanceEdit}
             startAttendanceEdit={startAttendanceEdit}
             autofillCurrentDirectors={autofillCurrentDirectors}
+            attendanceAutofillLabel={meeting.type === "Committee" ? "Add committee members" : "Add current directors"}
             saveAttendance={saveAttendance}
             quorumSnapshot={quorumSnapshot}
+            activeProxyCount={activeProxyCount}
             quorumLegalGuides={quorumLegalGuides}
             members={members}
             directors={directors}
             saveMinuteSections={saveMinuteSections}
             saveMinuteMotions={saveMotions}
+            resolvedMotions={displayMotions}
             addSectionToBacklog={addSectionToBacklog}
             adoptionTargets={adoptionTargets}
             onOpenMotions={() => setActiveTab("motions")}
@@ -2292,7 +2381,7 @@ export function MeetingDetailPage() {
             <div className="card__body">
               <MotionEditor
                 ref={motionEditorRef}
-                motions={minutesMotionsForDisplay(minutes) as Motion[]}
+                motions={displayMotions}
                 directorNames={directorNames}
                 people={motionPeople}
                 agendaSections={(minutes?.sections ?? []).map((section: any) => ({
@@ -2373,7 +2462,7 @@ export function MeetingDetailPage() {
                     <strong>{selectedMinutesExportStyle.label}</strong>
                     <p className="muted">{selectedMinutesExportStyle.tone}</p>
                   </div>
-                  <button className="btn-action" onClick={openMinutesPreviewPage}>
+                  <button className="btn-action" onClick={openMinutesPreviewPage} disabled={meeting.status !== "Held"}>
                     <ExternalLink size={12} /> Open separate page
                   </button>
                 </div>

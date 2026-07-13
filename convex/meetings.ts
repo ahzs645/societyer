@@ -28,6 +28,7 @@ export const get = query({
 export const create = mutation({
   args: {
     societyId: v.id("societies"),
+    committeeId: v.optional(v.id("committees")),
     type: v.string(),
     title: v.string(),
     scheduledAt: v.string(),
@@ -83,6 +84,7 @@ export const update = mutation({
     id: v.id("meetings"),
     patch: v.object({
       type: v.optional(v.string()),
+      committeeId: v.optional(v.id("committees")),
       title: v.optional(v.string()),
       scheduledAt: v.optional(v.string()),
       location: v.optional(v.string()),
@@ -115,6 +117,7 @@ export const update = mutation({
       // Explicit clear signals — db.patch ignores undefined coming over the
       // wire, so the client can't unset a field by sending `field: undefined`.
       clearNoticeSent: v.optional(v.boolean()),
+      clearCommitteeId: v.optional(v.boolean()),
     }),
   },
   returns: v.any(),

@@ -9,6 +9,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
 import { formatDateTime } from "../lib/format";
 import { enrichGcosNormalizedGrant, readGcosExportFile } from "../lib/gcosExportImport";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 type RunnerHealth = {
   ok?: boolean;
@@ -207,11 +208,12 @@ function connectorForSession(session: BrowserSession, availableConnectors: Conne
 }
 
 export function BrowserConnectorsPage() {
+  const staticDemo = isStaticDemoRuntime();
   const society = useSociety();
   const toast = useToast();
   const [searchParams] = useSearchParams();
   const requestedConnectorId = searchParams.get("connector");
-  const [health, setHealth] = useState<RunnerHealth | null>(null);
+  const [health, setHealth] = useState<RunnerHealth | null>(() => staticDemo ? staticDemoHealth() : null);
   const [connectors, setConnectors] = useState<ConnectorManifest[]>([]);
   const [connectorId, setConnectorId] = useState(DEFAULT_CONNECTOR_ID);
   const [sessions, setSessions] = useState<BrowserSession[]>([]);
@@ -261,11 +263,12 @@ export function BrowserConnectorsPage() {
   const showGenericUtilities = Boolean(selectedConnector && !connectorPanelPolicy[selectedConnector.id]?.hideGenericUtilities);
 
   useEffect(() => {
+    if (staticDemo) return;
     refresh();
     const id = window.setInterval(refresh, 5000);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [society?._id]);
+  }, [society?._id, staticDemo]);
 
   useEffect(() => {
     if (!requestedConnectorId) return;
@@ -278,6 +281,9 @@ export function BrowserConnectorsPage() {
   if (society === null) return <SeedPrompt />;
 
   async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+    if (staticDemo) {
+      throw new Error("Browser apps are a read-only preview in the static demo. Start the local app and connector stack to use them.");
+    }
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 10_000);
     try {
@@ -304,6 +310,11 @@ export function BrowserConnectorsPage() {
 
   async function refresh() {
     if (!society?._id) return;
+    if (staticDemo) {
+      setHealth(staticDemoHealth());
+      setSessions([]);
+      return;
+    }
     try {
       const [connectorsPayload, healthPayload, sessionsPayload] = await Promise.all([
         apiFetch<{ connectors: ConnectorManifest[] }>(`/connectors?societyId=${society._id}`),
@@ -1404,4 +1415,16 @@ export function BrowserConnectorsPage() {
       </SettingsShell>
     </div>
   );
+}
+
+function staticDemoHealth(): RunnerHealth {
+  return {
+    ok: false,
+    browser: {
+      ok: false,
+      provider: "preview",
+      detail: "Browser apps are shown for preview only in the static demo; no connector service is contacted.",
+    },
+    activeSessions: 0,
+  };
 }

@@ -4,23 +4,21 @@
  * reused by the page Drawer and the global "Create meeting" popup
  * (MeetingCreateModal).
  */
-import { useMemo } from "react";
-import { useQuery } from "convex/react";
+import { useEffect, useMemo, useRef } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "@/components/ui";
 import { Select } from "@/components/Select";
 import { DateTimeInput } from "@/components/DateTimeInput";
-import { Toggle } from "@/components/Controls";
+import { Checkbox, Toggle } from "@/components/Controls";
 import { NameAutocomplete } from "@/components/NameAutocomplete";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
 import { AlertTriangle, BookMarked } from "lucide-react";
 import { formatDateTime, toDateTimeLocalValue } from "@/lib/format";
 import { useBylawRules } from "@/hooks/useBylawRules";
-import { daysUntil, isGeneralMeeting, meetsNoticeWindow } from "../lib/noticeWindow";
+import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow } from "../lib/noticeWindow";
 import { useHiddenSuggestions, looksLikeLink } from "@/lib/hiddenSuggestions";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
-
-export const OVERLAP_WINDOW_MS = 2 * 60 * 60 * 1000; // within 2 hours counts as concurrent
 
 export type MeetingDraft = {
   type: string;
@@ -32,6 +30,8 @@ export type MeetingDraft = {
   status: string;
   attendeeIds: string[];
   meetingTemplateId: string;
+  committeeId: string;
+  conflictAcknowledged: boolean;
   notes?: string;
 };
 
@@ -40,6 +40,7 @@ type BylawRules = ReturnType<typeof useBylawRules>["rules"];
 export type MeetingFormData = {
   meetings: Doc<"meetings">[] | undefined;
   meetingTemplates: Doc<"meetingTemplates">[] | undefined;
+  committees: Doc<"committees">[] | undefined;
   defaultTemplate: Doc<"meetingTemplates"> | undefined;
   rules: BylawRules;
   effectiveRules: BylawRules;
@@ -61,6 +62,8 @@ export function useMeetingFormData(
   scheduledAt?: string,
 ): MeetingFormData {
   const { rules } = useBylawRules();
+  const seedMeetingTemplates = useMutation(api.meetingTemplates.seedDefaults);
+  const templateSeedRequested = useRef(false);
   const meetings = useQuery(api.meetings.list, societyId ? { societyId } : "skip") as
     | Doc<"meetings">[]
     | undefined;
@@ -68,10 +71,24 @@ export function useMeetingFormData(
     api.meetingTemplates.list,
     societyId ? { societyId } : "skip",
   ) as Doc<"meetingTemplates">[] | undefined;
+  const committees = useQuery(
+    api.committees.list,
+    societyId ? { societyId } : "skip",
+  ) as Doc<"committees">[] | undefined;
   const formRules = useQuery(
     api.bylawRules.getForDate,
     societyId && scheduledAt ? { societyId, dateISO: scheduledAt } : "skip",
   );
+  useEffect(() => {
+    if (!societyId || meetingTemplates === undefined || templateSeedRequested.current) return;
+    const hasBoard = meetingTemplates.some((template) => template.meetingType === "Board");
+    const hasAgm = meetingTemplates.some((template) => template.meetingType === "AGM");
+    if (hasBoard && hasAgm) return;
+    templateSeedRequested.current = true;
+    void seedMeetingTemplates({ societyId }).catch(() => {
+      templateSeedRequested.current = false;
+    });
+  }, [meetingTemplates, seedMeetingTemplates, societyId]);
   const { hide: hideLocationSuggestion, isHidden: isHiddenLocation } =
     useHiddenSuggestions("meeting-location");
 
@@ -99,13 +116,13 @@ export function useMeetingFormData(
     return out;
   }, [meetings, isHiddenLocation]);
 
-  const defaultTemplate =
-    (meetingTemplates ?? []).find((template) => template.isDefault) ??
-    (meetingTemplates ?? [])[0];
+  const defaultTemplate = meetingTemplatesForType(meetingTemplates, "Board").find((template) => template.isDefault) ??
+    meetingTemplatesForType(meetingTemplates, "Board")[0];
 
   return {
     meetings,
     meetingTemplates,
+    committees,
     defaultTemplate,
     rules,
     effectiveRules,
@@ -124,16 +141,20 @@ export function useMeetingFormData(
  * before rules/templates arrive). `makeMeetingDraft` refines it once data loads.
  */
 export function blankMeetingDraft(overrides: Partial<MeetingDraft> = {}): MeetingDraft {
+  const scheduled = new Date();
+  scheduled.setDate(scheduled.getDate() + 14);
   return {
     type: "Board",
     title: "",
-    scheduledAt: toDateTimeLocalValue(new Date(Date.now() + 14 * 864e5)),
+    scheduledAt: toDateTimeLocalValue(scheduled),
     location: "",
     electronic: false,
     quorumRequired: "",
     status: "Scheduled",
     attendeeIds: [],
     meetingTemplateId: "",
+    committeeId: "",
+    conflictAcknowledged: false,
     ...overrides,
   };
 }
@@ -144,10 +165,16 @@ export function makeMeetingDraft(
   data: MeetingFormData,
   overrides: Partial<MeetingDraft> = {},
 ): MeetingDraft {
+  const type = overrides.type ?? "Board";
+  const template = meetingTemplatesForType(data.meetingTemplates, type).find((row) => row.isDefault) ??
+    meetingTemplatesForType(data.meetingTemplates, type)[0];
+  const scheduled = new Date();
+  scheduled.setDate(scheduled.getDate() + data.noticeMinDays);
   return blankMeetingDraft({
-    scheduledAt: toDateTimeLocalValue(new Date(Date.now() + data.noticeMinDays * 864e5)),
+    type,
+    scheduledAt: toDateTimeLocalValue(scheduled),
     electronic: !!data.rules?.allowElectronicMeetings,
-    meetingTemplateId: data.defaultTemplate?._id ? String(data.defaultTemplate._id) : "",
+    meetingTemplateId: template?._id ? String(template._id) : "",
     ...overrides,
   });
 }
@@ -164,8 +191,17 @@ export function meetingToDraft(meeting: Doc<"meetings">): MeetingDraft {
     status: meeting.status,
     attendeeIds: meeting.attendeeIds ?? [],
     meetingTemplateId: meeting.meetingTemplateId ? String(meeting.meetingTemplateId) : "",
+    committeeId: meeting.committeeId ? String(meeting.committeeId) : "",
+    conflictAcknowledged: false,
     notes: meeting.notes ?? "",
   };
+}
+
+export function meetingTemplatesForType(
+  templates: Doc<"meetingTemplates">[] | undefined,
+  type: string,
+) {
+  return (templates ?? []).filter((template) => !template.meetingType || template.meetingType === type);
 }
 
 export function numberOrUndefined(value: unknown) {
@@ -204,7 +240,10 @@ export function MeetingFormFields({
     recentLocations,
     hideLocationSuggestion,
     meetings,
+    committees,
   } = data;
+  const availableTemplates = meetingTemplatesForType(meetingTemplates, value.type);
+  const overlaps = meetingScheduleConflicts(meetings, value.scheduledAt, editingId);
 
   return (
     <div className="meeting-form">
@@ -228,7 +267,7 @@ export function MeetingFormFields({
               onChange={(v) => onChange({ meetingTemplateId: v })}
               options={[
                 { value: "", label: "Blank meeting" },
-                ...(meetingTemplates ?? []).map((template) => ({
+                ...availableTemplates.map((template) => ({
                   value: String(template._id),
                   label: `${template.name}${template.isDefault ? " (default)" : ""}`,
                 })),
@@ -239,7 +278,7 @@ export function MeetingFormFields({
             <p className="meeting-template-picker__summary">
               <BookMarked size={12} style={{ verticalAlign: -2, marginRight: 4 }} />
               {templateSummary(
-                (meetingTemplates ?? []).find(
+                availableTemplates.find(
                   (template) => String(template._id) === value.meetingTemplateId,
                 ),
               )}
@@ -251,9 +290,10 @@ export function MeetingFormFields({
           )}
         </div>
       )}
-      <Field label="Title">
+      <Field label="Title" required>
         <input
           className="input"
+          required
           value={value.title}
           onChange={(e) => onChange({ title: e.target.value })}
         />
@@ -262,17 +302,40 @@ export function MeetingFormFields({
         <Field label="Type">
           <Select
             value={value.type}
-            onChange={(v) => onChange({ type: v })}
+            onChange={(v) => {
+              const templates = meetingTemplatesForType(meetingTemplates, v);
+              const template = templates.find((row) => row.isDefault) ?? templates[0];
+              onChange({
+                type: v,
+                committeeId: v === "Committee" ? value.committeeId : "",
+                meetingTemplateId: editingId ? value.meetingTemplateId : template ? String(template._id) : "",
+              });
+            }}
             options={["Board", "Committee", "AGM", "SGM"].map((t) => ({ value: t, label: t }))}
           />
         </Field>
         <Field label="Scheduled">
           <DateTimeInput
             value={value.scheduledAt}
-            onChange={(v) => onChange({ scheduledAt: v })}
+            onChange={(v) => onChange({ scheduledAt: v, conflictAcknowledged: false })}
           />
         </Field>
       </div>
+      {value.type === "Committee" && (
+        <Field label="Committee" required>
+          <Select
+            value={value.committeeId}
+            onChange={(committeeId) => onChange({ committeeId })}
+            options={[
+              { value: "", label: "Select committee" },
+              ...(committees ?? []).map((committee) => ({
+                value: String(committee._id),
+                label: committee.name,
+              })),
+            ]}
+          />
+        </Field>
+      )}
       {editingId && (
         <Field label="Status">
           <Select
@@ -330,17 +393,7 @@ export function MeetingFormFields({
             : ""}
         </div>
       )}
-      {(() => {
-        const draftTs = value.scheduledAt ? new Date(value.scheduledAt).getTime() : NaN;
-        if (!Number.isFinite(draftTs)) return null;
-        const overlaps = (meetings ?? []).filter(
-          (m) =>
-            m._id !== editingId &&
-            m.status !== "Cancelled" &&
-            Math.abs(new Date(m.scheduledAt).getTime() - draftTs) <= OVERLAP_WINDOW_MS,
-        );
-        if (overlaps.length === 0) return null;
-        return (
+      {overlaps.length > 0 && (
           <div
             style={{
               marginTop: 8,
@@ -364,9 +417,15 @@ export function MeetingFormFields({
                 </li>
               ))}
             </ul>
+            <div style={{ marginTop: 8 }}>
+              <Checkbox
+                checked={value.conflictAcknowledged}
+                onChange={(conflictAcknowledged) => onChange({ conflictAcknowledged })}
+                label="I reviewed this conflict and want to schedule anyway."
+              />
+            </div>
           </div>
-        );
-      })()}
+      )}
     </div>
   );
 }

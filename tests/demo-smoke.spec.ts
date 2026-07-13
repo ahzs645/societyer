@@ -83,6 +83,19 @@ test.describe("Demo navigation", () => {
       await expect(banner).toContainText(/demo/i);
     }
   });
+
+  test("browser apps stays backend-free in the static demo", async ({ page }) => {
+    const connectorRequests: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/v1/browser-connectors")) {
+        connectorRequests.push(request.url());
+      }
+    });
+
+    await page.goto("/demo/app/browser-connectors", { waitUntil: "networkidle" });
+    await expect(page.getByRole("heading", { name: "Browser apps" })).toBeVisible();
+    expect(connectorRequests).toEqual([]);
+  });
 });
 
 test.describe("Meeting agenda minutes workflow", () => {

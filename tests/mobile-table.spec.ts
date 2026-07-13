@@ -26,7 +26,7 @@ test.describe("record table mobile view", () => {
     expect(await table.scrollContainerOverflowX()).toBe("auto");
   });
 
-  test("on desktop the selectable table keeps its selection + drag columns", async ({ page }) => {
+  test("on desktop the selectable table keeps selection without exposing an inert drag handle", async ({ page }) => {
     await page.setViewportSize(DESKTOP);
 
     const members = new MembersPage(page);
@@ -34,10 +34,12 @@ test.describe("record table mobile view", () => {
 
     const table = new RecordTablePage(page);
 
-    // The Members demo table is `selectable`, so on a wide screen both leading
-    // structural columns are present — the mobile treatment is not applied.
+    // The Members demo table is `selectable`, so selection remains a real
+    // desktop interaction. Row
+    // reordering is not implemented yet, so the old decorative drag handle
+    // must stay hidden instead of advertising an action that cannot work.
     await expect(table.bodySelectionCheckboxes().first()).toBeVisible();
-    await expect(table.dragHandles().first()).toBeVisible();
+    await expect(table.dragHandles()).toHaveCount(0);
   });
 
   test("the frozen first column stays pinned when the table is scrolled sideways", async ({ page }) => {

@@ -21,15 +21,14 @@ import { formatDateTime } from "../lib/format";
 import type { ToneVariant } from "../components/ui";
 import { type MenuSection } from "../components/Menu";
 import { useConfirm } from "../components/Modal";
-import { hasStartedMinutesDraft } from "../features/meetings/lib/meetingDetailHelpers";
-import { daysUntil, isGeneralMeeting } from "../features/meetings/lib/noticeWindow";
+import { hasStartedMinutesDraft, normalizedMeetingTitle } from "../features/meetings/lib/meetingDetailHelpers";
+import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, OVERLAP_WINDOW_MS } from "../features/meetings/lib/noticeWindow";
 import {
   MeetingFormFields,
   makeMeetingDraft,
   meetingToDraft,
   numberOrUndefined,
   useMeetingFormData,
-  OVERLAP_WINDOW_MS,
   type MeetingDraft,
 } from "../features/meetings/components/MeetingFormFields";
 import type { Doc } from "../../convex/_generated/dataModel";
@@ -79,6 +78,9 @@ export function MeetingsPage() {
   const noticeMinDays = data.noticeMinDays;
   const noticeMaxDays = data.noticeMaxDays;
   const effectiveNoticeMinDays = data.effectiveNoticeMinDays;
+  const hasUnacknowledgedConflict = !!form &&
+    meetingScheduleConflicts(meetings, form.scheduledAt, editingId).length > 0 &&
+    !form.conflictAcknowledged;
 
   const conflicts = useMemo(() => computeConflicts(meetings ?? []), [meetings]);
   const minutesByMeeting = useMemo(() => {
@@ -171,6 +173,19 @@ export function MeetingsPage() {
   if (society === null) return <SeedPrompt />;
   const save = async () => {
     if (!form) return;
+    const title = normalizedMeetingTitle(form.title);
+    if (!title) {
+      toast.error("Enter a meeting title.");
+      return;
+    }
+    if (form.type === "Committee" && !form.committeeId) {
+      toast.error("Select the committee for this meeting.");
+      return;
+    }
+    if (hasUnacknowledgedConflict) {
+      toast.error("Review and acknowledge the schedule conflict before continuing.");
+      return;
+    }
     // Only hard-block on creation with less than the minimum notice — the notice
     // window governs when notice is sent, not how far ahead a meeting may be
     // scheduled, and edits to past/held meetings must stay possible. Scheduling
@@ -187,28 +202,33 @@ export function MeetingsPage() {
         id: editingId,
         patch: {
           type: form.type,
-          title: form.title,
+          title,
           scheduledAt: form.scheduledAt,
           location: form.location,
           electronic: form.electronic,
           quorumRequired: numberOrUndefined(form.quorumRequired),
           status: form.status,
           attendeeIds: form.attendeeIds,
+          committeeId: (form.committeeId || undefined) as any,
+          clearCommitteeId: !form.committeeId,
           notes: form.notes,
         },
       });
       setOpen(false);
-      toast.success("Meeting updated", form.title);
+      toast.success("Meeting updated", title);
       return;
     }
+    const { conflictAcknowledged: _conflictAcknowledged, committeeId, ...payload } = form;
     const meetingId = await create({
       societyId: society._id,
-      ...form,
+      ...payload,
+      title,
+      committeeId: (committeeId || undefined) as any,
       meetingTemplateId: form.meetingTemplateId || undefined,
       quorumRequired: numberOrUndefined(form.quorumRequired),
     });
     setOpen(false);
-    toast.success("Meeting scheduled", form.title);
+    toast.success("Meeting scheduled", title);
     if (meetingId) navigate(`/app/meetings/${meetingId}`);
   };
 
@@ -325,7 +345,7 @@ export function MeetingsPage() {
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title={editingId ? "Edit meeting" : "Schedule meeting"}
-        footer={<><button className="btn" type="button" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" type="button" onClick={save}>{editingId ? "Save" : "Schedule"}</button></>}
+        footer={<><button className="btn" type="button" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" type="button" onClick={save} disabled={hasUnacknowledgedConflict}>{editingId ? "Save" : "Schedule"}</button></>}
       >
         {form && (
           <MeetingFormFields

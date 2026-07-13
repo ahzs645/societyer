@@ -12,6 +12,25 @@
   background: token('bg-app');
 }
 
+.skip-link {
+  position: fixed;
+  top: token('s-2');
+  left: token('s-2');
+  z-index: token('z-modal');
+  padding: token('s-2') token('s-3');
+  border: 1px solid token('border-strong');
+  border-radius: token('r-sm');
+  background: token('bg-panel');
+  color: token('text-primary');
+  box-shadow: token('shadow-md');
+  transform: translateY(calc(-100% - token('s-4')));
+  transition: transform token('anim-fast') token('anim-ease');
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 .sidebar-backdrop {
   position: fixed;
   inset: 0;

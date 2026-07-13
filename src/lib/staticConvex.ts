@@ -102,6 +102,7 @@ import {
   fundingSourceEvents,
   committees,
   meetings,
+  meetingTemplates,
   agendas,
   agendaItems,
   minutes,

@@ -95,6 +95,7 @@ async function buildQuorumSnapshot(
   ctx: PortableQueryCtx | PortableMutationCtx,
   args: {
     societyId: string;
+    committeeId?: string;
     meetingDateISO: string;
     meetingType?: string;
     quorumRequiredOverride?: number;
@@ -435,6 +436,7 @@ export async function createPortable(
   ctx: PortableMutationCtx,
   args: {
     societyId: string;
+    committeeId?: string;
     type: string;
     title: string;
     scheduledAt: string;
@@ -478,6 +480,7 @@ export async function createPortable(
 
   const snapshot = await buildQuorumSnapshot(ctx, {
     societyId: args.societyId,
+    committeeId: args.committeeId,
     meetingDateISO: args.scheduledAt,
     meetingType: args.type,
     quorumRequiredOverride: args.quorumRequired,
@@ -809,6 +812,7 @@ export async function updatePortable(
     id: string;
     patch: {
       type?: string;
+      committeeId?: string;
       title?: string;
       scheduledAt?: string;
       location?: string;
@@ -839,12 +843,14 @@ export async function updatePortable(
       packageReviewedByUserId?: string;
       notes?: string;
       clearNoticeSent?: boolean;
+      clearCommitteeId?: boolean;
     };
   },
 ) {
-  const { clearNoticeSent, ...rest } = patch;
+  const { clearNoticeSent, clearCommitteeId, ...rest } = patch;
   const next: Record<string, unknown> = { ...rest };
   if (clearNoticeSent) next.noticeSentAt = undefined;
+  if (clearCommitteeId) next.committeeId = undefined;
   const existing = rest.scheduledAt !== undefined ? await ctx.db.get(id) : null;
   await ctx.db.patch(id, next);
   // Rescheduling: keep the auto-created minutes stub in step. Only touch
