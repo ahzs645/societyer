@@ -247,10 +247,10 @@ function packageLifecycle(pkg: any, related: Record<string, any[]>) {
     (pkg.workflowId && task.workflowId === pkg.workflowId) ||
     (task.documentId && (pkg.supportingDocumentIds ?? []).map(String).includes(String(task.documentId))),
   );
-  const relatedSignatures = related.signatures.filter((signature) =>
-    signature.entityId === packageId ||
-    (pkg.signingPackageIds ?? []).includes(signature.entityId),
-  );
+  const relatedSignatures = related.signatures.filter((signature) => {
+    const subjectId = signature.subjectId ?? signature.entityId;
+    return subjectId === packageId || (pkg.signingPackageIds ?? []).includes(subjectId);
+  });
   const relatedFilings = related.filings.filter((filing) =>
     String(filing.kind ?? "").toLowerCase().includes(String(pkg.eventType ?? "").toLowerCase()) ||
     relatedTasks.some((task) => task.filingId && task.filingId === filing._id),

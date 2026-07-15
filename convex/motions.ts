@@ -100,7 +100,7 @@ export const backfillFromLegacy = internalMutation({
       minutesProcessed += 1;
       minutesMotions += motions.length;
       if (!dryRun) {
-        await syncMotionsForMinutes(toPortableMutationCtx(ctx), {
+        await syncMotionsForMinutes(await toPortableMutationCtx(ctx), {
           societyId: minutes.societyId,
           minutesId: minutes._id,
           meetingId: minutes.meetingId,
@@ -176,19 +176,19 @@ export const backfillProceduralClassification = internalMutation({
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx: any, args: any) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx: any, args: any) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listForMinutes = query({
   args: { minutesId: v.id("minutes") },
   returns: v.any(),
-  handler: (ctx: any, args: any) => listForMinutesPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx: any, args: any) => listForMinutesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listForMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx: any, args: any) => listForMeetingPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx: any, args: any) => listForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 // Backlog list = motions parked before/around a meeting. Folds in the old
@@ -196,7 +196,7 @@ export const listForMeeting = query({
 export const backlog = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx: any, args: any) => backlogPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx: any, args: any) => backlogPortable(await toPortableQueryCtx(ctx), args),
 });
 
 // ----- mutations ------------------------------------------------------------
@@ -209,7 +209,7 @@ export const create = mutation({
     ...motionContent,
   },
   returns: v.any(),
-  handler: (ctx: any, args: any) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx: any, args: any) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -222,7 +222,7 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx: any, args: any) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx: any, args: any) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 /** Set an explicit, overridable status (and optional outcome), appending a
@@ -238,7 +238,7 @@ export const setStatus = mutation({
     note: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx: any, args: any) => setStatusPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx: any, args: any) => setStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
 /** Replace a motion's tag/label set (normalized: trimmed, lowercased, deduped).
@@ -247,7 +247,7 @@ export const setStatus = mutation({
 export const setTags = mutation({
   args: { motionId: v.id("motions"), tags: v.array(v.string()) },
   returns: v.any(),
-  handler: (ctx: any, args: any) => setTagsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx: any, args: any) => setTagsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const recordVote = mutation({
@@ -258,11 +258,11 @@ export const recordVote = mutation({
     abstentions: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: (ctx: any, args: any) => recordVotePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx: any, args: any) => recordVotePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { motionId: v.id("motions") },
   returns: v.any(),
-  handler: (ctx: any, args: any) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx: any, args: any) => removePortable(await toPortableMutationCtx(ctx), args),
 });

@@ -20,19 +20,19 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const listForObject = query({
   args: { objectMetadataId: v.id("objectMetadata") },
   returns: v.any(),
-  handler: (ctx, args) => listForObjectPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listForObjectPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listForSociety = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listForSocietyPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listForSocietyPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("fieldMetadata") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const getByName = query({
@@ -41,7 +41,7 @@ export const getByName = query({
     name: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => getByNamePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getByNamePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -62,7 +62,7 @@ export const create = mutation({
     position: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -82,11 +82,11 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("fieldMetadata") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

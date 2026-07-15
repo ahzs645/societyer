@@ -12,13 +12,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => attestationsListPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => attestationsListPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const forDirector = query({
   args: { directorId: v.id("directors") },
   returns: v.any(),
-  handler: (ctx, args) => attestationsForDirectorPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => attestationsForDirectorPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const sign = mutation({
@@ -33,18 +33,18 @@ export const sign = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => attestationSignPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => attestationSignPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("directorAttestations") },
   returns: v.any(),
-  handler: (ctx, args) => attestationRemovePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => attestationRemovePortable(await toPortableMutationCtx(ctx), args),
 });
 
 /** Returns directors who haven't attested for the current year. */
 export const missingForYear = query({
   args: { societyId: v.id("societies"), year: v.number() },
   returns: v.any(),
-  handler: (ctx, args) => attestationsMissingForYearPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => attestationsMissingForYearPortable(await toPortableQueryCtx(ctx), args),
 });

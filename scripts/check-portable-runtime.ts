@@ -76,7 +76,7 @@ function localEngine(): TransactionalDb {
 }
 
 function votingRuntime(db: TransactionalDb): PortableRuntime {
-  return new PortableRuntime({ db, capabilities: makeCapabilities({}) }).register(
+  return new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) }).register(
     definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }),
   );
 }
@@ -127,7 +127,7 @@ const issueHolding = definePortableMutation({
 });
 
 async function holdingsAndClass(db: TransactionalDb) {
-  const ctxQ = new PortableRuntime({ db, capabilities: makeCapabilities({}) });
+  const ctxQ = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) });
   ctxQ.register(definePortableQuery({ name: "demo:dump", handler: async (c) => {
     const holdings = (await c.db.query("rightsHoldings").collect()).sort((a, b) => a._id.localeCompare(b._id));
     const classA = await c.db.get("classA");
@@ -140,8 +140,8 @@ async function holdingsAndClass(db: TransactionalDb) {
   // Successful commit: both engines reach the same state.
   const mem = memoryEngine();
   const loc = localEngine();
-  await new PortableRuntime({ db: mem, capabilities: makeCapabilities({}) }).register(issueHolding).runMutation("demo:issueHolding", {});
-  await new PortableRuntime({ db: loc, capabilities: makeCapabilities({}) }).register(issueHolding).runMutation("demo:issueHolding", {});
+  await new PortableRuntime({ db: mem, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) }).register(issueHolding).runMutation("demo:issueHolding", {});
+  await new PortableRuntime({ db: loc, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) }).register(issueHolding).runMutation("demo:issueHolding", {});
 
   const memState: any = await holdingsAndClass(mem);
   const locState: any = await holdingsAndClass(loc);
@@ -156,7 +156,7 @@ async function holdingsAndClass(db: TransactionalDb) {
   for (const [label, db] of [["MemoryDb", memoryEngine()], ["LocalStoreDb", localEngine()]] as const) {
     const before: any = await holdingsAndClass(db);
     await assert.rejects(
-      () => new PortableRuntime({ db, capabilities: makeCapabilities({}) }).register(issueHolding).runMutation("demo:issueHolding", { boom: true }),
+      () => new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) }).register(issueHolding).runMutation("demo:issueHolding", { boom: true }),
       /injected failure/,
       `${label} should propagate the error`,
     );

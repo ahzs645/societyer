@@ -24,7 +24,7 @@ import { toPortableMutationCtx } from "./lib/portable";
 /* ----------------------------- Seed operations ---------------------------- */
 
 async function seedSociety(ctx: any, societyId: any) {
-  await seedSocietyPortable(toPortableMutationCtx(ctx), societyId, RECORD_TABLE_OBJECTS);
+  await seedSocietyPortable(await toPortableMutationCtx(ctx), societyId, RECORD_TABLE_OBJECTS);
 }
 
 export const run = mutation({
@@ -32,7 +32,7 @@ export const run = mutation({
   returns: v.object({ seededSocieties: v.number(), objects: v.number() }),
   handler: async (ctx, { serviceToken }) => {
     await assertMaintenanceToken(serviceToken);
-    return runPortable(toPortableMutationCtx(ctx), { objects: RECORD_TABLE_OBJECTS });
+    return runPortable(await toPortableMutationCtx(ctx), { objects: RECORD_TABLE_OBJECTS });
   },
 });
 
@@ -41,7 +41,7 @@ export const runForSociety = mutation({
   returns: v.object({ ok: v.boolean(), objects: v.number() }),
   handler: async (ctx, { societyId, serviceToken }) => {
     await assertMaintenanceToken(serviceToken);
-    return runForSocietyPortable(toPortableMutationCtx(ctx), { societyId, objects: RECORD_TABLE_OBJECTS });
+    return runForSocietyPortable(await toPortableMutationCtx(ctx), { societyId, objects: RECORD_TABLE_OBJECTS });
   },
 });
 
@@ -55,8 +55,8 @@ export const runForSociety = mutation({
 export const ensureForSociety = mutation({
   args: { societyId: v.id("societies") },
   returns: v.object({ ok: v.boolean(), objects: v.number() }),
-  handler: (ctx, { societyId }) =>
-    ensureForSocietyPortable(toPortableMutationCtx(ctx), { societyId, objects: RECORD_TABLE_OBJECTS }),
+  handler: async (ctx, { societyId }) =>
+    ensureForSocietyPortable(await toPortableMutationCtx(ctx), { societyId, objects: RECORD_TABLE_OBJECTS }),
 });
 
 export { seedSociety };
@@ -69,6 +69,6 @@ export const wipe = mutation({
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, { serviceToken }) => {
     await assertMaintenanceToken(serviceToken);
-    return wipePortable(toPortableMutationCtx(ctx));
+    return wipePortable(await toPortableMutationCtx(ctx));
   },
 });

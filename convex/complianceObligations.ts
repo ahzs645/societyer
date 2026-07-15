@@ -19,7 +19,7 @@ const decisionArgs = {
 export const listDecisions = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listDecisionsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listDecisionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const markReviewed = mutation({
@@ -30,7 +30,7 @@ export const markReviewed = mutation({
     targetId: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => markReviewedPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => markReviewedPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const dismissDecision = mutation({
@@ -39,11 +39,11 @@ export const dismissDecision = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => dismissDecisionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => dismissDecisionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const reopenDecision = mutation({
   args: decisionArgs,
   returns: v.any(),
-  handler: (ctx, args) => reopenDecisionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => reopenDecisionPortable(await toPortableMutationCtx(ctx), args),
 });

@@ -13,5 +13,5 @@ import { toPortableQueryCtx } from "./lib/portable";
 export const checklist = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => checklistPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => checklistPortable(await toPortableQueryCtx(ctx), args),
 });

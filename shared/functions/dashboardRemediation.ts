@@ -82,6 +82,8 @@ export async function markPrivacyProgramReviewedPortable(
     societyId: args.societyId,
     actor: "You",
     entityType: "society",
+    subjectId: args.societyId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: args.societyId,
     action: "privacy-program-reviewed",
     summary: "Marked PIPA privacy program reviewed from dashboard remediation.",
@@ -116,6 +118,8 @@ export async function markMemberDataAccessReviewedPortable(
     societyId: args.societyId,
     actor: "You",
     entityType: "society",
+    subjectId: args.societyId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: args.societyId,
     action: "member-data-access-reviewed",
     summary: "Marked member-data access reviewed from dashboard remediation.",
@@ -176,6 +180,8 @@ async function createReviewTaskForFlag(ctx: PortableMutationCtx, args: {
       societyId: args.societyId,
       actor: "You",
       entityType: "task",
+      subjectId: taskId,
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: taskId,
       action: "created",
       summary: `Created remediation task "${args.title}"`,

@@ -13,7 +13,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const overview = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => overviewPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => overviewPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const updateReview = mutation({
@@ -24,7 +24,7 @@ export const updateReview = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => updateReviewPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateReviewPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const promoteBoardRoleToDirector = mutation({
@@ -37,19 +37,19 @@ export const promoteBoardRoleToDirector = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => promoteBoardRoleToDirectorPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => promoteBoardRoleToDirectorPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const finishFinancePaperlessReview = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => finishFinancePaperlessReviewPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => finishFinancePaperlessReviewPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const finishSafePaperlessReview = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => finishSafePaperlessReviewPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => finishSafePaperlessReviewPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const createManual = mutation({
@@ -59,5 +59,5 @@ export const createManual = mutation({
     payload: v.any(),
   },
   returns: v.any(),
-  handler: (ctx, args) => createManualPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createManualPortable(await toPortableMutationCtx(ctx), args),
 });

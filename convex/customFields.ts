@@ -17,7 +17,7 @@ export const listDefinitions = query({
     entityType: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => listDefinitionsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listDefinitionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const createDefinition = mutation({
@@ -32,7 +32,7 @@ export const createDefinition = mutation({
     description: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createDefinitionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createDefinitionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const updateDefinition = mutation({
@@ -45,22 +45,23 @@ export const updateDefinition = mutation({
     description: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => updateDefinitionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateDefinitionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const deleteDefinition = mutation({
   args: { id: v.id("customFieldDefinitions") },
   returns: v.any(),
-  handler: (ctx, args) => deleteDefinitionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => deleteDefinitionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const listValues = query({
   args: {
     entityType: v.string(),
-    entityId: v.string(),
+    subjectId: v.optional(v.string()),
+    entityId: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => listValuesPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listValuesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const setValue = mutation({
@@ -68,19 +69,21 @@ export const setValue = mutation({
     societyId: v.id("societies"),
     definitionId: v.id("customFieldDefinitions"),
     entityType: v.string(),
-    entityId: v.string(),
+    subjectId: v.optional(v.string()),
+    entityId: v.optional(v.string()),
     value: v.any(),
   },
   returns: v.any(),
-  handler: (ctx, args) => setValuePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setValuePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const clearValue = mutation({
   args: {
     entityType: v.string(),
-    entityId: v.string(),
+    subjectId: v.optional(v.string()),
+    entityId: v.optional(v.string()),
     definitionId: v.id("customFieldDefinitions"),
   },
   returns: v.any(),
-  handler: (ctx, args) => clearValuePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => clearValuePortable(await toPortableMutationCtx(ctx), args),
 });

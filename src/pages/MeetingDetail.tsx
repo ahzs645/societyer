@@ -152,7 +152,7 @@ export function MeetingDetailPage() {
   // rendered into the export's signature block.
   const minutesSignatures = useQuery(
     api.signatures.listForEntity,
-    minutes ? { entityType: "minutes", entityId: minutes._id as string } : "skip",
+    minutes ? { entityType: "minutes", subjectId: minutes._id as string } : "skip",
   );
   // Conflict-of-interest / recusal declarations for this meeting.
   const meetingConflicts = useQuery(

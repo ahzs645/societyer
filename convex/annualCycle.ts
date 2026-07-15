@@ -9,5 +9,5 @@ export const summary = query({
     year: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: (ctx, args) => summaryPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => summaryPortable(await toPortableQueryCtx(ctx), args),
 });

@@ -26,13 +26,13 @@ const transcriptSegment = v.object({
 export const getByMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => getByMeetingPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getByMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const jobForMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => jobForMeetingPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => jobForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const createJob = mutation({
@@ -42,7 +42,7 @@ export const createJob = mutation({
     provider: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => createJobPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createJobPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const updateJob = mutation({
@@ -56,7 +56,7 @@ export const updateJob = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => updateJobPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateJobPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const saveTranscript = mutation({
@@ -72,8 +72,8 @@ export const saveTranscript = mutation({
     demo: v.boolean(),
   },
   returns: v.any(),
-  handler: (ctx, args): Promise<Id<"transcripts">> =>
-    saveTranscriptPortable(toPortableMutationCtx(ctx), args) as Promise<Id<"transcripts">>,
+  handler: async (ctx, args): Promise<Id<"transcripts">> =>
+    saveTranscriptPortable(await toPortableMutationCtx(ctx), args) as Promise<Id<"transcripts">>,
 });
 
 export const saveText = mutation({
@@ -88,8 +88,8 @@ export const saveText = mutation({
     demo: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: (ctx, args): Promise<Id<"transcripts">> =>
-    saveTextPortable(toPortableMutationCtx(ctx), args) as Promise<Id<"transcripts">>,
+  handler: async (ctx, args): Promise<Id<"transcripts">> =>
+    saveTextPortable(await toPortableMutationCtx(ctx), args) as Promise<Id<"transcripts">>,
 });
 
 export const importVtt = mutation({
@@ -99,8 +99,8 @@ export const importVtt = mutation({
     vttText: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args): Promise<Id<"transcripts">> =>
-    importVttPortable(toPortableMutationCtx(ctx), args) as Promise<Id<"transcripts">>,
+  handler: async (ctx, args): Promise<Id<"transcripts">> =>
+    importVttPortable(await toPortableMutationCtx(ctx), args) as Promise<Id<"transcripts">>,
 });
 
 // End-to-end action: kick off transcription, then summarize into a minute

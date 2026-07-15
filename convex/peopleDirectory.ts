@@ -12,13 +12,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: {},
   returns: v.any(),
-  handler: (ctx) => listPortable(toPortableQueryCtx(ctx)),
+  handler: async (ctx) => listPortable(await toPortableQueryCtx(ctx)),
 });
 
 export const searchByPrefix = query({
   args: { prefix: v.string(), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: (ctx, args) => searchByPrefixPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => searchByPrefixPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -38,7 +38,7 @@ export const upsert = mutation({
     nowISO: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Materialize a directory person onto a society as a role holder (YCN
@@ -53,11 +53,11 @@ export const addToSociety = mutation({
     nowISO: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => addToSocietyPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => addToSocietyPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const duplicates = query({
   args: {},
   returns: v.any(),
-  handler: (ctx) => duplicatesPortable(toPortableQueryCtx(ctx)),
+  handler: async (ctx) => duplicatesPortable(await toPortableQueryCtx(ctx)),
 });

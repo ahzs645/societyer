@@ -13,13 +13,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const runForMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => runForMeetingPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => runForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const init = mutation({
   args: { societyId: v.id("societies"), meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => agmInit(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => agmInit(await toPortableMutationCtx(ctx), args),
 });
 
 export const markStep = mutation({
@@ -40,7 +40,7 @@ export const markStep = mutation({
     ),
   },
   returns: v.any(),
-  handler: (ctx, args) => agmMarkStep(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => agmMarkStep(await toPortableMutationCtx(ctx), args),
 });
 
 export const logNoticeDelivery = mutation({
@@ -61,13 +61,13 @@ export const logNoticeDelivery = mutation({
     status: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => logNoticeDeliveryPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => logNoticeDeliveryPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const noticeDeliveries = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => noticeDeliveriesPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => noticeDeliveriesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Bulk-create notice delivery records for all voting members.
@@ -84,5 +84,5 @@ export const queueNoticeToAllVotingMembers = mutation({
     channel: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => queueNoticeToAllVotingMembersPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => queueNoticeToAllVotingMembersPortable(await toPortableMutationCtx(ctx), args),
 });

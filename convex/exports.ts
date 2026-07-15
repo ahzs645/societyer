@@ -216,7 +216,7 @@ export const EXPORTABLE_TABLES = [
 export const listExportableTables = query({
   args: { societyId: v.optional(v.id("societies")) },
   returns: v.any(),
-  handler: (ctx, args) => listExportableTablesPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listExportableTablesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const exportTable = query({
@@ -226,7 +226,7 @@ export const exportTable = query({
     includeRecoverySecrets: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: (ctx, args) => exportTablePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => exportTablePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const exportTablePage = query({
@@ -237,7 +237,7 @@ export const exportTablePage = query({
     includeRecoverySecrets: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: (ctx, args) => exportTablePagePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => exportTablePagePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const countTablePage = query({
@@ -247,7 +247,7 @@ export const countTablePage = query({
     paginationOpts: paginationOptsValidator,
   },
   returns: v.any(),
-  handler: (ctx, args) => countTablePagePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => countTablePagePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const exportAttachmentPage = query({
@@ -257,7 +257,7 @@ export const exportAttachmentPage = query({
     paginationOpts: paginationOptsValidator,
   },
   returns: v.any(),
-  handler: (ctx, args) => exportAttachmentPagePortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
+  handler: async (ctx, args) => exportAttachmentPagePortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const exportWorkspace = query({
@@ -267,11 +267,11 @@ export const exportWorkspace = query({
     includeRecoverySecrets: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: (ctx, args) => exportWorkspacePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => exportWorkspacePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const validateCurrentDatabase = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => validateCurrentDatabasePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => validateCurrentDatabasePortable(await toPortableQueryCtx(ctx), args),
 });

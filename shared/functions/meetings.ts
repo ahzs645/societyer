@@ -916,6 +916,8 @@ export async function markSourceReviewPortable(
     societyId: meeting.societyId,
     actor: actor?.displayName ?? "You",
     entityType: "meeting",
+    subjectId: id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: id,
     action: "source-review",
     summary: `Marked source review ${status.replace(/_/g, " ")} for ${meeting.title}`,
@@ -952,6 +954,8 @@ export async function setPackageReviewStatusPortable(
     societyId: meeting.societyId,
     actor: actor?.displayName ?? "You",
     entityType: "meeting",
+    subjectId: id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: id,
     action: "package-review",
     summary: `Marked board package ${status.replace(/_/g, " ")} for ${meeting.title}`,

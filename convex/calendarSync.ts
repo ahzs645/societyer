@@ -17,7 +17,7 @@ export const stageCalendarEvents = mutation({
     name: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => stageCalendarEventsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => stageCalendarEventsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertExternalCalendarEventMapping = mutation({
@@ -34,7 +34,7 @@ export const upsertExternalCalendarEventMapping = mutation({
     metadata: v.optional(v.any()),
   },
   returns: v.id("integrationSyncStates"),
-  handler: (ctx, args) => upsertExternalCalendarEventMappingPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertExternalCalendarEventMappingPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const recordCalendarWebhook = mutation({
@@ -49,7 +49,7 @@ export const recordCalendarWebhook = mutation({
     payload: v.optional(v.any()),
   },
   returns: v.id("integrationSyncStates"),
-  handler: (ctx, args) => recordCalendarWebhookPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => recordCalendarWebhookPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const recordCalendarIncrementalCursor = mutation({
@@ -65,5 +65,5 @@ export const recordCalendarIncrementalCursor = mutation({
     metadata: v.optional(v.any()),
   },
   returns: v.id("integrationSyncStates"),
-  handler: (ctx, args) => recordCalendarIncrementalCursorPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => recordCalendarIncrementalCursorPortable(await toPortableMutationCtx(ctx), args),
 });

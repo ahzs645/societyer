@@ -51,6 +51,8 @@ async function logActivity(ctx: PortableMutationCtx, row: any, actorName: string
     societyId: row.societyId,
     actor: actorName,
     entityType: "secretVaultItem",
+    subjectId: String(row._id),
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: String(row._id),
     action,
     summary,

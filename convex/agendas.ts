@@ -20,25 +20,25 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const listForMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => listForMeetingPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const getForMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => getForMeetingPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { agendaId: v.id("agendas") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listForSociety = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listForSocietyPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listForSocietyPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -49,7 +49,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const updateAgenda = mutation({
@@ -60,13 +60,13 @@ export const updateAgenda = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => updateAgendaPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateAgendaPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { agendaId: v.id("agendas") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const addItem = mutation({
@@ -83,7 +83,7 @@ export const addItem = mutation({
     motionText: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => addItemPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => addItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const updateItem = mutation({
@@ -98,7 +98,7 @@ export const updateItem = mutation({
     outcome: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => updateItemPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const syncForMeeting = mutation({
@@ -120,19 +120,19 @@ export const syncForMeeting = mutation({
     })),
   },
   returns: v.any(),
-  handler: (ctx, args) => syncForMeetingPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => syncForMeetingPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const startMinutesFromAgenda = mutation({
   args: { agendaId: v.id("agendas") },
   returns: v.any(),
-  handler: (ctx, args) => startMinutesFromAgendaPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => startMinutesFromAgendaPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeItem = mutation({
   args: { itemId: v.id("agendaItems") },
   returns: v.any(),
-  handler: (ctx, args) => removeItemPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const reorderItems = mutation({
@@ -141,5 +141,5 @@ export const reorderItems = mutation({
     orderedItemIds: v.array(v.id("agendaItems")),
   },
   returns: v.any(),
-  handler: (ctx, args) => reorderItemsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => reorderItemsPortable(await toPortableMutationCtx(ctx), args),
 });

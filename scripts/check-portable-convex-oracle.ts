@@ -117,7 +117,7 @@ const localFixture: Record<string, PortableDoc[]> = {
     { _id: "h4", societyId, holderKey: "carol", holderRoleHolderId: "rh_carol", rightsClassId: "classB", quantity: 300, status: "current" },
   ],
 };
-const runtime = new PortableRuntime({ db: new MemoryDb({ seed: localFixture }), capabilities: makeCapabilities({}) })
+const runtime = new PortableRuntime({ db: new MemoryDb({ seed: localFixture }), capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) })
   .register(definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }));
 const localResult: any = await runtime.runQuery("legalOperations:votingPower", { societyId });
 
@@ -153,7 +153,7 @@ assert.equal(convexUpdated._id, convexCreatedId, "update patches in place (same 
 // Local engines: the same portable mutation produces the same normalized row.
 const upsertDef = definePortableMutation({ name: "legalOperations:upsertRightsClass", handler: upsertRightsClassPortable });
 async function localCreate(db: TransactionalDb) {
-  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}) }).register(upsertDef);
+  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) }).register(upsertDef);
   const id = await rt.runMutation<string>("legalOperations:upsertRightsClass", {
     societyId: "soc_local", className: "Class C", classType: "share", status: "active", votesPerShare: 5,
   });
@@ -172,7 +172,7 @@ await assert.rejects(
 );
 await assert.rejects(
   () => localCreate(new MemoryDb()).then(() =>
-    new PortableRuntime({ db: new MemoryDb(), capabilities: makeCapabilities({}) }).register(upsertDef)
+    new PortableRuntime({ db: new MemoryDb(), capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) }).register(upsertDef)
       .runMutation("legalOperations:upsertRightsClass", { societyId: "s", className: "X", classType: "not_a_real_type", status: "active" })),
   /must be one of the configured/,
   "local runtime should reject the same invalid classType",
@@ -196,7 +196,7 @@ assert.equal(cList.length, 0, "Convex member removed");
 
 // Local engines: the same CRUD sequence, identical observable behavior.
 async function localMembersCrud(db: TransactionalDb) {
-  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}) })
+  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) })
     .register(definePortableMutation({ name: "members:create", handler: memberCreate }))
     .register(definePortableMutation({ name: "members:update", handler: memberUpdate }))
     .register(definePortableMutation({ name: "members:remove", handler: memberRemove }))

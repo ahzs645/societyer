@@ -23,21 +23,21 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** The governing Act as of a given ISO date (null when none has taken effect). */
 export const currentRegime = query({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => currentRegimePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => currentRegimePortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Human-readable narrative of the constating chain. */
 export const narrative = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => narrativePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => narrativePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -51,11 +51,11 @@ export const create = mutation({
     nowISO: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("constatingEvents") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

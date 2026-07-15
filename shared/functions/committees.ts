@@ -66,6 +66,8 @@ export async function committeeCreatePortable(
     societyId: args.societyId,
     actor: "You",
     entityType: "committee",
+    subjectId: id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: id,
     action: "created",
     summary: `Created committee "${args.name}"`,

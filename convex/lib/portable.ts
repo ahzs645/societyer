@@ -11,12 +11,13 @@
  * just runs the body.
  */
 
-import { makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type UserIdentity } from "convex/server";
 import { makeCapabilities, type PortableCapabilities } from "../../shared/portable/capabilities";
 import type {
   IndexRangeBuilder,
   PortableDoc,
   PortableMutationCtx,
+  PortablePrincipal,
   PortableQuery,
   PortableQueryCtx,
   SearchFilterBuilder,
@@ -134,20 +135,46 @@ class ConvexPortableDb implements TransactionalDb {
 
 const NO_CAPABILITIES = makeCapabilities({});
 
+function hostedPrincipal(identity: UserIdentity | null): PortablePrincipal {
+  if (!identity) {
+    return { kind: "anonymous", runtime: "convex-hosted", assurance: "none" };
+  }
+  return {
+    kind: "user",
+    runtime: "convex-hosted",
+    assurance: "verified-jwt",
+    subject: identity.subject,
+    issuer: identity.issuer,
+    tokenIdentifier: identity.tokenIdentifier,
+    email: identity.email,
+    emailVerified: identity.emailVerified,
+  };
+}
+
 /** Wrap a real Convex query ctx as a portable query ctx. */
-export function toPortableQueryCtx(ctx: any, capabilities: PortableCapabilities = NO_CAPABILITIES): PortableQueryCtx {
+export async function toPortableQueryCtx(
+  ctx: any,
+  capabilities: PortableCapabilities = NO_CAPABILITIES,
+): Promise<PortableQueryCtx> {
+  const principal = hostedPrincipal(await ctx.auth.getUserIdentity());
   return {
     db: new ConvexPortableDb(ctx.db),
     capabilities,
+    principal,
     runQuery: (name, args) => ctx.runQuery(makeFunctionReference<"query">(name) as any, args ?? {}),
   };
 }
 
 /** Wrap a real Convex mutation ctx as a portable mutation ctx. */
-export function toPortableMutationCtx(ctx: any, capabilities: PortableCapabilities = NO_CAPABILITIES): PortableMutationCtx {
+export async function toPortableMutationCtx(
+  ctx: any,
+  capabilities: PortableCapabilities = NO_CAPABILITIES,
+): Promise<PortableMutationCtx> {
+  const principal = hostedPrincipal(await ctx.auth.getUserIdentity());
   return {
     db: new ConvexPortableDb(ctx.db),
     capabilities,
+    principal,
     runQuery: (name, args) => ctx.runQuery(makeFunctionReference<"query">(name) as any, args ?? {}),
     runMutation: (name, args) => ctx.runMutation(makeFunctionReference<"mutation">(name) as any, args ?? {}),
   };

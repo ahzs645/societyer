@@ -10,6 +10,7 @@ type ActivityRow = {
   _id: string;
   actor: string;
   entityType: string;
+  subjectId?: string;
   entityId?: string;
   action: string;
   summary: string;
@@ -55,7 +56,7 @@ export function ActivityTimeline({
   const society = useSociety();
   const rows = useQuery(
     api.activity.listForRecord,
-    society ? { societyId: society._id, entityType, entityId, limit } : "skip",
+    society ? { societyId: society._id, entityType, subjectId: entityId, limit } : "skip",
   ) as ActivityRow[] | undefined;
 
   if (rows === undefined) {

@@ -12,19 +12,19 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const getActive = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => getActivePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getActivePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const getForDate = query({
   args: { societyId: v.id("societies"), dateISO: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => getForDatePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getForDatePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertActive = mutation({
@@ -78,11 +78,11 @@ export const upsertActive = mutation({
     ),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertActivePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertActivePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const resetToDefault = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => resetToDefaultPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => resetToDefaultPortable(await toPortableMutationCtx(ctx), args),
 });

@@ -1,6 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import { DEFAULT_HOME_JURISDICTION_CODE } from "../../shared/jurisdictionWorkspace";
 import type { LocalRowStore, RowStoreOp } from "../../shared/portable/localRowStore";
+import { createEntityIdFactory } from "../../shared/portable/ids";
 
 export type LocalSeed = Record<string, any[]>;
 export type LocalArgs = Record<string, any> | undefined;
@@ -59,7 +60,7 @@ export type LocalWorkspaceSnapshot = {
   changes: LocalChangeEnvelope[];
 };
 
-const CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION = 2;
+const CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION = 3;
 
 // Keep a useful diagnostic window without treating the journal as durable history.
 const LOCAL_CHANGE_JOURNAL_CAP = 2_000;
@@ -609,6 +610,24 @@ export function migrateLocalWorkspaceSnapshotTables(seed: LocalSeed): LocalSeed 
       [],
       now,
     );
+  }
+  const entityIdFactory = createEntityIdFactory();
+  const semanticSubjectTables = new Set(["activity", "notes", "signatures", "customFieldValues"]);
+  for (const [table, rows] of Object.entries(migrated)) {
+    if (!Array.isArray(rows)) continue;
+    migrated[table] = rows.map((row) => {
+      if (!row || typeof row !== "object" || Array.isArray(row)) return row;
+      const legacySubjectId = typeof row.entityId === "string" && row.entityId ? row.entityId : undefined;
+      const subjectId =
+        semanticSubjectTables.has(table) && !(typeof row.subjectId === "string" && row.subjectId)
+          ? legacySubjectId
+          : row.subjectId;
+      return {
+        ...row,
+        ...(semanticSubjectTables.has(table) ? { subjectId } : {}),
+        entityId: legacySubjectId ?? entityIdFactory.mint(table),
+      };
+    });
   }
   return migrated;
 }

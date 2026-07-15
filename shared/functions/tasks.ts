@@ -67,6 +67,8 @@ export async function taskCreate(
     societyId: args.societyId,
     actor: "You",
     entityType: "task",
+    subjectId: id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: id,
     action: "created",
     summary: `Created task "${args.title}"`,
@@ -124,6 +126,8 @@ export async function taskUpdate(
       societyId: task.societyId,
       actor: "You",
       entityType: "task",
+      subjectId: id,
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: id,
       action: patch.status === "Done" ? "completed" : "updated",
       summary: `${patch.status === "Done" ? "Completed" : "Moved"} task "${task.title}" → ${patch.status}`,

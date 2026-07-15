@@ -142,11 +142,11 @@ export const navCounts = query({
     openGoals: v.number(),
     openTasks: v.number(),
   }),
-  handler: (ctx, args) => navCountsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => navCountsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const summary = (query as any)({
   args: { societyId: validator.id("societies") },
   returns: dashboardSummaryValidator,
-  handler: (ctx: any, args: any) => summaryPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx: any, args: any) => summaryPortable(await toPortableQueryCtx(ctx), args),
 });

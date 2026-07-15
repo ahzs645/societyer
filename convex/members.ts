@@ -6,13 +6,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => membersList(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => membersList(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("members") },
   returns: v.any(),
-  handler: (ctx, args) => memberGet(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => memberGet(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -31,7 +31,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => memberCreate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => memberCreate(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -53,13 +53,13 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => memberUpdate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => memberUpdate(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("members") },
   returns: v.any(),
-  handler: (ctx, args) => memberRemove(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => memberRemove(await toPortableMutationCtx(ctx), args),
 });
 
 // Member-id foreign-key rewiring (the MEMBER_FK_REFS table) and the merge logic
@@ -88,5 +88,5 @@ export const merge = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => memberMerge(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => memberMerge(await toPortableMutationCtx(ctx), args),
 });

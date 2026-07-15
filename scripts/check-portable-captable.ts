@@ -66,7 +66,7 @@ async function capTableScenario(ids: Ids, exec: Exec) {
 // --- local engines (MemoryDb, LocalStoreDb over MemoryRowStore) ----------------
 const transferDef = definePortableMutation({ name: "legalOperations:upsertRightsholdingTransfer", handler: upsertRightsholdingTransferPortable });
 function localExec(db: TransactionalDb, ids: Ids): Exec {
-  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}) })
+  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) })
     .register(transferDef)
     .register(definePortableQuery({
       name: "_holdings",

@@ -25,7 +25,7 @@ const templateItem = v.object({
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -38,7 +38,7 @@ export const create = mutation({
     items: v.array(templateItem),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -51,19 +51,19 @@ export const update = mutation({
     items: v.optional(v.array(templateItem)),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { templateId: v.id("meetingTemplates") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const duplicate = mutation({
   args: { templateId: v.id("meetingTemplates"), name: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args) => duplicatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => duplicatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const createFromMeeting = mutation({
@@ -74,11 +74,11 @@ export const createFromMeeting = mutation({
     isDefault: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createFromMeetingPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createFromMeetingPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const seedDefaults = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => seedDefaultsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => seedDefaultsPortable(await toPortableMutationCtx(ctx), args),
 });

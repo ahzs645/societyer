@@ -11,13 +11,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => inspectionsList(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => inspectionsList(await toPortableQueryCtx(ctx), args),
 });
 
 export const forDocument = query({
   args: { documentId: v.id("documents") },
   returns: v.any(),
-  handler: (ctx, args) => inspectionsForDocument(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => inspectionsForDocument(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -35,11 +35,11 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => inspectionCreate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => inspectionCreate(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("inspections") },
   returns: v.any(),
-  handler: (ctx, args) => inspectionRemove(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => inspectionRemove(await toPortableMutationCtx(ctx), args),
 });

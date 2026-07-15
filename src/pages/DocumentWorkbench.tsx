@@ -35,7 +35,7 @@ export function DocumentWorkbenchPage() {
   const latest = useQuery(api.documentVersions.latest, id ? { documentId: id as Id<"documents"> } : "skip");
   const legacyUrl = useQuery(api.files.getUrl, document?.storageId ? { storageId: document.storageId } : "skip");
   const comments = useQuery(api.documentComments.listForDocument, id ? { documentId: id as Id<"documents"> } : "skip");
-  const signatures = useQuery(api.signatures.listForEntity, id ? { entityType: "document", entityId: id } : "skip");
+  const signatures = useQuery(api.signatures.listForEntity, id ? { entityType: "document", subjectId: id } : "skip");
   const markOpened = useMutation(api.documents.markOpened);
   const updateReviewStatus = useMutation(api.documents.updateReviewStatus);
   const createComment = useMutation(api.documentComments.create);

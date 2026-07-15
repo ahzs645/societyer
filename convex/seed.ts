@@ -11,7 +11,7 @@ export const run = mutation({
   returns: v.object({ societyId: v.id("societies") }),
   handler: async (ctx, { serviceToken }) => {
     await assertMaintenanceToken(serviceToken);
-    return runPortable(toPortableMutationCtx(ctx));
+    return runPortable(await toPortableMutationCtx(ctx));
   },
 });
 
@@ -20,6 +20,6 @@ export const reset = mutation({
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, { serviceToken }) => {
     await assertMaintenanceToken(serviceToken);
-    return resetPortable(toPortableMutationCtx(ctx));
+    return resetPortable(await toPortableMutationCtx(ctx));
   },
 });

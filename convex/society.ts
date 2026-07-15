@@ -29,57 +29,57 @@ import { buildConvexCapabilities } from "./providers/capabilities";
 export const get = query({
   args: {},
   returns: v.any(),
-  handler: (ctx) => getPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), {}),
+  handler: async (ctx) => getPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), {}),
 });
 
 export const list = query({
   args: {},
   returns: v.any(),
-  handler: (ctx) => listPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx))),
+  handler: async (ctx) => listPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx))),
 });
 
 export const getById = query({
   args: { id: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => getByIdPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
+  handler: async (ctx, args) => getByIdPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
-const withStorageCaps = (ctx) => toPortableMutationCtx(ctx, buildConvexCapabilities(ctx));
+const withStorageCaps = async (ctx) => await toPortableMutationCtx(ctx, buildConvexCapabilities(ctx));
 
 export const setLogo = mutation({
   args: { societyId: v.id("societies"), storageId: v.id("_storage") },
   returns: v.id("societies"),
-  handler: (ctx, args) => setLogoPortable(withStorageCaps(ctx), args),
+  handler: async (ctx, args) => setLogoPortable(await withStorageCaps(ctx), args),
 });
 
 export const clearLogo = mutation({
   args: { societyId: v.id("societies") },
   returns: v.id("societies"),
-  handler: (ctx, args) => clearLogoPortable(withStorageCaps(ctx), args),
+  handler: async (ctx, args) => clearLogoPortable(await withStorageCaps(ctx), args),
 });
 
 export const setDarkLogo = mutation({
   args: { societyId: v.id("societies"), storageId: v.id("_storage") },
   returns: v.id("societies"),
-  handler: (ctx, args) => setDarkLogoPortable(withStorageCaps(ctx), args),
+  handler: async (ctx, args) => setDarkLogoPortable(await withStorageCaps(ctx), args),
 });
 
 export const clearDarkLogo = mutation({
   args: { societyId: v.id("societies") },
   returns: v.id("societies"),
-  handler: (ctx, args) => clearDarkLogoPortable(withStorageCaps(ctx), args),
+  handler: async (ctx, args) => clearDarkLogoPortable(await withStorageCaps(ctx), args),
 });
 
 export const setLetterhead = mutation({
   args: { societyId: v.id("societies"), storageId: v.id("_storage") },
   returns: v.id("societies"),
-  handler: (ctx, args) => setLetterheadPortable(withStorageCaps(ctx), args),
+  handler: async (ctx, args) => setLetterheadPortable(await withStorageCaps(ctx), args),
 });
 
 export const clearLetterhead = mutation({
   args: { societyId: v.id("societies") },
   returns: v.id("societies"),
-  handler: (ctx, args) => clearLetterheadPortable(withStorageCaps(ctx), args),
+  handler: async (ctx, args) => clearLetterheadPortable(await withStorageCaps(ctx), args),
 });
 
 export const setLogoInvertInDarkMode = mutation({
@@ -88,7 +88,7 @@ export const setLogoInvertInDarkMode = mutation({
     invert: v.boolean(),
   },
   returns: v.id("societies"),
-  handler: (ctx, args) => setLogoInvertInDarkModePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setLogoInvertInDarkModePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -350,6 +350,8 @@ export const createWorkspace = mutation({
       societyId,
       actor: "You",
       entityType: "society",
+      subjectId: societyId,
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: societyId,
       action: "created",
       summary: `Created workspace for ${name}`,
@@ -359,6 +361,8 @@ export const createWorkspace = mutation({
       societyId,
       actor: "System",
       entityType: "workflow",
+      subjectId: workflowId,
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: workflowId,
       action: "created",
       summary: "Created workspace onboarding workflow",
@@ -375,13 +379,13 @@ export const updateModules = mutation({
     disabledModules: disabledModulesValidator,
   },
   returns: v.any(),
-  handler: (ctx, args) => updateModulesPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateModulesPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const cloneSociety = mutation({
   args: { sourceSocietyId: v.id("societies"), newName: v.string(), nowISO: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => cloneSocietyPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => cloneSocietyPortable(await toPortableMutationCtx(ctx), args),
 });
 
 // YCN-style compliance settings (AGM date + financials-prep waiver). Consumed by
@@ -407,7 +411,7 @@ export const updateComplianceSettings = mutation({
     includeDocumentIdHeader: v.optional(v.boolean()),
   },
   returns: v.id("societies"),
-  handler: (ctx, args) => updateComplianceSettingsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateComplianceSettingsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const updateInventorySettings = mutation({
@@ -416,7 +420,7 @@ export const updateInventorySettings = mutation({
     consumableIntakeCountPromptEnabled: v.boolean(),
   },
   returns: v.id("societies"),
-  handler: (ctx, args) => updateInventorySettingsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateInventorySettingsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const updateNotificationSettings = mutation({
@@ -426,7 +430,7 @@ export const updateNotificationSettings = mutation({
     notificationRetentionDays: v.number(),
   },
   returns: v.id("societies"),
-  handler: (ctx, args) => updateNotificationSettingsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateNotificationSettingsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 function blankToUndefined(value?: string) {

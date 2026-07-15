@@ -33,13 +33,13 @@ export const list = query({
     includeDismissed: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: (ctx, args) => notificationsList(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => notificationsList(await toPortableQueryCtx(ctx), args),
 });
 
 export const unreadCount = query({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => notificationsUnreadCount(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => notificationsUnreadCount(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -53,19 +53,19 @@ export const create = mutation({
     linkHref: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => notificationCreate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => notificationCreate(await toPortableMutationCtx(ctx), args),
 });
 
 export const markRead = mutation({
   args: { id: v.id("notifications") },
   returns: v.any(),
-  handler: (ctx, args) => notificationMarkRead(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => notificationMarkRead(await toPortableMutationCtx(ctx), args),
 });
 
 export const markAllRead = mutation({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => notificationMarkAllRead(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => notificationMarkAllRead(await toPortableMutationCtx(ctx), args),
 });
 
 /** Clear a single notification from the bell. Stamps dismissedAt (and readAt
@@ -74,7 +74,7 @@ export const markAllRead = mutation({
 export const dismiss = mutation({
   args: { id: v.id("notifications") },
   returns: v.any(),
-  handler: (ctx, args) => notificationDismiss(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => notificationDismiss(await toPortableMutationCtx(ctx), args),
 });
 
 /** Hide a notification from the bell until `untilISO` (null un-snoozes it). The
@@ -82,14 +82,14 @@ export const dismiss = mutation({
 export const snooze = mutation({
   args: { id: v.id("notifications"), untilISO: v.union(v.string(), v.null()) },
   returns: v.any(),
-  handler: (ctx, args) => notificationSnooze(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => notificationSnooze(await toPortableMutationCtx(ctx), args),
 });
 
 /** Clear every (non-dismissed) notification for this user/society from the bell. */
 export const dismissAll = mutation({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => notificationDismissAll(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => notificationDismissAll(await toPortableMutationCtx(ctx), args),
 });
 
 /** Permanently delete a single notification now, without waiting for the
@@ -98,14 +98,14 @@ export const dismissAll = mutation({
 export const remove = mutation({
   args: { id: v.id("notifications") },
   returns: v.any(),
-  handler: (ctx, args) => notificationRemove(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => notificationRemove(await toPortableMutationCtx(ctx), args),
 });
 
 /** Permanently delete every dismissed notification for this user/society now. */
 export const removeAllDismissed = mutation({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => notificationRemoveAllDismissed(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => notificationRemoveAllDismissed(await toPortableMutationCtx(ctx), args),
 });
 
 /** Default retention window (days) when a society hasn't set its own. Mirrored
@@ -149,7 +149,7 @@ export const purgeDismissed = internalMutation({
 export const listPrefs = query({
   args: { userId: v.id("users") },
   returns: v.any(),
-  handler: (ctx, args) => notificationsListPrefs(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => notificationsListPrefs(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertPref = mutation({
@@ -160,7 +160,7 @@ export const upsertPref = mutation({
     enabled: v.boolean(),
   },
   returns: v.any(),
-  handler: (ctx, args) => notificationUpsertPref(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => notificationUpsertPref(await toPortableMutationCtx(ctx), args),
 });
 
 // Cron: scan upcoming deadlines and filings, raise notifications for anything

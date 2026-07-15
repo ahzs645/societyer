@@ -13,17 +13,17 @@ import { toPortableQueryCtx } from "./lib/portable";
 export const getSocietyBySlug = query({
   args: { slug: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => getSocietyBySlugPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getSocietyBySlugPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const volunteerIntakeContext = query({
   args: { slug: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => volunteerIntakeContextPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => volunteerIntakeContextPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const grantIntakeContext = query({
   args: { slug: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => grantIntakeContextPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => grantIntakeContextPortable(await toPortableQueryCtx(ctx), args),
 });

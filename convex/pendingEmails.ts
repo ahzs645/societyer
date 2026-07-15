@@ -24,13 +24,13 @@ export const list = query({
     status: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("pendingEmails") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -53,7 +53,7 @@ export const create = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -75,7 +75,7 @@ export const update = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const markSent = mutation({
@@ -86,7 +86,7 @@ export const markSent = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => markSentPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => markSentPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const cancel = mutation({
@@ -96,7 +96,7 @@ export const cancel = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => cancelPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => cancelPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
@@ -105,5 +105,5 @@ export const remove = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

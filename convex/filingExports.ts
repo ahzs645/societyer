@@ -15,7 +15,7 @@ import { toPortableQueryCtx } from "./lib/portable";
 export const societiesOnlinePreFill = query({
   args: { societyId: v.id("societies"), kind: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => societiesOnlinePreFillPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => societiesOnlinePreFillPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** CRA form pre-fill summary. We surface the line numbers + totals we can
@@ -23,5 +23,5 @@ export const societiesOnlinePreFill = query({
 export const craPreFill = query({
   args: { societyId: v.id("societies"), kind: v.string(), fiscalYear: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => craPreFillPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => craPreFillPortable(await toPortableQueryCtx(ctx), args),
 });

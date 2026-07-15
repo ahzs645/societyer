@@ -24,7 +24,7 @@ export const myPermissions = query({
     societyId: v.id("societies"),
   },
   returns: v.any(),
-  handler: (ctx, args) => myPermissionsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => myPermissionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listAll = query({

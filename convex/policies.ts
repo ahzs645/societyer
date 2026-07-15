@@ -14,13 +14,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const adoptionOptions = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => adoptionOptionsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => adoptionOptionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -47,13 +47,13 @@ export const upsert = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("policies") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const createReviewTask = mutation({
@@ -62,17 +62,17 @@ export const createReviewTask = mutation({
     dueDate: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createReviewTaskPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createReviewTaskPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const createRequiredSignerTask = mutation({
   args: { policyId: v.id("policies") },
   returns: v.any(),
-  handler: (ctx, args) => createRequiredSignerTaskPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createRequiredSignerTaskPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const createTransparencyDraft = mutation({
   args: { policyId: v.id("policies") },
   returns: v.any(),
-  handler: (ctx, args) => createTransparencyDraftPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createTransparencyDraftPortable(await toPortableMutationCtx(ctx), args),
 });

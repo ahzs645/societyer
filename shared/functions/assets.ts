@@ -337,6 +337,8 @@ export async function createPortable(
     societyId: args.societyId,
     actor: "You",
     entityType: "asset",
+    subjectId: id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: id,
     action: "created",
     summary: `Created asset ${args.assetTag} — ${args.name}`,
@@ -417,6 +419,8 @@ export async function addConsumableStockPortable(
     societyId: asset.societyId,
     actor: "You",
     entityType: "asset",
+    subjectId: assetId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: assetId,
     action: "stock_intake",
     summary: `Added ${quantityAdded} ${asset.quantityUnit ?? "unit"}${quantityAdded === 1 ? "" : "s"} to ${asset.assetTag}; ${quantityAfter} now on hand`,
@@ -562,6 +566,8 @@ export async function recordEventPortable(
     societyId: asset.societyId,
     actor: "You",
     entityType: "asset",
+    subjectId: assetId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: assetId,
     action: event.eventType,
     summary: `${event.eventType} for asset ${asset.assetTag}`,

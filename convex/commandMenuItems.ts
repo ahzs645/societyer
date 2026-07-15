@@ -15,7 +15,7 @@ export const listForScope = query({
     pagePath: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => commandMenuItemsListForScope(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => commandMenuItemsListForScope(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -36,11 +36,11 @@ export const upsert = mutation({
     position: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: (ctx, args) => commandMenuItemUpsert(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => commandMenuItemUpsert(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("commandMenuItems") },
   returns: v.any(),
-  handler: (ctx, args) => commandMenuItemRemove(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => commandMenuItemRemove(await toPortableMutationCtx(ctx), args),
 });

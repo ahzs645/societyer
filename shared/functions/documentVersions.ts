@@ -63,6 +63,8 @@ export async function rollbackPortable(
     societyId: v.societyId,
     actor: "System",
     entityType: "document",
+    subjectId: v.documentId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: v.documentId,
     action: "rolled-back",
     summary: `Rolled back to v${v.version} (${v.fileName})`,

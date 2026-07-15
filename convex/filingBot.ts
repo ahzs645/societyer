@@ -40,19 +40,19 @@ const STEP_DEFINITIONS: Record<string, { label: string; note?: string }[]> = {
 export const listRuns = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: (ctx, args) => listRunsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listRunsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const runsForFiling = query({
   args: { filingId: v.id("filings") },
   returns: v.any(),
-  handler: (ctx, args) => runsForFilingPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => runsForFilingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const getRun = query({
   args: { id: v.id("filingBotRuns") },
   returns: v.any(),
-  handler: (ctx, args) => getRunPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getRunPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const _createRun = internalMutation({
@@ -169,7 +169,7 @@ export const buildFilingPacket = query({
     // attach resolved displayMotions so minutesMotionsForDisplay() below reads the
     // table. No-op on data without motionIds (falls back to the embedded array).
     const lastAgmMinutes = lastAgmMinutesRaw
-      ? { ...lastAgmMinutesRaw, displayMotions: await resolveMinutesMotions(toPortableQueryCtx(ctx), lastAgmMinutesRaw) }
+      ? { ...lastAgmMinutesRaw, displayMotions: await resolveMinutesMotions(await toPortableQueryCtx(ctx), lastAgmMinutesRaw) }
       : undefined;
 
     if (kind === "AnnualReport") {

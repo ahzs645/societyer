@@ -16,7 +16,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => fundingSourcesList(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => fundingSourcesList(await toPortableQueryCtx(ctx), args),
 });
 
 export const rollup = query({
@@ -26,7 +26,7 @@ export const rollup = query({
     to: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => fundingSourcesRollup(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => fundingSourcesRollup(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertSource = mutation({
@@ -61,13 +61,13 @@ export const upsertSource = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertSourcePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertSourcePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeSource = mutation({
   args: { id: v.id("fundingSources"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => removeSourcePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeSourcePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertEvent = mutation({
@@ -90,13 +90,13 @@ export const upsertEvent = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertEventPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertEventPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeEvent = mutation({
   args: { id: v.id("fundingSourceEvents"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => removeEventPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeEventPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const importStudentLevy = mutation({
@@ -143,7 +143,7 @@ export const importStudentLevy = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => importStudentLevyPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => importStudentLevyPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const applyOtenFeeStructure = mutation({
@@ -153,5 +153,5 @@ export const applyOtenFeeStructure = mutation({
     societyName: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => applyOtenFeeStructurePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => applyOtenFeeStructurePortable(await toPortableMutationCtx(ctx), args),
 });

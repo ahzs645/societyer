@@ -15,5 +15,5 @@ import { toPortableQueryCtx } from "./lib/portable";
 export const complianceDeadlines = query({
   args: { societyId: v.id("societies"), fromISO: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => complianceDeadlinesPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => complianceDeadlinesPortable(await toPortableQueryCtx(ctx), args),
 });

@@ -245,28 +245,28 @@ export const createPdfTemplateImportSession = action({
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
 export const listRuns = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: (ctx, args) => listRunsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listRunsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
 export const runsForWorkflow = query({
   args: { workflowId: v.id("workflows") },
   returns: v.any(),
-  handler: (ctx, args) => runsForWorkflowPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => runsForWorkflowPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
 export const getRun = query({
   args: { id: v.id("workflowRuns") },
   returns: v.any(),
-  handler: (ctx, args) => getRunPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getRunPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
@@ -430,7 +430,7 @@ export const setStatus = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => setStatusPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Light-touch patch for inline edits from the record table. Only
@@ -449,7 +449,7 @@ export const update = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 
@@ -539,7 +539,7 @@ export const updateProviderLink = mutation({
 export const remove = mutation({
   args: { id: v.id("workflows"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Append (or insert) a node into the workflow's preview graph. For now this
@@ -560,7 +560,7 @@ export const addNode = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => addNodePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => addNodePortable(await toPortableMutationCtx(ctx), args),
 });
 
 
@@ -574,7 +574,7 @@ export const updateNodeConfig = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => updateNodeConfigPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateNodeConfigPortable(await toPortableMutationCtx(ctx), args),
 });
 
 
@@ -585,7 +585,7 @@ export const removeNode = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => removeNodePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeNodePortable(await toPortableMutationCtx(ctx), args),
 });
 
 
@@ -758,6 +758,8 @@ export const recordGeneratedDocument = mutation({
       societyId: args.societyId,
       actor: "n8n workflow",
       entityType: "document",
+      subjectId: documentId,
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: documentId,
       action: "workflow-generated",
       summary: `Generated ${args.fileName} from workflow run ${args.runId}.`,
@@ -1006,6 +1008,8 @@ export const recordConnectorRun = mutation({
       societyId: args.societyId,
       actor: args.triggeredByUserId ? "User" : "Browser connector",
       entityType: "workflowRun",
+      subjectId: String(runId),
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: String(runId),
       action: "connector-run-recorded",
       summary: `${connectorLabel} ${actionLabel} ${status}.`,
@@ -1194,12 +1198,14 @@ export const _gatherMappingContext = internalQuery({
         )
         .collect();
       const defKeyById = new Map<string, string>(defs.map((d: any) => [String(d._id), d.key]));
-      const values = await ctx.db
+      // TODO(H0-flip): query by_subject after the hosted backfill is complete.
+      const indexedValues = await ctx.db
         .query("customFieldValues")
         .withIndex("by_entity", (q) =>
           q.eq("entityType", ref.category).eq("entityId", ref.personId),
         )
         .collect();
+      const values = indexedValues.filter((value) => (value.subjectId ?? value.entityId) === ref.personId);
       const customValues: Record<string, any> = {};
       for (const v of values) {
         const k = defKeyById.get(String(v.definitionId));

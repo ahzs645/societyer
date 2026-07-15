@@ -4,7 +4,7 @@
  *
  * For each convex/<module>.ts, finds every `export const <name> = query|mutation(...)`
  * whose handler delegates to a portable function via
- * `=> <fn>(toPortableQueryCtx(ctx)` / `toPortableMutationCtx(ctx)`, and resolves
+ * `=> <fn>(await toPortableQueryCtx(ctx)` / `toPortableMutationCtx(ctx)`, and resolves
  * <fn> to its shared module from that file's `../shared/functions/<mod>` imports.
  *
  * Usage:
@@ -69,9 +69,10 @@ function parseDelegations(source) {
     nextRe.lastIndex = re.lastIndex;
     const next = nextRe.exec(source);
     const block = source.slice(start, next ? next.index : source.length);
-    // Matches both `=> fn(toPortableQueryCtx(ctx), args)` and the capability form
-    // `=> fn(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args)`.
-    const deleg = block.match(/=>\s*(\w+)\(\s*toPortable(?:Query|Mutation)Ctx\(ctx[,)]/);
+    // Matches both `=> fn(await toPortableQueryCtx(ctx), args)` and the
+    // capability form with `buildConvexCapabilities(ctx)`. The optional await
+    // keeps the authoring aid compatible with pre-Stage-1 delegations too.
+    const deleg = block.match(/=>\s*(\w+)\(\s*(?:await\s+)?toPortable(?:Query|Mutation)Ctx\(ctx[,)]/);
     if (deleg) {
       out.push({ exportName, kind, fn: deleg[1] });
     }

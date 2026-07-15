@@ -56,7 +56,7 @@ export function AuditLogPage() {
         r.createdAtISO,
         r.actor,
         r.entityType,
-        r.entityId ?? "",
+        r.subjectId ?? r.entityId ?? "",
         r.action,
         r.summary,
       ]),

@@ -15,19 +15,36 @@ import type {
 } from "./capabilities";
 import type {
   PortableMutationCtx,
+  PortablePrincipal,
   PortableQueryCtx,
   TransactionalDb,
 } from "./ctx";
 
+export type PortableAccess =
+  | { audience: "public" }
+  | { audience: "authenticated" }
+  | { audience: "service"; scopes: readonly string[] };
+
+const DEFAULT_PORTABLE_ACCESS: PortableAccess = { audience: "authenticated" };
+
+/**
+ * Stage 1 records access intent but intentionally does not enforce it. Stage 2
+ * of docs/trusted-principal-proposal.md turns this seam on after a hosted JWT
+ * provider and service-token path have been selected and wired.
+ */
+export const PORTABLE_ACCESS_ENFORCEMENT = false;
+
 export interface PortableQueryDef<Args = any, Result = any> {
   kind: "query";
   name: string;
+  access?: PortableAccess;
   handler: (ctx: PortableQueryCtx, args: Args) => Promise<Result>;
 }
 
 export interface PortableMutationDef<Args = any, Result = any> {
   kind: "mutation";
   name: string;
+  access?: PortableAccess;
   handler: (ctx: PortableMutationCtx, args: Args) => Promise<Result>;
 }
 
@@ -36,19 +53,26 @@ export type PortableFunctionDef = PortableQueryDef | PortableMutationDef;
 export function definePortableQuery<Args = any, Result = any>(
   def: Omit<PortableQueryDef<Args, Result>, "kind">,
 ): PortableQueryDef<Args, Result> {
-  return { kind: "query", ...def };
+  return { kind: "query", access: DEFAULT_PORTABLE_ACCESS, ...def };
 }
 
 export function definePortableMutation<Args = any, Result = any>(
   def: Omit<PortableMutationDef<Args, Result>, "kind">,
 ): PortableMutationDef<Args, Result> {
-  return { kind: "mutation", ...def };
+  return { kind: "mutation", access: DEFAULT_PORTABLE_ACCESS, ...def };
 }
 
 export interface PortableRuntimeOptions {
   db: TransactionalDb;
   capabilities: PortableCapabilities;
+  principalProvider?: () => PortablePrincipal | Promise<PortablePrincipal>;
 }
+
+const DEFAULT_ANONYMOUS_PRINCIPAL: PortablePrincipal = {
+  kind: "anonymous",
+  runtime: "test",
+  assurance: "none",
+};
 
 /**
  * Executes portable functions locally against one `ctx.db` and capability bag.
@@ -62,14 +86,16 @@ export class PortableRuntime {
   private readonly registry = new Map<string, PortableFunctionDef>();
   private readonly db: TransactionalDb;
   private readonly capabilities: PortableCapabilities;
+  private readonly principalProvider: () => PortablePrincipal | Promise<PortablePrincipal>;
 
   constructor(options: PortableRuntimeOptions) {
     this.db = options.db;
     this.capabilities = options.capabilities;
+    this.principalProvider = options.principalProvider ?? (() => DEFAULT_ANONYMOUS_PRINCIPAL);
   }
 
   register(def: PortableFunctionDef): this {
-    this.registry.set(def.name, def);
+    this.registry.set(def.name, { ...def, access: def.access ?? DEFAULT_PORTABLE_ACCESS });
     return this;
   }
 
@@ -87,19 +113,26 @@ export class PortableRuntime {
     return this.registry.get(name)?.kind;
   }
 
-  private queryCtx(): PortableQueryCtx {
+  /** Access intent for a registered function, or undefined if unregistered. */
+  access(name: string): PortableAccess | undefined {
+    return this.registry.get(name)?.access;
+  }
+
+  private queryCtx(principal: PortablePrincipal): PortableQueryCtx {
     return {
       db: this.db,
       capabilities: this.capabilities,
-      runQuery: (name, args) => this.runQuery(name, args),
+      principal,
+      runQuery: (name, args) => this.runQueryNested(name, args, principal),
     };
   }
 
-  private mutationCtx(): PortableMutationCtx {
+  private mutationCtx(principal: PortablePrincipal): PortableMutationCtx {
     return {
       db: this.db,
       capabilities: this.capabilities,
-      runQuery: (name, args) => this.runQuery(name, args),
+      principal,
+      runQuery: (name, args) => this.runQueryNested(name, args, principal),
       // Nested mutations (ctx.runMutation inside a handler) run the child
       // handler directly inside the CURRENT transaction rather than opening a
       // new db.transaction(). Nesting must be a property of the call chain,
@@ -107,28 +140,50 @@ export class PortableRuntime {
       // in LocalStoreDb let an unrelated concurrent mutation silently join
       // (and possibly lose its writes with) whatever transaction happened to
       // be in flight.
-      runMutation: (name, args) => this.runMutationNested(name, args),
+      runMutation: (name, args) => this.runMutationNested(name, args, principal),
     };
   }
 
-  private async runMutationNested<Result = unknown>(name: string, args: Record<string, any> = {}): Promise<Result> {
-    const def = this.registry.get(name);
-    if (!def) throw new Error(`Portable function not registered locally: ${name}`);
-    if (def.kind !== "mutation") throw new Error(`${name} is a ${def.kind}, not a mutation`);
-    return def.handler(this.mutationCtx(), args) as Promise<Result>;
+  private accessHook(_def: PortableFunctionDef, _principal: PortablePrincipal): void {
+    if (!PORTABLE_ACCESS_ENFORCEMENT) return;
+    // Stage 2: enforce the registered audience/scopes against the principal.
   }
 
-  async runQuery<Result = unknown>(name: string, args: Record<string, any> = {}): Promise<Result> {
+  private async runQueryNested<Result = unknown>(
+    name: string,
+    args: Record<string, any> = {},
+    principal: PortablePrincipal,
+  ): Promise<Result> {
     const def = this.registry.get(name);
     if (!def) throw new Error(`Portable function not registered locally: ${name}`);
     if (def.kind !== "query") throw new Error(`${name} is a ${def.kind}, not a query`);
-    return def.handler(this.queryCtx(), args) as Promise<Result>;
+    this.accessHook(def, principal);
+    return def.handler(this.queryCtx(principal), args) as Promise<Result>;
+  }
+
+  private async runMutationNested<Result = unknown>(
+    name: string,
+    args: Record<string, any> = {},
+    principal: PortablePrincipal,
+  ): Promise<Result> {
+    const def = this.registry.get(name);
+    if (!def) throw new Error(`Portable function not registered locally: ${name}`);
+    if (def.kind !== "mutation") throw new Error(`${name} is a ${def.kind}, not a mutation`);
+    this.accessHook(def, principal);
+    return def.handler(this.mutationCtx(principal), args) as Promise<Result>;
+  }
+
+  async runQuery<Result = unknown>(name: string, args: Record<string, any> = {}): Promise<Result> {
+    const principal = await this.principalProvider();
+    return this.runQueryNested(name, args, principal);
   }
 
   async runMutation<Result = unknown>(name: string, args: Record<string, any> = {}): Promise<Result> {
     const def = this.registry.get(name);
     if (!def) throw new Error(`Portable function not registered locally: ${name}`);
     if (def.kind !== "mutation") throw new Error(`${name} is a ${def.kind}, not a mutation`);
-    return this.db.transaction(() => def.handler(this.mutationCtx(), args)) as Promise<Result>;
+    const principal = await this.principalProvider();
+    this.accessHook(def, principal);
+    return this.db.transaction(() => def.handler(this.mutationCtx(principal), args)) as Promise<Result>;
   }
 }

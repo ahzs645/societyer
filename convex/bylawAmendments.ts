@@ -19,13 +19,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("bylawAmendments") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const createDraft = mutation({
@@ -38,7 +38,7 @@ export const createDraft = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createDraftPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createDraftPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const updateDraft = mutation({
@@ -53,13 +53,13 @@ export const updateDraft = mutation({
     actor: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => updateDraftPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateDraftPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const startConsultation = mutation({
   args: { id: v.id("bylawAmendments"), actor: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args) => startConsultationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => startConsultationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const markResolutionPassed = mutation({
@@ -72,7 +72,7 @@ export const markResolutionPassed = mutation({
     actor: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => markResolutionPassedPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => markResolutionPassedPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const markFiled = mutation({
@@ -82,13 +82,13 @@ export const markFiled = mutation({
     actor: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => markFiledPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => markFiledPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const withdraw = mutation({
   args: { id: v.id("bylawAmendments"), actor: v.optional(v.string()), reason: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args) => withdrawPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => withdrawPortable(await toPortableMutationCtx(ctx), args),
 });
 
 /** Mark an amendment Superseded — the status the UI already renders but that no
@@ -103,7 +103,7 @@ export const supersede = mutation({
     reason: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => supersedePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => supersedePortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Persist an amendment's proposed text as structured section records (replacing
@@ -122,17 +122,17 @@ export const materializeSections = mutation({
     ),
   },
   returns: v.any(),
-  handler: (ctx, args) => materializeSectionsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => materializeSectionsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const sectionsForAmendment = query({
   args: { amendmentId: v.id("bylawAmendments") },
   returns: v.any(),
-  handler: (ctx, args) => sectionsForAmendmentPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => sectionsForAmendmentPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("bylawAmendments") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

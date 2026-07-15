@@ -12,7 +12,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => receiptsListPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => receiptsListPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const issue = mutation({
@@ -31,17 +31,17 @@ export const issue = mutation({
     appraiserName: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => receiptIssuePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => receiptIssuePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const voidReceipt = mutation({
   args: { id: v.id("donationReceipts"), reason: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => receiptVoidPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => receiptVoidPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("donationReceipts") },
   returns: v.any(),
-  handler: (ctx, args) => receiptRemovePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => receiptRemovePortable(await toPortableMutationCtx(ctx), args),
 });

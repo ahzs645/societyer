@@ -20,14 +20,14 @@ import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 export const getFeedToken = query({
   args: { societyId: v.id("societies") },
   returns: v.union(v.string(), v.null()),
-  handler: (ctx, args) => getFeedTokenPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getFeedTokenPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Enable/rotate (token = string) or disable (token = null) the feed. */
 export const setFeedToken = mutation({
   args: { societyId: v.id("societies"), token: v.union(v.string(), v.null()) },
   returns: v.union(v.string(), v.null()),
-  handler: (ctx, args) => setFeedTokenPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setFeedTokenPortable(await toPortableMutationCtx(ctx), args),
 });
 
 /** Resolve a token to its society's calendar events. Internal: feeds the

@@ -439,9 +439,9 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "registerHistory:significantIndividualsAsOf", handler: registerHistoryFns.significantIndividualsAsOfPortable }),
 
   // publicPortal
-  definePortableQuery({ name: "publicPortal:getSocietyBySlug", handler: publicPortalFns.getSocietyBySlugPortable }),
-  definePortableQuery({ name: "publicPortal:volunteerIntakeContext", handler: publicPortalFns.volunteerIntakeContextPortable }),
-  definePortableQuery({ name: "publicPortal:grantIntakeContext", handler: publicPortalFns.grantIntakeContextPortable }),
+  definePortableQuery({ name: "publicPortal:getSocietyBySlug", access: { audience: "public" }, handler: publicPortalFns.getSocietyBySlugPortable }),
+  definePortableQuery({ name: "publicPortal:volunteerIntakeContext", access: { audience: "public" }, handler: publicPortalFns.volunteerIntakeContextPortable }),
+  definePortableQuery({ name: "publicPortal:grantIntakeContext", access: { audience: "public" }, handler: publicPortalFns.grantIntakeContextPortable }),
 
   // filingExports
   definePortableQuery({ name: "filingExports:societiesOnlinePreFill", handler: filingExportsFns.societiesOnlinePreFillPortable }),
@@ -1050,7 +1050,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   // grants
   definePortableMutation({ name: "grants:upsertEmployeeLink", handler: grantsFns.upsertEmployeeLinkPortable }),
   definePortableMutation({ name: "grants:removeEmployeeLink", handler: grantsFns.removeEmployeeLinkPortable }),
-  definePortableMutation({ name: "grants:submitApplication", handler: grantsFns.submitApplicationPortable }),
+  definePortableMutation({ name: "grants:submitApplication", access: { audience: "public" }, handler: grantsFns.submitApplicationPortable }),
   definePortableMutation({ name: "grants:reviewApplication", handler: grantsFns.reviewApplicationPortable }),
   definePortableMutation({ name: "grants:convertApplication", handler: grantsFns.convertApplicationPortable }),
   definePortableMutation({ name: "grants:upsertGrant", handler: grantsFns.upsertGrantPortable }),
@@ -1085,7 +1085,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "elections:tallyElection", handler: electionsFns.tallyElectionPortable }),
 
   // volunteers
-  definePortableMutation({ name: "volunteers:submitApplication", handler: volunteersFns.submitApplicationPortable }),
+  definePortableMutation({ name: "volunteers:submitApplication", access: { audience: "public" }, handler: volunteersFns.submitApplicationPortable }),
   definePortableMutation({ name: "volunteers:reviewApplication", handler: volunteersFns.reviewApplicationPortable }),
   definePortableMutation({ name: "volunteers:convertApplication", handler: volunteersFns.convertApplicationPortable }),
   definePortableMutation({ name: "volunteers:upsertVolunteer", handler: volunteersFns.upsertVolunteerPortable }),
@@ -1225,10 +1225,10 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "inventoryHub:items", handler: inventoryHubFns.itemsPortable }),
 
   // transparency
-  definePortableQuery({ name: "transparency:publicCenter", handler: transparencyFns.publicCenterPortable }),
+  definePortableQuery({ name: "transparency:publicCenter", access: { audience: "public" }, handler: transparencyFns.publicCenterPortable }),
 
   // partyPortals
-  definePortableQuery({ name: "partyPortals:center", handler: partyPortalsFns.centerPortable }),
+  definePortableQuery({ name: "partyPortals:center", access: { audience: "public" }, handler: partyPortalsFns.centerPortable }),
 
   // meetingMaterials
   definePortableQuery({ name: "meetingMaterials:packageForMeeting", handler: meetingMaterialsFns.packageForMeetingPortable }),

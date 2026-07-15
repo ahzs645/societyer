@@ -88,6 +88,7 @@ export const treasuryTables = {
     societyId: v.id("societies"),
     entityType: v.string(), // minutes | resolution | filing
     entityId: v.string(),
+    subjectId: v.optional(v.string()),
     userId: v.optional(v.id("users")),
     directorId: v.optional(v.id("directors")),
     memberId: v.optional(v.id("members")),
@@ -103,7 +104,8 @@ export const treasuryTables = {
     demo: v.boolean(),
   })
     .index("by_society", ["societyId"])
-    .index("by_entity", ["entityType", "entityId"]),
+    .index("by_entity", ["entityType", "entityId"])
+    .index("by_subject", ["entityType", "subjectId"]),
 
   signatureProfiles: defineTable({
     societyId: v.id("societies"),

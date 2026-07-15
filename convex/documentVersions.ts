@@ -20,13 +20,13 @@ import {
 export const listForDocument = query({
   args: { documentId: v.id("documents") },
   returns: v.any(),
-  handler: (ctx, args) => listForDocumentPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listForDocumentPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const latest = query({
   args: { documentId: v.id("documents") },
   returns: v.any(),
-  handler: (ctx, args) => latestPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => latestPortable(await toPortableQueryCtx(ctx), args),
 });
 
 // Action: caller asks us for a presigned upload URL. The client PUTs the file
@@ -137,6 +137,8 @@ export const recordUploadedVersion = mutation({
       societyId: args.societyId,
       actor: uploader?.displayName ?? "System",
       entityType: "document",
+      subjectId: args.documentId,
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: args.documentId,
       action: "version-uploaded",
       summary: `Uploaded ${args.fileName} as v${args.version}${args.changeNote ? ` — ${args.changeNote}` : ""}`,
@@ -237,7 +239,7 @@ async function downloadTargetForVersion(version: any) {
 export const get = query({
   args: { id: v.id("documentVersions") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 // Demo-friendly helper: creates a new version inline with a synthesized blob.
@@ -298,6 +300,8 @@ export const createDemoVersion = mutation({
       societyId: args.societyId,
       actor: uploader?.displayName ?? "Demo user",
       entityType: "document",
+      subjectId: args.documentId,
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: args.documentId,
       action: "version-uploaded",
       summary: `Uploaded ${args.fileName} as v${nextVersion}${args.changeNote ? ` — ${args.changeNote}` : ""}`,
@@ -313,5 +317,5 @@ export const rollback = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => rollbackPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => rollbackPortable(await toPortableMutationCtx(ctx), args),
 });

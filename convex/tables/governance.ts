@@ -61,23 +61,27 @@ export const governanceTables = {
     actor: v.string(),
     entityType: v.string(),
     entityId: v.optional(v.string()),
+    subjectId: v.optional(v.string()),
     action: v.string(),
     summary: v.string(),
     createdAtISO: v.string(),
   })
     .index("by_society", ["societyId"])
-    .index("by_entity", ["societyId", "entityType", "entityId"]),
+    .index("by_entity", ["societyId", "entityType", "entityId"])
+    .index("by_subject", ["societyId", "entityType", "subjectId"]),
 
   notes: defineTable({
     societyId: v.id("societies"),
     entityType: v.string(),
     entityId: v.string(),
+    subjectId: v.optional(v.string()),
     author: v.string(),
     body: v.string(),
     createdAtISO: v.string(),
     updatedAtISO: v.optional(v.string()),
   })
     .index("by_entity", ["societyId", "entityType", "entityId"])
+    .index("by_subject", ["societyId", "entityType", "subjectId"])
     .index("by_society", ["societyId"]),
 
   invitations: defineTable({

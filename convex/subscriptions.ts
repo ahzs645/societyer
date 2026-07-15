@@ -25,19 +25,19 @@ function frontendAppUrl(path: string) {
 export const plans = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => plansPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => plansPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const mySubscriptions = query({
   args: { societyId: v.id("societies"), email: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => mySubscriptionsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => mySubscriptionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const allSubscriptions = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => allSubscriptionsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => allSubscriptionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertPlan = mutation({
@@ -56,13 +56,13 @@ export const upsertPlan = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertPlanPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertPlanPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const feeTimeline = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => feeTimelinePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => feeTimelinePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertFeePeriod = mutation({
@@ -82,25 +82,25 @@ export const upsertFeePeriod = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertFeePeriodPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertFeePeriodPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeFeePeriod = mutation({
   args: { id: v.id("membershipFeePeriods"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => removeFeePeriodPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeFeePeriodPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removePlan = mutation({
   args: { id: v.id("subscriptionPlans"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => removePlanPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePlanPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const cancelSubscription = mutation({
   args: { id: v.id("memberSubscriptions"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => cancelSubscriptionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => cancelSubscriptionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Begin checkout. Live mode returns a hosted Stripe Checkout URL. Demo mode
@@ -153,7 +153,7 @@ export const beginCheckout = action({
 export const getPlan = query({
   args: { id: v.id("subscriptionPlans") },
   returns: v.any(),
-  handler: (ctx, args) => getPlanPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPlanPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const _createPending = internalMutation({

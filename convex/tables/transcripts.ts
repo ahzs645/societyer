@@ -65,13 +65,16 @@ export const transcriptTables = {
     definitionId: v.id("customFieldDefinitions"),
     entityType: v.string(),
     entityId: v.string(),
+    subjectId: v.optional(v.string()),
     value: v.any(),
     updatedAtISO: v.string(),
   })
     .index("by_society", ["societyId"])
     .index("by_entity", ["entityType", "entityId"])
+    .index("by_subject", ["entityType", "subjectId"])
     .index("by_definition", ["definitionId"])
-    .index("by_entity_def", ["entityType", "entityId", "definitionId"]),
+    .index("by_entity_def", ["entityType", "entityId", "definitionId"])
+    .index("by_subject_def", ["entityType", "subjectId", "definitionId"]),
 
   // People & governance tables (members, directors, board role assignments/changes, signing authorities, committees, committee members, org-chart assignments), extracted from convex/schema — extracted to convex/tables/people.ts
 };

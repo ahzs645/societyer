@@ -2621,6 +2621,8 @@ const tables: Record<string, any[]> = {
       societyId: SOCIETY_ID,
       actor: "Mina Patel",
       entityType: "filing",
+      subjectId: "static_filing_ar",
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: "static_filing_ar",
       action: "filed",
       summary: "Filed the annual report and attached the Societies Online confirmation.",

@@ -18,19 +18,19 @@ import { toPortableQueryCtx } from "./lib/portable";
 export const revisionHistory = query({
   args: { roleHolderId: v.id("roleHolders") },
   returns: v.any(),
-  handler: (ctx, args) => revisionHistoryPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => revisionHistoryPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** The whole register reconstructed as it stood at a past instant. */
 export const registerAsOf = query({
   args: { societyId: v.id("societies"), asOfISO: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => registerAsOfPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => registerAsOfPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** What changed in the register between two instants (new/update/delete). */
 export const changesBetween = query({
   args: { societyId: v.id("societies"), fromISO: v.string(), toISO: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => changesBetweenPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => changesBetweenPortable(await toPortableQueryCtx(ctx), args),
 });

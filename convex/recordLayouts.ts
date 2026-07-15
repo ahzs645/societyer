@@ -14,7 +14,7 @@ export const get = query({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => recordLayoutGet(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => recordLayoutGet(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -25,7 +25,7 @@ export const upsert = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => recordLayoutUpsert(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => recordLayoutUpsert(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
@@ -35,5 +35,5 @@ export const remove = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => recordLayoutRemove(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => recordLayoutRemove(await toPortableMutationCtx(ctx), args),
 });

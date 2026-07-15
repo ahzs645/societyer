@@ -10,7 +10,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const overview = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => overviewPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => overviewPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -34,11 +34,11 @@ export const upsert = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("minuteBookItems") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

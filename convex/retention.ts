@@ -73,5 +73,5 @@ export const openAttestationYear = internalMutation({
 export const expiredForSociety = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => expiredForSocietyPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => expiredForSocietyPortable(await toPortableQueryCtx(ctx), args),
 });

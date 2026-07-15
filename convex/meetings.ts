@@ -16,13 +16,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -59,7 +59,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Apply (or re-apply) a meeting template's agenda + minutes scaffolding onto an
@@ -76,7 +76,7 @@ export const applyTemplate = mutation({
     replace: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: (ctx, args) => applyTemplatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => applyTemplatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -121,7 +121,7 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const markSourceReview = mutation({
@@ -132,7 +132,7 @@ export const markSourceReview = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => markSourceReviewPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => markSourceReviewPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const setPackageReviewStatus = mutation({
@@ -143,17 +143,17 @@ export const setPackageReviewStatus = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => setPackageReviewStatusPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setPackageReviewStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const backfillQuorumSnapshot = mutation({
   args: { id: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => backfillQuorumSnapshotPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => backfillQuorumSnapshotPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

@@ -27,13 +27,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const suggestForMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => suggestForMeetingPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => suggestForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -46,7 +46,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -58,13 +58,13 @@ export const update = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { backlogId: v.id("motions") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const createFromMinutesMotion = mutation({
@@ -75,7 +75,7 @@ export const createFromMinutesMotion = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createFromMinutesMotionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createFromMinutesMotionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const createFromMinutesSection = mutation({
@@ -87,13 +87,13 @@ export const createFromMinutesSection = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createFromMinutesSectionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createFromMinutesSectionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const seedPipaSetup = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => seedPipaSetupPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => seedPipaSetupPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const addToAgenda = mutation({
@@ -102,7 +102,7 @@ export const addToAgenda = mutation({
     agendaId: v.id("agendas"),
   },
   returns: v.any(),
-  handler: (ctx, args) => addToAgendaPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => addToAgendaPortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Create backlog motions for a set of (deferred/tabled) motions in a source
@@ -117,11 +117,11 @@ export const carryForwardToMeeting = mutation({
     motionIndexes: v.array(v.number()),
   },
   returns: v.any(),
-  handler: (ctx, args) => carryForwardToMeetingPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => carryForwardToMeetingPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const seedToMinutes = mutation({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => seedToMinutesPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => seedToMinutesPortable(await toPortableMutationCtx(ctx), args),
 });

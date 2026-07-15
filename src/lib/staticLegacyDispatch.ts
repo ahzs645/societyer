@@ -925,6 +925,8 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
       societyId,
       actor: "Desktop user",
       entityType: "society",
+      subjectId: societyId,
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: societyId,
       action: "workspace-created",
       summary: `Created ${args?.name ?? "workspace"}`,

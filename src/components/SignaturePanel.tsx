@@ -94,7 +94,7 @@ export function SignaturePanel({
 }) {
   const signatures = useQuery(api.signatures.listForEntity, {
     entityType,
-    entityId,
+    subjectId: entityId,
   });
   const signatureProfiles = useQuery(api.signatures.listProfilesForSociety, { societyId });
   const sign = useMutation(api.signatures.sign);
@@ -367,7 +367,7 @@ export function SignaturePanel({
                 const result = await sign({
                   societyId,
                   entityType,
-                  entityId,
+        subjectId: entityId,
                   userId: selectedSignerUserId,
                   directorId: selectedSigner?.directorId as Id<"directors"> | undefined,
                   memberId: selectedSigner?.memberId as Id<"members"> | undefined,
