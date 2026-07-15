@@ -31,6 +31,7 @@ export function RecordTableCell({
   const hoverPosition = useRecordTableState((state) => state.hoverPosition);
   const editingCell = useRecordTableState((state) => state.editingCell);
   const editingInitialValue = useRecordTableState((state) => state.editingInitialValue);
+  const openRecordIn = useRecordTableState((state) => state.openRecordIn);
   const handle = useRecordTableStoreHandle();
   const cellRef = useRef<HTMLTableCellElement | null>(null);
 
@@ -74,6 +75,8 @@ export function RecordTableCell({
         (isHovered ? " record-table__cell--hovered" : "") +
         (isFocused ? " record-table__cell--focused" : "")
       }
+      tabIndex={isFocused ? 0 : -1}
+      aria-selected={isFocused}
       style={{ width: recordField.size, minWidth: recordField.size }}
       // The identifier column opens the record on a single click, so double-click
       // must NOT also try to edit it (the first click already navigates away —
@@ -87,26 +90,37 @@ export function RecordTableCell({
           handle.get().setHoverPosition(null);
         }
       }}
-      onClick={(e) => {
+      onClick={() => {
         handle.get().setFocusedCell({ rowIndex, columnIndex });
-        // The identifier (first) column opens the record on click. Editing the
-        // identifier is still possible via the hover edit pencil (whose click
-        // stops propagation, so it edits instead of opening). Other editable
-        // columns edit via the pencil / double-click / Enter.
-        if (isLabelIdentifier && tableCtx.onRecordClick) {
-          e.stopPropagation();
-          tableCtx.onRecordClick(recordId, record);
-        }
+        cellRef.current?.focus({ preventScroll: true });
       }}
       data-column-index={columnIndex}
+      data-row-index={rowIndex}
       data-field-name={recordField.field.name}
       ref={cellRef}
     >
-      <div className="record-table__cell-content">
-        {renderCell?.({ record, field: recordField.field, value }) ?? (
-          <FieldDisplay value={value} record={record} field={recordField.field} />
-        )}
-      </div>
+      {isLabelIdentifier && tableCtx.onRecordClick ? (
+        <button
+          type="button"
+          className="record-table__identifier-button"
+          onClick={(event) => {
+            event.stopPropagation();
+            tableCtx.onRecordClick?.(recordId, record, { openRecordIn });
+          }}
+        >
+          <span className="record-table__cell-content">
+            {renderCell?.({ record, field: recordField.field, value }) ?? (
+              <FieldDisplay value={value} record={record} field={recordField.field} />
+            )}
+          </span>
+        </button>
+      ) : (
+        <div className="record-table__cell-content">
+          {renderCell?.({ record, field: recordField.field, value }) ?? (
+            <FieldDisplay value={value} record={record} field={recordField.field} />
+          )}
+        </div>
+      )}
       {/* Only render the overlay when it has at least one action — an empty
           container shows up as a tiny floating box over the cell. */}
       {(isHovered || isFocused) &&
@@ -134,7 +148,11 @@ export function RecordTableCell({
               className="record-table__cell-action"
               aria-label={`Edit ${recordField.field.label}`}
               title={`Edit ${recordField.field.label}`}
-              onClick={startEdit}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={(event) => {
+                event.stopPropagation();
+                startEdit();
+              }}
             >
               <Pencil size={12} />
             </button>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useMemo, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useFilteredRecords } from "./useFilteredRecords";
 import { isFieldEditable } from "../../record-field/components/FieldInput";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
@@ -11,7 +11,13 @@ function isTypingTarget(target: EventTarget | null) {
   return ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
-export function useRecordTableKeyboardNavigation({ enabled }: { enabled: boolean }) {
+export function useRecordTableKeyboardNavigation({
+  enabled,
+  selectable,
+}: {
+  enabled: boolean;
+  selectable: boolean;
+}) {
   const filteredRecords = useFilteredRecords();
   const columns = useRecordTableState((state) => state.columns);
   const visibleColumns = useMemo(
@@ -19,18 +25,18 @@ export function useRecordTableKeyboardNavigation({ enabled }: { enabled: boolean
     [columns],
   );
   const focusedCell = useRecordTableState((state) => state.focusedCell);
+  const openRecordIn = useRecordTableState((state) => state.openRecordIn);
   const handle = useRecordTableStoreHandle();
   const { onRecordClick, onUpdate } = useRecordTableContextOrThrow();
-  const selectionAnchorRowIndexRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (!enabled) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
+  return useCallback(
+    (event: ReactKeyboardEvent<HTMLElement>) => {
+      if (!enabled) return;
       if (event.key === "Escape") {
-        handle.get().setFocusedCell(null);
+        const wasEditing = !!handle.get().editingCell;
         handle.get().setEditingInitialValue(undefined);
         handle.get().setEditingCell(null);
+        if (!wasEditing) handle.get().setFocusedCell(null);
         return;
       }
       if (isTypingTarget(event.target)) return;
@@ -58,23 +64,32 @@ export function useRecordTableKeyboardNavigation({ enabled }: { enabled: boolean
         const record = filteredRecords[current.rowIndex];
         if (record && onRecordClick) {
           event.preventDefault();
-          onRecordClick(String(record._id), record);
+          onRecordClick(String(record._id), record, { openRecordIn });
         }
         return;
       } else if (event.key === "Enter") {
-        if (handle.get().focusedCell) {
+        const column = visibleColumns[current.columnIndex];
+        if (
+          handle.get().focusedCell &&
+          column &&
+          isFieldEditable(column.field) &&
+          onUpdate
+        ) {
           handle.get().setEditingInitialValue(undefined);
           handle.get().setEditingCell(handle.get().focusedCell);
         }
         return;
-      } else if (event.key.toLowerCase() === "x") {
+      } else if (
+        selectable &&
+        (event.key === " " || event.key.toLowerCase() === "x")
+      ) {
         event.preventDefault();
         const record = filteredRecords[current.rowIndex];
         if (!record) return;
         const recordId = String(record._id);
         const nextSelected = new Set(handle.get().selectedRecordIds);
         if (event.shiftKey) {
-          const anchor = selectionAnchorRowIndexRef.current ?? current.rowIndex;
+          const anchor = handle.get().selectionAnchorRowIndex ?? current.rowIndex;
           const start = Math.min(anchor, current.rowIndex);
           const end = Math.max(anchor, current.rowIndex);
           for (let index = start; index <= end; index += 1) {
@@ -83,10 +98,10 @@ export function useRecordTableKeyboardNavigation({ enabled }: { enabled: boolean
           }
         } else if (nextSelected.has(recordId)) {
           nextSelected.delete(recordId);
-          selectionAnchorRowIndexRef.current = current.rowIndex;
+          handle.get().setSelectionAnchorRowIndex(current.rowIndex);
         } else {
           nextSelected.add(recordId);
-          selectionAnchorRowIndexRef.current = current.rowIndex;
+          handle.get().setSelectionAnchorRowIndex(current.rowIndex);
         }
         handle.get().setSelectedRecordIds(nextSelected);
         return;
@@ -116,14 +131,22 @@ export function useRecordTableKeyboardNavigation({ enabled }: { enabled: boolean
 
       event.preventDefault();
       handle.get().setFocusedCell(next);
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [enabled, filteredRecords, focusedCell, handle, onRecordClick, onUpdate, visibleColumns]);
+    },
+    [
+      enabled,
+      filteredRecords,
+      focusedCell,
+      handle,
+      onRecordClick,
+      openRecordIn,
+      onUpdate,
+      selectable,
+      visibleColumns,
+    ],
+  );
 }
 
-function isPrintableEditKey(event: KeyboardEvent) {
+function isPrintableEditKey(event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey">) {
   return event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey;
 }
 

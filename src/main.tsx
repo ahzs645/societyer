@@ -140,6 +140,7 @@ const CustomFieldsPage = React.lazy(() => import("./pages/CustomFields").then((m
 const PublicTransparencyPage = React.lazy(() => import("./pages/PublicTransparency").then((m) => ({ default: m.PublicTransparencyPage })));
 const VolunteerApplyPage = React.lazy(() => import("./pages/VolunteerApply").then((m) => ({ default: m.VolunteerApplyPage })));
 const GrantApplyPage = React.lazy(() => import("./pages/GrantApply").then((m) => ({ default: m.GrantApplyPage })));
+const RecordTableFieldLabPage = React.lazy(() => import("./pages/RecordTableFieldLab").then((m) => ({ default: m.RecordTableFieldLabPage })));
 import "./i18n";
 import "./theme/palette.css";
 import "./theme/tokens.css";
@@ -540,6 +541,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             />
             <Route path="outbox" element={<OutboxPage />} />
             <Route path="custom-fields" element={<CustomFieldsPage />} />
+            {staticDemoRuntime && <Route path="table-field-lab" element={<RecordTableFieldLabPage />} />}
             <Route path="settings" element={<SettingsPage />} />
             <Route path="settings/api-keys" element={<ApiKeysPage />} />
             <Route path="webhooks" element={<WebhooksPage />} />

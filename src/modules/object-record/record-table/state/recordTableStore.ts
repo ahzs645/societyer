@@ -2,6 +2,7 @@ import { createContext, useContext } from "react";
 import { createStore, useStore } from "zustand";
 import type {
   HydratedView,
+  AggregateOperation,
   RecordField,
   ViewFilter,
   ViewFilterGroup,
@@ -65,6 +66,7 @@ export type RecordTableState = {
   resizeColumn: (viewFieldId: string, size: number) => void;
   reorderColumns: (orderedViewFieldIds: string[]) => void;
   toggleColumnVisibility: (viewFieldId: string) => void;
+  setColumnAggregateOperation: (viewFieldId: string, operation: AggregateOperation | null) => void;
 
   /* density */
   density: "compact" | "comfortable";
@@ -100,6 +102,8 @@ export type RecordTableState = {
   selectedRecordIds: Set<string>;
   setSelectedRecordIds: (next: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
   clearSelection: () => void;
+  selectionAnchorRowIndex: number | null;
+  setSelectionAnchorRowIndex: (rowIndex: number | null) => void;
 
   /* interaction state */
   hoverPosition: CellPosition | null;
@@ -130,6 +134,7 @@ export type RecordTableStore = ReturnType<typeof createRecordTableStore>;
 export function createRecordTableStore(opts: {
   tableId: string;
   objectMetadataId: string;
+  labelIdentifierFieldName?: string;
 }) {
   return createStore<RecordTableState>()((set, get) => ({
     tableId: opts.tableId,
@@ -150,6 +155,7 @@ export function createRecordTableStore(opts: {
     visibility: "personal",
     openRecordIn: "drawer",
     selectedRecordIds: new Set(),
+    selectionAnchorRowIndex: null,
     hoverPosition: null,
     focusedCell: null,
     editingCell: null,
@@ -157,7 +163,8 @@ export function createRecordTableStore(opts: {
     records: [],
     savedView: null,
 
-    setColumns: (columns) => set({ columns }),
+    setColumns: (columns) =>
+      set({ columns: normalizeIdentifierColumn(columns, opts.labelIdentifierFieldName) }),
     resizeColumn: (viewFieldId, size) =>
       set((state) => ({
         columns: state.columns.map((c) =>
@@ -176,12 +183,28 @@ export function createRecordTableStore(opts: {
         for (const col of state.columns) {
           if (!orderedViewFieldIds.includes(col.viewFieldId)) reordered.push(col);
         }
-        return { columns: reordered };
+        return {
+          columns: normalizeIdentifierColumn(
+            reordered,
+            opts.labelIdentifierFieldName,
+          ),
+        };
       }),
     toggleColumnVisibility: (viewFieldId) =>
       set((state) => ({
         columns: state.columns.map((c) =>
-          c.viewFieldId === viewFieldId ? { ...c, isVisible: !c.isVisible } : c,
+          c.viewFieldId === viewFieldId &&
+          c.field.name !== opts.labelIdentifierFieldName
+            ? { ...c, isVisible: !c.isVisible }
+            : c,
+        ),
+      })),
+    setColumnAggregateOperation: (viewFieldId, aggregateOperation) =>
+      set((state) => ({
+        columns: state.columns.map((column) =>
+          column.viewFieldId === viewFieldId
+            ? { ...column, aggregateOperation }
+            : column,
         ),
       })),
 
@@ -207,7 +230,8 @@ export function createRecordTableStore(opts: {
             : next;
         return { selectedRecordIds: resolved };
       }),
-    clearSelection: () => set({ selectedRecordIds: new Set() }),
+    clearSelection: () => set({ selectedRecordIds: new Set(), selectionAnchorRowIndex: null }),
+    setSelectionAnchorRowIndex: (selectionAnchorRowIndex) => set({ selectionAnchorRowIndex }),
 
     setHoverPosition: (pos) => set({ hoverPosition: pos }),
     setFocusedCell: (pos) => set({ focusedCell: pos }),
@@ -217,9 +241,13 @@ export function createRecordTableStore(opts: {
     setRecords: (records) => set({ records }),
 
     loadView: (hydrated) => {
+      const normalizedColumns = normalizeIdentifierColumn(
+        hydrated.columns,
+        opts.labelIdentifierFieldName,
+      );
       const snapshot: SavedViewSnapshot = {
         viewId: hydrated.view._id,
-        columns: hydrated.columns,
+        columns: normalizedColumns,
         density: hydrated.view.density,
         filters: hydrated.view.filters,
         filterGroups: hydrated.view.filterGroups,
@@ -299,6 +327,22 @@ export function createRecordTableStore(opts: {
       });
     },
   }));
+}
+
+function normalizeIdentifierColumn(
+  columns: RecordField[],
+  labelIdentifierFieldName?: string,
+) {
+  if (!labelIdentifierFieldName) return columns;
+  const identifier = columns.find(
+    (column) => column.field.name === labelIdentifierFieldName,
+  );
+  if (!identifier) return columns;
+  const ordered = [
+    { ...identifier, isVisible: true },
+    ...columns.filter((column) => column.viewFieldId !== identifier.viewFieldId),
+  ];
+  return ordered.map((column, position) => ({ ...column, position }));
 }
 
 /* ----------------------- context & hooks ----------------------- */

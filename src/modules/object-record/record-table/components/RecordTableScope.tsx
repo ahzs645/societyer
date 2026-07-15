@@ -25,14 +25,18 @@ export function RecordTableScope({
   records,
   onRecordClick,
   onUpdate,
+  onCreate,
+  onReorder,
   children,
 }: {
   tableId: string;
   objectMetadata: ObjectMetadata;
   hydratedView: HydratedView | null;
   records: any[];
-  onRecordClick?: (recordId: string, record: any) => void;
+  onRecordClick?: RecordTableContextValue["onRecordClick"];
   onUpdate?: RecordTableContextValue["onUpdate"];
+  onCreate?: RecordTableContextValue["onCreate"];
+  onReorder?: RecordTableContextValue["onReorder"];
   children: ReactNode;
 }) {
   // Store is created once per tableId for the lifetime of this scope.
@@ -41,6 +45,7 @@ export function RecordTableScope({
     storeRef.current = createRecordTableStore({
       tableId,
       objectMetadataId: objectMetadata._id,
+      labelIdentifierFieldName: objectMetadata.labelIdentifierFieldName,
     });
   }
   const store = storeRef.current;
@@ -54,8 +59,8 @@ export function RecordTableScope({
   }, [records, store]);
 
   const contextValue = useMemo<RecordTableContextValue>(
-    () => ({ tableId, objectMetadata, onRecordClick, onUpdate }),
-    [tableId, objectMetadata, onRecordClick, onUpdate],
+    () => ({ tableId, objectMetadata, onRecordClick, onUpdate, onCreate, onReorder }),
+    [tableId, objectMetadata, onRecordClick, onUpdate, onCreate, onReorder],
   );
 
   return (

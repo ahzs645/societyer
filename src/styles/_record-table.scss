@@ -88,6 +88,11 @@
   font-weight: token('fw-medium');
 }
 
+.record-table__view-count {
+  color: token('text-tertiary');
+  font-weight: 400;
+}
+
 .record-table__toolbar-button--active {
   background: token('bg-transparent-light');
   color: token('accent');
@@ -279,6 +284,37 @@
   font-weight: 700;
   color: token('text-tertiary');
   text-transform: uppercase;
+}
+
+.record-table__menu-label--icon {
+  @include inline-flex-center;
+  gap: 5px;
+}
+
+.record-table__density-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  padding: 3px;
+  background: token('bg-subtle');
+  border-radius: token('r-sm');
+
+  button {
+    padding: 5px 7px;
+    color: token('text-secondary');
+    background: transparent;
+    border: 0;
+    border-radius: token('r-sm');
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+
+    &:hover,
+    &.is-active {
+      color: token('text-primary');
+      background: token('bg-panel');
+    }
+  }
 }
 
 .record-table__menu-radio {
@@ -579,6 +615,11 @@ select.record-table__menu-select,
   overflow-x: auto;
 }
 
+.record-table__interaction-root,
+.record-table__scroll-frame {
+  outline: none;
+}
+
 // Non-scrolling wrapper that hosts the edge-fade overlays. The fades must sit
 // on this frame (not inside the scroller) so they stay pinned to the visible
 // edge while the table scrolls underneath. They appear only when the table can
@@ -622,6 +663,7 @@ select.record-table__menu-select,
 
 .record-table {
   width: 100%;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   background: token('bg-panel');
@@ -631,8 +673,9 @@ select.record-table__menu-select,
 
 .record-table--compact .record-table__cell,
 .record-table--compact .record-table__header-cell {
-  padding-top: 4px;
-  padding-bottom: 4px;
+  height: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .record-table--comfortable .record-table__cell,
@@ -642,7 +685,7 @@ select.record-table__menu-select,
 }
 
 .record-table__thead {
-  background: token('bg-subtle');
+  background: token('bg-panel');
   position: sticky;
   top: 0;
   z-index: 2;
@@ -653,20 +696,29 @@ select.record-table__menu-select,
 }
 
 .record-table__header-cell {
-  padding: 6px 10px;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 8px;
   text-align: left;
-  font-weight: 600;
-  font-size: 11px;
+  font-weight: 500;
+  font-size: 12px;
   color: token('text-tertiary');
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  text-transform: none;
+  letter-spacing: 0;
   border-bottom: 1px solid token('border');
   border-right: 1px solid token('border');
-  background: token('bg-subtle');
+  background: token('bg-panel');
   position: relative;
   white-space: nowrap;
   user-select: none;
   overflow: visible;
+}
+
+.record-table__header-cell--identifier {
+  left: var(--record-table-identifier-left, 0px);
+  position: sticky;
+  z-index: 4;
+  box-shadow: 1px 0 0 token('border-color-light');
 }
 
 .record-table__header-cell-button {
@@ -832,9 +884,20 @@ select.record-table__menu-select,
   }
 }
 
+.record-table__resize-handle:focus-visible {
+  outline: 2px solid token('accent');
+  outline-offset: -2px;
+}
+
 .record-table__checkbox-cell {
+  box-sizing: border-box;
+  left: 0;
+  min-width: 28px;
+  position: sticky;
+  width: 28px;
+  z-index: 5;
   text-align: center;
-  padding: 0 8px;
+  padding: 0;
   border-right: 1px solid token('border');
   background: inherit;
 
@@ -868,6 +931,8 @@ select.record-table__menu-select,
   width: 22px;
   height: 22px;
   color: token('text-tertiary');
+  background: transparent;
+  border: 0;
   opacity: 0;
   cursor: grab;
   border-radius: 5px;
@@ -896,9 +961,21 @@ select.record-table__menu-select,
   }
 }
 
+.record-table__row:hover .record-table__cell,
+.record-table__row:hover .record-table__cell--identifier {
+  background: token('bg-hover');
+}
+
+.record-table__row:has(.record-table__cell--focused) .record-table__cell,
+.record-table__row:has(.record-table__checkbox-cell input:checked) .record-table__cell {
+  background: token('accent-soft');
+}
+
 .record-table__cell {
+  box-sizing: border-box;
+  height: 32px;
   position: relative;
-  padding: 6px 10px;
+  padding: 0 8px;
   border-right: 1px solid token('border-color-light');
   border-bottom: 1px solid token('border-color-light');
   vertical-align: middle;
@@ -920,11 +997,31 @@ select.record-table__menu-select,
   // inline editing). Bold + link-style hover signals the click-to-open.
   font-weight: 600;
   color: token('text-primary');
+  left: var(--record-table-identifier-left, 0px);
+  position: sticky;
+  z-index: 3;
+  background: token('bg-panel');
+  box-shadow: 1px 0 0 token('border-color-light');
+}
+
+.record-table__identifier-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
   cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: inherit;
+  height: 24px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 4px;
+  text-align: left;
 
   &:hover {
-    color: token('accent');
-    text-decoration: underline;
+    background: token('bg-hover');
+    border-radius: token('r-sm');
   }
 }
 
@@ -933,14 +1030,28 @@ select.record-table__menu-select,
 }
 
 .record-table__cell--focused {
-  outline: 2px solid token('accent');
-  outline-offset: -2px;
+  outline: 1px solid token('accent');
+  outline-offset: -1px;
   background: token('accent-soft');
+  z-index: 4;
 }
 
 .record-table__cell--hovered:not(.record-table__cell--focused) {
   background: token('bg-hover');
   box-shadow: inset 0 0 0 1px token('border');
+}
+
+.record-table__fill-head,
+.record-table__fill-cell {
+  min-width: 24px;
+  width: auto;
+  background: token('bg-panel');
+  border-bottom: 1px solid token('border-color-light');
+}
+
+.record-table__fill-head {
+  background: token('bg-panel');
+  border-bottom-color: token('border');
 }
 
 .record-table__cell-actions {
@@ -984,6 +1095,7 @@ select.record-table__menu-select,
 }
 
 .record-table__footer-cell {
+  height: 32px;
   padding: 5px 10px;
   border-top: 1px solid token('border');
   border-right: 1px solid token('border-color-light');
@@ -992,6 +1104,120 @@ select.record-table__menu-select,
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.record-table__aggregate {
+  position: relative;
+}
+
+.record-table__aggregate-trigger {
+  @include inline-flex-center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 4px;
+  color: token('text-tertiary');
+  background: transparent;
+  border: 0;
+  border-radius: token('r-sm');
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    color: token('text-primary');
+    background: token('bg-hover');
+  }
+}
+
+.record-table__aggregate-trigger--empty {
+  opacity: 0;
+
+  .record-table__footer-cell:hover &,
+  &:focus-visible,
+  &[aria-expanded='true'] {
+    opacity: 1;
+  }
+}
+
+.record-table__aggregate-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: token('z-dropdown');
+  min-width: 160px;
+  padding: 4px;
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+  box-shadow: token('shadow-strong');
+
+  button {
+    width: 100%;
+    padding: 6px 8px;
+    color: token('text-primary');
+    background: transparent;
+    border: 0;
+    border-radius: token('r-sm');
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+
+    &:hover,
+    &.is-active {
+      background: token('bg-hover');
+    }
+  }
+}
+
+.record-table__action-row td {
+  height: 32px;
+  padding: 0;
+  border-bottom: 1px solid token('border-color-light');
+  background: token('bg-panel');
+}
+
+.record-table__action-row button {
+  @include inline-flex-center;
+  justify-content: flex-start;
+  gap: 6px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  color: token('text-tertiary');
+  background: token('bg-panel');
+  border: 0;
+  border-bottom: 1px solid token('border-color-light');
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+
+  &:hover {
+    color: token('text-primary');
+    background: token('bg-hover');
+  }
+}
+
+.record-table-field-lab__status {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 12px;
+  color: token('text-secondary');
+  font-size: 12px;
+
+  strong {
+    color: token('text-primary');
+  }
+}
+
+@media (max-width: 760px) {
+  .record-table-field-lab__status {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
 }
 
 /* -------------------------- Cell sub-renderers -------------------------- */
@@ -1246,13 +1472,14 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 
 .record-table__loading {
   @include flex-column;
-  gap: 6px;
-  padding: 8px 0;
+  gap: 0;
+  padding: 0;
 }
 
 .record-table__loading-row {
-  height: 28px;
-  border-radius: 4px;
+  height: 32px;
+  border-bottom: 1px solid token('border-color-light');
+  border-radius: 0;
   background: linear-gradient(90deg, token('bg-subtle') 25%, token('bg-hover') 50%, token('bg-subtle') 75%);
   background-size: 200% 100%;
   animation: record-table-skeleton 1.4s ease-in-out infinite;
@@ -1342,29 +1569,32 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 
 /* ----- per-row actions (sticky right column) ----- */
 
-/* The actions column pins to the right edge — on wide tables it would
- * otherwise sit past the viewport and rows would appear to have no
- * actions at all until the user horizontally scrolled. */
+/* The actions anchor is zero-width so it overlays the table's fill area
+ * instead of making an otherwise-fitting table overflow by one control. */
 .record-table__row-actions-head {
-  width: 1%;
-  min-width: 60px;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
   padding: 0;
   position: sticky;
   right: 0;
   z-index: 2;
-  background: token('bg-subtle');
+  background: transparent;
 }
 
 .record-table__row-actions-cell {
-  width: 1%;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
   white-space: nowrap;
-  padding: 0 8px;
+  padding: 0;
   vertical-align: middle;
   text-align: right;
   position: sticky;
   right: 0;
   z-index: 1;
-  background: token('bg-base');
+  background: transparent;
+  overflow: visible;
 }
 
 .record-table__row:hover .record-table__row-actions-cell {
@@ -1376,18 +1606,21 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 }
 
 .record-table__row-actions {
+  position: absolute;
+  right: 4px;
+  top: 50%;
   display: inline-flex;
   gap: 4px;
   align-items: center;
   justify-content: flex-end;
   opacity: 0;
-  transform: translateX(2px);
   transition: opacity 120ms ease, transform 120ms ease;
+  transform: translateY(-50%) translateX(2px);
 
   .record-table__row:hover &,
   .record-table__row:focus-within & {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(-50%) translateX(0);
   }
 }
 
@@ -1459,6 +1692,12 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
     background: token('bg-panel');
     width: 46vw !important;
     min-width: 0 !important;
+  }
+  .record-table__scroll .record-table > tbody > .record-table__action-row > td:first-child,
+  .record-table__virtuoso .record-table > tbody > .record-table__action-row > td:first-child {
+    position: static;
+    width: auto !important;
+    min-width: 100% !important;
   }
   .record-table__scroll .record-table > tfoot > tr > td:first-child,
   .record-table__virtuoso .record-table > tfoot > tr > td:first-child {

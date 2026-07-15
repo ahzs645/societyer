@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   DEFAULT_FREEZE_FIRST_COLUMN_ABOVE,
   getMobileTableLayout,
@@ -70,5 +71,37 @@ assert.equal(customThreshold.freezeFirstColumn, true, "custom freeze threshold i
 // --- Defaults: drag handle is off unless a table opts in ---------------------
 const defaultDragHandle = getMobileTableLayout({ isMobile: false, selectable: true });
 assert.equal(defaultDragHandle.showDragHandle, false, "drag handle defaults to off when unspecified");
+
+// --- Shared RecordTable CSS keeps the Twenty mobile interaction contract ---
+const recordTableStyles = readFileSync(
+  new URL("../src/styles/_record-table.scss", import.meta.url),
+  "utf8",
+);
+
+assert.match(
+  recordTableStyles,
+  /@media \(max-width: 760px\)/,
+  "record table has an explicit phone breakpoint",
+);
+assert.match(
+  recordTableStyles,
+  /position: sticky;[\s\S]*width: 46vw !important;/,
+  "phone identifier column remains sticky and viewport-capped",
+);
+assert.match(
+  recordTableStyles,
+  /\.record-table__scroll-frame\.is-scrolled-right::after \{ opacity: 1; \}/,
+  "phone horizontal overflow keeps a visible edge cue",
+);
+assert.match(
+  recordTableStyles,
+  /@media \(hover: none\), \(pointer: coarse\)[\s\S]*\.record-table__row-actions[\s\S]*opacity: 1;/,
+  "touch devices do not hide row actions behind hover",
+);
+assert.match(
+  recordTableStyles,
+  /\.record-table__identifier-button[\s\S]*max-width: 100%;/,
+  "identifier control cannot widen the frozen phone column",
+);
 
 console.log("mobile table layout checks passed");

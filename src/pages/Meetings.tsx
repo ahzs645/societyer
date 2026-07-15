@@ -261,7 +261,14 @@ export function MeetingsPage() {
             objectMetadata={tableData.objectMetadata}
             hydratedView={tableData.hydratedView}
             records={meetings ?? []}
-            onRecordClick={(recordId) => navigate(`/app/meetings/${recordId}`)}
+            onRecordClick={(recordId, record, { openRecordIn }) => {
+              if (openRecordIn === "page") {
+                navigate(`/app/meetings/${recordId}`);
+                return;
+              }
+              openEdit(record as Doc<"meetings">);
+            }}
+            onCreate={() => openNew()}
             onUpdate={async ({ recordId, fieldName, value }) => {
               if (fieldName === "minutes") return;
               await updateMeeting({ id: recordId as Doc<"meetings">["_id"], patch: { [fieldName]: value } as any });

@@ -22,6 +22,7 @@ import {
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { resolveRouteIdentity } from "../../../../lib/routeIdentity";
 import { RecordTableSortPopover } from "./RecordTableSortPopover";
+import { useFilteredRecords } from "../hooks/useFilteredRecords";
 
 /**
  * Compact search bar + column toggle + view switcher. Sits above the table
@@ -74,12 +75,14 @@ export function RecordTableToolbar({
   const searchTerm = useRecordTableState((s) => s.searchTerm);
   const columns = useRecordTableState((s) => s.columns);
   const density = useRecordTableState((s) => s.density);
+  const openRecordIn = useRecordTableState((s) => s.openRecordIn);
   const filters = useRecordTableState((s) => s.filters);
   const sorts = useRecordTableState((s) => s.sorts);
   const viewType = useRecordTableState((s) => s.type);
   const kanbanFieldMetadataId = useRecordTableState((s) => s.kanbanFieldMetadataId);
   const calendarFieldMetadataId = useRecordTableState((s) => s.calendarFieldMetadataId);
   const handle = useRecordTableStoreHandle();
+  const filteredRecords = useFilteredRecords();
   const isDirty = useRecordTableIsDirty();
   const { objectMetadata } = useRecordTableContextOrThrow();
 
@@ -157,6 +160,7 @@ export function RecordTableToolbar({
             >
               {resolvedIcon}
               <span>{activeViewName}</span>
+              <span className="record-table__view-count">{filteredRecords.length}</span>
               <ChevronDown size={12} />
             </button>
             {viewMenuOpen && (
@@ -185,6 +189,7 @@ export function RecordTableToolbar({
           <div className="record-table__title">
             {resolvedIcon}
             <span>{label}</span>
+            <span className="record-table__view-count">{filteredRecords.length}</span>
           </div>
         )}
       </div>
@@ -390,36 +395,77 @@ export function RecordTableToolbar({
         </button>
         <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} />
 
-        <button
-          type="button"
-          className="record-table__toolbar-button"
-          onClick={() => handle.get().setDensity(density === "compact" ? "comfortable" : "compact")}
-          title="Toggle row density"
-        >
-          <span>{density === "compact" ? "Compact" : "Comfort"}</span>
-        </button>
-
         <div className="record-table__view-switcher" ref={columnMenuRef}>
           <button
             type="button"
             className="record-table__toolbar-button"
             onClick={() => setColumnMenuOpen((x) => !x)}
           >
-            <Columns size={12} />
-            <span>Columns</span>
+            <SlidersHorizontal size={12} />
+            <span>Options</span>
           </button>
           {columnMenuOpen && (
-            <div className="record-table__menu record-table__menu--right">
+            <div className="record-table__menu record-table__menu--right record-table__menu--wide">
+              <div className="record-table__menu-section">
+                <span className="record-table__menu-label">Density</span>
+                <div className="record-table__density-options" role="radiogroup" aria-label="Row density">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={density === "compact"}
+                    className={density === "compact" ? "is-active" : ""}
+                    onClick={() => handle.get().setDensity("compact")}
+                  >
+                    Compact
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={density === "comfortable"}
+                    className={density === "comfortable" ? "is-active" : ""}
+                    onClick={() => handle.get().setDensity("comfortable")}
+                  >
+                    Comfortable
+                  </button>
+                </div>
+              </div>
+              <div className="record-table__menu-section">
+                <span className="record-table__menu-label">Open records in</span>
+                <label className="record-table__menu-radio">
+                  <input
+                    type="radio"
+                    name={`${handle.get().tableId}-open-record-in`}
+                    checked={openRecordIn === "drawer"}
+                    onChange={() => handle.get().setOpenRecordIn("drawer")}
+                  />
+                  Side panel
+                </label>
+                <label className="record-table__menu-radio">
+                  <input
+                    type="radio"
+                    name={`${handle.get().tableId}-open-record-in`}
+                    checked={openRecordIn === "page"}
+                    onChange={() => handle.get().setOpenRecordIn("page")}
+                  />
+                  Full page
+                </label>
+              </div>
+              <div className="record-table__menu-section">
+                <span className="record-table__menu-label record-table__menu-label--icon">
+                  <Columns size={12} /> Columns
+                </span>
               {columns.map((col) => (
                 <label key={col.viewFieldId} className="record-table__menu-checkbox">
                   <input
                     type="checkbox"
                     checked={col.isVisible}
+                    disabled={col.field.name === objectMetadata.labelIdentifierFieldName}
                     onChange={() => handle.get().toggleColumnVisibility(col.viewFieldId)}
                   />
                   {col.field.label}
                 </label>
               ))}
+              </div>
             </div>
           )}
         </div>

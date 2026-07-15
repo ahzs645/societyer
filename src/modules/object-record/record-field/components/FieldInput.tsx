@@ -475,6 +475,11 @@ const INPUT_BY_TYPE: Partial<Record<FieldMetadata["fieldType"], InputComponent>>
   [FIELD_TYPES.DATE]: DateInput,
   [FIELD_TYPES.DATE_TIME]: DateInput,
   [FIELD_TYPES.BOOLEAN]: BooleanInput,
+  // Relation fields become editable when their metadata adapter supplies a
+  // finite option list. Objects backed by a remote relation query remain
+  // read-only until that adapter provides the choices rather than falling
+  // back to an unsafe free-form record id.
+  [FIELD_TYPES.RELATION]: SelectInput,
 };
 
 export function FieldInput(props: FieldInputProps) {
@@ -494,7 +499,11 @@ export function isFieldEditable(field: FieldMetadata): boolean {
   if (field.isReadOnly) return false;
   const input = INPUT_BY_TYPE[field.fieldType];
   if (!input) return false;
-  if (field.fieldType === "SELECT" || field.fieldType === "MULTI_SELECT") {
+  if (
+    field.fieldType === "SELECT" ||
+    field.fieldType === "MULTI_SELECT" ||
+    field.fieldType === "RELATION"
+  ) {
     const options = (field.config as SelectFieldConfig)?.options;
     if (!options || options.length === 0) return false;
   }
