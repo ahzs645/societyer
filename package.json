@@ -122,6 +122,7 @@
     "test:register-diff": "tsx scripts/check-register-diff.ts",
     "export:workspace:files": "tsx scripts/export-workspace-with-files.ts",
     "backup:runtime": "./scripts/backup-runtime-data.sh",
+    "backup:runtime:k8s": "./scripts/backup-runtime-data-from-k8s.sh",
     "test:bank-csv": "tsx scripts/check-bank-csv.ts",
     "test:motion-governance": "tsx scripts/check-motion-governance.ts",
     "test:motion-tags": "tsx scripts/check-motion-tags.ts",

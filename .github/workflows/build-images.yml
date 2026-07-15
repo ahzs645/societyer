@@ -1,15 +1,34 @@
 name: Build and push container images
 
 on:
+  push:
+    branches: [main]
+    tags: ["v*"]
   release:
     types: [published]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/ahzs645
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm run test:exports
+
   build:
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,19 +58,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate image tags
-        id: tags
-        run: |
-          echo "version_tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+      - name: Generate immutable and channel tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}
+          tags: |
+            type=sha,format=long,prefix=sha-
+            type=ref,event=tag
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
 
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
           push: true
           build-args: ${{ matrix.build_args }}
-          tags: |
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}:${{ steps.tags.outputs.version_tag }}
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}:main
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max

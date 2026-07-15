@@ -14,7 +14,9 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: ghcr.io/ahzs645/societyer-frontend:main # {"$imagepolicy": "flux-system:societyer-frontend"}
+          # Registry manifest digest for the last deployed pre-upgrade image.
+          # Replace with the tested release digest during promotion.
+          image: ghcr.io/ahzs645/societyer-frontend@sha256:9e801dc8cde2cc592ed471c82b6448a6f42de350843a825649b13e20de4e123c
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
