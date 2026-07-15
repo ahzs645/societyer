@@ -33,6 +33,7 @@ import {
   removePortable,
   updateNodeConfigPortable,
   removeNodePortable,
+  listNodeTypesPortable,
 } from "../shared/functions/workflows";
 
 import {
@@ -55,7 +56,6 @@ import {
   UNBC_SAMPLE_KEY_REQUEST,
   OTE_SAMPLE_KEYCARD_REQUEST,
   RECIPE_CATALOG,
-  NODE_TYPE_CATALOG,
   effectivePdfFields,
   effectiveIntakeFields,
   effectiveDocumentConfig,
@@ -131,7 +131,7 @@ export const listCatalog = query({
 export const listNodeTypes = query({
   args: {},
   returns: v.any(),
-  handler: async () => NODE_TYPE_CATALOG,
+  handler: () => listNodeTypesPortable(),
 });
 
 

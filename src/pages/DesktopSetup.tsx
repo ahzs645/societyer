@@ -20,7 +20,12 @@ import {
   type DesktopConnectorHealth,
   type DesktopWorkspaceInfo,
 } from "../lib/desktopBridge";
-import { downloadLocalWorkspaceSnapshot, importLocalWorkspaceSnapshotFile } from "../lib/localWorkspaceExport";
+import { persistLocalWorkspaceSnapshot } from "../lib/documentStorage";
+import {
+  downloadLocalWorkspaceSnapshot,
+  getLocalWorkspaceSnapshot,
+  importLocalWorkspaceSnapshotFile,
+} from "../lib/localWorkspaceExport";
 import { getRuntimeDescriptor } from "../lib/runtimeMode";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
@@ -80,6 +85,9 @@ export function DesktopSetupPage() {
     if (!bridge) return;
     setBusy("backup");
     try {
+      const snapshot = getLocalWorkspaceSnapshot();
+      if (!snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
+      await persistLocalWorkspaceSnapshot(JSON.stringify(snapshot, null, 2));
       const result = await bridge.createBackup();
       setBackupPath(result.path);
       setStatusMessage("Backup created.");
@@ -195,10 +203,10 @@ export function DesktopSetupPage() {
           </div>
           <div className="card__body col">
             <div className="muted">
-              The desktop app unlocks local-first storage — your society's records and documents live directly on
-              your computer's file system, with offline access, local backups, and file exports/imports — but it
-              isn't required to use Societyer. You're using the web version right now, and everything else in
-              Societyer works normally here.
+              The desktop app unlocks local-first storage — your society's records live in the app's local database,
+              while document files live in your chosen workspace folder. Both remain on your computer for offline
+              access, backups, and exports/imports. Societyer Desktop isn't required; everything else works normally
+              in the web version you're using now.
             </div>
             <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
               To set up the desktop app, download and open Societyer Desktop, then revisit this page from inside
@@ -222,7 +230,7 @@ export function DesktopSetupPage() {
     <div className="page page--wide">
       <PageHeader
         title="Welcome to Societyer Desktop"
-        subtitle="Choose where local records live, confirm the desktop bridge, and connect optional services when needed."
+        subtitle="Choose where local documents live, confirm the desktop bridge, and connect optional services when needed."
         icon={<HardDrive size={16} />}
         iconColor="blue"
         actions={
@@ -247,7 +255,9 @@ export function DesktopSetupPage() {
           <div className="card__head">
             <div>
               <h2 className="card__title">Workspace vault</h2>
-              <span className="card__subtitle">Local records and document versions are stored in this folder.</span>
+              <span className="card__subtitle">
+                Document files are stored in this folder. Records stay in the app's local database and are snapshotted here for backups.
+              </span>
             </div>
             <Badge tone={workspace?.rootPath ? "success" : "warn"}>
               {workspace?.rootPath ? "Ready" : "Pending"}
@@ -270,7 +280,7 @@ export function DesktopSetupPage() {
                 <div>
                   <strong>Backup</strong>
                   <div className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
-                    {backupPath ?? "Creates a local copy inside the workspace backups folder."}
+                    {backupPath ?? "Snapshots local records, then copies the workspace into its backups folder."}
                   </div>
                 </div>
                 <button className="btn" disabled={!requiredReady || busy === "backup"} onClick={createBackup}>
@@ -281,7 +291,7 @@ export function DesktopSetupPage() {
                 <div>
                   <strong>Local data export</strong>
                   <div className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
-                    Downloads local records, document versions, attachment references, and change metadata as JSON.
+                    Downloads local records, attachment references, and change metadata as JSON. Workspace document files remain in the folder.
                   </div>
                 </div>
                 <button className="btn" disabled={!requiredReady || busy === "export"} onClick={exportLocalData}>

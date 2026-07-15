@@ -1,20 +1,24 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CalendarClock,
   Clipboard,
   Clock3,
   ExternalLink,
-  FileText,
   Home,
   MoreHorizontal,
+  Pencil,
   StickyNote,
   X,
 } from "lucide-react";
 import { Drawer } from "../../../../components/ui";
 import { Menu } from "../../../../components/Menu";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
-import type { ObjectMetadata } from "../../types";
+import { isFieldEditable } from "../../record-field/components/FieldInput";
+import { resolveFieldIcon } from "../../record-field/fieldIcons";
+import type { FieldMetadata, ObjectMetadata } from "../../types";
+import type { RecordTableContextValue } from "../contexts/RecordTableContext";
 import { useRecordTableState } from "../state/recordTableStore";
+import { RecordTableFloatingCellEditor } from "./RecordTableCell";
 
 type PanelTab = "home" | "timeline" | "notes";
 
@@ -24,12 +28,14 @@ export function RecordTableSidePanel({
   objectMetadata,
   onClose,
   onOpenRecord,
+  onUpdate,
 }: {
   open: boolean;
   record: any;
   objectMetadata: ObjectMetadata;
   onClose: () => void;
   onOpenRecord: () => void;
+  onUpdate?: RecordTableContextValue["onUpdate"];
 }) {
   const [activeTab, setActiveTab] = useState<PanelTab>("home");
   const columns = useRecordTableState((state) => state.columns);
@@ -144,19 +150,13 @@ export function RecordTableSidePanel({
           <div className="record-side-panel__group-title">General</div>
           <div className="record-side-panel__fields">
             {visibleFields.map((column) => (
-              <div className="record-side-panel__field" key={column.viewFieldId}>
-                <span className="record-side-panel__field-icon" aria-hidden="true">
-                  <FileText size={16} />
-                </span>
-                <span className="record-side-panel__field-label">{column.field.label}</span>
-                <span className="record-side-panel__field-value">
-                  <FieldDisplay
-                    value={record?.[column.field.name]}
-                    record={record}
-                    field={column.field}
-                  />
-                </span>
-              </div>
+              <SidePanelField
+                key={column.viewFieldId}
+                field={column.field}
+                record={record}
+                recordId={recordId}
+                onUpdate={onUpdate}
+              />
             ))}
           </div>
         </section>
@@ -187,6 +187,80 @@ export function RecordTableSidePanel({
         </section>
       )}
     </Drawer>
+  );
+}
+
+function SidePanelField({
+  field,
+  record,
+  recordId,
+  onUpdate,
+}: {
+  field: FieldMetadata;
+  record: any;
+  recordId: string;
+  onUpdate?: RecordTableContextValue["onUpdate"];
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const valueAnchorRef = useRef<HTMLSpanElement>(null);
+  const FieldIcon = resolveFieldIcon(field);
+  const canEdit = isFieldEditable(field) && !!onUpdate;
+  const value = record?.[field.name];
+
+  useEffect(() => setIsEditing(false), [recordId, field.name]);
+
+  const startEdit = () => {
+    if (canEdit) setIsEditing(true);
+  };
+
+  return (
+    <div
+      className={`record-side-panel__field${canEdit ? " record-side-panel__field--editable" : ""}`}
+      onDoubleClick={startEdit}
+    >
+      <span className="record-side-panel__field-icon" aria-hidden="true">
+        <FieldIcon size={16} />
+      </span>
+      <span className="record-side-panel__field-label">{field.label}</span>
+      <span
+        ref={valueAnchorRef}
+        className="record-side-panel__field-value"
+        tabIndex={canEdit ? 0 : undefined}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" || !canEdit) return;
+          event.preventDefault();
+          startEdit();
+        }}
+      >
+        <FieldDisplay value={value} record={record} field={field} />
+      </span>
+      {canEdit ? (
+        <button
+          type="button"
+          className="record-side-panel__field-edit"
+          aria-label={`Edit ${field.label}`}
+          title={`Edit ${field.label}`}
+          onClick={startEdit}
+        >
+          <Pencil size={12} />
+        </button>
+      ) : (
+        <span aria-hidden="true" />
+      )}
+      {isEditing ? (
+        <RecordTableFloatingCellEditor
+          anchorRef={valueAnchorRef}
+          value={value}
+          field={field}
+          onCommit={async (nextValue) => {
+            setIsEditing(false);
+            if (Object.is(nextValue, value)) return;
+            await onUpdate?.({ recordId, fieldName: field.name, value: nextValue });
+          }}
+          onCancel={() => setIsEditing(false)}
+        />
+      ) : null}
+    </div>
   );
 }
 

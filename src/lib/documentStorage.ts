@@ -98,6 +98,17 @@ export async function openLocalDocumentVersion(ref: DocumentVersionRef) {
   await requireDesktopBridge().openDocumentVersion({ key: ref.key });
 }
 
+export async function persistLocalWorkspaceSnapshot(serializedSnapshot: string) {
+  const bridge = requireDesktopBridge();
+  const snapshotBridge = bridge as typeof bridge & {
+    persistLocalWorkspaceSnapshot(value: string): Promise<{ path: string }>;
+  };
+  if (typeof snapshotBridge.persistLocalWorkspaceSnapshot !== "function") {
+    throw new Error("Local workspace snapshot persistence requires the current Electron preload API.");
+  }
+  return await snapshotBridge.persistLocalWorkspaceSnapshot(serializedSnapshot);
+}
+
 export async function openDocumentDownloadTarget(target: DocumentDownloadTarget) {
   if (target.kind === "local-filesystem") {
     await requireDesktopBridge().openDocumentVersion({ key: target.key });

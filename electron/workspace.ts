@@ -1,6 +1,6 @@
 import { app } from "electron";
 import { randomUUID } from "node:crypto";
-import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { readDesktopConfig, updateDesktopConfig } from "./config.js";
@@ -17,6 +17,9 @@ export type WorkspaceInfo = {
 
 let workspaceRoot: string | null = null;
 let workspaceInfo: WorkspaceInfo | null = null;
+
+export const LOCAL_WORKSPACE_SNAPSHOT_FILE = "records-snapshot.json";
+export const PERSIST_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL = "societyer:persistLocalWorkspaceSnapshot";
 
 export async function ensureWorkspace() {
   if (workspaceRoot && workspaceInfo) return { root: workspaceRoot, info: workspaceInfo };
@@ -76,6 +79,38 @@ export function resolveWorkspaceKey(root: string, key: string) {
     throw new Error("Workspace key is outside the workspace.");
   }
   return resolved;
+}
+
+export async function persistLocalWorkspaceSnapshot(serializedSnapshot: string) {
+  let snapshot: unknown;
+  try {
+    snapshot = JSON.parse(serializedSnapshot);
+  } catch {
+    throw new Error("Local workspace snapshot is not valid JSON.");
+  }
+  if (
+    !snapshot ||
+    typeof snapshot !== "object" ||
+    Array.isArray(snapshot) ||
+    (snapshot as { kind?: unknown }).kind !== "societyer.localWorkspaceSnapshot" ||
+    !(snapshot as { tables?: unknown }).tables ||
+    typeof (snapshot as { tables?: unknown }).tables !== "object" ||
+    Array.isArray((snapshot as { tables?: unknown }).tables)
+  ) {
+    throw new Error("Local workspace snapshot has an invalid format.");
+  }
+
+  const { root } = await ensureWorkspace();
+  const snapshotPath = resolveWorkspaceKey(root, LOCAL_WORKSPACE_SNAPSHOT_FILE);
+  const temporaryPath = resolveWorkspaceKey(root, `.${LOCAL_WORKSPACE_SNAPSHOT_FILE}.${randomUUID()}.tmp`);
+  try {
+    await writeFile(temporaryPath, serializedSnapshot, "utf8");
+    await rename(temporaryPath, snapshotPath);
+  } catch (error) {
+    await unlink(temporaryPath).catch(() => undefined);
+    throw error;
+  }
+  return { path: snapshotPath };
 }
 
 export async function createBackup() {

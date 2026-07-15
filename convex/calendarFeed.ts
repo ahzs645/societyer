@@ -1,6 +1,11 @@
 import { query, mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import type { ICalEvent } from "../shared/icalendar";
+import {
+  getFeedTokenPortable,
+  setFeedTokenPortable,
+} from "../shared/functions/calendarFeed";
+import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 
 /**
  * Outbound read-only iCalendar feed (the `export_ics` action in the integration
@@ -15,20 +20,14 @@ import type { ICalEvent } from "../shared/icalendar";
 export const getFeedToken = query({
   args: { societyId: v.id("societies") },
   returns: v.union(v.string(), v.null()),
-  handler: async (ctx, { societyId }) => {
-    const society = await ctx.db.get(societyId);
-    return society?.calendarFeedToken ?? null;
-  },
+  handler: (ctx, args) => getFeedTokenPortable(toPortableQueryCtx(ctx), args),
 });
 
 /** Enable/rotate (token = string) or disable (token = null) the feed. */
 export const setFeedToken = mutation({
   args: { societyId: v.id("societies"), token: v.union(v.string(), v.null()) },
   returns: v.union(v.string(), v.null()),
-  handler: async (ctx, { societyId, token }) => {
-    await ctx.db.patch(societyId, { calendarFeedToken: token ?? undefined });
-    return token;
-  },
+  handler: (ctx, args) => setFeedTokenPortable(toPortableMutationCtx(ctx), args),
 });
 
 /** Resolve a token to its society's calendar events. Internal: feeds the

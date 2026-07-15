@@ -1,14 +1,14 @@
 /**
  * PORTABLE FUNCTIONS: the workflow read surface plus the light-touch record
- * mutations (list / listRuns / runsForWorkflow / getRun / setStatus / update /
- * addNode).
+ * mutations (list / listRuns / runsForWorkflow / getRun / listNodeTypes /
+ * setStatus / update / addNode).
  *
  * These touch only `ctx.db` (plus the `requireRolePortable` access gate and the
  * pure status parser from shared/workflows/schemas), so they run unchanged on
  * hosted Convex, the local Dexie runtime, and the convex-test oracle.
  *
- * The recipe-aware handlers (listCatalog / listNodeTypes / get / create /
- * configure / setupGovernanceN8nRecipes) stay on Convex: they lean on the
+ * The recipe-aware handlers (listCatalog / get / create / configure /
+ * setupGovernanceN8nRecipes) stay on Convex: they lean on the
  * workflow catalog helpers, which read the server env (e.g. to compute live node
  * setup status), and the runner surface (run / inspectPdfTemplate / the external
  * dispatch internals) executes/parses externally. `NODE_TYPE_CATALOG` is a pure
@@ -61,6 +61,10 @@ export async function runsForWorkflowPortable(ctx: PortableQueryCtx, { workflowI
 
 export async function getRunPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
   return ctx.db.get(id);
+}
+
+export async function listNodeTypesPortable() {
+  return NODE_TYPE_CATALOG;
 }
 
 export async function setStatusPortable(

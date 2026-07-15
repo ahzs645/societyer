@@ -98,6 +98,7 @@ export function RecordTableScope({
             record={currentSidePanelRecord}
             objectMetadata={objectMetadata}
             onClose={() => setSidePanelRecord(null)}
+            onUpdate={onUpdate}
             onOpenRecord={() =>
               handleRecordClick(sidePanelRecord.recordId, currentSidePanelRecord, {
                 openRecordIn: "page",

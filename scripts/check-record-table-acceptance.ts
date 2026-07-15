@@ -132,6 +132,21 @@ assert.match(
   "the preview sidebar provides the Researcher-style tab structure",
 );
 assert.match(
+  recordTableSidePanelSource,
+  /resolveFieldIcon\(field\)/,
+  "the preview sidebar resolves the same metadata-aware icon as the table header",
+);
+assert.doesNotMatch(
+  recordTableSidePanelSource,
+  /<FileText size=\{16\}/,
+  "the preview sidebar must not replace every field icon with a generic document icon",
+);
+assert.match(
+  recordTableSidePanelSource,
+  /RecordTableFloatingCellEditor[\s\S]*onUpdate\?\.\(\{ recordId, fieldName: field\.name, value: nextValue \}\)/,
+  "the preview sidebar reuses the table's field-type editor and update path",
+);
+assert.match(
   meetingsSource,
   /onRecordClick=\{\(recordId\) => navigate\(`\/app\/meetings\//,
   "the sidebar Open action routes Meetings to its full record page",

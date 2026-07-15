@@ -117,12 +117,14 @@ import * as aiAgentsFns from "./aiAgents";
 import * as aiSettingsFns from "./aiSettings";
 import * as apiPlatformFns from "./apiPlatform";
 import * as calendarSyncFns from "./calendarSync";
+import * as calendarFeedFns from "./calendarFeed";
 import * as communicationsFns from "./communications";
 import * as documentVersionsFns from "./documentVersions";
 import * as financialHubFns from "./financialHub";
 import * as importSessionsFns from "./importSessions";
 import * as membersFns from "./members";
 import * as paperlessFns from "./paperless";
+import * as permissionsFns from "./permissions";
 import * as recordLayoutsFns from "./recordLayouts";
 import * as roleHoldersFns from "./roleHolders";
 import * as secretsFns from "./secrets";
@@ -946,6 +948,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "workflows:listRuns", handler: workflowsFns.listRunsPortable }),
   definePortableQuery({ name: "workflows:runsForWorkflow", handler: workflowsFns.runsForWorkflowPortable }),
   definePortableQuery({ name: "workflows:getRun", handler: workflowsFns.getRunPortable }),
+  definePortableQuery({ name: "workflows:listNodeTypes", handler: workflowsFns.listNodeTypesPortable }),
   definePortableMutation({ name: "workflows:setStatus", handler: workflowsFns.setStatusPortable }),
   definePortableMutation({ name: "workflows:update", handler: workflowsFns.updatePortable }),
   definePortableMutation({ name: "workflows:addNode", handler: workflowsFns.addNodePortable }),
@@ -962,6 +965,10 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "calendarSync:upsertExternalCalendarEventMapping", handler: calendarSyncFns.upsertExternalCalendarEventMappingPortable }),
   definePortableMutation({ name: "calendarSync:recordCalendarWebhook", handler: calendarSyncFns.recordCalendarWebhookPortable }),
   definePortableMutation({ name: "calendarSync:recordCalendarIncrementalCursor", handler: calendarSyncFns.recordCalendarIncrementalCursorPortable }),
+
+  // calendarFeed
+  definePortableQuery({ name: "calendarFeed:getFeedToken", handler: calendarFeedFns.getFeedTokenPortable }),
+  definePortableMutation({ name: "calendarFeed:setFeedToken", handler: calendarFeedFns.setFeedTokenPortable }),
 
   // secrets
   definePortableQuery({ name: "secrets:list", handler: secretsFns.listPortable }),
@@ -999,6 +1006,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "apiPlatform:listIntegrationSyncStates", handler: apiPlatformFns.listIntegrationSyncStatesPortable }),
 
   // paperless
+  definePortableQuery({ name: "paperless:tagProfiles", handler: paperlessFns.tagProfilesPortable }),
   definePortableQuery({ name: "paperless:listConnection", handler: paperlessFns.listConnectionPortable }),
   definePortableQuery({ name: "paperless:recentSyncs", handler: paperlessFns.recentSyncsPortable }),
   definePortableQuery({ name: "paperless:syncForDocument", handler: paperlessFns.syncForDocumentPortable }),
@@ -1006,6 +1014,9 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "paperless:authorizeMeetingImport", handler: paperlessFns.authorizeMeetingImportPortable }),
   definePortableQuery({ name: "paperless:getSync", handler: paperlessFns.getSyncPortable }),
   definePortableMutation({ name: "paperless:recordConnectionTest", handler: paperlessFns.recordConnectionTestPortable }),
+
+  // permissions
+  definePortableQuery({ name: "permissions:myPermissions", handler: permissionsFns.myPermissionsPortable }),
 
   // documentVersions
   definePortableQuery({ name: "documentVersions:listForDocument", handler: documentVersionsFns.listForDocumentPortable }),

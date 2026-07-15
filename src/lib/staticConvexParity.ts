@@ -25,9 +25,6 @@ export const STATIC_OFFLINE_NOOP_WRITES: ReadonlySet<string> = new Set([
   "grantSources:discoverFromSource",
   "apiPlatform:revokeToken",
   "apiPlatform:setWebhookSubscriptionStatus",
-  // The outbound iCalendar feed needs the live Convex http server, so enabling
-  // it is a no-op in the fully-offline demo runtime.
-  "calendarFeed:setFeedToken",
   "communications:ensureDefaultTemplates",
   "communications:sendCampaign",
   "communications:sendMeetingNotice",

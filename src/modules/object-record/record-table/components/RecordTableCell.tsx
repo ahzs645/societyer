@@ -175,7 +175,7 @@ export function RecordTableCell({
   );
 }
 
-function RecordTableFloatingCellEditor({
+export function RecordTableFloatingCellEditor({
   anchorRef,
   value,
   field,

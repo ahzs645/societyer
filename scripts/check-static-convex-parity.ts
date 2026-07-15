@@ -54,11 +54,15 @@ function collectFrontendWrites(): Map<string, string[]> {
 }
 
 // (2) Names the mirror handles explicitly, i.e. any "module:fn" string literal
-// in staticConvex.ts (handlers are `name === "module:fn"` / switch(name) cases).
+// in the static mirror (handlers are `name === "module:fn"` / switch(name) cases).
 function collectExplicitlyHandled(): Set<string> {
-  // The mirror is split across staticConvex.ts and its domain sibling modules
-  // (e.g. staticConvexYcn.ts) that staticConvex.ts delegates to. Scan all of them.
-  const mirrorFiles = [staticConvexPath, path.join(srcDir, "lib", "staticConvexYcn.ts")];
+  // The compatibility barrel delegates to the isolated legacy dispatcher and
+  // its domain sibling modules. Scan every file containing explicit handlers.
+  const mirrorFiles = [
+    staticConvexPath,
+    path.join(srcDir, "lib", "staticLegacyDispatch.ts"),
+    path.join(srcDir, "lib", "staticConvexYcn.ts"),
+  ];
   const handled = new Set<string>();
   for (const file of mirrorFiles) {
     const text = readFileSync(file, "utf8");
