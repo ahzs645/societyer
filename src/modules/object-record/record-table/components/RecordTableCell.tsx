@@ -31,7 +31,6 @@ export function RecordTableCell({
   const hoverPosition = useRecordTableState((state) => state.hoverPosition);
   const editingCell = useRecordTableState((state) => state.editingCell);
   const editingInitialValue = useRecordTableState((state) => state.editingInitialValue);
-  const openRecordIn = useRecordTableState((state) => state.openRecordIn);
   const handle = useRecordTableStoreHandle();
   const cellRef = useRef<HTMLTableCellElement | null>(null);
 
@@ -105,7 +104,7 @@ export function RecordTableCell({
           className="record-table__identifier-button"
           onClick={(event) => {
             event.stopPropagation();
-            tableCtx.onRecordClick?.(recordId, record, { openRecordIn });
+            tableCtx.onRecordClick?.(recordId, record, { openRecordIn: "drawer" });
           }}
         >
           <span className="record-table__cell-content">

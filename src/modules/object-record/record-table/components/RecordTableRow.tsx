@@ -1,5 +1,5 @@
 import { type ReactNode, useMemo } from "react";
-import { ExternalLink, GripVertical, MoreHorizontal, PanelRightOpen } from "lucide-react";
+import { GripVertical, MoreHorizontal, PanelRightOpen } from "lucide-react";
 import { Menu, type MenuSection } from "../../../../components/Menu";
 import { RecordTableRowContext } from "../contexts/RecordTableRowContext";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
@@ -31,7 +31,6 @@ export function RecordTableRow({
 }) {
   const { objectMetadata, onRecordClick, onReorder } = useRecordTableContextOrThrow();
   const columns = useRecordTableState((s) => s.columns);
-  const openRecordIn = useRecordTableState((s) => s.openRecordIn);
   const isSelected = useRecordTableState((s) =>
     s.selectedRecordIds.has(String(record._id)),
   );
@@ -138,15 +137,11 @@ export function RecordTableRow({
               <button
                 type="button"
                 className="btn btn--ghost btn--sm btn--icon record-table__open-record"
-                aria-label={`Open ${objectMetadata.labelSingular ?? "record"} in ${openRecordIn === "drawer" ? "side panel" : "full page"}`}
-                title={`Open in ${openRecordIn === "drawer" ? "side panel" : "full page"}`}
-                onClick={() => onRecordClick(recordId, record, { openRecordIn })}
+                aria-label={`Preview ${objectMetadata.labelSingular ?? "record"} in sidebar`}
+                title="Preview in sidebar"
+                onClick={() => onRecordClick(recordId, record, { openRecordIn: "drawer" })}
               >
-                {openRecordIn === "drawer" ? (
-                  <PanelRightOpen size={12} />
-                ) : (
-                  <ExternalLink size={12} />
-                )}
+                <PanelRightOpen size={12} />
               </button>
             )}
             {renderRowActions?.(record)}

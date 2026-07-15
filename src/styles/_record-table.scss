@@ -1443,6 +1443,236 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   }
 }
 
+/* Researcher-style record preview. A normal record click lands here first;
+ * the primary footer action opens the full record page. */
+.record-side-panel .drawer__head {
+  min-height: 64px;
+  padding: 10px 12px;
+}
+
+.record-side-panel__identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.record-side-panel__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: token('text-primary');
+  background: token('bg-subtle');
+  border: 1px solid token('border');
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.record-side-panel__identity-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: token('text-primary');
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  small {
+    color: token('text-tertiary');
+    font-size: 11px;
+  }
+}
+
+.record-side-panel__body {
+  padding: 0 !important;
+  background: token('bg-panel');
+}
+
+.record-side-panel__tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 38px;
+  padding: 0 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid token('border');
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 5px;
+    align-self: stretch;
+    padding: 0 9px;
+    color: token('text-secondary');
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+
+    &:hover {
+      color: token('text-primary');
+      background: token('bg-hover');
+    }
+
+    &.is-active {
+      color: token('text-primary');
+      border-bottom-color: token('text-primary');
+    }
+  }
+}
+
+.record-side-panel__widget {
+  margin: 12px;
+  overflow: hidden;
+  background: token('bg-panel');
+  border: 1px solid token('border');
+  border-radius: token('r-md');
+
+  h3 {
+    margin: 0;
+    padding: 10px 12px;
+    color: token('text-primary');
+    font-size: 12px;
+    font-weight: 600;
+    border-bottom: 1px solid token('border');
+  }
+}
+
+.record-side-panel__group-title {
+  padding: 8px 12px;
+  color: token('text-tertiary');
+  background: token('bg-subtle');
+  border-bottom: 1px solid token('border-color-light');
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.record-side-panel__fields {
+  display: flex;
+  flex-direction: column;
+}
+
+.record-side-panel__field {
+  display: grid;
+  grid-template-columns: 20px minmax(88px, 118px) minmax(0, 1fr);
+  align-items: center;
+  min-height: 36px;
+  gap: 8px;
+  padding: 5px 12px;
+  border-bottom: 1px solid token('border-color-light');
+  font-size: 12px;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.record-side-panel__field-icon {
+  display: inline-flex;
+  color: token('text-tertiary');
+}
+
+.record-side-panel__field-label {
+  overflow: hidden;
+  color: token('text-secondary');
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-side-panel__field-value {
+  min-width: 0;
+  overflow: hidden;
+  color: token('text-primary');
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-side-panel__timeline,
+.record-side-panel__notes {
+  padding: 12px;
+  color: token('text-secondary');
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.record-side-panel__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.record-side-panel__timeline-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  > span:first-child {
+    display: inline-flex;
+    color: token('text-tertiary');
+  }
+}
+
+.record-side-panel__footer {
+  justify-content: space-between !important;
+  padding: 8px 10px !important;
+}
+
+.record-side-panel__options,
+.record-side-panel__open {
+  min-height: 28px;
+  font-size: 12px;
+}
+
+.record-side-panel__open {
+  margin-left: auto;
+
+  kbd {
+    margin-left: 6px;
+    color: currentColor;
+    font-family: inherit;
+    font-size: 10px;
+    opacity: 0.7;
+  }
+}
+
+@media (max-width: 760px) {
+  .record-side-panel__widget {
+    margin: 10px;
+  }
+
+  .record-side-panel__field {
+    grid-template-columns: 18px minmax(80px, 105px) minmax(0, 1fr);
+    padding-inline: 10px;
+  }
+
+  .record-side-panel__footer > * {
+    flex: 0 0 auto;
+  }
+
+  .record-side-panel__open {
+    min-width: 120px;
+  }
+}
+
 /* ------------------------ Empty / loading state ------------------------ */
 
 .record-table__empty {

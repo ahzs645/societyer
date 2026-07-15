@@ -75,7 +75,6 @@ export function RecordTableToolbar({
   const searchTerm = useRecordTableState((s) => s.searchTerm);
   const columns = useRecordTableState((s) => s.columns);
   const density = useRecordTableState((s) => s.density);
-  const openRecordIn = useRecordTableState((s) => s.openRecordIn);
   const filters = useRecordTableState((s) => s.filters);
   const sorts = useRecordTableState((s) => s.sorts);
   const viewType = useRecordTableState((s) => s.type);
@@ -428,27 +427,6 @@ export function RecordTableToolbar({
                     Comfortable
                   </button>
                 </div>
-              </div>
-              <div className="record-table__menu-section">
-                <span className="record-table__menu-label">Open records in</span>
-                <label className="record-table__menu-radio">
-                  <input
-                    type="radio"
-                    name={`${handle.get().tableId}-open-record-in`}
-                    checked={openRecordIn === "drawer"}
-                    onChange={() => handle.get().setOpenRecordIn("drawer")}
-                  />
-                  Side panel
-                </label>
-                <label className="record-table__menu-radio">
-                  <input
-                    type="radio"
-                    name={`${handle.get().tableId}-open-record-in`}
-                    checked={openRecordIn === "page"}
-                    onChange={() => handle.get().setOpenRecordIn("page")}
-                  />
-                  Full page
-                </label>
               </div>
               <div className="record-table__menu-section">
                 <span className="record-table__menu-label record-table__menu-label--icon">

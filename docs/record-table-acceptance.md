@@ -31,10 +31,10 @@ cannot be mistaken for a complete visual audit.
   `artifacts/table-acceptance/field-editor-mobile.png`
 - Meeting title edited from the identifier-cell pencil:
   `artifacts/table-acceptance/meeting-title-editor-desktop.png`
-- Meeting opened in its side panel, desktop:
-  `artifacts/table-acceptance/meeting-record-drawer-desktop.png`
-- Meeting side panel at 390 × 844:
-  `artifacts/table-acceptance/meeting-record-drawer-mobile.png`
+- Researcher-style meeting preview sidebar, desktop:
+  `artifacts/table-acceptance/meeting-record-preview-sidebar-desktop.png`
+- Researcher-style meeting preview sidebar at 390 × 844:
+  `artifacts/table-acceptance/meeting-record-preview-sidebar-mobile.png`
 - Meeting opened as a full record page:
   `artifacts/table-acceptance/meeting-record-page-desktop.png`
 - Meeting full record page at 390 × 844:
@@ -54,11 +54,13 @@ intercepted an automated click. All 15 value round-trips are therefore covered
 by the deterministic demo-fixture acceptance check; this document does not
 claim that every link-like field was clicked by browser automation.
 
-The view's saved `openRecordIn` value is now passed through table identifier
-clicks, trailing open buttons, keyboard opening, kanban cards, and calendar
-items. Meetings is the first dual-mode adapter: `Side panel` opens the edit
-drawer without changing the URL, while `Full page` navigates to the meeting
-detail route. The row action label and icon reflect the selected mode.
+Normal identifier clicks, trailing preview buttons, keyboard opening, kanban
+cards, and calendar items now open the shared Researcher-style record sidebar.
+The sidebar is metadata-driven, provides Home, Timeline, and Notes tabs, and
+keeps editing separate from record navigation. Its primary `Open` action (or
+Cmd/Ctrl+Enter while the sidebar is focused) delegates to the owning page's
+full record surface. Meetings therefore previews without changing the table
+URL and only navigates to the meeting detail route when `Open` is selected.
 
 ## Automated acceptance
 

@@ -16,8 +16,12 @@ const recordTableContextSource = readFileSync(
   join(ROOT, "modules/object-record/record-table/contexts/RecordTableContext.ts"),
   "utf8",
 );
-const recordTableToolbarSource = readFileSync(
-  join(ROOT, "modules/object-record/record-table/components/RecordTableToolbar.tsx"),
+const recordTableScopeSource = readFileSync(
+  join(ROOT, "modules/object-record/record-table/components/RecordTableScope.tsx"),
+  "utf8",
+);
+const recordTableSidePanelSource = readFileSync(
+  join(ROOT, "modules/object-record/record-table/components/RecordTableSidePanel.tsx"),
   "utf8",
 );
 const meetingsSource = readFileSync(join(ROOT, "pages/Meetings.tsx"), "utf8");
@@ -113,19 +117,24 @@ assert.match(
   "record-open callbacks receive the current view's opening mode",
 );
 assert.match(
-  recordTableToolbarSource,
-  /Open records in[\s\S]*Side panel[\s\S]*Full page/,
-  "table options expose side-panel and full-page record opening",
+  recordTableScopeSource,
+  /options\.openRecordIn === "drawer"[\s\S]*setSidePanelRecord/,
+  "normal record opens are intercepted by the shared preview sidebar",
+);
+assert.match(
+  recordTableScopeSource,
+  /onOpenRecord[\s\S]*openRecordIn: "page"/,
+  "the preview sidebar delegates its Open action to the full record surface",
+);
+assert.match(
+  recordTableSidePanelSource,
+  /Record sidebar tabs[\s\S]*Home[\s\S]*Timeline[\s\S]*Notes/,
+  "the preview sidebar provides the Researcher-style tab structure",
 );
 assert.match(
   meetingsSource,
-  /openRecordIn === "page"[\s\S]*navigate\(`\/app\/meetings\//,
-  "Meetings routes full-page opens to its record page",
-);
-assert.match(
-  meetingsSource,
-  /openRecordIn === "page"[\s\S]*openEdit\(record/,
-  "Meetings routes side-panel opens to its edit drawer",
+  /onRecordClick=\{\(recordId\) => navigate\(`\/app\/meetings\//,
+  "the sidebar Open action routes Meetings to its full record page",
 );
 
 const expectedTypes = new Set(Object.values(FIELD_TYPES));

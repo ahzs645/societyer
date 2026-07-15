@@ -25,7 +25,6 @@ export function useRecordTableKeyboardNavigation({
     [columns],
   );
   const focusedCell = useRecordTableState((state) => state.focusedCell);
-  const openRecordIn = useRecordTableState((state) => state.openRecordIn);
   const handle = useRecordTableStoreHandle();
   const { onRecordClick, onUpdate } = useRecordTableContextOrThrow();
 
@@ -64,7 +63,7 @@ export function useRecordTableKeyboardNavigation({
         const record = filteredRecords[current.rowIndex];
         if (record && onRecordClick) {
           event.preventDefault();
-          onRecordClick(String(record._id), record, { openRecordIn });
+          onRecordClick(String(record._id), record, { openRecordIn: "drawer" });
         }
         return;
       } else if (event.key === "Enter") {
@@ -138,7 +137,6 @@ export function useRecordTableKeyboardNavigation({
       focusedCell,
       handle,
       onRecordClick,
-      openRecordIn,
       onUpdate,
       selectable,
       visibleColumns,
