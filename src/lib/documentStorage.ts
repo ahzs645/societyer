@@ -11,6 +11,16 @@ export type DocumentVersionRef = {
   sha256?: string;
 };
 
+export type LocalWorkspaceSnapshotReadResult =
+  | { status: "missing" }
+  | {
+      status: "available";
+      serializedSnapshot: string;
+      exportedAtISO: string;
+      tableCount: number;
+    }
+  | { status: "invalid"; error: string };
+
 export type DocumentDownloadTarget =
   | {
       kind: "url";
@@ -107,6 +117,17 @@ export async function persistLocalWorkspaceSnapshot(serializedSnapshot: string) 
     throw new Error("Local workspace snapshot persistence requires the current Electron preload API.");
   }
   return await snapshotBridge.persistLocalWorkspaceSnapshot(serializedSnapshot);
+}
+
+export async function readLocalWorkspaceSnapshot() {
+  const bridge = requireDesktopBridge();
+  const snapshotBridge = bridge as typeof bridge & {
+    readLocalWorkspaceSnapshot(): Promise<LocalWorkspaceSnapshotReadResult>;
+  };
+  if (typeof snapshotBridge.readLocalWorkspaceSnapshot !== "function") {
+    throw new Error("Reading a local workspace snapshot requires the current Electron preload API.");
+  }
+  return await snapshotBridge.readLocalWorkspaceSnapshot();
 }
 
 export async function openDocumentDownloadTarget(target: DocumentDownloadTarget) {

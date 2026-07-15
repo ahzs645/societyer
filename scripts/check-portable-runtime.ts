@@ -112,6 +112,7 @@ const issueHolding = definePortableMutation({
   name: "demo:issueHolding",
   handler: async (ctx, args: { boom?: boolean }) => {
     await ctx.db.insert("rightsHoldings", {
+      entityId: "rightsHoldings_01HF7YAT00DG0000",
       societyId,
       holderKey: "dana",
       rightsClassId: "classA",
@@ -213,7 +214,16 @@ async function holdingsAndClass(db: TransactionalDb) {
   assert.equal(map.nativeFor(minted), "convex_native_123");
   assert.equal(map.entityFor("convex_native_123"), minted);
   assert.equal(map.ensureEntityFor("convex_native_123", () => "SHOULD_NOT_MINT"), minted, "idempotent");
-  console.log("✓ ids: monotonic sortable entityIds + bidirectional native<->entity map");
+
+  const local = new LocalStoreDb(new MemoryRowStore());
+  const autoId = await local.transaction(() => local.insert("meetings", { title: "Auto identity" }));
+  const autoRow = await local.get(autoId);
+  assert.ok(autoRow?.entityId && looksLikeEntityId(autoRow.entityId, "meetings"), "local inserts mint a table-prefixed entityId");
+
+  const suppliedEntityId = factory.mint("meeting");
+  const suppliedId = await local.transaction(() => local.insert("meetings", { entityId: suppliedEntityId, title: "Supplied identity" }));
+  assert.equal((await local.get(suppliedId))?.entityId, suppliedEntityId, "local inserts preserve a caller-provided entityId");
+  console.log("✓ ids: monotonic sortable entityIds + map + local insert mint/preserve");
 }
 
 // === 5. full-text search (withSearchIndex) parity + semantics =================

@@ -5,12 +5,15 @@ import type {
   DesktopWriteDocumentVersionInput,
   SocietyerDesktopBridge,
 } from "../src/lib/desktopBridge";
+import type { LocalWorkspaceSnapshotReadResult } from "../src/lib/documentStorage";
 import * as IpcChannels from "./ipcChannels.js";
 
 const PERSIST_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL = "societyer:persistLocalWorkspaceSnapshot";
+const READ_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL = "societyer:readLocalWorkspaceSnapshot";
 
 type SocietyerDesktopBridgeWithSnapshot = SocietyerDesktopBridge & {
   persistLocalWorkspaceSnapshot(serializedSnapshot: string): Promise<{ path: string }>;
+  readLocalWorkspaceSnapshot(): Promise<LocalWorkspaceSnapshotReadResult>;
 };
 
 const bridge: SocietyerDesktopBridgeWithSnapshot = {
@@ -28,6 +31,7 @@ const bridge: SocietyerDesktopBridgeWithSnapshot = {
   createBackup: () => ipcRenderer.invoke(IpcChannels.CREATE_BACKUP_CHANNEL),
   persistLocalWorkspaceSnapshot: (serializedSnapshot: string) =>
     ipcRenderer.invoke(PERSIST_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL, serializedSnapshot),
+  readLocalWorkspaceSnapshot: () => ipcRenderer.invoke(READ_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL),
   checkConnector: (endpoint: string) => ipcRenderer.invoke(IpcChannels.CHECK_CONNECTOR_CHANNEL, endpoint),
   openExternal: (url: string) => ipcRenderer.invoke(IpcChannels.OPEN_EXTERNAL_CHANNEL, url),
   getAppInfo: () => ipcRenderer.invoke(IpcChannels.GET_APP_INFO_CHANNEL),

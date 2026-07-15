@@ -24,6 +24,14 @@ export const FIELD_TYPES = {
   RATING: "RATING",
   UUID: "UUID",
   ARRAY: "ARRAY",
+  ADDRESS: "ADDRESS",
+  FULL_NAME: "FULL_NAME",
+  RICH_TEXT: "RICH_TEXT",
+  RAW_JSON: "RAW_JSON",
+  EMAILS: "EMAILS",
+  PHONES: "PHONES",
+  LINKS: "LINKS",
+  FILES: "FILES",
 } as const;
 
 export type FieldType = (typeof FIELD_TYPES)[keyof typeof FIELD_TYPES];
@@ -103,4 +111,55 @@ export type RatingFieldConfig = {
 
 export type LinkFieldConfig = {
   labelPattern?: string; // {value} gets replaced by the URL
+};
+
+export type AddressValue = {
+  addressStreet1?: string | null;
+  addressStreet2?: string | null;
+  addressCity?: string | null;
+  addressState?: string | null;
+  addressPostcode?: string | null;
+  addressCountry?: string | null;
+};
+
+export type FullNameValue = {
+  firstName?: string | null;
+  lastName?: string | null;
+  middleName?: string | null;
+  honorificPrefix?: string | null;
+  honorificSuffix?: string | null;
+};
+
+export type EmailsValue = {
+  primaryEmail?: string | null;
+  additionalEmails?: string[];
+};
+
+export type PhoneValue = {
+  number: string;
+  countryCode?: string | null;
+  callingCode?: string | null;
+};
+
+export type PhonesValue = {
+  primaryPhoneNumber?: string | null;
+  primaryPhoneCountryCode?: string | null;
+  primaryPhoneCallingCode?: string | null;
+  additionalPhones?: PhoneValue[];
+};
+
+export type LinkValue = { url: string; label?: string | null };
+
+export type LinksValue = {
+  primaryLinkUrl?: string | null;
+  primaryLinkLabel?: string | null;
+  secondaryLinks?: LinkValue[];
+};
+
+export type FileValue = {
+  fileId: string;
+  name: string;
+  label?: string | null;
+  url?: string | null;
+  mimeType?: string | null;
 };

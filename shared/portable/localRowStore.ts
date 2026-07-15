@@ -131,6 +131,7 @@ export interface LocalStoreDbOptions {
 export class LocalStoreDb implements PortableDbWriter {
   private readonly store: LocalRowStore;
   private readonly mintId: (table: string) => string;
+  private readonly mintEntityId: (table: string) => string;
   private readonly now: () => number;
   private overlay: Overlay | null = null;
 
@@ -138,6 +139,7 @@ export class LocalStoreDb implements PortableDbWriter {
     this.store = store;
     const factory = createEntityIdFactory();
     this.mintId = options.mintId ?? ((table) => factory.mint(table));
+    this.mintEntityId = (table) => factory.mint(table);
     this.now = options.now ?? (() => Date.now());
   }
 
@@ -193,7 +195,8 @@ export class LocalStoreDb implements PortableDbWriter {
 
   async insert(table: TableName, doc: Record<string, any>): Promise<string> {
     const _id = typeof doc._id === "string" && doc._id ? doc._id : this.mintId(table);
-    const row: PortableDoc = { _creationTime: this.now(), ...doc, _id };
+    const entityId = typeof doc.entityId === "string" && doc.entityId ? doc.entityId : this.mintEntityId(table);
+    const row: PortableDoc = { _creationTime: this.now(), ...doc, _id, entityId };
     this.overlayFor(table).set(_id, clone(row));
     return _id;
   }

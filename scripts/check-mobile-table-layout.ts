@@ -77,6 +77,13 @@ const recordTableStyles = readFileSync(
   new URL("../src/styles/_record-table.scss", import.meta.url),
   "utf8",
 );
+const recordTableCellSource = readFileSync(
+  new URL(
+    "../src/modules/object-record/record-table/components/RecordTableCell.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 assert.match(
   recordTableStyles,
@@ -102,6 +109,16 @@ assert.match(
   recordTableStyles,
   /\.record-table__identifier-button[\s\S]*max-width: 100%;/,
   "identifier control cannot widen the frozen phone column",
+);
+assert.match(
+  recordTableCellSource,
+  /isMobile && canEdit && !isLabelIdentifier[\s\S]*startEdit\(\)/,
+  "phone table cells enter edit mode from one tap while the identifier remains a record-open action",
+);
+assert.match(
+  recordTableCellSource,
+  /target\.closest\("\.record-table__cell-editor-popover, \.menu, \.calendar"\)/,
+  "phone editor portal interactions cannot bubble back into a cell and reopen it",
 );
 
 console.log("mobile table layout checks passed");

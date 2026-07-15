@@ -20,7 +20,11 @@ import {
   type DesktopConnectorHealth,
   type DesktopWorkspaceInfo,
 } from "../lib/desktopBridge";
-import { persistLocalWorkspaceSnapshot } from "../lib/documentStorage";
+import {
+  persistLocalWorkspaceSnapshot,
+  readLocalWorkspaceSnapshot,
+  type LocalWorkspaceSnapshotReadResult,
+} from "../lib/documentStorage";
 import {
   downloadLocalWorkspaceSnapshot,
   getLocalWorkspaceSnapshot,
@@ -31,6 +35,7 @@ import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const CONNECTOR_ENDPOINT_KEY = "societyer.desktop.connectorEndpoint";
 const DEFAULT_CONNECTOR_ENDPOINT = "http://127.0.0.1:8890";
+type WorkspaceSnapshotOffer = Extract<LocalWorkspaceSnapshotReadResult, { status: "available" }>;
 
 export function DesktopSetupPage() {
   const runtime = useMemo(() => getRuntimeDescriptor(), []);
@@ -45,6 +50,7 @@ export function DesktopSetupPage() {
   const [connectorHealth, setConnectorHealth] = useState<DesktopConnectorHealth | null>(null);
   const [busy, setBusy] = useState<"workspace" | "backup" | "connector" | "export" | "import" | null>(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
+  const [workspaceSnapshotOffer, setWorkspaceSnapshotOffer] = useState<WorkspaceSnapshotOffer | null>(null);
 
   useEffect(() => {
     const bridge = getDesktopBridge();
@@ -68,11 +74,20 @@ export function DesktopSetupPage() {
     const bridge = getDesktopBridge();
     if (!bridge) return;
     setBusy("workspace");
+    setWorkspaceSnapshotOffer(null);
     try {
       const selected = await bridge.chooseWorkspaceDirectory();
       if (!selected) return;
       setWorkspace(await bridge.getWorkspaceInfo());
-      setStatusMessage("Workspace folder updated.");
+      const snapshotResult = await readLocalWorkspaceSnapshot();
+      if (snapshotResult.status === "available") {
+        setWorkspaceSnapshotOffer(snapshotResult);
+        setStatusMessage("Workspace folder updated.");
+      } else if (snapshotResult.status === "invalid") {
+        setStatusMessage(`Workspace folder updated, but ${snapshotResult.error}`);
+      } else {
+        setStatusMessage("Workspace folder updated.");
+      }
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Workspace selection failed.");
     } finally {
@@ -118,6 +133,25 @@ export function DesktopSetupPage() {
       setStatusMessage("Local workspace data import completed.");
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Local data import failed.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const importBundledRecords = async () => {
+    if (!workspaceSnapshotOffer) return;
+    setBusy("import");
+    try {
+      const file = new File(
+        [workspaceSnapshotOffer.serializedSnapshot],
+        "records-snapshot.json",
+        { type: "application/json" },
+      );
+      await importLocalWorkspaceSnapshotFile(file);
+      setWorkspaceSnapshotOffer(null);
+      setStatusMessage("Records from the workspace snapshot were imported.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Workspace records import failed.");
     } finally {
       setBusy(null);
     }
@@ -247,6 +281,30 @@ export function DesktopSetupPage() {
       {statusMessage && (
         <div className="notice notice--info" style={{ marginBottom: 16 }}>
           {statusMessage}
+        </div>
+      )}
+
+      {workspaceSnapshotOffer && (
+        <div className="notice notice--warning" style={{ marginBottom: 16 }}>
+          <div className="row" style={{ justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <strong>Records snapshot found</strong>
+              <div style={{ marginTop: 4 }}>
+                This folder contains a records snapshot from{" "}
+                {new Date(workspaceSnapshotOffer.exportedAtISO).toLocaleString()} with{" "}
+                {workspaceSnapshotOffer.tableCount} table{workspaceSnapshotOffer.tableCount === 1 ? "" : "s"}.
+                Importing it replaces the records currently stored in this app.
+              </div>
+            </div>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn btn--accent" disabled={busy === "import"} onClick={() => void importBundledRecords()}>
+                <Upload size={12} /> {busy === "import" ? "Importing..." : "Import records"}
+              </button>
+              <button className="btn" disabled={busy === "import"} onClick={() => setWorkspaceSnapshotOffer(null)}>
+                Not now
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -5,6 +5,7 @@ import type { RecordField } from "../../types";
 import { FIELD_TYPES } from "../../types";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { FieldInput, isFieldEditable } from "../../record-field/components/FieldInput";
+import { useIsMobile } from "../../../../lib/useIsMobile";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { useRecordTableRowContextOrThrow } from "../contexts/RecordTableRowContext";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
@@ -33,6 +34,7 @@ export function RecordTableCell({
   const editingInitialValue = useRecordTableState((state) => state.editingInitialValue);
   const handle = useRecordTableStoreHandle();
   const cellRef = useRef<HTMLTableCellElement | null>(null);
+  const isMobile = useIsMobile();
 
   const value = record[recordField.field.name];
   const canEdit = isFieldEditable(recordField.field) && !!tableCtx.onUpdate;
@@ -89,9 +91,23 @@ export function RecordTableCell({
           handle.get().setHoverPosition(null);
         }
       }}
-      onClick={() => {
+      onClick={(event) => {
+        const target = event.target as HTMLElement;
+        // The editor and its dropdown/calendar content are rendered through
+        // portals, but React still bubbles their clicks through this cell.
+        // Treat those as editor interactions so Apply, Cancel, and option
+        // selection cannot immediately reopen the field on mobile.
+        if (target.closest(".record-table__cell-editor-popover, .menu, .calendar")) return;
         handle.get().setFocusedCell({ rowIndex, columnIndex });
         cellRef.current?.focus({ preventScroll: true });
+        // Researcher's phone table opens an editable field from the cell tap
+        // itself. Keep the identifier/title tap dedicated to opening the
+        // record, while every other editable field enters edit mode in one
+        // tap instead of exposing a tiny pencil that needs a second tap.
+        if (isMobile && canEdit && !isLabelIdentifier) {
+          event.preventDefault();
+          startEdit();
+        }
       }}
       data-column-index={columnIndex}
       data-row-index={rowIndex}
@@ -208,15 +224,24 @@ export function RecordTableFloatingCellEditor({
 
   if (!rect) return null;
 
+  const expanded = isExpandedEditorType(field.fieldType);
+  const editorWidth = expanded ? Math.min(360, window.innerWidth - 16) : rect.width + 4;
+  const editorLeft = expanded
+    ? Math.min(Math.max(8, rect.left - 2), Math.max(8, window.innerWidth - editorWidth - 8))
+    : Math.max(8, rect.left - 2);
+  const placeExpandedAbove = expanded && rect.top > window.innerHeight / 2;
+
   return createPortal(
     <div
-      className="record-table__cell-editor-popover"
+      className={`record-table__cell-editor-popover${expanded ? " record-table__cell-editor-popover--expanded" : ""}`}
       data-record-cell-editor-anchor
       style={{
-        left: Math.max(8, rect.left - 2),
-        top: Math.max(8, rect.top - 2),
-        minWidth: rect.width + 4,
-        height: rect.height + 4,
+        left: editorLeft,
+        top: placeExpandedAbove ? undefined : Math.max(8, rect.top - 2),
+        bottom: placeExpandedAbove ? Math.max(8, window.innerHeight - rect.bottom - 2) : undefined,
+        minWidth: editorWidth,
+        width: expanded ? editorWidth : undefined,
+        height: expanded ? undefined : rect.height + 4,
       }}
       onMouseDown={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
@@ -233,6 +258,19 @@ export function RecordTableFloatingCellEditor({
   );
 }
 
+function isExpandedEditorType(fieldType: string) {
+  return [
+    FIELD_TYPES.ADDRESS,
+    FIELD_TYPES.FULL_NAME,
+    FIELD_TYPES.RICH_TEXT,
+    FIELD_TYPES.RAW_JSON,
+    FIELD_TYPES.EMAILS,
+    FIELD_TYPES.PHONES,
+    FIELD_TYPES.LINKS,
+    FIELD_TYPES.FILES,
+  ].includes(fieldType as any);
+}
+
 function getSecondaryActions({
   fieldType,
   value,
@@ -243,7 +281,7 @@ function getSecondaryActions({
   const text = primaryText(value);
   if (!text) return [];
 
-  if (fieldType === FIELD_TYPES.EMAIL) {
+  if (fieldType === FIELD_TYPES.EMAIL || fieldType === FIELD_TYPES.EMAILS) {
     return [
       {
         label: "Copy email",
@@ -258,7 +296,7 @@ function getSecondaryActions({
     ];
   }
 
-  if (fieldType === FIELD_TYPES.PHONE) {
+  if (fieldType === FIELD_TYPES.PHONE || fieldType === FIELD_TYPES.PHONES) {
     return [
       {
         label: "Copy phone",
@@ -273,7 +311,7 @@ function getSecondaryActions({
     ];
   }
 
-  if (fieldType === FIELD_TYPES.LINK) {
+  if (fieldType === FIELD_TYPES.LINK || fieldType === FIELD_TYPES.LINKS) {
     return [
       {
         label: "Copy link",
@@ -288,14 +326,32 @@ function getSecondaryActions({
     ];
   }
 
+  if (
+    fieldType === FIELD_TYPES.TEXT ||
+    fieldType === FIELD_TYPES.NUMBER ||
+    fieldType === FIELD_TYPES.CURRENCY ||
+    fieldType === FIELD_TYPES.DATE ||
+    fieldType === FIELD_TYPES.DATE_TIME ||
+    fieldType === FIELD_TYPES.UUID ||
+    fieldType === FIELD_TYPES.RATING ||
+    fieldType === FIELD_TYPES.RAW_JSON
+  ) {
+    return [{
+      label: "Copy value",
+      icon: <Copy size={12} />,
+      onClick: () => void navigator.clipboard?.writeText(text),
+    }];
+  }
+
   return [];
 }
 
 function primaryText(value: unknown): string {
   if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
-    return String(
+    const primary = String(
       record.primaryEmail ??
         record.email ??
         record.primaryPhoneNumber ??
@@ -305,6 +361,8 @@ function primaryText(value: unknown): string {
         record.value ??
         "",
     ).trim();
+    if (primary) return primary;
+    try { return JSON.stringify(value); } catch { return ""; }
   }
   return "";
 }

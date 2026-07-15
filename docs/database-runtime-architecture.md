@@ -20,7 +20,7 @@ The important distinction is:
 
 - Convex mode stores data in the Convex backend.
 - Local mode stores data in the browser's IndexedDB through Dexie.
-- IndexedDB is not a Convex cache, and the `changes` table is not currently pushing changes to Convex.
+- IndexedDB is not a Convex cache, and the `changes` table is not a sync queue.
 - Both modes reuse the same React hooks and, for most domain operations, the same business handlers.
 
 ## How startup selects the database
@@ -58,7 +58,7 @@ Visiting `/demo` also forces the local-data path through [`src/lib/staticRuntime
 The IndexedDB/Dexie schema is in [`src/lib/localDexieRowStore.ts`](../src/lib/localDexieRowStore.ts) (`LocalDexieDatabase`). Its main stores are:
 
 - `records`: generic records for every logical domain table.
-- `changes`: local mutation journal.
+- `changes`: capped diagnostic change journal.
 - `attachments`: attachment metadata.
 - `meta`: workspace and schema metadata.
 - `meetings` and `minutes`: legacy/specialized stores retained for compatibility.
@@ -149,13 +149,19 @@ That bridge is implemented by `StaticConvexClient.watchQuery` / `watchPortableQu
 
 ## Limitations to keep in mind
 
-- There is currently no automatic Convex ↔ IndexedDB synchronization.
-- The local `changes` store is a mutation/export journal, not an active remote-sync queue. As recorded today it cannot power future sync: upsert entries carry no payload, and ops from one transaction are not grouped under a shared mutation ID.
 - Local `withIndex()` generally scans cached rows and applies constraints in JavaScript; Convex uses real database indexes. The index *name* is not validated locally, so a handler referencing a nonexistent index can work locally and fail on Convex.
 - The Convex adapter implements `filter(predicate)` as collect-then-filter, so predicate-heavy handlers that feel fine locally can hit Convex scan/bandwidth limits at production data sizes. Prefer index narrowing before predicates.
 - Server capabilities such as AI, messaging, network integrations, and some storage actions may be unavailable locally (they throw structured `CAPABILITY_UNAVAILABLE` errors).
 - `local-indexeddb` uses demo seed data; `electron-local` uses a workspace client with an empty seed and local filesystem document storage.
 - Workspace isolation is based on the Dexie database name, derived in [`src/lib/localWorkspaceAdapter.ts`](../src/lib/localWorkspaceAdapter.ts). `VITE_LOCAL_WORKSPACE_ID` can set a stable custom name.
+
+### Sync stance (decided)
+
+- Local mode is an island. Snapshot export/import is the supported way to move or restore a local workspace.
+- The planned upgrade path is one-way promotion of a local workspace into Convex. The design will be documented in [`local-to-convex-promotion.md`](./local-to-convex-promotion.md).
+- Two-way synchronization between local mode and Convex is explicitly out of scope.
+- The local `changes` store is a capped diagnostic change journal. It is **not** an audit log: entries do not record an actor or before/after values. It is also **not** a sync queue.
+- Durable identity across runtimes follows the `entityId` design in [`shared/portable/ids.ts`](../shared/portable/ids.ts); each runtime's native `_id` remains runtime-specific.
 
 ## Known gaps / migration status
 

@@ -20,6 +20,17 @@ let workspaceInfo: WorkspaceInfo | null = null;
 
 export const LOCAL_WORKSPACE_SNAPSHOT_FILE = "records-snapshot.json";
 export const PERSIST_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL = "societyer:persistLocalWorkspaceSnapshot";
+export const READ_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL = "societyer:readLocalWorkspaceSnapshot";
+
+export type LocalWorkspaceSnapshotReadResult =
+  | { status: "missing" }
+  | {
+      status: "available";
+      serializedSnapshot: string;
+      exportedAtISO: string;
+      tableCount: number;
+    }
+  | { status: "invalid"; error: string };
 
 export async function ensureWorkspace() {
   if (workspaceRoot && workspaceInfo) return { root: workspaceRoot, info: workspaceInfo };
@@ -111,6 +122,54 @@ export async function persistLocalWorkspaceSnapshot(serializedSnapshot: string) 
     throw error;
   }
   return { path: snapshotPath };
+}
+
+export async function readLocalWorkspaceSnapshot(): Promise<LocalWorkspaceSnapshotReadResult> {
+  const { root } = await ensureWorkspace();
+  const snapshotPath = resolveWorkspaceKey(root, LOCAL_WORKSPACE_SNAPSHOT_FILE);
+  let serializedSnapshot: string;
+  try {
+    serializedSnapshot = await readFile(snapshotPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { status: "missing" };
+    throw error;
+  }
+
+  let snapshot: unknown;
+  try {
+    snapshot = JSON.parse(serializedSnapshot);
+  } catch {
+    return {
+      status: "invalid",
+      error: `${LOCAL_WORKSPACE_SNAPSHOT_FILE} is not valid JSON.`,
+    };
+  }
+
+  if (
+    !snapshot ||
+    typeof snapshot !== "object" ||
+    Array.isArray(snapshot) ||
+    (snapshot as { kind?: unknown }).kind !== "societyer.localWorkspaceSnapshot" ||
+    typeof (snapshot as { exportedAtISO?: unknown }).exportedAtISO !== "string" ||
+    Number.isNaN(Date.parse((snapshot as { exportedAtISO: string }).exportedAtISO)) ||
+    !(snapshot as { tables?: unknown }).tables ||
+    typeof (snapshot as { tables?: unknown }).tables !== "object" ||
+    Array.isArray((snapshot as { tables?: unknown }).tables)
+  ) {
+    return {
+      status: "invalid",
+      error: `${LOCAL_WORKSPACE_SNAPSHOT_FILE} is not a valid Societyer records snapshot.`,
+    };
+  }
+
+  const exportedAtISO = (snapshot as { exportedAtISO: string }).exportedAtISO;
+  const tables = (snapshot as { tables: Record<string, unknown> }).tables;
+  return {
+    status: "available",
+    serializedSnapshot,
+    exportedAtISO,
+    tableCount: Object.keys(tables).length,
+  };
 }
 
 export async function createBackup() {

@@ -127,6 +127,29 @@ export function Select<T extends string>({
     setPos({ top: r.bottom + 4, left: r.left, width: r.width });
   }, [open, triggerless, anchorRect]);
 
+  // Once the portal has rendered we know its real height. Flip it above the
+  // anchor when needed and clamp it inside the viewport, matching Researcher's
+  // cell pickers on narrow screens and low table/sidebar rows.
+  useLayoutEffect(() => {
+    if (!open || !pos || !menuRef.current) return;
+    const anchor = triggerless && anchorRect
+      ? anchorRect
+      : triggerRef.current?.getBoundingClientRect();
+    if (!anchor) return;
+    const menuRect = menuRef.current.getBoundingClientRect();
+    const below = anchor.bottom + 4;
+    const top = below + menuRect.height <= window.innerHeight - 8
+      ? below
+      : Math.max(8, anchor.top - menuRect.height - 4);
+    const left = Math.min(
+      Math.max(8, anchor.left),
+      Math.max(8, window.innerWidth - menuRect.width - 8),
+    );
+    if (Math.abs(top - pos.top) > 0.5 || Math.abs(left - pos.left) > 0.5) {
+      setPos((current) => current ? { ...current, top, left } : current);
+    }
+  }, [open, pos?.width, triggerless, anchorRect, visibleItems.length, query]);
+
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {

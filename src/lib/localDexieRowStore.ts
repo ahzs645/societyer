@@ -61,6 +61,10 @@ export type LocalWorkspaceSnapshot = {
 
 const CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION = 2;
 
+// Keep a useful diagnostic window without treating the journal as durable history.
+const LOCAL_CHANGE_JOURNAL_CAP = 2_000;
+const LOCAL_CHANGE_JOURNAL_PRUNE_SLACK = 100;
+
 export class LocalDexieDatabase extends Dexie {
   meta!: Table<any, string>;
   records!: Table<LocalRecordEnvelope, string>;
@@ -246,6 +250,7 @@ export class LocalDexieRowStore implements LocalRowStore {
             }
           }
           await this.db!.changes.bulkAdd(changes);
+          await this.prunePersistedChangesIfNeeded();
         });
       } catch (error) {
         // Roll the cache back to its pre-batch state so memory matches storage.
@@ -254,7 +259,8 @@ export class LocalDexieRowStore implements LocalRowStore {
       }
     }
 
-    this.changesCache = [...this.changesCache, ...changes];
+    this.changesCache.push(...changes);
+    this.pruneChangesCacheIfNeeded();
     this.scheduleNotify();
   }
 
@@ -378,6 +384,11 @@ export class LocalDexieRowStore implements LocalRowStore {
       await this.putMissingSeedRows(seed);
     }
 
+    // Bound journals created before the cap was introduced before hydrating them.
+    await this.db.transaction("rw", this.db.changes, async () => {
+      await this.prunePersistedChangesIfNeeded();
+    });
+
     const [localRecords, attachments, changes, workspaceMeta] = await Promise.all([
       this.db.records.toArray(),
       this.db.attachments.toArray(),
@@ -453,8 +464,29 @@ export class LocalDexieRowStore implements LocalRowStore {
 
   private appendChange(table: string, row: any, op: LocalChangeEnvelope["op"], metadata?: Pick<LocalChangeEnvelope, "mutationId" | "reason" | "snapshot">) {
     const change = createLocalChange(table, row, op, metadata);
-    this.changesCache = [...this.changesCache, change];
-    return this.db?.changes.add(change);
+    this.changesCache.push(change);
+    this.pruneChangesCacheIfNeeded();
+    if (!this.db) return undefined;
+    return this.db.transaction("rw", this.db.changes, async () => {
+      change.seq = await this.db!.changes.add(change);
+      await this.prunePersistedChangesIfNeeded();
+    });
+  }
+
+  private pruneChangesCacheIfNeeded() {
+    if (this.changesCache.length <= LOCAL_CHANGE_JOURNAL_CAP + LOCAL_CHANGE_JOURNAL_PRUNE_SLACK) return;
+    this.changesCache.splice(0, this.changesCache.length - LOCAL_CHANGE_JOURNAL_CAP);
+  }
+
+  private async prunePersistedChangesIfNeeded() {
+    if (!this.db) return;
+    const count = await this.db.changes.count();
+    if (count <= LOCAL_CHANGE_JOURNAL_CAP + LOCAL_CHANGE_JOURNAL_PRUNE_SLACK) return;
+    const oldestKeys = await this.db.changes
+      .orderBy(":id")
+      .limit(count - LOCAL_CHANGE_JOURNAL_CAP)
+      .primaryKeys();
+    await this.db.changes.bulkDelete(oldestKeys);
   }
 
   private notify() {

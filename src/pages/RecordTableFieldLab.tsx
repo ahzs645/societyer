@@ -82,6 +82,7 @@ export function RecordTableFieldLabPage() {
         objectMetadata={LAB_OBJECT}
         hydratedView={LAB_VIEW}
         records={[record]}
+        onRecordClick={() => { /* Field lab keeps the full record surface in-place. */ }}
         onUpdate={({ fieldName, value }) => {
           setRecord((current) => applyLabEdit(current, fieldName, value, relationLabels));
           setEditedFields((current) =>

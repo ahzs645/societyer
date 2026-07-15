@@ -1,10 +1,21 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import type { BooleanFieldConfig, CurrencyFieldConfig, FieldMetadata, SelectFieldConfig } from "../../types";
+import { Star, UserRound } from "lucide-react";
+import type { BooleanFieldConfig, CurrencyFieldConfig, FieldMetadata, RelationFieldConfig, SelectFieldConfig } from "../../types";
 import { FIELD_TYPES } from "../../types";
 import { Select } from "@/components/Select";
 import { DatePicker } from "@/components/DatePicker";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import type { TagColor } from "@/components/Tag";
+import {
+  AddressInput,
+  EmailsInput,
+  FilesInput,
+  FullNameInput,
+  LinksInput,
+  PhonesInput,
+  RawJsonInput,
+  RichTextInput,
+} from "./StructuredFieldInputs";
 
 /**
  * Edit-mode input for a cell. Renders a type-appropriate control, wires
@@ -221,6 +232,53 @@ function SelectInput({ value, onCommit, onCancel, field }: FieldInputProps) {
   );
 }
 
+/** Searchable record picker matching Researcher's relation selector. */
+function RelationInput({ value, onCommit, onCancel, field }: FieldInputProps) {
+  const config = field.config as RelationFieldConfig & {
+    options?: Array<{ value: string; label: string; hint?: string; color?: TagColor }>;
+  };
+  const options = (config.options ?? []).map((option) => ({
+    value: option.value,
+    label: option.label,
+    hint: option.hint,
+    icon: <span className="record-cell__relation-option-avatar"><UserRound size={11} /></span>,
+  }));
+  const committed = useRef(false);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const [anchorRect, setAnchorRect] = useState<{ top: number; bottom: number; left: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const cell = anchorRef.current?.closest("[data-record-cell-editor-anchor], td");
+    if (!cell) return;
+    const rect = cell.getBoundingClientRect();
+    setAnchorRect({ top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width });
+  }, []);
+
+  return (
+    <span ref={anchorRef} className="record-cell__select-anchor" style={{ display: "inline-block", minHeight: 20 }}>
+      {anchorRect ? (
+        <Select
+          size="sm"
+          triggerless
+          anchorRect={anchorRect}
+          defaultOpen
+          searchable
+          menuMinWidth={220}
+          value={value == null ? "" : String(value)}
+          options={options}
+          clearable={field.isNullable}
+          clearLabel={`No ${field.label}`}
+          onChange={(next) => {
+            committed.current = true;
+            onCommit(next === "" ? null : next);
+          }}
+          onClose={() => { if (!committed.current) onCancel(); }}
+        />
+      ) : null}
+    </span>
+  );
+}
+
 /** "YYYY-MM-DD" in local time, or "" when the value can't be parsed. */
 function toDateDraft(value: unknown): string {
   if (value == null || value === "") return "";
@@ -342,6 +400,7 @@ function MultiSelectInput({ value, onCommit, onCancel, field }: FieldInputProps)
       ? []
       : [String(value)];
   const [selected, setSelected] = useState<string[]>(initial);
+  const [query, setQuery] = useState("");
   const anchorRef = useRef<HTMLSpanElement>(null);
   const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
 
@@ -355,6 +414,7 @@ function MultiSelectInput({ value, onCommit, onCancel, field }: FieldInputProps)
   const toggle = (v: string) =>
     setSelected((cur) => (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]));
   const commit = () => onCommit(selected.length === 0 && field.isNullable ? null : selected);
+  const filteredOptions = options.filter((option) => option.label.toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
     <span ref={anchorRef} className="record-cell__select-anchor" style={{ display: "inline-block", minHeight: 20 }}>
@@ -380,13 +440,18 @@ function MultiSelectInput({ value, onCommit, onCancel, field }: FieldInputProps)
             }
           }}
         >
-          {options.length === 0 && <div className="muted" style={{ padding: 4 }}>No options configured.</div>}
-          {options.map((o) => (
-            <label key={o.value} className="row" style={{ gap: 6, alignItems: "center", padding: "2px 4px", cursor: "pointer" }}>
+          <div className="menu__search record-cell__multiselect-search">
+            <input autoFocus className="menu__search-input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search…" />
+          </div>
+          {filteredOptions.length === 0 && <div className="menu__empty">No results</div>}
+          <div className="record-cell__multiselect-options">
+          {filteredOptions.map((o) => (
+            <label key={o.value} className="record-cell__multiselect-option">
               <input type="checkbox" checked={selected.includes(o.value)} onChange={() => toggle(o.value)} />
-              <span>{o.label}</span>
+              <span className={`record-cell__chip record-cell__chip--${o.color ?? "gray"}`}>{o.label}</span>
             </label>
           ))}
+          </div>
           <div className="row" style={{ gap: 6, justifyContent: "flex-end", marginTop: 4 }}>
             <button className="btn btn--ghost" onMouseDown={(e) => { e.preventDefault(); onCancel(); }}>
               Cancel
@@ -460,6 +525,20 @@ function BooleanInput({ value, onCommit, onCancel, field }: FieldInputProps) {
   );
 }
 
+function RatingInput({ value, onCommit, onCancel, field }: FieldInputProps) {
+  const max = Number((field.config as { max?: number })?.max ?? 5);
+  const current = Math.max(0, Math.min(max, Number(value ?? 0)));
+  return (
+    <div className="record-cell__rating-editor" role="radiogroup" aria-label={`Edit ${field.label}`} onKeyDown={(event) => { if (event.key === "Escape") onCancel(); }}>
+      {Array.from({ length: max }, (_, index) => {
+        const rating = index + 1;
+        return <button key={rating} type="button" role="radio" aria-checked={rating === current} aria-label={`${rating} out of ${max}`} onClick={() => onCommit(rating)}><Star size={16} className={rating <= current ? "record-cell__rating-star--filled" : "record-cell__rating-star"} /></button>;
+      })}
+      {field.isNullable ? <button type="button" className="record-cell__rating-clear" onClick={() => onCommit(null)}>Clear</button> : null}
+    </div>
+  );
+}
+
 const INPUT_BY_TYPE: Partial<Record<FieldMetadata["fieldType"], InputComponent>> = {
   [FIELD_TYPES.TEXT]: TextInput,
   [FIELD_TYPES.EMAIL]: TextInput,
@@ -468,7 +547,7 @@ const INPUT_BY_TYPE: Partial<Record<FieldMetadata["fieldType"], InputComponent>>
   [FIELD_TYPES.UUID]: TextInput,
   [FIELD_TYPES.NUMBER]: NumberInput,
   [FIELD_TYPES.CURRENCY]: CurrencyInput,
-  [FIELD_TYPES.RATING]: NumberInput,
+  [FIELD_TYPES.RATING]: RatingInput,
   [FIELD_TYPES.SELECT]: SelectInput,
   [FIELD_TYPES.MULTI_SELECT]: MultiSelectInput,
   [FIELD_TYPES.ARRAY]: ArrayInput,
@@ -479,7 +558,15 @@ const INPUT_BY_TYPE: Partial<Record<FieldMetadata["fieldType"], InputComponent>>
   // finite option list. Objects backed by a remote relation query remain
   // read-only until that adapter provides the choices rather than falling
   // back to an unsafe free-form record id.
-  [FIELD_TYPES.RELATION]: SelectInput,
+  [FIELD_TYPES.RELATION]: RelationInput,
+  [FIELD_TYPES.ADDRESS]: AddressInput,
+  [FIELD_TYPES.FULL_NAME]: FullNameInput,
+  [FIELD_TYPES.RICH_TEXT]: RichTextInput,
+  [FIELD_TYPES.RAW_JSON]: RawJsonInput,
+  [FIELD_TYPES.EMAILS]: EmailsInput,
+  [FIELD_TYPES.PHONES]: PhonesInput,
+  [FIELD_TYPES.LINKS]: LinksInput,
+  [FIELD_TYPES.FILES]: FilesInput,
 };
 
 export function FieldInput(props: FieldInputProps) {

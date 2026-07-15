@@ -1416,6 +1416,201 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   }
 }
 
+.record-table__cell-editor-popover--expanded {
+  display: block;
+  max-height: min(520px, calc(100vh - 16px));
+  padding: 8px;
+  overflow: auto;
+  border-width: 1px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.2);
+}
+
+.record-cell__structured-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+
+  input,
+  textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 8px;
+    color: token('text-primary');
+    background: token('bg-subtle');
+    border: 1px solid token('border');
+    border-radius: 4px;
+    font: inherit;
+    outline: none;
+
+    &:focus {
+      background: token('bg-panel');
+      border-color: token('accent');
+      box-shadow: 0 0 0 1px token('accent');
+    }
+  }
+
+  textarea {
+    min-height: 128px;
+    resize: vertical;
+  }
+
+  .select-trigger {
+    width: 100%;
+    min-height: 32px;
+  }
+}
+
+.record-cell__editor-field,
+.record-cell__structured-editor > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+
+  > span {
+    color: token('text-tertiary');
+    font-size: 11px;
+    font-weight: 500;
+  }
+}
+
+.record-cell__editor-field--wide,
+.record-cell__long-editor > label,
+.record-cell__multi-value-list,
+.record-cell__add-value,
+.record-cell__editor-error,
+.record-cell__editor-actions {
+  grid-column: 1 / -1;
+}
+
+.record-cell__editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.record-cell__editor-error {
+  color: token('danger');
+  font-size: 11px;
+}
+
+.record-cell__multi-value-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.record-cell__multi-value-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  gap: 6px;
+
+  button {
+    @include inline-flex-center;
+    justify-content: center;
+    padding: 0;
+    color: token('text-tertiary');
+    background: transparent;
+    border: 1px solid token('border');
+    border-radius: 4px;
+    cursor: pointer;
+  }
+}
+
+.record-cell__add-value {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 5px;
+  padding: 4px 6px;
+  color: token('text-secondary');
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover { background: token('bg-hover'); }
+}
+
+.record-cell__relation-option-avatar {
+  @include inline-flex-center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: token('text-secondary');
+  background: token('bg-subtle');
+  border: 1px solid token('border');
+  border-radius: 50%;
+}
+
+.record-cell__multiselect {
+  max-height: min(340px, calc(100vh - 24px));
+  overflow: hidden;
+}
+
+.record-cell__multiselect-search {
+  margin: -6px -6px 4px;
+}
+
+.record-cell__multiselect-options {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.record-cell__multiselect-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 3px 5px;
+  cursor: pointer;
+
+  &:hover { background: token('bg-hover'); }
+}
+
+.record-cell__rating-editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 5px;
+
+  button {
+    @include inline-flex-center;
+    padding: 2px;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+  }
+}
+
+.record-cell__rating-clear {
+  margin-left: 4px;
+  color: token('text-tertiary');
+  font-size: 11px;
+}
+
+@media (max-width: 520px) {
+  .record-table__cell-editor-popover--expanded {
+    max-height: calc(100vh - 16px);
+  }
+
+  .record-cell__structured-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .record-cell__editor-field--wide,
+  .record-cell__long-editor > label,
+  .record-cell__multi-value-list,
+  .record-cell__add-value,
+  .record-cell__editor-error,
+  .record-cell__editor-actions {
+    grid-column: 1;
+  }
+}
+
 /* Researcher-style record preview. A normal record click lands here first;
  * the primary footer action opens the full record page. */
 .record-side-panel .drawer__head {

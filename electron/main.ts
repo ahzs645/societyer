@@ -17,6 +17,8 @@ import {
   ensureWorkspace,
   persistLocalWorkspaceSnapshot,
   PERSIST_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL,
+  readLocalWorkspaceSnapshot,
+  READ_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL,
 } from "./workspace.js";
 import { createMainWindow } from "./window.js";
 
@@ -48,6 +50,20 @@ handleValidatedIpc({
   payload: z.string().min(1),
   result: z.object({ path: z.string() }),
   handler: (_event, serializedSnapshot) => persistLocalWorkspaceSnapshot(serializedSnapshot),
+});
+handleValidatedIpc({
+  channel: READ_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL,
+  result: z.discriminatedUnion("status", [
+    z.object({ status: z.literal("missing") }),
+    z.object({
+      status: z.literal("available"),
+      serializedSnapshot: z.string(),
+      exportedAtISO: z.string(),
+      tableCount: z.number().int().nonnegative(),
+    }),
+    z.object({ status: z.literal("invalid"), error: z.string() }),
+  ]),
+  handler: () => readLocalWorkspaceSnapshot(),
 });
 
 app.whenReady().then(() =>
