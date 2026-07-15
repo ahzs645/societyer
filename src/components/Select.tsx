@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronDown, Check, Search } from "lucide-react";
 import { MenuRow } from "./ui";
 import { Tag, type TagColor } from "./Tag";
+import { bottomSheetMediaQuery } from "../lib/breakpoints";
 
 export type SelectOption<T extends string = string> = {
   value: T;
@@ -87,6 +88,9 @@ export function Select<T extends string>({
   const generatedId = useId();
   const controlId = id ?? generatedId;
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [isBottomSheet, setIsBottomSheet] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
+  );
   // Notify parents exactly once per open→close cycle. We don't want
   // `onClose` to fire when we first mount with `defaultOpen=true`.
   const wasOpenRef = useRef(defaultOpen);
@@ -116,8 +120,20 @@ export function Select<T extends string>({
     return filtered;
   }, [clearable, clearLabel, filtered]);
 
+  useEffect(() => {
+    const media = window.matchMedia(bottomSheetMediaQuery);
+    const update = () => setIsBottomSheet(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
   useLayoutEffect(() => {
     if (!open) return;
+    if (isBottomSheet) {
+      setPos(null);
+      return;
+    }
     if (triggerless && anchorRect) {
       setPos({ top: anchorRect.bottom + 4, left: anchorRect.left, width: anchorRect.width });
       return;
@@ -125,13 +141,13 @@ export function Select<T extends string>({
     if (!triggerRef.current) return;
     const r = triggerRef.current.getBoundingClientRect();
     setPos({ top: r.bottom + 4, left: r.left, width: r.width });
-  }, [open, triggerless, anchorRect]);
+  }, [open, triggerless, anchorRect, isBottomSheet]);
 
   // Once the portal has rendered we know its real height. Flip it above the
   // anchor when needed and clamp it inside the viewport, matching Researcher's
   // cell pickers on narrow screens and low table/sidebar rows.
   useLayoutEffect(() => {
-    if (!open || !pos || !menuRef.current) return;
+    if (isBottomSheet || !open || !pos || !menuRef.current) return;
     const anchor = triggerless && anchorRect
       ? anchorRect
       : triggerRef.current?.getBoundingClientRect();
@@ -148,7 +164,7 @@ export function Select<T extends string>({
     if (Math.abs(top - pos.top) > 0.5 || Math.abs(left - pos.left) > 0.5) {
       setPos((current) => current ? { ...current, top, left } : current);
     }
-  }, [open, pos?.width, triggerless, anchorRect, visibleItems.length, query]);
+  }, [open, pos?.width, triggerless, anchorRect, visibleItems.length, query, isBottomSheet]);
 
   useEffect(() => {
     if (!open) return;
@@ -164,7 +180,7 @@ export function Select<T extends string>({
     // one, which previously made the dropdown close as soon as you tried to
     // scroll its items.
     const onScroll = (e: Event) => {
-      if (menuRef.current?.contains(e.target as Node)) return;
+      if (e.target instanceof Node && menuRef.current?.contains(e.target)) return;
       setOpen(false);
     };
     const onResize = () => setOpen(false);
@@ -284,68 +300,85 @@ export function Select<T extends string>({
           <ChevronDown size={size === "sm" ? 12 : 14} className="select-trigger__chev" />
         </button>
       )}
-      {open && pos
+      {open && (isBottomSheet || pos)
         ? createPortal(
-            <div
-              ref={menuRef}
-              id={`${controlId}-menu`}
-              className="menu"
-              role="listbox"
-              tabIndex={-1}
-              onKeyDown={onMenuKey}
-              style={{ top: pos.top, left: pos.left, minWidth: Math.max(menuMinWidth ?? 0, pos.width) }}
-            >
-              {renderedSearchable && (
-                <div className="menu__search">
-                  <Search size={12} />
-                  <input
-                    autoFocus
-                    className="menu__search-input"
-                    value={query}
-                    onChange={(e) => {
-                      setQuery(e.target.value);
-                      setActiveIdx(0);
-                    }}
-                    placeholder="Search…"
-                    onKeyDown={onMenuKey}
-                  />
-                </div>
+            <>
+              {isBottomSheet && (
+                <div
+                  className="menu-backdrop"
+                  aria-hidden="true"
+                  onMouseDown={() => setOpen(false)}
+                />
               )}
-              <div className="menu__list">
-                {visibleItems.length === 0 && <div className="menu__empty">No results</div>}
-                {visibleItems.map((o, i) => {
-                  const isActive = i === activeIdx;
-                  const isSelected = o.value === value;
-                  const isClear = "_clear" in o;
-                  const hasColor = !isClear && "color" in o && o.color;
-                  // A "clear" row renders as an outline-variant Tag so
-                  // it visually reads as an empty state.
-                  const label = isClear ? (
-                    <Tag color="transparent" variant="outline" text={o.label} />
-                  ) : hasColor ? (
-                    <Tag color={(o as SelectOption<T>).color!} text={o.label} />
-                  ) : (
-                    o.label
-                  );
-                  return (
-                    <MenuRow
-                      key={`${o.value}-${i}`}
-                      role="option"
-                      ariaSelected={isSelected}
-                      icon={!isClear && !hasColor ? o.icon : undefined}
-                      label={label}
-                      hint={!isClear && !hasColor ? o.hint : undefined}
-                      right={isSelected ? <Check size={12} className="menu__item-check" /> : undefined}
-                      active={isActive}
-                      disabled={!isClear && o.disabled}
-                      subtle={isClear}
-                      onMouseEnter={() => setActiveIdx(i)}
-                      onClick={() => commit(i)}
+              <div
+                ref={menuRef}
+                id={`${controlId}-menu`}
+                className={`menu${isBottomSheet ? " menu--sheet" : ""}`}
+                role="listbox"
+                tabIndex={-1}
+                onKeyDown={onMenuKey}
+                style={
+                  isBottomSheet || !pos
+                    ? undefined
+                    : {
+                        top: pos.top,
+                        left: pos.left,
+                        minWidth: Math.max(menuMinWidth ?? 0, pos.width),
+                      }
+                }
+              >
+                {renderedSearchable && (
+                  <div className="menu__search">
+                    <Search size={12} />
+                    <input
+                      autoFocus
+                      className="menu__search-input"
+                      value={query}
+                      onChange={(e) => {
+                        setQuery(e.target.value);
+                        setActiveIdx(0);
+                      }}
+                      placeholder="Search…"
+                      onKeyDown={onMenuKey}
                     />
-                  );
-                })}
+                  </div>
+                )}
+                <div className="menu__list">
+                  {visibleItems.length === 0 && <div className="menu__empty">No results</div>}
+                  {visibleItems.map((o, i) => {
+                    const isActive = i === activeIdx;
+                    const isSelected = o.value === value;
+                    const isClear = "_clear" in o;
+                    const hasColor = !isClear && "color" in o && o.color;
+                    // A "clear" row renders as an outline-variant Tag so
+                    // it visually reads as an empty state.
+                    const label = isClear ? (
+                      <Tag color="transparent" variant="outline" text={o.label} />
+                    ) : hasColor ? (
+                      <Tag color={(o as SelectOption<T>).color!} text={o.label} />
+                    ) : (
+                      o.label
+                    );
+                    return (
+                      <MenuRow
+                        key={`${o.value}-${i}`}
+                        role="option"
+                        ariaSelected={isSelected}
+                        icon={!isClear && !hasColor ? o.icon : undefined}
+                        label={label}
+                        hint={!isClear && !hasColor ? o.hint : undefined}
+                        right={isSelected ? <Check size={12} className="menu__item-check" /> : undefined}
+                        active={isActive}
+                        disabled={!isClear && o.disabled}
+                        subtle={isClear}
+                        onMouseEnter={() => setActiveIdx(i)}
+                        onClick={() => commit(i)}
+                      />
+                    );
+                  })}
+                </div>
               </div>
-            </div>,
+            </>,
             document.body,
           )
         : null}

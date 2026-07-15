@@ -11,6 +11,7 @@ import {
 import { FIELD_TYPES, type RecordField, type ViewFilterOperator } from "../../types";
 import { resolveFieldIcon } from "../../record-field/fieldIcons";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
+import { useIsMobile } from "../../../../lib/useIsMobile";
 
 /**
  * One header cell. Click = cycle sort (asc → desc → off). Drag the right
@@ -29,6 +30,7 @@ export function RecordTableHeaderCell({
   const filterGroups = useRecordTableState((s) => s.filterGroups);
   const sorts = useRecordTableState((s) => s.sorts);
   const handle = useRecordTableStoreHandle();
+  const isMobile = useIsMobile();
   const resizing = useRef<{ startX: number; startSize: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -261,17 +263,19 @@ export function RecordTableHeaderCell({
           </div>
         )}
       </div>
-      <span
-        className="record-table__resize-handle"
-        onMouseDown={onResizeMouseDown}
-        aria-label="Resize column"
-        aria-orientation="vertical"
-        aria-valuemin={80}
-        aria-valuenow={recordField.size}
-        role="separator"
-        tabIndex={0}
-        onKeyDown={resizeWithKeyboard}
-      />
+      {!isMobile && (
+        <span
+          className="record-table__resize-handle"
+          onMouseDown={onResizeMouseDown}
+          aria-label="Resize column"
+          aria-orientation="vertical"
+          aria-valuemin={80}
+          aria-valuenow={recordField.size}
+          role="separator"
+          tabIndex={0}
+          onKeyDown={resizeWithKeyboard}
+        />
+      )}
     </th>
   );
 }

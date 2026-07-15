@@ -76,6 +76,36 @@ const VirtuosoTableRow = forwardRef<
   );
 });
 
+function trackScrollState(node: HTMLElement, classTarget: HTMLElement) {
+  let isScrolledX = false;
+  let isScrolledY = false;
+
+  const update = () => {
+    const nextScrolledX = node.scrollLeft > 0;
+    const nextScrolledY = node.scrollTop > 0;
+
+    // Sticky layers only need a class mutation when an edge changes state;
+    // avoiding writes on every scroll frame keeps the hot path read-only.
+    if (nextScrolledX !== isScrolledX) {
+      isScrolledX = nextScrolledX;
+      classTarget.classList.toggle("is-scrolled-x", isScrolledX);
+    }
+    if (nextScrolledY !== isScrolledY) {
+      isScrolledY = nextScrolledY;
+      classTarget.classList.toggle("is-scrolled-y", isScrolledY);
+    }
+  };
+
+  update();
+  node.addEventListener("scroll", update, { passive: true });
+
+  return () => {
+    node.removeEventListener("scroll", update);
+    if (isScrolledX) classTarget.classList.remove("is-scrolled-x");
+    if (isScrolledY) classTarget.classList.remove("is-scrolled-y");
+  };
+}
+
 /**
  * Opt-in escape hatch for pages that need a custom cell renderer on
  * specific fields (links, badges with domain-specific tones, composite
@@ -145,6 +175,8 @@ export function RecordTable({
   const handle = useRecordTableStoreHandle();
   const getTableState = handle.get;
   const tableRootRef = useRef<HTMLDivElement | null>(null);
+  const scrollCleanupRef = useRef<(() => void) | null>(null);
+  const virtualScrollCleanupRef = useRef<(() => void) | null>(null);
   const virtuosoRef = useRef<TableVirtuosoHandle>(null);
   const [rowContextMenu, setRowContextMenu] = useState<{ x: number; y: number; record: any } | null>(null);
 
@@ -180,12 +212,33 @@ export function RecordTable({
     () => (onCreate ? [...filtered, VIRTUAL_ACTION_ROW] : filtered),
     [filtered, onCreate],
   );
-  // Keep the scroll node available for cell focus/outside-click queries. The
-  // Researcher table clips cleanly at the viewport edge, without overlay
-  // gradients; horizontal scrolling itself remains unchanged.
   const setScrollNode = useCallback(
     (node: HTMLDivElement | null) => {
+      scrollCleanupRef.current?.();
+      scrollCleanupRef.current = null;
       tableRootRef.current = node;
+      if (node) {
+        scrollCleanupRef.current = trackScrollState(node, node.parentElement ?? node);
+      }
+    },
+    [],
+  );
+  const setVirtualScrollNode = useCallback((node: HTMLElement | Window | null) => {
+    virtualScrollCleanupRef.current?.();
+    virtualScrollCleanupRef.current = null;
+    if (node instanceof HTMLElement) {
+      virtualScrollCleanupRef.current = trackScrollState(node, node.parentElement ?? node);
+    }
+  }, []);
+
+  useEffect(
+    () => () => {
+      // Callback refs normally receive null on detach; this also covers a
+      // virtualization teardown that does not forward its final ref update.
+      scrollCleanupRef.current?.();
+      virtualScrollCleanupRef.current?.();
+      scrollCleanupRef.current = null;
+      virtualScrollCleanupRef.current = null;
     },
     [],
   );
@@ -456,6 +509,7 @@ export function RecordTable({
     >
       <TableVirtuoso
         ref={virtuosoRef}
+        scrollerRef={setVirtualScrollNode}
         data={virtualizedRows}
         context={{ onRowContextMenu }}
         className={`record-table__virtuoso ${densityClass}`}

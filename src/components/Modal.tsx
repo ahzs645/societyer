@@ -14,6 +14,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { X, AlertTriangle } from "lucide-react";
+import { bottomSheetMediaQuery } from "../lib/breakpoints";
 
 type ModalSize = "sm" | "md" | "lg" | "xl";
 
@@ -412,7 +413,6 @@ const MIN_MODAL_W = 320;
 const MIN_MODAL_H = 200;
 const RESIZE_MARGIN = 8; // keep this many px between the dialog and the viewport edge
 const RESIZE_STORAGE_PREFIX = "societyer:modal-size:";
-const NARROW_QUERY = "(max-width: 560px)"; // matches the bottom-sheet breakpoint
 
 const clampNum = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(n, Math.max(lo, hi)));
 
@@ -492,7 +492,7 @@ function useResizableDialog(params: {
 }) {
   const { enabled, open, storageKey, elementRef } = params;
   const [isNarrow, setIsNarrow] = useState(
-    () => typeof window !== "undefined" && window.matchMedia(NARROW_QUERY).matches,
+    () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
   );
   const [rect, setRect] = useState<DialogRect | null>(null);
   const dragRef = useRef<{ dir: ResizeDir; startX: number; startY: number; start: DialogRect } | null>(
@@ -505,7 +505,7 @@ function useResizableDialog(params: {
 
   // Track the bottom-sheet breakpoint; resizing is disabled below it.
   useEffect(() => {
-    const mq = window.matchMedia(NARROW_QUERY);
+    const mq = window.matchMedia(bottomSheetMediaQuery);
     const update = () => setIsNarrow(mq.matches);
     update();
     mq.addEventListener("change", update);

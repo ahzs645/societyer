@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { MenuRow, MenuSectionLabel } from "./ui";
+import { bottomSheetMediaQuery } from "../lib/breakpoints";
 
 export type MenuItem = {
   id: string;
@@ -44,6 +45,9 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; triggerWidth: number } | null>(null);
   const [posClamped, setPosClamped] = useState(false);
+  const [isBottomSheet, setIsBottomSheet] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
+  );
 
   const flat = useMemo(() => sections.flatMap((s) => s.items.filter((i) => !i.disabled)), [sections]);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -54,15 +58,20 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
       setPosClamped(false);
       return;
     }
+    if (isBottomSheet) {
+      setPos(null);
+      setPosClamped(false);
+      return;
+    }
     if (!triggerRef.current) return;
     const r = triggerRef.current.getBoundingClientRect();
     const left = align === "right" ? r.right : r.left;
     setPos({ top: r.bottom + 4, left, triggerWidth: r.width });
     setPosClamped(false);
-  }, [open, align]);
+  }, [open, align, isBottomSheet]);
 
   useLayoutEffect(() => {
-    if (!open || !pos || posClamped || !menuRef.current || !triggerRef.current) return;
+    if (isBottomSheet || !open || !pos || posClamped || !menuRef.current || !triggerRef.current) return;
     const menu = menuRef.current.getBoundingClientRect();
     const trig = triggerRef.current.getBoundingClientRect();
     const margin = 8;
@@ -75,7 +84,15 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
     }
     setPos({ top, left, triggerWidth: trig.width });
     setPosClamped(true);
-  }, [open, pos, posClamped, align]);
+  }, [open, pos, posClamped, align, isBottomSheet]);
+
+  useEffect(() => {
+    const media = window.matchMedia(bottomSheetMediaQuery);
+    const update = () => setIsBottomSheet(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -85,7 +102,11 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
       if (menuRef.current?.contains(t)) return;
       setOpen(false);
     };
-    const onScroll = () => setOpen(false);
+    const onScroll = (event: Event) => {
+      // A long sheet must remain open while its own options are scrolled.
+      if (event.target instanceof Node && menuRef.current?.contains(event.target)) return;
+      setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpen(false);
@@ -124,9 +145,11 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
   const cloned = cloneElement(trigger, {
     ref: (node: HTMLElement | null) => {
       (triggerRef as React.MutableRefObject<HTMLElement | null>).current = node;
-      const childRef = (trigger as any).ref;
+      const childRef = (trigger as ReactElement & { ref?: React.Ref<HTMLElement> }).ref;
       if (typeof childRef === "function") childRef(node);
-      else if (childRef) childRef.current = node;
+      else if (childRef) {
+        (childRef as React.MutableRefObject<HTMLElement | null>).current = node;
+      }
     },
     onClick: (e: React.MouseEvent) => {
       trigger.props.onClick?.(e);
@@ -175,22 +198,35 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
   return (
     <>
       {cloned}
-      {open && pos
+      {open && (isBottomSheet || pos)
         ? createPortal(
-            <div
-              ref={menuRef}
-              className="menu menu--actions"
-              role="menu"
-              style={{
-                top: pos.top,
-                left: posClamped ? pos.left : (align === "right" ? undefined : pos.left),
-                right: posClamped ? undefined : (align === "right" ? window.innerWidth - pos.left : undefined),
-                minWidth: Math.max(minWidth ?? 0, pos.triggerWidth),
-                visibility: posClamped ? "visible" : "hidden",
-              }}
-            >
-              {renderSections()}
-            </div>,
+            <>
+              {isBottomSheet && (
+                <div
+                  className="menu-backdrop"
+                  aria-hidden="true"
+                  onMouseDown={() => setOpen(false)}
+                />
+              )}
+              <div
+                ref={menuRef}
+                className={`menu menu--actions${isBottomSheet ? " menu--sheet" : ""}`}
+                role="menu"
+                style={
+                  isBottomSheet || !pos
+                    ? undefined
+                    : {
+                        top: pos.top,
+                        left: posClamped ? pos.left : (align === "right" ? undefined : pos.left),
+                        right: posClamped ? undefined : (align === "right" ? window.innerWidth - pos.left : undefined),
+                        minWidth: Math.max(minWidth ?? 0, pos.triggerWidth),
+                        visibility: posClamped ? "visible" : "hidden",
+                      }
+                }
+              >
+                {renderSections()}
+              </div>
+            </>,
             document.body,
           )
         : null}

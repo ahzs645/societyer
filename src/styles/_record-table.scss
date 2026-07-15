@@ -626,6 +626,45 @@ select.record-table__menu-select,
   position: relative;
 }
 
+.record-table__scroll-frame.is-scrolled-y .record-table__thead::after,
+.record-table__interaction-root.is-scrolled-y .record-table__thead::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 4px;
+  box-shadow:
+    0 2px 4px 0 token('gray-a-2'),
+    0 0 4px 0 token('gray-a-5');
+  clip-path: inset(0 0 -4px 0);
+  pointer-events: none;
+}
+
+.record-table__scroll-frame.is-scrolled-x,
+.record-table__interaction-root.is-scrolled-x {
+  .record-table__header-cell--identifier::after,
+  .record-table__cell--identifier::after {
+    content: "";
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 4px;
+    height: calc(100% + 2px);
+    box-shadow:
+      2px 0 4px 0 token('gray-a-2'),
+      0 0 4px 0 token('gray-a-5');
+    clip-path: inset(0 -4px 0 0);
+    pointer-events: none;
+  }
+
+  // The value itself is clipped by its inner wrapper, leaving the sticky
+  // cell free to project elevation into the scrolling columns.
+  .record-table__cell--identifier {
+    overflow: visible;
+  }
+}
+
 .record-table__virtuoso {
   height: 600px;
   background: token('bg-panel');
@@ -2163,19 +2202,26 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   .record-table__virtuoso .record-table > thead > tr > th:first-child .record-table__header-cell-label {
     max-width: 34vw;
   }
-  /* Hairline divider so the frozen column reads as pinned while scrolling. */
-  .record-table__scroll .record-table > thead > tr > th:first-child::after,
-  .record-table__scroll .record-table > tbody > tr > td:first-child::after,
-  .record-table__scroll .record-table > tfoot > tr > td:first-child::after,
-  .record-table__virtuoso .record-table > thead > tr > th:first-child::after,
-  .record-table__virtuoso .record-table > tbody > tr > td:first-child::after,
-  .record-table__virtuoso .record-table > tfoot > tr > td:first-child::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 1px;
-    background: token('border');
+  .record-table__scroll-frame.is-scrolled-x,
+  .record-table__interaction-root.is-scrolled-x {
+    .record-table > thead > tr > th:first-child::after,
+    .record-table > tbody > tr:not(.record-table__action-row) > td:first-child::after,
+    .record-table > tfoot > tr > td:first-child::after {
+      content: "";
+      position: absolute;
+      top: -1px;
+      right: -1px;
+      width: 4px;
+      height: calc(100% + 2px);
+      box-shadow:
+        2px 0 4px 0 token('gray-a-2'),
+        0 0 4px 0 token('gray-a-5');
+      clip-path: inset(0 -4px 0 0);
+      pointer-events: none;
+    }
+
+    .record-table > tbody > tr:not(.record-table__action-row) > td:first-child {
+      overflow: visible;
+    }
   }
 }
