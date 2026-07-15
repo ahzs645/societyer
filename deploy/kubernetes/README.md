@@ -103,7 +103,12 @@ CONVEX_SELF_HOSTED_URL=http://societyer.k8s.home:3320 \
 npm run convex:deploy:k8s
 ```
 
-4. Validate every exportable table and run the frontend against the clone:
+4. Open each legacy workspace once. If a record-table page shows
+   `Metadata not seeded`, use its idempotent `Seed metadata` action. This seeds
+   all current object, field, and default-view definitions for that society;
+   imported records are not rewritten. For Over the Edge, Meetings must then
+   show 33 records.
+5. Validate every exportable table and run the frontend against the clone:
 
 ```sh
 CONVEX_SELF_HOSTED_URL=http://societyer.k8s.home:3320 \
@@ -138,7 +143,10 @@ CONVEX_SELF_HOSTED_URL=http://societyer.k8s.home:3220 \
 npm run convex:deploy:k8s
 ```
 
-6. Apply the reviewed manifests and wait for each rollout:
+6. Seed record-table metadata for every legacy production workspace as
+   rehearsed above. This is a required data-shape migration for societies that
+   predate the current record-table objects.
+7. Apply the reviewed manifests and wait for each rollout:
 
 ```sh
 kubectl apply -k deploy/kubernetes
@@ -148,7 +156,7 @@ kubectl -n societyer rollout status deployment/societyer-frontend --timeout=180s
 curl -fsS http://societyer.k8s.home:3220/version
 ```
 
-7. Recheck the Over the Edge dashboard, Documents, Meetings, and a full export.
+8. Recheck the Over the Edge dashboard, Documents, Meetings, and a full export.
    Keep the prior image digests, old retained PVCs, and backup archive until
    acceptance is complete.
 
