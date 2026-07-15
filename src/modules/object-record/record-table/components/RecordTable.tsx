@@ -16,7 +16,6 @@ import { RecordTableActionRow, RecordTableActionRowCells } from "./RecordTableAc
 import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboardNavigation";
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { getMobileTableLayout } from "../../../../lib/mobileTableLayout";
-import { useScrollEdgeShadows } from "../../../../lib/useScrollEdgeShadows";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { CalendarView } from "../../../../components/CalendarView";
 import { RecordBoard, type RecordBoardColumn } from "../../../../components/RecordBoard";
@@ -181,18 +180,14 @@ export function RecordTable({
     () => (onCreate ? [...filtered, VIRTUAL_ACTION_ROW] : filtered),
     [filtered, onCreate],
   );
-  // In the non-virtualized branch the scroll container is the horizontal
-  // scroller, so these edge flags drive the "there's more →" fade shadows that
-  // keep a frozen-first-column table from looking cut off on a phone. The
-  // scroller node feeds both `tableRootRef` (used for focus/outside-click
-  // queries) and the shadow hook's callback ref.
-  const { edges: scrollEdges, ref: scrollShadowRef } = useScrollEdgeShadows();
+  // Keep the scroll node available for cell focus/outside-click queries. The
+  // Researcher table clips cleanly at the viewport edge, without overlay
+  // gradients; horizontal scrolling itself remains unchanged.
   const setScrollNode = useCallback(
     (node: HTMLDivElement | null) => {
       tableRootRef.current = node;
-      scrollShadowRef(node);
     },
-    [scrollShadowRef],
+    [],
   );
   const handleTableKeyDown = useRecordTableKeyboardNavigation({
     enabled: keyboardNavigation,
@@ -399,7 +394,7 @@ export function RecordTable({
         aria-label={`${objectMetadata.labelPlural} table`}
         tabIndex={0}
         onKeyDown={handleTableKeyDown}
-        className={`record-table__scroll-frame${scrollEdges.left ? " is-scrolled-left" : ""}${scrollEdges.right ? " is-scrolled-right" : ""}`}
+        className="record-table__scroll-frame"
         style={{
           "--record-table-identifier-left": effectiveSelectable ? "28px" : "0px",
         } as CSSProperties}

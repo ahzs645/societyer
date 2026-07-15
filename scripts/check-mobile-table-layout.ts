@@ -88,10 +88,10 @@ assert.match(
   /position: sticky;[\s\S]*width: 46vw !important;/,
   "phone identifier column remains sticky and viewport-capped",
 );
-assert.match(
+assert.doesNotMatch(
   recordTableStyles,
-  /\.record-table__scroll-frame\.is-scrolled-right::after \{ opacity: 1; \}/,
-  "phone horizontal overflow keeps a visible edge cue",
+  /\.record-table__scroll-frame\.is-scrolled-right::after|linear-gradient\(to left, rgba\(0, 0, 0, 0\.14\)/,
+  "record table keeps Researcher-style clean clipping without an edge gradient",
 );
 assert.match(
   recordTableStyles,

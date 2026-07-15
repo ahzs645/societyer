@@ -187,20 +187,27 @@ function PageLoader() {
 
 function AsyncAppProviders() {
   const [convexClient, setConvexClient] = React.useState<ConvexReactClient | null>(null);
+  const [clientLoadFailed, setClientLoadFailed] = React.useState(false);
 
   React.useEffect(() => {
     let active = true;
     const clientPromise = localDataRuntime
       ? import("./lib/localDataClient").then(({ localDataClient }) => localDataClient)
       : import("./lib/convex").then(({ convex }) => convex);
-    clientPromise.then((client) => {
-      if (active) setConvexClient(client as unknown as ConvexReactClient);
-    });
+    clientPromise
+      .then((client) => {
+        if (active) setConvexClient(client as unknown as ConvexReactClient);
+      })
+      .catch((error) => {
+        console.error("[societyer] Failed to load the data client.", error);
+        if (active) setClientLoadFailed(true);
+      });
     return () => {
       active = false;
     };
   }, []);
 
+  if (clientLoadFailed) return <RootErrorFallback />;
   if (!convexClient) return <PageLoader />;
 
   return <AppProviders client={convexClient} />;

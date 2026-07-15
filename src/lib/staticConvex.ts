@@ -59,6 +59,7 @@ import {
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
 const FUNCTION_NAME = Symbol.for("functionName");
+const warnedLegacyFallbacks = new Set<string>();
 
 import {
   SOCIETY_ID,
@@ -174,6 +175,48 @@ function functionName(ref: any) {
   if (typeof ref === "string") return ref;
   const name = ref?.[FUNCTION_NAME];
   return typeof name === "string" ? name : "";
+}
+
+function warnLegacyFallback(
+  name: string,
+  registeredKind?: "query" | "mutation",
+  invokedVia?: "watchQuery" | "watchPaginatedQuery" | "query" | "mutation" | "action",
+) {
+  if (warnedLegacyFallbacks.has(name)) return;
+  warnedLegacyFallbacks.add(name);
+  if (registeredKind && invokedVia) {
+    console.warn(
+      `[societyer-local] "${name}" is registered as a ${registeredKind} but was invoked via ${invokedVia}(); served by legacy demo fallback`,
+    );
+    return;
+  }
+  console.warn(`[societyer-local] "${name}" served by legacy demo fallback (not in the portable registry)`);
+}
+
+function isPortablePageResult(value: unknown): value is {
+  page: unknown[];
+  isDone: boolean;
+  continueCursor: string | null;
+} {
+  if (!value || typeof value !== "object") return false;
+  const result = value as Record<string, unknown>;
+  return (
+    Array.isArray(result.page) &&
+    typeof result.isDone === "boolean" &&
+    (typeof result.continueCursor === "string" || result.continueCursor === null)
+  );
+}
+
+function isPortablePaginatedCache(value: unknown): value is {
+  results: unknown;
+  status: "CanLoadMore" | "Exhausted";
+} {
+  if (!value || typeof value !== "object") return false;
+  const result = value as Record<string, unknown>;
+  return (
+    "results" in result &&
+    (result.status === "CanLoadMore" || result.status === "Exhausted")
+  );
 }
 
 // A frontend write reached the static mirror with no handler and no generic-CRUD
@@ -1840,10 +1883,20 @@ export class StaticConvexClient {
   // value synchronously, and `portableListeners` re-renders subscribers on resolve.
   private portableCache = new Map<string, unknown>();
   private portableListeners = new Set<() => void>();
-  /** Every portable query ever watched, so store-level updates (hydration,
-   *  mutations) can refresh the cache without depending on React's
-   *  subscription timing. */
-  private portableWatchSpecs = new Map<string, { name: string; args?: StaticArgs }>();
+  private portablePaginatedRunId = 0;
+  private portablePaginatedRunTokens = new Map<string, number>();
+  /** Every non-paginated query ever watched, plus active paginated watches,
+   *  so store-level updates (hydration, mutations) can refresh the cache
+   *  without depending on React's subscription timing. */
+  private portableWatchSpecs = new Map<string, {
+    name: string;
+    args?: StaticArgs;
+    pagination?: {
+      pageSizes: number[];
+      subscribers: number;
+      loadMoreInFlight: boolean;
+    };
+  }>();
 
   private emitPortable() {
     for (const listener of this.portableListeners) listener();
@@ -1866,7 +1919,8 @@ export class StaticConvexClient {
     // onUpdate subscription would otherwise leave that query stale.
     this.store.onUpdate(() => {
       for (const [cacheKey, spec] of this.portableWatchSpecs) {
-        this.recomputePortable(cacheKey, spec.name, spec.args);
+        if (spec.pagination) this.recomputePortablePaginated(cacheKey, spec);
+        else this.recomputePortable(cacheKey, spec.name, spec.args);
       }
     });
     // Seed the Twenty-style record-table metadata for the demo society up front,
@@ -1897,7 +1951,9 @@ export class StaticConvexClient {
 
   watchQuery(query: any, args?: StaticArgs) {
     const name = functionName(query);
-    if (this.portable.kind(name) === "query") return this.watchPortableQuery(name, args);
+    const kind = this.portable.kind(name);
+    if (kind === "query") return this.watchPortableQuery(name, args);
+    warnLegacyFallback(name, kind, "watchQuery");
     return {
       onUpdate: (callback: () => void) => this.store.onUpdate(callback),
       localQueryResult: () => mutableQueryResult(name, args, this.store),
@@ -1964,8 +2020,140 @@ export class StaticConvexClient {
     };
   }
 
-  watchPaginatedQuery(query: any, args?: StaticArgs) {
+  private recomputePortablePaginated(
+    cacheKey: string,
+    spec: {
+      name: string;
+      args?: StaticArgs;
+      pagination?: {
+        pageSizes: number[];
+        subscribers: number;
+        loadMoreInFlight: boolean;
+      };
+    },
+    loadMoreRun = false,
+  ) {
+    const pageSizes = spec.pagination?.pageSizes.slice() ?? [];
+    const runId = ++this.portablePaginatedRunId;
+    this.portablePaginatedRunTokens.set(cacheKey, runId);
+    const run = async () => {
+      const results: unknown[] = [];
+      let cursor: string | null = null;
+      let isDone = false;
+
+      for (const numItems of pageSizes) {
+        const next = await this.portable.runQuery<unknown>(spec.name, {
+          ...(spec.args ?? {}),
+          paginationOpts: { numItems, cursor },
+        });
+        if (!isPortablePageResult(next)) {
+          return { results: next ?? [], status: "Exhausted" as const };
+        }
+        results.push(...next.page);
+        isDone = next.isDone;
+        cursor = next.continueCursor;
+        if (isDone) break;
+      }
+
+      return { results, status: isDone ? "Exhausted" as const : "CanLoadMore" as const };
+    };
+
+    void run()
+      .then((next) => {
+        if (this.portablePaginatedRunTokens.get(cacheKey) !== runId) return;
+        const prev = this.portableCache.get(cacheKey);
+        if (!this.portableCache.has(cacheKey) || JSON.stringify(next) !== JSON.stringify(prev)) {
+          this.portableCache.set(cacheKey, next);
+          this.emitPortable();
+        }
+      })
+      .catch((error) => {
+        console.warn(`[societyer-local] portable paginated query ${spec.name} failed`, error);
+      })
+      .finally(() => {
+        if (loadMoreRun && spec.pagination) spec.pagination.loadMoreInFlight = false;
+      });
+  }
+
+  private watchPortablePaginatedQuery(
+    name: string,
+    args?: StaticArgs,
+    options?: { initialNumItems?: number; id?: number },
+  ) {
+    const initialNumItems = options?.initialNumItems ?? 10;
+    const cacheKey = `paginated|${name}|${JSON.stringify(args ?? {})}|${options?.id ?? "default"}|${initialNumItems}`;
+    let watchSpec = this.portableWatchSpecs.get(cacheKey);
+    if (!watchSpec?.pagination) {
+      watchSpec = {
+        name,
+        args,
+        pagination: {
+          pageSizes: [initialNumItems],
+          subscribers: 0,
+          loadMoreInFlight: false,
+        },
+      };
+      this.portableWatchSpecs.set(cacheKey, watchSpec);
+    }
+
+    const recompute = () => {
+      const spec = this.portableWatchSpecs.get(cacheKey);
+      if (spec) this.recomputePortablePaginated(cacheKey, spec);
+    };
+    const loadMore = (numItems: number) => {
+      const spec = this.portableWatchSpecs.get(cacheKey);
+      if (!spec?.pagination || spec.pagination.loadMoreInFlight || numItems <= 0) return;
+      spec.pagination.loadMoreInFlight = true;
+      spec.pagination.pageSizes.push(numItems);
+      this.recomputePortablePaginated(cacheKey, spec, true);
+    };
+    recompute();
+
+    return {
+      onUpdate: (callback: () => void) => {
+        let spec = this.portableWatchSpecs.get(cacheKey);
+        if (!spec?.pagination) {
+          spec = watchSpec;
+          this.portableWatchSpecs.set(cacheKey, spec);
+        }
+        const pagination = spec.pagination;
+        if (!pagination) return () => undefined;
+        pagination.subscribers += 1;
+        this.portableListeners.add(callback);
+        const unsubStore = this.store.onUpdate(recompute);
+        recompute();
+        let subscribed = true;
+        return () => {
+          if (!subscribed) return;
+          subscribed = false;
+          this.portableListeners.delete(callback);
+          unsubStore();
+          pagination.subscribers -= 1;
+          if (pagination.subscribers > 0) return;
+          if (this.portableWatchSpecs.get(cacheKey) === spec) {
+            this.portableWatchSpecs.delete(cacheKey);
+            this.portableCache.delete(cacheKey);
+            this.portablePaginatedRunTokens.delete(cacheKey);
+          }
+        };
+      },
+      localQueryResult: () => {
+        const cached = this.portableCache.get(cacheKey);
+        if (!isPortablePaginatedCache(cached)) return undefined;
+        return { ...cached, loadMore };
+      },
+    };
+  }
+
+  watchPaginatedQuery(
+    query: any,
+    args?: StaticArgs,
+    options?: { initialNumItems?: number; id?: number },
+  ) {
     const name = functionName(query);
+    const kind = this.portable.kind(name);
+    if (kind === "query") return this.watchPortablePaginatedQuery(name, args, options);
+    warnLegacyFallback(name, kind, "watchPaginatedQuery");
     return {
       onUpdate: (callback: () => void) => this.store.onUpdate(callback),
       localQueryResult: () => ({
@@ -1978,13 +2166,16 @@ export class StaticConvexClient {
 
   query(query: any, args?: StaticArgs) {
     const name = functionName(query);
-    if (this.portable.kind(name) === "query") return this.portable.runQuery(name, args ?? {});
+    const kind = this.portable.kind(name);
+    if (kind === "query") return this.portable.runQuery(name, args ?? {});
+    warnLegacyFallback(name, kind, "query");
     return Promise.resolve(mutableQueryResult(name, args, this.store));
   }
 
   mutation(mutation: any, args?: StaticArgs) {
     const name = functionName(mutation);
-    if (this.portable.kind(name) === "mutation") {
+    const kind = this.portable.kind(name);
+    if (kind === "mutation") {
       // The Convex wrapper for this mutation injects RECORD_TABLE_OBJECTS before
       // calling the portable handler; the offline runtime has to do the same or
       // the handler iterates `undefined` ("objects is not iterable").
@@ -1994,11 +2185,14 @@ export class StaticConvexClient {
           : args ?? {};
       return this.portable.runMutation(name, enriched);
     }
+    warnLegacyFallback(name, kind, "mutation");
     return Promise.resolve(mutationResult(name, args, this.store));
   }
 
   action(action: any, args?: StaticArgs) {
-    return Promise.resolve(mutationResult(functionName(action), args, this.store));
+    const name = functionName(action);
+    warnLegacyFallback(name, this.portable.kind(name), "action");
+    return Promise.resolve(mutationResult(name, args, this.store));
   }
 
   prewarmQuery() {

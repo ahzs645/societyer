@@ -117,7 +117,12 @@ export class LocalDexieRowStore implements LocalRowStore {
 
     this.db = new LocalDexieDatabase(options?.databaseName ?? "societyer-local-workspace");
     void this.hydrate(seed).catch((error) => {
-      console.warn(`[${options?.logLabel ?? "societyer-local"}] Dexie hydrate failed; using in-memory data.`, error);
+      this.db?.close();
+      this.db = null;
+      console.warn(
+        `[${options?.logLabel ?? "societyer-local"}] Dexie hydrate failed; using in-memory data for this session. Changes will not persist.`,
+        error,
+      );
     });
   }
 
@@ -225,6 +230,7 @@ export class LocalDexieRowStore implements LocalRowStore {
       });
     }
 
+    // Persistence policy: broken at startup => memory-only session; broken mid-session => fail the mutation.
     if (this.db) {
       try {
         await this.db.open();
@@ -418,7 +424,13 @@ export class LocalDexieRowStore implements LocalRowStore {
 
   private notify() {
     this.pendingNotify = false;
-    for (const listener of this.listeners) listener();
+    for (const listener of this.listeners) {
+      try {
+        listener();
+      } catch (error) {
+        console.error("[societyer-local] local row store listener failed", error);
+      }
+    }
   }
 
   private scheduleNotify() {
