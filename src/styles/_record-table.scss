@@ -2256,6 +2256,17 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
       display: none;
     }
 
+    /* The button reserves 24px for the (now hidden) column-menu chevron;
+     * inside the 38px cell that squeezed the flex row to ~0 and crushed
+     * the field icon with it. */
+    .record-table > thead > tr > th:first-child .record-table__header-cell-button {
+      max-width: 100%;
+
+      .record-table__header-cell-icon {
+        flex-shrink: 0;
+      }
+    }
+
     /* An auto-layout column can't shrink below its widest cell's intrinsic
      * width, and the footer's "N records" trigger held the whole column at
      * ~100px. Bounding the inner block bounds the cell's intrinsic width
