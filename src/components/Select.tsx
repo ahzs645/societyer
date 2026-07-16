@@ -4,6 +4,7 @@ import { ChevronDown, Check, Search } from "lucide-react";
 import { MenuRow } from "./ui";
 import { Tag, type TagColor } from "./Tag";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { useVisualViewportBottomInset } from "../lib/useVisualViewportBottomInset";
 
 export type SelectOption<T extends string = string> = {
   value: T;
@@ -91,6 +92,10 @@ export function Select<T extends string>({
   const [isBottomSheet, setIsBottomSheet] = useState(
     () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
   );
+  // Keeps the bottom sheet above the on-screen keyboard: iOS overlays the
+  // keyboard on the layout viewport, so a `bottom: 0` sheet disappears
+  // behind it the moment the search input is focused.
+  const keyboardInset = useVisualViewportBottomInset();
   // Notify parents exactly once per open→close cycle. We don't want
   // `onClose` to fire when we first mount with `defaultOpen=true`.
   const wasOpenRef = useRef(defaultOpen);
@@ -180,10 +185,17 @@ export function Select<T extends string>({
     // one, which previously made the dropdown close as soon as you tried to
     // scroll its items.
     const onScroll = (e: Event) => {
+      // A bottom sheet is viewport-pinned — it can't drift from its anchor,
+      // and the keyboard opening pans/resizes the page, which must not
+      // dismiss it.
+      if (isBottomSheet) return;
       if (e.target instanceof Node && menuRef.current?.contains(e.target)) return;
       setOpen(false);
     };
-    const onResize = () => setOpen(false);
+    const onResize = () => {
+      if (isBottomSheet) return;
+      setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -201,7 +213,7 @@ export function Select<T extends string>({
       window.removeEventListener("resize", onResize);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, isBottomSheet]);
 
   useEffect(() => {
     if (!open) {
@@ -318,20 +330,30 @@ export function Select<T extends string>({
                 tabIndex={-1}
                 onKeyDown={onMenuKey}
                 style={
-                  isBottomSheet || !pos
-                    ? undefined
-                    : {
-                        top: pos.top,
-                        left: pos.left,
-                        minWidth: Math.max(menuMinWidth ?? 0, pos.width),
-                      }
+                  isBottomSheet
+                    ? keyboardInset > 0
+                      ? {
+                          bottom: keyboardInset,
+                          maxHeight: `calc(100vh - ${keyboardInset + 12}px)`,
+                        }
+                      : undefined
+                    : !pos
+                      ? undefined
+                      : {
+                          top: pos.top,
+                          left: pos.left,
+                          minWidth: Math.max(menuMinWidth ?? 0, pos.width),
+                        }
                 }
               >
                 {renderedSearchable && (
                   <div className="menu__search">
                     <Search size={12} />
                     <input
-                      autoFocus
+                      // Auto-focusing in sheet mode pops the keyboard over
+                      // the sheet before the user has seen a single option.
+                      // Researcher shows options first; search is a tap away.
+                      autoFocus={!isBottomSheet}
                       className="menu__search-input"
                       value={query}
                       onChange={(e) => {

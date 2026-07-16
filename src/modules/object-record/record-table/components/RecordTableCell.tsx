@@ -123,6 +123,12 @@ export function RecordTableCell({
             tableCtx.onRecordClick?.(recordId, record, { openRecordIn: "drawer" });
           }}
         >
+          {/* Hidden until the phone table scrolls sideways, when the frozen
+              identifier column collapses to this single-letter card the way
+              Researcher's does. */}
+          <span className="record-table__identifier-avatar" aria-hidden="true">
+            {identifierInitial(value)}
+          </span>
           <span className="record-table__cell-content">
             {renderCell?.({ record, field: recordField.field, value }) ?? (
               <FieldDisplay value={value} record={record} field={recordField.field} />
@@ -216,9 +222,15 @@ export function RecordTableFloatingCellEditor({
     update();
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
+    // The mobile keyboard pans/resizes the visual viewport without firing
+    // window scroll/resize — re-measure so the editor stays on its anchor.
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
     return () => {
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
     };
   }, [anchorRef]);
 
@@ -256,6 +268,11 @@ export function RecordTableFloatingCellEditor({
     </div>,
     document.body,
   );
+}
+
+function identifierInitial(value: unknown): string {
+  const text = String(value ?? "").trim();
+  return text.charAt(0).toUpperCase() || "·";
 }
 
 function isExpandedEditorType(fieldType: string) {
