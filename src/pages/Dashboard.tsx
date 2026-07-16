@@ -18,10 +18,8 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardCheck,
-  ExternalLink,
   FileCheck2,
   Info,
-  Link2,
   ShieldCheck,
   UploadCloud,
   UserRoundCheck,
@@ -63,7 +61,6 @@ export function Dashboard() {
   const markPrivacyProgramReviewed = useMutation(api.dashboardRemediation.markPrivacyProgramReviewed);
   const markMemberDataAccessReviewed = useMutation(api.dashboardRemediation.markMemberDataAccessReviewed);
   const [showComplianceDetails, setShowComplianceDetails] = useState(false);
-  const [showEvidenceDetails, setShowEvidenceDetails] = useState(false);
   // null = follow the completion-based default; true/false = user override this session.
   const [onboardingExpandedOverride, setOnboardingExpandedOverride] = useState<boolean | null>(null);
   const [busyRemediationAction, setBusyRemediationAction] = useState<string | null>(null);
@@ -73,7 +70,7 @@ export function Dashboard() {
   if (society === null) return <SeedPrompt />;
   if (!data) return <PageLoading />;
 
-  const { counts, board, upcomingMeetings, upcomingFilings, overdueFilings, goals, complianceFlags, openTasks, evidenceChains } = data;
+  const { counts, board, upcomingMeetings, upcomingFilings, overdueFilings, goals, complianceFlags, openTasks } = data;
   const onboardingSteps = getOnboardingSteps({ society, counts, upcomingMeetings, upcomingFilings, overdueFilings });
   const completedOnboardingSteps = onboardingSteps.filter((step) => step.complete).length;
   const nextOnboardingStep = onboardingSteps.find((step) => !step.complete) ?? onboardingSteps[onboardingSteps.length - 1];
@@ -403,63 +400,6 @@ export function Dashboard() {
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card__head">
-              <h2 className="card__title">Why this is green</h2>
-              <span className="card__subtitle">Proof chains for completed compliance work</span>
-              {(evidenceChains ?? []).length > 0 && (
-                <button
-                  type="button"
-                  className="btn-action"
-                  style={{ marginLeft: "auto" }}
-                  onClick={() => setShowEvidenceDetails((v) => !v)}
-                  aria-expanded={showEvidenceDetails}
-                >
-                  {showEvidenceDetails ? "Hide details" : "View details"}
-                  {showEvidenceDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                </button>
-              )}
-            </div>
-            <div className="card__body evidence-chains">
-              {(evidenceChains ?? []).map((chain: any) => (
-                <article className="evidence-chain" key={chain.id}>
-                  <div className="evidence-chain__head">
-                    <span className={`evidence-chain__status evidence-chain__status--${chain.status}`}>
-                      {chain.status === "verified" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-                    </span>
-                    <div>
-                      <h3>{chain.title}</h3>
-                      <p>{chain.summary}</p>
-                    </div>
-                    {chain.actionHref && (
-                      <Link to={chain.actionHref} className="btn-action">
-                        Open <ExternalLink size={12} />
-                      </Link>
-                    )}
-                  </div>
-                  {showEvidenceDetails && (
-                    <ol className="evidence-chain__nodes">
-                      {chain.nodes.map((node: any, index: number) => (
-                        <li className={`evidence-chain__node evidence-chain__node--${node.status}`} key={`${chain.id}-${node.label}-${index}`}>
-                          <span className="evidence-chain__dot"><Link2 size={12} /></span>
-                          <div>
-                            <span>{node.label}</span>
-                            {node.href ? <Link to={node.href}>{node.value}</Link> : <strong>{node.value}</strong>}
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                </article>
-              ))}
-              {(!evidenceChains || evidenceChains.length === 0) && (
-                <div className="muted">
-                  No completed filing proof chains yet. Mark a filing as filed with a filed date, confirmation/evidence document, responsible person, and audit entry to light this up.
-                </div>
-              )}
             </div>
           </div>
 

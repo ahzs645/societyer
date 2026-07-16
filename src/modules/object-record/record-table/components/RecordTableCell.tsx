@@ -216,9 +216,15 @@ export function RecordTableFloatingCellEditor({
     update();
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
+    // The mobile keyboard pans/resizes the visual viewport without firing
+    // window scroll/resize — re-measure so the editor stays on its anchor.
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
     return () => {
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
     };
   }, [anchorRef]);
 

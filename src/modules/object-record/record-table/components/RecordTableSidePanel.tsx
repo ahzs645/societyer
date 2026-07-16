@@ -12,8 +12,9 @@ import {
 } from "lucide-react";
 import { Drawer } from "../../../../components/ui";
 import { Menu } from "../../../../components/Menu";
+import { useIsMobile } from "../../../../lib/useIsMobile";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
-import { isFieldEditable } from "../../record-field/components/FieldInput";
+import { FieldInput, isFieldEditable } from "../../record-field/components/FieldInput";
 import { resolveFieldIcon } from "../../record-field/fieldIcons";
 import type { FieldMetadata, ObjectMetadata } from "../../types";
 import type { RecordTableContextValue } from "../contexts/RecordTableContext";
@@ -204,6 +205,7 @@ function SidePanelField({
   const [isEditing, setIsEditing] = useState(false);
   const valueAnchorRef = useRef<HTMLSpanElement>(null);
   const FieldIcon = resolveFieldIcon(field);
+  const isMobile = useIsMobile();
   const canEdit = isFieldEditable(field) && !!onUpdate;
   const value = record?.[field.name];
 
@@ -212,6 +214,39 @@ function SidePanelField({
   const startEdit = () => {
     if (canEdit) setIsEditing(true);
   };
+
+  const commitEdit = async (nextValue: unknown) => {
+    setIsEditing(false);
+    if (Object.is(nextValue, value)) return;
+    await onUpdate?.({ recordId, fieldName: field.name, value: nextValue });
+  };
+
+  // On phones the floating editor (fixed-position, anchored via
+  // getBoundingClientRect) drifts away from the row when the on-screen
+  // keyboard pans the viewport. Render the editor inline in the value slot
+  // instead, so it always sits exactly where the value is displayed.
+  if (isMobile && isEditing) {
+    return (
+      <div className="record-side-panel__field record-side-panel__field--editing">
+        <span className="record-side-panel__field-icon" aria-hidden="true">
+          <FieldIcon size={16} />
+        </span>
+        <span className="record-side-panel__field-label">{field.label}</span>
+        <span
+          className="record-side-panel__field-value record-side-panel__field-value--editing"
+          data-record-cell-editor-anchor
+        >
+          <FieldInput
+            value={value}
+            field={field}
+            onCommit={commitEdit}
+            onCancel={() => setIsEditing(false)}
+          />
+        </span>
+        <span aria-hidden="true" />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -252,11 +287,7 @@ function SidePanelField({
           anchorRef={valueAnchorRef}
           value={value}
           field={field}
-          onCommit={async (nextValue) => {
-            setIsEditing(false);
-            if (Object.is(nextValue, value)) return;
-            await onUpdate?.({ recordId, fieldName: field.name, value: nextValue });
-          }}
+          onCommit={commitEdit}
           onCancel={() => setIsEditing(false)}
         />
       ) : null}
