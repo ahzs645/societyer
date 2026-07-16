@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
-import { Badge, Drawer, EmptyState, Pill } from "../components/ui";
+import { Badge, Drawer, EmptyState } from "../components/ui";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -240,16 +240,16 @@ export function MeetingsPage() {
         iconColor="orange"
         subtitle="Board meetings, committee meetings, and general meetings (AGM/SGM)."
         actions={
-          <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center" }}>
-            <Tooltip content="Required notice window for general meetings under the active bylaw rule set.">
-              <Pill tone="info" size="sm">
-                Notice: {noticeMinDays}–{noticeMaxDays} days
-              </Pill>
-            </Tooltip>
-            <button className="btn-action btn-action--primary" type="button" onClick={() => openNew()}>
-              <Plus size={12} /> New meeting
-            </button>
-          </div>
+          <button
+            className="btn-action btn-action--primary meetings-page__new"
+            type="button"
+            onClick={() => openNew()}
+            aria-label="New meeting"
+            title={`New meeting — general meetings need ${noticeMinDays}–${noticeMaxDays} days of notice`}
+          >
+            <Plus size={14} />
+            <span className="meetings-page__new-label">New meeting</span>
+          </button>
         }
       />
 
