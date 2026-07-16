@@ -2125,20 +2125,14 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   color: token('text-secondary');
 }
 
+/* Touch devices work like Researcher's phone table: no floating per-row or
+ * per-cell controls at all. Tapping the title opens the record, tapping an
+ * editable cell edits it, and the table swipes sideways without buttons
+ * drifting over the scrolling content. */
 @media (hover: none), (pointer: coarse) {
-  .record-table__row-actions {
-    opacity: 1;
-    /* Keep the vertical centering from the base rule — only drop the
-     * hover slide-in offset. `transform: none` removed translateY(-50%)
-     * too, leaving the buttons hanging across the row's bottom border. */
-    transform: translateY(-50%);
-    /* Always visible on touch, floating over scrolling cell content —
-     * back them with a panel so they don't read as stray glyphs. */
-    background: token('bg-panel');
-    border: 1px solid token('border');
-    border-radius: token('r-sm');
-    box-shadow: token('shadow-xs');
-    padding: 1px;
+  .record-table__row-actions,
+  .record-table__cell-actions {
+    display: none;
   }
 }
 
