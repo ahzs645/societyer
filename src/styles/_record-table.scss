@@ -2256,6 +2256,16 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
       display: none;
     }
 
+    /* An auto-layout column can't shrink below its widest cell's intrinsic
+     * width, and the footer's "N records" trigger held the whole column at
+     * ~100px. Bounding the inner block bounds the cell's intrinsic width
+     * (same trick as the title cap above), letting the 38px stick — the
+     * counter clips while compact, exactly like Researcher's footer. */
+    .record-table > tfoot > tr > td:first-child .record-table__aggregate {
+      max-width: 26px;
+      overflow: hidden;
+    }
+
     .record-table > tbody > tr > td:first-child .record-table__identifier-button {
       padding: 0;
 
