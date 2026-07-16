@@ -123,6 +123,12 @@ export function RecordTableCell({
             tableCtx.onRecordClick?.(recordId, record, { openRecordIn: "drawer" });
           }}
         >
+          {/* Hidden until the phone table scrolls sideways, when the frozen
+              identifier column collapses to this single-letter card the way
+              Researcher's does. */}
+          <span className="record-table__identifier-avatar" aria-hidden="true">
+            {identifierInitial(value)}
+          </span>
           <span className="record-table__cell-content">
             {renderCell?.({ record, field: recordField.field, value }) ?? (
               <FieldDisplay value={value} record={record} field={recordField.field} />
@@ -262,6 +268,11 @@ export function RecordTableFloatingCellEditor({
     </div>,
     document.body,
   );
+}
+
+function identifierInitial(value: unknown): string {
+  const text = String(value ?? "").trim();
+  return text.charAt(0).toUpperCase() || "·";
 }
 
 function isExpandedEditorType(fieldType: string) {

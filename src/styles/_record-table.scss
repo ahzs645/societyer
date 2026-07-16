@@ -1037,6 +1037,24 @@ select.record-table__menu-select,
   }
 }
 
+/* Single-letter card shown in place of the record name when the phone
+ * table is scrolled sideways (see the compact rules in the phone media
+ * block below). Hidden everywhere else. */
+.record-table__identifier-avatar {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: token('r-sm');
+  background: token('accent-soft');
+  color: token('accent');
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .record-table__cell--editable {
   cursor: text;
 }
@@ -2220,6 +2238,37 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   .record-table__virtuoso .record-table > thead > tr > th:first-child .record-table__header-cell-label {
     max-width: 34vw;
   }
+  /* Researcher-style compact identifier: as soon as the table is scrolled
+   * sideways, the frozen name column collapses to a 38px single-letter card
+   * so the data columns get the width; scrolling back to the start restores
+   * the full name. */
+  .record-table__scroll-frame.is-scrolled-x,
+  .record-table__interaction-root.is-scrolled-x {
+    .record-table > thead > tr > th:first-child,
+    .record-table > tbody > tr:not(.record-table__action-row) > td:first-child,
+    .record-table > tfoot > tr > td:first-child {
+      width: 38px !important;
+      overflow: hidden;
+    }
+
+    .record-table > thead > tr > th:first-child .record-table__header-cell-label,
+    .record-table > thead > tr > th:first-child .record-table__header-menu-wrap {
+      display: none;
+    }
+
+    .record-table > tbody > tr > td:first-child .record-table__identifier-button {
+      padding: 0;
+
+      .record-table__cell-content {
+        display: none;
+      }
+
+      .record-table__identifier-avatar {
+        display: inline-flex;
+      }
+    }
+  }
+
   .record-table__scroll-frame.is-scrolled-x,
   .record-table__interaction-root.is-scrolled-x {
     .record-table > thead > tr > th:first-child::after,
