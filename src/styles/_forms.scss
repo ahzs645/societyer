@@ -636,6 +636,42 @@ select.editable-cell__input:hover:not(:disabled) {
   align-items: flex-start;
 }
 .notif-row:last-child { border-bottom: none; }
+/* Clear/snooze overlay buttons on each notification row (were inline-styled;
+ * moved here so touch devices can get a real hit area). */
+.notif-clear {
+  position: absolute;
+  top: 8px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: token('r-sm');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+  z-index: 1;
+}
+.notif-clear:hover {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+.notif-clear--secondary { right: 28px; }
+/* Touch: 20px is well under target size. */
+@media (hover: none), (pointer: coarse) {
+  .notif-clear {
+    top: 4px;
+    right: 4px;
+    width: 32px;
+    height: 32px;
+  }
+  .notif-clear--secondary { right: 38px; }
+  /* Keep row text clear of the wider button pair. */
+  .notif-row { padding-right: 76px; }
+}
 
 /* User picker */
 .user-picker {

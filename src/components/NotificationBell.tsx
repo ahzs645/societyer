@@ -224,30 +224,13 @@ export function NotificationBell() {
                     event.stopPropagation();
                     void dismiss({ id: n._id });
                   }}
-                  style={{
-                    position: "absolute",
-                    top: 8,
-                    right: 6,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 20,
-                    height: 20,
-                    padding: 0,
-                    border: 0,
-                    borderRadius: "var(--r-sm)",
-                    background: "transparent",
-                    color: "var(--text-tertiary)",
-                    cursor: "pointer",
-                    zIndex: 1,
-                  }}
                 >
                   <X size={13} />
                 </button>
               );
               const snoozeButton = (
                 <button
-                  className="notif-clear"
+                  className="notif-clear notif-clear--secondary"
                   aria-label="Snooze for 1 day"
                   title="Snooze for 1 day"
                   onClick={(event) => {
@@ -255,23 +238,6 @@ export function NotificationBell() {
                     event.stopPropagation();
                     const until = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
                     void snooze({ id: n._id, untilISO: until });
-                  }}
-                  style={{
-                    position: "absolute",
-                    top: 8,
-                    right: 28,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 20,
-                    height: 20,
-                    padding: 0,
-                    border: 0,
-                    borderRadius: "var(--r-sm)",
-                    background: "transparent",
-                    color: "var(--text-tertiary)",
-                    cursor: "pointer",
-                    zIndex: 1,
                   }}
                 >
                   <Clock size={13} />
