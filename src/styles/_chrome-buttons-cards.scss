@@ -407,6 +407,16 @@ code.chip,
   box-shadow: token('shadow-xs');
   min-width: 0;
 }
+/* Cards normally get their padding from .card__head/.card__body children, but
+ * a dozen pages put bare content (h3 / p / rows) straight inside .card, which
+ * then sits flush against the border (e.g. Corporate history). Pad the
+ * UNstructured card; cards using the structured children — or hosting an
+ * edge-to-edge table or their own <summary> — keep edge-to-edge layout.
+ * Branch-dependent bodies (a ternary rendering card__body in one state and a
+ * bare <p> in another) resolve per rendered DOM, which is exactly right. */
+.card:not(:has(> .card__head, > .card__body, > .table, > table, > summary)) {
+  padding: token('s-4');
+}
 .card__head {
   padding: token('s-4');
   border-bottom: 1px solid token('border');
