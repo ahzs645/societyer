@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   DEFAULT_FREEZE_FIRST_COLUMN_ABOVE,
+  MOBILE_MAX_VISIBLE_COLUMNS,
   getMobileTableLayout,
+  limitColumnsForPhone,
 } from "../src/lib/mobileTableLayout";
 
 // --- Phone: selection + drag handle are dropped, first column is frozen -----
@@ -72,6 +74,25 @@ assert.equal(customThreshold.freezeFirstColumn, true, "custom freeze threshold i
 const defaultDragHandle = getMobileTableLayout({ isMobile: false, selectable: true });
 assert.equal(defaultDragHandle.showDragHandle, false, "drag handle defaults to off when unspecified");
 
+// --- Phone column cap: name + a couple, never a sideways pan through all ---
+const manyColumns = ["name", "status", "date", "email", "phone", "notes"];
+assert.deepEqual(
+  limitColumnsForPhone(manyColumns, true),
+  manyColumns.slice(0, MOBILE_MAX_VISIBLE_COLUMNS),
+  "phone renders only the first few visible columns",
+);
+assert.equal(
+  limitColumnsForPhone(manyColumns, false),
+  manyColumns,
+  "desktop renders the full set (same reference, no copy)",
+);
+const fewColumns = ["name", "status"];
+assert.equal(
+  limitColumnsForPhone(fewColumns, true),
+  fewColumns,
+  "a table already within the cap is untouched on phones",
+);
+
 // --- Shared RecordTable CSS keeps the Twenty mobile interaction contract ---
 const recordTableStyles = readFileSync(
   new URL("../src/styles/_record-table.scss", import.meta.url),
@@ -79,7 +100,7 @@ const recordTableStyles = readFileSync(
 );
 const recordTableCellSource = readFileSync(
   new URL(
-    "../src/modules/object-record/record-table/components/RecordTableCell.tsx",
+    "../src/platform/record-engine/record-table/components/RecordTableCell.tsx",
     import.meta.url,
   ),
   "utf8",
