@@ -527,8 +527,9 @@
     max-width: 100%;
   }
 
-  /* Adjust main area to leave room for bottom nav */
+  /* Leave room for the fixed top bar + bottom nav. */
   .app-shell.is-mobile .main {
+    padding-top: calc(52px + env(safe-area-inset-top, 0));
     padding-bottom: calc(52px + env(safe-area-inset-bottom, 0));
   }
 
@@ -536,5 +537,49 @@
   .app-shell.is-mobile.is-collapsed .sidebar-peek {
     opacity: 0;
     pointer-events: none;
+  }
+}
+
+/* Persistent mobile top bar — search + notifications, always visible so they
+ * aren't buried in the closed navigation drawer. Nav stays on the bottom bar;
+ * this is a utility bar only (no nav trigger). */
+.mobile-topbar {
+  display: none;
+}
+@media (max-width: 980px) {
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: token('s-2');
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: token('z-bottom-nav');
+    height: calc(52px + env(safe-area-inset-top, 0));
+    padding: env(safe-area-inset-top, 0) token('s-3') 0;
+    background: token('bg-primary');
+    border-bottom: 1px solid token('border-color-light');
+  }
+  .mobile-topbar__search {
+    flex: 1;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: token('s-2');
+    height: 36px;
+    padding: 0 token('s-3');
+    border: 1px solid token('border');
+    border-radius: token('r-md');
+    background: token('bg-subtle');
+    color: token('text-tertiary');
+    font-size: token('fs-sm');
+    text-align: left;
+    cursor: pointer;
+  }
+  .mobile-topbar__search span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
