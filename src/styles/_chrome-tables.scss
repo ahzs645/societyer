@@ -631,7 +631,9 @@
   background: token('accent-soft-strong');
 }
 
-/* Sticky bulk-action toolbar shown while rows are selected */
+/* Sticky bulk-action toolbar shown while rows are selected.
+ * Theme-consistent (was bg-inverse/text-inverse — a light bar in dark mode
+ * and vice versa — which read as a theme bug rather than a design). */
 .table-bulkbar {
   position: sticky;
   bottom: token('s-3');
@@ -642,8 +644,9 @@
   gap: token('s-3');
   padding: token('s-2') token('s-3');
   border-radius: token('r-pill');
-  background: token('bg-inverse');
-  color: token('text-inverse');
+  background: token('bg-panel');
+  color: token('text-primary');
+  border: 1px solid token('border');
   box-shadow: token('shadow-strong');
   z-index: token('z-sticky');
   animation: bulkbarIn 0.18s token('anim-ease');
@@ -660,14 +663,14 @@
   border-radius: token('r-pill');
   background: transparent;
   border: 0;
-  color: token('text-inverse');
+  color: token('text-secondary');
   opacity: 0.7;
   cursor: pointer;
   transition: background token('anim-fast') token('anim-ease'), opacity token('anim-fast') token('anim-ease');
 }
 .table-bulkbar__clear:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.1);
+  background: token('bg-hover');
 }
 .table-bulkbar__count {
   font-size: token('fs-sm');
@@ -677,11 +680,8 @@
   display: inline-flex;
   gap: 4px;
 }
-.table-bulkbar__actions .btn {
-  background: token('bg-panel');
-  color: token('text-primary');
-  border-color: token('bg-panel');
-}
+/* Buttons use their default theme styling now that the bar is panel-colored;
+ * only hover keeps a nudge. */
 .table-bulkbar__actions .btn:hover {
   background: token('bg-hover');
 }

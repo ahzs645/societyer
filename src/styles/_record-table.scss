@@ -2023,6 +2023,8 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 
 /* ------------------------ Bulk action bar ------------------------ */
 
+/* Theme-consistent floating pill (was theme-INVERTED — a light bar in dark
+ * mode and vice versa — which read as a theme bug rather than a design). */
 .record-table__bulk-bar {
   position: sticky;
   bottom: 12px;
@@ -2031,10 +2033,11 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   @include inline-flex-center;
   gap: 12px;
   padding: 8px 12px;
-  background: token('text-primary');
-  color: token('bg-panel');
+  background: token('bg-panel');
+  color: token('text-primary');
+  border: 1px solid token('border');
   border-radius: 8px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: token('shadow-strong');
   z-index: 5;
   align-self: center;
   margin: 12px auto 0;
@@ -2049,10 +2052,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   display: inline-flex;
   gap: 4px;
   padding-left: 8px;
-  /* currentColor follows the button text (var(--bg-panel)), which flips with
-   * the theme — keeps the divider visible on both the dark pill (light mode)
-   * and the light pill (dark mode). */
-  border-left: 1px solid color-mix(in oklab, currentColor 20%, transparent);
+  border-left: 1px solid token('border');
 }
 
 .record-table__bulk-bar-button {
@@ -2062,13 +2062,14 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   font-size: 12px;
   font-weight: 500;
   background: transparent;
-  color: token('bg-panel');
+  color: token('text-secondary');
   border: 1px solid transparent;
   border-radius: 5px;
   cursor: pointer;
 
   &:hover {
-    background: color-mix(in oklab, currentColor 12%, transparent);
+    background: token('bg-hover');
+    color: token('text-primary');
   }
 }
 
@@ -2083,14 +2084,13 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 .record-table__bulk-bar-clear {
   background: transparent;
   border: none;
-  color: token('bg-panel');
-  opacity: 0.6;
+  color: token('text-tertiary');
   cursor: pointer;
   padding: 0;
   margin-left: 4px;
 
   &:hover {
-    opacity: 1;
+    color: token('text-primary');
   }
 }
 

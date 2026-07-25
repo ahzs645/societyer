@@ -85,7 +85,9 @@
   color: token('font-color-inverted-secondary');
 }
 .btn--primary:hover {
-  background: #1a1a1a;
+  /* Nudge toward the text color instead of hardcoding near-black — the old
+   * #1a1a1a flipped the (light) primary button to black on hover in dark mode. */
+  background: color-mix(in oklab, token('bg-inverse') 85%, token('text-inverse'));
 }
 .btn--primary:disabled:hover {
   background: token('bg-inverse');
