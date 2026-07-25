@@ -12,7 +12,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -25,7 +25,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -38,17 +38,17 @@ export const update = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { templateId: v.id("motionTemplates") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const seedDefaults = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => seedDefaultsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => seedDefaultsPortable(await toPortableMutationCtx(ctx), args),
 });

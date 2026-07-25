@@ -6,6 +6,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { optionalSubjectId, requireSubjectId, type SubjectIdArgs } from "./subjectId";
 
 export async function listPortable(
   ctx: PortableQueryCtx,
@@ -24,17 +25,21 @@ export async function listForRecordPortable(
   {
     societyId,
     entityType,
+    subjectId,
     entityId,
     limit,
-  }: { societyId: string; entityType: string; entityId: string; limit?: number },
+  }: { societyId: string; entityType: string; limit?: number } & SubjectIdArgs,
 ) {
-  return ctx.db
+  const resolvedSubjectId = requireSubjectId({ subjectId, entityId });
+  // TODO(H0-flip): query by_subject after the hosted backfill is complete.
+  const rows = await ctx.db
     .query("activity")
     .withIndex("by_entity", (q) =>
-      q.eq("societyId", societyId).eq("entityType", entityType).eq("entityId", entityId),
+      q.eq("societyId", societyId).eq("entityType", entityType).eq("entityId", resolvedSubjectId),
     )
     .order("desc")
     .take(limit ?? 100);
+  return rows.filter((row) => optionalSubjectId(row) === resolvedSubjectId);
 }
 
 export async function logPortable(
@@ -43,10 +48,17 @@ export async function logPortable(
     societyId: string;
     actor: string;
     entityType: string;
-    entityId?: string;
     action: string;
     summary: string;
-  },
+  } & SubjectIdArgs,
 ) {
-  return ctx.db.insert("activity", { ...args, createdAtISO: new Date().toISOString() });
+  const { subjectId: preferredSubjectId, entityId: legacyEntityId, ...activity } = args;
+  const subjectId = optionalSubjectId({ subjectId: preferredSubjectId, entityId: legacyEntityId });
+  return ctx.db.insert("activity", {
+    ...activity,
+    subjectId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
+    entityId: subjectId,
+    createdAtISO: new Date().toISOString(),
+  });
 }

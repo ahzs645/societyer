@@ -19,25 +19,25 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const applications = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => applicationsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => applicationsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const screenings = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => screeningsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => screeningsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const summary = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => summaryPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => summaryPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const submitApplication = mutation({
@@ -55,7 +55,7 @@ export const submitApplication = mutation({
     source: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => submitApplicationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => submitApplicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const reviewApplication = mutation({
@@ -65,7 +65,7 @@ export const reviewApplication = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => reviewApplicationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => reviewApplicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const convertApplication = mutation({
@@ -76,7 +76,7 @@ export const convertApplication = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => convertApplicationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => convertApplicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertVolunteer = mutation({
@@ -105,7 +105,7 @@ export const upsertVolunteer = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertVolunteerPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertVolunteerPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeVolunteer = mutation({
@@ -114,7 +114,7 @@ export const removeVolunteer = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => removeVolunteerPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeVolunteerPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertScreening = mutation({
@@ -137,7 +137,7 @@ export const upsertScreening = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertScreeningPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertScreeningPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeScreening = mutation({
@@ -146,11 +146,11 @@ export const removeScreening = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => removeScreeningPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeScreeningPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const buildCrrpDraft = query({
   args: { volunteerId: v.id("volunteers") },
   returns: v.any(),
-  handler: (ctx, args) => buildCrrpDraftPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => buildCrrpDraftPortable(await toPortableQueryCtx(ctx), args),
 });

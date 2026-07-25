@@ -151,13 +151,13 @@ const structuredMinutesFields = {
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const getByMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => getByMeetingPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getByMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -188,7 +188,7 @@ export const create = mutation({
     draftTranscript: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -226,7 +226,7 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Upsert a minutes row from an AI-generated draft (transcripts.runPipeline).
@@ -258,19 +258,19 @@ export const upsertFromDraft = mutation({
     draftTranscript: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertFromDraftPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertFromDraftPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const backfillMotionPersonLinks = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => backfillMotionPersonLinksPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => backfillMotionPersonLinksPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const backfillQuorumSnapshot = mutation({
   args: { id: v.id("minutes") },
   returns: v.any(),
-  handler: (ctx, args) => backfillQuorumSnapshotPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => backfillQuorumSnapshotPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const generateDraft = action({

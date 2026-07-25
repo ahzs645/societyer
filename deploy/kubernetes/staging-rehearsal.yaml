@@ -1,0 +1,111 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: societyer-convex-staging-data
+  namespace: societyer
+  labels:
+    app.kubernetes.io/name: societyer
+    societyer.dev/storage-role: convex-staging
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: societyer-convex-staging
+  namespace: societyer
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: societyer-convex-staging
+  template:
+    metadata:
+      labels:
+        app: societyer-convex-staging
+    spec:
+      containers:
+        - name: convex
+          image: ghcr.io/get-convex/convex-backend@sha256:1738f1673f8d63161043a7859710d2301b1e9d6271e06afbb7af31594ea3a58f
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: convex-api
+              containerPort: 3210
+              hostPort: 3320
+            - name: convex-site
+              containerPort: 3211
+              hostPort: 3321
+          env:
+            - name: INSTANCE_NAME
+              value: societyer-staging
+            - name: INSTANCE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: CONVEX_INSTANCE_SECRET
+            - name: CONVEX_CLOUD_ORIGIN
+              value: http://societyer.k8s.home:3320
+            - name: CONVEX_SITE_ORIGIN
+              value: http://societyer.k8s.home:3321
+            - name: DISABLE_BEACON
+              value: "true"
+            - name: REDACT_LOGS_TO_CLIENT
+              value: "true"
+          volumeMounts:
+            - name: convex-data
+              mountPath: /convex/data
+          readinessProbe:
+            httpGet:
+              path: /version
+              port: 3210
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 12
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 4Gi
+      volumes:
+        - name: convex-data
+          persistentVolumeClaim:
+            claimName: societyer-convex-staging-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: societyer-convex-staging
+  namespace: societyer
+spec:
+  selector:
+    app: societyer-convex-staging
+  ports:
+    - name: convex-api
+      port: 3210
+      targetPort: 3210
+    - name: convex-site
+      port: 3211
+      targetPort: 3211
+---
+# Rehearsal data is production-derived. Block actions from reaching mail,
+# connector, webhook, and other external services while functions are tested.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: societyer-convex-staging-deny-egress
+  namespace: societyer
+spec:
+  podSelector:
+    matchLabels:
+      app: societyer-convex-staging
+  policyTypes:
+    - Egress
+  egress: []

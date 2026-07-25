@@ -397,6 +397,8 @@ export async function approveToolDraftPortable(
       societyId: args.societyId,
       actor: user?.displayName ?? "AI approver",
       entityType: "task",
+      subjectId: taskId,
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: taskId,
       action: "created",
       summary: `Approved AI task draft "${payload.title ?? draft.title ?? "Untitled"}"`,

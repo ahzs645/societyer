@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { RecordTableHeaderCell } from "./RecordTableHeaderCell";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
+import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 
 /**
  * Header row. The selection checkbox reflects whether *all filtered rows*
@@ -20,6 +21,7 @@ export function RecordTableHeader({
   const selected = useRecordTableState((s) => s.selectedRecordIds);
   const handle = useRecordTableStoreHandle();
   const filtered = useFilteredRecords();
+  const { objectMetadata } = useRecordTableContextOrThrow();
 
   const allSelected = useMemo(() => {
     if (filtered.length === 0) return false;
@@ -38,6 +40,7 @@ export function RecordTableHeader({
       filtered.forEach((r: any) => next.add(String(r._id)));
     }
     handle.get().setSelectedRecordIds(next);
+    handle.get().setSelectionAnchorRowIndex(null);
   };
 
   const visibleColumns = columns.filter((c) => c.isVisible);
@@ -46,7 +49,7 @@ export function RecordTableHeader({
     <tr className="record-table__header-row">
       {showDragHandle && <th className="record-table__drag-head" aria-hidden="true" />}
       {selectable && (
-        <th className="record-table__checkbox-cell" style={{ width: 36 }}>
+        <th className="record-table__checkbox-cell">
           <input
             type="checkbox"
             aria-label={allSelected ? "Deselect all rows" : "Select all rows"}
@@ -59,8 +62,15 @@ export function RecordTableHeader({
         </th>
       )}
       {visibleColumns.map((column) => (
-        <RecordTableHeaderCell key={column.viewFieldId} recordField={column} />
+        <RecordTableHeaderCell
+          key={column.viewFieldId}
+          recordField={column}
+          isLabelIdentifier={
+            column.field.name === objectMetadata.labelIdentifierFieldName
+          }
+        />
       ))}
+      <th className="record-table__fill-head" aria-hidden="true" />
       {hasRowActions && (
         <th className="record-table__row-actions-head" aria-hidden="true" />
       )}

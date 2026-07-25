@@ -6,7 +6,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => directorsList(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => directorsList(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -26,7 +26,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => directorCreate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => directorCreate(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -49,11 +49,11 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => directorUpdate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => directorUpdate(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("directors") },
   returns: v.any(),
-  handler: (ctx, args) => directorRemove(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => directorRemove(await toPortableMutationCtx(ctx), args),
 });

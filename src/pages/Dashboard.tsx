@@ -18,9 +18,8 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardCheck,
-  ExternalLink,
   FileCheck2,
-  Link2,
+  Info,
   ShieldCheck,
   UploadCloud,
   UserRoundCheck,
@@ -30,6 +29,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
+import { Tooltip } from "../components/Tooltip";
 
 const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
 
@@ -61,7 +61,6 @@ export function Dashboard() {
   const markPrivacyProgramReviewed = useMutation(api.dashboardRemediation.markPrivacyProgramReviewed);
   const markMemberDataAccessReviewed = useMutation(api.dashboardRemediation.markMemberDataAccessReviewed);
   const [showComplianceDetails, setShowComplianceDetails] = useState(false);
-  const [showEvidenceDetails, setShowEvidenceDetails] = useState(false);
   // null = follow the completion-based default; true/false = user override this session.
   const [onboardingExpandedOverride, setOnboardingExpandedOverride] = useState<boolean | null>(null);
   const [busyRemediationAction, setBusyRemediationAction] = useState<string | null>(null);
@@ -71,7 +70,7 @@ export function Dashboard() {
   if (society === null) return <SeedPrompt />;
   if (!data) return <PageLoading />;
 
-  const { counts, board, upcomingMeetings, upcomingFilings, overdueFilings, goals, complianceFlags, openTasks, evidenceChains } = data;
+  const { counts, board, upcomingMeetings, upcomingFilings, overdueFilings, goals, complianceFlags, openTasks } = data;
   const onboardingSteps = getOnboardingSteps({ society, counts, upcomingMeetings, upcomingFilings, overdueFilings });
   const completedOnboardingSteps = onboardingSteps.filter((step) => step.complete).length;
   const nextOnboardingStep = onboardingSteps.find((step) => !step.complete) ?? onboardingSteps[onboardingSteps.length - 1];
@@ -287,13 +286,13 @@ export function Dashboard() {
           label="Active members"
           value={counts.members}
           icon={<Users size={14} />}
-          sub="with voting rights counted separately in members list"
+          tooltip="with voting rights counted separately in members list"
         />
         <Stat
           label="Active directors"
           value={counts.directors}
           icon={<UserCog size={14} />}
-          sub={
+          tooltip={
             society.isMemberFunded
               ? `${counts.bcResidents} BC resident${counts.bcResidents === 1 ? "" : "s"} (s.197 exception)`
               : `${counts.bcResidents} BC resident${counts.bcResidents === 1 ? "" : "s"} (s.40 requires >= 1)`
@@ -401,63 +400,6 @@ export function Dashboard() {
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card__head">
-              <h2 className="card__title">Why this is green</h2>
-              <span className="card__subtitle">Proof chains for completed compliance work</span>
-              {(evidenceChains ?? []).length > 0 && (
-                <button
-                  type="button"
-                  className="btn-action"
-                  style={{ marginLeft: "auto" }}
-                  onClick={() => setShowEvidenceDetails((v) => !v)}
-                  aria-expanded={showEvidenceDetails}
-                >
-                  {showEvidenceDetails ? "Hide details" : "View details"}
-                  {showEvidenceDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                </button>
-              )}
-            </div>
-            <div className="card__body evidence-chains">
-              {(evidenceChains ?? []).map((chain: any) => (
-                <article className="evidence-chain" key={chain.id}>
-                  <div className="evidence-chain__head">
-                    <span className={`evidence-chain__status evidence-chain__status--${chain.status}`}>
-                      {chain.status === "verified" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-                    </span>
-                    <div>
-                      <h3>{chain.title}</h3>
-                      <p>{chain.summary}</p>
-                    </div>
-                    {chain.actionHref && (
-                      <Link to={chain.actionHref} className="btn-action">
-                        Open <ExternalLink size={12} />
-                      </Link>
-                    )}
-                  </div>
-                  {showEvidenceDetails && (
-                    <ol className="evidence-chain__nodes">
-                      {chain.nodes.map((node: any, index: number) => (
-                        <li className={`evidence-chain__node evidence-chain__node--${node.status}`} key={`${chain.id}-${node.label}-${index}`}>
-                          <span className="evidence-chain__dot"><Link2 size={12} /></span>
-                          <div>
-                            <span>{node.label}</span>
-                            {node.href ? <Link to={node.href}>{node.value}</Link> : <strong>{node.value}</strong>}
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                </article>
-              ))}
-              {(!evidenceChains || evidenceChains.length === 0) && (
-                <div className="muted">
-                  No completed filing proof chains yet. Mark a filing as filed with a filed date, confirmation/evidence document, responsible person, and audit entry to light this up.
-                </div>
-              )}
             </div>
           </div>
 
@@ -775,43 +717,38 @@ function relativeShort(iso: string) {
 function Stat({
   label,
   value,
-  sub,
+  tooltip,
   tone,
   icon,
 }: {
   label: string;
   value: number | string;
-  sub?: string;
+  tooltip?: string;
   tone?: "danger" | "ok";
   icon?: React.ReactNode;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  // The description (`sub`) is hidden on mobile by CSS and revealed when the
-  // user taps the cell. Desktop users see it inline as before — the handler
-  // still toggles `.is-expanded` but has no visual effect above 760px.
-  const expandable = Boolean(sub);
-  const handleToggle = expandable ? () => setExpanded((v) => !v) : undefined;
   return (
-    <div
-      className={`stat${expandable ? " stat--expandable" : ""}${expanded ? " is-expanded" : ""}`}
-      onClick={handleToggle}
-      onKeyDown={expandable ? (e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded((v) => !v); }
-      } : undefined}
-      role={expandable ? "button" : undefined}
-      tabIndex={expandable ? 0 : undefined}
-      aria-expanded={expandable ? expanded : undefined}
-    >
+    <div className={`stat${tooltip ? " stat--has-tooltip" : ""}`}>
       <div className="stat__label">
         {icon} {label}
       </div>
+      {tooltip && (
+        <Tooltip content={tooltip} placement="top" delay={150}>
+          <button
+            type="button"
+            className="stat__info"
+            aria-label={`${label}: ${tooltip}`}
+          >
+            <Info size={14} aria-hidden="true" />
+          </button>
+        </Tooltip>
+      )}
       <div
         className="stat__value"
         style={{ color: tone === "danger" ? "var(--danger)" : undefined }}
       >
         {value}
       </div>
-      {sub && <div className="stat__sub">{sub}</div>}
     </div>
   );
 }

@@ -99,43 +99,43 @@ const grantAnswerLibraryItem = v.object({
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("grants") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const publicOpenings = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => publicOpeningsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => publicOpeningsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const applications = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => applicationsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => applicationsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const transactions = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => transactionsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => transactionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const reports = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => reportsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => reportsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const employeeLinks = query({
   args: { societyId: v.id("societies"), grantId: v.optional(v.id("grants")) },
   returns: v.any(),
-  handler: (ctx, args) => employeeLinksPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => employeeLinksPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertEmployeeLink = mutation({
@@ -148,19 +148,19 @@ export const upsertEmployeeLink = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertEmployeeLinkPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertEmployeeLinkPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeEmployeeLink = mutation({
   args: { id: v.id("grantEmployeeLinks"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => removeEmployeeLinkPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeEmployeeLinkPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const summary = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => summaryPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => summaryPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const submitApplication = mutation({
@@ -180,7 +180,7 @@ export const submitApplication = mutation({
     source: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => submitApplicationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => submitApplicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const reviewApplication = mutation({
@@ -191,7 +191,7 @@ export const reviewApplication = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => reviewApplicationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => reviewApplicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const convertApplication = mutation({
@@ -202,7 +202,7 @@ export const convertApplication = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => convertApplicationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => convertApplicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertGrant = mutation({
@@ -255,7 +255,7 @@ export const upsertGrant = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertGrantPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertGrantPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const importGcosProjectSnapshot = mutation({
@@ -266,13 +266,13 @@ export const importGcosProjectSnapshot = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => importGcosProjectSnapshotPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => importGcosProjectSnapshotPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeGrant = mutation({
   args: { id: v.id("grants"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => removeGrantPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeGrantPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertReport = mutation({
@@ -292,13 +292,13 @@ export const upsertReport = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertReportPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertReportPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeReport = mutation({
   args: { id: v.id("grantReports"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => removeReportPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeReportPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertTransaction = mutation({
@@ -316,11 +316,11 @@ export const upsertTransaction = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertTransactionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertTransactionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeTransaction = mutation({
   args: { id: v.id("grantTransactions"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => removeTransactionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeTransactionPortable(await toPortableMutationCtx(ctx), args),
 });

@@ -15,19 +15,19 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const get = query({
   args: { id: v.id("filings") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const guidance = query({
   args: { kind: v.string(), jurisdictionCode: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args) => guidancePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => guidancePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -47,7 +47,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const markFiled = mutation({
@@ -65,7 +65,7 @@ export const markFiled = mutation({
     submissionChecklist: v.optional(v.array(v.string())),
   },
   returns: v.any(),
-  handler: (ctx, args) => markFiledPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => markFiledPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -98,7 +98,7 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const importBcRegistryHistory = mutation({
@@ -130,11 +130,11 @@ export const importBcRegistryHistory = mutation({
     ),
   },
   returns: v.any(),
-  handler: (ctx, args) => importBcRegistryHistoryPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => importBcRegistryHistoryPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("filings") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

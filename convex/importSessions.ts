@@ -43,13 +43,13 @@ import {
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { sessionId: v.id("documents") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const createFromBundle = mutation({
@@ -59,7 +59,7 @@ export const createFromBundle = mutation({
     bundle: v.any(),
   },
   returns: v.any(),
-  handler: (ctx, args) => createFromBundlePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createFromBundlePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const updateRecord = mutation({
@@ -71,7 +71,7 @@ export const updateRecord = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
   },
   returns: v.any(),
-  handler: (ctx, args) => updateRecordPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateRecordPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const bulkSetStatus = mutation({
@@ -81,7 +81,7 @@ export const bulkSetStatus = mutation({
     recordIds: v.optional(v.array(v.id("documents"))),
   },
   returns: v.any(),
-  handler: (ctx, args) => bulkSetStatusPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => bulkSetStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const bulkSetStatusByKind = mutation({
@@ -92,7 +92,7 @@ export const bulkSetStatusByKind = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
   },
   returns: v.any(),
-  handler: (ctx, args) => bulkSetStatusByKindPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => bulkSetStatusByKindPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const bulkSetStatusByFilter = mutation({
@@ -104,7 +104,7 @@ export const bulkSetStatusByFilter = mutation({
     targetModules: v.optional(v.array(v.string())),
   },
   returns: v.any(),
-  handler: (ctx, args) => bulkSetStatusByFilterPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => bulkSetStatusByFilterPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const refreshSessionSummaries = mutation({
@@ -113,41 +113,41 @@ export const refreshSessionSummaries = mutation({
     sessionIds: v.optional(v.array(v.id("documents"))),
   },
   returns: v.any(),
-  handler: (ctx, args) => refreshSessionSummariesPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => refreshSessionSummariesPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeSession = mutation({
   args: { sessionId: v.id("documents") },
   returns: v.any(),
-  handler: (ctx, args) => removeSessionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeSessionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const applyApprovedToOrgHistory = mutation({
   args: { sessionId: v.id("documents") },
   returns: v.any(),
-  handler: (ctx, args) => applyApprovedToOrgHistoryPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => applyApprovedToOrgHistoryPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const applyApprovedMeetings = mutation({
   args: { sessionId: v.id("documents") },
   returns: v.any(),
-  handler: (ctx, args) => applyApprovedMeetingsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => applyApprovedMeetingsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const backfillApprovedMeetingReferences = mutation({
   args: { sessionId: v.id("documents") },
   returns: v.any(),
-  handler: (ctx, args) => backfillApprovedMeetingReferencesPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => backfillApprovedMeetingReferencesPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const applyApprovedDocuments = mutation({
   args: { sessionId: v.id("documents") },
   returns: v.any(),
-  handler: (ctx, args) => applyApprovedDocumentsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => applyApprovedDocumentsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const applyApprovedSectionRecords = mutation({
   args: { sessionId: v.id("documents") },
   returns: v.any(),
-  handler: (ctx, args) => applyApprovedSectionRecordsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => applyApprovedSectionRecordsPortable(await toPortableMutationCtx(ctx), args),
 });

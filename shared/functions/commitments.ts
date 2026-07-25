@@ -73,6 +73,8 @@ export async function createPortable(
     societyId: args.societyId,
     actor: "You",
     entityType: "commitment",
+    subjectId: id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: id,
     action: "created",
     summary: `Created commitment "${args.title}"`,
@@ -171,6 +173,8 @@ export async function recordEventPortable(
     societyId: commitment.societyId,
     actor: "You",
     entityType: "commitment",
+    subjectId: args.commitmentId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: args.commitmentId,
     action: "completed",
     summary: `Recorded "${args.title}" for ${commitment.title}`,

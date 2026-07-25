@@ -441,6 +441,42 @@ async function paginateForSociety(
     return paginateCollectedRows(rows, paginationOpts, options);
   }
 
+  // inventoryCountLines belong to a society through their parent inventory
+  // count. The table intentionally has no societyId/by_society index, so the
+  // generic export path cannot query it directly.
+  if (table === "inventoryCountLines") {
+    const counts = await ctx.db
+      .query("inventoryCounts")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect();
+    const rows: any[] = [];
+    for (const count of counts) {
+      rows.push(
+        ...(await ctx.db
+          .query("inventoryCountLines")
+          .withIndex("by_count", (q) => q.eq("inventoryCountId", count._id))
+          .collect()),
+      );
+    }
+    return paginateCollectedRows(rows, paginationOpts, options);
+  }
+
+  // peopleDirectory is cross-tenant and therefore has no societyId. Export
+  // only the directory people referenced by this society's role holders or
+  // signer register; treating it as a global table would leak other workspaces.
+  if (table === "peopleDirectory") {
+    const [roleHolders, entitySigners] = await Promise.all([
+      ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+      ctx.db.query("entitySigners").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    ]);
+    const ids = new Set<string>();
+    for (const row of [...roleHolders, ...entitySigners]) {
+      if (row.directoryPersonId) ids.add(String(row.directoryPersonId));
+    }
+    const rows = (await Promise.all(Array.from(ids, (id) => ctx.db.get(id)))).filter(Boolean);
+    return paginateCollectedRows(rows, paginationOpts, options);
+  }
+
   if (OPTIONAL_SOCIETY_TABLES.has(table)) {
     const [globalRows, societyRows] = await Promise.all([
       ctx.db.query(table).withIndex("by_society", (q) => q.eq("societyId", undefined)).collect(),

@@ -6,18 +6,19 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listForRecord = query({
   args: {
     societyId: v.id("societies"),
     entityType: v.string(),
-    entityId: v.string(),
+    subjectId: v.optional(v.string()),
+    entityId: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: (ctx, args) => listForRecordPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listForRecordPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const log = mutation({
@@ -25,10 +26,11 @@ export const log = mutation({
     societyId: v.id("societies"),
     actor: v.string(),
     entityType: v.string(),
+    subjectId: v.optional(v.string()),
     entityId: v.optional(v.string()),
     action: v.string(),
     summary: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => logPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => logPortable(await toPortableMutationCtx(ctx), args),
 });

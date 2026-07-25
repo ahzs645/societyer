@@ -17,7 +17,7 @@ import { syncMotionsForMinutes, resolveMinutesMotions, updatePortable } from "..
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
-const rt = () => new PortableRuntime({ db, capabilities: caps });
+const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) });
 const query = (name: string, handler: any) => rt().register(definePortableQuery({ name, handler })).runQuery(name, {});
 const mutate = (name: string, handler: any) => rt().register(definePortableMutation({ name, handler })).runMutation(name, {});
 

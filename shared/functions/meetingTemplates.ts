@@ -15,9 +15,13 @@ export async function seedDefaultsPortable(ctx: PortableMutationCtx, { societyId
     .query("meetingTemplates")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
-  if (existing.length > 0) return { inserted: 0, existing: existing.length };
+  const hasBoard = existing.some((template) => template.meetingType === "Board");
+  const hasAgm = existing.some((template) => template.meetingType === "AGM");
+  if (hasBoard && hasAgm) return { inserted: 0, existing: existing.length };
   const now = new Date().toISOString();
-  await ctx.db.insert("meetingTemplates", {
+  let inserted = 0;
+  if (!hasBoard) {
+    await ctx.db.insert("meetingTemplates", {
     societyId,
     name: "Regular board meeting",
     description: "Baseline recurring board agenda with standard procedural motions.",
@@ -57,8 +61,32 @@ export async function seedDefaultsPortable(ctx: PortableMutationCtx, { societyId
     ],
     createdAtISO: now,
     updatedAtISO: now,
-  });
-  return { inserted: 1, existing: 0 };
+    });
+    inserted += 1;
+  }
+  if (!hasAgm) {
+    await ctx.db.insert("meetingTemplates", {
+      societyId,
+      name: "Annual general meeting",
+      description: "Governance-ready AGM agenda covering notice, annual reporting, elections, prior minutes, and adjournment.",
+      meetingType: "AGM",
+      isDefault: false,
+      items: [
+        { title: "Call to order", depth: 0, sectionType: "discussion" },
+        { title: "Notice and quorum confirmation", depth: 0, sectionType: "discussion", details: "Confirm the meeting notice, delivery window, quorum, and electronic participation arrangements." },
+        { title: "Approval of agenda", depth: 0, sectionType: "motion", motionText: "BE IT RESOLVED THAT the agenda for this annual general meeting be adopted as presented." },
+        { title: "Approval of prior minutes", depth: 0, sectionType: "motion", motionText: "BE IT RESOLVED THAT the minutes of {{previousMeetingTitle}} of {{previousMeetingDate}}, as circulated, be approved.", adoptsPreviousMinutes: true },
+        { title: "Financial statements and annual report", depth: 0, sectionType: "report", details: "Present the annual financial statements and auditor's report, if applicable." },
+        { title: "Election of directors", depth: 0, sectionType: "discussion", details: "Record nominations, elections, appointments, and resulting terms." },
+        { title: "New business", depth: 0, sectionType: "discussion" },
+        { title: "Adjournment", depth: 0, sectionType: "motion", motionText: "BE IT RESOLVED THAT the annual general meeting be adjourned." },
+      ],
+      createdAtISO: now,
+      updatedAtISO: now,
+    });
+    inserted += 1;
+  }
+  return { inserted, existing: existing.length };
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {

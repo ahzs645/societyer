@@ -12,32 +12,34 @@ export const listForRecord = query({
   args: {
     societyId: v.id("societies"),
     entityType: v.string(),
-    entityId: v.string(),
+    subjectId: v.optional(v.string()),
+    entityId: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => notesListForRecordPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => notesListForRecordPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
   args: {
     societyId: v.id("societies"),
     entityType: v.string(),
-    entityId: v.string(),
+    subjectId: v.optional(v.string()),
+    entityId: v.optional(v.string()),
     author: v.string(),
     body: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => noteCreatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => noteCreatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
   args: { id: v.id("notes"), body: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => noteUpdatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => noteUpdatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("notes") },
   returns: v.any(),
-  handler: (ctx, args) => noteRemovePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => noteRemovePortable(await toPortableMutationCtx(ctx), args),
 });

@@ -696,16 +696,24 @@ export function Drawer({
   open,
   onClose,
   title,
+  header,
   children,
   footer,
   size = "default",
+  className,
+  bodyClassName,
+  footerClassName,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  header?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   size?: "default" | "wide";
+  className?: string;
+  bodyClassName?: string;
+  footerClassName?: string;
 }) {
   const inspector = useInspectorPanel();
   const panelId = useId();
@@ -722,21 +730,21 @@ export function Drawer({
   if (inspector?.portalTarget) {
     return createPortal(
       <div
-        className={`inspector-panel${size === "wide" ? " inspector-panel--wide" : ""}`}
+        className={`inspector-panel${size === "wide" ? " inspector-panel--wide" : ""}${className ? ` ${className}` : ""}`}
         role="dialog"
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}
       >
         <div className="drawer__head inspector-panel__head">
-          <h2 className="drawer__title" id={titleId}>{title}</h2>
+          {header ? <div id={titleId}>{header}</div> : <h2 className="drawer__title" id={titleId}>{title}</h2>}
           <div style={{ flex: 1 }} />
           <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label="Close drawer">
             <X />
           </button>
         </div>
-        <div className="drawer__body inspector-panel__body">{children}</div>
-        {footer && <div className="drawer__footer inspector-panel__footer">{footer}</div>}
+        <div className={`drawer__body inspector-panel__body${bodyClassName ? ` ${bodyClassName}` : ""}`}>{children}</div>
+        {footer && <div className={`drawer__footer inspector-panel__footer${footerClassName ? ` ${footerClassName}` : ""}`}>{footer}</div>}
       </div>,
       inspector.portalTarget,
     );
@@ -747,7 +755,7 @@ export function Drawer({
     <>
       <div className="drawer-backdrop" onClick={onClose} />
       <div
-        className={`drawer${size === "wide" ? " drawer--wide" : ""}`}
+        className={`drawer${size === "wide" ? " drawer--wide" : ""}${className ? ` ${className}` : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -755,14 +763,14 @@ export function Drawer({
         tabIndex={-1}
       >
         <div className="drawer__head">
-          <h2 className="drawer__title" id={titleId}>{title}</h2>
+          {header ? <div id={titleId}>{header}</div> : <h2 className="drawer__title" id={titleId}>{title}</h2>}
           <div style={{ flex: 1 }} />
           <button className="btn btn--ghost btn--icon" onClick={onClose} aria-label="Close drawer">
             <X />
           </button>
         </div>
-        <div className="drawer__body">{children}</div>
-        {footer && <div className="drawer__footer">{footer}</div>}
+        <div className={`drawer__body${bodyClassName ? ` ${bodyClassName}` : ""}`}>{children}</div>
+        {footer && <div className={`drawer__footer${footerClassName ? ` ${footerClassName}` : ""}`}>{footer}</div>}
       </div>
     </>
   );

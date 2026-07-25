@@ -9,7 +9,7 @@ export const getEffective = query({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => getEffectivePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getEffectivePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -29,7 +29,7 @@ export const upsert = mutation({
     validationMessage: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const setStatus = mutation({
@@ -40,7 +40,7 @@ export const setStatus = mutation({
     status: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => setStatusPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const _getModelCatalogCache = internalQuery({

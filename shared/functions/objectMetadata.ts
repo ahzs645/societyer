@@ -14,6 +14,10 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 
+function firstStableMatch<T extends { _id: unknown }>(rows: T[]): T | null {
+  return rows.slice().sort((a, b) => String(a._id).localeCompare(String(b._id)))[0] ?? null;
+}
+
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   return ctx.db
     .query("objectMetadata")
@@ -29,24 +33,26 @@ export async function getByNameSingularPortable(
   ctx: PortableQueryCtx,
   { societyId, nameSingular }: { societyId: string; nameSingular: string },
 ) {
-  return ctx.db
+  const rows = await ctx.db
     .query("objectMetadata")
     .withIndex("by_society_name", (q) =>
       q.eq("societyId", societyId).eq("nameSingular", nameSingular),
     )
-    .unique();
+    .collect();
+  return firstStableMatch(rows);
 }
 
 export async function getByNamePluralPortable(
   ctx: PortableQueryCtx,
   { societyId, namePlural }: { societyId: string; namePlural: string },
 ) {
-  return ctx.db
+  const rows = await ctx.db
     .query("objectMetadata")
     .withIndex("by_society_name_plural", (q) =>
       q.eq("societyId", societyId).eq("namePlural", namePlural),
     )
-    .unique();
+    .collect();
+  return firstStableMatch(rows);
 }
 
 /**
@@ -83,12 +89,13 @@ export async function getFullTableSetupPortable(
   ctx: PortableQueryCtx,
   { societyId, nameSingular, viewId }: { societyId: string; nameSingular: string; viewId?: string },
 ) {
-  const object = await ctx.db
+  const matchingObjects = await ctx.db
     .query("objectMetadata")
     .withIndex("by_society_name", (q) =>
       q.eq("societyId", societyId).eq("nameSingular", nameSingular),
     )
-    .unique();
+    .collect();
+  const object = firstStableMatch(matchingObjects);
   if (!object) {
     return { object: null, views: [], activeView: null };
   }

@@ -224,19 +224,19 @@ const SENSITIVE_FIELD_RE = /(password|secret|token|key|credential|sin|ssn|birth|
 export const listDefinitions = query({
   args: {},
   returns: v.any(),
-  handler: (ctx) => listDefinitionsPortable(toPortableQueryCtx(ctx)),
+  handler: async (ctx) => listDefinitionsPortable(await toPortableQueryCtx(ctx)),
 });
 
 export const listSkills = query({
   args: { societyId: v.optional(v.id("societies")) },
   returns: v.any(),
-  handler: (ctx, args) => listSkillsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listSkillsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listAllSkills = query({
   args: { societyId: v.optional(v.id("societies")) },
   returns: v.any(),
-  handler: (ctx, args) => listAllSkillsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listAllSkillsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const loadSkills = query({
@@ -245,7 +245,7 @@ export const loadSkills = query({
     skillNames: v.array(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => loadSkillsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => loadSkillsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertSkill = mutation({
@@ -260,7 +260,7 @@ export const upsertSkill = mutation({
     isActive: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertSkillPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertSkillPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const setSkillActive = mutation({
@@ -271,7 +271,7 @@ export const setSkillActive = mutation({
     isActive: v.boolean(),
   },
   returns: v.any(),
-  handler: (ctx, args) => setSkillActivePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setSkillActivePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeSkill = mutation({
@@ -281,13 +281,13 @@ export const removeSkill = mutation({
     id: v.id("aiSkills"),
   },
   returns: v.any(),
-  handler: (ctx, args) => removeSkillPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeSkillPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const listLogicFunctions = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listLogicFunctionsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listLogicFunctionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listToolDrafts = query({
@@ -297,7 +297,7 @@ export const listToolDrafts = query({
     limit: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: (ctx, args) => listToolDraftsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listToolDraftsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const approveToolDraft = mutation({
@@ -307,7 +307,7 @@ export const approveToolDraft = mutation({
     id: v.id("aiToolDrafts"),
   },
   returns: v.any(),
-  handler: (ctx, args) => approveToolDraftPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => approveToolDraftPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const rejectToolDraft = mutation({
@@ -317,7 +317,7 @@ export const rejectToolDraft = mutation({
     id: v.id("aiToolDrafts"),
   },
   returns: v.any(),
-  handler: (ctx, args) => rejectToolDraftPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => rejectToolDraftPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertLogicFunction = mutation({
@@ -338,7 +338,7 @@ export const upsertLogicFunction = mutation({
     requiredPermission: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertLogicFunctionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertLogicFunctionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const getToolCatalog = query({
@@ -617,6 +617,8 @@ export const _recordAgentRun = internalMutation({
       societyId: args.societyId,
       actor: args.actorDisplayName ?? "AI workspace tool",
       entityType: "aiAgentRun",
+      subjectId: String(runId),
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: String(runId),
       action: "completed",
       summary: `${agent.name} responded via ${args.provider}.`,
@@ -794,6 +796,8 @@ export const runAgent = mutation({
       societyId: args.societyId,
       actor: user?.displayName ?? "AI workspace tool",
       entityType: "aiAgentRun",
+      subjectId: String(runId),
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: String(runId),
       action: "completed",
       summary: `${agent.name} loaded ${loadedSkills.length} skill(s), learned ${learnedTools.length} tool schema(s), and planned ${plannedToolCalls.length} tool request(s).`,

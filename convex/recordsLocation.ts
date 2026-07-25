@@ -6,7 +6,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const get = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => recordsLocationGet(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => recordsLocationGet(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -19,5 +19,5 @@ export const upsert = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => recordsLocationUpsert(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => recordsLocationUpsert(await toPortableMutationCtx(ctx), args),
 });

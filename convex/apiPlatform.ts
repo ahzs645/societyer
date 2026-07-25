@@ -215,7 +215,7 @@ function invalidToken(reason: string) {
 export const listClients = query({
   args: { societyId: v.id("societies") },
   returns: v.array(apiClientReturn),
-  handler: (ctx, args) => listClientsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listClientsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const createClient = mutation({
@@ -227,7 +227,7 @@ export const createClient = mutation({
     createdByUserId: v.optional(v.id("users")),
   },
   returns: v.id("apiClients"),
-  handler: (ctx, args) => createClientPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createClientPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const updateClient = mutation({
@@ -241,7 +241,7 @@ export const updateClient = mutation({
     }),
   },
   returns: v.null(),
-  handler: (ctx, args) => updateClientPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateClientPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const listTokens = query({
@@ -250,7 +250,7 @@ export const listTokens = query({
     clientId: v.optional(v.id("apiClients")),
   },
   returns: v.array(apiTokenPublicReturn),
-  handler: (ctx, args) => listTokensPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listTokensPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const createToken = mutation({
@@ -345,13 +345,13 @@ export const revokeToken = mutation({
 export const listPluginInstallations = query({
   args: { societyId: v.id("societies") },
   returns: v.array(pluginInstallationReturn),
-  handler: (ctx, args) => listPluginInstallationsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPluginInstallationsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listIntegrationCatalog = query({
   args: { societyId: v.optional(v.id("societies")) },
   returns: v.array(integrationCatalogItemReturn),
-  handler: (ctx, args) => listIntegrationCatalogPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listIntegrationCatalogPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const installIntegration = mutation({
@@ -362,7 +362,7 @@ export const installIntegration = mutation({
     installedByUserId: v.optional(v.id("users")),
   },
   returns: v.id("pluginInstallations"),
-  handler: (ctx, args) => installIntegrationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => installIntegrationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const updateIntegrationHealth = mutation({
@@ -374,7 +374,7 @@ export const updateIntegrationHealth = mutation({
     status: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: (ctx, args) => updateIntegrationHealthPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateIntegrationHealthPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertPluginInstallation = mutation({
@@ -390,7 +390,7 @@ export const upsertPluginInstallation = mutation({
     installedByUserId: v.optional(v.id("users")),
   },
   returns: v.id("pluginInstallations"),
-  handler: (ctx, args) => upsertPluginInstallationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertPluginInstallationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const listWebhookSubscriptions = query({
@@ -576,7 +576,7 @@ export const listIntegrationSyncStates = query({
     resourceType: v.optional(v.string()),
   },
   returns: v.array(integrationSyncStateReturn),
-  handler: (ctx, args) => listIntegrationSyncStatesPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listIntegrationSyncStatesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertIntegrationSyncState = mutation({

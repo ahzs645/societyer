@@ -70,6 +70,7 @@ import {
   formFromAsset,
   inputToCents,
   isDue,
+  isAssetPurchaseTransaction,
   money,
   normalizeAssetForm,
   parseAssetCsv,
@@ -112,6 +113,7 @@ export function AssetsPage() {
   const [verificationTitle, setVerificationTitle] = useState(`Physical inventory ${todayDate()}`);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [mobileQuery, setMobileQuery] = useState("");
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -131,6 +133,19 @@ export function AssetsPage() {
     })),
     [rows],
   );
+  const mobileRows = useMemo(() => {
+    const query = mobileQuery.trim().toLowerCase();
+    if (!query) return rows;
+    return rows.filter((row) => [
+      row.assetTag,
+      row.name,
+      row.category,
+      row.serialNumber,
+      row.location,
+      row.custodianName,
+      row.responsiblePersonName,
+    ].some((value) => String(value ?? "").toLowerCase().includes(query)));
+  }, [rows, mobileQuery]);
 
   useEffect(() => {
     if (!scanCode || scanResult === undefined) return;
@@ -384,7 +399,7 @@ export function AssetsPage() {
             <button className="btn-action" onClick={() => setScanOpen(true)}>
               <ScanLine size={12} /> Scan
             </button>
-            <button className="btn-action btn-action--primary" onClick={openGlobalAssetCreate}>
+            <button className="btn-action btn-action--primary" onClick={() => openGlobalAssetCreate()}>
               <Plus size={12} /> New asset
             </button>
           </div>
@@ -409,46 +424,78 @@ export function AssetsPage() {
         </div>
       )}
 
-      {showMetadataWarning ? (
-        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="asset" />
-      ) : tableData.objectMetadata ? (
-        <RecordTableScope
-          tableId="assets"
-          objectMetadata={tableData.objectMetadata}
-          hydratedView={tableData.hydratedView}
-          records={records}
-          onRecordClick={(recordId) => navigate(`/app/assets/${recordId}`)}
-        >
-          <RecordTableViewToolbar
-            societyId={society._id}
-            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
-            icon={<Package size={14} />}
-            label="All inventory"
-            views={tableData.views}
-            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
-            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
-            onOpenFilter={() => setFilterOpen((x) => !x)}
+      <div className="asset-mobile-register">
+        <div className="asset-mobile-register__toolbar">
+          <input
+            className="input"
+            type="search"
+            aria-label="Search mobile asset register"
+            placeholder="Search assets…"
+            value={mobileQuery}
+            onChange={(event) => setMobileQuery(event.target.value)}
           />
-          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
-          <RecordTableFilterChips />
-          <RecordTable
-            loading={tableData.loading || assets === undefined}
-            renderCell={({ record: row, field }) => {
-              if (field.name === "assetTag") return <span className="mono">{row.assetTag}</span>;
-              if (field.name === "name") return <AssetCell row={row} />;
-              if (field.name === "status") return <StatusBadge status={row.status} />;
-              if (field.name === "custodian") return <CustodyCell row={row} />;
-              if (field.name === "location") return <span>{row.location}</span>;
-              if (field.name === "quantityOnHand") return row.category === "Consumable" ? <span className="mono">{formatQuantity(row.quantityOnHand, row.quantityUnit)}</span> : <span className="muted">—</span>;
-              if (field.name === "value") return <ValueCell row={row} />;
-              if (field.name === "nextMaintenanceDate") return <DueDate date={row.nextMaintenanceDate} />;
-              if (field.name === "purchaseEvidence") return <EvidenceCell row={row} documents={documents ?? []} transactions={transactions ?? []} />;
-              return undefined;
-            }}
-            rowMenuSections={assetMenuSections}
-          />
-        </RecordTableScope>
-      ) : null}
+          <span className="muted">{mobileRows.length} of {rows.length}</span>
+        </div>
+        <div className="asset-mobile-list">
+          {mobileRows.map((row) => (
+            <AssetMobileCard
+              key={row._id}
+              row={row}
+              documents={documents ?? []}
+              transactions={transactions ?? []}
+              onOpen={() => navigate(`/app/assets/${row._id}`)}
+              onEdit={() => openEdit(row)}
+              onAddStock={() => openStockIntake(row)}
+            />
+          ))}
+          {assets !== undefined && mobileRows.length === 0 && (
+            <div className="asset-mobile-empty">No assets match “{mobileQuery}”.</div>
+          )}
+        </div>
+      </div>
+
+      <div className="asset-desktop-register">
+        {showMetadataWarning ? (
+          <RecordTableMetadataEmpty societyId={society?._id} objectLabel="asset" />
+        ) : tableData.objectMetadata ? (
+          <RecordTableScope
+            tableId="assets"
+            objectMetadata={tableData.objectMetadata}
+            hydratedView={tableData.hydratedView}
+            records={records}
+            onRecordClick={(recordId) => navigate(`/app/assets/${recordId}`)}
+          >
+            <RecordTableViewToolbar
+              societyId={society._id}
+              objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+              icon={<Package size={14} />}
+              label="All inventory"
+              views={tableData.views}
+              currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+              onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+              onOpenFilter={() => setFilterOpen((x) => !x)}
+            />
+            <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+            <RecordTableFilterChips />
+            <RecordTable
+              loading={tableData.loading || assets === undefined}
+              renderCell={({ record: row, field }) => {
+                if (field.name === "assetTag") return <span className="mono">{row.assetTag}</span>;
+                if (field.name === "name") return <AssetCell row={row} />;
+                if (field.name === "status") return <StatusBadge status={row.status} />;
+                if (field.name === "custodian") return <CustodyCell row={row} />;
+                if (field.name === "location") return <span>{row.location}</span>;
+                if (field.name === "quantityOnHand") return row.category === "Consumable" ? <span className="mono">{formatQuantity(row.quantityOnHand, row.quantityUnit)}</span> : <span className="muted">—</span>;
+                if (field.name === "value") return <ValueCell row={row} />;
+                if (field.name === "nextMaintenanceDate") return <DueDate date={row.nextMaintenanceDate} />;
+                if (field.name === "purchaseEvidence") return <EvidenceCell row={row} documents={documents ?? []} transactions={transactions ?? []} />;
+                return undefined;
+              }}
+              rowMenuSections={assetMenuSections}
+            />
+          </RecordTableScope>
+        ) : null}
+      </div>
 
       <Drawer
         open={drawer === "edit"}
@@ -743,6 +790,7 @@ export function AssetDetailPage() {
         />
 
         {activeTab === "overview" && (
+          <>
           <section className="panel">
             <div className="panel__head"><h2>Register</h2>{!asset.imageUrl && <StatusBadge status={asset.status} />}</div>
             {asset.imageUrl ? (
@@ -759,14 +807,23 @@ export function AssetDetailPage() {
               <div><dt>Location</dt><dd>{asset.location || "—"}</dd></div>
               <div><dt>Responsible person</dt><dd>{asset.responsiblePersonName || "—"}</dd></div>
               <div><dt>Custodian</dt><dd>{asset.custodianName || "—"}</dd></div>
+            </dl>
+          </section>
+          <section className="panel">
+            <div className="panel__head">
+              <h2>Purchase &amp; accounting</h2>
+              <Link className="btn btn--ghost btn--sm" to="/app/financials?tab=transactions"><Link2 size={12} /> Transactions</Link>
+            </div>
+            <dl className="record-kv">
               <div><dt>Supplier</dt><dd>{asset.supplier || "—"}</dd></div>
               <div><dt>Purchase date</dt><dd>{formatDate(asset.purchaseDate)}</dd></div>
               <div><dt>Purchase value</dt><dd>{money(asset.purchaseValueCents, asset.currency)}</dd></div>
               <div><dt>Book value</dt><dd>{money(asset.bookValueCents, asset.currency)}</dd></div>
-              <div><dt>Receipt</dt><dd>{receiptDocument ? <Link to={`/app/documents/${receiptDocument._id}`}>{receiptDocument.title}</Link> : "—"}</dd></div>
-              <div><dt>Purchase transaction</dt><dd>{purchaseTransaction ? `${formatDate(purchaseTransaction.date)} · ${purchaseTransaction.description} · ${money(Math.abs(purchaseTransaction.amountCents), asset.currency)}` : "—"}</dd></div>
+              <div><dt>Receipt or invoice</dt><dd>{receiptDocument ? <Link to={`/app/documents/${receiptDocument._id}`}>{receiptDocument.title}</Link> : "—"}</dd></div>
+              <div><dt>Accounting purchase</dt><dd>{purchaseTransaction ? <Link to={`/app/financials?tab=transactions&transaction=${purchaseTransaction._id}`}>{formatDate(purchaseTransaction.date)} · {purchaseTransaction.description} · {money(Math.abs(purchaseTransaction.amountCents), asset.currency)}</Link> : "—"}</dd></div>
             </dl>
           </section>
+          </>
         )}
 
         {activeTab === "maintenance" && (
@@ -1005,10 +1062,9 @@ function ReceiptLineLinkForm({
 }) {
   const receiptDocuments = documents.filter((doc) =>
     doc.category === "Receipt" ||
-    doc.category === "FinancialStatement" ||
-    (doc.tags ?? []).some((tag: string) => /receipt|invoice|finance/i.test(tag)),
+    (doc.tags ?? []).some((tag: string) => /receipt|invoice/i.test(tag)),
   );
-  const purchaseTransactions = transactions.filter((txn) => txn.amountCents < 0);
+  const purchaseTransactions = transactions.filter(isAssetPurchaseTransaction);
   return (
     <div className="form-grid">
       <Field label="Receipt document" required>
@@ -1121,6 +1177,55 @@ function Select({
   );
 }
 
+function AssetMobileCard({
+  row,
+  documents,
+  transactions,
+  onOpen,
+  onEdit,
+  onAddStock,
+}: {
+  row: any;
+  documents: any[];
+  transactions: any[];
+  onOpen: () => void;
+  onEdit: () => void;
+  onAddStock: () => void;
+}) {
+  const hasPurchaseEvidence = Boolean(row.receiptDocumentId || row.purchaseTransactionId);
+  return (
+    <article className="asset-mobile-card">
+      <div className="asset-mobile-card__head">
+        <button className="asset-mobile-card__title" onClick={onOpen}>
+          <span className="mono">{row.assetTag}</span>
+          <strong>{row.name}</strong>
+          <span>{[row.category, row.serialNumber].filter(Boolean).join(" · ")}</span>
+        </button>
+        <StatusBadge status={row.status} />
+      </div>
+      <dl className="asset-mobile-card__facts">
+        <div><dt>Location</dt><dd>{row.location || "Not set"}</dd></div>
+        <div><dt>Custody</dt><dd>{row.custodianName || "Unassigned"}</dd></div>
+        <div>
+          <dt>{row.category === "Consumable" ? "On hand" : "Value"}</dt>
+          <dd>{row.category === "Consumable" ? formatQuantity(row.quantityOnHand, row.quantityUnit) : money(row.bookValueCents ?? row.purchaseValueCents, row.currency)}</dd>
+        </div>
+        <div><dt>Purchase</dt><dd className={hasPurchaseEvidence ? "" : "muted"}>{hasPurchaseEvidence ? "Linked" : "Not linked"}</dd></div>
+      </dl>
+      {hasPurchaseEvidence && (
+        <div className="asset-mobile-card__evidence">
+          <EvidenceCell row={row} documents={documents} transactions={transactions} />
+        </div>
+      )}
+      <div className="asset-mobile-card__actions">
+        <button className="btn btn--accent btn--sm" onClick={onOpen}>Open</button>
+        <button className="btn btn--sm" onClick={onEdit}><Pencil size={12} /> Edit</button>
+        {row.category === "Consumable" && <button className="btn btn--sm" onClick={onAddStock}><Plus size={12} /> Add stock</button>}
+      </div>
+    </article>
+  );
+}
+
 function AssetCell({ row }: { row: any }) {
   return (
     <div className="row" style={{ gap: 10, alignItems: "center", flexWrap: "nowrap" }}>
@@ -1163,8 +1268,8 @@ function EvidenceCell({ row, documents, transactions }: { row: any; documents: a
   if (!doc && !txn) return <span className="muted">No receipt linked</span>;
   return (
     <div>
-      {doc ? <Link to={`/app/documents/${doc._id}`}>{doc.title}</Link> : <span className="muted">No receipt document</span>}
-      {txn && <div className="muted">{formatDate(txn.date)} · {txn.description}</div>}
+      {doc ? <Link to={`/app/documents/${doc._id}`}>{doc.title}</Link> : txn ? <span className="muted">Accounting purchase linked</span> : null}
+      {txn && <div><Link className="muted" to={`/app/financials?tab=transactions&transaction=${txn._id}`}>{formatDate(txn.date)} · {txn.description}</Link></div>}
     </div>
   );
 }

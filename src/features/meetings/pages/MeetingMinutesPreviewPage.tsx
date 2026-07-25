@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -12,11 +12,12 @@ import { formatDate } from "../../../lib/format";
 import { exportWordDocx } from "../../../lib/docx";
 import { exportPdfDownload, printPdfDocument } from "../../../lib/pdf";
 import { renderMinutesHtml } from "../lib/minutesRenderer";
-import { minutesMotionsForDisplay } from "../../../../shared/minutesMotions";
+import { minutesMotionsForDisplay, motionRowToEmbedded } from "../../../../shared/minutesMotions";
 import { MinutesDocumentPreview } from "../components/MinutesDocumentPreview";
 import { getQuorumSnapshot, personLinkCandidates } from "../components/MeetingDetailSupport";
 import { motionPersonDisplayName } from "../../../components/MotionEditor";
-import { agendaEntriesFromRecord } from "../lib/meetingDetailHelpers";
+import { agendaEntriesFromRecord, formalMinutesExportBlockers } from "../lib/meetingDetailHelpers";
+import { useToast } from "../../../components/Toast";
 import { readStoredAgendaNumberingMode } from "../lib/agendaNumbering";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "../lib/minutesExportStyles";
 import {
@@ -30,6 +31,14 @@ export function MeetingMinutesPreviewPage() {
   const society = useSociety();
   const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const liveMotionRows = useQuery(api.motions.listForMinutes, minutes ? { minutesId: minutes._id } : "skip");
+  const displayMotions = useMemo(() => {
+    if (!minutes) return [] as any[];
+    if (minutes.approvedAt || Array.isArray(minutes.motionSnapshots)) return minutesMotionsForDisplay(minutes) as any[];
+    return liveMotionRows === undefined
+      ? minutesMotionsForDisplay(minutes) as any[]
+      : (liveMotionRows as any[]).map(motionRowToEmbedded);
+  }, [minutes, liveMotionRows]);
   const agendaRecord = useQuery(api.agendas.getForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   // Needed to resolve ID-linked movers/seconders to display names, so this
   // page's exports match the meeting-detail Export tab output.
@@ -42,6 +51,7 @@ export function MeetingMinutesPreviewPage() {
   const [includeApprovalInExport, setIncludeApprovalInExport] = useState(() => readStoredExportBool("includeApproval", true));
   const [includeSignaturesInExport, setIncludeSignaturesInExport] = useState(() => readStoredExportBool("includeSignatures", true));
   const [includePlaceholdersInExport, setIncludePlaceholdersInExport] = useState(() => readStoredExportBool("includePlaceholders", false));
+  const toast = useToast();
 
   useEffect(() => {
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}style`, minutesExportStyle);
@@ -81,6 +91,12 @@ export function MeetingMinutesPreviewPage() {
   const selectedMinutesExportStyle =
     MINUTES_EXPORT_STYLES.find((style) => style.id === minutesExportStyle) ??
     MINUTES_EXPORT_STYLES[0];
+  const formalExportBlockers = formalMinutesExportBlockers({
+    meeting,
+    minutes,
+    agendaItemCount: agendaTree.length,
+    motions: displayMotions,
+  });
 
   const bodyHtml = renderMinutesHtml({
     society: {
@@ -115,7 +131,7 @@ export function MeetingMinutesPreviewPage() {
       quorumSourceLabel: quorumSnapshot.label,
       discussion: minutes.discussion,
       sections: minutes.sections ?? null,
-      motions: minutesMotionsForDisplay(minutes).map((m: any) => ({
+      motions: displayMotions.map((m: any) => ({
         ...m,
         movedBy: motionPersonDisplayName(m.movedBy, motionPeople, { memberId: m.movedByMemberId, directorId: m.movedByDirectorId }),
         secondedBy: motionPersonDisplayName(m.secondedBy, motionPeople, { memberId: m.secondedByMemberId, directorId: m.secondedByDirectorId }),
@@ -146,6 +162,10 @@ export function MeetingMinutesPreviewPage() {
   });
 
   const exportPreviewToWord = () => {
+    if (formalExportBlockers.length) {
+      toast.error("Final minutes export is blocked", formalExportBlockers.join(" "));
+      return;
+    }
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
     void exportWordDocx({
       filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.docx`,
@@ -155,6 +175,10 @@ export function MeetingMinutesPreviewPage() {
   };
 
   const exportPreviewToPdf = async () => {
+    if (formalExportBlockers.length) {
+      toast.error("Final minutes export is blocked", formalExportBlockers.join(" "));
+      return;
+    }
     const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
     await exportPdfDownload({
       filename: `${safe}-minutes-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.pdf`,
@@ -164,6 +188,10 @@ export function MeetingMinutesPreviewPage() {
   };
 
   const printPreview = async () => {
+    if (formalExportBlockers.length) {
+      toast.error("Final minutes export is blocked", formalExportBlockers.join(" "));
+      return;
+    }
     await printPdfDocument({
       title: `${meeting.title} - Minutes`,
       bodyHtml,
@@ -182,13 +210,13 @@ export function MeetingMinutesPreviewPage() {
         </div>
         <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
           <button className="btn-action" onClick={() => window.close()}>Close page</button>
-          <button className="btn-action btn-action--primary" onClick={exportPreviewToWord}>
+          <button className="btn-action btn-action--primary" onClick={exportPreviewToWord} disabled={formalExportBlockers.length > 0}>
             <FileDown size={12} /> Export Word
           </button>
-          <button className="btn-action" onClick={exportPreviewToPdf}>
+          <button className="btn-action" onClick={exportPreviewToPdf} disabled={formalExportBlockers.length > 0}>
             <FileDown size={12} /> Download PDF
           </button>
-          <button className="btn-action" onClick={printPreview}>
+          <button className="btn-action" onClick={printPreview} disabled={formalExportBlockers.length > 0}>
             <Printer size={12} /> Print
           </button>
         </div>
@@ -196,6 +224,15 @@ export function MeetingMinutesPreviewPage() {
 
       <div className="meeting-preview-page__layout">
         <aside className="meeting-preview-page__settings">
+          {formalExportBlockers.length > 0 && (
+            <div className="callout callout--warn" role="status">
+              <strong>Final export blocked</strong>
+              <ul style={{ margin: "6px 0 0 18px" }}>
+                {formalExportBlockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+              </ul>
+              <div style={{ marginTop: 6 }}>You can still review this preview.</div>
+            </div>
+          )}
           <Field label="Style">
             <Select
               value={minutesExportStyle}

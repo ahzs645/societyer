@@ -357,6 +357,8 @@ export async function markOpenedPortable(
     societyId: document.societyId,
     actor: actorName ?? "You",
     entityType: "document",
+    subjectId: id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: id,
     action: "opened",
     summary: `Opened ${document.title}`,
@@ -376,6 +378,8 @@ export async function updateReviewStatusPortable(
     societyId: document.societyId,
     actor: actorName ?? "You",
     entityType: "document",
+    subjectId: id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: id,
     action: "review-status",
     summary: `Marked ${document.title} ${reviewStatus ? reviewStatus.replace(/_/g, " ") : "not reviewed"}`,
@@ -434,7 +438,9 @@ export async function reviewQueuesPortable(
   const signatureCounts = new Map<string, number>();
   for (const signature of signatures) {
     if (signature.entityType !== "document") continue;
-    signatureCounts.set(signature.entityId, (signatureCounts.get(signature.entityId) ?? 0) + 1);
+    const subjectId = signature.subjectId ?? signature.entityId;
+    if (!subjectId) continue;
+    signatureCounts.set(subjectId, (signatureCounts.get(subjectId) ?? 0) + 1);
   }
   const materialDocIds = new Set(materials.map((row) => String(row.documentId)));
 
@@ -538,6 +544,8 @@ export async function createPipaPolicyDraftPortable(
     societyId,
     actor: "Societyer",
     entityType: "document",
+    subjectId: documentId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: documentId,
     action: "document-created",
     summary: "Created a draft PIPA privacy policy from the Societyer starter template.",
@@ -574,6 +582,8 @@ export async function rebuildPipaPolicyDraftFromSocietyPortable(
     societyId: document.societyId,
     actor: "Societyer",
     entityType: "document",
+    subjectId: id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: id,
     action: "document-updated",
     summary: `Rebuilt ${title} from the current society details.`,
@@ -610,6 +620,8 @@ export async function createMemberDataGapMemoDraftPortable(
     societyId,
     actor: "Societyer",
     entityType: "document",
+    subjectId: documentId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: documentId,
     action: "document-created",
     summary: "Created a draft member-data access gap memo from the Societyer starter template.",
@@ -636,6 +648,8 @@ export async function updateDraftContentPortable(
     societyId: document.societyId,
     actor: "Societyer",
     entityType: "document",
+    subjectId: args.id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: args.id,
     action: "document-updated",
     summary: `Updated ${args.title.trim() || document.title}.`,
@@ -664,6 +678,8 @@ export async function linkPrivacyPolicyEvidencePortable(
     societyId,
     actor: "Societyer",
     entityType: "society",
+    subjectId: societyId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: societyId,
     action: "privacy-policy-linked",
     summary: `Linked ${document.title} as PIPA policy evidence.`,
@@ -762,6 +778,8 @@ export async function createGovernanceDocumentFromLocalFilePortable(
     societyId: args.societyId,
     actor: uploader?.displayName ?? "BC Registry connector",
     entityType: "document",
+    subjectId: documentId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: documentId,
     action: "document-imported",
     summary: `Imported ${args.title} from BC Registry.`,
@@ -854,6 +872,8 @@ export async function createLocalDocumentFromConnectorPortable(
     societyId: args.societyId,
     actor: uploader?.displayName ?? "Browser connector",
     entityType: "document",
+    subjectId: documentId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: documentId,
     action: "document-imported",
     summary: `Imported ${args.title} from browser connector export.`,
@@ -975,6 +995,8 @@ async function refreshGenericPipaPolicyDraft(ctx: PortableMutationCtx, document:
     societyId: document.societyId,
     actor: "Societyer",
     entityType: "document",
+    subjectId: document._id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: document._id,
     action: "document-updated",
     summary: `Filled ${title} with current society details.`,

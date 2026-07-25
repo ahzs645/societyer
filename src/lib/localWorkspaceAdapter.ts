@@ -21,15 +21,23 @@ export function createLocalWorkspaceAdapter(): LocalWorkspaceAdapter {
 
 function createLocalClient(runtime: RuntimeDescriptor) {
   if (runtime.mode === "electron-local" && !isStaticDemoRuntime()) {
-    return new DexieWorkspaceClient({ databaseName: localWorkspaceDatabaseName(runtime, "workspace") });
+    const workspaceId = localWorkspaceId(runtime, "workspace");
+    return new DexieWorkspaceClient({
+      databaseName: `societyer-local-${workspaceId}`,
+      workspaceId,
+    });
   }
   return new StaticConvexClient({ databaseName: localWorkspaceDatabaseName(runtime, "demo") });
 }
 
 function localWorkspaceDatabaseName(runtime: RuntimeDescriptor, seedMode: "demo" | "workspace") {
+  return `societyer-local-${localWorkspaceId(runtime, seedMode)}`;
+}
+
+function localWorkspaceId(runtime: RuntimeDescriptor, seedMode: "demo" | "workspace") {
   const configured = import.meta.env.VITE_LOCAL_WORKSPACE_ID as string | undefined;
   const rawKey = configured || `${runtime.mode}-${runtime.documentStorage}-${seedMode}`;
-  return `societyer-local-${slugifyLocalWorkspaceKey(rawKey)}`;
+  return slugifyLocalWorkspaceKey(rawKey);
 }
 
 function slugifyLocalWorkspaceKey(value: string) {

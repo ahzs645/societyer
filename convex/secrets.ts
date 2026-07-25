@@ -110,6 +110,8 @@ async function logActivity(ctx: any, row: any, actorName: string, action: string
     societyId: row.societyId,
     actor: actorName,
     entityType: "secretVaultItem",
+    subjectId: String(row._id),
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: String(row._id),
     action,
     summary,
@@ -120,7 +122,7 @@ async function logActivity(ctx: any, row: any, actorName: string, action: string
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -275,5 +277,5 @@ export const _revealForServer = internalQuery({
 export const remove = mutation({
   args: { id: v.id("secretVaultItems"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

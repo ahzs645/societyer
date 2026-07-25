@@ -11,7 +11,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /**
@@ -23,7 +23,7 @@ export const list = query({
 export const listAsOf = query({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => listAsOfPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listAsOfPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -38,7 +38,7 @@ export const upsert = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
@@ -48,5 +48,5 @@ export const remove = mutation({
     subjectId: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

@@ -25,6 +25,46 @@
 
 import type { PortableCapabilities } from "./capabilities";
 
+export type RuntimeKind =
+  | "convex-hosted"
+  | "browser-local"
+  | "electron-local"
+  | "test";
+
+/**
+ * Runtime-derived caller identity. This deliberately carries neither raw
+ * credentials nor authorization roles; roles are always resolved from the
+ * current application user row.
+ */
+export type PortablePrincipal =
+  | {
+      kind: "anonymous";
+      runtime: RuntimeKind;
+      assurance: "none";
+    }
+  | {
+      kind: "user";
+      runtime: RuntimeKind;
+      assurance: "verified-jwt" | "trusted-workspace";
+      subject: string;
+      issuer?: string;
+      tokenIdentifier?: string;
+      email?: string;
+      emailVerified?: boolean;
+      userId?: string;
+      societyId?: string;
+    }
+  | {
+      kind: "service";
+      runtime: RuntimeKind;
+      assurance: "verified-jwt" | "trusted-internal";
+      subject: string;
+      societyId?: string;
+      actorUserId?: string;
+      clientId?: string;
+      scopes: readonly string[];
+    };
+
 /** A stored document. Every row has a string `_id`; most carry `societyId`. */
 export type PortableDoc = Record<string, any> & {
   _id: string;
@@ -106,6 +146,7 @@ export interface TransactionalDb extends PortableDbWriter {
 export interface PortableQueryCtx {
   db: PortableDbReader;
   capabilities: PortableCapabilities;
+  principal: PortablePrincipal;
   runQuery: <Result = unknown>(name: string, args?: Record<string, any>) => Promise<Result>;
 }
 
@@ -113,6 +154,7 @@ export interface PortableQueryCtx {
 export interface PortableMutationCtx {
   db: PortableDbWriter;
   capabilities: PortableCapabilities;
+  principal: PortablePrincipal;
   runQuery: <Result = unknown>(name: string, args?: Record<string, any>) => Promise<Result>;
   runMutation: <Result = unknown>(name: string, args?: Record<string, any>) => Promise<Result>;
 }

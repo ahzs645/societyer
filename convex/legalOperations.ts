@@ -57,7 +57,7 @@ import {
 export const listRoleHolders = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listRoleHoldersPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listRoleHoldersPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertRoleHolder = mutation({
@@ -123,13 +123,13 @@ export const upsertRoleHolder = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertRoleHolderPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertRoleHolderPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeRoleHolder = mutation({
   args: { id: v.id("roleHolders"), actorUserId: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args) => removeRoleHolderPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeRoleHolderPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const rightsLedger = query({
@@ -138,7 +138,7 @@ export const rightsLedger = query({
   // register. Omitted = live state from the stored holdings.
   args: { societyId: v.id("societies"), asOf: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args) => rightsLedgerPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => rightsLedgerPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /**
@@ -156,8 +156,8 @@ export const votingPower = query({
   // runtime. The marshalling that used to be hand-copied into the static mirror
   // now lives once in shared/functions/votingPower.ts.
   // See docs/portable-functions-architecture.md.
-  handler: (ctx, { societyId, asOf }) =>
-    votingPowerPortable(toPortableQueryCtx(ctx), { societyId, asOf }),
+  handler: async (ctx, { societyId, asOf }) =>
+    votingPowerPortable(await toPortableQueryCtx(ctx), { societyId, asOf }),
 });
 
 export const upsertRightsClass = mutation({
@@ -184,7 +184,7 @@ export const upsertRightsClass = mutation({
   returns: v.any(),
   // Portable handler: the same insert/patch runs on the local runtime and the
   // convex-test oracle. See shared/functions/rightsClasses.ts.
-  handler: (ctx, args) => upsertRightsClassPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertRightsClassPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertRightsholdingTransfer = mutation({
@@ -215,43 +215,43 @@ export const upsertRightsholdingTransfer = mutation({
   returns: v.any(),
   // Portable handler: validate-ledger + multi-row syncRightsHoldings runs on the
   // local runtime (inside one atomic transaction) and convex-test alike.
-  handler: (ctx, args) => upsertRightsholdingTransferPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertRightsholdingTransferPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeRightsClass = mutation({
   args: { id: v.id("rightsClasses") },
   returns: v.any(),
-  handler: (ctx, args) => removeRightsClassPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeRightsClassPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeRightsholdingTransfer = mutation({
   args: { id: v.id("rightsholdingTransfers") },
   returns: v.any(),
-  handler: (ctx, args) => removeRightsholdingTransferPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeRightsholdingTransferPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const templateEngine = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => templateEnginePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => templateEnginePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const seedStarterPolicyTemplates = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => seedStarterPolicyTemplatesPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => seedStarterPolicyTemplatesPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const seedCorporationDocumentPackets = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => seedCorporationDocumentPacketsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => seedCorporationDocumentPacketsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const seedSocietyDocumentPackets = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => seedSocietyDocumentPacketsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => seedSocietyDocumentPacketsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 /**
@@ -267,7 +267,7 @@ export const generateDocumentFromCatalog = mutation({
     effectiveDate: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => generateDocumentFromCatalogPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => generateDocumentFromCatalogPortable(await toPortableMutationCtx(ctx), args),
 });
 
 /**
@@ -280,7 +280,7 @@ export async function generatePacketForSociety(
   ctx: any,
   args: { societyId: any; packetKey: string; effectiveDate?: string },
 ): Promise<any> {
-  return generatePacketForSocietyPortable(toPortableMutationCtx(ctx), args);
+  return generatePacketForSocietyPortable(await toPortableMutationCtx(ctx), args);
 }
 
 /**
@@ -291,7 +291,7 @@ export async function generatePacketForSociety(
 export const seedDocumentPacketsForEntity = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, { societyId }) => seedDocumentPacketsForEntityPortable(toPortableMutationCtx(ctx), societyId),
+  handler: async (ctx, { societyId }) => seedDocumentPacketsForEntityPortable(await toPortableMutationCtx(ctx), societyId),
 });
 
 /**
@@ -301,7 +301,7 @@ export const seedDocumentPacketsForEntity = mutation({
  * portable kernel so external callers pass a raw Convex ctx.
  */
 export async function seedDocumentPacketsForEntityHelper(ctx: any, societyId: any) {
-  return seedDocumentPacketsForEntityPortable(toPortableMutationCtx(ctx), societyId);
+  return seedDocumentPacketsForEntityPortable(await toPortableMutationCtx(ctx), societyId);
 }
 
 export const stageCorporationDocumentPacket = mutation({
@@ -318,7 +318,7 @@ export const stageCorporationDocumentPacket = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => stageCorporationDocumentPacketPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => stageCorporationDocumentPacketPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const stageShareIssuancePacket = mutation({
@@ -328,7 +328,7 @@ export const stageShareIssuancePacket = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => stageShareIssuancePacketPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => stageShareIssuancePacketPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const stageShareSplitPacket = mutation({
@@ -340,7 +340,7 @@ export const stageShareSplitPacket = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => stageShareSplitPacketPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => stageShareSplitPacketPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertTemplateDataField = mutation({
@@ -358,7 +358,7 @@ export const upsertTemplateDataField = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertTemplateDataFieldPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertTemplateDataFieldPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertLegalTemplate = mutation({
@@ -394,7 +394,7 @@ export const upsertLegalTemplate = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertLegalTemplatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertLegalTemplatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertLegalPrecedent = mutation({
@@ -424,7 +424,7 @@ export const upsertLegalPrecedent = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertLegalPrecedentPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertLegalPrecedentPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertLegalPrecedentRun = mutation({
@@ -452,7 +452,7 @@ export const upsertLegalPrecedentRun = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertLegalPrecedentRunPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertLegalPrecedentRunPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertGeneratedLegalDocument = mutation({
@@ -484,7 +484,7 @@ export const upsertGeneratedLegalDocument = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertGeneratedLegalDocumentPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertGeneratedLegalDocumentPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertLegalSigner = mutation({
@@ -506,49 +506,49 @@ export const upsertLegalSigner = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertLegalSignerPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertLegalSignerPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeTemplateDataField = mutation({
   args: { id: v.id("legalTemplateDataFields") },
   returns: v.any(),
-  handler: (ctx, args) => removeTemplateDataFieldPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeTemplateDataFieldPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeLegalTemplate = mutation({
   args: { id: v.id("legalTemplates") },
   returns: v.any(),
-  handler: (ctx, args) => removeLegalTemplatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeLegalTemplatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeLegalPrecedent = mutation({
   args: { id: v.id("legalPrecedents") },
   returns: v.any(),
-  handler: (ctx, args) => removeLegalPrecedentPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeLegalPrecedentPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeLegalPrecedentRun = mutation({
   args: { id: v.id("legalPrecedentRuns") },
   returns: v.any(),
-  handler: (ctx, args) => removeLegalPrecedentRunPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeLegalPrecedentRunPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeGeneratedLegalDocument = mutation({
   args: { id: v.id("generatedLegalDocuments") },
   returns: v.any(),
-  handler: (ctx, args) => removeGeneratedLegalDocumentPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeGeneratedLegalDocumentPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeLegalSigner = mutation({
   args: { id: v.id("legalSigners") },
   returns: v.any(),
-  handler: (ctx, args) => removeLegalSignerPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeLegalSignerPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const formationMaintenance = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => formationMaintenancePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => formationMaintenancePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertFormationRecord = mutation({
@@ -581,7 +581,7 @@ export const upsertFormationRecord = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertFormationRecordPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertFormationRecordPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertNameSearchItem = mutation({
@@ -604,7 +604,7 @@ export const upsertNameSearchItem = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertNameSearchItemPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertNameSearchItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertEntityAmendment = mutation({
@@ -624,7 +624,7 @@ export const upsertEntityAmendment = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertEntityAmendmentPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertEntityAmendmentPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertAnnualMaintenanceRecord = mutation({
@@ -659,7 +659,7 @@ export const upsertAnnualMaintenanceRecord = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertAnnualMaintenanceRecordPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertAnnualMaintenanceRecordPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertJurisdictionMetadata = mutation({
@@ -675,7 +675,7 @@ export const upsertJurisdictionMetadata = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertJurisdictionMetadataPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertJurisdictionMetadataPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertSupportLog = mutation({
@@ -700,41 +700,41 @@ export const upsertSupportLog = mutation({
     createdAtISO: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertSupportLogPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertSupportLogPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeFormationRecord = mutation({
   args: { id: v.id("formationRecords") },
   returns: v.any(),
-  handler: (ctx, args) => removeFormationRecordPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeFormationRecordPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeNameSearchItem = mutation({
   args: { id: v.id("nameSearchItems") },
   returns: v.any(),
-  handler: (ctx, args) => removeNameSearchItemPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeNameSearchItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeEntityAmendment = mutation({
   args: { id: v.id("entityAmendments") },
   returns: v.any(),
-  handler: (ctx, args) => removeEntityAmendmentPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeEntityAmendmentPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeAnnualMaintenanceRecord = mutation({
   args: { id: v.id("annualMaintenanceRecords") },
   returns: v.any(),
-  handler: (ctx, args) => removeAnnualMaintenanceRecordPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeAnnualMaintenanceRecordPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeJurisdictionMetadata = mutation({
   args: { id: v.id("jurisdictionMetadata") },
   returns: v.any(),
-  handler: (ctx, args) => removeJurisdictionMetadataPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeJurisdictionMetadataPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeSupportLog = mutation({
   args: { id: v.id("supportLogs") },
   returns: v.any(),
-  handler: (ctx, args) => removeSupportLogPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeSupportLogPortable(await toPortableMutationCtx(ctx), args),
 });

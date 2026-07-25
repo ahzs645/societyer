@@ -12,13 +12,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => conflictsListPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => conflictsListPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const forMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => conflictsForMeetingPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => conflictsForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -36,17 +36,17 @@ export const create = mutation({
     motionText: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => conflictsCreatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => conflictsCreatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const resolve = mutation({
   args: { id: v.id("conflicts"), resolvedAt: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => conflictsResolvePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => conflictsResolvePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("conflicts") },
   returns: v.any(),
-  handler: (ctx, args) => conflictsRemovePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => conflictsRemovePortable(await toPortableMutationCtx(ctx), args),
 });

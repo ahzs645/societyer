@@ -250,6 +250,8 @@ export async function importBcRegistryHistoryPortable(
       societyId: args.societyId,
       actor: "BC Registry connector",
       entityType: "filing",
+      subjectId: args.societyId,
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: args.societyId,
       action: "filings-imported",
       summary: `Imported BC Registry filing history: ${inserted} created, ${updated} updated.`,

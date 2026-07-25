@@ -33,7 +33,7 @@ export function NotesPanel({
   const confirm = useConfirm();
   const notes = useQuery(
     api.notes.listForRecord,
-    society ? { societyId: society._id, entityType, entityId } : "skip",
+    society ? { societyId: society._id, entityType, subjectId: entityId } : "skip",
   ) as Note[] | undefined;
   const createNote = useMutation(api.notes.create);
   const updateNote = useMutation(api.notes.update);
@@ -52,7 +52,7 @@ export function NotesPanel({
       await createNote({
         societyId: society._id,
         entityType,
-        entityId,
+        subjectId: entityId,
         author,
         body: draft.trim(),
       });

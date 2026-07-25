@@ -15,6 +15,16 @@ import { RelationFieldDisplay } from "./display/RelationFieldDisplay";
 import { RatingFieldDisplay } from "./display/RatingFieldDisplay";
 import { ArrayFieldDisplay } from "./display/ArrayFieldDisplay";
 import { UuidFieldDisplay } from "./display/UuidFieldDisplay";
+import {
+  AddressFieldDisplay,
+  EmailsFieldDisplay,
+  FilesFieldDisplay,
+  FullNameFieldDisplay,
+  LinksFieldDisplay,
+  PhonesFieldDisplay,
+  RawJsonFieldDisplay,
+  RichTextFieldDisplay,
+} from "./display/StructuredFieldDisplays";
 
 export type FieldDisplayProps = {
   value: unknown;
@@ -44,6 +54,14 @@ const DISPLAY_BY_TYPE: Record<FieldType, DisplayComponent> = {
   [FIELD_TYPES.RATING]: RatingFieldDisplay,
   [FIELD_TYPES.UUID]: UuidFieldDisplay,
   [FIELD_TYPES.ARRAY]: ArrayFieldDisplay,
+  [FIELD_TYPES.ADDRESS]: AddressFieldDisplay,
+  [FIELD_TYPES.FULL_NAME]: FullNameFieldDisplay,
+  [FIELD_TYPES.RICH_TEXT]: RichTextFieldDisplay,
+  [FIELD_TYPES.RAW_JSON]: RawJsonFieldDisplay,
+  [FIELD_TYPES.EMAILS]: EmailsFieldDisplay,
+  [FIELD_TYPES.PHONES]: PhonesFieldDisplay,
+  [FIELD_TYPES.LINKS]: LinksFieldDisplay,
+  [FIELD_TYPES.FILES]: FilesFieldDisplay,
 };
 
 export function FieldDisplay(props: FieldDisplayProps) {

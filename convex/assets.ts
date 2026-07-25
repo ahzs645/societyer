@@ -107,13 +107,13 @@ const eventInput = v.object({
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const get = query({
   args: { id: v.id("assets") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 // Resolve a scanned code to an asset. QR/2D labels encode the asset page URL
@@ -122,43 +122,43 @@ export const get = query({
 export const resolveScan = query({
   args: { societyId: v.id("societies"), code: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => resolveScanPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => resolveScanPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const bundle = query({
   args: { id: v.id("assets") },
   returns: v.any(),
-  handler: (ctx, args) => bundlePortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
+  handler: async (ctx, args) => bundlePortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const receiptLinks = query({
   args: { societyId: v.id("societies"), receiptDocumentId: v.optional(v.id("documents")) },
   returns: v.any(),
-  handler: (ctx, args) => receiptLinksPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => receiptLinksPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const events = query({
   args: { assetId: v.id("assets") },
   returns: v.any(),
-  handler: (ctx, args) => eventsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => eventsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const maintenance = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => maintenancePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => maintenancePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const verificationRuns = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => verificationRunsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => verificationRunsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const verificationItems = query({
   args: { runId: v.id("assetVerificationRuns") },
   returns: v.any(),
-  handler: (ctx, args) => verificationItemsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => verificationItemsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -209,13 +209,13 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
   args: { id: v.id("assets"), patch: assetPatch },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const addConsumableStock = mutation({
@@ -226,7 +226,7 @@ export const addConsumableStock = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => addConsumableStockPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => addConsumableStockPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const linkReceiptLine = mutation({
@@ -247,13 +247,13 @@ export const linkReceiptLine = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => linkReceiptLinePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => linkReceiptLinePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const recordEvent = mutation({
   args: { assetId: v.id("assets"), event: eventInput },
   returns: v.any(),
-  handler: (ctx, args) => recordEventPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => recordEventPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const scheduleMaintenance = mutation({
@@ -266,7 +266,7 @@ export const scheduleMaintenance = mutation({
     createTask: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: (ctx, args) => scheduleMaintenancePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => scheduleMaintenancePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const completeMaintenance = mutation({
@@ -277,7 +277,7 @@ export const completeMaintenance = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => completeMaintenancePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => completeMaintenancePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const startVerificationRun = mutation({
@@ -288,7 +288,7 @@ export const startVerificationRun = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => startVerificationRunPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => startVerificationRunPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const verifyAsset = mutation({
@@ -301,13 +301,13 @@ export const verifyAsset = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => verifyAssetPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => verifyAssetPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const completeVerificationRun = mutation({
   args: { id: v.id("assetVerificationRuns") },
   returns: v.any(),
-  handler: (ctx, args) => completeVerificationRunPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => completeVerificationRunPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const dispose = mutation({
@@ -322,11 +322,11 @@ export const dispose = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => disposePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => disposePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("assets") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

@@ -25,7 +25,7 @@ export const createComplianceReviewTask = mutation({
     dueDate: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createComplianceReviewTaskPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createComplianceReviewTaskPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const createPrivacyReviewTask = mutation({
@@ -35,17 +35,17 @@ export const createPrivacyReviewTask = mutation({
     dueDate: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPrivacyReviewTaskPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPrivacyReviewTaskPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const markPrivacyProgramReviewed = mutation({
   args: remediationArgs,
   returns: v.any(),
-  handler: (ctx, args) => markPrivacyProgramReviewedPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => markPrivacyProgramReviewedPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const markMemberDataAccessReviewed = mutation({
   args: remediationArgs,
   returns: v.any(),
-  handler: (ctx, args) => markMemberDataAccessReviewedPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => markMemberDataAccessReviewedPortable(await toPortableMutationCtx(ctx), args),
 });

@@ -11,15 +11,19 @@ import {
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const listForEntity = query({
-  args: { entityType: v.string(), entityId: v.string() },
+  args: {
+    entityType: v.string(),
+    subjectId: v.optional(v.string()),
+    entityId: v.optional(v.string()),
+  },
   returns: v.any(),
-  handler: (ctx, args) => listForEntityPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listForEntityPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listProfilesForSociety = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listProfilesForSocietyPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listProfilesForSocietyPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const saveProfile = mutation({
@@ -37,14 +41,15 @@ export const saveProfile = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => saveProfilePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => saveProfilePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const sign = mutation({
   args: {
     societyId: v.id("societies"),
     entityType: v.string(),
-    entityId: v.string(),
+    subjectId: v.optional(v.string()),
+    entityId: v.optional(v.string()),
     userId: v.optional(v.id("users")),
     directorId: v.optional(v.id("directors")),
     memberId: v.optional(v.id("members")),
@@ -60,17 +65,17 @@ export const sign = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => signPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => signPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const revoke = mutation({
   args: { id: v.id("signatures"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => revokePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => revokePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const deleteProfile = mutation({
   args: { id: v.id("signatureProfiles"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => deleteProfilePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => deleteProfilePortable(await toPortableMutationCtx(ctx), args),
 });

@@ -14,25 +14,25 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => tasksList(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => tasksList(await toPortableQueryCtx(ctx), args),
 });
 
 export const byCommittee = query({
   args: { committeeId: v.id("committees") },
   returns: v.any(),
-  handler: (ctx, args) => tasksByCommittee(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => tasksByCommittee(await toPortableQueryCtx(ctx), args),
 });
 
 export const byGoal = query({
   args: { goalId: v.id("goals") },
   returns: v.any(),
-  handler: (ctx, args) => tasksByGoal(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => tasksByGoal(await toPortableQueryCtx(ctx), args),
 });
 
 export const byMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => tasksByMeeting(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => tasksByMeeting(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -56,7 +56,7 @@ export const create = mutation({
     tags: v.array(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => taskCreate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => taskCreate(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -88,11 +88,11 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => taskUpdate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => taskUpdate(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("tasks") },
   returns: v.any(),
-  handler: (ctx, args) => taskRemove(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => taskRemove(await toPortableMutationCtx(ctx), args),
 });

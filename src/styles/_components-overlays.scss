@@ -123,6 +123,33 @@
   from { opacity: 0; transform: translateY(-2px); }
   to { opacity: 1; transform: translateY(0); }
 }
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: calc(token('z-dropdown') - 1);
+  background: token('bg-overlay-scrim');
+  animation: fadeIn 0.12s ease-out;
+}
+.menu.menu--sheet {
+  box-sizing: border-box;
+  inset: auto 0 0;
+  width: 100%;
+  min-width: 0;
+  max-height: 60vh;
+  max-height: 60dvh;
+  padding: 4px max(4px, env(safe-area-inset-right))
+    calc(4px + env(safe-area-inset-bottom))
+    max(4px, env(safe-area-inset-left));
+  border-radius: token('r-lg') token('r-lg') 0 0;
+  box-shadow: token('shadow-strong');
+  overscroll-behavior-y: contain;
+  overflow: hidden auto;
+  animation-name: menuSheetIn;
+}
+@keyframes menuSheetIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .menu__search {
   @include flex-center;
   gap: 6px;

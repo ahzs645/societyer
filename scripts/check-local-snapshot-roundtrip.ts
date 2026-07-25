@@ -118,7 +118,7 @@ await source.mutation("complianceObligations:markReviewed", {
 
 const snapshot = source.exportLocalWorkspaceSnapshot();
 assert.equal(snapshot.kind, "societyer.localWorkspaceSnapshot");
-assert.equal(snapshot.workspace.schemaVersion, 2);
+assert.equal(snapshot.workspace.schemaVersion, 3);
 assert.ok(snapshot.tables.societies.some((row: any) => row._id === bcWorkspace.societyId), "BC society workspace missing from snapshot");
 assert.ok(snapshot.tables.societies.some((row: any) => row._id === federalWorkspace.societyId), "Federal corporation workspace missing from snapshot");
 assert.ok(snapshot.tables.organizationRegistrations.some((row: any) => row._id === ontarioRegistrationId), "Ontario registration missing from snapshot");
@@ -219,12 +219,32 @@ await legacyImport.importLocalWorkspaceSnapshot({
       incorporationDate: "2019-05-01",
       fiscalYearEnd: "12-31",
     }],
+    activity: [{
+      _id: "legacy_activity_1",
+      _creationTime: Date.parse("2024-01-01T00:00:00.000Z"),
+      societyId: "legacy_society_1",
+      actor: "Legacy user",
+      entityType: "society",
+      entityId: "legacy_society_1",
+      action: "imported",
+      summary: "Imported a legacy activity row.",
+      createdAtISO: "2024-01-01T00:00:00.000Z",
+    }],
   },
   attachments: [],
   changes: [],
 });
 const legacyWorkspaces = await legacyImport.query("society:list", {});
-assert.equal(legacyImport.exportLocalWorkspaceSnapshot().workspace.schemaVersion, 2);
+const migratedLegacySnapshot = legacyImport.exportLocalWorkspaceSnapshot();
+assert.equal(migratedLegacySnapshot.workspace.schemaVersion, 3);
+assert.ok(
+  Object.entries(migratedLegacySnapshot.tables).every(([, rows]) =>
+    rows.every((row: any) => typeof row.entityId === "string" && row.entityId.length > 0),
+  ),
+  "schema v3 migration should mint a durable entityId for every local row",
+);
+assert.equal(migratedLegacySnapshot.tables.activity[0].subjectId, "legacy_society_1");
+assert.equal(migratedLegacySnapshot.tables.activity[0].entityId, "legacy_society_1");
 assert.equal(legacyWorkspaces[0].jurisdictionCode, "CA-BC");
 assert.equal(legacyWorkspaces[0].entityType, "society");
 assert.equal(legacyWorkspaces[0].actFormedUnder, "societies_act");

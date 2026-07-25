@@ -140,6 +140,7 @@ const CustomFieldsPage = React.lazy(() => import("./pages/CustomFields").then((m
 const PublicTransparencyPage = React.lazy(() => import("./pages/PublicTransparency").then((m) => ({ default: m.PublicTransparencyPage })));
 const VolunteerApplyPage = React.lazy(() => import("./pages/VolunteerApply").then((m) => ({ default: m.VolunteerApplyPage })));
 const GrantApplyPage = React.lazy(() => import("./pages/GrantApply").then((m) => ({ default: m.GrantApplyPage })));
+const RecordTableFieldLabPage = React.lazy(() => import("./pages/RecordTableFieldLab").then((m) => ({ default: m.RecordTableFieldLabPage })));
 import "./i18n";
 import "./theme/palette.css";
 import "./theme/tokens.css";
@@ -186,20 +187,27 @@ function PageLoader() {
 
 function AsyncAppProviders() {
   const [convexClient, setConvexClient] = React.useState<ConvexReactClient | null>(null);
+  const [clientLoadFailed, setClientLoadFailed] = React.useState(false);
 
   React.useEffect(() => {
     let active = true;
     const clientPromise = localDataRuntime
       ? import("./lib/localDataClient").then(({ localDataClient }) => localDataClient)
       : import("./lib/convex").then(({ convex }) => convex);
-    clientPromise.then((client) => {
-      if (active) setConvexClient(client as unknown as ConvexReactClient);
-    });
+    clientPromise
+      .then((client) => {
+        if (active) setConvexClient(client as unknown as ConvexReactClient);
+      })
+      .catch((error) => {
+        console.error("[societyer] Failed to load the data client.", error);
+        if (active) setClientLoadFailed(true);
+      });
     return () => {
       active = false;
     };
   }, []);
 
+  if (clientLoadFailed) return <RootErrorFallback />;
   if (!convexClient) return <PageLoader />;
 
   return <AppProviders client={convexClient} />;
@@ -540,6 +548,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             />
             <Route path="outbox" element={<OutboxPage />} />
             <Route path="custom-fields" element={<CustomFieldsPage />} />
+            {staticDemoRuntime && <Route path="table-field-lab" element={<RecordTableFieldLabPage />} />}
             <Route path="settings" element={<SettingsPage />} />
             <Route path="settings/api-keys" element={<ApiKeysPage />} />
             <Route path="webhooks" element={<WebhooksPage />} />

@@ -20,7 +20,7 @@ const statusValidator = v.union(
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -36,19 +36,19 @@ export const create = mutation({
     linkedFilingId: v.optional(v.id("filings")),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const setStatus = mutation({
   args: { id: v.id("deadlines"), status: statusValidator },
   returns: v.any(),
-  handler: (ctx, args) => setStatusPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const toggleDone = mutation({
   args: { id: v.id("deadlines"), done: v.boolean() },
   returns: v.any(),
-  handler: (ctx, args) => toggleDonePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => toggleDonePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -67,17 +67,17 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("deadlines") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const backfillStatus = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => backfillStatusPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => backfillStatusPortable(await toPortableMutationCtx(ctx), args),
 });

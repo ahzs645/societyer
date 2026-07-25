@@ -1,4 +1,4 @@
-import { forwardRef, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 // NOTE: if you're adding another hook to this file, it MUST go above all the
 // early returns (`if (loading) ...`, etc). React's rules of hooks require a
 // stable call order on every render. An earlier iteration had a useMemo
@@ -11,11 +11,11 @@ import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { RecordTableHeader } from "./RecordTableHeader";
 import { RecordTableRow } from "./RecordTableRow";
 import { RecordTableEmpty } from "./RecordTableEmpty";
-import { RecordTableAggregateFooter } from "./RecordTableAggregateFooter";
+import { RecordTableAggregateFooter, RecordTableAggregateFooterRow } from "./RecordTableAggregateFooter";
+import { RecordTableActionRow, RecordTableActionRowCells } from "./RecordTableActionRow";
 import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboardNavigation";
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { getMobileTableLayout } from "../../../../lib/mobileTableLayout";
-import { useScrollEdgeShadows } from "../../../../lib/useScrollEdgeShadows";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { CalendarView } from "../../../../components/CalendarView";
 import { RecordBoard, type RecordBoardColumn } from "../../../../components/RecordBoard";
@@ -30,7 +30,7 @@ import { FIELD_TYPES, type FieldMetadata, type RecordField } from "../../types";
 // would thrash virtuoso's internal keys).
 const VirtuosoTable = forwardRef<HTMLTableElement, React.TableHTMLAttributes<HTMLTableElement>>(
   function VirtuosoTable(props, ref) {
-    return <table ref={ref} {...props} className="record-table" />;
+    return <table ref={ref} {...props} className="record-table" role="grid" />;
   },
 );
 
@@ -48,6 +48,12 @@ const VirtuosoTableBody = forwardRef<HTMLTableSectionElement, React.HTMLAttribut
 
 type RowContextMenuHandler = (event: React.MouseEvent, record: any) => void;
 
+const VIRTUAL_ACTION_ROW = { __recordTableActionRow: true } as const;
+
+function isVirtualActionRow(item: unknown): item is typeof VIRTUAL_ACTION_ROW {
+  return !!item && typeof item === "object" && "__recordTableActionRow" in item;
+}
+
 const VirtuosoTableRow = forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement> & {
@@ -55,19 +61,50 @@ const VirtuosoTableRow = forwardRef<
     context?: { onRowContextMenu?: RowContextMenuHandler };
   }
 >(function VirtuosoTableRow({ item, context, ...props }, ref) {
+  const isActionRow = isVirtualActionRow(item);
   return (
     <tr
       ref={ref}
       {...props}
-      className="record-table__row"
+      className={isActionRow ? "record-table__action-row" : "record-table__row"}
       onContextMenu={
-        context?.onRowContextMenu && item != null
+        context?.onRowContextMenu && item != null && !isActionRow
           ? (event) => context.onRowContextMenu!(event, item)
           : undefined
       }
     />
   );
 });
+
+function trackScrollState(node: HTMLElement, classTarget: HTMLElement) {
+  let isScrolledX = false;
+  let isScrolledY = false;
+
+  const update = () => {
+    const nextScrolledX = node.scrollLeft > 0;
+    const nextScrolledY = node.scrollTop > 0;
+
+    // Sticky layers only need a class mutation when an edge changes state;
+    // avoiding writes on every scroll frame keeps the hot path read-only.
+    if (nextScrolledX !== isScrolledX) {
+      isScrolledX = nextScrolledX;
+      classTarget.classList.toggle("is-scrolled-x", isScrolledX);
+    }
+    if (nextScrolledY !== isScrolledY) {
+      isScrolledY = nextScrolledY;
+      classTarget.classList.toggle("is-scrolled-y", isScrolledY);
+    }
+  };
+
+  update();
+  node.addEventListener("scroll", update, { passive: true });
+
+  return () => {
+    node.removeEventListener("scroll", update);
+    if (isScrolledX) classTarget.classList.remove("is-scrolled-x");
+    if (isScrolledY) classTarget.classList.remove("is-scrolled-y");
+  };
+}
 
 /**
  * Opt-in escape hatch for pages that need a custom cell renderer on
@@ -128,14 +165,18 @@ export function RecordTable({
 }) {
   const columns = useRecordTableState((s) => s.columns);
   const density = useRecordTableState((s) => s.density);
+  const records = useRecordTableState((s) => s.records);
   const focusedCell = useRecordTableState((s) => s.focusedCell);
   const viewType = useRecordTableState((s) => s.type);
   const kanbanFieldMetadataId = useRecordTableState((s) => s.kanbanFieldMetadataId);
   const calendarFieldMetadataId = useRecordTableState((s) => s.calendarFieldMetadataId);
   const filtered = useFilteredRecords();
-  const { objectMetadata, onRecordClick, onUpdate } = useRecordTableContextOrThrow();
+  const { objectMetadata, onRecordClick, onUpdate, onCreate, onReorder } = useRecordTableContextOrThrow();
   const handle = useRecordTableStoreHandle();
+  const getTableState = handle.get;
   const tableRootRef = useRef<HTMLDivElement | null>(null);
+  const scrollCleanupRef = useRef<(() => void) | null>(null);
+  const virtualScrollCleanupRef = useRef<(() => void) | null>(null);
   const virtuosoRef = useRef<TableVirtuosoHandle>(null);
   const [rowContextMenu, setRowContextMenu] = useState<{ x: number; y: number; record: any } | null>(null);
 
@@ -159,26 +200,52 @@ export function RecordTable({
   // record name) sits flush left and can be frozen while the rest of the
   // table scrolls horizontally — the Twenty-style narrow-screen table.
   const isMobile = useIsMobile();
-  // Drag-to-reorder was never wired up (the grip was a decorative <span> with no
-  // handlers), so we don't show a handle that does nothing. The scaffolding
-  // (drag cells/header/footer behind `showDragHandle`) stays in place so real
-  // reorder can be turned back on later by flipping hasDragHandle + wiring it.
   const { showSelectionColumn: effectiveSelectable, showDragHandle } =
-    getMobileTableLayout({ isMobile, selectable, hasDragHandle: false });
-  // In the non-virtualized branch the scroll container is the horizontal
-  // scroller, so these edge flags drive the "there's more →" fade shadows that
-  // keep a frozen-first-column table from looking cut off on a phone. The
-  // scroller node feeds both `tableRootRef` (used for focus/outside-click
-  // queries) and the shadow hook's callback ref.
-  const { edges: scrollEdges, ref: scrollShadowRef } = useScrollEdgeShadows();
+    getMobileTableLayout({ isMobile, selectable, hasDragHandle: !!onReorder });
+  const tableColumnCount =
+    visibleColumns.length +
+    1 +
+    (effectiveSelectable ? 1 : 0) +
+    (showDragHandle ? 1 : 0) +
+    (hasRowActions ? 1 : 0);
+  const virtualizedRows = useMemo(
+    () => (onCreate ? [...filtered, VIRTUAL_ACTION_ROW] : filtered),
+    [filtered, onCreate],
+  );
   const setScrollNode = useCallback(
     (node: HTMLDivElement | null) => {
+      scrollCleanupRef.current?.();
+      scrollCleanupRef.current = null;
       tableRootRef.current = node;
-      scrollShadowRef(node);
+      if (node) {
+        scrollCleanupRef.current = trackScrollState(node, node.parentElement ?? node);
+      }
     },
-    [scrollShadowRef],
+    [],
   );
-  useRecordTableKeyboardNavigation({ enabled: keyboardNavigation });
+  const setVirtualScrollNode = useCallback((node: HTMLElement | Window | null) => {
+    virtualScrollCleanupRef.current?.();
+    virtualScrollCleanupRef.current = null;
+    if (node instanceof HTMLElement) {
+      virtualScrollCleanupRef.current = trackScrollState(node, node.parentElement ?? node);
+    }
+  }, []);
+
+  useEffect(
+    () => () => {
+      // Callback refs normally receive null on detach; this also covers a
+      // virtualization teardown that does not forward its final ref update.
+      scrollCleanupRef.current?.();
+      virtualScrollCleanupRef.current?.();
+      scrollCleanupRef.current = null;
+      virtualScrollCleanupRef.current = null;
+    },
+    [],
+  );
+  const handleTableKeyDown = useRecordTableKeyboardNavigation({
+    enabled: keyboardNavigation,
+    selectable: effectiveSelectable,
+  });
 
   useEffect(() => {
     if (!focusedCell) return;
@@ -187,14 +254,20 @@ export function RecordTable({
       align: "center",
       behavior: "smooth",
     });
-    window.requestAnimationFrame(() => {
-      tableRootRef.current
+    const frame = window.requestAnimationFrame(() => {
+      // Opening an editor focuses its input. Do not let the delayed cell-focus
+      // pass steal focus back from that input: doing so fires the editor's blur
+      // commit and closes it immediately after it opens.
+      if (getTableState().editingCell) return;
+      const focusedElement = tableRootRef.current
         ?.querySelector<HTMLElement>(
-          `[data-row-index="${focusedCell.rowIndex}"] [data-column-index="${focusedCell.columnIndex}"]`,
-        )
-        ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+          `[data-row-index="${focusedCell.rowIndex}"][data-column-index="${focusedCell.columnIndex}"]`,
+        );
+      focusedElement?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      focusedElement?.focus({ preventScroll: true });
     });
-  }, [focusedCell]);
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusedCell, getTableState]);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -232,6 +305,27 @@ export function RecordTable({
   }
 
   if (filtered.length === 0) {
+    if (records.length > 0) {
+      return (
+        <RecordTableEmpty
+          title="No matching records"
+          description="Change or clear the current search and filters."
+          action={
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => {
+                handle.get().setSearchTerm("");
+                handle.get().setFilters([]);
+                handle.get().setFilterGroups([]);
+              }}
+            >
+              Clear search and filters
+            </button>
+          }
+        />
+      );
+    }
     return (
       emptyState ?? (
         <RecordTableEmpty
@@ -295,7 +389,7 @@ export function RecordTable({
             <button
               type="button"
               className="record-table__board-card"
-              onClick={() => onRecordClick?.(String(record._id), record)}
+              onClick={() => onRecordClick?.(String(record._id), record, { openRecordIn: "drawer" })}
             >
               <strong>{String(record[labelColumn?.field.name ?? "_id"] ?? "Untitled")}</strong>
               <span>
@@ -337,7 +431,7 @@ export function RecordTable({
           getId={(record) => String(record._id)}
           getDate={(record) => record[dateColumn.field.name]}
           getLabel={(record) => String(record[labelColumn?.field.name ?? "_id"] ?? "Untitled")}
-          onSelect={(record) => onRecordClick?.(String(record._id), record)}
+          onSelect={(record) => onRecordClick?.(String(record._id), record, { openRecordIn: "drawer" })}
         />
       </div>
     );
@@ -349,10 +443,17 @@ export function RecordTable({
   if (filtered.length <= virtualizeAbove) {
     return (
       <div
-        className={`record-table__scroll-frame${scrollEdges.left ? " is-scrolled-left" : ""}${scrollEdges.right ? " is-scrolled-right" : ""}`}
+        role="region"
+        aria-label={`${objectMetadata.labelPlural} table`}
+        tabIndex={0}
+        onKeyDown={handleTableKeyDown}
+        className="record-table__scroll-frame"
+        style={{
+          "--record-table-identifier-left": effectiveSelectable ? "28px" : "0px",
+        } as CSSProperties}
       >
         <div ref={setScrollNode} className={`record-table__scroll ${densityClass}`}>
-          <table className="record-table">
+          <table className="record-table" role="grid">
             <thead className="record-table__thead">
               <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
             </thead>
@@ -376,6 +477,9 @@ export function RecordTable({
                   />
                 </tr>
               ))}
+              {onCreate && (
+                <RecordTableActionRow colSpan={tableColumnCount} />
+              )}
             </tbody>
             {showAggregateFooter && (
               <RecordTableAggregateFooter selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
@@ -392,10 +496,21 @@ export function RecordTable({
   // parent card has no explicit height, 100% collapses to 0 and virtuoso
   // renders an empty tbody. Pass height inline so our value wins.
   return (
-    <div ref={tableRootRef}>
+    <div
+      ref={tableRootRef}
+      className="record-table__interaction-root"
+      role="region"
+      aria-label={`${objectMetadata.labelPlural} table`}
+      tabIndex={0}
+      onKeyDown={handleTableKeyDown}
+      style={{
+        "--record-table-identifier-left": effectiveSelectable ? "28px" : "0px",
+      } as CSSProperties}
+    >
       <TableVirtuoso
         ref={virtuosoRef}
-        data={filtered}
+        scrollerRef={setVirtualScrollNode}
+        data={virtualizedRows}
         context={{ onRowContextMenu }}
         className={`record-table__virtuoso ${densityClass}`}
         style={{ height: 600 }}
@@ -408,18 +523,29 @@ export function RecordTable({
         fixedHeaderContent={() => (
           <RecordTableHeader selectable={effectiveSelectable} hasRowActions={hasRowActions} showDragHandle={showDragHandle} />
         )}
-        itemContent={(index, record) => (
-          <RecordTableRow
-            record={record}
-            rowIndex={index}
+        fixedFooterContent={showAggregateFooter ? () => (
+          <RecordTableAggregateFooterRow
             selectable={effectiveSelectable}
+            hasRowActions={hasRowActions}
             showDragHandle={showDragHandle}
-            renderRowActions={renderRowActions}
-            rowMenuSections={rowMenuSections}
-            showOpenRecordAction={hasOpenRecordAction}
-            renderCell={renderCell}
           />
-        )}
+        ) : undefined}
+        itemContent={(index, record) =>
+          isVirtualActionRow(record) ? (
+            <RecordTableActionRowCells colSpan={tableColumnCount} />
+          ) : (
+            <RecordTableRow
+              record={record}
+              rowIndex={index}
+              selectable={effectiveSelectable}
+              showDragHandle={showDragHandle}
+              renderRowActions={renderRowActions}
+              rowMenuSections={rowMenuSections}
+              showOpenRecordAction={hasOpenRecordAction}
+              renderCell={renderCell}
+            />
+          )
+        }
       />
       {rowContextMenuElement}
     </div>

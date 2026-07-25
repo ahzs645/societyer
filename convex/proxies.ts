@@ -13,13 +13,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => proxiesList(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => proxiesList(await toPortableQueryCtx(ctx), args),
 });
 
 export const forMeeting = query({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
-  handler: (ctx, args) => proxiesForMeeting(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => proxiesForMeeting(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -34,7 +34,7 @@ export const create = mutation({
     signedAtISO: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => proxyCreate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => proxyCreate(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -48,17 +48,17 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => proxyUpdate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => proxyUpdate(await toPortableMutationCtx(ctx), args),
 });
 
 export const revoke = mutation({
   args: { id: v.id("proxies") },
   returns: v.any(),
-  handler: (ctx, args) => proxyRevoke(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => proxyRevoke(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("proxies") },
   returns: v.any(),
-  handler: (ctx, args) => proxyRemove(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => proxyRemove(await toPortableMutationCtx(ctx), args),
 });

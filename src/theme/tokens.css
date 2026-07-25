@@ -232,11 +232,13 @@
    * and the bottom nav appears (tablet + phone).
    * --bp-mobile is twenty-ui's MOBILE_VIEWPORT (768px): the viewport below which
    * we swap to phone-optimized affordances — full-width drawer, larger tap
-   * targets, more generous page padding. Keep both in sync with the SCSS media
-   * queries below. */
+   * targets, more generous page padding. The narrower sheet breakpoint keeps
+   * anchored overlays usable when the remaining viewport is too cramped. Keep
+   * these in sync with their literal SCSS media queries. */
   --bp-mobile-sidebar: 980;
   --bp-mobile:         768;
   --bp-mobile-card:    760;
+  --bp-bottom-sheet:   560;
 }
 
 .dark {

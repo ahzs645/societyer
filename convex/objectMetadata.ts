@@ -25,13 +25,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("objectMetadata") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const getByNameSingular = query({
@@ -40,7 +40,7 @@ export const getByNameSingular = query({
     nameSingular: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => getByNameSingularPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getByNameSingularPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const getByNamePlural = query({
@@ -49,7 +49,7 @@ export const getByNamePlural = query({
     namePlural: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => getByNamePluralPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getByNamePluralPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /**
@@ -59,7 +59,7 @@ export const getByNamePlural = query({
 export const getWithFields = query({
   args: { objectMetadataId: v.id("objectMetadata") },
   returns: v.any(),
-  handler: (ctx, args) => getWithFieldsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getWithFieldsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /**
@@ -81,7 +81,7 @@ export const getFullTableSetup = query({
     viewId: v.optional(v.id("views")),
   },
   returns: v.any(),
-  handler: (ctx, args) => getFullTableSetupPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getFullTableSetupPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -101,7 +101,7 @@ export const create = mutation({
     routePath: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -120,11 +120,11 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("objectMetadata") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

@@ -6,34 +6,6 @@
   overflow-x: auto;
   overflow-y: visible;
 }
-.table-scroll::before,
-.table-scroll::after {
-  content: "";
-  position: sticky;
-  top: 0;
-  width: 14px;
-  height: 100%;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-  z-index: 2;
-  display: block;
-}
-.table-scroll::before {
-  left: 0;
-  background: linear-gradient(to right, rgba(0,0,0,0.08), transparent);
-  float: left;
-  margin-right: -14px;
-}
-.table-scroll::after {
-  right: 0;
-  background: linear-gradient(to left, rgba(0,0,0,0.08), transparent);
-  float: right;
-  margin-left: -14px;
-}
-.table-scroll.is-scrolled-left::before { opacity: 1; }
-.table-scroll.is-scrolled-right::after { opacity: 1; }
-
 .table-scroll--sticky .table--sticky-first th:first-child,
 .table-scroll--sticky .table--sticky-first td:first-child {
   position: sticky;

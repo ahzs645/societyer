@@ -40,50 +40,50 @@ import { buildConvexCapabilities } from "./providers/capabilities";
 export const connections = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => connectionsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => connectionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 // Resolves item image blob URLs through the injected storage capability.
 export const items = query({
   args: { societyId: v.id("societies"), itemType: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args) => itemsPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
+  handler: async (ctx, args) => itemsPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const locations = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => locationsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => locationsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const balances = query({
   args: { societyId: v.id("societies"), inventoryItemId: v.optional(v.id("inventoryItems")) },
   returns: v.any(),
-  handler: (ctx, args) => balancesPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => balancesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const lots = query({
   args: { societyId: v.id("societies"), inventoryItemId: v.optional(v.id("inventoryItems")) },
   returns: v.any(),
-  handler: (ctx, args) => lotsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => lotsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const stockMovements = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: (ctx, args) => stockMovementsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => stockMovementsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const receiptLinks = query({
   args: { societyId: v.id("societies"), inventoryItemId: v.optional(v.id("inventoryItems")) },
   returns: v.any(),
-  handler: (ctx, args) => receiptLinksPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => receiptLinksPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const counts = query({
   args: { societyId: v.id("societies"), status: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args) => countsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => countsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertConnection = mutation({
@@ -98,13 +98,13 @@ export const upsertConnection = mutation({
     settingsJson: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertConnectionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertConnectionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const deleteConnection = mutation({
   args: { id: v.id("inventoryConnections") },
   returns: v.any(),
-  handler: (ctx, args) => deleteConnectionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => deleteConnectionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertItem = mutation({
@@ -134,7 +134,7 @@ export const upsertItem = mutation({
     rawJson: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertItemPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertLocation = mutation({
@@ -156,19 +156,19 @@ export const upsertLocation = mutation({
     rawJson: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertLocationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertLocationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const deleteLocation = mutation({
   args: { id: v.id("inventoryLocations") },
   returns: v.any(),
-  handler: (ctx, args) => deleteLocationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => deleteLocationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const deleteItem = mutation({
   args: { id: v.id("inventoryItems") },
   returns: v.any(),
-  handler: (ctx, args) => deleteItemPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => deleteItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertLot = mutation({
@@ -189,13 +189,13 @@ export const upsertLot = mutation({
     rawJson: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertLotPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertLotPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const deleteLot = mutation({
   args: { id: v.id("inventoryLots") },
   returns: v.any(),
-  handler: (ctx, args) => deleteLotPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => deleteLotPortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Start an in-app physical count. Seeds count lines from the current posted
@@ -211,7 +211,7 @@ export const createCount = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createCountPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createCountPortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Add an item/location pair that wasn't expected (found stock not on the sheet).
@@ -226,7 +226,7 @@ export const addCountLine = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => addCountLinePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => addCountLinePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const setCountLine = mutation({
@@ -238,13 +238,13 @@ export const setCountLine = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => setCountLinePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setCountLinePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const voidCount = mutation({
   args: { inventoryCountId: v.id("inventoryCounts") },
   returns: v.any(),
-  handler: (ctx, args) => voidCountPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => voidCountPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertCandidate = mutation({
@@ -267,7 +267,7 @@ export const upsertCandidate = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertCandidatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertCandidatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Review queue for imported inventory candidates (the gate before a candidate
@@ -275,14 +275,14 @@ export const upsertCandidate = mutation({
 export const candidates = query({
   args: { societyId: v.id("societies"), status: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args) => candidatesPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => candidatesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 // Mark a candidate ignored / needs_review / matched without posting it.
 export const setCandidateStatus = mutation({
   args: { candidateId: v.id("inventoryCandidates"), status: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => setCandidateStatusPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setCandidateStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Promote a reviewed `movement` candidate into a real posted stock movement and
@@ -298,7 +298,7 @@ export const promoteCandidateToMovement = mutation({
     movementType: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => promoteCandidateToMovementPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => promoteCandidateToMovementPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const linkReceipt = mutation({
@@ -320,13 +320,13 @@ export const linkReceipt = mutation({
     createdByUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => linkReceiptPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => linkReceiptPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const unlinkReceipt = mutation({
   args: { id: v.id("assetReceiptLinks") },
   returns: v.any(),
-  handler: (ctx, args) => unlinkReceiptPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => unlinkReceiptPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const postStockMovement = mutation({
@@ -357,7 +357,7 @@ export const postStockMovement = mutation({
     rawJson: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => postStockMovementPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => postStockMovementPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const postCountVarianceAdjustments = mutation({
@@ -366,7 +366,7 @@ export const postCountVarianceAdjustments = mutation({
     reason: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => postCountVarianceAdjustmentsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => postCountVarianceAdjustmentsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const importOpenBoxesSnapshot = mutation({
@@ -403,13 +403,13 @@ export const importOpenBoxesSnapshot = mutation({
     }))),
   },
   returns: v.any(),
-  handler: (ctx, args) => importOpenBoxesSnapshotPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => importOpenBoxesSnapshotPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const createItemFromAsset = mutation({
   args: { assetId: v.id("assets") },
   returns: v.any(),
-  handler: (ctx, args) => createItemFromAssetPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createItemFromAssetPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const recordAssetStockIntake = mutation({
@@ -420,11 +420,11 @@ export const recordAssetStockIntake = mutation({
     quantityAdded: v.number(),
   },
   returns: v.any(),
-  handler: (ctx, args) => recordAssetStockIntakePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => recordAssetStockIntakePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const backfillAssets = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => backfillAssetsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => backfillAssetsPortable(await toPortableMutationCtx(ctx), args),
 });

@@ -114,7 +114,7 @@ $known-tokens: (
   "z-drawer" "z-modal-backdrop" "z-modal" "z-dropdown" "z-popover" "z-command-palette"
   "z-toast" "z-tooltip" "bg-overlay-scrim" "bg-overlay-scrim-dense" "modal-w-sm" "modal-w-md"
   "modal-w-lg" "modal-w-xl" "popover-w-sm" "popover-w-md" "popover-h-md" "bp-mobile-sidebar"
-  "bp-mobile" "bp-mobile-card"
+  "bp-mobile" "bp-mobile-card" "bp-bottom-sheet"
 );
 
 @function token($name, $fallback: null) {
@@ -126,4 +126,3 @@ $known-tokens: (
   }
   @return var(--#{$name});
 }
-

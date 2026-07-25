@@ -39,7 +39,7 @@ const structureValidator = v.object({
 export const summary = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => summaryPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => summaryPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const resources = query({
@@ -50,13 +50,13 @@ export const resources = query({
     limit: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: (ctx, args) => resourcesPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => resourcesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const resource = query({
   args: { id: v.id("waveCacheResources") },
   returns: v.any(),
-  handler: (ctx, args) => resourcePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => resourcePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const resourceByExternalId = query({
@@ -66,7 +66,7 @@ export const resourceByExternalId = query({
     resourceType: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => resourceByExternalIdPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => resourceByExternalIdPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const structures = query({
@@ -76,7 +76,7 @@ export const structures = query({
     limit: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: (ctx, args) => structuresPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => structuresPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const sync = action({

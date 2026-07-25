@@ -23,21 +23,21 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** The legal name in effect on a specific ISO date. */
 export const asOf = query({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => asOfPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => asOfPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Human-readable summary of the society's name-change history. */
 export const narrative = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => narrativePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => narrativePortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Create a new name record or patch an existing one. Returns the id. */
@@ -52,12 +52,12 @@ export const upsert = mutation({
     nowISO: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
 /** Delete a name record. */
 export const remove = mutation({
   args: { id: v.id("societyNameHistory") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

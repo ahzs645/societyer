@@ -164,6 +164,7 @@ export function Layout() {
     window.matchMedia(mobileSidebarMediaQuery).matches,
   );
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   // Tracks a touch on the mobile drawer so a decisive left-swipe can dismiss it.
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const [collapsed, setCollapsed] = useState(
@@ -211,6 +212,7 @@ export function Layout() {
   >(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const mainRef = useRef<HTMLDivElement | null>(null);
+  const workbenchContentRef = useRef<HTMLDivElement | null>(null);
   const workspaceButtonRef = useRef<HTMLButtonElement | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const navContextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -459,6 +461,17 @@ export function Layout() {
   }, [isMobileNav, mobileSidebarOpen]);
 
   useEffect(() => {
+    if (!isMobileNav || !mobileInspectorOpen) return;
+    const content = workbenchContentRef.current as (HTMLDivElement & { inert?: boolean }) | null;
+    content?.setAttribute("aria-hidden", "true");
+    if (content) content.inert = true;
+    return () => {
+      content?.removeAttribute("aria-hidden");
+      if (content) content.inert = false;
+    };
+  }, [isMobileNav, mobileInspectorOpen]);
+
+  useEffect(() => {
     const groupedNav = getGroupedNav(new Set(pinnedRoutes));
     const activeGroup = groupedNav.find((group) =>
       group.items.some((item) => isNavItemActive(item, loc.pathname)),
@@ -608,6 +621,8 @@ export function Layout() {
     if (isMobileNav && mobileSidebarOpen) value += " is-mobile-nav-open";
     return value;
   }, [isMobileNav, isSidebarCollapsed, mobileSidebarOpen]);
+
+  const mobileOverlayOpen = isMobileNav && (mobileSidebarOpen || mobileInspectorOpen);
 
   const openSidebar = () => {
     if (isMobileNav) {
@@ -838,6 +853,14 @@ export function Layout() {
       <GlobalMeetingCreate />
       <GlobalCommitmentCreate />
       <ShortcutHelp />
+      <a
+        className="skip-link"
+        href="#main-content"
+        aria-hidden={mobileOverlayOpen || undefined}
+        tabIndex={mobileOverlayOpen ? -1 : undefined}
+      >
+        {t("sidebar.skipToMain", "Skip to main content")}
+      </a>
       <div className={shellClassName}>
         {isMobileNav && mobileSidebarOpen && (
           <button
@@ -846,14 +869,16 @@ export function Layout() {
             aria-label={t("sidebar.closeNavigation")}
           />
         )}
-        <button
-          className="sidebar-peek"
-          onClick={openSidebar}
-          title={isMobileNav ? t("sidebar.openNavigation") : `${t("sidebar.openSidebar")} (⌘\\)`}
-          aria-label={isMobileNav ? t("sidebar.openNavigation") : t("sidebar.openSidebar")}
-        >
-          <PanelLeftOpen size={14} />
-        </button>
+        {!isMobileNav && (
+          <button
+            className="sidebar-peek"
+            onClick={openSidebar}
+            title={`${t("sidebar.openSidebar")} (⌘\\)`}
+            aria-label={t("sidebar.openSidebar")}
+          >
+            <PanelLeftOpen size={14} />
+          </button>
+        )}
         <aside
           className="sidebar"
           ref={sidebarRef}
@@ -1463,46 +1488,68 @@ export function Layout() {
           document.body,
         )}
 
-        <div className="main" ref={mainRef}>
+        <div className="main" id="main-content" role="main" ref={mainRef} tabIndex={-1}>
           <div className="workbench">
             <div className="workbench__panel">
               <DemoBanner />
               <div className="workbench__body">
-                <div className="workbench__content">
+                <div className="workbench__content" ref={workbenchContentRef}>
                   <Suspense fallback={<WorkbenchPageLoader />}>
                     <Outlet />
                   </Suspense>
                 </div>
-                <InspectorHost />
+                <InspectorHost onOpenChange={setMobileInspectorOpen} />
               </div>
             </div>
           </div>
         </div>
         {!aiChatHidden && <GlobalAiAssistantSafe />}
         {isMobileNav && (
-          <nav className="bottom-nav" aria-label={t("sidebar.navigation")}>
+          <nav
+            className="bottom-nav"
+            aria-label={t("sidebar.navigation")}
+            aria-hidden={mobileOverlayOpen || undefined}
+          >
             {/* Icon size 16px matches twenty's icon.size.md — the CSS also
              * clamps to 16px, but passing it through to the SVG avoids the
              * initial over-render before styles kick in. */}
-            <NavLink to="/app" end className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}>
+            <NavLink
+              to="/app"
+              end
+              tabIndex={mobileOverlayOpen ? -1 : undefined}
+              className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}
+            >
               <LayoutDashboard size={16} strokeWidth={2} />
               <span>{t("nav.dashboard", "Dashboard")}</span>
             </NavLink>
-            <NavLink to="/app/tasks" className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}>
+            <NavLink
+              to="/app/tasks"
+              tabIndex={mobileOverlayOpen ? -1 : undefined}
+              className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}
+            >
               <ListTodo size={16} strokeWidth={2} />
               <span>{t("nav.tasks", "Tasks")}</span>
             </NavLink>
-            <NavLink to="/app/meetings" className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}>
+            <NavLink
+              to="/app/meetings"
+              tabIndex={mobileOverlayOpen ? -1 : undefined}
+              className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}
+            >
               <Calendar size={16} strokeWidth={2} />
               <span>{t("nav.meetingsItem", "Meetings")}</span>
             </NavLink>
-            <NavLink to="/app/documents" className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}>
+            <NavLink
+              to="/app/documents"
+              tabIndex={mobileOverlayOpen ? -1 : undefined}
+              className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}
+            >
               <FolderOpen size={16} strokeWidth={2} />
               <span>{t("nav.documents", "Docs")}</span>
             </NavLink>
             <button
               type="button"
               className="bottom-nav__item"
+              tabIndex={mobileOverlayOpen ? -1 : undefined}
               onClick={openSidebar}
             >
               <Menu size={16} strokeWidth={2} />
@@ -1514,4 +1561,3 @@ export function Layout() {
     </InspectorProvider>
   );
 }
-

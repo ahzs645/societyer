@@ -16,7 +16,7 @@ export const list = query({
     workflowId: v.optional(v.id("workflows")),
   },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -40,13 +40,13 @@ export const upsert = mutation({
     stripeCheckoutSessionId: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("workflowPackages") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const createFollowUpTask = mutation({
@@ -56,7 +56,7 @@ export const createFollowUpTask = mutation({
     dueDate: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createFollowUpTaskPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createFollowUpTaskPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const markFiled = mutation({
@@ -66,7 +66,7 @@ export const markFiled = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => markFiledPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => markFiledPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const createBoardPack = mutation({
@@ -80,5 +80,5 @@ export const createBoardPack = mutation({
     packageId: v.id("workflowPackages"),
     taskIds: v.array(v.id("tasks")),
   }),
-  handler: (ctx, args) => createBoardPackPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createBoardPackPortable(await toPortableMutationCtx(ctx), args),
 });

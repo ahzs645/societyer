@@ -13,7 +13,7 @@ import { buildConvexCapabilities } from "./providers/capabilities";
 export const listPublications = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPublicationsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPublicationsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertPublication = mutation({
@@ -34,17 +34,17 @@ export const upsertPublication = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args): Promise<any> => upsertPublicationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args): Promise<any> => upsertPublicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removePublication = mutation({
   args: { id: v.id("publications"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args): Promise<void> => removePublicationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args): Promise<void> => removePublicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const publicCenter = query({
   args: { slug: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args): Promise<any> => publicCenterPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
+  handler: async (ctx, args): Promise<any> => publicCenterPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });

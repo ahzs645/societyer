@@ -6,5 +6,5 @@ import { toPortableQueryCtx } from "./lib/portable";
 export const overview = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => overviewPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => overviewPortable(await toPortableQueryCtx(ctx), args),
 });

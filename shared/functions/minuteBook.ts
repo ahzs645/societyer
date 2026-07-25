@@ -293,7 +293,7 @@ function buildRecordBundles(data: Record<string, any[]>) {
   const amendmentsByMeetingId = groupByField(bylawAmendments, "resolutionMeetingId");
   const amendmentsByFilingId = groupByField(bylawAmendments, "filingId");
   const sourceByTarget = groupBy(sourceEvidence, (row) => targetKey(row.targetTable, row.targetId));
-  const signaturesByEntity = groupBy(signatures, (row) => targetKey(row.entityType, row.entityId));
+  const signaturesByEntity = groupBy(signatures, (row) => targetKey(row.entityType, row.subjectId ?? row.entityId));
   const agendaItemsByAgendaId = groupByField(agendaItems, "agendaId");
   const agendasByMeetingId = groupByField(agendas, "meetingId");
 
@@ -887,7 +887,9 @@ function minuteBookChecks({
 }: Record<string, any[]>) {
   const categorySet = new Set(binderDocuments.map((doc) => doc.category));
   const missingBasics = ["Constitution", "Bylaws", "Minutes"].filter((category) => !categorySet.has(category));
-  const signatureEntityKeys = new Set(signatures.map((signature) => `${signature.entityType}:${signature.entityId}`));
+  const signatureEntityKeys = new Set(
+    signatures.map((signature) => `${signature.entityType}:${signature.subjectId ?? signature.entityId}`),
+  );
   const missingSignatureItems = items.filter((item) => {
     const type = String(item.recordType ?? "").toLowerCase();
     const needsSignature = /resolution|minutes|minute|policy|filing|package/.test(type) ||

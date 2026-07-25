@@ -155,7 +155,7 @@ export const tagProfiles = query({
 export const listConnection = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listConnectionPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listConnectionPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
@@ -179,14 +179,14 @@ export const connectionStatus = query({
 export const recentSyncs = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: (ctx, args) => recentSyncsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => recentSyncsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
 export const syncForDocument = query({
   args: { documentId: v.id("documents") },
   returns: v.any(),
-  handler: (ctx, args) => syncForDocumentPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => syncForDocumentPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
@@ -197,7 +197,7 @@ export const sourcePullContext = query({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => sourcePullContextPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => sourcePullContextPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
@@ -544,14 +544,14 @@ export const authorizeMeetingImport = query({
     actingUserId: v.id("users"),
   },
   returns: v.any(),
-  handler: (ctx, args) => authorizeMeetingImportPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => authorizeMeetingImportPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
 export const getSync = query({
   args: { id: v.id("paperlessDocumentSyncs") },
   returns: v.any(),
-  handler: (ctx, args) => getSyncPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getSyncPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
@@ -656,7 +656,7 @@ export const recordConnectionTest = mutation({
     demo: v.boolean(),
   },
   returns: v.any(),
-  handler: (ctx, args) => recordConnectionTestPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => recordConnectionTestPortable(await toPortableMutationCtx(ctx), args),
 });
 
 

@@ -6,6 +6,7 @@ import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { RecordTableCell } from "./RecordTableCell";
 import type { RecordTableCellRenderer } from "./RecordTable";
+import { useFilteredRecords } from "../hooks/useFilteredRecords";
 
 export function RecordTableRow({
   record,
@@ -28,21 +29,34 @@ export function RecordTableRow({
   showOpenRecordAction?: boolean;
   renderCell?: RecordTableCellRenderer;
 }) {
-  const { objectMetadata, onRecordClick } = useRecordTableContextOrThrow();
+  const { objectMetadata, onRecordClick, onReorder } = useRecordTableContextOrThrow();
   const columns = useRecordTableState((s) => s.columns);
   const isSelected = useRecordTableState((s) =>
     s.selectedRecordIds.has(String(record._id)),
   );
   const handle = useRecordTableStoreHandle();
+  const filteredRecords = useFilteredRecords();
 
   const visibleColumns = useMemo(() => columns.filter((c) => c.isVisible), [columns]);
   const recordId = String(record._id);
 
-  const toggleRow = () => {
+  const toggleRow = (extendRange = false) => {
     const next = new Set(handle.get().selectedRecordIds);
+    if (extendRange) {
+      const anchor = handle.get().selectionAnchorRowIndex ?? rowIndex;
+      const start = Math.min(anchor, rowIndex);
+      const end = Math.max(anchor, rowIndex);
+      for (let index = start; index <= end; index += 1) {
+        const rangeRecord = filteredRecords[index];
+        if (rangeRecord?._id) next.add(String(rangeRecord._id));
+      }
+      handle.get().setSelectedRecordIds(next);
+      return;
+    }
     if (next.has(recordId)) next.delete(recordId);
     else next.add(recordId);
     handle.get().setSelectedRecordIds(next);
+    handle.get().setSelectionAnchorRowIndex(rowIndex);
   };
 
   const rowValue = useMemo(
@@ -53,19 +67,50 @@ export function RecordTableRow({
   return (
     <RecordTableRowContext.Provider value={rowValue}>
       {showDragHandle && (
-        <td className="record-table__drag-cell" aria-hidden="true">
-          <span className="record-table__drag-grip" title="Row handle">
+        <td
+          className="record-table__drag-cell"
+          onDragOver={(event) => {
+            if (!onReorder) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+          }}
+          onDrop={(event) => {
+            if (!onReorder) return;
+            event.preventDefault();
+            const draggedRecordId = event.dataTransfer.getData("text/plain");
+            if (!draggedRecordId || draggedRecordId === recordId) return;
+            const orderedIds = filteredRecords.map((item) => String(item._id));
+            const fromIndex = orderedIds.indexOf(draggedRecordId);
+            if (fromIndex < 0) return;
+            orderedIds.splice(fromIndex, 1);
+            orderedIds.splice(rowIndex, 0, draggedRecordId);
+            void onReorder(orderedIds);
+          }}
+        >
+          <button
+            type="button"
+            className="record-table__drag-grip"
+            title="Reorder row"
+            aria-label={`Reorder ${objectMetadata.labelSingular.toLowerCase()}`}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", recordId);
+            }}
+          >
             <GripVertical size={13} />
-          </span>
+          </button>
         </td>
       )}
       {selectable && (
-        <td className="record-table__checkbox-cell" style={{ width: 36 }}>
+        <td className="record-table__checkbox-cell">
           <input
             type="checkbox"
             aria-label={isSelected ? "Deselect row" : "Select row"}
             checked={isSelected}
-            onChange={toggleRow}
+            onChange={(event) =>
+              toggleRow((event.nativeEvent as MouseEvent).shiftKey)
+            }
             onClick={(e) => e.stopPropagation()}
           />
         </td>
@@ -81,6 +126,7 @@ export function RecordTableRow({
           renderCell={renderCell}
         />
       ))}
+      <td className="record-table__fill-cell" aria-hidden="true" />
       {(showOpenRecordAction || renderRowActions || rowMenuSections) && (
         <td
           className="record-table__row-actions-cell"
@@ -91,9 +137,9 @@ export function RecordTableRow({
               <button
                 type="button"
                 className="btn btn--ghost btn--sm btn--icon record-table__open-record"
-                aria-label={`Open ${objectMetadata.labelSingular ?? "record"} details`}
-                title={`Open ${objectMetadata.labelSingular ?? "record"} details`}
-                onClick={() => onRecordClick(recordId, record)}
+                aria-label={`Preview ${objectMetadata.labelSingular ?? "record"} in sidebar`}
+                title="Preview in sidebar"
+                onClick={() => onRecordClick(recordId, record, { openRecordIn: "drawer" })}
               >
                 <PanelRightOpen size={12} />
               </button>

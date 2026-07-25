@@ -50,6 +50,8 @@ export function MeetingSidebarColumn({
   publicCopyMode,
   setPublicCopyMode,
   minutesExportGaps,
+  formalExportBlockers,
+  minutesRecorded,
   showExportGaps = false,
   exportControlsReadOnly = false,
   quorumSnapshot,
@@ -102,6 +104,8 @@ export function MeetingSidebarColumn({
   publicCopyMode: boolean;
   setPublicCopyMode: (value: boolean) => void;
   minutesExportGaps: any[];
+  formalExportBlockers: string[];
+  minutesRecorded: boolean;
   showExportGaps?: boolean;
   /**
    * When true, disables every export control except the style picker. Used on
@@ -137,6 +141,7 @@ export function MeetingSidebarColumn({
   draftingFromTranscript?: boolean;
 }) {
   const show = (panel: NonNullable<typeof visiblePanels>[number]) => visiblePanels.includes(panel);
+  const minutesExportBlocked = formalExportBlockers.length > 0;
   const agmRun = useQuery(
     api.agm.runForMeeting,
     meeting?.type === "AGM" && show("agm") ? { meetingId: meeting._id } : "skip",
@@ -172,6 +177,15 @@ export function MeetingSidebarColumn({
                 <span className="card__subtitle">{selectedMinutesExportStyle.source}</span>
               </div>
               <div className="card__body col" style={{ gap: 12 }}>
+                {minutesExportBlocked && (
+                  <div className="callout callout--warn" role="status">
+                    <strong>Final export blocked</strong>
+                    <ul style={{ margin: "6px 0 0 18px" }}>
+                      {formalExportBlockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+                    </ul>
+                    <div style={{ marginTop: 6 }}>Preview remains available while you complete the record.</div>
+                  </div>
+                )}
                 {!exportControlsReadOnly && (
                   <>
                     <Field label="Style">
@@ -223,7 +237,7 @@ export function MeetingSidebarColumn({
                       type="button"
                       role="switch"
                       aria-checked={publicCopyMode}
-                      disabled={!minutes}
+                      disabled={!minutes || minutesExportBlocked}
                       className={`public-copy-toggle${publicCopyMode ? " is-private" : " is-public"}`}
                       onClick={() => setPublicCopyMode(!publicCopyMode)}
                       title={publicCopyMode
@@ -239,13 +253,13 @@ export function MeetingSidebarColumn({
                       </span>
                     </button>
                     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                      <button className="btn-action btn-action--primary" onClick={exportToWord} disabled={!minutes}>
+                      <button className="btn-action btn-action--primary" onClick={exportToWord} disabled={!minutes || minutesExportBlocked}>
                         <FileDown size={12} /> Export Word
                       </button>
-                      <button className="btn-action" onClick={exportToPdf} disabled={!minutes}>
+                      <button className="btn-action" onClick={exportToPdf} disabled={!minutes || minutesExportBlocked}>
                         <FileDown size={12} /> Download PDF
                       </button>
-                      <button className="btn-action" onClick={printMinutes} disabled={!minutes}>
+                      <button className="btn-action" onClick={printMinutes} disabled={!minutes || minutesExportBlocked}>
                         <Printer size={12} /> Print
                       </button>
                     </div>
@@ -363,7 +377,7 @@ export function MeetingSidebarColumn({
                 */}
                 <Check ok={!!meeting.noticeSentAt}>Notice sent 14–60 days in advance</Check>
                 <Check ok={meeting.status === "Held"}>Meeting held</Check>
-                <Check ok={!!minutes}>Minutes recorded</Check>
+                <Check ok={minutesRecorded}>Minutes recorded</Check>
                 <Check ok={!!minutes?.approvedAt}>Minutes approved at next meeting</Check>
                 <Check ok={isAgmStepDone(agmRun, "annualReportFiled")}>Annual report filed within 30 days</Check>
                 <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>

@@ -36,25 +36,25 @@ const commitmentFields = {
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("commitments") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const eventsForSociety = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => eventsForSocietyPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => eventsForSocietyPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const eventsForCommitment = query({
   args: { commitmentId: v.id("commitments") },
   returns: v.any(),
-  handler: (ctx, args) => eventsForCommitmentPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => eventsForCommitmentPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -63,7 +63,7 @@ export const create = mutation({
     ...commitmentFields,
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -90,7 +90,7 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const recordEvent = mutation({
@@ -106,17 +106,17 @@ export const recordEvent = mutation({
     nextDueDate: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => recordEventPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => recordEventPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeEvent = mutation({
   args: { id: v.id("commitmentEvents") },
   returns: v.any(),
-  handler: (ctx, args) => removeEventPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeEventPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("commitments") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

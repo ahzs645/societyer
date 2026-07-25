@@ -10,6 +10,7 @@ import {
   resolveResolutionTypes,
   classifyProceduralMotion,
   isDecidedWithoutVote,
+  motionCompletionGaps,
   DECIDED_BY_VALUES,
   DECIDED_BY_LABELS,
   type DecidedBy,
@@ -126,11 +127,13 @@ function NameInput({
   onChange,
   placeholder,
   nameOptions,
+  ariaLabel,
 }: {
   value?: string;
   onChange: (v: string) => void;
   placeholder?: string;
   nameOptions: string[];
+  ariaLabel: string;
 }) {
   return (
     <NameAutocomplete
@@ -138,6 +141,7 @@ function NameInput({
       onChange={onChange}
       options={nameOptions}
       placeholder={placeholder}
+      ariaLabel={ariaLabel}
     />
   );
 }
@@ -321,6 +325,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     sectionScope != null ? motionSectionPatch(String(sectionScope), agendaSections) : {};
   const makeDraft = (): Motion => ({ text: "", outcome: "Pending", ...sectionPatchForScope() });
   const [adding, setAdding] = useState(false);
+  const confirm = useConfirm();
   const [draft, setDraft] = useState<Motion>(makeDraft);
   // Index of the motion the user is editing inline. Lifted out of MotionRow
   // so the parent can enforce one-at-a-time editing and so the bottom
@@ -374,8 +379,18 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   const businessMotionRows = motionRows.filter(({ motion }) => !isAdjournmentMotion(motion));
   const adjournmentRows = motionRows.filter(({ motion }) => isAdjournmentMotion(motion));
 
-  const saveDraft = () => {
+  const saveDraft = async () => {
     if (!draft.text.trim()) return;
+    const gaps = motionCompletionGaps(draft);
+    if (gaps.length) {
+      const ok = await confirm({
+        title: "Record an incomplete motion outcome?",
+        message: `This decided motion is missing ${gaps.join(", ")}. You can record it now, but final minutes export will remain blocked until those fields are complete.`,
+        confirmLabel: "Record incomplete outcome",
+        tone: "warn",
+      });
+      if (!ok) return;
+    }
     onChange([...motions, { ...draft, text: draft.text.trim() }]);
     resetDraft();
     setAdding(false);
@@ -513,7 +528,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
               value={draft.name ?? ""}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               placeholder="Motion name — e.g. Approve 2024–25 financial statements"
-              aria-label="Motion name"
+              aria-label="New motion name"
             />
             <textarea
               className="textarea"
@@ -535,6 +550,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
                   updateDraftPerson("movedBy", v, motionPersonPatch("movedBy", resolveMotionPerson(v, people)))
                 }
                 placeholder="Start typing…"
+                ariaLabel="New motion mover"
               />
             </Field>
             <Field label="Seconded by">
@@ -545,6 +561,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
                   updateDraftPerson("secondedBy", v, motionPersonPatch("secondedBy", resolveMotionPerson(v, people)))
                 }
                 placeholder="Optional"
+                ariaLabel="New motion seconder"
               />
             </Field>
 
@@ -734,6 +751,20 @@ function MotionRow({
     if (ok) onDelete();
   };
 
+  const setOutcomeWithReview = async (outcome: Motion["outcome"]) => {
+    const gaps = motionCompletionGaps({ ...motion, outcome });
+    if (gaps.length) {
+      const ok = await confirm({
+        title: "Record an incomplete motion outcome?",
+        message: `This decided motion is missing ${gaps.join(", ")}. You can record it now, but final minutes export will remain blocked until those fields are complete.`,
+        confirmLabel: "Record incomplete outcome",
+        tone: "warn",
+      });
+      if (!ok) return;
+    }
+    onPatch({ outcome });
+  };
+
   return (
     <div
       id={anchorId}
@@ -764,7 +795,7 @@ function MotionRow({
               value={motion.name ?? ""}
               onChange={(event) => onPatch({ name: event.target.value })}
               placeholder="Motion name"
-              aria-label="Motion name"
+              aria-label={`Motion name for ${titleText.trim() || "untitled motion"}`}
             />
           )}
           <div className="motion__meta motion__meta--inline">
@@ -777,7 +808,7 @@ function MotionRow({
               <>
                 <button
                   className="btn-action btn-action--success"
-                  onClick={() => onPatch({ outcome: "Carried" })}
+                  onClick={() => { void setOutcomeWithReview("Carried"); }}
                   title="Record as Carried"
                 >
                   <Check size={12} />
@@ -785,7 +816,7 @@ function MotionRow({
                 </button>
                 <button
                   className="btn-action btn-action--danger"
-                  onClick={() => onPatch({ outcome: "Defeated" })}
+                  onClick={() => { void setOutcomeWithReview("Defeated"); }}
                   title="Record as Defeated"
                 >
                   <X size={12} />
@@ -852,6 +883,7 @@ function MotionRow({
                 nameOptions={nameOptions}
                 value={motion.movedBy}
                 onChange={(v) => onPatch({ movedBy: v, ...motionPersonPatch("movedBy", resolveMotionPerson(v, people)) })}
+                ariaLabel={`Mover for ${titleText.trim() || "untitled motion"}`}
               />
             </Field>
             <Field label="Seconded by">
@@ -859,6 +891,7 @@ function MotionRow({
                 nameOptions={nameOptions}
                 value={motion.secondedBy}
                 onChange={(v) => onPatch({ secondedBy: v, ...motionPersonPatch("secondedBy", resolveMotionPerson(v, people)) })}
+                ariaLabel={`Seconder for ${titleText.trim() || "untitled motion"}`}
               />
             </Field>
           </div>
@@ -903,7 +936,7 @@ function MotionRow({
               />
             </Field>
           )}
-          <OutcomePicker stretch value={motion.outcome} onChange={(v) => onPatch({ outcome: v })} />
+          <OutcomePicker stretch value={motion.outcome} onChange={(v) => { void setOutcomeWithReview(v); }} />
           <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
             <VoteStepper label="For" value={motion.votesFor ?? 0} onChange={(n) => onSetVote("votesFor", n)} tone="success" />
             <VoteStepper label="Against" value={motion.votesAgainst ?? 0} onChange={(n) => onSetVote("votesAgainst", n)} tone="danger" />

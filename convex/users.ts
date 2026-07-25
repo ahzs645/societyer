@@ -20,7 +20,7 @@ export async function requireRole(
   ctx: QueryCtx | MutationCtx,
   args: { actingUserId?: Id<"users"> | null; societyId: Id<"societies">; required: Role },
 ): Promise<{ user: any | null }> {
-  return requireRolePortable(toPortableQueryCtx(ctx), {
+  return requireRolePortable(await toPortableQueryCtx(ctx), {
     actingUserId: args.actingUserId ?? undefined,
     societyId: args.societyId,
     required: args.required,
@@ -30,25 +30,25 @@ export async function requireRole(
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => usersList(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => usersList(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("users") },
   returns: v.any(),
-  handler: (ctx, args) => userGet(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => userGet(await toPortableQueryCtx(ctx), args),
 });
 
 export const getByEmail = query({
   args: { email: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => userGetByEmail(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => userGetByEmail(await toPortableQueryCtx(ctx), args),
 });
 
 export const getByAuthSubject = query({
   args: { authSubject: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => userGetByAuthSubject(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => userGetByAuthSubject(await toPortableQueryCtx(ctx), args),
 });
 
 export const resolveAuthSession = mutation({
@@ -60,7 +60,7 @@ export const resolveAuthSession = mutation({
     emailVerified: v.boolean(),
   },
   returns: v.any(),
-  handler: (ctx, args) => resolveAuthSessionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => resolveAuthSessionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -129,7 +129,7 @@ export const setRole = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => setRolePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setRolePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
@@ -151,5 +151,5 @@ export const remove = mutation({
 export const recordLogin = mutation({
   args: { id: v.id("users") },
   returns: v.any(),
-  handler: (ctx, args) => recordLoginPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => recordLoginPortable(await toPortableMutationCtx(ctx), args),
 });

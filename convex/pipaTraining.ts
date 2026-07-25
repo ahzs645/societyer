@@ -7,7 +7,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => pipaTrainingList(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => pipaTrainingList(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -23,7 +23,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => pipaTrainingCreate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => pipaTrainingCreate(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -41,11 +41,11 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => pipaTrainingUpdate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => pipaTrainingUpdate(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("pipaTrainings") },
   returns: v.any(),
-  handler: (ctx, args) => pipaTrainingRemove(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => pipaTrainingRemove(await toPortableMutationCtx(ctx), args),
 });

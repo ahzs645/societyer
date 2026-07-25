@@ -24,7 +24,7 @@ function packetKindFor(packetKey: string): string | null {
 export const overview = query({
   args: { todayISO: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args) => overviewPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => overviewPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /**
@@ -36,7 +36,7 @@ export const overview = query({
 export const search = query({
   args: { query: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => searchPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => searchPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const batchGeneratePacket = mutation({

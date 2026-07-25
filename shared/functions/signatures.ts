@@ -9,6 +9,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { optionalSubjectId, requireSubjectId, type SubjectIdArgs } from "./subjectId";
 
 // Role-rank check, copied (pure) from convex/users.ts so this file stays free of
 // the Convex-coupled users module. Logic preserved exactly.
@@ -119,12 +120,15 @@ async function upsertSignatureProfile(
 
 export async function listForEntityPortable(
   ctx: PortableQueryCtx,
-  { entityType, entityId }: { entityType: string; entityId: string },
+  { entityType, subjectId, entityId }: { entityType: string } & SubjectIdArgs,
 ) {
-  return ctx.db
+  const resolvedSubjectId = requireSubjectId({ subjectId, entityId });
+  // TODO(H0-flip): query by_subject after the hosted backfill is complete.
+  const rows = await ctx.db
     .query("signatures")
-    .withIndex("by_entity", (q) => q.eq("entityType", entityType).eq("entityId", entityId))
+    .withIndex("by_entity", (q) => q.eq("entityType", entityType).eq("entityId", resolvedSubjectId))
     .collect();
+  return rows.filter((row) => optionalSubjectId(row) === resolvedSubjectId);
 }
 
 export async function listProfilesForSocietyPortable(
@@ -162,7 +166,6 @@ export async function signPortable(
   args: {
     societyId: string;
     entityType: string;
-    entityId: string;
     userId?: string;
     directorId?: string;
     memberId?: string;
@@ -176,7 +179,7 @@ export async function signPortable(
     saveToProfile?: boolean;
     demo?: boolean;
     actingUserId?: string;
-  },
+  } & SubjectIdArgs,
 ) {
   // Signatures are kiosk-style: anyone can type/draw their own name. We only
   // enforce the actor check when one is provided AND a userId link is being
@@ -187,11 +190,14 @@ export async function signPortable(
   if (args.saveToProfile) {
     signatureProfileId = await upsertSignatureProfile(ctx, args);
   }
+  const subjectId = requireSubjectId(args);
 
   const id = await ctx.db.insert("signatures", {
     societyId: args.societyId,
     entityType: args.entityType,
-    entityId: args.entityId,
+    subjectId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
+    entityId: subjectId,
     userId: args.userId,
     directorId: args.directorId,
     memberId: args.memberId,
@@ -209,7 +215,9 @@ export async function signPortable(
     societyId: args.societyId,
     actor: args.signerName,
     entityType: args.entityType,
-    entityId: args.entityId,
+    subjectId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
+    entityId: subjectId,
     action: "signed",
     summary: `Signed ${args.entityType} via ${args.method}${args.demo ? " (demo)" : ""}`,
     createdAtISO: new Date().toISOString(),
@@ -243,11 +251,14 @@ export async function revokePortable(
     }
   }
   await ctx.db.delete(id);
+  const subjectId = optionalSubjectId(sig);
   await ctx.db.insert("activity", {
     societyId: sig.societyId,
     actor: sig.signerName,
     entityType: sig.entityType,
-    entityId: sig.entityId,
+    subjectId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
+    entityId: subjectId,
     action: "signature-revoked",
     summary: `Revoked signature on ${sig.entityType}`,
     createdAtISO: new Date().toISOString(),

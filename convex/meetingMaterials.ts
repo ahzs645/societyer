@@ -22,19 +22,19 @@ const accessGrantValidator = v.object({
 export const listForMeeting = query({
   args: { meetingId: v.id("meetings"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => listForMeetingPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const packageForMeeting = query({
   args: { meetingId: v.id("meetings"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => packageForMeetingPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
+  handler: async (ctx, args) => packageForMeetingPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
 export const listForSociety = query({
   args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: (ctx, args) => listForSocietyPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listForSocietyPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const attach = mutation({
@@ -55,7 +55,7 @@ export const attach = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => attachPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => attachPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const setAvailability = mutation({
@@ -66,12 +66,12 @@ export const setAvailability = mutation({
     expiresAtISO: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => setAvailabilityPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setAvailabilityPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("meetingMaterials") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 

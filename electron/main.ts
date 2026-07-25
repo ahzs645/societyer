@@ -1,17 +1,25 @@
 import { app, BrowserWindow } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 
 import { configureAppIdentity, configurePlatformAppIdentity } from "./appInfo.js";
 import { createDesktopEnvironment } from "./environment.js";
 import { registerIpc } from "./ipc.js";
+import { handleValidatedIpc } from "./ipcValidation.js";
 import { runStartupStage } from "./lifecycle.js";
 import { configureApplicationMenu } from "./menu.js";
 import { makeDesktopLogger } from "./observability.js";
 import { registerDesktopAppProtocol, registerDesktopProtocolPrivileges } from "./protocol.js";
 import { registerNativeThemeSync } from "./theme.js";
 import { configureUserDataPath } from "./userData.js";
-import { ensureWorkspace } from "./workspace.js";
+import {
+  ensureWorkspace,
+  persistLocalWorkspaceSnapshot,
+  PERSIST_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL,
+  readLocalWorkspaceSnapshot,
+  READ_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL,
+} from "./workspace.js";
 import { createMainWindow } from "./window.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +45,26 @@ async function openMainWindow() {
 }
 
 registerIpc(environment);
+handleValidatedIpc({
+  channel: PERSIST_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL,
+  payload: z.string().min(1),
+  result: z.object({ path: z.string() }),
+  handler: (_event, serializedSnapshot) => persistLocalWorkspaceSnapshot(serializedSnapshot),
+});
+handleValidatedIpc({
+  channel: READ_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL,
+  result: z.discriminatedUnion("status", [
+    z.object({ status: z.literal("missing") }),
+    z.object({
+      status: z.literal("available"),
+      serializedSnapshot: z.string(),
+      exportedAtISO: z.string(),
+      tableCount: z.number().int().nonnegative(),
+    }),
+    z.object({ status: z.literal("invalid"), error: z.string() }),
+  ]),
+  handler: () => readLocalWorkspaceSnapshot(),
+});
 
 app.whenReady().then(() =>
   runStartupStage("bootstrap", async () => {

@@ -16,17 +16,10 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/ahzs645/societyer-api:main # {"$imagepolicy": "flux-system:societyer-api"}
+          # Registry manifest digest for the last deployed pre-upgrade image.
+          # Replace with the tested release digest during promotion.
+          image: ghcr.io/ahzs645/societyer-api@sha256:c1696d9b48b649d0fc5a62e20b13bf3c024f7b01056ade5f244e6bb80b4e9047
           imagePullPolicy: IfNotPresent
-          command: ["sh", "-lc"]
-          args:
-            - |
-              if [ -n "${CONVEX_SELF_HOSTED_ADMIN_KEY:-}" ]; then
-                npx convex dev --once
-              else
-                echo "CONVEX_SELF_HOSTED_ADMIN_KEY is not set; skipping Convex function deploy."
-              fi
-              exec npx tsx server/auth-server.ts
           ports:
             - containerPort: 8787
           env:
@@ -74,7 +67,7 @@ spec:
       volumes:
         - name: api-data
           persistentVolumeClaim:
-            claimName: societyer-api-data
+            claimName: societyer-api-data-local
 ---
 apiVersion: v1
 kind: Service

@@ -17,7 +17,7 @@ type Props = {
 // exist yet, shows a helpful empty state with a link to the admin page.
 export function CustomFieldsPanel({ societyId, entityType, entityId, title = "Custom fields" }: Props) {
   const definitions = useQuery(api.customFields.listDefinitions, { societyId, entityType });
-  const values = useQuery(api.customFields.listValues, entityId ? { entityType, entityId } : "skip");
+  const values = useQuery(api.customFields.listValues, entityId ? { entityType, subjectId: entityId } : "skip");
   const setValue = useMutation(api.customFields.setValue);
   const clearValue = useMutation(api.customFields.clearValue);
 
@@ -58,13 +58,13 @@ export function CustomFieldsPanel({ societyId, entityType, entityId, title = "Cu
             value={current?.value}
             onSave={async (next) => {
               if (next === undefined || next === "" || next === null) {
-                await clearValue({ entityType, entityId, definitionId: def._id });
+                await clearValue({ entityType, subjectId: entityId, definitionId: def._id });
               } else {
                 await setValue({
                   societyId,
                   definitionId: def._id,
                   entityType,
-                  entityId,
+                  subjectId: entityId,
                   value: next,
                 });
               }

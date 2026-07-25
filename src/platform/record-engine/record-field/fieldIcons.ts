@@ -21,6 +21,7 @@ import {
   BadgeDollarSign,
   BarChart,
   BookOpen,
+  Braces,
   Briefcase,
   Building,
   Calculator,
@@ -132,6 +133,14 @@ const ICON_BY_FIELD_TYPE: Record<FieldType, LucideIcon> = {
   [FIELD_TYPES.RATING]: Star,
   [FIELD_TYPES.UUID]: Hash,
   [FIELD_TYPES.ARRAY]: List,
+  [FIELD_TYPES.ADDRESS]: MapPin,
+  [FIELD_TYPES.FULL_NAME]: User,
+  [FIELD_TYPES.RICH_TEXT]: FileText,
+  [FIELD_TYPES.RAW_JSON]: Braces,
+  [FIELD_TYPES.EMAILS]: Mail,
+  [FIELD_TYPES.PHONES]: Phone,
+  [FIELD_TYPES.LINKS]: Link,
+  [FIELD_TYPES.FILES]: Paperclip,
 };
 
 export function resolveFieldIcon(field: { icon?: string; fieldType: FieldType }): LucideIcon {

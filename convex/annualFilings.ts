@@ -22,21 +22,21 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Distinct jurisdictions tracked for a society, in first-seen order. */
 export const jurisdictions = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => jurisdictionsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => jurisdictionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Filing history for a jurisdiction, ascending by year. */
 export const history = query({
   args: { societyId: v.id("societies"), jurisdiction: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => historyPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => historyPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Years in [fromYear, toYear] with no filed=true record for the jurisdiction. */
@@ -48,7 +48,7 @@ export const outstanding = query({
     toYear: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => outstandingPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => outstandingPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Create or patch a ledger row. Returns the row id. */
@@ -65,12 +65,12 @@ export const upsert = mutation({
     nowISO: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
 /** Delete a ledger row. */
 export const remove = mutation({
   args: { id: v.id("annualFilingLedger") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });

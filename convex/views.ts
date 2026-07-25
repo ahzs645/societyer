@@ -28,13 +28,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const listForObject = query({
   args: { objectMetadataId: v.id("objectMetadata") },
   returns: v.any(),
-  handler: (ctx, args) => listForObjectPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listForObjectPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("views") },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /**
@@ -44,7 +44,7 @@ export const get = query({
 export const getHydrated = query({
   args: { id: v.id("views") },
   returns: v.any(),
-  handler: (ctx, args) => getHydratedPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getHydratedPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -75,7 +75,7 @@ export const create = mutation({
     createdByUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -106,7 +106,7 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => updatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const listSharedForDataTable = query({
@@ -116,7 +116,7 @@ export const listSharedForDataTable = query({
     nameSingular: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => listSharedForDataTablePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listSharedForDataTablePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const createSharedDataTableView = mutation({
@@ -138,7 +138,7 @@ export const createSharedDataTableView = mutation({
     createdByUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => createSharedDataTableViewPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createSharedDataTableViewPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const deleteSharedDataTableView = mutation({
@@ -147,19 +147,19 @@ export const deleteSharedDataTableView = mutation({
     id: v.id("views"),
   },
   returns: v.any(),
-  handler: (ctx, args) => deleteSharedDataTableViewPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => deleteSharedDataTableViewPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const seedGovernanceDataTableViews = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => seedGovernanceDataTableViewsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => seedGovernanceDataTableViewsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("views") },
   returns: v.any(),
-  handler: (ctx, args) => removePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
 /* ----------------------------- View fields ----------------------------- */
@@ -167,7 +167,7 @@ export const remove = mutation({
 export const listFieldsForView = query({
   args: { viewId: v.id("views") },
   returns: v.any(),
-  handler: (ctx, args) => listFieldsForViewPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listFieldsForViewPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const addField = mutation({
@@ -182,7 +182,7 @@ export const addField = mutation({
     viewFieldGroupId: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => addFieldPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => addFieldPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const updateField = mutation({
@@ -197,13 +197,13 @@ export const updateField = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => updateFieldPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateFieldPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeField = mutation({
   args: { id: v.id("viewFields") },
   returns: v.any(),
-  handler: (ctx, args) => removeFieldPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeFieldPortable(await toPortableMutationCtx(ctx), args),
 });
 
 /**
@@ -217,5 +217,5 @@ export const reorderFields = mutation({
     orderedIds: v.array(v.id("viewFields")),
   },
   returns: v.any(),
-  handler: (ctx, args) => reorderFieldsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => reorderFieldsPortable(await toPortableMutationCtx(ctx), args),
 });

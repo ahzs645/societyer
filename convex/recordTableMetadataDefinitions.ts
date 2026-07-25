@@ -2086,7 +2086,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       { name: "account", label: "Account", fieldType: FIELD_TYPES.TEXT, icon: "Landmark", isReadOnly: true },
       { name: "category", label: "Category", fieldType: FIELD_TYPES.TEXT, icon: "Tag" },
       { name: "amountCents", label: "Amount", fieldType: FIELD_TYPES.CURRENCY, icon: "DollarSign", config: { currencyCode: "CAD", isCents: true } },
-      { name: "items", label: "Inventory items", fieldType: FIELD_TYPES.TEXT, icon: "Link", isReadOnly: true },
+      { name: "items", label: "Purchase links", fieldType: FIELD_TYPES.TEXT, icon: "Link", isReadOnly: true },
     ],
     defaultView: {
       name: "Recent transactions",

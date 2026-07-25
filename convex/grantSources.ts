@@ -44,19 +44,19 @@ const sourcePatchValidator = v.object({
 export const library = query({
   args: {},
   returns: v.any(),
-  handler: (ctx, args) => libraryPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => libraryPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listWithLibrary = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listWithLibraryPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listWithLibraryPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = mutation({
@@ -106,19 +106,19 @@ export const addFromLibrary = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => addFromLibraryPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => addFromLibraryPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const getSource = query({
   args: { sourceId: v.id("grantSources") },
   returns: v.any(),
-  handler: (ctx, args) => getSourcePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getSourcePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const candidates = query({
   args: { societyId: v.id("societies"), sourceId: v.optional(v.id("grantSources")) },
   returns: v.any(),
-  handler: (ctx, args) => candidatesPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => candidatesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 // Manually add a grant opportunity to the review queue. The automated scraping
@@ -138,13 +138,13 @@ export const createCandidate = mutation({
     description: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createCandidatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createCandidatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const setCandidateStatus = mutation({
   args: { candidateId: v.id("grantOpportunityCandidates"), status: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => setCandidateStatusPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => setCandidateStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
 // Persist discovered opportunities into the queue, deduping by sourceExternalId

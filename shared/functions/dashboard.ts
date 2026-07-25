@@ -1015,14 +1015,16 @@ async function buildFilingEvidenceChain(
     filing.stagedPacketDocumentId,
     ...(filing.sourceDocumentIds ?? []),
   ].filter(Boolean) as DashboardId[];
-  const [documents, submitter, auditEvents] = await Promise.all([
+  const [documents, submitter, indexedAuditEvents] = await Promise.all([
     Promise.all(documentIds.map((id) => ctx.db.get(id))),
     filing.submittedByUserId ? ctx.db.get(filing.submittedByUserId) : Promise.resolve(null),
     ctx.db
       .query("activity")
+      // TODO(H0-flip): query by_subject after the hosted backfill is complete.
       .withIndex("by_entity", (q) => q.eq("societyId", societyId).eq("entityType", "filing").eq("entityId", filing._id))
       .collect(),
   ]);
+  const auditEvents = indexedAuditEvents.filter((event) => (event.subjectId ?? event.entityId) === filing._id);
   const evidenceDocument = documents.find(Boolean);
   const auditEvent = auditEvents
     .sort((a: any, b: any) => String(b.createdAtISO).localeCompare(String(a.createdAtISO)))

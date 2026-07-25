@@ -157,111 +157,6 @@
   padding: 0 10px 6px;
 }
 
-.evidence-chains {
-  display: grid;
-  gap: token('s-3');
-}
-
-.evidence-chain {
-  border: 1px solid token('border');
-  border-radius: token('r-sm');
-  display: grid;
-  gap: token('s-3');
-  padding: token('s-3');
-}
-
-.evidence-chain__head {
-  align-items: flex-start;
-  display: grid;
-  gap: token('s-2');
-  grid-template-columns: auto minmax(0, 1fr) auto;
-}
-
-.evidence-chain__head h3 {
-  color: token('text-primary');
-  font-size: token('fs-md');
-  margin: 0;
-}
-
-.evidence-chain__head p {
-  color: token('text-secondary');
-  font-size: token('fs-sm');
-  line-height: 1.35;
-  margin: 3px 0 0;
-}
-
-.evidence-chain__status {
-  align-items: center;
-  border-radius: token('r-sm');
-  display: inline-flex;
-  height: 24px;
-  justify-content: center;
-  width: 24px;
-}
-
-.evidence-chain__status--verified {
-  background: token('success-soft');
-  color: token('success');
-}
-
-.evidence-chain__status--incomplete {
-  background: token('warn-soft');
-  color: token('warn');
-}
-
-.evidence-chain__nodes {
-  display: grid;
-  gap: 8px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.evidence-chain__node {
-  align-items: flex-start;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: auto minmax(0, 1fr);
-}
-
-.evidence-chain__dot {
-  align-items: center;
-  background: token('bg-subtle');
-  border: 1px solid token('border');
-  border-radius: 999px;
-  color: token('text-tertiary');
-  display: inline-flex;
-  height: 22px;
-  justify-content: center;
-  width: 22px;
-}
-
-.evidence-chain__node > div {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.evidence-chain__node span:not(.evidence-chain__dot) {
-  color: token('text-tertiary');
-  font-size: token('fs-xs');
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.evidence-chain__node strong,
-.evidence-chain__node a {
-  color: token('text-primary');
-  font-size: token('fs-sm');
-  overflow-wrap: anywhere;
-}
-
-.evidence-chain__node--missing .evidence-chain__dot {
-  background: token('warn-soft');
-  border-color: transparent;
-  color: token('warn');
-}
-
 .transparency-builder {
   display: grid;
   gap: token('s-4');
@@ -860,19 +755,16 @@
     border-top: 1px solid token('border');
   }
 
-  .evidence-chain__head,
   .transparency-builder,
   .transparency-builder__checks {
     grid-template-columns: 1fr;
   }
 
-  .evidence-chain__head .btn-action {
-    justify-self: start;
-  }
-
   .onboarding-flow {
     gap: token('s-3');
     padding: token('s-3');
+    /* Anchor for the absolutely-positioned dismiss button below. */
+    position: relative;
   }
 
   .onboarding-flow__story,
@@ -883,6 +775,17 @@
 
   .onboarding-flow__story h2 {
     font-size: token('fs-lg');
+    /* Keep the title clear of the top-right dismiss button. */
+    padding-right: 32px;
+  }
+
+  /* On phones the actions row stacks under the copy, which pushed the
+   * dismiss button to the bottom of the card — pin it to the top right
+   * instead, where a close affordance is expected. */
+  .onboarding-flow__dismiss {
+    position: absolute;
+    top: token('s-2');
+    right: token('s-2');
   }
 
   .onboarding-flow__status {

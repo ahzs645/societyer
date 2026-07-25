@@ -26,7 +26,7 @@ import { summaryPortable as annualCycleSummaryPortable } from "../shared/functio
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
-const rt = () => new PortableRuntime({ db, capabilities: caps });
+const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) });
 
 // 1) Seed. The Phase 1 finalization routes every seeded minutes through the
 //    dual-write, so each carries ordered motionIds + mirror rows.

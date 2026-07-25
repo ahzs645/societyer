@@ -300,19 +300,19 @@ async function resolveAudienceRecipients(
 export const listTemplates = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listTemplatesPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listTemplatesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const getTemplate = query({
   args: { id: v.id("communicationTemplates") },
   returns: v.any(),
-  handler: (ctx, args) => getTemplatePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getTemplatePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listCampaigns = query({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
-  handler: (ctx, args) => listCampaignsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listCampaignsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listDeliveries = query({
@@ -323,19 +323,19 @@ export const listDeliveries = query({
     limit: v.optional(v.number()),
   },
   returns: v.any(),
-  handler: (ctx, args) => listDeliveriesPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listDeliveriesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listMemberPrefs = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listMemberPrefsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listMemberPrefsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listSegments = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listSegmentsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listSegmentsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsertTemplate = mutation({
@@ -353,7 +353,7 @@ export const upsertTemplate = mutation({
     system: v.boolean(),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertTemplatePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertTemplatePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsertSegment = mutation({
@@ -371,13 +371,13 @@ export const upsertSegment = mutation({
     volunteerStatus: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertSegmentPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertSegmentPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeSegment = mutation({
   args: { id: v.id("communicationSegments") },
   returns: v.any(),
-  handler: (ctx, args) => removeSegmentPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeSegmentPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const ensureDefaultTemplates = mutation({
@@ -425,7 +425,7 @@ export const upsertMemberPref = mutation({
     unsubscribeReason: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => upsertMemberPrefPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => upsertMemberPrefPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const _createCampaign = internalMutation({
@@ -512,13 +512,13 @@ export const _recordDelivery = internalMutation({
 export const markDeliveryOpened = mutation({
   args: { id: v.id("communicationDeliveries") },
   returns: v.any(),
-  handler: (ctx, args) => markDeliveryOpenedPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => markDeliveryOpenedPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const markDeliveryBounced = mutation({
   args: { id: v.id("communicationDeliveries"), errorMessage: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args) => markDeliveryBouncedPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => markDeliveryBouncedPortable(await toPortableMutationCtx(ctx), args),
 });
 
 async function recordManualDelivery(

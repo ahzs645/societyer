@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
         - name: convex
-          image: ghcr.io/get-convex/convex-backend:latest
+          # Rehearsed against a clone of production data on 2026-07-14.
+          image: ghcr.io/get-convex/convex-backend@sha256:1738f1673f8d63161043a7859710d2301b1e9d6271e06afbb7af31594ea3a58f
           imagePullPolicy: IfNotPresent
           ports:
             - name: convex-api
@@ -61,7 +62,7 @@ spec:
       volumes:
         - name: convex-data
           persistentVolumeClaim:
-            claimName: societyer-convex-data
+            claimName: societyer-convex-data-local
 ---
 apiVersion: v1
 kind: Service

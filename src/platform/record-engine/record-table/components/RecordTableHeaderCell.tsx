@@ -11,6 +11,7 @@ import {
 import { FIELD_TYPES, type RecordField, type ViewFilterOperator } from "../../types";
 import { resolveFieldIcon } from "../../record-field/fieldIcons";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
+import { useIsMobile } from "../../../../lib/useIsMobile";
 
 /**
  * One header cell. Click = cycle sort (asc → desc → off). Drag the right
@@ -19,14 +20,17 @@ import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordT
  */
 export function RecordTableHeaderCell({
   recordField,
+  isLabelIdentifier = false,
 }: {
   recordField: RecordField;
+  isLabelIdentifier?: boolean;
 }) {
   const columns = useRecordTableState((s) => s.columns);
   const filters = useRecordTableState((s) => s.filters);
   const filterGroups = useRecordTableState((s) => s.filterGroups);
   const sorts = useRecordTableState((s) => s.sorts);
   const handle = useRecordTableStoreHandle();
+  const isMobile = useIsMobile();
   const resizing = useRef<{ startX: number; startSize: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -38,8 +42,11 @@ export function RecordTableHeaderCell({
   const visibleIndex = visibleColumns.findIndex(
     (column) => column.viewFieldId === recordField.viewFieldId,
   );
-  const canMoveLeft = visibleIndex > 0;
-  const canMoveRight = visibleIndex >= 0 && visibleIndex < visibleColumns.length - 1;
+  const canMoveLeft = !isLabelIdentifier && visibleIndex > 1;
+  const canMoveRight =
+    !isLabelIdentifier &&
+    visibleIndex >= 1 &&
+    visibleIndex < visibleColumns.length - 1;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -81,7 +88,12 @@ export function RecordTableHeaderCell({
       (column) => column.viewFieldId === recordField.viewFieldId,
     );
     const nextIndex = currentIndex + direction;
-    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= currentVisible.length) return;
+    if (
+      isLabelIdentifier ||
+      currentIndex < 0 ||
+      nextIndex < 1 ||
+      nextIndex >= currentVisible.length
+    ) return;
 
     const nextVisible = [...currentVisible];
     const [moved] = nextVisible.splice(currentIndex, 1);
@@ -153,9 +165,19 @@ export function RecordTableHeaderCell({
     window.addEventListener("mouseup", onUp);
   };
 
+  const resizeWithKeyboard = (event: React.KeyboardEvent) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const delta = event.key === "ArrowRight" ? 10 : -10;
+    handle.get().resizeColumn(recordField.viewFieldId, Math.max(80, recordField.size + delta));
+  };
+
   return (
     <th
-      className="record-table__header-cell"
+      className={
+        "record-table__header-cell" +
+        (isLabelIdentifier ? " record-table__header-cell--identifier" : "")
+      }
       style={{ width: recordField.size, minWidth: recordField.size }}
       aria-sort={sort ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
     >
@@ -229,24 +251,31 @@ export function RecordTableHeaderCell({
             </button>
             <button
               type="button"
+              disabled={isLabelIdentifier}
               onClick={() => {
                 handle.get().toggleColumnVisibility(recordField.viewFieldId);
                 setMenuOpen(false);
               }}
             >
               <EyeOff size={13} />
-              <span>Hide field</span>
+              <span>{isLabelIdentifier ? "Identifier field" : "Hide field"}</span>
             </button>
           </div>
         )}
       </div>
-      <span
-        className="record-table__resize-handle"
-        onMouseDown={onResizeMouseDown}
-        aria-label="Resize column"
-        role="separator"
-        tabIndex={-1}
-      />
+      {!isMobile && (
+        <span
+          className="record-table__resize-handle"
+          onMouseDown={onResizeMouseDown}
+          aria-label="Resize column"
+          aria-orientation="vertical"
+          aria-valuemin={80}
+          aria-valuenow={recordField.size}
+          role="separator"
+          tabIndex={0}
+          onKeyDown={resizeWithKeyboard}
+        />
+      )}
     </th>
   );
 }

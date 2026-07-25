@@ -22,7 +22,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
@@ -31,7 +31,7 @@ export const get = query({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => getPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listNominations = query({
@@ -40,7 +40,7 @@ export const listNominations = query({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => listNominationsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listNominationsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const listMine = query({
@@ -49,7 +49,7 @@ export const listMine = query({
     userId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => listMinePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listMinePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -68,7 +68,7 @@ export const create = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const updateSettings = mutation({
@@ -82,7 +82,7 @@ export const updateSettings = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => updateSettingsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => updateSettingsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const addQuestion = mutation({
@@ -102,7 +102,7 @@ export const addQuestion = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => addQuestionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => addQuestionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const submitNomination = mutation({
@@ -115,7 +115,7 @@ export const submitNomination = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => submitNominationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => submitNominationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const reviewNomination = mutation({
@@ -125,7 +125,7 @@ export const reviewNomination = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => reviewNominationPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => reviewNominationPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const publishNominationToBallot = mutation({
@@ -135,7 +135,7 @@ export const publishNominationToBallot = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => publishNominationToBallotPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => publishNominationToBallotPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const snapshotEligibleVoters = mutation({
@@ -144,7 +144,7 @@ export const snapshotEligibleVoters = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => snapshotEligibleVotersPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => snapshotEligibleVotersPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const castBallot = mutation({
@@ -159,7 +159,7 @@ export const castBallot = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => castBallotPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => castBallotPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const close = mutation({
@@ -168,7 +168,7 @@ export const close = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => closePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => closePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const tallyElection = mutation({
@@ -179,7 +179,7 @@ export const tallyElection = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => tallyElectionPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => tallyElectionPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const tally = query({
@@ -188,5 +188,5 @@ export const tally = query({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => tallyPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => tallyPortable(await toPortableQueryCtx(ctx), args),
 });

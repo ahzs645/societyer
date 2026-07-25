@@ -1,7 +1,35 @@
 import { formatDateTime } from "../../../lib/format";
 import { minutesMotionsForDisplay } from "../../../../shared/minutesMotions";
+import { motionCompletionGaps } from "../../../lib/motionGovernance";
 
 export type MeetingAgendaItemEntry = { title: string; depth: 0 | 1 };
+
+export function normalizedMeetingTitle(value: unknown): string {
+  return String(value ?? "").trim();
+}
+
+export function quorumPresentCount(minutes: any): number {
+  const detailed = Array.isArray(minutes?.detailedAttendance) ? minutes.detailedAttendance : [];
+  if (detailed.length) {
+    return detailed.filter(
+      (row: any) => row?.status === "present" && row?.quorumCounted !== false,
+    ).length;
+  }
+  return Array.isArray(minutes?.attendees) ? minutes.attendees.length : 0;
+}
+
+export function computedQuorumMet({
+  presentCount,
+  activeProxyCount = 0,
+  required,
+}: {
+  presentCount: number;
+  activeProxyCount?: number;
+  required?: number | null;
+}): boolean | null {
+  if (required == null || !Number.isFinite(required)) return null;
+  return presentCount + activeProxyCount >= required;
+}
 
 export function slugifyFilePart(value: string) {
   return (value || "item").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "item";
@@ -42,6 +70,46 @@ export function hasStartedMinutesDraft(record: any): boolean {
     if (motion?.secondedByMemberId || motion?.secondedByDirectorId) return true;
   }
   return false;
+}
+
+/** A scaffolded minutes row is not a recorded set of minutes. The checklist
+ * becomes complete only after the meeting is held and the record has actual
+ * authored content (or has been approved). */
+export function hasRecordedMeetingMinutes(meeting: any, record: any, motions?: any[]): boolean {
+  const resolvedRecord = record && motions ? { ...record, displayMotions: motions } : record;
+  return meeting?.status === "Held" && hasStartedMinutesDraft(resolvedRecord);
+}
+
+/** Hard blockers for final Word/PDF/print output. Preview stays available so a
+ * recorder can inspect layout while resolving these governance gaps. */
+export function formalMinutesExportBlockers({
+  meeting,
+  minutes,
+  agendaItemCount,
+  motions,
+}: {
+  meeting: any;
+  minutes: any;
+  agendaItemCount: number;
+  motions: any[];
+}): string[] {
+  const blockers: string[] = [];
+  if (meeting?.status !== "Held") blockers.push("Mark the meeting held.");
+  if (!minutes) return [...blockers, "Create or record the minutes."];
+  if ((minutes.attendees?.length ?? 0) === 0) blockers.push("Record at least one attendee present.");
+  if (agendaItemCount === 0 && (minutes.sections?.length ?? 0) === 0) {
+    blockers.push("Record an agenda or minutes section.");
+  }
+  if (![minutes.chairName, minutes.secretaryName, minutes.recorderName].some((value) => String(value ?? "").trim())) {
+    blockers.push("Record a chair, secretary, or minute-taker.");
+  }
+  motions.forEach((motion, index) => {
+    const gaps = motionCompletionGaps(motion);
+    if (!gaps.length) return;
+    const label = String(motion.name || motion.text || `Motion ${index + 1}`).trim();
+    blockers.push(`Complete ${label}: ${gaps.join(", ")}.`);
+  });
+  return blockers;
 }
 
 export function isCurrentDirector(director: any) {

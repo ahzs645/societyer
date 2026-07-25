@@ -15,7 +15,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const saveSource = mutation({
@@ -25,13 +25,13 @@ export const saveSource = mutation({
     payload: v.any(),
   },
   returns: v.any(),
-  handler: (ctx, args) => saveSourcePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => saveSourcePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeSource = mutation({
   args: { id: v.id("documents") },
   returns: v.any(),
-  handler: (ctx, args) => removeSourcePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeSourcePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const saveItem = mutation({
@@ -42,7 +42,7 @@ export const saveItem = mutation({
     payload: v.any(),
   },
   returns: v.any(),
-  handler: (ctx, args) => saveItemPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => saveItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const bulkSetItemReviewStatus = mutation({
@@ -58,7 +58,7 @@ export const bulkSetItemReviewStatus = mutation({
     ),
   },
   returns: v.any(),
-  handler: (ctx, args) => bulkSetItemReviewStatusPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => bulkSetItemReviewStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const extractBudgetSourceDetails = mutation({
@@ -67,13 +67,13 @@ export const extractBudgetSourceDetails = mutation({
     budgetId: v.id("documents"),
   },
   returns: v.any(),
-  handler: (ctx, args) => extractBudgetSourceDetailsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => extractBudgetSourceDetailsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeItem = mutation({
   args: { id: v.id("documents"), kind: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => removeItemPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => removeItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const bulkImport = mutation({
@@ -87,5 +87,5 @@ export const bulkImport = mutation({
     budgets: v.optional(v.array(v.any())),
   },
   returns: v.any(),
-  handler: (ctx, args) => bulkImportPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => bulkImportPortable(await toPortableMutationCtx(ctx), args),
 });

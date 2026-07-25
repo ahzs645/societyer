@@ -25,7 +25,7 @@ export const roleHoldersAsOfDate = query({
     roleType: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => roleHoldersAsOfDatePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => roleHoldersAsOfDatePortable(await toPortableQueryCtx(ctx), args),
 });
 
 /**
@@ -36,14 +36,14 @@ export const roleHoldersAsOfDate = query({
 export const addressesAsOf = query({
   args: { societyId: v.id("societies"), asOf: v.string(), type: v.optional(v.string()) },
   returns: v.any(),
-  handler: (ctx, args) => addressesAsOfPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => addressesAsOfPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Directors who held office on a specific ISO date ("who were the directors on X?"). */
 export const directorsAsOf = query({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => directorsAsOfPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => directorsAsOfPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /**
@@ -55,5 +55,5 @@ export const directorsAsOf = query({
 export const significantIndividualsAsOf = query({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => significantIndividualsAsOfPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => significantIndividualsAsOfPortable(await toPortableQueryCtx(ctx), args),
 });

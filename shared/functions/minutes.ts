@@ -493,6 +493,8 @@ async function applyAdoptionApprovals(
       societyId: minutes.societyId,
       actor: "You",
       entityType: "minutes",
+      subjectId: String(target._id),
+      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: String(target._id),
       action: "approved",
       summary: `Marked minutes${targetMeeting ? ` of ${targetMeeting.title}` : ""} approved — adoption motion carried`,

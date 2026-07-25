@@ -9,6 +9,8 @@
 
 export type {
   PortableDoc,
+  RuntimeKind,
+  PortablePrincipal,
   TableName,
   IndexRangeBuilder,
   PaginationOptions,
@@ -60,4 +62,5 @@ export type {
   PortableMutationDef,
   PortableFunctionDef,
   PortableRuntimeOptions,
+  PortableAccess,
 } from "./define";

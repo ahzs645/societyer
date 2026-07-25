@@ -10,7 +10,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 export const disclosureForYear = query({
   args: { societyId: v.id("societies"), fiscalYear: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => disclosureForYearPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => disclosureForYearPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Apply the computed disclosure back onto a financials row. */
@@ -20,5 +20,5 @@ export const applyToFinancials = mutation({
     disclosures: v.array(v.object({ role: v.string(), amountCents: v.number() })),
   },
   returns: v.any(),
-  handler: (ctx, args) => applyToFinancialsPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => applyToFinancialsPortable(await toPortableMutationCtx(ctx), args),
 });

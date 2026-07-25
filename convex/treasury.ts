@@ -14,7 +14,7 @@ export const profitAndLoss = query({
     to: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => profitAndLossPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => profitAndLossPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const budgetVariance = query({
@@ -23,11 +23,11 @@ export const budgetVariance = query({
     fiscalYear: v.string(),
   },
   returns: v.any(),
-  handler: (ctx, args) => budgetVariancePortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => budgetVariancePortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const restrictedFunds = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => restrictedFundsPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => restrictedFundsPortable(await toPortableQueryCtx(ctx), args),
 });

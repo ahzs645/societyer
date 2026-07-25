@@ -79,6 +79,8 @@ export async function createPortable(ctx: PortableMutationCtx, args: GoalCreateA
     societyId: args.societyId,
     actor: "You",
     entityType: "goal",
+    subjectId: id,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: id,
     action: "created",
     summary: `Created goal "${args.title}"`,

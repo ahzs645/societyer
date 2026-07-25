@@ -20,6 +20,39 @@
   width: 0;
   height: 0;
 }
+
+/* On phones the "New meeting" action becomes an icon-only + pinned to the
+ * header's top right, instead of a labeled button wrapping under the title. */
+@media (max-width: 760px) {
+  .meetings-page .page__header {
+    position: relative;
+  }
+
+  .meetings-page .page__intro {
+    padding-right: 40px;
+  }
+
+  .meetings-page .page__actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    /* The generic phone rule stretches actions to width: 100% under the
+     * title; undo that so the pinned + hugs the top-right corner. */
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .meetings-page__new {
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+  }
+
+  .meetings-page__new .meetings-page__new-label {
+    display: none;
+  }
+}
 .minutes-export-gap {
   padding: token('s-2');
   border: 1px solid token('border');

@@ -69,13 +69,16 @@ export type MeetingMinutesColumnProps = {
   setAttendanceEdit: (value: any) => void;
   startAttendanceEdit: () => void;
   autofillCurrentDirectors: () => void;
+  attendanceAutofillLabel: string;
   saveAttendance: () => void | Promise<void>;
   quorumSnapshot: any;
+  activeProxyCount: number;
   quorumLegalGuides: any[];
   members: any;
   directors: any;
   saveMinuteSections: (next: any[]) => void | Promise<void> | undefined;
   saveMinuteMotions: (next: Motion[]) => void | Promise<void> | undefined;
+  resolvedMotions?: Motion[];
   addSectionToBacklog: (section: any) => void | Promise<void>;
   onOpenMotions?: () => void;
   meetingTasks: any[];
@@ -103,13 +106,16 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   setAttendanceEdit,
   startAttendanceEdit,
   autofillCurrentDirectors,
+  attendanceAutofillLabel,
   saveAttendance,
   quorumSnapshot,
+  activeProxyCount,
   quorumLegalGuides,
   members,
   directors,
   saveMinuteSections,
   saveMinuteMotions,
+  resolvedMotions,
   addSectionToBacklog,
   onOpenMotions,
   meetingTasks,
@@ -127,7 +133,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   // section editor + its index-based remaps operate on the same list the rest of
   // the UI shows and the backend resolves. See Phase 4B. Each carries motionId,
   // so save-remaps reconcile in place instead of regenerating rows.
-  const motions = minutesMotionsForDisplay(minutes) as Motion[];
+  const motions = resolvedMotions ?? (minutesMotionsForDisplay(minutes) as Motion[]);
   const sectionHasDetails = (section: any) =>
     !!(
       section?.discussion ||
@@ -1426,8 +1432,10 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     setAttendanceEdit,
     startAttendanceEdit,
     autofillCurrentDirectors,
+    attendanceAutofillLabel,
     saveAttendance,
     quorumSnapshot,
+    activeProxyCount,
     quorumLegalGuides,
     members,
     directors,

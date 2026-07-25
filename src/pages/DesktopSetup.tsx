@@ -20,12 +20,22 @@ import {
   type DesktopConnectorHealth,
   type DesktopWorkspaceInfo,
 } from "../lib/desktopBridge";
-import { downloadLocalWorkspaceSnapshot, importLocalWorkspaceSnapshotFile } from "../lib/localWorkspaceExport";
+import {
+  persistLocalWorkspaceSnapshot,
+  readLocalWorkspaceSnapshot,
+  type LocalWorkspaceSnapshotReadResult,
+} from "../lib/documentStorage";
+import {
+  downloadLocalWorkspaceSnapshot,
+  getLocalWorkspaceSnapshot,
+  importLocalWorkspaceSnapshotFile,
+} from "../lib/localWorkspaceExport";
 import { getRuntimeDescriptor } from "../lib/runtimeMode";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const CONNECTOR_ENDPOINT_KEY = "societyer.desktop.connectorEndpoint";
 const DEFAULT_CONNECTOR_ENDPOINT = "http://127.0.0.1:8890";
+type WorkspaceSnapshotOffer = Extract<LocalWorkspaceSnapshotReadResult, { status: "available" }>;
 
 export function DesktopSetupPage() {
   const runtime = useMemo(() => getRuntimeDescriptor(), []);
@@ -40,6 +50,7 @@ export function DesktopSetupPage() {
   const [connectorHealth, setConnectorHealth] = useState<DesktopConnectorHealth | null>(null);
   const [busy, setBusy] = useState<"workspace" | "backup" | "connector" | "export" | "import" | null>(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
+  const [workspaceSnapshotOffer, setWorkspaceSnapshotOffer] = useState<WorkspaceSnapshotOffer | null>(null);
 
   useEffect(() => {
     const bridge = getDesktopBridge();
@@ -63,11 +74,20 @@ export function DesktopSetupPage() {
     const bridge = getDesktopBridge();
     if (!bridge) return;
     setBusy("workspace");
+    setWorkspaceSnapshotOffer(null);
     try {
       const selected = await bridge.chooseWorkspaceDirectory();
       if (!selected) return;
       setWorkspace(await bridge.getWorkspaceInfo());
-      setStatusMessage("Workspace folder updated.");
+      const snapshotResult = await readLocalWorkspaceSnapshot();
+      if (snapshotResult.status === "available") {
+        setWorkspaceSnapshotOffer(snapshotResult);
+        setStatusMessage("Workspace folder updated.");
+      } else if (snapshotResult.status === "invalid") {
+        setStatusMessage(`Workspace folder updated, but ${snapshotResult.error}`);
+      } else {
+        setStatusMessage("Workspace folder updated.");
+      }
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Workspace selection failed.");
     } finally {
@@ -80,6 +100,9 @@ export function DesktopSetupPage() {
     if (!bridge) return;
     setBusy("backup");
     try {
+      const snapshot = getLocalWorkspaceSnapshot();
+      if (!snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
+      await persistLocalWorkspaceSnapshot(JSON.stringify(snapshot, null, 2));
       const result = await bridge.createBackup();
       setBackupPath(result.path);
       setStatusMessage("Backup created.");
@@ -110,6 +133,25 @@ export function DesktopSetupPage() {
       setStatusMessage("Local workspace data import completed.");
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Local data import failed.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const importBundledRecords = async () => {
+    if (!workspaceSnapshotOffer) return;
+    setBusy("import");
+    try {
+      const file = new File(
+        [workspaceSnapshotOffer.serializedSnapshot],
+        "records-snapshot.json",
+        { type: "application/json" },
+      );
+      await importLocalWorkspaceSnapshotFile(file);
+      setWorkspaceSnapshotOffer(null);
+      setStatusMessage("Records from the workspace snapshot were imported.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Workspace records import failed.");
     } finally {
       setBusy(null);
     }
@@ -195,10 +237,10 @@ export function DesktopSetupPage() {
           </div>
           <div className="card__body col">
             <div className="muted">
-              The desktop app unlocks local-first storage — your society's records and documents live directly on
-              your computer's file system, with offline access, local backups, and file exports/imports — but it
-              isn't required to use Societyer. You're using the web version right now, and everything else in
-              Societyer works normally here.
+              The desktop app unlocks local-first storage — your society's records live in the app's local database,
+              while document files live in your chosen workspace folder. Both remain on your computer for offline
+              access, backups, and exports/imports. Societyer Desktop isn't required; everything else works normally
+              in the web version you're using now.
             </div>
             <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
               To set up the desktop app, download and open Societyer Desktop, then revisit this page from inside
@@ -222,7 +264,7 @@ export function DesktopSetupPage() {
     <div className="page page--wide">
       <PageHeader
         title="Welcome to Societyer Desktop"
-        subtitle="Choose where local records live, confirm the desktop bridge, and connect optional services when needed."
+        subtitle="Choose where local documents live, confirm the desktop bridge, and connect optional services when needed."
         icon={<HardDrive size={16} />}
         iconColor="blue"
         actions={
@@ -242,12 +284,38 @@ export function DesktopSetupPage() {
         </div>
       )}
 
+      {workspaceSnapshotOffer && (
+        <div className="notice notice--warning" style={{ marginBottom: 16 }}>
+          <div className="row" style={{ justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <strong>Records snapshot found</strong>
+              <div style={{ marginTop: 4 }}>
+                This folder contains a records snapshot from{" "}
+                {new Date(workspaceSnapshotOffer.exportedAtISO).toLocaleString()} with{" "}
+                {workspaceSnapshotOffer.tableCount} table{workspaceSnapshotOffer.tableCount === 1 ? "" : "s"}.
+                Importing it replaces the records currently stored in this app.
+              </div>
+            </div>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn btn--accent" disabled={busy === "import"} onClick={() => void importBundledRecords()}>
+                <Upload size={12} /> {busy === "import" ? "Importing..." : "Import records"}
+              </button>
+              <button className="btn" disabled={busy === "import"} onClick={() => setWorkspaceSnapshotOffer(null)}>
+                Not now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="settings-pair" style={{ marginBottom: 16 }}>
         <div className="card">
           <div className="card__head">
             <div>
               <h2 className="card__title">Workspace vault</h2>
-              <span className="card__subtitle">Local records and document versions are stored in this folder.</span>
+              <span className="card__subtitle">
+                Document files are stored in this folder. Records stay in the app's local database and are snapshotted here for backups.
+              </span>
             </div>
             <Badge tone={workspace?.rootPath ? "success" : "warn"}>
               {workspace?.rootPath ? "Ready" : "Pending"}
@@ -270,7 +338,7 @@ export function DesktopSetupPage() {
                 <div>
                   <strong>Backup</strong>
                   <div className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
-                    {backupPath ?? "Creates a local copy inside the workspace backups folder."}
+                    {backupPath ?? "Snapshots local records, then copies the workspace into its backups folder."}
                   </div>
                 </div>
                 <button className="btn" disabled={!requiredReady || busy === "backup"} onClick={createBackup}>
@@ -281,7 +349,7 @@ export function DesktopSetupPage() {
                 <div>
                   <strong>Local data export</strong>
                   <div className="muted mono" style={{ fontSize: "var(--fs-xs)" }}>
-                    Downloads local records, document versions, attachment references, and change metadata as JSON.
+                    Downloads local records, attachment references, and change metadata as JSON. Workspace document files remain in the folder.
                   </div>
                 </div>
                 <button className="btn" disabled={!requiredReady || busy === "export"} onClick={exportLocalData}>

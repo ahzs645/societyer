@@ -1,6 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import { DEFAULT_HOME_JURISDICTION_CODE } from "../../shared/jurisdictionWorkspace";
 import type { LocalRowStore, RowStoreOp } from "../../shared/portable/localRowStore";
+import { createEntityIdFactory } from "../../shared/portable/ids";
 
 export type LocalSeed = Record<string, any[]>;
 export type LocalArgs = Record<string, any> | undefined;
@@ -59,7 +60,11 @@ export type LocalWorkspaceSnapshot = {
   changes: LocalChangeEnvelope[];
 };
 
-const CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION = 2;
+const CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION = 3;
+
+// Keep a useful diagnostic window without treating the journal as durable history.
+const LOCAL_CHANGE_JOURNAL_CAP = 2_000;
+const LOCAL_CHANGE_JOURNAL_PRUNE_SLACK = 100;
 
 export class LocalDexieDatabase extends Dexie {
   meta!: Table<any, string>;
@@ -117,7 +122,12 @@ export class LocalDexieRowStore implements LocalRowStore {
 
     this.db = new LocalDexieDatabase(options?.databaseName ?? "societyer-local-workspace");
     void this.hydrate(seed).catch((error) => {
-      console.warn(`[${options?.logLabel ?? "societyer-local"}] Dexie hydrate failed; using in-memory data.`, error);
+      this.db?.close();
+      this.db = null;
+      console.warn(
+        `[${options?.logLabel ?? "societyer-local"}] Dexie hydrate failed; using in-memory data for this session. Changes will not persist.`,
+        error,
+      );
     });
   }
 
@@ -225,6 +235,7 @@ export class LocalDexieRowStore implements LocalRowStore {
       });
     }
 
+    // Persistence policy: broken at startup => memory-only session; broken mid-session => fail the mutation.
     if (this.db) {
       try {
         await this.db.open();
@@ -240,6 +251,7 @@ export class LocalDexieRowStore implements LocalRowStore {
             }
           }
           await this.db!.changes.bulkAdd(changes);
+          await this.prunePersistedChangesIfNeeded();
         });
       } catch (error) {
         // Roll the cache back to its pre-batch state so memory matches storage.
@@ -248,7 +260,8 @@ export class LocalDexieRowStore implements LocalRowStore {
       }
     }
 
-    this.changesCache = [...this.changesCache, ...changes];
+    this.changesCache.push(...changes);
+    this.pruneChangesCacheIfNeeded();
     this.scheduleNotify();
   }
 
@@ -264,31 +277,53 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   async importSnapshot(snapshot: LocalWorkspaceSnapshot | { tables?: LocalSeed; attachments?: LocalAttachmentEnvelope[]; workspace?: Partial<LocalWorkspaceMeta> }) {
-    const tables = snapshot?.tables;
-    if (!tables || typeof tables !== "object") throw new Error("Local workspace snapshot is missing tables.");
-    this.cache = migrateLocalWorkspaceSnapshotTables(cloneLocalSeed(tables));
-    this.attachmentsCache = cloneLocalRows(snapshot.attachments ?? []);
-    this.workspaceMeta = normalizeWorkspaceMeta(snapshot.workspace, this.workspaceMeta);
-    if (!this.db) {
-      this.notify();
-      return;
-    }
-    await this.db.open();
-    await Promise.all([
-      this.db.meta.clear(),
-      this.db.records.clear(),
-      this.db.changes.clear(),
-      this.db.attachments.clear(),
-      this.db.meetings.clear(),
-      this.db.minutes.clear(),
-    ]);
-    await this.writeSeed(this.cache);
-    if (this.attachmentsCache.length) await this.db.attachments.bulkPut(cloneLocalRows(this.attachmentsCache));
-    await this.db.meta.put({ key: "workspace", value: this.workspaceMeta });
-    await this.appendChange("__workspace", { _id: this.workspaceMeta.id }, "seed", {
+    const importedTables = validateSnapshotTables(snapshot?.tables);
+    const importedAttachments = validateSnapshotAttachments(snapshot?.attachments);
+    const normalizedMeta = normalizeWorkspaceMeta(snapshot?.workspace, this.workspaceMeta);
+    const importedCache = migrateLocalWorkspaceSnapshotTables(importedTables);
+    const importedMeta: LocalWorkspaceMeta = {
+      ...normalizedMeta,
+      schemaVersion: Math.max(normalizedMeta.schemaVersion, CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION),
+      updatedAtISO: new Date().toISOString(),
+    };
+    const importChange = createLocalChange("__workspace", { _id: importedMeta.id }, "seed", {
       reason: "import-snapshot",
-      snapshot: { tableCount: Object.keys(this.cache).length, attachmentCount: this.attachmentsCache.length },
+      snapshot: { tableCount: Object.keys(importedCache).length, attachmentCount: importedAttachments.length },
     });
+    let committedImportChange = importChange;
+
+    if (this.db) {
+      await this.db.open();
+      const records = localRecordsForSeed(importedCache);
+      await this.db.transaction(
+        "rw",
+        [this.db.meta, this.db.records, this.db.changes, this.db.attachments, this.db.meetings, this.db.minutes],
+        async () => {
+          await this.db!.meta.clear();
+          await this.db!.records.clear();
+          await this.db!.changes.clear();
+          await this.db!.attachments.clear();
+          await this.db!.meetings.clear();
+          await this.db!.minutes.clear();
+
+          if (records.length) await this.db!.records.bulkPut(records);
+          if (importedAttachments.length) await this.db!.attachments.bulkPut(cloneLocalRows(importedAttachments));
+          if (importedCache.meetings?.length) await this.db!.meetings.bulkPut(cloneLocalRows(importedCache.meetings));
+          if (importedCache.minutes?.length) await this.db!.minutes.bulkPut(cloneLocalRows(importedCache.minutes));
+          await this.db!.meta.bulkPut([
+            { key: "schemaVersion", value: importedMeta.schemaVersion },
+            { key: "workspace", value: importedMeta },
+          ]);
+          const seq = await this.db!.changes.add(importChange);
+          committedImportChange = { ...importChange, seq };
+        },
+      );
+    }
+
+    this.cache = importedCache;
+    this.attachmentsCache = importedAttachments;
+    this.changesCache = [committedImportChange];
+    this.workspaceMeta = importedMeta;
     this.notify();
   }
 
@@ -350,6 +385,11 @@ export class LocalDexieRowStore implements LocalRowStore {
       await this.putMissingSeedRows(seed);
     }
 
+    // Bound journals created before the cap was introduced before hydrating them.
+    await this.db.transaction("rw", this.db.changes, async () => {
+      await this.prunePersistedChangesIfNeeded();
+    });
+
     const [localRecords, attachments, changes, workspaceMeta] = await Promise.all([
       this.db.records.toArray(),
       this.db.attachments.toArray(),
@@ -362,18 +402,40 @@ export class LocalDexieRowStore implements LocalRowStore {
       next[record.table] = upsertLocalRow(next[record.table] ?? [], record.value);
     }
 
-    this.cache = next;
+    const persistedWorkspaceMeta = normalizeWorkspaceMeta(workspaceMeta?.value, this.workspaceMeta);
+    let hydratedCache = next;
+    let hydratedWorkspaceMeta = persistedWorkspaceMeta;
+    if (persistedWorkspaceMeta.schemaVersion < CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION) {
+      hydratedCache = migrateLocalWorkspaceSnapshotTables(next);
+      hydratedWorkspaceMeta = {
+        ...persistedWorkspaceMeta,
+        schemaVersion: CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION,
+        updatedAtISO: new Date().toISOString(),
+      };
+      const migratedRecords = localRecordsForSeed(hydratedCache);
+      await this.db.transaction("rw", [this.db.meta, this.db.records, this.db.meetings, this.db.minutes], async () => {
+        if (migratedRecords.length) await this.db!.records.bulkPut(migratedRecords);
+        await this.db!.meetings.clear();
+        await this.db!.minutes.clear();
+        if (hydratedCache.meetings?.length) await this.db!.meetings.bulkPut(cloneLocalRows(hydratedCache.meetings));
+        if (hydratedCache.minutes?.length) await this.db!.minutes.bulkPut(cloneLocalRows(hydratedCache.minutes));
+        await this.db!.meta.bulkPut([
+          { key: "schemaVersion", value: CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION },
+          { key: "workspace", value: hydratedWorkspaceMeta },
+        ]);
+      });
+    }
+
+    this.cache = hydratedCache;
     this.attachmentsCache = cloneLocalRows(attachments);
     this.changesCache = cloneLocalRows(changes);
-    this.workspaceMeta = normalizeWorkspaceMeta(workspaceMeta?.value, this.workspaceMeta);
+    this.workspaceMeta = hydratedWorkspaceMeta;
     this.notify();
   }
 
   private async writeSeed(seed: LocalSeed) {
     if (!this.db) return;
-    const records = Object.entries(seed).flatMap(([table, rows]) =>
-      Array.isArray(rows) ? rows.filter((row) => row?._id).map((row) => localRecord(table, row)) : [],
-    );
+    const records = localRecordsForSeed(seed);
     if (records.length) await this.db.records.bulkPut(records);
     await Promise.all([
       this.db.meta.put({ key: "schemaVersion", value: CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION }),
@@ -402,23 +464,41 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   private appendChange(table: string, row: any, op: LocalChangeEnvelope["op"], metadata?: Pick<LocalChangeEnvelope, "mutationId" | "reason" | "snapshot">) {
-    const change: LocalChangeEnvelope = {
-      table,
-      id: row._id,
-      societyId: row.societyId,
-      op,
-      createdAtISO: new Date().toISOString(),
-      mutationId: metadata?.mutationId ?? `${table}:${row._id}:${Date.now()}`,
-      reason: metadata?.reason,
-      snapshot: metadata?.snapshot,
-    };
-    this.changesCache = [...this.changesCache, change];
-    return this.db?.changes.add(change);
+    const change = createLocalChange(table, row, op, metadata);
+    this.changesCache.push(change);
+    this.pruneChangesCacheIfNeeded();
+    if (!this.db) return undefined;
+    return this.db.transaction("rw", this.db.changes, async () => {
+      change.seq = await this.db!.changes.add(change);
+      await this.prunePersistedChangesIfNeeded();
+    });
+  }
+
+  private pruneChangesCacheIfNeeded() {
+    if (this.changesCache.length <= LOCAL_CHANGE_JOURNAL_CAP + LOCAL_CHANGE_JOURNAL_PRUNE_SLACK) return;
+    this.changesCache.splice(0, this.changesCache.length - LOCAL_CHANGE_JOURNAL_CAP);
+  }
+
+  private async prunePersistedChangesIfNeeded() {
+    if (!this.db) return;
+    const count = await this.db.changes.count();
+    if (count <= LOCAL_CHANGE_JOURNAL_CAP + LOCAL_CHANGE_JOURNAL_PRUNE_SLACK) return;
+    const oldestKeys = await this.db.changes
+      .orderBy(":id")
+      .limit(count - LOCAL_CHANGE_JOURNAL_CAP)
+      .primaryKeys();
+    await this.db.changes.bulkDelete(oldestKeys);
   }
 
   private notify() {
     this.pendingNotify = false;
-    for (const listener of this.listeners) listener();
+    for (const listener of this.listeners) {
+      try {
+        listener();
+      } catch (error) {
+        console.error("[societyer-local] local row store listener failed", error);
+      }
+    }
   }
 
   private scheduleNotify() {
@@ -464,6 +544,61 @@ export function cloneLocalSeed(seed: LocalSeed): LocalSeed {
   );
 }
 
+function validateSnapshotTables(value: unknown): LocalSeed {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Local workspace snapshot is missing tables.");
+  }
+  for (const [table, rows] of Object.entries(value)) {
+    if (!Array.isArray(rows)) {
+      throw new Error(`Local workspace snapshot table "${table}" is not an array.`);
+    }
+    if (rows.some((row) => !row || typeof row !== "object" || Array.isArray(row))) {
+      throw new Error(`Local workspace snapshot table "${table}" contains an invalid row.`);
+    }
+  }
+  return cloneLocalSeed(value as LocalSeed);
+}
+
+function validateSnapshotAttachments(value: unknown): LocalAttachmentEnvelope[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error("Local workspace snapshot attachments are not an array.");
+  for (const attachment of value) {
+    if (
+      !attachment ||
+      typeof attachment !== "object" ||
+      Array.isArray(attachment) ||
+      typeof (attachment as { key?: unknown }).key !== "string"
+    ) {
+      throw new Error("Local workspace snapshot contains an invalid attachment.");
+    }
+  }
+  return cloneLocalRows(value as LocalAttachmentEnvelope[]);
+}
+
+function localRecordsForSeed(seed: LocalSeed): LocalRecordEnvelope[] {
+  return Object.entries(seed).flatMap(([table, rows]) =>
+    Array.isArray(rows) ? rows.filter((row) => row?._id).map((row) => localRecord(table, row)) : [],
+  );
+}
+
+function createLocalChange(
+  table: string,
+  row: { _id: string; societyId?: string },
+  op: LocalChangeEnvelope["op"],
+  metadata?: Pick<LocalChangeEnvelope, "mutationId" | "reason" | "snapshot">,
+): LocalChangeEnvelope {
+  return {
+    table,
+    id: row._id,
+    societyId: row.societyId,
+    op,
+    createdAtISO: new Date().toISOString(),
+    mutationId: metadata?.mutationId ?? `${table}:${row._id}:${Date.now()}`,
+    reason: metadata?.reason,
+    snapshot: metadata?.snapshot,
+  };
+}
+
 export function migrateLocalWorkspaceSnapshotTables(seed: LocalSeed): LocalSeed {
   const migrated = cloneLocalSeed(seed);
   const now = new Date().toISOString();
@@ -475,6 +610,24 @@ export function migrateLocalWorkspaceSnapshotTables(seed: LocalSeed): LocalSeed 
       [],
       now,
     );
+  }
+  const entityIdFactory = createEntityIdFactory();
+  const semanticSubjectTables = new Set(["activity", "notes", "signatures", "customFieldValues"]);
+  for (const [table, rows] of Object.entries(migrated)) {
+    if (!Array.isArray(rows)) continue;
+    migrated[table] = rows.map((row) => {
+      if (!row || typeof row !== "object" || Array.isArray(row)) return row;
+      const legacySubjectId = typeof row.entityId === "string" && row.entityId ? row.entityId : undefined;
+      const subjectId =
+        semanticSubjectTables.has(table) && !(typeof row.subjectId === "string" && row.subjectId)
+          ? legacySubjectId
+          : row.subjectId;
+      return {
+        ...row,
+        ...(semanticSubjectTables.has(table) ? { subjectId } : {}),
+        entityId: legacySubjectId ?? entityIdFactory.mint(table),
+      };
+    });
   }
   return migrated;
 }
@@ -556,13 +709,11 @@ export function localAttachmentKey(ownerId: string | undefined, storageKey: stri
 
 function normalizeWorkspaceMeta(value: Partial<LocalWorkspaceMeta> | undefined, fallback: LocalWorkspaceMeta): LocalWorkspaceMeta {
   const now = new Date().toISOString();
+  const schemaVersion = Number(value?.schemaVersion ?? fallback.schemaVersion);
   return {
     id: String(value?.id ?? fallback.id),
     name: String(value?.name ?? fallback.name),
-    schemaVersion: Math.max(
-      Number(value?.schemaVersion ?? fallback.schemaVersion ?? CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION),
-      CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION,
-    ),
+    schemaVersion: Number.isFinite(schemaVersion) && schemaVersion >= 1 ? schemaVersion : fallback.schemaVersion,
     createdAtISO: String(value?.createdAtISO ?? fallback.createdAtISO ?? now),
     updatedAtISO: String(value?.updatedAtISO ?? now),
   };

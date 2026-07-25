@@ -5,7 +5,8 @@ import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
-import { daysUntil, isGeneralMeeting } from "../lib/noticeWindow";
+import { daysUntil, isGeneralMeeting, meetingScheduleConflicts } from "../lib/noticeWindow";
+import { normalizedMeetingTitle } from "../lib/meetingDetailHelpers";
 import {
   MeetingFormFields,
   blankMeetingDraft,
@@ -39,6 +40,9 @@ export function MeetingCreateModal({
   const [form, setForm] = useState<MeetingDraft>(() => blankMeetingDraft());
   const data = useMeetingFormData(societyId, open ? form.scheduledAt : undefined);
   const [saving, setSaving] = useState(false);
+  const hasUnacknowledgedConflict =
+    meetingScheduleConflicts(data.meetings, form.scheduledAt).length > 0 &&
+    !form.conflictAcknowledged;
 
   // Refresh the draft when the dialog opens. Re-run once the default template /
   // notice window load so the fresh draft reflects them.
@@ -51,6 +55,19 @@ export function MeetingCreateModal({
   }, [open, data.defaultTemplate?._id, data.noticeMinDays, data.rules?.allowElectronicMeetings]);
 
   const save = async () => {
+    const title = normalizedMeetingTitle(form.title);
+    if (!title) {
+      toast.error("Enter a meeting title.");
+      return;
+    }
+    if (form.type === "Committee" && !form.committeeId) {
+      toast.error("Select the committee for this meeting.");
+      return;
+    }
+    if (hasUnacknowledgedConflict) {
+      toast.error("Review and acknowledge the schedule conflict before continuing.");
+      return;
+    }
     if (isGeneralMeeting(form.type)) {
       const days = daysUntil(form.scheduledAt);
       if (days == null || days < data.effectiveNoticeMinDays) {
@@ -60,13 +77,16 @@ export function MeetingCreateModal({
     }
     setSaving(true);
     try {
+      const { conflictAcknowledged: _conflictAcknowledged, committeeId, ...payload } = form;
       const meetingId = await create({
         societyId,
-        ...form,
+        ...payload,
+        title,
+        committeeId: (committeeId || undefined) as Id<"committees"> | undefined,
         meetingTemplateId: form.meetingTemplateId || undefined,
         quorumRequired: numberOrUndefined(form.quorumRequired),
       });
-      toast.success("Meeting scheduled", form.title);
+      toast.success("Meeting scheduled", title);
       onClose();
       if (meetingId) {
         onCreated?.(meetingId as Id<"meetings">);
@@ -91,7 +111,7 @@ export function MeetingCreateModal({
           <button className="btn" type="button" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button className="btn btn--accent" type="button" onClick={save} disabled={saving}>
+          <button className="btn btn--accent" type="button" onClick={save} disabled={saving || hasUnacknowledgedConflict}>
             {saving ? "Scheduling…" : "Schedule"}
           </button>
         </>

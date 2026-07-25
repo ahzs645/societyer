@@ -687,7 +687,7 @@ export function OrganizationHistoryPage() {
               <tbody>
                 {budgets.map((budget: any) => (
                   <tr key={budget._id}>
-                    <td className="table__cell--mono">{budget.fiscalYear}</td>
+                    <td className="table__cell--mono">{budgetFiscalYearLabel(budget)}</td>
                     <td>
                       <Link
                         to={`/app/org-history/budgets/${budget._id}`}
@@ -1075,7 +1075,7 @@ export function OrganizationHistoryPage() {
         {budgetForm && (
           <div>
             <Field label="Fiscal year" required>
-              <input className="input" value={budgetForm.fiscalYear} onChange={(e) => setBudgetForm({ ...budgetForm, fiscalYear: e.target.value })} />
+              <input className="input" value={budgetForm.fiscalYear ?? ""} onChange={(e) => setBudgetForm({ ...budgetForm, fiscalYear: e.target.value })} />
             </Field>
             <Field label="Title" required>
               <input className="input" value={budgetForm.title} onChange={(e) => setBudgetForm({ ...budgetForm, title: e.target.value })} />
@@ -1133,6 +1133,7 @@ export function OrganizationHistoryBudgetPage() {
   const registerTransactions = Array.isArray(budget?.registerTransactions) ? budget.registerTransactions : [];
   const sourceObservations = Array.isArray(budget?.sourceObservations) ? budget.sourceObservations : [];
   const sourceSummary = budget?.sourceSummary;
+  const fiscalYearLabel = budgetFiscalYearLabel(budget);
 
   const toggleBudgetGroup = (groupKey: string) => {
     setCollapsedBudgetGroups((current) => ({
@@ -1191,7 +1192,7 @@ export function OrganizationHistoryBudgetPage() {
         title={budget.title}
         icon={<Archive size={16} />}
         iconColor="purple"
-        subtitle={`Budget snapshot for ${budget.fiscalYear}${budget.sourceDate ? ` · source date ${budget.sourceDate}` : ""}`}
+        subtitle={`Budget snapshot · ${fiscalYearLabel}${budget.sourceDate ? ` · source date ${budget.sourceDate}` : ""}`}
         actions={(
           <>
             <button className="btn-action" type="button" disabled={extracting || !budget.sourceIds?.length} onClick={runSourceExtraction}>
@@ -1204,7 +1205,7 @@ export function OrganizationHistoryBudgetPage() {
       />
 
       <div className="stat-grid org-history__budget-stats">
-        <Stat label="Fiscal year" value={budget.fiscalYear} icon={<BookOpen size={14} />} sub={budget.sourceDate || "No source date"} />
+        <Stat label="Fiscal year" value={fiscalYearLabel} icon={<BookOpen size={14} />} sub={budget.sourceDate || "No source date"} />
         <Stat label="Income" value={formatCents(budget.totalIncomeCents, budget.currency)} icon={<FileText size={14} />} />
         <Stat label="Expenses" value={formatCents(budget.totalExpenseCents, budget.currency)} icon={<FileText size={14} />} />
         <Stat label="Register rows" value={String(registerTransactions.length)} icon={<Archive size={14} />} sub={sourceSummary?.pageCount ? `${sourceSummary.pageCount} source pages` : undefined} />
@@ -1699,6 +1700,13 @@ function buildPeopleConnections(boardTerms: any[], motions: any[]) {
 function formatCents(value: number | undefined, currency = "CAD") {
   if (value == null) return "-";
   return new Intl.NumberFormat("en-CA", { style: "currency", currency }).format(value / 100);
+}
+
+function budgetFiscalYearLabel(budget: any) {
+  const explicit = String(budget?.fiscalYear ?? budget?.periodLabel ?? "").trim();
+  if (explicit) return explicit;
+  const sourceYear = String(budget?.sourceDate ?? "").match(/\b(?:19|20)\d{2}\b/)?.[0];
+  return sourceYear ?? "Unspecified";
 }
 
 type BudgetLineGroup = {

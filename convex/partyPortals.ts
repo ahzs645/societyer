@@ -15,7 +15,7 @@ import { buildConvexCapabilities } from "./providers/capabilities";
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => listPortable(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -29,13 +29,13 @@ export const create = mutation({
     expiresAtISO: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: (ctx, args) => createPortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const revoke = mutation({
   args: { id: v.id("partyPortals") },
   returns: v.any(),
-  handler: (ctx, args) => revokePortable(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => revokePortable(await toPortableMutationCtx(ctx), args),
 });
 
 /** Public, token-gated view. Returns null for an unknown/revoked/expired token,
@@ -43,5 +43,5 @@ export const revoke = mutation({
 export const center = query({
   args: { token: v.string() },
   returns: v.any(),
-  handler: (ctx, args) => centerPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
+  handler: async (ctx, args) => centerPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });

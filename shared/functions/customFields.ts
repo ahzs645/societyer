@@ -9,6 +9,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { optionalSubjectId, requireSubjectId, type SubjectIdArgs } from "./subjectId";
 
 const ENTITY_TYPES = ["members", "directors", "volunteers", "employees"] as const;
 
@@ -112,12 +113,15 @@ export async function deleteDefinitionPortable(ctx: PortableMutationCtx, { id }:
 
 export async function listValuesPortable(
   ctx: PortableQueryCtx,
-  { entityType, entityId }: { entityType: string; entityId: string },
+  { entityType, subjectId, entityId }: { entityType: string } & SubjectIdArgs,
 ) {
-  return await ctx.db
+  const resolvedSubjectId = requireSubjectId({ subjectId, entityId });
+  // TODO(H0-flip): query by_subject after the hosted backfill is complete.
+  const rows = await ctx.db
     .query("customFieldValues")
-    .withIndex("by_entity", (q) => q.eq("entityType", entityType).eq("entityId", entityId))
+    .withIndex("by_entity", (q) => q.eq("entityType", entityType).eq("entityId", resolvedSubjectId))
     .collect();
+  return rows.filter((row) => optionalSubjectId(row) === resolvedSubjectId);
 }
 
 export async function setValuePortable(
@@ -126,29 +130,33 @@ export async function setValuePortable(
     societyId: string;
     definitionId: string;
     entityType: string;
-    entityId: string;
     value: any;
-  },
+  } & SubjectIdArgs,
 ) {
   assertEntityType(args.entityType);
+  const subjectId = requireSubjectId(args);
   const def = await ctx.db.get(args.definitionId);
   if (!def) throw new Error("Custom field definition not found");
-  const existing = await ctx.db
+  const indexedValues = await ctx.db
     .query("customFieldValues")
+    // TODO(H0-flip): query by_subject_def after the hosted backfill is complete.
     .withIndex("by_entity_def", (q) =>
-      q.eq("entityType", args.entityType).eq("entityId", args.entityId).eq("definitionId", args.definitionId),
+      q.eq("entityType", args.entityType).eq("entityId", subjectId).eq("definitionId", args.definitionId),
     )
-    .first();
+    .collect();
+  const matchingExisting = indexedValues.find((value) => optionalSubjectId(value) === subjectId);
   const nowISO = new Date().toISOString();
-  if (existing) {
-    await ctx.db.patch(existing._id, { value: args.value, updatedAtISO: nowISO });
-    return existing._id;
+  if (matchingExisting) {
+    await ctx.db.patch(matchingExisting._id, { value: args.value, updatedAtISO: nowISO });
+    return matchingExisting._id;
   }
   return await ctx.db.insert("customFieldValues", {
     societyId: args.societyId,
     definitionId: args.definitionId,
     entityType: args.entityType,
-    entityId: args.entityId,
+    subjectId,
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
+    entityId: subjectId,
     value: args.value,
     updatedAtISO: nowISO,
   });
@@ -156,13 +164,16 @@ export async function setValuePortable(
 
 export async function clearValuePortable(
   ctx: PortableMutationCtx,
-  args: { entityType: string; entityId: string; definitionId: string },
+  args: { entityType: string; definitionId: string } & SubjectIdArgs,
 ) {
-  const existing = await ctx.db
+  const subjectId = requireSubjectId(args);
+  const indexedValues = await ctx.db
     .query("customFieldValues")
+    // TODO(H0-flip): query by_subject_def after the hosted backfill is complete.
     .withIndex("by_entity_def", (q) =>
-      q.eq("entityType", args.entityType).eq("entityId", args.entityId).eq("definitionId", args.definitionId),
+      q.eq("entityType", args.entityType).eq("entityId", subjectId).eq("definitionId", args.definitionId),
     )
-    .first();
+    .collect();
+  const existing = indexedValues.find((value) => optionalSubjectId(value) === subjectId);
   if (existing) await ctx.db.delete(existing._id);
 }

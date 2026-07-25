@@ -20,13 +20,13 @@ const statementLine = v.object({
 export const list = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: (ctx, args) => programStatementsList(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => programStatementsList(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = query({
   args: { id: v.id("programStatements") },
   returns: v.any(),
-  handler: (ctx, args) => programStatementGet(toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => programStatementGet(await toPortableQueryCtx(ctx), args),
 });
 
 export const create = mutation({
@@ -44,7 +44,7 @@ export const create = mutation({
     createdByUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: (ctx, args) => programStatementCreate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => programStatementCreate(await toPortableMutationCtx(ctx), args),
 });
 
 export const update = mutation({
@@ -63,11 +63,11 @@ export const update = mutation({
     }),
   },
   returns: v.any(),
-  handler: (ctx, args) => programStatementUpdate(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => programStatementUpdate(await toPortableMutationCtx(ctx), args),
 });
 
 export const remove = mutation({
   args: { id: v.id("programStatements") },
   returns: v.any(),
-  handler: (ctx, args) => programStatementRemove(toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => programStatementRemove(await toPortableMutationCtx(ctx), args),
 });

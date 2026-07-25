@@ -44,5 +44,5 @@ export const attachUploadedFileToDocument = mutation({
 export const getUrl = query({
   args: { storageId: v.id("_storage") },
   returns: v.any(),
-  handler: (ctx, args) => getUrlPortable(toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
+  handler: async (ctx, args) => getUrlPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });

@@ -125,6 +125,8 @@ export async function upsertPortable(
     societyId: args.societyId,
     actor: user?.displayName ?? "AI setup",
     entityType: "aiProviderSettings",
+    subjectId: String(id),
+    // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
     entityId: String(id),
     action: "configured",
     summary: `Configured ${scope} AI provider ${patch.label}.`,
