@@ -70,10 +70,10 @@ export function RecordTableHeader({
           }
         />
       ))}
-      <th className="record-table__fill-head" aria-hidden="true" />
       {hasRowActions && (
         <th className="record-table__row-actions-head" aria-hidden="true" />
       )}
+      <th className="record-table__fill-head" aria-hidden="true" />
     </tr>
   );
 }
