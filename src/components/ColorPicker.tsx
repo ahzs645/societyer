@@ -55,6 +55,27 @@ export function ColorPicker({
     setPos({ top: r.bottom + 4, left: r.left });
   }, [open]);
 
+  // Once the portal has rendered we know its real size — flip above the anchor
+  // when it doesn't fit below, and clamp inside the viewport so the popover
+  // never hangs off the phone's right/bottom edge (matches Select/DatePicker).
+  useLayoutEffect(() => {
+    if (!open || !pos || !popRef.current || !triggerRef.current) return;
+    const anchor = triggerRef.current.getBoundingClientRect();
+    const rect = popRef.current.getBoundingClientRect();
+    const below = anchor.bottom + 4;
+    const top =
+      below + rect.height <= window.innerHeight - 8
+        ? below
+        : Math.max(8, anchor.top - rect.height - 4);
+    const left = Math.min(
+      Math.max(8, anchor.left),
+      Math.max(8, window.innerWidth - rect.width - 8),
+    );
+    if (Math.abs(top - pos.top) > 0.5 || Math.abs(left - pos.left) > 0.5) {
+      setPos({ top, left });
+    }
+  }, [open, pos]);
+
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
@@ -63,7 +84,11 @@ export function ColorPicker({
       if (popRef.current?.contains(t)) return;
       setOpen(false);
     };
-    const onScroll = () => setOpen(false);
+    const onScroll = (e: Event) => {
+      // Scrolling inside the popover must not dismiss it.
+      if (e.target instanceof Node && popRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("scroll", onScroll, true);
@@ -135,6 +160,9 @@ export function ColorPicker({
                     className="color-pop__hex"
                     value={draft}
                     placeholder="#000000"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     onChange={(e) => {
                       const v = e.target.value.startsWith("#") ? e.target.value : `#${e.target.value}`;
                       setDraft(v);
