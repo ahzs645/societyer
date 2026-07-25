@@ -729,80 +729,79 @@ export function Layout() {
     });
   };
 
-  // Drag-to-reorder and the right-click context menu don't work on touch, so
-  // each favorite row shows explicit up/down/unpin controls on mobile. Rendered
-  // as role=button spans (rows are plain divs) that stop the click from
-  // navigating/running the row.
+  // Move a favorite to an absolute target index (splice out, insert at target).
+  // The mobile reorder controls use this to step OVER hidden favorites.
+  const moveFavoriteToIndex = (fromIndex: number, toIndex: number) => {
+    setFavoritesOrder((prev) => {
+      if (
+        fromIndex < 0 ||
+        fromIndex >= prev.length ||
+        toIndex < 0 ||
+        toIndex >= prev.length ||
+        fromIndex === toIndex
+      ) {
+        return prev;
+      }
+      const next = prev.slice();
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  };
+
+  // A favorite row only renders when its target is currently visible (module /
+  // permission / entity gating). Reorder eligibility and the disabled state must
+  // be computed against the VISIBLE sequence — otherwise the arrows step onto a
+  // hidden row and appear to do nothing.
+  const isFavoriteVisible = (ref: FavoriteRef) => {
+    if (ref.kind === "route") return visiblePinnedNav.some((nav) => nav.to === ref.id);
+    if (ref.kind === "command") return visiblePinnedCommands.some((cmd) => cmd.id === ref.id);
+    return pinnedViews.some((view) => view.viewsKey === ref.viewsKey && view.viewId === ref.viewId);
+  };
+
+  // Touch has no drag-reorder or right-click, so each favorite row gets explicit
+  // up/down/unpin controls on mobile. These are real <button>s rendered as a
+  // SIBLING of the row (see the favorites map), never nested inside the row's
+  // link/button — so they stay valid, focusable, independent controls.
   const renderFavoriteControls = (ref: FavoriteRef, index: number) => {
-    const canMoveUp = index > 0;
-    const canMoveDown = index < favoritesOrder.length - 1;
+    const visibleIndices = favoritesOrder.reduce<number[]>((acc, favRef, i) => {
+      if (isFavoriteVisible(favRef)) acc.push(i);
+      return acc;
+    }, []);
+    const pos = visibleIndices.indexOf(index);
+    const canMoveUp = pos > 0;
+    const canMoveDown = pos >= 0 && pos < visibleIndices.length - 1;
     return (
       <span className="sidebar__fav-controls">
-        <span
-          role="button"
-          tabIndex={canMoveUp ? 0 : -1}
+        <button
+          type="button"
           className="sidebar__fav-btn"
           aria-label={t("sidebar.moveUp", "Move up")}
-          aria-disabled={!canMoveUp || undefined}
           title={t("sidebar.moveUp", "Move up")}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (canMoveUp) moveFavoriteByIndex(index, -1);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              e.stopPropagation();
-              if (canMoveUp) moveFavoriteByIndex(index, -1);
-            }
-          }}
+          disabled={!canMoveUp}
+          onClick={() => moveFavoriteToIndex(index, visibleIndices[pos - 1])}
         >
           <ChevronUp size={14} />
-        </span>
-        <span
-          role="button"
-          tabIndex={canMoveDown ? 0 : -1}
+        </button>
+        <button
+          type="button"
           className="sidebar__fav-btn"
           aria-label={t("sidebar.moveDown", "Move down")}
-          aria-disabled={!canMoveDown || undefined}
           title={t("sidebar.moveDown", "Move down")}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (canMoveDown) moveFavoriteByIndex(index, 1);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              e.stopPropagation();
-              if (canMoveDown) moveFavoriteByIndex(index, 1);
-            }
-          }}
+          disabled={!canMoveDown}
+          onClick={() => moveFavoriteToIndex(index, visibleIndices[pos + 1])}
         >
           <ChevronDown size={14} />
-        </span>
-        <span
-          role="button"
-          tabIndex={0}
+        </button>
+        <button
+          type="button"
           className="sidebar__fav-btn"
           aria-label={t("sidebar.unpinFromFavorites")}
           title={t("sidebar.unpinFromFavorites")}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            togglePinnedFavorite(ref);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              e.stopPropagation();
-              togglePinnedFavorite(ref);
-            }
-          }}
+          onClick={() => togglePinnedFavorite(ref)}
         >
           <PinOff size={14} />
-        </span>
+        </button>
       </span>
     );
   };
@@ -1109,39 +1108,40 @@ export function Layout() {
                 // dragstart from firing or stamping the wrong drag image).
                 const isActive = isNavItemActive(item, loc.pathname);
                 return (
-                  <div
-                    key={favoriteRefKey(ref)}
-                    role="link"
-                    tabIndex={0}
-                    aria-current={isActive ? "page" : undefined}
-                    className={`sidebar__item${isActive ? " is-active" : ""}${dragClass}${dropClass}`}
-                    data-pinned
-                    title={!isMobileNav && collapsed ? label : undefined}
-                    draggable
-                    onClick={() => navigate(item.to)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        navigate(item.to);
-                        return;
-                      }
-                      handleNavItemKeyDown(event, item);
-                    }}
-                    onDragStart={onFavoriteDragStart(index)}
-                    onDragOver={onFavoriteDragOver(index)}
-                    onDrop={onFavoriteDrop}
-                    onDragEnd={onFavoriteDragEnd}
-                    onContextMenu={(event) => handleNavItemContextMenu(event, item)}
-                  >
-                    <TintedIconTile tone={item.color} size="sm" className="sidebar__icon-chip">
-                      <Icon size={14} />
-                    </TintedIconTile>
-                    <span className="sidebar__label">{label}</span>
-                    {count != null && (
-                      <Pill size="sm" className="sidebar__count">
-                        {count}
-                      </Pill>
-                    )}
+                  <div key={favoriteRefKey(ref)} className="sidebar__item-slot">
+                    <div
+                      role="link"
+                      tabIndex={0}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`sidebar__item${isActive ? " is-active" : ""}${dragClass}${dropClass}`}
+                      data-pinned
+                      title={!isMobileNav && collapsed ? label : undefined}
+                      draggable
+                      onClick={() => navigate(item.to)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate(item.to);
+                          return;
+                        }
+                        handleNavItemKeyDown(event, item);
+                      }}
+                      onDragStart={onFavoriteDragStart(index)}
+                      onDragOver={onFavoriteDragOver(index)}
+                      onDrop={onFavoriteDrop}
+                      onDragEnd={onFavoriteDragEnd}
+                      onContextMenu={(event) => handleNavItemContextMenu(event, item)}
+                    >
+                      <TintedIconTile tone={item.color} size="sm" className="sidebar__icon-chip">
+                        <Icon size={14} />
+                      </TintedIconTile>
+                      <span className="sidebar__label">{label}</span>
+                      {count != null && (
+                        <Pill size="sm" className="sidebar__count">
+                          {count}
+                        </Pill>
+                      )}
+                    </div>
                     {renderFavoriteControls(ref, index)}
                   </div>
                 );
@@ -1156,33 +1156,34 @@ export function Layout() {
                 const isActive =
                   loc.pathname === view.to || loc.pathname.startsWith(`${view.to}/`);
                 return (
-                  <div
-                    key={favoriteRefKey(ref)}
-                    role="link"
-                    tabIndex={0}
-                    aria-current={isActive ? "page" : undefined}
-                    className={`sidebar__nav-item sidebar__nav-item--view${isActive ? " is-active" : ""}${dragClass}${dropClass}`}
-                    title={collapsed ? view.label : undefined}
-                    draggable
-                    onClick={() => navigate(target)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        navigate(target);
-                        return;
-                      }
-                      handleViewKeyDown(event, view);
-                    }}
-                    onDragStart={onFavoriteDragStart(index)}
-                    onDragOver={onFavoriteDragOver(index)}
-                    onDrop={onFavoriteDrop}
-                    onDragEnd={onFavoriteDragEnd}
-                    onContextMenu={(event) => handleViewContextMenu(event, view)}
-                  >
-                    <span className="sidebar__nav-icon" aria-hidden="true">
-                      <Pin size={12} />
-                    </span>
-                    {!collapsed && <span className="sidebar__nav-label">{view.label}</span>}
+                  <div key={favoriteRefKey(ref)} className="sidebar__item-slot">
+                    <div
+                      role="link"
+                      tabIndex={0}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`sidebar__nav-item sidebar__nav-item--view${isActive ? " is-active" : ""}${dragClass}${dropClass}`}
+                      title={collapsed ? view.label : undefined}
+                      draggable
+                      onClick={() => navigate(target)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate(target);
+                          return;
+                        }
+                        handleViewKeyDown(event, view);
+                      }}
+                      onDragStart={onFavoriteDragStart(index)}
+                      onDragOver={onFavoriteDragOver(index)}
+                      onDrop={onFavoriteDrop}
+                      onDragEnd={onFavoriteDragEnd}
+                      onContextMenu={(event) => handleViewContextMenu(event, view)}
+                    >
+                      <span className="sidebar__nav-icon" aria-hidden="true">
+                        <Pin size={12} />
+                      </span>
+                      {!collapsed && <span className="sidebar__nav-label">{view.label}</span>}
+                    </div>
                     {renderFavoriteControls(ref, index)}
                   </div>
                 );
@@ -1192,33 +1193,34 @@ export function Layout() {
               if (!command) return null;
               const Icon = command.icon;
               return (
-                <div
-                  key={favoriteRefKey(ref)}
-                  role="button"
-                  tabIndex={0}
-                  className={`sidebar__item sidebar__item--command${dragClass}${dropClass}`}
-                  onClick={() => { void command.run(); }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      void command.run();
-                      return;
-                    }
-                    handleCommandKeyDown(event, command.id, command.label);
-                  }}
-                  title={collapsed ? command.label : undefined}
-                  aria-label={command.label}
-                  draggable
-                  onDragStart={onFavoriteDragStart(index)}
-                  onDragOver={onFavoriteDragOver(index)}
-                  onDrop={onFavoriteDrop}
-                  onDragEnd={onFavoriteDragEnd}
-                  onContextMenu={(event) => handleCommandContextMenu(event, command.id, command.label)}
-                >
-                  <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
-                    <Icon size={14} />
-                  </TintedIconTile>
-                  {!collapsed && <span className="sidebar__label">{command.label}</span>}
+                <div key={favoriteRefKey(ref)} className="sidebar__item-slot">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className={`sidebar__item sidebar__item--command${dragClass}${dropClass}`}
+                    onClick={() => { void command.run(); }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        void command.run();
+                        return;
+                      }
+                      handleCommandKeyDown(event, command.id, command.label);
+                    }}
+                    title={collapsed ? command.label : undefined}
+                    aria-label={command.label}
+                    draggable
+                    onDragStart={onFavoriteDragStart(index)}
+                    onDragOver={onFavoriteDragOver(index)}
+                    onDrop={onFavoriteDrop}
+                    onDragEnd={onFavoriteDragEnd}
+                    onContextMenu={(event) => handleCommandContextMenu(event, command.id, command.label)}
+                  >
+                    <TintedIconTile tone="gray" size="sm" className="sidebar__icon-chip">
+                      <Icon size={14} />
+                    </TintedIconTile>
+                    {!collapsed && <span className="sidebar__label">{command.label}</span>}
+                  </div>
                   {renderFavoriteControls(ref, index)}
                 </div>
               );
