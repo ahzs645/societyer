@@ -64,7 +64,9 @@
    Record show page (summary + tabs + inspector)
    ============================================================ */
 .record-show { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: token('s-6'); align-items: start; }
-@media (max-width: 960px) {
+/* 980 = --bp-mobile-sidebar, where the shell already switches to mobile nav —
+ * keeping this in the same tier avoids a 20px band of drifted layout. */
+@media (max-width: 980px) {
   .record-show { grid-template-columns: 1fr; }
 }
 .record-show__main { display: flex; flex-direction: column; gap: token('s-4'); min-width: 0; }

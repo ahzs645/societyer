@@ -472,7 +472,8 @@ select.record-table__menu-select,
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  width: 460px;
+  /* Cap to the viewport — a rigid 460px overflows phones. */
+  width: min(460px, calc(100vw - 16px));
   padding: 12px;
   background: token('bg-panel');
   border: 1px solid token('border');
@@ -786,6 +787,12 @@ select.record-table__menu-select,
     color: token('text-primary');
     background: token('bg-panel');
     border-color: token('border');
+  }
+
+  /* Touch has no hover — without this the column sort/filter menu exists but
+   * is invisible (and untappable-looking) on phones. */
+  @media (hover: none), (pointer: coarse) {
+    opacity: 1;
   }
 }
 

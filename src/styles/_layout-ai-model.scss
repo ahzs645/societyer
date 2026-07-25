@@ -315,7 +315,9 @@
   padding: 4px 0;
 }
 
-@media (max-width: 720px) {
+/* 768 = --bp-mobile; 720 was an ad-hoc value that left 721–768px phones with
+ * a cramped non-full-width drawer. */
+@media (max-width: 768px) {
   .global-ai-drawer {
     width: 100vw;
   }
