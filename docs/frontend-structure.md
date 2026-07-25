@@ -115,16 +115,16 @@ Every slice = pure move + import-path fix (no logic change), ending on `tsc -b` 
 - [x] **Slice 3** — `Global{Asset,Meeting,Task,Commitment}Create` moved from `components/`
       into their features (`features/assets|meetings/components|tasks|commitments/`).
       Importers repointed to `@/` alias. Verified: tsc -b, lint. (commit 7cf03ba)
-- [x] **Slice 4a** — `lib/static-convex/` subsystem carved out (8 files: `staticConvex*`,
-      `staticIds`, `staticRuntime`). Pure move; ~20 src importers + 16 conformance scripts
-      repointed. Took 3 fix rounds for hidden non-import references — a `.ts`-extension
-      import and two hardcoded `path.join(...,"lib","staticConvex.ts")` fs paths in
-      `check-static-convex-parity.ts`. Verified: tsc -b, convex:typecheck, lint,
-      test:static-parity (452 writes, 0 gaps), portable-live-runtime, corporation-equity,
-      clone-society. (commit f880094)
-- [ ] **Slice 4b (NOT recommended)** — `lib/runtime/` grouping (`convex`, `store`, `local*`,
-      `authClient`, `runtimeMode`, ...). Deferred: these are imported far more widely and at
-      a lower level than the static cluster, and 4a proved how many hidden non-import
-      references (hardcoded paths, tooling) lurk. For a purely cosmetic grouping the
-      value/effort is unfavorable — do only if `lib/` navigability becomes a real pain.
+- [~] **Slice 4a — DONE then REVERTED** (commit f880094, reverted in the origin/main merge).
+      Carved the 8 static-mirror files into `lib/static-convex/` and it verified green — but
+      `origin/main` had concurrently refactored the mirror (split `staticConvex.ts` into a
+      barrel + `staticConvexClient`/`staticLegacyDispatch`/`staticDemoStore` at lib root, all
+      importing the cluster as lib-root siblings). The carve is fundamentally incompatible
+      with that structure, and it was the lowest-value slice, so it was backed out rather than
+      re-litigated on migration-sensitive code. Static files stay at lib root.
+- [ ] **Slice 4b (NOT recommended)** — `lib/runtime/` grouping. Same low-value/high-hidden-ref
+      verdict as before; main's mirror refactor reinforces staying out of this area.
+- [ ] **Slice 4 (redo, optional)** — if the static grouping is still wanted, redo it fresh on
+      top of main's new mirror layout (now 11 files incl. `staticConvexClient`,
+      `staticLegacyDispatch`, `staticDemoStore`), moving the whole set together.
 - [ ] **Slice 5** — `components/` domain de-leak (meetings/legal/documents/filings).
