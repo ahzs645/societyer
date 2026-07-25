@@ -209,6 +209,7 @@ export function Layout() {
   >(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const mainRef = useRef<HTMLDivElement | null>(null);
+  const topbarRef = useRef<HTMLElement | null>(null);
   const workbenchContentRef = useRef<HTMLDivElement | null>(null);
   const workspaceButtonRef = useRef<HTMLButtonElement | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
@@ -456,6 +457,19 @@ export function Layout() {
       previousFocus?.focus?.();
     };
   }, [isMobileNav, mobileSidebarOpen]);
+
+  // Keep the persistent mobile top bar out of the tab order + AT tree while a
+  // drawer (sidebar or inspector) is open over it — mirrors the main/workbench
+  // inert treatment. NotificationBell can't take a tabIndex prop, so inert is
+  // the clean way to also cover the bell.
+  useEffect(() => {
+    const topbar = topbarRef.current as (HTMLElement & { inert?: boolean }) | null;
+    if (!topbar) return;
+    const hidden = isMobileNav && (mobileSidebarOpen || mobileInspectorOpen);
+    if (hidden) topbar.setAttribute("aria-hidden", "true");
+    else topbar.removeAttribute("aria-hidden");
+    topbar.inert = hidden;
+  }, [isMobileNav, mobileSidebarOpen, mobileInspectorOpen]);
 
   useEffect(() => {
     if (!isMobileNav || !mobileInspectorOpen) return;
@@ -1016,7 +1030,9 @@ export function Layout() {
               </span>
             </button>
             <div className="sidebar__brand-actions">
-              <NotificationBellSafe />
+              {/* On mobile the bell + search live in the persistent top bar; keep
+               * them out of the drawer to avoid duplicate controls. */}
+              {!isMobileNav && <NotificationBellSafe />}
               {!aiChatHidden && (
                 <button
                   className="sidebar__icon-btn"
@@ -1027,14 +1043,16 @@ export function Layout() {
                   <Bot size={14} />
                 </button>
               )}
-              <button
-                className="sidebar__icon-btn"
-                onClick={() => window.dispatchEvent(new Event("kbar:open"))}
-                title={`${t("common.search")} (/ or ⌘K)`}
-                aria-label={t("common.search")}
-              >
-                <Search size={14} />
-              </button>
+              {!isMobileNav && (
+                <button
+                  className="sidebar__icon-btn"
+                  onClick={() => window.dispatchEvent(new Event("kbar:open"))}
+                  title={`${t("common.search")} (/ or ⌘K)`}
+                  aria-label={t("common.search")}
+                >
+                  <Search size={14} />
+                </button>
+              )}
               {/* On mobile the drawer closes via the scrim, a left-swipe, or
                 * Escape, so this collapse toggle is redundant — dropping it also
                 * unclutters the cramped top bar. */}
@@ -1568,6 +1586,21 @@ export function Layout() {
             </div>
           </div>,
           document.body,
+        )}
+
+        {isMobileNav && (
+          <header ref={topbarRef} className="mobile-topbar">
+            <button
+              type="button"
+              className="mobile-topbar__search"
+              onClick={() => window.dispatchEvent(new Event("kbar:open"))}
+              aria-label={t("common.search")}
+            >
+              <Search size={16} />
+              <span>{t("common.search")}</span>
+            </button>
+            <NotificationBellSafe />
+          </header>
         )}
 
         <div className="main" id="main-content" role="main" ref={mainRef} tabIndex={-1}>
