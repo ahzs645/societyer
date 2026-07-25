@@ -137,6 +137,76 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Tap-to-pin affordance on each browse item. Hidden until hover on desktop
+ * (keeps rows clean), always visible on touch so pinning is discoverable in
+ * the mobile "More" drawer instead of only via the command palette. */
+.sidebar__pin-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  border: 0;
+  border-radius: token('r-xs');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity token('anim-fast') token('anim-ease'),
+    background token('anim-fast') token('anim-ease'),
+    color token('anim-fast') token('anim-ease');
+}
+.sidebar__item:hover .sidebar__pin-toggle,
+.sidebar__pin-toggle:focus-visible {
+  opacity: 1;
+}
+.sidebar__pin-toggle:hover {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+/* Touch devices have no hover — keep it visible so users can find it. */
+.app-shell.is-mobile .sidebar__pin-toggle {
+  opacity: 1;
+}
+/* No room for it in the collapsed desktop rail. */
+.app-shell.is-collapsed:not(.is-mobile) .sidebar__pin-toggle {
+  display: none;
+}
+
+/* Touch-friendly favorites management: reorder (up/down) + unpin on each
+ * favorite row. Desktop keeps drag-to-reorder + the context menu, so this
+ * cluster is shown only on mobile. */
+.sidebar__fav-controls {
+  display: none;
+  margin-left: auto;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+}
+.app-shell.is-mobile .sidebar__fav-controls {
+  display: inline-flex;
+}
+.sidebar__fav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: token('r-xs');
+  color: token('text-tertiary');
+  cursor: pointer;
+}
+.sidebar__fav-btn:active {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+.sidebar__fav-btn[aria-disabled="true"] {
+  opacity: 0.3;
+  pointer-events: none;
+}
 .app-shell.is-collapsed .sidebar {
   width: token('sidebar-w-collapsed');
 }

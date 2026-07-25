@@ -1,27 +1,24 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
-  LayoutDashboard,
   Building2,
   Users,
   UserCog,
-  Calendar,
   CalendarCheck,
   FileText,
   FileJson,
   ClipboardList,
-  FolderOpen,
   AlertTriangle,
   PiggyBank,
   Shield,
   Settings,
   Search,
   ChevronDown,
+  ChevronUp,
   PanelLeftClose,
   PanelLeftOpen,
   UsersRound,
   Target,
-  ListTodo,
   CalendarClock,
   HelpCircle,
   CreditCard,
@@ -732,6 +729,84 @@ export function Layout() {
     });
   };
 
+  // Drag-to-reorder and the right-click context menu don't work on touch, so
+  // each favorite row shows explicit up/down/unpin controls on mobile. Rendered
+  // as role=button spans (rows are plain divs) that stop the click from
+  // navigating/running the row.
+  const renderFavoriteControls = (ref: FavoriteRef, index: number) => {
+    const canMoveUp = index > 0;
+    const canMoveDown = index < favoritesOrder.length - 1;
+    return (
+      <span className="sidebar__fav-controls">
+        <span
+          role="button"
+          tabIndex={canMoveUp ? 0 : -1}
+          className="sidebar__fav-btn"
+          aria-label={t("sidebar.moveUp", "Move up")}
+          aria-disabled={!canMoveUp || undefined}
+          title={t("sidebar.moveUp", "Move up")}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (canMoveUp) moveFavoriteByIndex(index, -1);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              if (canMoveUp) moveFavoriteByIndex(index, -1);
+            }
+          }}
+        >
+          <ChevronUp size={14} />
+        </span>
+        <span
+          role="button"
+          tabIndex={canMoveDown ? 0 : -1}
+          className="sidebar__fav-btn"
+          aria-label={t("sidebar.moveDown", "Move down")}
+          aria-disabled={!canMoveDown || undefined}
+          title={t("sidebar.moveDown", "Move down")}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (canMoveDown) moveFavoriteByIndex(index, 1);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              if (canMoveDown) moveFavoriteByIndex(index, 1);
+            }
+          }}
+        >
+          <ChevronDown size={14} />
+        </span>
+        <span
+          role="button"
+          tabIndex={0}
+          className="sidebar__fav-btn"
+          aria-label={t("sidebar.unpinFromFavorites")}
+          title={t("sidebar.unpinFromFavorites")}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePinnedFavorite(ref);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              togglePinnedFavorite(ref);
+            }
+          }}
+        >
+          <PinOff size={14} />
+        </span>
+      </span>
+    );
+  };
+
   const openFavoriteContextMenu = (
     ref: FavoriteRef,
     label: string,
@@ -1067,6 +1142,7 @@ export function Layout() {
                         {count}
                       </Pill>
                     )}
+                    {renderFavoriteControls(ref, index)}
                   </div>
                 );
               }
@@ -1107,6 +1183,7 @@ export function Layout() {
                       <Pin size={12} />
                     </span>
                     {!collapsed && <span className="sidebar__nav-label">{view.label}</span>}
+                    {renderFavoriteControls(ref, index)}
                   </div>
                 );
               }
@@ -1142,6 +1219,7 @@ export function Layout() {
                     <Icon size={14} />
                   </TintedIconTile>
                   {!collapsed && <span className="sidebar__label">{command.label}</span>}
+                  {renderFavoriteControls(ref, index)}
                 </div>
               );
             })}
@@ -1192,6 +1270,10 @@ export function Layout() {
                           pinnedRouteSet.has(item.to),
                           handleNavItemContextMenu,
                           handleNavItemKeyDown,
+                          (navItem) => togglePinnedFavorite({ kind: "route", id: navItem.to }),
+                          pinnedRouteSet.has(item.to)
+                            ? t("sidebar.unpinFromFavorites")
+                            : t("sidebar.pinToFavorites"),
                         ),
                       )}
                     </div>
@@ -1513,39 +1595,28 @@ export function Layout() {
             {/* Icon size 16px matches twenty's icon.size.md — the CSS also
              * clamps to 16px, but passing it through to the SVG avoids the
              * initial over-render before styles kick in. */}
-            <NavLink
-              to="/app"
-              end
-              tabIndex={mobileOverlayOpen ? -1 : undefined}
-              className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}
-            >
-              <LayoutDashboard size={16} strokeWidth={2} />
-              <span>{t("nav.dashboard", "Dashboard")}</span>
-            </NavLink>
-            <NavLink
-              to="/app/tasks"
-              tabIndex={mobileOverlayOpen ? -1 : undefined}
-              className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}
-            >
-              <ListTodo size={16} strokeWidth={2} />
-              <span>{t("nav.tasks", "Tasks")}</span>
-            </NavLink>
-            <NavLink
-              to="/app/meetings"
-              tabIndex={mobileOverlayOpen ? -1 : undefined}
-              className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}
-            >
-              <Calendar size={16} strokeWidth={2} />
-              <span>{t("nav.meetingsItem", "Meetings")}</span>
-            </NavLink>
-            <NavLink
-              to="/app/documents"
-              tabIndex={mobileOverlayOpen ? -1 : undefined}
-              className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}
-            >
-              <FolderOpen size={16} strokeWidth={2} />
-              <span>{t("nav.documents", "Docs")}</span>
-            </NavLink>
+            {/* Every slot except "More" follows the user's pinned routes — the
+             * same list that drives the sidebar, already filtered by module /
+             * permission / entity, in their pin order. Nothing is hardcoded
+             * (Dashboard included), so the bar is fully user-controlled. Capped
+             * at 4 so it stays <= 5 with "More"; extra pins live in the More
+             * drawer. Pinned *commands* are actions, not destinations, so they're
+             * excluded from the nav bar. */}
+            {visiblePinnedNav.slice(0, 4).map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  tabIndex={mobileOverlayOpen ? -1 : undefined}
+                  className={({ isActive }) => `bottom-nav__item${isActive ? " is-active" : ""}`}
+                >
+                  <Icon size={16} />
+                  <span>{getNavItemLabel(item)}</span>
+                </NavLink>
+              );
+            })}
             <button
               type="button"
               className="bottom-nav__item"

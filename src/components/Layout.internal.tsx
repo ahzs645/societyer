@@ -683,6 +683,8 @@ function renderNavItem(
   isPinned: boolean,
   onContextMenu: (event: ReactMouseEvent<HTMLElement>, item: NavItem) => void,
   onKeyDown: (event: ReactKeyboardEvent<HTMLElement>, item: NavItem) => void,
+  onTogglePin: (item: NavItem) => void,
+  pinActionLabel: string,
 ) {
   const Icon = item.icon;
   const count = getCount(item.to, counts);
@@ -708,6 +710,31 @@ function renderNavItem(
           {count}
         </Pill>
       )}
+      {/* Tap-to-pin, so pinning is discoverable in the mobile "More" drawer
+       * without needing right-click (desktop) or the command palette. Rendered
+       * as a role=button span (not <button>) to avoid nesting interactive
+       * elements inside the NavLink <a>; stops the click from navigating. */}
+      <span
+        role="button"
+        tabIndex={0}
+        className="sidebar__pin-toggle"
+        aria-label={pinActionLabel}
+        title={pinActionLabel}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onTogglePin(item);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            event.stopPropagation();
+            onTogglePin(item);
+          }
+        }}
+      >
+        {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
+      </span>
     </NavLink>
   );
 }

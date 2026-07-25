@@ -589,6 +589,11 @@ select.editable-cell__input:hover:not(:disabled) {
   font-size: token('fs-xxs');
   margin-right: 2px;
 }
+/* The footer only lists keyboard shortcuts (navigate / run / close / inspector),
+ * which are meaningless on touch — hide it on phones. */
+@media (max-width: 760px) {
+  .kbar__footer { display: none; }
+}
 
 /* Demo banner */
 .demo-banner {
@@ -771,7 +776,9 @@ select.editable-cell__input:hover:not(:disabled) {
   }
 
   .kbar__list {
-    max-height: calc(100dvh - 160px);
+    // The footer is hidden on phones (keyboard-only hints), so the results list
+    // reclaims that space and the palette extends closer to the bottom edge.
+    max-height: calc(100dvh - 120px);
   }
 
   .demo-banner {
