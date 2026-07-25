@@ -13,6 +13,7 @@ import {
   Shield,
   Settings,
   Search,
+  X,
   ChevronDown,
   ChevronUp,
   PanelLeftClose,
@@ -162,6 +163,10 @@ export function Layout() {
   );
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
+  // Mobile "More" drawer: favorites management is behind an explicit Edit mode
+  // (declutters rows), and the 90+-item nav catalog gets a local filter.
+  const [favoritesEditing, setFavoritesEditing] = useState(false);
+  const [navFilter, setNavFilter] = useState("");
   // Tracks a touch on the mobile drawer so a decisive left-swipe can dismiss it.
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const [collapsed, setCollapsed] = useState(
@@ -186,8 +191,11 @@ export function Layout() {
     // Views aren't included in the initial migration because they live in
     // zustand and need to be appended once that store is read in render.
   });
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
-    () => getInitialOpenGroups(window.location.pathname),
+  // Desktop opens the group containing the current route; the phone drawer
+  // starts with every group collapsed so the catalog reads as ~10 scannable
+  // headers instead of a 90-row scroll.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
+    isMobileNav ? {} : getInitialOpenGroups(window.location.pathname),
   );
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceAnchor, setWorkspaceAnchor] = useState<{
@@ -436,6 +444,15 @@ export function Layout() {
     }
   }, [isMobileNav, loc.pathname]);
 
+  // Closing the drawer resets its transient UI (edit mode, nav filter) so it
+  // reopens in the clean browse state.
+  useEffect(() => {
+    if (!mobileSidebarOpen) {
+      setFavoritesEditing(false);
+      setNavFilter("");
+    }
+  }, [mobileSidebarOpen]);
+
   useEffect(() => {
     if (!isMobileNav || !mobileSidebarOpen) return;
     const previousFocus = document.activeElement as HTMLElement | null;
@@ -610,14 +627,29 @@ export function Layout() {
     [groupedNav, society, entityKind, isMultiEntity, can],
   );
   const getNavItemLabel = (item: NavItem) => t(NAV_ITEM_LABEL_KEYS[item.label] ?? item.label, item.label);
+  // Drawer nav filter (mobile): match on the translated label; groups with no
+  // hits drop out, matching groups render forced-open. Cheap enough (<100 rows)
+  // to compute per render.
+  const navFilterQuery = navFilter.trim().toLowerCase();
+  const displayedGroupedNav = navFilterQuery
+    ? visibleGroupedNav
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) =>
+            getNavItemLabel(item).toLowerCase().includes(navFilterQuery),
+          ),
+        }))
+        .filter((group) => group.items.length > 0)
+    : visibleGroupedNav;
   const isSidebarCollapsed = isMobileNav ? !mobileSidebarOpen : collapsed;
   const shellClassName = useMemo(() => {
     let value = "app-shell";
     if (isSidebarCollapsed) value += " is-collapsed";
     if (isMobileNav) value += " is-mobile";
     if (isMobileNav && mobileSidebarOpen) value += " is-mobile-nav-open";
+    if (isMobileNav && favoritesEditing) value += " is-favorites-editing";
     return value;
-  }, [isMobileNav, isSidebarCollapsed, mobileSidebarOpen]);
+  }, [isMobileNav, isSidebarCollapsed, mobileSidebarOpen, favoritesEditing]);
 
   const mobileOverlayOpen = isMobileNav && (mobileSidebarOpen || mobileInspectorOpen);
 
@@ -1087,8 +1119,21 @@ export function Layout() {
           )}
 
           <nav className="sidebar__nav">
-            <div className="sidebar__section sidebar__section--compact">
+            <div className="sidebar__section sidebar__section--compact sidebar__section--favorites">
               <span>{t("nav.favorites")}</span>
+              {/* iOS-style list editing: view mode keeps rows clean; Edit
+                * reveals the reorder/unpin (and browse pin) controls. Mobile
+                * only — desktop manages favorites via drag + context menu. */}
+              {isMobileNav && favoritesOrder.length > 0 && (
+                <button
+                  type="button"
+                  className="sidebar__section-edit"
+                  aria-pressed={favoritesEditing}
+                  onClick={() => setFavoritesEditing((v) => !v)}
+                >
+                  {favoritesEditing ? t("common.done", "Done") : t("common.edit", "Edit")}
+                </button>
+              )}
             </div>
             {favoritesOrder.map((ref, index) => {
               const isDragging = favoriteDragIndex === index;
@@ -1242,8 +1287,34 @@ export function Layout() {
             <div className="sidebar__section sidebar__section--compact">
               <span>{t("nav.allRecords")}</span>
             </div>
-            {visibleGroupedNav.map((group) => {
-              const isOpen = openGroups[group.id] ?? false;
+            {/* With ~95 routes, type-to-jump beats scrolling on a phone. The
+              * filter only exists in the mobile drawer; desktop has ⌘K. */}
+            {isMobileNav && (
+              <div className="sidebar__nav-filter">
+                <Search size={13} aria-hidden="true" />
+                <input
+                  type="text"
+                  value={navFilter}
+                  onChange={(event) => setNavFilter(event.target.value)}
+                  placeholder={t("sidebar.filterNav", "Filter navigation…")}
+                  aria-label={t("sidebar.filterNav", "Filter navigation…")}
+                />
+                {navFilter && (
+                  <button
+                    type="button"
+                    aria-label={t("common.clear", "Clear")}
+                    onClick={() => setNavFilter("")}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            )}
+            {navFilterQuery && displayedGroupedNav.length === 0 && (
+              <div className="sidebar__filter-empty">{t("sidebar.noNavMatches", "No matches")}</div>
+            )}
+            {displayedGroupedNav.map((group) => {
+              const isOpen = navFilterQuery ? true : (openGroups[group.id] ?? false);
               const hasActiveItem = group.items.some((item) => isNavItemActive(item, loc.pathname));
 
               return (

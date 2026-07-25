@@ -188,8 +188,14 @@
   background: token('bg-hover');
   color: token('text-primary');
 }
-/* Touch devices have no hover — keep it visible so users can find it. */
+/* On touch there's no hover, but always-on controls clutter every row — so on
+ * mobile the pin toggle only exists while favorites Edit mode is active (the
+ * Edit button lives in the Favorites section header). */
 .app-shell.is-mobile .sidebar__pin-toggle {
+  display: none;
+}
+.app-shell.is-mobile.is-favorites-editing .sidebar__pin-toggle {
+  display: inline-flex;
   opacity: 1;
 }
 /* No room for it in the collapsed desktop rail. */
@@ -206,7 +212,7 @@
   align-items: center;
   gap: 2px;
 }
-.app-shell.is-mobile .sidebar__fav-controls {
+.app-shell.is-mobile.is-favorites-editing .sidebar__fav-controls {
   display: inline-flex;
 }
 .sidebar__fav-btn {
@@ -230,6 +236,76 @@
 .sidebar__fav-btn:disabled {
   opacity: 0.3;
   cursor: default;
+}
+
+/* Favorites header hosts the mobile Edit/Done toggle at its trailing edge. */
+.sidebar__section--favorites {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: token('s-2');
+}
+.sidebar__section-edit {
+  border: 0;
+  padding: 2px 6px;
+  border-radius: token('r-xs');
+  background: transparent;
+  color: token('accent');
+  font: inherit;
+  font-size: token('fs-xs');
+  font-weight: 600;
+  cursor: pointer;
+}
+.sidebar__section-edit:active {
+  background: token('bg-hover');
+}
+
+/* Drawer nav filter (mobile-only, rendered conditionally) — with ~95 routes,
+ * type-to-jump beats scrolling. */
+.sidebar__nav-filter {
+  display: flex;
+  align-items: center;
+  gap: token('s-2');
+  margin: 2px token('s-2') 6px;
+  padding: 0 token('s-2');
+  height: 34px;
+  border: 1px solid token('border');
+  border-radius: token('r-sm');
+  background: token('bg-subtle');
+  color: token('text-tertiary');
+}
+.sidebar__nav-filter svg {
+  flex-shrink: 0;
+}
+.sidebar__nav-filter input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: token('text-primary');
+  font-size: token('fs-sm');
+}
+.sidebar__nav-filter input:focus {
+  outline: none;
+}
+.sidebar__nav-filter button {
+  @include inline-flex-center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: token('r-xs');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+}
+.sidebar__nav-filter button:active {
+  background: token('bg-hover');
+}
+.sidebar__filter-empty {
+  padding: token('s-2') token('s-3');
+  color: token('text-tertiary');
+  font-size: token('fs-sm');
 }
 .app-shell.is-collapsed .sidebar {
   width: token('sidebar-w-collapsed');
