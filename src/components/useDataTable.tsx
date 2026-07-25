@@ -19,6 +19,7 @@ import {
 import { AdvancedFilterModal } from "./AdvancedFilter";
 import { MenuRow, MenuSectionLabel, Pill, Skeleton } from "./ui";
 import { useIsMobile } from "../lib/useIsMobile";
+import { limitColumnsForPhone } from "../lib/mobileTableLayout";
 import {
   makeViewId,
   readSavedViews,
@@ -207,9 +208,16 @@ export function useDataTable<T extends { _id?: string } & Record<string, any>>(p
   const sortBtnRef = useRef<HTMLButtonElement>(null);
   const optionsBtnRef = useRef<HTMLButtonElement>(null);
   const selectable = Boolean(bulkActions && bulkActions.length > 0);
-  const visibleColumns = useMemo(
+  // The uncapped visible set backs data operations (copy/export); the rendered
+  // set is additionally capped on phones so the table doesn't pan sideways
+  // through every column.
+  const allVisibleColumns = useMemo(
     () => columns.filter((col) => !hiddenColumns.has(col.id)),
     [columns, hiddenColumns],
+  );
+  const visibleColumns = useMemo(
+    () => limitColumnsForPhone(allVisibleColumns, isMobile),
+    [allVisibleColumns, isMobile],
   );
 
   const sortColumn = sort ? columns.find((column) => column.id === sort.columnId) : null;
@@ -359,11 +367,11 @@ export function useDataTable<T extends { _id?: string } & Record<string, any>>(p
       const selection = window.getSelection?.();
       if (selection && selection.toString().length > 0) return;
       event.preventDefault();
-      const header = visibleColumns.map((c) =>
+      const header = allVisibleColumns.map((c) =>
         typeof c.header === "string" ? c.header : c.id,
       );
       const body = selectedRows.map((row) =>
-        visibleColumns.map((c) =>
+        allVisibleColumns.map((c) =>
           c.render ? cellToText(c.render(row)) : String(c.accessor?.(row) ?? ""),
         ),
       );
@@ -373,7 +381,7 @@ export function useDataTable<T extends { _id?: string } & Record<string, any>>(p
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectable, selectedRows, visibleColumns, toast]);
+  }, [selectable, selectedRows, allVisibleColumns, toast]);
   const allVisibleSelected =
     selectable && filtered.length > 0 && filtered.every((row) => selected.has(rowKey(row)));
   const someVisibleSelected =

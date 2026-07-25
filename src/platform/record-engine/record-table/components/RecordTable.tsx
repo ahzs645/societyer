@@ -15,7 +15,7 @@ import { RecordTableAggregateFooter, RecordTableAggregateFooterRow } from "./Rec
 import { RecordTableActionRow, RecordTableActionRowCells } from "./RecordTableActionRow";
 import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboardNavigation";
 import { useIsMobile } from "../../../../lib/useIsMobile";
-import { getMobileTableLayout } from "../../../../lib/mobileTableLayout";
+import { getMobileTableLayout, limitColumnsForPhone } from "../../../../lib/mobileTableLayout";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
 import { CalendarView } from "../../../../components/CalendarView";
 import { RecordBoard, type RecordBoardColumn } from "../../../../components/RecordBoard";
@@ -180,7 +180,14 @@ export function RecordTable({
   const virtuosoRef = useRef<TableVirtuosoHandle>(null);
   const [rowContextMenu, setRowContextMenu] = useState<{ x: number; y: number; record: any } | null>(null);
 
-  const visibleColumns = useMemo(() => columns.filter((c) => c.isVisible), [columns]);
+  // Phones cap how many columns render (name + a couple) instead of panning
+  // sideways through the whole set — the rest of the record lives in the
+  // drawer. Column pickers/sort/filter still see the full column list.
+  const isMobile = useIsMobile();
+  const visibleColumns = useMemo(
+    () => limitColumnsForPhone(columns.filter((c) => c.isVisible), isMobile),
+    [columns, isMobile],
+  );
   const hasOpenRecordAction = !!onRecordClick;
   const hasRowActions = !!renderRowActions || !!rowMenuSections || hasOpenRecordAction;
   const onRowContextMenu: RowContextMenuHandler | undefined = rowMenuSections
@@ -199,7 +206,6 @@ export function RecordTable({
   // On phones we drop the selection column so the first data column (the
   // record name) sits flush left and can be frozen while the rest of the
   // table scrolls horizontally — the Twenty-style narrow-screen table.
-  const isMobile = useIsMobile();
   const { showSelectionColumn: effectiveSelectable, showDragHandle } =
     getMobileTableLayout({ isMobile, selectable, hasDragHandle: !!onReorder });
   const tableColumnCount =

@@ -36,6 +36,18 @@ export type MobileTableLayout = {
 
 export const DEFAULT_FREEZE_FIRST_COLUMN_ABOVE = 6;
 
+// On a phone the table no longer pans through every column: a ~360px viewport
+// comfortably shows the name column plus a couple more, and serially swiping
+// through the rest was the single hardest interaction on mobile. Cap what
+// renders; the full record stays one tap away in the record drawer, and
+// exports/column pickers keep using the uncapped list.
+export const MOBILE_MAX_VISIBLE_COLUMNS = 3;
+
+export function limitColumnsForPhone<T>(columns: T[], isMobile: boolean): T[] {
+  if (!isMobile || columns.length <= MOBILE_MAX_VISIBLE_COLUMNS) return columns;
+  return columns.slice(0, MOBILE_MAX_VISIBLE_COLUMNS);
+}
+
 export function getMobileTableLayout({
   isMobile,
   selectable,
