@@ -412,6 +412,15 @@
 .name-autocomplete__remove:focus-visible {
   opacity: 1;
 }
+/* Touch: hover-reveal never fires and 20px is under-target — keep the remove
+ * affordance visible and give it a real hit area. */
+@media (hover: none), (pointer: coarse) {
+  .name-autocomplete__remove {
+    opacity: 1;
+    width: 32px;
+    height: 32px;
+  }
+}
 .name-autocomplete__remove:hover {
   background: token('bg-hover');
   color: token('text-primary');

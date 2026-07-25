@@ -114,7 +114,9 @@
   border-radius: token('r-md');
   box-shadow: token('shadow-lg');
   padding: 4px;
-  max-height: min(70vh, 420px);
+  /* dvh, not vh — anchored menus must fit the VISIBLE viewport on mobile
+   * (vh includes the browser chrome, letting the menu extend under it). */
+  max-height: min(70dvh, 420px);
   @include flex-column;
   overflow: hidden auto;
   animation: menuIn 0.08s ease-out;

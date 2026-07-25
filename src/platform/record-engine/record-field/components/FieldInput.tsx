@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type InputHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Star, UserRound } from "lucide-react";
 import type { BooleanFieldConfig, CurrencyFieldConfig, FieldMetadata, RelationFieldConfig, SelectFieldConfig } from "../../types";
 import { FIELD_TYPES } from "../../types";
@@ -33,6 +33,29 @@ export type FieldInputProps = {
 
 type InputComponent = ComponentType<FieldInputProps>;
 
+// TextInput backs several field types; without these hints phones show the
+// full QWERTY keyboard for phone numbers, emails and URLs, and iOS
+// autocapitalizes/autocorrects identifiers.
+const TEXT_INPUT_ATTRS: Partial<
+  Record<FieldMetadata["fieldType"], InputHTMLAttributes<HTMLInputElement>>
+> = {
+  [FIELD_TYPES.EMAIL]: {
+    type: "email",
+    inputMode: "email",
+    autoComplete: "email",
+    autoCapitalize: "none",
+    spellCheck: false,
+  },
+  [FIELD_TYPES.PHONE]: { type: "tel", inputMode: "tel", autoComplete: "tel" },
+  [FIELD_TYPES.LINK]: {
+    type: "url",
+    inputMode: "url",
+    autoCapitalize: "none",
+    spellCheck: false,
+  },
+  [FIELD_TYPES.UUID]: { autoCapitalize: "none", autoCorrect: "off", spellCheck: false },
+};
+
 function TextInput({ value, onCommit, onCancel, field, initialValue }: FieldInputProps) {
   const [draft, setDraft] = useState<string>(initialValue ?? (value == null ? "" : String(value)));
   const ref = useRef<HTMLInputElement>(null);
@@ -43,6 +66,7 @@ function TextInput({ value, onCommit, onCancel, field, initialValue }: FieldInpu
   return (
     <input
       ref={ref}
+      {...(TEXT_INPUT_ATTRS[field.fieldType] ?? {})}
       className="record-cell__input"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
@@ -90,6 +114,7 @@ function NumberInput({ value, onCommit, onCancel, field, initialValue }: FieldIn
     <input
       ref={ref}
       type="number"
+      inputMode="decimal"
       className="record-cell__input"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
