@@ -137,6 +137,26 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Each browse/favorite row is wrapped in a slot so the row (link/button) and
+ * its action controls are SIBLINGS, never interactive elements nested inside
+ * one another. The row grows; the controls sit at the trailing edge. */
+.sidebar__item-slot {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.sidebar__item-slot > .sidebar__item,
+.sidebar__item-slot > .sidebar__nav-item {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* The command row ships width:100% for standalone use; inside a slot it must
+ * flex instead, so the controls get room. */
+.sidebar__item-slot > .sidebar__item--command {
+  width: auto;
+}
+
 /* Tap-to-pin affordance on each browse item. Hidden until hover on desktop
  * (keeps rows clean), always visible on touch so pinning is discoverable in
  * the mobile "More" drawer instead of only via the command palette. */
@@ -147,11 +167,12 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin-left: 2px;
+  padding: 0;
   border: 0;
   border-radius: token('r-xs');
   background: transparent;
   color: token('text-tertiary');
+  font: inherit;
   cursor: pointer;
   opacity: 0;
   transition:
@@ -159,7 +180,7 @@
     background token('anim-fast') token('anim-ease'),
     color token('anim-fast') token('anim-ease');
 }
-.sidebar__item:hover .sidebar__pin-toggle,
+.sidebar__item-slot:hover .sidebar__pin-toggle,
 .sidebar__pin-toggle:focus-visible {
   opacity: 1;
 }
@@ -181,7 +202,6 @@
  * cluster is shown only on mobile. */
 .sidebar__fav-controls {
   display: none;
-  margin-left: auto;
   flex-shrink: 0;
   align-items: center;
   gap: 2px;
@@ -195,17 +215,21 @@
   justify-content: center;
   width: 32px;
   height: 32px;
+  padding: 0;
+  border: 0;
   border-radius: token('r-xs');
+  background: transparent;
   color: token('text-tertiary');
+  font: inherit;
   cursor: pointer;
 }
 .sidebar__fav-btn:active {
   background: token('bg-hover');
   color: token('text-primary');
 }
-.sidebar__fav-btn[aria-disabled="true"] {
+.sidebar__fav-btn:disabled {
   opacity: 0.3;
-  pointer-events: none;
+  cursor: default;
 }
 .app-shell.is-collapsed .sidebar {
   width: token('sidebar-w-collapsed');

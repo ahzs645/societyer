@@ -691,51 +691,40 @@ function renderNavItem(
   const label = getLabel(item);
 
   return (
-    <NavLink
-      key={item.to}
-      to={item.to}
-      end={item.end}
-      className={({ isActive }) => `sidebar__item${isActive ? " is-active" : ""}`}
-      data-pinned={isPinned || undefined}
-      title={!isMobileNav && collapsed ? label : undefined}
-      onContextMenu={(event) => onContextMenu(event, item)}
-      onKeyDown={(event) => onKeyDown(event, item)}
-    >
-      <TintedIconTile tone={item.color} size="sm" className="sidebar__icon-chip">
-        <Icon size={14} />
-      </TintedIconTile>
-      <span className="sidebar__label">{label}</span>
-      {count != null && (
-        <Pill size="sm" className="sidebar__count">
-          {count}
-        </Pill>
-      )}
+    <div key={item.to} className="sidebar__item-slot">
+      <NavLink
+        to={item.to}
+        end={item.end}
+        className={({ isActive }) => `sidebar__item${isActive ? " is-active" : ""}`}
+        data-pinned={isPinned || undefined}
+        title={!isMobileNav && collapsed ? label : undefined}
+        onContextMenu={(event) => onContextMenu(event, item)}
+        onKeyDown={(event) => onKeyDown(event, item)}
+      >
+        <TintedIconTile tone={item.color} size="sm" className="sidebar__icon-chip">
+          <Icon size={14} />
+        </TintedIconTile>
+        <span className="sidebar__label">{label}</span>
+        {count != null && (
+          <Pill size="sm" className="sidebar__count">
+            {count}
+          </Pill>
+        )}
+      </NavLink>
       {/* Tap-to-pin, so pinning is discoverable in the mobile "More" drawer
-       * without needing right-click (desktop) or the command palette. Rendered
-       * as a role=button span (not <button>) to avoid nesting interactive
-       * elements inside the NavLink <a>; stops the click from navigating. */}
-      <span
-        role="button"
-        tabIndex={0}
+       * without needing right-click (desktop) or the command palette. A real
+       * <button> rendered as a SIBLING of the NavLink — never nested inside the
+       * <a> — so it stays a valid, independent, focusable control. */}
+      <button
+        type="button"
         className="sidebar__pin-toggle"
         aria-label={pinActionLabel}
         title={pinActionLabel}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onTogglePin(item);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            event.stopPropagation();
-            onTogglePin(item);
-          }
-        }}
+        onClick={() => onTogglePin(item)}
       >
         {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
-      </span>
-    </NavLink>
+      </button>
+    </div>
   );
 }
 
