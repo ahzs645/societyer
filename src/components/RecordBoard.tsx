@@ -1,4 +1,6 @@
 import { ReactNode, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { ArrowRightLeft } from "lucide-react";
+import { Menu } from "./Menu";
 import type { ToneVariant } from "./ui";
 
 export type RecordBoardColumn = {
@@ -117,6 +119,34 @@ export function RecordBoard<T>({
                     }}
                   >
                     {renderCard(item)}
+                    {/* Touch can't drag cards between columns, so each card
+                      * gets a move-menu trigger (bottom sheet on phones via
+                      * Menu). CSS shows it only on coarse-pointer devices —
+                      * desktop keeps drag-and-drop with no extra chrome. */}
+                    <Menu
+                      trigger={
+                        <button
+                          type="button"
+                          className="kanban__card-move"
+                          aria-label={`Move to column`}
+                        >
+                          <ArrowRightLeft size={14} />
+                        </button>
+                      }
+                      align="right"
+                      sections={[
+                        {
+                          id: "move",
+                          label: "Move to",
+                          items: columns.map((c) => ({
+                            id: c.id,
+                            label: c.label,
+                            disabled: c.id === col.id,
+                            onSelect: () => onMove(item, c.id),
+                          })),
+                        },
+                      ]}
+                    />
                   </div>
                 );
               })}
