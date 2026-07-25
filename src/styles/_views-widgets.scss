@@ -141,6 +141,32 @@
   position: relative;
 }
 .kanban__card:hover { box-shadow: token('shadow-sm'); }
+/* Coarse-pointer-only move trigger — desktop keeps drag-and-drop, so the
+ * button never renders visually there. */
+.kanban__card-move {
+  display: none;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: token('r-xs');
+  background: transparent;
+  color: token('text-tertiary');
+  cursor: pointer;
+}
+.kanban__card-move:active {
+  background: token('bg-hover');
+  color: token('text-primary');
+}
+@media (hover: none), (pointer: coarse) {
+  .kanban__card { padding-right: 40px; }
+  .kanban__card-move { display: inline-flex; }
+}
 .kanban__card.is-dragging { opacity: 0.4; }
 .kanban__card.is-clickable { cursor: pointer; }
 .kanban__card.is-clickable:focus-visible {
