@@ -4,7 +4,7 @@
 // builder helpers). The query/mutation engine that consumes it lives in
 // staticConvex.ts.
 
-import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
+import { RECORD_TABLE_OBJECTS } from "../../../convex/recordTableMetadataDefinitions";
 import {
   CORPORATION_DOCUMENT_PACKETS,
   corporationPacketEntityTypes,
@@ -12,18 +12,18 @@ import {
   corporationPacketPrecedentMarker,
   corporationPacketTemplateHtml,
   corporationPacketTemplateMarker,
-} from "../../shared/corporationDocumentPackets";
+} from "../../../shared/corporationDocumentPackets";
 import {
   corporationPacketDocxDataUrl,
   corporationPacketDocxFileName,
   corporationPacketDocxMimeType,
-} from "../../shared/corporationPacketDocx";
-import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
-import { riversideGamingProgramStatement } from "../../shared/programStatement";
-import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
-import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
-import { registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
-import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
+} from "../../../shared/corporationPacketDocx";
+import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../../shared/grantSourceLibrary";
+import { riversideGamingProgramStatement } from "../../../shared/programStatement";
+import { materializeRightsHoldings, validateLedger } from "../../../shared/equityLedger";
+import { INTEGRATION_CATALOG } from "../../../shared/integrationCatalog";
+import { registryOnboardingCopy } from "../../../shared/jurisdictionWorkspace";
+import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "../localDexieRowStore";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
 const SOCIETY_ID = STATIC_DEMO_SOCIETY_ID;

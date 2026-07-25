@@ -101,7 +101,7 @@ import { getRouteIdentity, routeAllowedForEntityKind, type IconTone, type Lucide
 import { organizationKind } from "../../shared/organizationDomain";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
-import { isStaticDemoRuntime } from "../lib/staticRuntime";
+import { isStaticDemoRuntime } from "../lib/static-convex/staticRuntime";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
 import { useAiChatVisibility } from "../hooks/useAiChatVisibility";

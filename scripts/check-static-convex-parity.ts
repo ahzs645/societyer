@@ -15,13 +15,13 @@ import {
   STATIC_OFFLINE_NOOP_WRITES,
   STATIC_PENDING_WRITES,
   isStaticGenericCrud,
-} from "../src/lib/staticConvexParity.ts";
+} from "../src/lib/static-convex/staticConvexParity.ts";
 import { PORTABLE_FUNCTION_NAMES } from "../shared/functions/registry.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
 const srcDir = path.join(repoRoot, "src");
-const staticConvexPath = path.join(srcDir, "lib", "staticConvex.ts");
+const staticConvexPath = path.join(srcDir, "lib", "static-convex", "staticConvex.ts");
 
 function walk(dir: string): string[] {
   const out: string[] = [];
@@ -58,7 +58,7 @@ function collectFrontendWrites(): Map<string, string[]> {
 function collectExplicitlyHandled(): Set<string> {
   // The mirror is split across staticConvex.ts and its domain sibling modules
   // (e.g. staticConvexYcn.ts) that staticConvex.ts delegates to. Scan all of them.
-  const mirrorFiles = [staticConvexPath, path.join(srcDir, "lib", "staticConvexYcn.ts")];
+  const mirrorFiles = [staticConvexPath, path.join(srcDir, "lib", "static-convex", "staticConvexYcn.ts")];
   const handled = new Set<string>();
   for (const file of mirrorFiles) {
     const text = readFileSync(file, "utf8");

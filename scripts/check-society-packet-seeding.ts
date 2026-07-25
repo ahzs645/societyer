@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { SOCIETY_DOCUMENT_PACKETS } from "../shared/societyDocumentPackets";
 import { CORPORATION_DOCUMENT_PACKETS } from "../shared/corporationDocumentPackets";
-import { StaticConvexClient } from "../src/lib/staticConvex";
+import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
 
 /**
  * Society document packets seed into the legal catalog the same way corporation

@@ -1,4 +1,4 @@
-import { isLocalRuntimeMode } from "./runtimeMode";
+import { isLocalRuntimeMode } from "../runtimeMode";
 
 export function isStaticDemoRuntime() {
   if (typeof window === "undefined") return false;

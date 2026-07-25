@@ -6,7 +6,7 @@ import { useToast } from "../components/Toast";
 import { setStoredSocietyId } from "../hooks/useSociety";
 import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi";
 import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/routeIdentity";
-import { isStaticDemoRuntime } from "../lib/staticRuntime";
+import { isStaticDemoRuntime } from "../lib/static-convex/staticRuntime";
 import { getRuntimeMode } from "../lib/runtimeMode";
 
 // The society-loading placeholder shown while `useSociety()` is undefined.

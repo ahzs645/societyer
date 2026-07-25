@@ -1,7 +1,7 @@
 // Firm-wide layer: cross-entity overview rollup + batch ("Multiple_Copy") packet
 // generation, exercised through the static mirror (the app's code path).
 
-import { StaticConvexClient } from "../src/lib/staticConvex";
+import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
 
 function expectEqual(label: string, actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {

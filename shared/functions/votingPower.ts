@@ -3,7 +3,7 @@
  *
  * The first handler ported to the portable `ctx.db` contract (the audit's
  * Phase-0 slice). It existed in TWO hand-written copies — the Convex handler
- * (convex/legalOperations.ts) and the static mirror (src/lib/staticConvex.ts) —
+ * (convex/legalOperations.ts) and the static mirror (src/lib/static-convex/staticConvex.ts) —
  * both marshalling the same inputs into the shared `computeVotingPower` kernel.
  *
  * This file is now the single source of truth for that logic:

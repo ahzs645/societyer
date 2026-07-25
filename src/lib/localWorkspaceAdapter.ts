@@ -1,7 +1,7 @@
-import { StaticConvexClient } from "./staticConvex";
+import { StaticConvexClient } from "./static-convex/staticConvex";
 import { DexieWorkspaceClient } from "./dexieWorkspaceClient";
 import { getRuntimeDescriptor, type RuntimeDescriptor } from "./runtimeMode";
-import { isStaticDemoRuntime } from "./staticRuntime";
+import { isStaticDemoRuntime } from "./static-convex/staticRuntime";
 
 export type LocalWorkspaceAdapter = {
   client: StaticConvexClient;

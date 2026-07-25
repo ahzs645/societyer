@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { appBasePath } from "../lib/staticRuntime";
+import { appBasePath } from "../lib/static-convex/staticRuntime";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";

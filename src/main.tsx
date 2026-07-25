@@ -2,7 +2,7 @@ import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, HashRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { ConvexProvider, type ConvexReactClient } from "convex/react";
-import { isLocalDataRuntime, isStaticDemoRuntime } from "./lib/staticRuntime";
+import { isLocalDataRuntime, isStaticDemoRuntime } from "./lib/static-convex/staticRuntime";
 import { getRuntimeMode } from "./lib/runtimeMode";
 import { AuthProvider } from "./auth/AuthProvider";
 import { AuthGate } from "./components/AuthGate";

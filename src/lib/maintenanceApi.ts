@@ -1,6 +1,6 @@
 import type { Id } from "../../convex/_generated/dataModel";
-import { STATIC_DEMO_SOCIETY_ID } from "./staticIds";
-import { isLocalDataRuntime } from "./staticRuntime";
+import { STATIC_DEMO_SOCIETY_ID } from "./static-convex/staticIds";
+import { isLocalDataRuntime } from "./static-convex/staticRuntime";
 
 type SeedResult = { societyId: Id<"societies"> };
 type ResetResult = { ok: boolean };

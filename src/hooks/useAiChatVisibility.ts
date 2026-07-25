@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { isStaticDemoRuntime } from "../lib/staticRuntime";
+import { isStaticDemoRuntime } from "../lib/static-convex/staticRuntime";
 
 const STORAGE_KEY = "societyer.aiChat.hidden";
 const CHANGE_EVENT = "societyer:ai-chat-changed";

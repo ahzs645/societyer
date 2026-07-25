@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { StaticConvexClient } from "../src/lib/staticConvex";
+import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
 
 /**
  * #2 Clone completeness + ID remapping. A deep clone must (a) copy the equity

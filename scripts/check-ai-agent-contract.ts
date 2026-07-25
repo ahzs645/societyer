@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { StaticConvexClient } from "../src/lib/staticConvex";
+import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
 
 const client = new StaticConvexClient();
 const [society] = await client.query("society:list", {});

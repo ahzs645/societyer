@@ -1,4 +1,4 @@
-import { StaticConvexClient, type StaticDemoSeed } from "./staticConvex";
+import { StaticConvexClient, type StaticDemoSeed } from "./static-convex/staticConvex";
 import type { LocalWorkspaceSnapshot } from "./localDexieRowStore";
 
 export class DexieWorkspaceClient extends StaticConvexClient {

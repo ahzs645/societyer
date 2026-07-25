@@ -9,7 +9,7 @@
 
 import assert from "node:assert/strict";
 
-import { StaticConvexClient } from "../src/lib/staticConvex";
+import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
 import type { PortableDoc } from "../shared/portable/index";
 
 const societyId = "soc_riverside";
