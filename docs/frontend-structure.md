@@ -115,9 +115,16 @@ Every slice = pure move + import-path fix (no logic change), ending on `tsc -b` 
 - [x] **Slice 3** — `Global{Asset,Meeting,Task,Commitment}Create` moved from `components/`
       into their features (`features/assets|meetings/components|tasks|commitments/`).
       Importers repointed to `@/` alias. Verified: tsc -b, lint. (commit 7cf03ba)
-- [ ] **Slice 4 (assessed, not started)** — `lib/` carve into `static-convex/` + `runtime/`.
-      Lowest user-value slice (grouping already-coherently-named files) and the fiddliest:
-      `staticRuntime` has 17 importers in heterogeneous alias/relative forms. No backend
-      coupling (the `shared/` references are stale doc comments, not imports). Run
-      `npm run test:static-parity` after, since this touches migration-sensitive code.
+- [x] **Slice 4a** — `lib/static-convex/` subsystem carved out (8 files: `staticConvex*`,
+      `staticIds`, `staticRuntime`). Pure move; ~20 src importers + 16 conformance scripts
+      repointed. Took 3 fix rounds for hidden non-import references — a `.ts`-extension
+      import and two hardcoded `path.join(...,"lib","staticConvex.ts")` fs paths in
+      `check-static-convex-parity.ts`. Verified: tsc -b, convex:typecheck, lint,
+      test:static-parity (452 writes, 0 gaps), portable-live-runtime, corporation-equity,
+      clone-society. (commit f880094)
+- [ ] **Slice 4b (NOT recommended)** — `lib/runtime/` grouping (`convex`, `store`, `local*`,
+      `authClient`, `runtimeMode`, ...). Deferred: these are imported far more widely and at
+      a lower level than the static cluster, and 4a proved how many hidden non-import
+      references (hardcoded paths, tooling) lurk. For a purely cosmetic grouping the
+      value/effort is unfavorable — do only if `lib/` navigability becomes a real pain.
 - [ ] **Slice 5** — `components/` domain de-leak (meetings/legal/documents/filings).
