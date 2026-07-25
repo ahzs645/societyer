@@ -7,9 +7,9 @@
  * other caller) can pop this from anywhere in the app.
  */
 import { useEffect, useState } from "react";
-import { useSociety } from "../hooks/useSociety";
-import { AssetCreateModal } from "../features/assets/AssetCreateModal";
-import type { AssetFormInitialValues } from "../features/assets/AssetFormFields";
+import { useSociety } from "../../hooks/useSociety";
+import { AssetCreateModal } from "./AssetCreateModal";
+import type { AssetFormInitialValues } from "./AssetFormFields";
 
 export const OPEN_ASSET_CREATE_EVENT = "quickaction:add-asset";
 

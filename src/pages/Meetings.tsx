@@ -13,7 +13,7 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   useObjectRecordTableData,
-} from "@/modules/object-record";
+} from "@/platform/record-engine";
 import { Tooltip } from "../components/Tooltip";
 import { useToast } from "../components/Toast";
 import { Plus, Calendar, AlertTriangle, Monitor, Pencil, Trash2, ExternalLink } from "lucide-react";

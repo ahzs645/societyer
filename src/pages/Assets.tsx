@@ -43,13 +43,13 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   useObjectRecordTableData,
-} from "@/modules/object-record";
+} from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { formatDate } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { AssetQrLabel } from "../features/assets/AssetQrLabel";
 import { AssetScanner } from "../features/assets/AssetScanner";
-import { openGlobalAssetCreate } from "../components/GlobalAssetCreate";
+import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
 import {
   AssetFormFields,
   useAssetFormData,

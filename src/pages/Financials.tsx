@@ -42,9 +42,9 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   useObjectRecordTableData,
-} from "@/modules/object-record";
+} from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
-import { openGlobalAssetCreate } from "../components/GlobalAssetCreate";
+import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
 import { assetCategoryFromTransaction, isAssetPurchaseTransaction } from "../features/assets/assetUtils";
 
 export function FinancialsPage() {

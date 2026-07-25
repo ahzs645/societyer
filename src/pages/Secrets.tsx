@@ -32,7 +32,7 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   useObjectRecordTableData,
-} from "@/modules/object-record";
+} from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 
 const CREDENTIAL_TYPES = ["recovery_key", "registry_key", "api_key", "password", "certificate", "other"];

@@ -9,7 +9,7 @@
 import { ROUTINE_MOTION_TAGS } from "../shared/proceduralMotions";
 
 // Field types the registry understands — keep in sync with
-// src/modules/object-record/types/FieldType.ts
+// src/platform/record-engine/types/FieldType.ts
 export const FIELD_TYPES = {
   TEXT: "TEXT",
   NUMBER: "NUMBER",
@@ -44,7 +44,7 @@ export type SeedViewColumn = { fieldName: string; size?: number; position?: numb
 
 /** A seeded view filter, expressed by field NAME (resolved to fieldMetadataId at
  * seed time). Mirrors the runtime ViewFilter shape in
- * src/modules/object-record/types/View.ts. */
+ * src/platform/record-engine/types/View.ts. */
 export type SeedViewFilter = { fieldName: string; operator: string; value: unknown };
 
 export type SeedView = {

@@ -1,7 +1,7 @@
 # RecordTable migration playbook
 
 The legacy `DataTable` component renders hardcoded columns per page. The new
-`RecordTable` (`src/modules/object-record`) is metadata-driven — columns, sorts,
+`RecordTable` (`src/platform/record-engine`) is metadata-driven — columns, sorts,
 filters, and saved views come from Convex tables (`objectMetadata`,
 `fieldMetadata`, `views`, `viewFields`). Migrating a page is roughly five steps.
 
@@ -81,7 +81,7 @@ import {
   RecordTableFilterPopover,
   RecordTableBulkBar,
   useObjectRecordTableData,
-} from "@/modules/object-record";
+} from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 
 // inside the component ...

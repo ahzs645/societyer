@@ -8,8 +8,8 @@
  * any other caller) can pop this from anywhere in the app.
  */
 import { useEffect, useState } from "react";
-import { useSociety } from "../hooks/useSociety";
-import { TaskCreateModal } from "../features/tasks/TaskCreateModal";
+import { useSociety } from "../../hooks/useSociety";
+import { TaskCreateModal } from "./TaskCreateModal";
 
 export const OPEN_TASK_CREATE_EVENT = "quickaction:add-task";
 

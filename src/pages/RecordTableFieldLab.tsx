@@ -7,7 +7,7 @@ import {
   RecordTableScope,
   RecordTableToolbar,
   useRecordTableState,
-} from "@/modules/object-record";
+} from "@/platform/record-engine";
 import {
   LAB_FIELD_DEFINITIONS,
   LAB_FIELDS,
@@ -16,7 +16,7 @@ import {
   applyLabEdit,
   initialLabRecord,
   type LabRecord,
-} from "@/modules/object-record/record-table/testing/fieldLabFixture";
+} from "@/platform/record-engine/record-table/testing/fieldLabFixture";
 import { isStaticDemoRuntime } from "@/lib/staticRuntime";
 
 function FieldLabStatus({ editedFields }: { editedFields: string[] }) {

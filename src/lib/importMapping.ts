@@ -1,5 +1,5 @@
 import Fuse from "fuse.js";
-import { FIELD_TYPES, type FieldMetadata } from "@/modules/object-record";
+import { FIELD_TYPES, type FieldMetadata } from "@/platform/record-engine";
 
 export type ImportMappingField = {
   id: string;

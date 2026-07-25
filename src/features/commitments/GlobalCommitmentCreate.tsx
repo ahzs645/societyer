@@ -8,8 +8,8 @@
  * any other caller) can pop this from anywhere in the app.
  */
 import { useEffect, useState } from "react";
-import { useSociety } from "../hooks/useSociety";
-import { CommitmentCreateModal } from "../features/commitments/CommitmentCreateModal";
+import { useSociety } from "../../hooks/useSociety";
+import { CommitmentCreateModal } from "./CommitmentCreateModal";
 
 export const OPEN_COMMITMENT_CREATE_EVENT = "quickaction:add-commitment";
 
