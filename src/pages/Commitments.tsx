@@ -16,7 +16,7 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   useObjectRecordTableData,
-} from "@/modules/object-record";
+} from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";

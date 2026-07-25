@@ -4,7 +4,7 @@
 // 'strict' (the value MUST resolve to an existing directory id) or left 'free'
 // (any string is accepted, optionally linkable to a directory id when one
 // happens to resolve). This module is framework-free and will later inform the
-// src/modules/object-record FieldType wiring (not touched here).
+// src/platform/record-engine FieldType wiring (not touched here).
 
 export type ReferenceConstraint = "strict" | "free";
 

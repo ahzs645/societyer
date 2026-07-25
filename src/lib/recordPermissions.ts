@@ -1,4 +1,4 @@
-import type { FieldMetadata, ObjectMetadata, View } from "@/modules/object-record";
+import type { FieldMetadata, ObjectMetadata, View } from "@/platform/record-engine";
 
 export type RecordPermissionContext = {
   role?: string | null;

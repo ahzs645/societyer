@@ -24,7 +24,7 @@ import {
   RecordTableEmpty,
   useObjectRecordTableData,
   useRecordTableState,
-} from "@/modules/object-record";
+} from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 
 /**

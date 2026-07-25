@@ -16,7 +16,7 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   useObjectRecordTableData,
-} from "@/modules/object-record";
+} from "@/platform/record-engine";
 import { useState } from "react";
 import type { Id } from "../../convex/_generated/dataModel";
 

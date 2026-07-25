@@ -16,7 +16,7 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   useObjectRecordTableData,
-} from "@/modules/object-record";
+} from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { ArrowLeft, BadgeDollarSign, ExternalLink, FileText, Pencil, Plus, Save, Trash2, Inbox, Upload } from "lucide-react";
 import { useToast } from "../components/Toast";

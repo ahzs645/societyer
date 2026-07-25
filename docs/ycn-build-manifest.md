@@ -19,7 +19,7 @@ Three components were reported by multiple audit domains and are merged here: **
 | Template-assembly layer (token / list-repeat / conditional) | PARTIAL | `shared/templateAssembly.ts`, `shared/corporationPacketDocx.ts`, `shared/corporationDocumentPackets.ts`, `shared/starter-template-rendering.ts`, `convex/legalOperations.ts` | — | M | **build-now** |
 | Generic versioned-register helper | GAP | `shared/versionedRegister.ts`, `src/lib/versionedRegister.ts`, `scripts/check-versioned-register.ts` | — | M | **build-now** |
 | asOf / point-in-time query (Convex) | GAP | `convex/versionedRegister.ts`, `shared/equityLedger.ts`, `scripts/check-holdings-as-of.ts`, `scripts/check-versioned-register-query.ts` | Versioned-register helper | M | **build-now** |
-| Reference-field strict/free constraint | PARTIAL | `src/modules/object-record/types/FieldType.ts`, `shared/referenceField.ts`, `scripts/check-reference-field-constraint.ts` | — | S | **build-now** |
+| Reference-field strict/free constraint | PARTIAL | `src/platform/record-engine/types/FieldType.ts`, `shared/referenceField.ts`, `scripts/check-reference-field-constraint.ts` | — | S | **build-now** |
 | Significant-Individuals extension + steps sub-register | PARTIAL | `convex/schema.ts`, `convex/legalOperations.ts`, `shared/significantIndividuals.ts`, `convex/lib/orgHubOptions.ts` | — | M | **build-now** |
 | Global People Directory (cross-tenant dedup/typeahead) | GAP | `convex/schema.ts`, `convex/peopleDirectory.ts`, `shared/peopleDirectory.ts`, `src/lib/people/directory.ts` | — | M | **build-now** |
 | Corporation Settings → compliance-driving config (AGM/FYE) | PARTIAL | `shared/corporationSettings.ts`, `convex/schema.ts`, `convex/organizationDetails.ts`, `convex/annualCycle.ts`, `src/lib/compliance/engine.ts` | — | M | **build-now** |
@@ -57,7 +57,7 @@ All four are pure-logic + standalone tsx tests. **Fully parallel** except the sh
 - **1a. `shared/nlg.ts`** — `actorGrammar()` + `looksLikeOrganization()` + test `scripts/check-nlg-grammar.ts`. *(Build the grammar engine and the name heuristic together — they share one file and one test script. Mirror/re-export `looksLikeOrganization`/`inferMemberKind` into `shared/organizationDomain.ts` as a follow-on edit within this same item to avoid a second writer.)*
 - **1b. `shared/ycnDate.ts`** — `encode/decodeYcnDate` (string-slicing, `<19000101 → null`) + `scripts/check-ycn-date-codec.ts`. Parallel-safe.
 - **1c. `shared/versionedRegister.ts`** (+ `src/lib/versionedRegister.ts` re-export) — `currentRows`/`asOfRows`/`planRevision` + `scripts/check-versioned-register.ts`. Parallel-safe.
-- **1d. `shared/referenceField.ts`** — `validateReference()` + `scripts/check-reference-field-constraint.ts`. Touches `src/modules/object-record/types/FieldType.ts` (add `referenceConstraint?`). Parallel-safe.
+- **1d. `shared/referenceField.ts`** — `validateReference()` + `scripts/check-reference-field-constraint.ts`. Touches `src/platform/record-engine/types/FieldType.ts` (add `referenceConstraint?`). Parallel-safe.
 
 ⚠️ **Serial within 1a only:** both NLG sub-tasks write `shared/nlg.ts` + `scripts/check-nlg-grammar.ts`. Do them as one unit.
 **Gate after Wave 1:** register `test:nlg-grammar`, `test:ycn-date-codec`, `test:versioned-register`, `test:reference-field` in `package.json`; `npm run convex:typecheck` stays green (only `FieldType.ts` non-convex change).

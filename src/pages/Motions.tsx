@@ -20,7 +20,7 @@ import {
   RecordTableFilterChips,
   RecordTableFilterPopover,
   useObjectRecordTableData,
-} from "@/modules/object-record";
+} from "@/platform/record-engine";
 import { Tabs } from "../components/primitives";
 import { MotionBacklogPage } from "./MotionBacklog";
 import { MotionLibraryPage } from "./MotionLibrary";

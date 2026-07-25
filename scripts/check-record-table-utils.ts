@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { FIELD_TYPES, type FieldType } from "../src/modules/object-record/types/FieldType";
-import type { FieldMetadata, RecordField } from "../src/modules/object-record/types";
-import { aggregateRecordValues, getAvailableAggregateOperationsForFieldType } from "../src/modules/object-record/record-table/utils/aggregateOperations";
-import { filterAndSortRecords } from "../src/modules/object-record/record-table/utils/filterAndSortRecords";
-import { deserializeViewFiltersFromUrl, serializeViewFiltersToUrl } from "../src/modules/object-record/record-table/utils/viewFilterGroups";
+import { FIELD_TYPES, type FieldType } from "../src/platform/record-engine/types/FieldType";
+import type { FieldMetadata, RecordField } from "../src/platform/record-engine/types";
+import { aggregateRecordValues, getAvailableAggregateOperationsForFieldType } from "../src/platform/record-engine/record-table/utils/aggregateOperations";
+import { filterAndSortRecords } from "../src/platform/record-engine/record-table/utils/filterAndSortRecords";
+import { deserializeViewFiltersFromUrl, serializeViewFiltersToUrl } from "../src/platform/record-engine/record-table/utils/viewFilterGroups";
 
 function field(id: string, name: string, fieldType: FieldType): RecordField {
   const metadata: FieldMetadata = {
