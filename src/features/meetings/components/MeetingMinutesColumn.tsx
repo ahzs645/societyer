@@ -874,6 +874,66 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                               <span className="meeting-minutes-section-item__actions">
                                 {sectionEditIndex !== index && (
                                   <>
+                                    {/* Desktop reorders sections via drag or the
+                                      * context menu — neither works on touch, so
+                                      * phones surface Move up/down inline (same
+                                      * child/root rules as the context menu). */}
+                                    {isMobileSectionEditor && (() => {
+                                      const isChild = section?.depth === 1;
+                                      let canUp = false;
+                                      let canDown = false;
+                                      let up: () => void = () => {};
+                                      let down: () => void = () => {};
+                                      if (isChild) {
+                                        const groupIdx = rootGroups.findIndex((group) => group.includes(index));
+                                        const group = groupIdx >= 0 ? rootGroups[groupIdx] : [];
+                                        const position = group.indexOf(index);
+                                        canUp = position > 1;
+                                        canDown = position > 0 && position < group.length - 1;
+                                        up = () => void moveChild(index, -1);
+                                        down = () => void moveChild(index, 1);
+                                      } else {
+                                        const rootIdx = rootIndexBySectionIndex.get(index);
+                                        canUp = rootIdx != null && rootIdx > 0;
+                                        canDown = rootIdx != null && rootIdx < rootGroups.length - 1;
+                                        up = () => {
+                                          if (rootIdx != null) moveRootUp(rootIdx);
+                                        };
+                                        down = () => {
+                                          if (rootIdx != null) moveRootDown(rootIdx);
+                                        };
+                                      }
+                                      return (
+                                        <>
+                                          <button
+                                            className="btn-action btn-action--icon"
+                                            type="button"
+                                            disabled={agendaEdit !== null || !canUp}
+                                            aria-label="Move section up"
+                                            onClick={(event) => {
+                                              event.preventDefault();
+                                              event.stopPropagation();
+                                              up();
+                                            }}
+                                          >
+                                            <ArrowUp size={12} />
+                                          </button>
+                                          <button
+                                            className="btn-action btn-action--icon"
+                                            type="button"
+                                            disabled={agendaEdit !== null || !canDown}
+                                            aria-label="Move section down"
+                                            onClick={(event) => {
+                                              event.preventDefault();
+                                              event.stopPropagation();
+                                              down();
+                                            }}
+                                          >
+                                            <ArrowDown size={12} />
+                                          </button>
+                                        </>
+                                      );
+                                    })()}
                                     <button
                                       className="btn-action btn-action--icon"
                                       type="button"
