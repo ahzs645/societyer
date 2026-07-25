@@ -8,8 +8,8 @@
  * any other caller) can pop this from anywhere in the app.
  */
 import { useEffect, useState } from "react";
-import { useSociety } from "../hooks/useSociety";
-import { MeetingCreateModal } from "../features/meetings/components/MeetingCreateModal";
+import { useSociety } from "../../../hooks/useSociety";
+import { MeetingCreateModal } from "./MeetingCreateModal";
 
 export const OPEN_MEETING_CREATE_EVENT = "quickaction:create-meeting";
 
