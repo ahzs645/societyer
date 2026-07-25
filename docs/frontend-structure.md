@@ -112,6 +112,12 @@ Every slice = pure move + import-path fix (no logic change), ending on `tsc -b` 
 - [ ] **Slice 2b (deferred)** — relocate the record-* UI components out of `components/`.
       Deferred because they're imported via relative paths (not the `@/` alias), so each
       needs its own import-graph rewrite; and `DataTable` is generic and should *stay*.
-- [ ] **Slice 3** — `Global*Create` → features.
-- [ ] **Slice 4** — `lib/` carve into `static-convex/` + `runtime/`.
-- [ ] **Slice 5** — `components/` domain de-leak.
+- [x] **Slice 3** — `Global{Asset,Meeting,Task,Commitment}Create` moved from `components/`
+      into their features (`features/assets|meetings/components|tasks|commitments/`).
+      Importers repointed to `@/` alias. Verified: tsc -b, lint. (commit 7cf03ba)
+- [ ] **Slice 4 (assessed, not started)** — `lib/` carve into `static-convex/` + `runtime/`.
+      Lowest user-value slice (grouping already-coherently-named files) and the fiddliest:
+      `staticRuntime` has 17 importers in heterogeneous alias/relative forms. No backend
+      coupling (the `shared/` references are stale doc comments, not imports). Run
+      `npm run test:static-parity` after, since this touches migration-sensitive code.
+- [ ] **Slice 5** — `components/` domain de-leak (meetings/legal/documents/filings).
