@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Calendar as CalIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { bottomSheetMediaQuery } from "../lib/breakpoints";
 
 type Props = {
   value: string; // "YYYY-MM-DD" or ""
@@ -84,6 +85,19 @@ export function DatePicker({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  // Phones render the calendar as a viewport-pinned bottom sheet (same pattern
+  // as Select/Menu) instead of an anchor-positioned popover.
+  const [isBottomSheet, setIsBottomSheet] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(bottomSheetMediaQuery).matches,
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia(bottomSheetMediaQuery);
+    const update = () => setIsBottomSheet(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   const minD = useMemo(() => parseISO(min ?? ""), [min]);
   const maxD = useMemo(() => parseISO(max ?? ""), [max]);
@@ -103,10 +117,36 @@ export function DatePicker({
   }, [open]);
 
   useLayoutEffect(() => {
-    if (!open || !triggerRef.current) return;
+    if (!open) return;
+    if (isBottomSheet) {
+      setPos(null);
+      return;
+    }
+    if (!triggerRef.current) return;
     const r = triggerRef.current.getBoundingClientRect();
     setPos({ top: r.bottom + 4, left: r.left });
-  }, [open]);
+  }, [open, isBottomSheet]);
+
+  // Once the portal has rendered we know its real size — flip above the anchor
+  // when it doesn't fit below, and clamp inside the viewport so the popover
+  // never hangs off the right/bottom edge (matches Select's behavior).
+  useLayoutEffect(() => {
+    if (isBottomSheet || !open || !pos || !popRef.current || !triggerRef.current) return;
+    const anchor = triggerRef.current.getBoundingClientRect();
+    const rect = popRef.current.getBoundingClientRect();
+    const below = anchor.bottom + 4;
+    const top =
+      below + rect.height <= window.innerHeight - 8
+        ? below
+        : Math.max(8, anchor.top - rect.height - 4);
+    const left = Math.min(
+      Math.max(8, anchor.left),
+      Math.max(8, window.innerWidth - rect.width - 8),
+    );
+    if (Math.abs(top - pos.top) > 0.5 || Math.abs(left - pos.left) > 0.5) {
+      setPos({ top, left });
+    }
+  }, [open, pos, quick, isBottomSheet]);
 
   useEffect(() => {
     if (!open) return;
@@ -116,7 +156,17 @@ export function DatePicker({
       if (popRef.current?.contains(t)) return;
       setOpen(false);
     };
-    const onScroll = () => setOpen(false);
+    const onScroll = (e: Event) => {
+      // A bottom sheet is viewport-pinned — it can't drift from its anchor —
+      // and scrolling inside the popover itself must not dismiss it.
+      if (isBottomSheet) return;
+      if (e.target instanceof Node && popRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onResize = () => {
+      if (isBottomSheet) return;
+      setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpen(false);
@@ -125,15 +175,15 @@ export function DatePicker({
     };
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onResize);
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", onResize);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, isBottomSheet]);
 
   const cells = useMemo(() => {
     const first = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
@@ -270,16 +320,24 @@ export function DatePicker({
           </button>
         )}
       </span>
-      {open && pos
+      {open && (isBottomSheet || pos)
         ? createPortal(
+            <>
+            {isBottomSheet && (
+              <div
+                className="menu-backdrop"
+                aria-hidden="true"
+                onMouseDown={() => setOpen(false)}
+              />
+            )}
             <div
               ref={popRef}
-              className="calendar"
+              className={`calendar${isBottomSheet ? " calendar--sheet" : ""}`}
               role="dialog"
               aria-label="Date picker"
               tabIndex={-1}
               onKeyDown={onPopoverKey}
-              style={{ top: pos.top, left: pos.left }}
+              style={isBottomSheet || !pos ? undefined : { top: pos.top, left: pos.left }}
             >
               <div className="calendar__head">
                 <button
@@ -401,7 +459,8 @@ export function DatePicker({
                   </button>
                 )}
               </div>
-            </div>,
+            </div>
+            </>,
             document.body,
           )
         : null}
