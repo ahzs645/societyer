@@ -28,22 +28,40 @@ export function RecordTableCell({
 }) {
   const tableCtx = useRecordTableContextOrThrow();
   const { record, recordId, rowIndex } = useRecordTableRowContextOrThrow();
-  const focusedCell = useRecordTableState((state) => state.focusedCell);
-  const hoverPosition = useRecordTableState((state) => state.hoverPosition);
-  const editingCell = useRecordTableState((state) => state.editingCell);
-  const editingInitialValue = useRecordTableState((state) => state.editingInitialValue);
+  // Subscribe to derived booleans, not the raw positions: with the raw objects
+  // every mounted cell re-renders on each hover/focus change anywhere in the
+  // table (the position object is new each time). Object.is on the boolean
+  // means a cell only re-renders when ITS OWN state flips.
+  const isFocused = useRecordTableState(
+    (state) =>
+      state.focusedCell?.rowIndex === rowIndex &&
+      state.focusedCell.columnIndex === columnIndex,
+  );
+  const isHovered = useRecordTableState(
+    (state) =>
+      state.hoverPosition?.rowIndex === rowIndex &&
+      state.hoverPosition.columnIndex === columnIndex,
+  );
+  const isEditingThisCell = useRecordTableState(
+    (state) =>
+      state.editingCell?.rowIndex === rowIndex &&
+      state.editingCell.columnIndex === columnIndex,
+  );
+  // Only the cell being edited cares about the seed value; every other cell
+  // sees a stable undefined and skips the re-render.
+  const editingInitialValue = useRecordTableState((state) =>
+    state.editingCell?.rowIndex === rowIndex &&
+    state.editingCell.columnIndex === columnIndex
+      ? state.editingInitialValue
+      : undefined,
+  );
   const handle = useRecordTableStoreHandle();
   const cellRef = useRef<HTMLTableCellElement | null>(null);
   const isMobile = useIsMobile();
 
   const value = record[recordField.field.name];
   const canEdit = isFieldEditable(recordField.field) && !!tableCtx.onUpdate;
-  const isFocused = focusedCell?.rowIndex === rowIndex && focusedCell.columnIndex === columnIndex;
-  const isHovered = hoverPosition?.rowIndex === rowIndex && hoverPosition.columnIndex === columnIndex;
-  const isEditing =
-    canEdit &&
-    editingCell?.rowIndex === rowIndex &&
-    editingCell.columnIndex === columnIndex;
+  const isEditing = canEdit && isEditingThisCell;
   const secondaryActions = useMemo(
     () => getSecondaryActions({ fieldType: recordField.field.fieldType, value }),
     [recordField.field.fieldType, value],
