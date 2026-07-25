@@ -11,13 +11,13 @@ import {
   corporationPacketForComplianceObligation,
   corporationPacketPrecedentMarker,
   corporationPacketTemplateHtml,
-} from "../../../shared/corporationDocumentPackets";
+} from "../../shared/corporationDocumentPackets";
 import {
   corporationPacketDocxDataUrl,
   corporationPacketDocxFileName,
   corporationPacketDocxMimeType,
-} from "../../../shared/corporationPacketDocx";
-import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../../shared/societyDocumentPackets";
+} from "../../shared/corporationPacketDocx";
+import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../shared/societyDocumentPackets";
 
 type DocStoreLike = {
   transaction: (fn: () => void) => void;

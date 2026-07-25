@@ -2,8 +2,8 @@ import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useEffect, useMemo, useState } from "react";
-import { STATIC_DEMO_SOCIETY_ID } from "../lib/static-convex/staticIds";
-import { isStaticDemoRuntime } from "../lib/static-convex/staticRuntime";
+import { STATIC_DEMO_SOCIETY_ID } from "../lib/staticIds";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const KEY = "societyer.currentSocietyId";
 const SOCIETY_CHANGED_EVENT = "societyer:society-changed";

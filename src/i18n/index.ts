@@ -2,7 +2,7 @@ import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import en from "./locales/en.json";
 import fr from "./locales/fr.json";
-import { isStaticDemoRuntime } from "../lib/static-convex/staticRuntime";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 export const SUPPORTED_LOCALES = ["en", "fr"] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];

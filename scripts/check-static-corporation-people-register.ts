@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
+import { StaticConvexClient } from "../src/lib/staticConvex";
 
 const client = new StaticConvexClient({
   databaseName: `societyer-static-corp-people-${Date.now()}`,

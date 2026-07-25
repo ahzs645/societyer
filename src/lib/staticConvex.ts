@@ -1,16 +1,16 @@
-import { RECORD_TABLE_OBJECTS } from "../../../convex/recordTableMetadataDefinitions";
+import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
 import {
   CORPORATION_DOCUMENT_PACKETS,
   corporationPacketEntityTypes,
   corporationPacketPrecedentMarker,
   corporationPacketTemplateMarker,
-} from "../../../shared/corporationDocumentPackets";
-import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../../shared/grantSourceLibrary";
-import { buildOrgRevenueStatement } from "../../../shared/orgRevenueStatement";
-import { materializeRightsHoldings, validateLedger } from "../../../shared/equityLedger";
-import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../../../shared/shareSplit";
-import { postIncorporationStepsForOrganization } from "../../../shared/postIncorporationSteps";
-import { organizationKind, organizationLabel } from "../../../shared/organizationDomain";
+} from "../../shared/corporationDocumentPackets";
+import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../../shared/grantSourceLibrary";
+import { buildOrgRevenueStatement } from "../../shared/orgRevenueStatement";
+import { materializeRightsHoldings, validateLedger } from "../../shared/equityLedger";
+import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../../shared/shareSplit";
+import { postIncorporationStepsForOrganization } from "../../shared/postIncorporationSteps";
+import { organizationKind, organizationLabel } from "../../shared/organizationDomain";
 import {
   buildTimeline,
   changesBetween as changesBetweenPure,
@@ -19,13 +19,13 @@ import {
   registerAsOf as registerAsOfPure,
   type LiveRoleHolder,
   type StoredRevision,
-} from "../../../shared/roleHolderHistory";
-import { summarizeVotingPower, transfersAsOf } from "../../../shared/functions/votingPower";
-import { PortableRuntime } from "../../../shared/portable/define";
-import { LocalStoreDb } from "../../../shared/portable/localRowStore";
-import { buildLocalCapabilities } from "../localCapabilities";
-import { PORTABLE_FUNCTIONS } from "../../../shared/functions/registry";
-import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../../shared/societyDocumentPackets";
+} from "../../shared/roleHolderHistory";
+import { summarizeVotingPower, transfersAsOf } from "../../shared/functions/votingPower";
+import { PortableRuntime } from "../../shared/portable/define";
+import { LocalStoreDb } from "../../shared/portable/localRowStore";
+import { buildLocalCapabilities } from "./localCapabilities";
+import { PORTABLE_FUNCTIONS } from "../../shared/functions/registry";
+import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../shared/societyDocumentPackets";
 import {
   ycnQueryResult,
   ycnMutationResult,
@@ -39,9 +39,9 @@ import {
   staticStageCorporationDocumentPacket,
   staticGenerateDocumentFromCatalog,
 } from "./staticConvexDocuments";
-import { INTEGRATION_CATALOG } from "../../../shared/integrationCatalog";
-import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../../../shared/jurisdictionWorkspace";
-import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "../localDexieRowStore";
+import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
+import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
+import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
 import { STATIC_OFFLINE_NOOP_WRITES } from "./staticConvexParity";
 import {
   byId,

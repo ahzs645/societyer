@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { computeVotingPower, votesPerShareOf } from "../shared/votingPower";
-import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
+import { StaticConvexClient } from "../src/lib/staticConvex";
 
 /**
  * #4 Voting-power roll-up + eligibility gating. Total votes = Σ(shares ×

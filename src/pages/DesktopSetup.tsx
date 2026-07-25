@@ -22,7 +22,7 @@ import {
 } from "../lib/desktopBridge";
 import { downloadLocalWorkspaceSnapshot, importLocalWorkspaceSnapshotFile } from "../lib/localWorkspaceExport";
 import { getRuntimeDescriptor } from "../lib/runtimeMode";
-import { isStaticDemoRuntime } from "../lib/static-convex/staticRuntime";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const CONNECTOR_ENDPOINT_KEY = "societyer.desktop.connectorEndpoint";
 const DEFAULT_CONNECTOR_ENDPOINT = "http://127.0.0.1:8890";

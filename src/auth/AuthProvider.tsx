@@ -9,7 +9,7 @@ import {
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { getAuthMode, type AuthMode } from "../lib/authMode";
-import { isLocalDataRuntime } from "../lib/static-convex/staticRuntime";
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { setStoredUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
 

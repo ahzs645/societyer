@@ -7,15 +7,15 @@
  * caller can fall through to the rest of the mirror.
  */
 import { SOCIETY_ID } from "./staticConvexFixtures";
-import { computeDividend, reconcileDividend, totalDeclaredByClass, totalDeclaredByCurrency } from "../../../shared/dividends";
-import { activeProvidersAsOf, SERVICE_PROVIDER_FUNCTIONS } from "../../../shared/serviceProviders";
-import { normalizeSearchName, matchByPrefix, findDuplicates } from "../../../shared/peopleDirectory";
-import { reviewsDue as computeReviewsDue } from "../../../shared/significantIndividuals";
-import { roleHoldersAsOf } from "../../../shared/registerHistory";
-import { nameTimeline, nameAsOf as computeNameAsOf, nameChangeNarrative } from "../../../shared/nameHistory";
-import { constatingTimeline, currentRegime as computeCurrentRegime, regimeNarrative } from "../../../shared/constating";
-import { jurisdictionsTracked, filingHistory, outstandingYears } from "../../../shared/annualFilings";
-import { activeCertificates, certificateChain, sharesOutstandingByClass } from "../../../shared/shareCertificates";
+import { computeDividend, reconcileDividend, totalDeclaredByClass, totalDeclaredByCurrency } from "../../shared/dividends";
+import { activeProvidersAsOf, SERVICE_PROVIDER_FUNCTIONS } from "../../shared/serviceProviders";
+import { normalizeSearchName, matchByPrefix, findDuplicates } from "../../shared/peopleDirectory";
+import { reviewsDue as computeReviewsDue } from "../../shared/significantIndividuals";
+import { roleHoldersAsOf } from "../../shared/registerHistory";
+import { nameTimeline, nameAsOf as computeNameAsOf, nameChangeNarrative } from "../../shared/nameHistory";
+import { constatingTimeline, currentRegime as computeCurrentRegime, regimeNarrative } from "../../shared/constating";
+import { jurisdictionsTracked, filingHistory, outstandingYears } from "../../shared/annualFilings";
+import { activeCertificates, certificateChain, sharesOutstandingByClass } from "../../shared/shareCertificates";
 
 export const YCN_NOT_HANDLED = Symbol("staticConvexYcn.notHandled");
 

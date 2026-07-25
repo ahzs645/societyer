@@ -98,7 +98,7 @@ import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { getRouteIdentity, type IconTone, type LucideIcon } from "../lib/routeIdentity";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
-import { isStaticDemoRuntime } from "../lib/static-convex/staticRuntime";
+import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
 import { useAiChatVisibility } from "../hooks/useAiChatVisibility";

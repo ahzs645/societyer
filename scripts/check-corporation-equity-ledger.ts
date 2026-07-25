@@ -8,7 +8,7 @@ import {
   type RightsholdingTransferRecord,
   type RightsClassRecord,
 } from "../src/lib/equity";
-import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
+import { StaticConvexClient } from "../src/lib/staticConvex";
 
 function expectThrows(label: string, fn: () => unknown) {
   try {

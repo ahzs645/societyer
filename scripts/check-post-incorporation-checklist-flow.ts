@@ -1,7 +1,7 @@
 // Wiring check: the post-incorporation checklist query returns the flow steps for
 // a federal CBCA corporation through the same code path the app uses (static mirror).
 
-import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
+import { StaticConvexClient } from "../src/lib/staticConvex";
 
 function expectEqual(label: string, actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {

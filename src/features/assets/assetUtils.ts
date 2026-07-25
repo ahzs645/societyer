@@ -1,5 +1,5 @@
 import { parseCsv, rowsToCsv } from "@/lib/csv";
-import { appBasePath } from "@/lib/static-convex/staticRuntime";
+import { appBasePath } from "@/lib/staticRuntime";
 
 export const ASSET_CATEGORIES = ["IT", "Program equipment", "Consumable", "Furniture", "Vehicle", "Facilities", "Software/license", "Other"];
 export const ASSET_CONDITIONS = ["New", "Good", "Fair", "Needs repair", "Damaged", "Lost"];

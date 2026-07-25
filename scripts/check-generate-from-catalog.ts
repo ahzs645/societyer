@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
+import { StaticConvexClient } from "../src/lib/staticConvex";
 
 /**
  * The Document Catalog "Generate" action: generateDocumentFromCatalog resolves a

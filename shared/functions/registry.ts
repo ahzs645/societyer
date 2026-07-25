@@ -3,7 +3,7 @@
  *
  * This is the migration frontier: a function listed here runs as ONE handler on
  * hosted Convex (via convex/lib/portable.ts) and on the local runtimes (via the
- * PortableRuntime in src/lib/static-convex/staticConvex.ts), instead of being hand-mirrored.
+ * PortableRuntime in src/lib/staticConvex.ts), instead of being hand-mirrored.
  * Add an entry as each handler is ported; delete its static-mirror case once the
  * conformance test is green.
  */

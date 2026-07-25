@@ -1,4 +1,4 @@
-import { isStaticDemoRuntime } from "./static-convex/staticRuntime";
+import { isStaticDemoRuntime } from "./staticRuntime";
 import { isPwaLaunch } from "./pwa";
 
 const KEY = "societyer.demo";

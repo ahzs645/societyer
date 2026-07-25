@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
+import { StaticConvexClient } from "../src/lib/staticConvex";
 import { complianceFactsForOrganization, computeComplianceObligations } from "../src/lib/compliance";
 import { deriveCurrentHoldings } from "../src/lib/equity";
 

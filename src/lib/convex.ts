@@ -1,5 +1,5 @@
 import { ConvexReactClient } from "convex/react";
-import { isLocalDataRuntime } from "./static-convex/staticRuntime";
+import { isLocalDataRuntime } from "./staticRuntime";
 
 const url = import.meta.env.VITE_CONVEX_URL as string | undefined;
 

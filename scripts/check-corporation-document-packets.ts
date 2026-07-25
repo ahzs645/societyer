@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { CORPORATION_DOCUMENT_PACKETS } from "../shared/corporationDocumentPackets";
-import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
+import { StaticConvexClient } from "../src/lib/staticConvex";
 
 const client = new StaticConvexClient({
   databaseName: `societyer-static-corp-packets-${Date.now()}`,

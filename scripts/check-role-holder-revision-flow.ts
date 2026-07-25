@@ -2,7 +2,7 @@
 // app uses offline). Verifies that upsert/remove append revisions and that the
 // roleHolderHistory queries reconstruct the timeline, as-of register, and diff.
 
-import { StaticConvexClient } from "../src/lib/static-convex/staticConvex";
+import { StaticConvexClient } from "../src/lib/staticConvex";
 
 function expectEqual(label: string, actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
