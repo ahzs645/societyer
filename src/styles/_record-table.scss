@@ -1038,9 +1038,14 @@ select.record-table__menu-select,
   padding: 0 4px;
   text-align: left;
 
+  /* Read as a link on hover — this is the zero-mouse-travel way to open a
+   * record, but with inherited color nothing hinted it was clickable. */
   &:hover {
     background: token('bg-hover');
     border-radius: token('r-sm');
+    color: token('accent');
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 }
 
@@ -2093,30 +2098,30 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 
 /* The actions anchor is zero-width so it overlays the table's fill area
  * instead of making an otherwise-fitting table overflow by one control. */
+/* The actions cells sit BEFORE the fill cell, so on a monitor wider than the
+ * table they anchor next to the last data column (short mouse travel) instead
+ * of the far screen edge. `position: sticky; right: 0` only engages when the
+ * table actually overflows — then they pin to the viewport edge and stay
+ * reachable while the columns scroll beneath. Real (auto) width, opaque
+ * background, so the stuck state doesn't float transparently over data. */
 .record-table__row-actions-head {
-  width: 0;
-  min-width: 0;
-  max-width: 0;
   padding: 0;
   position: sticky;
   right: 0;
   z-index: 2;
-  background: transparent;
+  background: token('bg-panel');
+  border-bottom: 1px solid token('border-color-light');
 }
 
 .record-table__row-actions-cell {
-  width: 0;
-  min-width: 0;
-  max-width: 0;
   white-space: nowrap;
-  padding: 0;
+  padding: 0 6px;
   vertical-align: middle;
-  text-align: right;
   position: sticky;
   right: 0;
   z-index: 1;
-  background: transparent;
-  overflow: visible;
+  background: token('bg-panel');
+  border-bottom: 1px solid token('border-color-light');
 }
 
 .record-table__row:hover .record-table__row-actions-cell {
@@ -2128,21 +2133,17 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 }
 
 .record-table__row-actions {
-  position: absolute;
-  right: 4px;
-  top: 50%;
   display: inline-flex;
   gap: 4px;
   align-items: center;
-  justify-content: flex-end;
   opacity: 0;
   transition: opacity 120ms ease, transform 120ms ease;
-  transform: translateY(-50%) translateX(2px);
+  transform: translateX(2px);
 
   .record-table__row:hover &,
   .record-table__row:focus-within & {
     opacity: 1;
-    transform: translateY(-50%) translateX(0);
+    transform: translateX(0);
   }
 }
 
@@ -2153,10 +2154,13 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
 /* Touch devices work like Researcher's phone table: no floating per-row or
  * per-cell controls at all. Tapping the title opens the record, tapping an
  * editable cell edits it, and the table swipes sideways without buttons
- * drifting over the scrolling content. */
+ * drifting over the scrolling content. The actions cells now have real width,
+ * so hide the whole column (all three row types render it consistently). */
 @media (hover: none), (pointer: coarse) {
   .record-table__row-actions,
-  .record-table__cell-actions {
+  .record-table__cell-actions,
+  .record-table__row-actions-head,
+  .record-table__row-actions-cell {
     display: none;
   }
 }

@@ -69,8 +69,8 @@ export function RecordTableAggregateFooterRow({
             isFirst={index === 0}
           />
         ))}
-        <td className="record-table__footer-cell record-table__fill-cell" />
         {hasRowActions && <td className="record-table__footer-cell record-table__row-actions-cell" />}
+        <td className="record-table__footer-cell record-table__fill-cell" />
     </tr>
   );
 }

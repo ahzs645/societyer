@@ -126,7 +126,10 @@ export function RecordTableRow({
           renderCell={renderCell}
         />
       ))}
-      <td className="record-table__fill-cell" aria-hidden="true" />
+      {/* Actions come BEFORE the fill cell so they anchor to where the data
+        * ends — on a wide monitor they sit next to the last column instead of
+        * a screen-width away. When the table overflows horizontally, their
+        * `position: sticky; right: 0` still pins them to the viewport edge. */}
       {(showOpenRecordAction || renderRowActions || rowMenuSections) && (
         <td
           className="record-table__row-actions-cell"
@@ -169,6 +172,7 @@ export function RecordTableRow({
           </div>
         </td>
       )}
+      <td className="record-table__fill-cell" aria-hidden="true" />
     </RecordTableRowContext.Provider>
   );
 }
