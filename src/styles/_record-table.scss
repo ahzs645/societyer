@@ -765,6 +765,7 @@ select.record-table__menu-select,
 
 .record-table__header-menu-trigger {
   @include inline-flex-center;
+  justify-content: center;
   width: 22px;
   height: 22px;
   padding: 0;
