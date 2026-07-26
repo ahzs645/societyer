@@ -1,3 +1,4 @@
+/* eslint-disable max-lines-per-function */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -376,8 +377,8 @@ function RecordBundlesCard({ rows }: { rows: any[] }) {
             {visibleRows.map((row) => (
               <tr key={row.key}>
                 <td>
-                  <div>{row.href ? <Link to={row.href}><strong>{humanize(row.title)}</strong></Link> : <strong>{humanize(row.title)}</strong>}</div>
-                  <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                  <div style={{marginTop: 3}}>{row.href ? <Link to={row.href}><strong>{humanize(row.title)}</strong></Link> : <strong>{humanize(row.title)}</strong>}</div>
+                  <div className="row" style={{ gap: 6 , flexWrap: "wrap", marginTop: 9 }}>
                     <Badge>{labelize(row.type)}</Badge>
                     {(row.badges ?? []).slice(0, 3).map((badge: any) => <Badge key={`${row.key}:${badge.label}`} tone={badge.tone}>{badge.label}</Badge>)}
                   </div>
