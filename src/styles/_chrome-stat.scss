@@ -60,6 +60,11 @@
   font-size: token('fs-xs');
   color: token('text-secondary');
 }
+/* Status accents: color the value/sub only — the tile itself stays quiet. */
+.stat--danger .stat__value { color: token('danger'); }
+.stat--ok .stat__value { color: token('success'); }
+.stat__sub--warn { color: token('warn'); }
+.stat__sub--info { color: token('info'); }
 
 /* Mobile: collapse the stat grid into a single flat panel with a 2-col grid
  * of quieter cells. Removes per-stat borders so the four KPIs read as one

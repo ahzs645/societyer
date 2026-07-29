@@ -254,21 +254,21 @@ export function RoleHoldersPage() {
       {corporationWorkspace && (
         <>
           <div className="stat-grid" style={{ marginBottom: 16 }}>
-            <div className="stat-card">
-              <span className="stat-card__label">Directors</span>
-              <strong>{roleSummary.directors}</strong>
+            <div className="stat">
+              <span className="stat__label">Directors</span>
+              <strong className="stat__value">{roleSummary.directors}</strong>
             </div>
-            <div className="stat-card">
-              <span className="stat-card__label">Officers</span>
-              <strong>{roleSummary.officers}</strong>
+            <div className="stat">
+              <span className="stat__label">Officers</span>
+              <strong className="stat__value">{roleSummary.officers}</strong>
             </div>
-            <div className="stat-card">
-              <span className="stat-card__label">Shareholders</span>
-              <strong>{roleSummary.shareholders}</strong>
+            <div className="stat">
+              <span className="stat__label">Shareholders</span>
+              <strong className="stat__value">{roleSummary.shareholders}</strong>
             </div>
-            <div className="stat-card">
-              <span className="stat-card__label">Controllers</span>
-              <strong>{roleSummary.controllers}</strong>
+            <div className="stat">
+              <span className="stat__label">Controllers</span>
+              <strong className="stat__value">{roleSummary.controllers}</strong>
             </div>
           </div>
 

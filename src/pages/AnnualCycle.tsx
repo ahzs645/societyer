@@ -279,9 +279,9 @@ function Stat({
   tone?: "ok" | "danger";
 }) {
   return (
-    <div className={`stat-card${tone === "danger" ? " stat-card--danger" : tone === "ok" ? " stat-card--ok" : ""}`}>
-      <div className="stat-card__label">{icon}{label}</div>
-      <div className="stat-card__value" style={{ fontSize: typeof value === "string" && value.length > 18 ? "var(--fs-lg)" : undefined }}>
+    <div className={`stat${tone === "danger" ? " stat--danger" : tone === "ok" ? " stat--ok" : ""}`}>
+      <div className="stat__label">{icon}{label}</div>
+      <div className="stat__value" style={{ fontSize: typeof value === "string" && value.length > 18 ? "var(--fs-lg)" : undefined }}>
         {value}
       </div>
     </div>

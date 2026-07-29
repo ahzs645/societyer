@@ -94,11 +94,11 @@ export function PortfolioPage() {
 
       {/* Firm summary */}
       <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <div className="stat-card"><span className="stat-card__label">Entities</span><span className="stat-card__value">{totals.entities ?? 0}</span></div>
-        <div className="stat-card"><span className="stat-card__label">Corporations</span><span className="stat-card__value">{totals.corporations ?? 0}</span></div>
-        <div className="stat-card"><span className="stat-card__label">Societies</span><span className="stat-card__value">{totals.societies ?? 0}</span></div>
-        <div className="stat-card"><span className="stat-card__label">Overdue (firm-wide)</span><span className="stat-card__value">{totals.overdueDeadlines ?? 0}</span></div>
-        <div className="stat-card"><span className="stat-card__label">Upcoming (firm-wide)</span><span className="stat-card__value">{totals.upcomingDeadlines ?? 0}</span></div>
+        <div className="stat"><span className="stat__label">Entities</span><span className="stat__value">{totals.entities ?? 0}</span></div>
+        <div className="stat"><span className="stat__label">Corporations</span><span className="stat__value">{totals.corporations ?? 0}</span></div>
+        <div className="stat"><span className="stat__label">Societies</span><span className="stat__value">{totals.societies ?? 0}</span></div>
+        <div className="stat"><span className="stat__label">Overdue (firm-wide)</span><span className="stat__value">{totals.overdueDeadlines ?? 0}</span></div>
+        <div className="stat"><span className="stat__label">Upcoming (firm-wide)</span><span className="stat__value">{totals.upcomingDeadlines ?? 0}</span></div>
       </div>
 
       {entities.length === 0 ? (
