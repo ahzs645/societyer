@@ -648,14 +648,14 @@ export function BylawRulesPage() {
         </div>
       </div>
 
-      <details className="card bylaw-rules__card" style={{ marginTop: 16 }}>
-        <summary style={{ cursor: "pointer", padding: "var(--space-4, 16px)", fontWeight: 600 }}>
+      <details className="card bylaw-rules__card">
+        <summary>
           Legal minimum guide tracks
-          <span className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: "var(--fs-sm)" }}>
-            · {jurisdictionPack.name} · {legalGuideRules.length} tracks
+          <span className="card__subtitle">
+            {jurisdictionPack.name} · {legalGuideRules.length} tracks
           </span>
         </summary>
-        <div className="card__body bylaw-rules__body" style={{ paddingTop: 0 }}>
+        <div className="card__body bylaw-rules__body">
           <LegalGuideTrackList
             rules={legalGuideRules}
             jurisdictionCode={jurisdictionCode}

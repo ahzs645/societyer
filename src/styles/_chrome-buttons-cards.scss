@@ -433,6 +433,21 @@ code.chip,
   gap: token('s-3');
   min-width: 0;
 }
+/* Collapsible card: `<details class="card"><summary>` reads like a card head,
+ * with the native disclosure triangle as the affordance. */
+.card > summary {
+  cursor: pointer;
+  padding: token('s-4');
+  font-size: token('fs-md');
+  font-weight: 600;
+}
+.card > summary > .card__subtitle {
+  font-weight: 400;
+  margin-left: token('s-2');
+}
+details.card[open] > summary {
+  border-bottom: 1px solid token('border');
+}
 .card__title {
   font-size: token('fs-md');
   font-weight: 600;
