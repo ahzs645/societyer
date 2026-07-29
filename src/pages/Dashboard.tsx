@@ -421,16 +421,16 @@ export function Dashboard() {
               </thead>
               <tbody>
                 {counts.overdueFilings > 0 && (
-                  <tr>
-                    <td colSpan={4} className="table__cell--muted" style={{ background: "var(--danger-soft)", color: "var(--danger)", fontWeight: 700 }}>
+                  <tr className="table__group-row table__group-row--danger">
+                    <td colSpan={4}>
                       Overdue · {counts.overdueFilings}
                     </td>
                   </tr>
                 )}
                 {overdueFilings.slice(0, 4).map((f: any) => renderFilingRow(f))}
                 {upcomingFilings.length > 0 && (
-                  <tr>
-                    <td colSpan={4} className="table__cell--muted" style={{ background: "var(--bg-subtle)", fontWeight: 700 }}>
+                  <tr className="table__group-row">
+                    <td colSpan={4}>
                       Upcoming · {upcomingFilings.length}
                     </td>
                   </tr>
@@ -438,7 +438,7 @@ export function Dashboard() {
                 {upcomingFilings.slice(0, overdueFilings.length > 0 ? 4 : 6).map((f: any) => renderFilingRow(f))}
                 {counts.overdueFilings + upcomingFilings.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="table__cell--muted" style={{ textAlign: "center", padding: 24 }}>
+                    <td colSpan={4} className="table__empty">
                       No overdue or upcoming filings.
                     </td>
                   </tr>
@@ -591,17 +591,33 @@ export function Dashboard() {
             </Link>
           </div>
           <table className="table">
+            <thead>
+              <tr>
+                <th scope="col" className="table__icon-col">
+                  <span className="sr-only">Priority</span>
+                </th>
+                <th scope="col">Task</th>
+                <th scope="col">Assignee</th>
+                <th scope="col">Due</th>
+              </tr>
+            </thead>
             <tbody>
               {openTasks.map((t: any) => (
                 <tr key={t._id}>
-                  <td style={{ width: 12 }}><span className={`priority-dot priority-${t.priority}`} /></td>
+                  <td className="table__icon-col">
+                    <span className={`priority-dot priority-${t.priority}`} />
+                  </td>
                   <td>{t.title}</td>
-                  <td className="muted">{t.assignee ?? "—"}</td>
-                  <td className="table__cell--mono muted">{t.dueDate ? formatDate(t.dueDate) : ""}</td>
+                  <td className="table__cell--muted">{t.assignee ?? "—"}</td>
+                  <td className="table__cell--mono table__cell--muted">
+                    {t.dueDate ? formatDate(t.dueDate) : ""}
+                  </td>
                 </tr>
               ))}
               {openTasks.length === 0 && (
-                <tr><td className="muted" style={{ textAlign: "center", padding: 24 }}>Nothing open.</td></tr>
+                <tr>
+                  <td colSpan={4} className="table__empty">Nothing open.</td>
+                </tr>
               )}
             </tbody>
           </table>

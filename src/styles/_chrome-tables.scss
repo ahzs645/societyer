@@ -599,7 +599,36 @@
   color: token('text-secondary');
   font-size: token('fs-sm');
 }
-.table__cell--muted { color: token('text-tertiary'); }
+.table__cell--muted {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-weight: token('fw-regular');
+  line-height: 1.15;
+}
+
+/* Compact section labels for lightweight static tables. These echo the
+ * RecordTable aggregate row without pulling previews into the full engine. */
+.table tbody tr.table__group-row > td {
+  height: 28px;
+  background: token('bg-subtle');
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-weight: token('fw-semibold');
+  letter-spacing: 0.02em;
+}
+.table tbody tr.table__group-row--danger > td {
+  background: token('danger-soft');
+  color: token('danger');
+}
+
+/* Narrow leading column for status, priority, or other icon-only markers. */
+.table thead th.table__icon-col,
+.table tbody td.table__icon-col {
+  width: token('s-7');
+  min-width: token('s-7');
+  padding-inline: 4px;
+  text-align: center;
+}
 /* Action cell: keep the <td> as a regular table-cell so it inherits row
  * height and vertical centering. The flex layout belongs on an inner div —
  * applying `display: flex` directly to a <td> overrides `display: table-cell`
@@ -711,7 +740,7 @@
     transform: none;
   }
 }
-.table__empty {
+.table tbody td.table__empty {
   text-align: center;
   padding: 32px 24px;
   color: token('text-secondary');
