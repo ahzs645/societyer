@@ -115,6 +115,7 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
       .collect();
     const fieldByName = new Map(seededFields.map((f: any) => [f.name, f]));
     const liveFieldIds = new Set(seededFields.map((f: any) => String(f._id)));
+    const resolveFieldId = (fieldName?: string) => fieldByName.get(fieldName)?._id;
 
     // Resolve seed view filters (expressed by field name) into the stored
     // filtersJson shape (fieldMetadataId-keyed). Undefined for no filters.
@@ -144,7 +145,8 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
         societyId,
         objectMetadataId: objectRow._id,
         name: obj.defaultView.name,
-        type: "table",
+        type: obj.defaultView.type ?? "table",
+        kanbanFieldMetadataId: resolveFieldId(obj.defaultView.kanbanFieldName),
         density: "compact",
         isShared: true,
         isSystem: true,
@@ -217,7 +219,8 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
         societyId,
         objectMetadataId: objectRow._id,
         name: extra.name,
-        type: "table",
+        type: extra.type ?? "table",
+        kanbanFieldMetadataId: resolveFieldId(extra.kanbanFieldName),
         density: "compact",
         isShared: true,
         isSystem: false,
