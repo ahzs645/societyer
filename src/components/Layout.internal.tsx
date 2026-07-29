@@ -197,17 +197,19 @@ function WorkbenchPageLoader() {
       </div>
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         {[0, 1, 2, 3].map((index) => (
-          <div className="stat-card" key={index}>
+          <div className="stat" key={index}>
             <div className="skeleton skeleton--line" style={{ width: 88, marginBottom: 12 }} />
             <div className="skeleton skeleton--line" style={{ width: 56, height: 18 }} />
           </div>
         ))}
       </div>
-      <div className="table-card">
-        <div className="skeleton skeleton--line" style={{ width: 160, height: 18, marginBottom: 16 }} />
-        <div className="skeleton skeleton--line" style={{ width: "100%", marginBottom: 10 }} />
-        <div className="skeleton skeleton--line" style={{ width: "94%", marginBottom: 10 }} />
-        <div className="skeleton skeleton--line" style={{ width: "88%" }} />
+      <div className="card">
+        <div className="card__body">
+          <div className="skeleton skeleton--line" style={{ width: 160, height: 18, marginBottom: 16 }} />
+          <div className="skeleton skeleton--line" style={{ width: "100%", marginBottom: 10 }} />
+          <div className="skeleton skeleton--line" style={{ width: "94%", marginBottom: 10 }} />
+          <div className="skeleton skeleton--line" style={{ width: "88%" }} />
+        </div>
       </div>
     </div>
   );

@@ -165,21 +165,21 @@ export function ComplianceObligationsPage() {
       />
 
       <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <div className="stat-card">
-          <span className="stat-card__label">Active packs</span>
-          <strong>{packs.length}</strong>
+        <div className="stat">
+          <span className="stat__label">Active packs</span>
+          <strong className="stat__value">{packs.length}</strong>
         </div>
-        <div className="stat-card">
-          <span className="stat-card__label">Computed obligations</span>
-          <strong>{obligations.length}</strong>
+        <div className="stat">
+          <span className="stat__label">Computed obligations</span>
+          <strong className="stat__value">{obligations.length}</strong>
         </div>
-        <div className="stat-card">
-          <span className="stat-card__label">Due today</span>
-          <strong>{dueToday}</strong>
+        <div className="stat">
+          <span className="stat__label">Due today</span>
+          <strong className="stat__value">{dueToday}</strong>
         </div>
-        <div className="stat-card">
-          <span className="stat-card__label">Overdue</span>
-          <strong>{overdue}</strong>
+        <div className="stat">
+          <span className="stat__label">Overdue</span>
+          <strong className="stat__value">{overdue}</strong>
         </div>
       </div>
 
@@ -214,7 +214,7 @@ export function ComplianceObligationsPage() {
         </div>
       </section>
 
-      <section className="table-card">
+      <section className="card">
         <div className="card__head">
           <div>
             <h2 className="card__title">Obligation results</h2>
@@ -222,118 +222,124 @@ export function ComplianceObligationsPage() {
           </div>
         </div>
         {obligations.length ? (
-          <div className="table">
-            <div className="table__head" style={{ gridTemplateColumns: "minmax(220px, 1.5fr) 140px 130px minmax(220px, 1fr) 240px" }}>
-              <span>Obligation</span>
-              <span>Due date</span>
-              <span>Status</span>
-              <span>Source</span>
-              <span>Action</span>
-            </div>
-            {obligations.map((obligation) => {
-              const filingKind = obligation.creates?.filingKind;
-              const existingFiling = filingKind ? filingMatches.get(filingMatchKey(filingKind, obligation.dueDate, obligation.sourceRegistrationId)) : null;
-              const packet = corporationPacketForComplianceObligation({
-                filingKind,
-                obligationKey: obligation.obligationKey,
-                ruleId: obligation.ruleId,
-              });
-              const decision = decisionsByRuleId.get(obligation.contextKey);
-              const isDismissed = decision?.status === "dismissed";
-              const isReviewed = decision?.status === "resolved" || Boolean(existingFiling);
-              const hasStagedPacket = decision?.targetTable === "legalPrecedentRuns";
-              return (
-                <div
-                  className="table__row"
-                  key={obligation.contextKey}
-                  style={{ gridTemplateColumns: "minmax(220px, 1.5fr) 140px 130px minmax(220px, 1fr) 240px" }}
-                >
-                  <div>
-                    <strong>{obligation.title}</strong>
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      {obligation.contextLabel && obligation.contextKey !== obligation.ruleId ? `${obligation.contextLabel} · ` : ""}{contextKindLabel(obligation.contextKind)} · {obligation.jurisdictionCode} · {obligation.obligationKey}
-                      {obligation.windowStartDate ? ` · window opens ${formatDate(obligation.windowStartDate)}` : ""}
-                    </div>
-                    {filingKind ? (
-                      <div className="muted" style={{ fontSize: 12 }}>
-                        Filing kind: {filingKind}
-                      </div>
-                    ) : null}
-                    {obligation.creates?.requiredEvidence?.length ? (
-                      <div className="muted" style={{ fontSize: 12 }}>
-                        Evidence: {obligation.creates.requiredEvidence.join(", ")}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div>
-                    {formatDate(obligation.dueDate)}
-                    <div className="muted" style={{ fontSize: 12 }}>{relative(obligation.dueDate)}</div>
-                  </div>
-                  <div>
-                    <Badge tone={isDismissed ? "neutral" : isReviewed ? "success" : statusTone(obligation.status)}>
-                      {isDismissed ? "Dismissed" : isReviewed ? "Reviewed" : statusLabel(obligation.status)}
-                    </Badge>
-                    {decision?.updatedAtISO ? (
-                      <div className="muted" style={{ fontSize: 12 }}>{relative(decision.updatedAtISO.slice(0, 10))}</div>
-                    ) : null}
-                  </div>
-                  <div>
-                    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                      <span>{obligation.authority.displayCitation}</span>
-                      <Badge tone={ruleStatusTone(obligation.ruleStatus)}>{ruleStatusLabel(obligation.ruleStatus)}</Badge>
-                    </div>
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      {obligation.authority.guideRuleIds.join(", ")}
-                    </div>
-                    {obligation.sources.length ? (
-                      <div className="muted" style={{ fontSize: 12 }}>
-                        {obligation.sources.slice(0, 2).map((source, index) => (
-                          <span key={source.sourceId}>
-                            {index > 0 ? " · " : ""}
-                            <a href={source.url} target="_blank" rel="noreferrer">{source.title}</a>
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div>
-                    {isDismissed ? (
-                      <button className="btn btn--sm" onClick={() => reopenObligation(obligation)}>
-                        <RotateCcw size={12} /> Reopen
-                      </button>
-                    ) : (
-                      <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                        {existingFiling ? (
-                          <Link className="btn btn--sm" to="/app/filings">Tracked</Link>
-                        ) : filingKind ? (
-                          <button className="btn btn--sm" onClick={() => trackFiling(obligation)}>
-                            <Plus size={12} /> Track
-                          </button>
-                        ) : isReviewed ? (
-                          <Badge tone="success">Workflow</Badge>
-                        ) : (
-                          <button className="btn btn--sm" onClick={() => acknowledgeWorkflow(obligation)}>
-                            <CheckCircle2 size={12} /> Review
-                          </button>
-                        )}
-                        {hasStagedPacket ? (
-                          <Link className="btn btn--sm" to="/app/template-engine">Packet</Link>
-                        ) : packet ? (
-                          <button className="btn btn--sm" onClick={() => stageDocumentPacket(obligation, existingFiling?._id)}>
-                            <BookTemplate size={12} /> Packet
-                          </button>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Obligation</th>
+                  <th>Due date</th>
+                  <th>Status</th>
+                  <th>Source</th>
+                  <th className="table__actions-col">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {obligations.map((obligation) => {
+                  const filingKind = obligation.creates?.filingKind;
+                  const existingFiling = filingKind ? filingMatches.get(filingMatchKey(filingKind, obligation.dueDate, obligation.sourceRegistrationId)) : null;
+                  const packet = corporationPacketForComplianceObligation({
+                    filingKind,
+                    obligationKey: obligation.obligationKey,
+                    ruleId: obligation.ruleId,
+                  });
+                  const decision = decisionsByRuleId.get(obligation.contextKey);
+                  const isDismissed = decision?.status === "dismissed";
+                  const isReviewed = decision?.status === "resolved" || Boolean(existingFiling);
+                  const hasStagedPacket = decision?.targetTable === "legalPrecedentRuns";
+                  const contextSummary = obligation.contextLabel && obligation.contextKey !== obligation.ruleId
+                    ? `${obligation.contextLabel} · ${obligation.jurisdictionCode}`
+                    : `${contextKindLabel(obligation.contextKind)} · ${obligation.jurisdictionCode}`;
+                  const obligationDetails = [
+                    `Context: ${contextKindLabel(obligation.contextKind)}`,
+                    `Jurisdiction: ${obligation.jurisdictionCode}`,
+                    `Obligation key: ${obligation.obligationKey}`,
+                    obligation.windowStartDate ? `Window opens: ${formatDate(obligation.windowStartDate)}` : "",
+                    filingKind ? `Filing kind: ${filingKind}` : "",
+                    obligation.creates?.requiredEvidence?.length
+                      ? `Evidence: ${obligation.creates.requiredEvidence.join(", ")}`
+                      : "",
+                  ].filter(Boolean).join("\n");
+                  return (
+                    <tr key={obligation.contextKey}>
+                      <td>
+                        <strong>{obligation.title}</strong>
+                        <div className="muted" style={{ fontSize: 12 }} title={obligationDetails}>
+                          {contextSummary}
+                        </div>
+                      </td>
+                      <td className="table__cell--mono">
+                        {formatDate(obligation.dueDate)}
+                        <div className="muted" style={{ fontSize: 12 }}>{relative(obligation.dueDate)}</div>
+                      </td>
+                      <td>
+                        <Badge tone={isDismissed ? "neutral" : isReviewed ? "success" : statusTone(obligation.status)}>
+                          {isDismissed ? "Dismissed" : isReviewed ? "Reviewed" : statusLabel(obligation.status)}
+                        </Badge>
+                        {decision?.updatedAtISO ? (
+                          <div className="muted" style={{ fontSize: 12 }}>{relative(decision.updatedAtISO.slice(0, 10))}</div>
                         ) : null}
-                        {!isReviewed && (
-                          <button className="btn btn--sm" onClick={() => dismissObligation(obligation)}>
-                            <X size={12} /> Dismiss
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                      </td>
+                      <td>
+                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                          <span>{obligation.authority.displayCitation}</span>
+                          <Badge tone={ruleStatusTone(obligation.ruleStatus)}>{ruleStatusLabel(obligation.ruleStatus)}</Badge>
+                        </div>
+                        <div className="muted" style={{ fontSize: 12 }}>
+                          {obligation.authority.guideRuleIds.join(", ")}
+                        </div>
+                        {obligation.sources.length ? (
+                          <div className="muted" style={{ fontSize: 12 }}>
+                            {obligation.sources.slice(0, 2).map((source, index) => (
+                              <span key={source.sourceId}>
+                                {index > 0 ? " · " : ""}
+                                <a href={source.url} target="_blank" rel="noreferrer">{source.title}</a>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="table__actions">
+                        <div className="table__actions-inner">
+                          {isDismissed ? (
+                            <button className="btn btn--sm" onClick={() => reopenObligation(obligation)}>
+                              <RotateCcw size={12} /> Reopen
+                            </button>
+                          ) : (
+                            <>
+                              {existingFiling ? (
+                                <Link className="btn btn--sm" to="/app/filings">Tracked</Link>
+                              ) : filingKind ? (
+                                <button className="btn btn--sm" onClick={() => trackFiling(obligation)}>
+                                  <Plus size={12} /> Track
+                                </button>
+                              ) : isReviewed ? (
+                                <Badge tone="success">Workflow</Badge>
+                              ) : (
+                                <button className="btn btn--sm" onClick={() => acknowledgeWorkflow(obligation)}>
+                                  <CheckCircle2 size={12} /> Review
+                                </button>
+                              )}
+                              {hasStagedPacket ? (
+                                <Link className="btn btn--sm" to="/app/template-engine">Packet</Link>
+                              ) : packet ? (
+                                <button className="btn btn--sm" onClick={() => stageDocumentPacket(obligation, existingFiling?._id)}>
+                                  <BookTemplate size={12} /> Packet
+                                </button>
+                              ) : null}
+                              {!isReviewed && (
+                                <button className="btn btn--sm" onClick={() => dismissObligation(obligation)}>
+                                  <X size={12} /> Dismiss
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         ) : (
           <div className="empty-state">
