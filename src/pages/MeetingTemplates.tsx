@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
-import type { Id } from "../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
@@ -15,6 +15,16 @@ import { Modal, useConfirm } from "../components/Modal";
 import { toDateTimeLocalValue } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { daysUntil, isGeneralMeeting } from "../features/meetings/lib/noticeWindow";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableEmpty,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  useObjectRecordTableData,
+} from "@/platform/record-engine";
 
 type TemplateItemDraft = {
   title: string;
@@ -186,6 +196,9 @@ AGENDA_ITEM_LIBRARY[AGENDA_ITEM_LIBRARY.length - 1].items = AGENDA_ITEM_LIBRARY
 const SECTION_TYPES = ["discussion", "motion", "report", "decision", "other"];
 const MEETING_TYPES = ["Board", "Committee", "AGM", "SGM", "Other"];
 
+type MeetingTemplate = Doc<"meetingTemplates">;
+type MeetingTemplateRecord = MeetingTemplate & { itemCount: number };
+
 function newDraft(): TemplateDraft {
   return {
     name: "",
@@ -207,14 +220,32 @@ export function MeetingTemplatesPage() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const { rules } = useBylawRules();
-  const templates = useQuery(api.meetingTemplates.list, society ? { societyId: society._id } : "skip");
+  const templates = useQuery(
+    api.meetingTemplates.list,
+    society ? { societyId: society._id } : "skip",
+  ) as MeetingTemplate[] | undefined;
   const remove = useMutation(api.meetingTemplates.remove);
   const duplicate = useMutation(api.meetingTemplates.duplicate);
   const seed = useMutation(api.meetingTemplates.seedDefaults);
   const createMeeting = useMutation(api.meetings.create);
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "meetingTemplate",
+    viewId: currentViewId,
+  });
+  const records = useMemo<MeetingTemplateRecord[]>(
+    () => (templates ?? []).map((template) => ({
+      ...template,
+      itemCount: template.items.length,
+    })),
+    [templates],
+  );
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
-  const handleDeleteTemplate = async (template: any) => {
+  const handleDeleteTemplate = async (template: MeetingTemplateRecord) => {
     const ok = await confirm({
       title: `Delete "${template.name}"?`,
       message: "Meetings already created from this template keep their agendas; new meetings will no longer be able to use it. This action cannot be undone.",
@@ -237,7 +268,7 @@ export function MeetingTemplatesPage() {
   } | null>(null);
   const [scheduling, setScheduling] = useState(false);
 
-  const openSchedule = (template: any) => {
+  const openSchedule = (template: MeetingTemplateRecord) => {
     setScheduleDraft({
       templateId: template._id,
       title: template.name ?? "Meeting",
@@ -315,75 +346,106 @@ export function MeetingTemplatesPage() {
         }
       />
 
-      <div className="card meeting-templates__saved">
-        <div className="card__head">
-          <div>
-            <h2 className="card__title">Saved templates</h2>
-            <div className="card__subtitle">{(templates ?? []).length} saved</div>
-          </div>
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society._id} objectLabel="meeting template" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="meetingTemplates"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={records}
+          onRecordClick={(recordId) => navigate(`/app/meeting-templates/${recordId}`)}
+          onCreate={() => navigate("/app/meeting-templates/new")}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<BookOpen size={14} />}
+            label="Saved templates"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((open) => !open)}
+            actions={<span className="muted">{records.length} saved</span>}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || templates === undefined}
+            emptyState={
+              <RecordTableEmpty
+                title="No meeting templates yet"
+                description="Create a reusable agenda pattern for future meetings."
+                action={
+                  <Link className="btn btn--accent" to="/app/meeting-templates/new">
+                    <Plus size={14} /> Create template
+                  </Link>
+                }
+              />
+            }
+            renderCell={({ record, field }) => {
+              if (field.name === "isDefault") {
+                return record.isDefault
+                  ? <Badge tone="success"><Star size={10} /> Default</Badge>
+                  : <span className="muted">—</span>;
+              }
+              return undefined;
+            }}
+            renderRowActions={(record) => {
+              const template = record as MeetingTemplateRecord;
+              return (
+                <>
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    type="button"
+                    onClick={() => openSchedule(template)}
+                    title="Schedule a meeting from this template"
+                  >
+                    <CalendarPlus size={12} /> Schedule meeting
+                  </button>
+                  <button
+                    className="btn btn--ghost btn--sm btn--icon"
+                    type="button"
+                    onClick={() => navigate(`/app/meeting-templates/${template._id}`)}
+                    title="Edit template"
+                    aria-label={`Edit ${template.name}`}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    className="btn btn--ghost btn--sm btn--icon"
+                    type="button"
+                    onClick={async () => {
+                      const copiedId = await duplicate({ templateId: template._id });
+                      toast.success("Template duplicated");
+                      if (copiedId) navigate(`/app/meeting-templates/${copiedId}`);
+                    }}
+                    title="Duplicate template"
+                    aria-label={`Duplicate ${template.name}`}
+                  >
+                    <Copy size={12} />
+                  </button>
+                  <button
+                    className="btn btn--ghost btn--sm btn--icon"
+                    type="button"
+                    onClick={() => { void handleDeleteTemplate(template); }}
+                    title="Delete template"
+                    aria-label={`Delete ${template.name}`}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </>
+              );
+            }}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="record-table__loading-row" />
+          ))}
         </div>
-        <div className="card__body meeting-templates__saved-body">
-          {(templates ?? []).length === 0 ? (
-            <div className="meeting-templates__empty">
-              <BookOpen size={18} aria-hidden="true" />
-              <strong>No meeting templates yet.</strong>
-              <Link className="btn btn--accent" to="/app/meeting-templates/new">
-                <Plus size={14} /> Create template
-              </Link>
-            </div>
-          ) : (
-            <div className="meeting-templates__list">
-              {(templates ?? []).map((template: any) => (
-                <article key={template._id} className="meeting-templates__template">
-                  <div className="meeting-templates__template-main">
-                    <div className="meeting-templates__template-head">
-                      <strong>{template.name}</strong>
-                      <div className="meeting-templates__meta">
-                        {template.isDefault && <Badge tone="success"><Star size={10} /> Default</Badge>}
-                        {template.meetingType && <span className="pill pill--sm">{template.meetingType}</span>}
-                        <span className="pill pill--sm">{template.items?.length ?? 0} items</span>
-                      </div>
-                    </div>
-                    {template.description && <p>{template.description}</p>}
-                    <ol className="meeting-template-summary">
-                      {(template.items ?? []).slice(0, 8).map((item: any, index: number) => (
-                        <li key={`${item.title}-${index}`} className={item.depth === 1 ? "is-child" : ""}>
-                          {item.title}
-                          {(item.motionTemplateId || item.motionText) && <span className="muted"> · motion</span>}
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                  <div className="meeting-templates__template-actions">
-                    <button className="btn-action" type="button" onClick={() => openSchedule(template)} title="Schedule a meeting from this template">
-                      <CalendarPlus size={12} /> Schedule meeting
-                    </button>
-                    <button className="btn-action btn-action--icon" type="button" onClick={() => navigate(`/app/meeting-templates/${template._id}`)} title="Edit template" aria-label={`Edit ${template.name}`}>
-                      <Pencil size={12} />
-                    </button>
-                    <button
-                      className="btn-action btn-action--icon"
-                      type="button"
-                      onClick={async () => {
-                        const copiedId = await duplicate({ templateId: template._id });
-                        toast.success("Template duplicated");
-                        if (copiedId) navigate(`/app/meeting-templates/${copiedId}`);
-                      }}
-                      title="Duplicate template"
-                      aria-label={`Duplicate ${template.name}`}
-                    >
-                      <Copy size={12} />
-                    </button>
-                    <button className="btn-action btn-action--icon" type="button" onClick={() => { void handleDeleteTemplate(template); }} title="Delete template" aria-label={`Delete ${template.name}`}>
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      )}
 
       <Modal
         open={!!scheduleDraft}
