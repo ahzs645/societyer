@@ -243,7 +243,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/auditors": { icon: Calculator, group: "records", label: "Auditors", module: "auditors" },
   "/app/court-orders": { icon: Gavel, group: "records", label: "Court orders", module: "courtOrders" },
   "/app/governance-registers": { icon: Scale, group: "records", label: "Governance registers" },
-  "/app/rights-ledger": { icon: BookKey, group: "records", label: "Rights ledger" },
+  "/app/rights-ledger": { icon: BookKey, group: "records", label: "Rights ledger", entityKinds: ["corporation"] },
   "/app/dividends": { icon: Coins, group: "records", label: "Dividends", entityKinds: ["corporation"] },
   "/app/significant-individuals": { icon: ShieldCheck, group: "records", label: "Significant individuals", entityKinds: ["corporation"] },
   "/app/service-providers": { icon: Briefcase, group: "records", label: "Service providers" },
