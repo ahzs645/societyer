@@ -62,13 +62,16 @@ export function RecordTableScope({
 
   const handleRecordClick = useCallback<NonNullable<RecordTableContextValue["onRecordClick"]>>(
     (recordId, record, options) => {
-      const openRecordIn = hydratedView?.view.openRecordIn ?? options.openRecordIn;
+      const openRecordIn =
+        options.source === "row"
+          ? hydratedView?.view.openRecordIn ?? "drawer"
+          : options.openRecordIn;
       if (openRecordIn === "drawer") {
         setSidePanelRecord({ recordId, record });
         return;
       }
       setSidePanelRecord(null);
-      onRecordClick?.(recordId, record, { openRecordIn });
+      onRecordClick?.(recordId, record, { ...options, openRecordIn });
     },
     [hydratedView?.view.openRecordIn, onRecordClick],
   );
@@ -102,6 +105,7 @@ export function RecordTableScope({
             onUpdate={onUpdate}
             onOpenRecord={() =>
               handleRecordClick(sidePanelRecord.recordId, currentSidePanelRecord, {
+                source: "action",
                 openRecordIn: "page",
               })
             }

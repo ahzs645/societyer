@@ -142,7 +142,12 @@ export function RecordTableRow({
                 className="btn btn--ghost btn--sm btn--icon record-table__open-record"
                 aria-label={`Preview ${objectMetadata.labelSingular ?? "record"} in sidebar`}
                 title="Preview in sidebar"
-                onClick={() => onRecordClick(recordId, record, { openRecordIn: "drawer" })}
+                onClick={() =>
+                  onRecordClick(recordId, record, {
+                    source: "action",
+                    openRecordIn: "drawer",
+                  })
+                }
               >
                 <PanelRightOpen size={12} />
               </button>

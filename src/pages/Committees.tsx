@@ -39,13 +39,17 @@ type CommitteeRecord = Doc<"committees"> & {
   openTaskCount: number;
 };
 
+type CommitteeListRecord = Doc<"committees"> & {
+  memberCount: number;
+};
+
 export function CommitteesPage() {
   const society = useSociety();
   const navigate = useNavigate();
   const committees = useQuery(
     api.committees.list,
     society ? { societyId: society._id } : "skip",
-  ) as Doc<"committees">[] | undefined;
+  ) as CommitteeListRecord[] | undefined;
   const allTasks = useQuery(
     api.tasks.list,
     society ? { societyId: society._id } : "skip",
@@ -70,7 +74,7 @@ export function CommitteesPage() {
     return (committees ?? []).map((committee) => ({
       ...committee,
       goalCount: (allGoals ?? []).filter((goal) => goal.committeeId === committee._id).length,
-      memberCount: 0,
+      memberCount: committee.memberCount,
       openTaskCount: (allTasks ?? []).filter(
         (task) => task.committeeId === committee._id && task.status !== "Done",
       ).length,
@@ -161,9 +165,6 @@ export function CommitteesPage() {
                   </div>
                 );
               }
-              if (field.name === "memberCount") {
-                return <CommitteeMemberCount committeeId={record._id} />;
-              }
               if (field.name === "nextMeetingAt" && record.nextMeetingAt) {
                 const overdue = new Date(record.nextMeetingAt).getTime() < Date.now();
                 return (
@@ -244,15 +245,6 @@ export function CommitteesPage() {
       </Drawer>
     </div>
   );
-}
-
-function CommitteeMemberCount({ committeeId }: { committeeId: Doc<"committees">["_id"] }) {
-  const detail = useQuery(api.committees.detail, { id: committeeId }) as
-    | { members?: Doc<"committeeMembers">[] }
-    | null
-    | undefined;
-  const count = detail?.members?.length ?? 0;
-  return <span>{count}</span>;
 }
 
 function truncate(value: string, maxLength: number): string {

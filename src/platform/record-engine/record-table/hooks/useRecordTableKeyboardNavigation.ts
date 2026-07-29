@@ -63,7 +63,10 @@ export function useRecordTableKeyboardNavigation({
         const record = filteredRecords[current.rowIndex];
         if (record && onRecordClick) {
           event.preventDefault();
-          onRecordClick(String(record._id), record, { openRecordIn: "drawer" });
+          onRecordClick(String(record._id), record, {
+            source: "action",
+            openRecordIn: "drawer",
+          });
         }
         return;
       } else if (event.key === "Enter") {

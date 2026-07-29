@@ -46,6 +46,7 @@ type RoleHolderDraft = {
   signerTag?: string;
   membershipId?: string;
   membershipClassName?: string;
+  membershipClassId?: Id<"rightsClasses">;
   officerTitle?: string;
   directorTerm?: string;
   startDate?: string;
@@ -57,6 +58,12 @@ type RoleHolderDraft = {
   provinceState?: string;
   postalCode?: string;
   country?: string;
+  alternateStreet?: string;
+  alternateUnit?: string;
+  alternateCity?: string;
+  alternateProvinceState?: string;
+  alternatePostalCode?: string;
+  alternateCountry?: string;
   serviceStreet?: string;
   serviceUnit?: string;
   serviceCity?: string;
@@ -78,10 +85,14 @@ type RoleHolderDraft = {
   gender?: string;
   pronouns?: string;
   authorizedRepresentative?: boolean;
+  relatedRoleHolderId?: Id<"roleHolders">;
   relatedShareholderIds?: string[];
   relatedShareholderIdsText?: string;
   controllingIndividualIds?: string[];
   controllingIndividualIdsText?: string;
+  extraProvincialRegistrationId?: Id<"organizationRegistrations">;
+  directoryPersonId?: Id<"peopleDirectory">;
+  sourceDocumentIds?: Id<"documents">[];
   sourceExternalIds?: string[];
   sourceExternalIdsText?: string;
   notes?: string;
@@ -139,6 +150,7 @@ export function RoleHoldersPage() {
       signerTag: empty(roleHolder.signerTag),
       membershipId: empty(roleHolder.membershipId),
       membershipClassName: empty(roleHolder.membershipClassName),
+      membershipClassId: roleHolder.membershipClassId,
       officerTitle: empty(roleHolder.officerTitle),
       directorTerm: empty(roleHolder.directorTerm),
       startDate: empty(roleHolder.startDate),
@@ -150,6 +162,12 @@ export function RoleHoldersPage() {
       provinceState: empty(roleHolder.provinceState),
       postalCode: empty(roleHolder.postalCode),
       country: empty(roleHolder.country),
+      alternateStreet: empty(roleHolder.alternateStreet),
+      alternateUnit: empty(roleHolder.alternateUnit),
+      alternateCity: empty(roleHolder.alternateCity),
+      alternateProvinceState: empty(roleHolder.alternateProvinceState),
+      alternatePostalCode: empty(roleHolder.alternatePostalCode),
+      alternateCountry: empty(roleHolder.alternateCountry),
       serviceStreet: empty(roleHolder.serviceStreet),
       serviceUnit: empty(roleHolder.serviceUnit),
       serviceCity: empty(roleHolder.serviceCity),
@@ -169,8 +187,12 @@ export function RoleHoldersPage() {
       gender: empty(roleHolder.gender),
       pronouns: empty(roleHolder.pronouns),
       authorizedRepresentative: roleHolder.authorizedRepresentative,
+      relatedRoleHolderId: roleHolder.relatedRoleHolderId,
       relatedShareholderIds: csv(roleHolder.relatedShareholderIdsText ?? roleHolder.relatedShareholderIds),
       controllingIndividualIds: csv(roleHolder.controllingIndividualIdsText ?? roleHolder.controllingIndividualIds),
+      extraProvincialRegistrationId: roleHolder.extraProvincialRegistrationId,
+      directoryPersonId: roleHolder.directoryPersonId,
+      sourceDocumentIds: roleHolder.sourceDocumentIds,
       sourceExternalIds: csv(roleHolder.sourceExternalIdsText ?? roleHolder.sourceExternalIds),
       notes: empty(roleHolder.notes),
     });

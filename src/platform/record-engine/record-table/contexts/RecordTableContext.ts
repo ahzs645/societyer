@@ -1,9 +1,15 @@
 import { createContext, useContext } from "react";
 import type { ObjectMetadata, ViewOpenRecordIn } from "../../types";
 
-export type RecordTableOpenOptions = {
-  openRecordIn: ViewOpenRecordIn;
-};
+export type RecordTableOpenOptions =
+  | {
+      source: "row";
+      openRecordIn?: ViewOpenRecordIn;
+    }
+  | {
+      source: "action";
+      openRecordIn: ViewOpenRecordIn;
+    };
 
 /**
  * Metadata-level context for the table — what object are we rendering?

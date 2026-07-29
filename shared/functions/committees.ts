@@ -10,10 +10,25 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 
 export async function committeesListPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
-  return ctx.db
-    .query("committees")
-    .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .collect();
+  const [committees, members] = await Promise.all([
+    ctx.db
+      .query("committees")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect(),
+    ctx.db
+      .query("committeeMembers")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .collect(),
+  ]);
+  const memberCounts = new Map<string, number>();
+  for (const member of members) {
+    const committeeId = String(member.committeeId);
+    memberCounts.set(committeeId, (memberCounts.get(committeeId) ?? 0) + 1);
+  }
+  return committees.map((committee) => ({
+    ...committee,
+    memberCount: memberCounts.get(String(committee._id)) ?? 0,
+  }));
 }
 
 export async function committeeGetPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
