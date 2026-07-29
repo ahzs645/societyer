@@ -40,7 +40,11 @@ export type SeedField = {
   isReadOnly?: boolean;
 };
 
-export type SeedViewColumn = { fieldName: string; size?: number; position?: number };
+export type SeedViewColumn = {
+  fieldName: string;
+  size?: number;
+  position?: number;
+};
 
 /** A seeded view filter, expressed by field NAME (resolved to fieldMetadataId at
  * seed time). Mirrors the runtime ViewFilter shape in
@@ -52,6 +56,9 @@ export type SeedView = {
   columns?: SeedViewColumn[];
   filters?: SeedViewFilter[];
   openRecordIn?: "drawer" | "page";
+  type?: "table" | "kanban" | "board" | "calendar";
+  /** Field name resolved to views.kanbanFieldMetadataId by the seeder. */
+  kanbanFieldName?: string;
 };
 
 export type SeedObject = {
@@ -64,11 +71,8 @@ export type SeedObject = {
   routePath?: string;
   labelIdentifierFieldName: string;
   fields: SeedField[];
-  defaultView: {
-    name: string;
+  defaultView: SeedView & {
     columns: SeedViewColumn[];
-    filters?: SeedViewFilter[];
-    openRecordIn?: "drawer" | "page";
   };
   /** Additional seeded shared views beyond the default (e.g. an unfiltered
    * "All" view). Seeded idempotently by name; columns default to the default
@@ -2904,6 +2908,193 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
     extraViews: [
       // Unfiltered — shows routine motions too.
       { name: "All motions" },
+    ],
+  },
+  {
+    nameSingular: "task",
+    namePlural: "tasks",
+    labelSingular: "Task",
+    labelPlural: "Tasks",
+    icon: "ListTodo",
+    iconColor: "turquoise",
+    routePath: "/app/tasks",
+    labelIdentifierFieldName: "title",
+    fields: [
+      {
+        name: "title",
+        label: "Task",
+        fieldType: FIELD_TYPES.TEXT,
+        icon: "ListTodo",
+        isSystem: true,
+        isReadOnly: true,
+      },
+      {
+        name: "status",
+        label: "Status",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Activity",
+        config: {
+          options: [
+            { value: "Todo", label: "To do", color: "gray" },
+            { value: "InProgress", label: "In progress", color: "blue" },
+            { value: "Blocked", label: "Blocked", color: "red" },
+            { value: "Done", label: "Done", color: "green" },
+          ],
+        },
+      },
+      {
+        name: "priority",
+        label: "Priority",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Flag",
+        config: {
+          options: [
+            { value: "Low", label: "Low", color: "gray" },
+            { value: "Medium", label: "Medium", color: "blue" },
+            { value: "High", label: "High", color: "amber" },
+            { value: "Urgent", label: "Urgent", color: "red" },
+          ],
+        },
+      },
+      { name: "assignee", label: "Assignee", fieldType: FIELD_TYPES.TEXT, icon: "User" },
+      { name: "dueDate", label: "Due", fieldType: FIELD_TYPES.DATE, icon: "CalendarClock" },
+      {
+        name: "responsibleUserIds",
+        label: "Responsible",
+        fieldType: FIELD_TYPES.RELATION,
+        icon: "Users",
+        isReadOnly: true,
+        config: {
+          targetObjectNamePlural: "users",
+          targetLabelFieldName: "displayName",
+          kind: "many-to-many",
+        },
+      },
+      {
+        name: "committeeId",
+        label: "Committee",
+        fieldType: FIELD_TYPES.RELATION,
+        icon: "UsersRound",
+        isReadOnly: true,
+        config: {
+          targetObjectNamePlural: "committees",
+          targetLabelFieldName: "name",
+          kind: "many-to-one",
+        },
+      },
+      {
+        name: "goalId",
+        label: "Goal",
+        fieldType: FIELD_TYPES.RELATION,
+        icon: "Target",
+        isReadOnly: true,
+        config: {
+          targetObjectNamePlural: "goals",
+          targetLabelFieldName: "title",
+          kind: "many-to-one",
+        },
+      },
+      {
+        name: "meetingId",
+        label: "Meeting",
+        fieldType: FIELD_TYPES.RELATION,
+        icon: "CalendarDays",
+        isReadOnly: true,
+        config: {
+          targetObjectNamePlural: "meetings",
+          targetLabelFieldName: "title",
+          kind: "many-to-one",
+        },
+      },
+      {
+        name: "filingId",
+        label: "Filing",
+        fieldType: FIELD_TYPES.RELATION,
+        icon: "FileText",
+        isReadOnly: true,
+        config: {
+          targetObjectNamePlural: "filings",
+          targetLabelFieldName: "kind",
+          kind: "many-to-one",
+        },
+      },
+      {
+        name: "workflowId",
+        label: "Workflow",
+        fieldType: FIELD_TYPES.RELATION,
+        icon: "Workflow",
+        isReadOnly: true,
+        config: {
+          targetObjectNamePlural: "workflows",
+          targetLabelFieldName: "name",
+          kind: "many-to-one",
+        },
+      },
+      {
+        name: "documentId",
+        label: "Document",
+        fieldType: FIELD_TYPES.RELATION,
+        icon: "File",
+        isReadOnly: true,
+        config: {
+          targetObjectNamePlural: "documents",
+          targetLabelFieldName: "title",
+          kind: "many-to-one",
+        },
+      },
+      {
+        name: "commitmentId",
+        label: "Commitment",
+        fieldType: FIELD_TYPES.RELATION,
+        icon: "Handshake",
+        isReadOnly: true,
+        config: {
+          targetObjectNamePlural: "commitments",
+          targetLabelFieldName: "title",
+          kind: "many-to-one",
+        },
+      },
+      { name: "eventId", label: "Event ID", fieldType: FIELD_TYPES.TEXT, icon: "Link", isReadOnly: true },
+      { name: "description", label: "Description", fieldType: FIELD_TYPES.TEXT, icon: "AlignLeft", isReadOnly: true },
+      { name: "tags", label: "Tags", fieldType: FIELD_TYPES.ARRAY, icon: "Tags", isReadOnly: true },
+      { name: "completionNote", label: "Completion note", fieldType: FIELD_TYPES.TEXT, icon: "StickyNote", isReadOnly: true },
+      {
+        name: "completedByUserId",
+        label: "Completed by",
+        fieldType: FIELD_TYPES.RELATION,
+        icon: "UserCheck",
+        isReadOnly: true,
+        config: {
+          targetObjectNamePlural: "users",
+          targetLabelFieldName: "displayName",
+          kind: "many-to-one",
+        },
+      },
+      { name: "completedAt", label: "Completed", fieldType: FIELD_TYPES.DATE_TIME, icon: "Check", isReadOnly: true },
+      { name: "createdAtISO", label: "Created", fieldType: FIELD_TYPES.DATE_TIME, icon: "Clock", isReadOnly: true },
+    ],
+    defaultView: {
+      name: "All tasks",
+      type: "table",
+      openRecordIn: "page",
+      columns: [
+        { fieldName: "title", size: 300 },
+        { fieldName: "priority", size: 110 },
+        { fieldName: "status", size: 130 },
+        { fieldName: "assignee", size: 160 },
+        { fieldName: "responsibleUserIds", size: 180 },
+        { fieldName: "committeeId", size: 170 },
+        { fieldName: "goalId", size: 190 },
+        { fieldName: "dueDate", size: 130 },
+      ],
+    },
+    extraViews: [
+      {
+        name: "Board",
+        type: "kanban",
+        kanbanFieldName: "status",
+        openRecordIn: "page",
+      },
     ],
   },
 ];

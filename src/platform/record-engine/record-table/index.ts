@@ -14,6 +14,7 @@ export type { BulkAction } from "./components/RecordTableBulkBar";
 export { RecordTableEmpty } from "./components/RecordTableEmpty";
 
 export { useObjectRecordTableData } from "./hooks/useHydratedView";
+export { useFilteredRecords } from "./hooks/useFilteredRecords";
 export { usePersistView } from "./hooks/usePersistView";
 
 export {
