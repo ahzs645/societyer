@@ -141,7 +141,6 @@ function MotionsTableTab() {
       const meeting = m.primaryMeetingId ? meetingById.get(String(m.primaryMeetingId)) : null;
       return {
         ...m,
-        _hasTitle: !!(m.title && String(m.title).trim()),
         title: m.title ?? "",
         tags: tagsForFilter,
         meeting: meeting ? `${meeting.title} (${formatDate(meeting.scheduledAt)})` : "",
@@ -242,12 +241,7 @@ function MotionsTableTab() {
             loading={tableData.loading || motions === undefined}
             renderCell={({ record: row, field }) => {
               if (field.name === "title") return (
-                <div>
-                  <strong>{row.title || truncate(row.text, 70)}</strong>
-                  {row._hasTitle && row.text && (
-                    <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{truncate(row.text, 120)}</div>
-                  )}
-                </div>
+                <strong>{row.title || truncate(row.text, 70)}</strong>
               );
               if (field.name === "meeting") {
                 if (!row.primaryMeetingId) return <span className="muted">—</span>;

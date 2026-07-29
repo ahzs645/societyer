@@ -320,9 +320,9 @@ export function GrantsPage() {
             loading={applicationsTable.loading || applications === undefined}
             renderCell={({ record, field }) => {
               if (field.name === "projectTitle") return (
-                <div>
-                  <strong>{record.projectTitle}</strong>
-                  <div className="muted" style={{ fontSize: 12 }}>{record.applicantName}</div>
+                <div className="record-table__identifier-lines">
+                  <strong className="record-table__identifier-primary">{record.projectTitle}</strong>
+                  <div className="record-table__identifier-secondary muted">{record.applicantName}</div>
                 </div>
               );
               if (field.name === "program") return <span>{record.program}</span>;
@@ -405,9 +405,9 @@ export function GrantsPage() {
             loading={pipelineTable.loading || grants === undefined}
             renderCell={({ record: row, field }) => {
               if (field.name === "title") return (
-                <div>
-                  <strong>{row.title}</strong>
-                  <div className="muted" style={{ fontSize: 12 }}>{row.funder}{row.program ? ` · ${row.program}` : ""}</div>
+                <div className="record-table__identifier-lines">
+                  <strong className="record-table__identifier-primary">{row.title}</strong>
+                  <div className="record-table__identifier-secondary muted">{row.funder}{row.program ? ` · ${row.program}` : ""}</div>
                 </div>
               );
               if (field.name === "status") return <Badge tone={row.status === "Active" || row.status === "Awarded" ? "success" : row.status === "Declined" ? "danger" : "warn"}>{row.status}</Badge>;

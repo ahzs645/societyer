@@ -226,11 +226,13 @@ export function MeetingMinutesPreviewPage() {
         <aside className="meeting-preview-page__settings">
           {formalExportBlockers.length > 0 && (
             <div className="callout callout--warn" role="status">
-              <strong>Final export blocked</strong>
-              <ul style={{ margin: "6px 0 0 18px" }}>
-                {formalExportBlockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
-              </ul>
-              <div style={{ marginTop: 6 }}>You can still review this preview.</div>
+              <div className="callout__body callout__body--list">
+                <strong className="callout__title">Final export blocked</strong>
+                <ul className="callout__list">
+                  {formalExportBlockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+                </ul>
+                <div className="callout__note">You can still review this preview.</div>
+              </div>
             </div>
           )}
           <Field label="Style">

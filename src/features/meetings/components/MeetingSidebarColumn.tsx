@@ -179,11 +179,13 @@ export function MeetingSidebarColumn({
               <div className="card__body col" style={{ gap: 12 }}>
                 {minutesExportBlocked && (
                   <div className="callout callout--warn" role="status">
-                    <strong>Final export blocked</strong>
-                    <ul style={{ margin: "6px 0 0 18px" }}>
-                      {formalExportBlockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
-                    </ul>
-                    <div style={{ marginTop: 6 }}>Preview remains available while you complete the record.</div>
+                    <div className="callout__body callout__body--list">
+                      <strong className="callout__title">Final export blocked</strong>
+                      <ul className="callout__list">
+                        {formalExportBlockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+                      </ul>
+                      <div className="callout__note">Preview remains available while you complete the record.</div>
+                    </div>
                   </div>
                 )}
                 {!exportControlsReadOnly && (

@@ -293,6 +293,33 @@
   padding: 10px 12px;
 }
 
+.callout__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.callout__body--list {
+  padding-inline-start: 16px;
+}
+
+.callout__title {
+  display: block;
+}
+
+.callout__list {
+  list-style-position: outside;
+  margin: 6px 0 0;
+  padding-inline-start: 0;
+}
+
+.callout__note {
+  margin-top: 2px;
+}
+
+.callout__list + .callout__note {
+  margin-top: 6px;
+}
+
 .callout--info {
   background: token('blue-2');
   border-color: token('blue-6');
@@ -451,14 +478,5 @@
   .accounting-purchase-create {
     align-items: stretch;
     flex-direction: column;
-  }
-}
-
-/* The inline asset photo is decorative — the cell already shows the name and
- * category · serial. Hide it on phones so every row's name lines up and the
- * thumbnail doesn't eat width in the horizontally-scrolling Asset column. */
-@media (max-width: 760px) {
-  .asset-cell__thumb {
-    display: none;
   }
 }

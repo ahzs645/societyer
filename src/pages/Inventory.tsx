@@ -651,9 +651,9 @@ export function InventoryPage() {
       {lowStock.length > 0 && (
         <div className="callout callout--warn">
           <AlertTriangle size={16} />
-          <div>
-            <strong>{lowStock.length} item{lowStock.length === 1 ? "" : "s"} at or below reorder point</strong>
-            <div className="muted">{lowStock.slice(0, 4).map(({ item }) => item.name).join(", ")}{lowStock.length > 4 ? ` +${lowStock.length - 4} more` : ""}</div>
+          <div className="callout__body">
+            <strong className="callout__title">{lowStock.length} item{lowStock.length === 1 ? "" : "s"} at or below reorder point</strong>
+            <div className="callout__note muted">{lowStock.slice(0, 4).map(({ item }) => item.name).join(", ")}{lowStock.length > 4 ? ` +${lowStock.length - 4} more` : ""}</div>
           </div>
         </div>
       )}
@@ -661,9 +661,9 @@ export function InventoryPage() {
       {expiringLots.length > 0 && (
         <div className="callout callout--warn">
           <ClipboardCheck size={16} />
-          <div>
-            <strong>{expiringLots.length} lot{expiringLots.length === 1 ? "" : "s"} expiring soon or expired</strong>
-            <div className="muted">
+          <div className="callout__body">
+            <strong className="callout__title">{expiringLots.length} lot{expiringLots.length === 1 ? "" : "s"} expiring soon or expired</strong>
+            <div className="callout__note muted">
               {expiringLots.slice(0, 4).map(({ lot, days }) => `${itemById.get(lot.inventoryItemId)?.name ?? "Item"} (${days != null && days < 0 ? "expired" : `${days}d`})`).join(", ")}
             </div>
           </div>
@@ -673,9 +673,9 @@ export function InventoryPage() {
       {varianceLines.length > 0 && (
         <div className="callout callout--warn">
           <ClipboardCheck size={16} />
-          <div>
-            <strong>{varianceLines.length} physical count variance{varianceLines.length === 1 ? "" : "s"} need reconciliation</strong>
-            <div className="muted">Posting adjustments will create stock movements and close the matching count run.</div>
+          <div className="callout__body">
+            <strong className="callout__title">{varianceLines.length} physical count variance{varianceLines.length === 1 ? "" : "s"} need reconciliation</strong>
+            <div className="callout__note muted">Posting adjustments will create stock movements and close the matching count run.</div>
           </div>
           <button
             className="btn btn--sm"
