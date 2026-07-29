@@ -409,6 +409,13 @@ code.chip,
   box-shadow: token('shadow-xs');
   min-width: 0;
 }
+/* Page-level cards use normal block flow, unlike `.col`, `.grid`, and the
+ * feature layouts that already own their spacing through `gap`. Give only
+ * direct page siblings the standard section rhythm so those gap-based
+ * containers never receive both a margin and a gap. */
+:where(.page > .card + .card) {
+  margin-block-start: token('s-4');
+}
 /* Cards normally get their padding from .card__head/.card__body children, but
  * a dozen pages put bare content (h3 / p / rows) straight inside .card, which
  * then sits flush against the border (e.g. Corporate history). Pad the

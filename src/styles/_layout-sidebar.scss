@@ -139,12 +139,15 @@
 }
 /* Each browse/favorite row is wrapped in a slot so the row (link/button) and
  * its action controls are SIBLINGS, never interactive elements nested inside
- * one another. The row grows; the controls sit at the trailing edge. */
+ * one another. The pin control overlays the row so revealing it never changes
+ * the label's available width. */
 .sidebar__item-slot {
+  --sidebar-item-overlay: transparent;
+
   display: flex;
   align-items: center;
-  gap: 2px;
   min-width: 0;
+  position: relative;
 }
 .sidebar__item-slot > .sidebar__item,
 .sidebar__item-slot > .sidebar__nav-item {
@@ -157,50 +160,75 @@
   width: auto;
 }
 
-/* Tap-to-pin affordance on each browse item. Hidden until hover on desktop
- * (keeps rows clean), always visible on touch so pinning is discoverable in
- * the mobile "More" drawer instead of only via the command palette. */
+/* Keep this variable in step with the row backgrounds from _layout-shell.scss.
+ * The toggle's fade uses it to cover the label without text bleeding through,
+ * including when the active row is hovered. */
+.sidebar__item-slot:hover {
+  --sidebar-item-overlay: #{token('bg-transparent-light')};
+}
+.sidebar__item-slot:has(> .sidebar__item.is-active) {
+  --sidebar-item-overlay: #{token('bg-transparent-medium')};
+}
+
+/* Tap-to-pin affordance on each browse item. It stays in the tab order while
+ * visually hidden, then fades over the trailing edge without taking space. */
 .sidebar__pin-toggle {
-  flex-shrink: 0;
+  position: absolute;
+  z-index: 1;
+  inset-inline-end: 0;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 24px;
+  justify-content: flex-end;
+  width: 36px;
   height: 24px;
-  padding: 0;
+  padding: 0 6px 0 0;
   border: 0;
   border-radius: token('r-xs');
-  background: transparent;
+  background:
+    linear-gradient(
+      to right,
+      transparent,
+      var(--sidebar-item-overlay) 34%,
+      var(--sidebar-item-overlay)
+    ),
+    linear-gradient(
+      to right,
+      transparent,
+      #{token('bg-app')} 34%,
+      #{token('bg-app')}
+    );
   color: token('text-tertiary');
   font: inherit;
   cursor: pointer;
   opacity: 0;
+  pointer-events: none;
   transition:
     opacity token('anim-fast') token('anim-ease'),
-    background token('anim-fast') token('anim-ease'),
     color token('anim-fast') token('anim-ease');
 }
 .sidebar__item-slot:hover .sidebar__pin-toggle,
-.sidebar__pin-toggle:focus-visible {
+.sidebar__item-slot:focus-within .sidebar__pin-toggle,
+.sidebar__pin-toggle:focus-visible,
+.sidebar__item-slot > [data-pinned] + .sidebar__pin-toggle {
   opacity: 1;
+  pointer-events: auto;
 }
 .sidebar__pin-toggle:hover {
-  background: token('bg-hover');
   color: token('text-primary');
 }
-/* On touch there's no hover, but always-on controls clutter every row — so on
- * mobile the pin toggle only exists while favorites Edit mode is active (the
- * Edit button lives in the Favorites section header). */
-.app-shell.is-mobile .sidebar__pin-toggle {
-  display: none;
-}
+/* On touch there's no hover, so Favorites Edit mode reveals every control. */
 .app-shell.is-mobile.is-favorites-editing .sidebar__pin-toggle {
-  display: inline-flex;
   opacity: 1;
+  pointer-events: auto;
 }
-/* No room for it in the collapsed desktop rail. */
+/* No room for it in the collapsed desktop rail. The sidebar itself is removed
+ * from pointer interaction while collapsed; this keeps the toggle's base
+ * focusable implementation free of display-based hiding. */
 .app-shell.is-collapsed:not(.is-mobile) .sidebar__pin-toggle {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Touch-friendly favorites management: reorder (up/down) + unpin on each

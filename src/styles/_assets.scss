@@ -325,6 +325,11 @@
   border-color: token('blue-6');
 }
 
+.callout--warn {
+  background: token('warn-soft');
+  border-color: token('orange-6');
+}
+
 .asset-mobile-register {
   display: none;
 }

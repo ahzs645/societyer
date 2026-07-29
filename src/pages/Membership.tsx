@@ -171,7 +171,7 @@ export function MembershipPage() {
         />
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card">
         <div className="card__head">
           <h2 className="card__title">Fee tiers & plans</h2>
           <span className="card__subtitle">Shown on the self-serve signup page; each tier can also carry dated fee periods.</span>
@@ -250,7 +250,7 @@ export function MembershipPage() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card">
         <div className="card__head">
           <div>
             <h2 className="card__title">Member fee timeline</h2>

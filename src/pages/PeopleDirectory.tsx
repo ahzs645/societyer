@@ -129,7 +129,7 @@ export function PeopleDirectoryPage() {
         <Link to="/app/directors">Directors</Link> or <Link to="/app/role-holders">Role holders</Link>.
       </p>
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card">
         <Field label="Search people">
           <input
             className="input"
@@ -168,7 +168,7 @@ export function PeopleDirectoryPage() {
       </div>
 
       {duplicateGroups && duplicateGroups.length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card">
           <h2 className="page__title-text">Possible duplicates</h2>
           <p style={{ opacity: 0.7 }}>
             These people share a normalized name and date of birth.

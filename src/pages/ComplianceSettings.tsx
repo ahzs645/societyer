@@ -119,7 +119,7 @@ export function ComplianceSettingsPage() {
         }
       />
 
-      <div className="card" style={{ maxWidth: 520, marginBottom: 16 }}>
+      <div className="card" style={{ maxWidth: 520 }}>
         <div className="row" style={{ gap: 12 }}>
           <Field label="AGM month">
             <Select value={String(agmMonth)} onChange={(value) => setAgmMonth(value === "" ? "" : Number(value))}
@@ -168,7 +168,7 @@ export function ComplianceSettingsPage() {
         </Field>
       </div>
 
-      <div className="card" style={{ maxWidth: 520, marginBottom: 16 }}>
+      <div className="card" style={{ maxWidth: 520 }}>
         <h3 style={{ margin: "0 0 8px" }}>Clone this entity</h3>
         <p style={{ color: "var(--text-tertiary)", marginTop: 0 }}>
           Deep-copy this entity's registers (role holders, addresses, share classes,
@@ -198,7 +198,7 @@ export function ComplianceSettingsPage() {
         {cloneResult && <p style={{ color: "var(--accent, green)" }}>{cloneResult}</p>}
       </div>
 
-      <div className="card" style={{ maxWidth: 520, marginBottom: 16 }}>
+      <div className="card" style={{ maxWidth: 520 }}>
         <h3 style={{ margin: "0 0 8px" }}>Contacts &amp; records</h3>
         <Field label="Short name / defined term (e.g. &quot;the Society&quot;)">
           <input className="input" value={contacts.shortName} onChange={(e) => setC("shortName", e.target.value)} />

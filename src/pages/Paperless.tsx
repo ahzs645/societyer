@@ -173,7 +173,7 @@ export function PaperlessPage() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card">
         <div className="card__head">
           <h2 className="card__title">Cross-app tag profiles</h2>
           <span className="card__subtitle">These are inferred from existing document references across modules.</span>

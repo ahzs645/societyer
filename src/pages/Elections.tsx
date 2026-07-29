@@ -9,7 +9,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DateTimeInput } from "../components/DateTimeInput";
-import { Vote, Plus, Users, CheckCircle2, Trash2 } from "lucide-react";
+import { AlertTriangle, Info, Vote, Plus, Users, CheckCircle2, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isBetterAuthMode } from "../lib/authMode";
 
@@ -161,8 +161,9 @@ export function ElectionsPage() {
       />
 
       {!isBetterAuthMode() && (
-        <div className="card" style={{ marginBottom: 16, borderLeft: "3px solid var(--text-tertiary)" }}>
-          <div className="card__body">
+        <div className="callout callout--info">
+          <Info size={16} />
+          <div>
             <strong>No-auth mode:</strong> Real anonymous member voting requires authenticated member accounts.
             You can still design and administer elections here, but the member
             ballot flow stays disabled until authentication is enabled.
@@ -171,8 +172,9 @@ export function ElectionsPage() {
       )}
 
       {rules && !rules.allowElectronicVoting && (
-        <div className="card" style={{ marginBottom: 16, borderLeft: "3px solid var(--warn)" }}>
-          <div className="card__body">
+        <div className="callout callout--warn">
+          <AlertTriangle size={16} />
+          <div>
             <strong>Bylaw restriction:</strong> The active bylaw rule set currently disallows electronic voting. You can
             still prepare elections here, but opening them for remote ballots may not
             match the society's bylaws.
@@ -181,7 +183,7 @@ export function ElectionsPage() {
       )}
 
       {myElections && myElections.length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card">
           <div className="card__head">
             <h2 className="card__title">My ballots</h2>
             <span className="card__subtitle">Verified member view</span>
