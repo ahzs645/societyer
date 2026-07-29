@@ -1,50 +1,71 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { Link, useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
+import { Check, ListTodo, Pencil, Plus, Trash2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
-import { useSociety } from "../hooks/useSociety";
-import { useCurrentUserId } from "../hooks/useCurrentUser";
-import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Drawer, Badge, MenuRow } from "../components/ui";
-import { Checkbox } from "../components/Controls";
-import { Segmented } from "../components/primitives";
-import { Kanban } from "../components/Kanban";
+import {
+  RecordTable,
+  RecordTableBulkBar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  useFilteredRecords,
+  useObjectRecordTableData,
+} from "@/platform/record-engine";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { Pencil, Plus, Search, ListTodo, Trash2, X } from "lucide-react";
-import { formatDate } from "../lib/format";
-import { useIsMobile } from "../lib/useIsMobile";
+import { Drawer } from "../components/ui";
 import {
   TaskFormFields,
+  TASK_STATUSES,
   makeTaskFormDefaults,
   useTaskFormData,
   type TaskFormValue,
 } from "../features/tasks/TaskFormFields";
+import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { useSociety } from "../hooks/useSociety";
+import { formatDate } from "../lib/format";
+import { useIsMobile } from "../lib/useIsMobile";
+import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 
 type EditableTaskForm = TaskFormValue & {
-  _id?: string;
+  _id?: Id<"tasks">;
   tags?: string[];
 };
 
-const COLS = [
-  { id: "Todo", label: "To do", accent: "var(--text-tertiary)" },
-  { id: "InProgress", label: "In progress", accent: "var(--accent)" },
-  { id: "Blocked", label: "Blocked", accent: "var(--danger)" },
-  { id: "Done", label: "Done", accent: "var(--success)" },
-];
+type TaskRecord = Doc<"tasks"> & {
+  responsibleUserIdsLabel?: string;
+  committeeIdLabel?: string;
+  meetingIdLabel?: string;
+  goalIdLabel?: string;
+  filingIdLabel?: string;
+  workflowIdLabel?: string;
+  documentIdLabel?: string;
+  commitmentIdLabel?: string;
+  completedByUserIdLabel?: string;
+};
+
+const TASK_STATUS_LABELS: Record<(typeof TASK_STATUSES)[number], string> = {
+  Todo: "To do",
+  InProgress: "In progress",
+  Blocked: "Blocked",
+  Done: "Done",
+};
 
 export function taskStatusLabel(status: string) {
-  return COLS.find((c) => c.id === status)?.label ?? status;
+  return status in TASK_STATUS_LABELS
+    ? TASK_STATUS_LABELS[status as keyof typeof TASK_STATUS_LABELS]
+    : status;
 }
 
 export function TasksPage() {
   const society = useSociety();
   const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
-  // Shared dropdown sources (committees, goals, users, filings, workflows,
-  // documents, commitments) — feeds both the page's filters/cards and the
-  // shared TaskFormFields component used in the create/edit drawer.
+  const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const formData = useTaskFormData(society?._id);
   const { committees, goals, users, filings, workflows, documents, commitments } = formData;
   const create = useMutation(api.tasks.create);
@@ -53,58 +74,113 @@ export function TasksPage() {
   const currentUserId = useCurrentUserId();
   const confirm = useConfirm();
   const toast = useToast();
+  const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedGoalId = searchParams.get("goalId") ?? "";
   const requestedCommitteeId = searchParams.get("committeeId") ?? "";
   const openNewFromUrl = searchParams.get("new") === "1";
-  const [view, setView] = useState<"kanban" | "list">("kanban");
-  // On phones the board/table don't fit, so we render a single-column card list
-  // regardless of the desktop view toggle, and tuck the filters behind a toggle.
-  const isMobile = useIsMobile();
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const [filterCommittee, setFilterCommittee] = useState<string>(requestedCommitteeId);
-  const [filterGoal, setFilterGoal] = useState<string>(requestedGoalId);
-  const [filterLink, setFilterLink] = useState<string>("");
+  const [filterCommittee, setFilterCommittee] = useState(requestedCommitteeId);
+  const [filterGoal, setFilterGoal] = useState(requestedGoalId);
+  const [filterLink, setFilterLink] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<EditableTaskForm | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [cardMenu, setCardMenu] = useState<{ task: any; top: number; left: number } | null>(null);
-  const cardMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const committeeById = useMemo(() => new Map<string, any>((committees ?? []).map((c: any) => [c._id, c])), [committees]);
-  const goalById = useMemo(() => new Map<string, any>((goals ?? []).map((g: any) => [g._id, g])), [goals]);
-  const userById = useMemo(() => new Map<string, any>((users ?? []).map((u: any) => [u._id, u])), [users]);
-  const filingById = useMemo(() => new Map<string, any>((filings ?? []).map((f: any) => [f._id, f])), [filings]);
-  const workflowById = useMemo(() => new Map<string, any>((workflows ?? []).map((w: any) => [w._id, w])), [workflows]);
-  const documentById = useMemo(() => new Map<string, any>((documents ?? []).map((d: any) => [d._id, d])), [documents]);
-  const commitmentById = useMemo(() => new Map<string, any>((commitments ?? []).map((c: any) => [c._id, c])), [commitments]);
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "task",
+    viewId: currentViewId,
+  });
 
-  const filtered = useMemo(() => {
-    const base = tasks ?? [];
-    const ql = q.toLowerCase();
-    return base.filter((t: any) => {
-      if (filterCommittee && t.committeeId !== filterCommittee) return false;
-      if (filterGoal && t.goalId !== filterGoal) return false;
-      if (filterLink && !matchesLinkFilter(t, filterLink)) return false;
-      if (!ql) return true;
-      const responsibleNames = (t.responsibleUserIds ?? []).map((id: string) => userById.get(id)?.displayName).filter(Boolean).join(" ");
-      const linkedText = [
-        goalById.get(t.goalId)?.title,
-        filingById.get(t.filingId)?.kind,
-        workflowById.get(t.workflowId)?.name,
-        documentById.get(t.documentId)?.title,
-        commitmentById.get(t.commitmentId)?.title,
-        t.eventId,
-      ].filter(Boolean).join(" ");
-      return t.title.toLowerCase().includes(ql) ||
-        (t.assignee ?? "").toLowerCase().includes(ql) ||
-        responsibleNames.toLowerCase().includes(ql) ||
-        linkedText.toLowerCase().includes(ql) ||
-        (t.tags ?? []).join(" ").toLowerCase().includes(ql);
-    });
-  }, [tasks, q, filterCommittee, filterGoal, filterLink, userById, goalById, filingById, workflowById, documentById, commitmentById]);
+  const committeeById = useMemo(
+    () => recordsById((committees ?? []) as Doc<"committees">[]),
+    [committees],
+  );
+  const goalById = useMemo(
+    () => recordsById((goals ?? []) as Doc<"goals">[]),
+    [goals],
+  );
+  const userById = useMemo(
+    () => recordsById((users ?? []) as Doc<"users">[]),
+    [users],
+  );
+  const meetingById = useMemo(
+    () => recordsById((meetings ?? []) as Doc<"meetings">[]),
+    [meetings],
+  );
+  const filingById = useMemo(
+    () => recordsById((filings ?? []) as Doc<"filings">[]),
+    [filings],
+  );
+  const workflowById = useMemo(
+    () => recordsById((workflows ?? []) as Doc<"workflows">[]),
+    [workflows],
+  );
+  const documentById = useMemo(
+    () => recordsById((documents ?? []) as Doc<"documents">[]),
+    [documents],
+  );
+  const commitmentById = useMemo(
+    () => recordsById((commitments ?? []) as Doc<"commitments">[]),
+    [commitments],
+  );
+
+  const records = useMemo<TaskRecord[]>(
+    () =>
+      ((tasks ?? []) as Doc<"tasks">[]).map((task) => {
+        const filing = task.filingId ? filingById.get(String(task.filingId)) : undefined;
+        return {
+          ...task,
+          responsibleUserIdsLabel: userNames(task.responsibleUserIds, userById),
+          committeeIdLabel: task.committeeId
+            ? committeeById.get(String(task.committeeId))?.name
+            : undefined,
+          meetingIdLabel: task.meetingId
+            ? meetingById.get(String(task.meetingId))?.title
+            : undefined,
+          goalIdLabel: task.goalId ? goalById.get(String(task.goalId))?.title : undefined,
+          filingIdLabel: filing
+            ? `${filing.kind}${filing.periodLabel ? ` — ${filing.periodLabel}` : ""}`
+            : undefined,
+          workflowIdLabel: task.workflowId
+            ? workflowById.get(String(task.workflowId))?.name
+            : undefined,
+          documentIdLabel: task.documentId
+            ? documentById.get(String(task.documentId))?.title
+            : undefined,
+          commitmentIdLabel: task.commitmentId
+            ? commitmentById.get(String(task.commitmentId))?.title
+            : undefined,
+          completedByUserIdLabel: task.completedByUserId
+            ? userById.get(String(task.completedByUserId))?.displayName
+            : undefined,
+        };
+      }),
+    [
+      tasks,
+      committeeById,
+      commitmentById,
+      documentById,
+      filingById,
+      goalById,
+      meetingById,
+      userById,
+      workflowById,
+    ],
+  );
+
+  const pageFilteredRecords = useMemo(
+    () =>
+      records.filter((task) => {
+        if (filterCommittee && String(task.committeeId ?? "") !== filterCommittee) return false;
+        if (filterGoal && String(task.goalId ?? "") !== filterGoal) return false;
+        return !filterLink || matchesLinkFilter(task, filterLink);
+      }),
+    [records, filterCommittee, filterGoal, filterLink],
+  );
 
   const openNew = useCallback(() => {
     setForm({
@@ -128,28 +204,34 @@ export function TasksPage() {
   useEffect(() => {
     if (!openNewFromUrl || open || society === undefined || society === null) return;
     openNew();
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete("new");
-      return next;
-    }, { replace: true });
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete("new");
+        return next;
+      },
+      { replace: true },
+    );
   }, [openNewFromUrl, open, openNew, setSearchParams, society]);
-
-  const changeGoalFilter = (goalId: string) => {
-    setFilterGoal(goalId);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (goalId) next.set("goalId", goalId);
-      else next.delete("goalId");
-      next.delete("new");
-      return next;
-    }, { replace: true });
-  };
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const openEdit = (task: any) => {
+  const changeGoalFilter = (goalId: string) => {
+    setFilterGoal(goalId);
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (goalId) next.set("goalId", goalId);
+        else next.delete("goalId");
+        next.delete("new");
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  const openEdit = (task: TaskRecord) => {
     setForm({
       ...makeTaskFormDefaults({
         title: task.title,
@@ -186,23 +268,35 @@ export function TasksPage() {
           status: form.status,
           priority: form.priority,
           assignee: form.assignee || undefined,
-          responsibleUserIds: form.responsibleUserId ? [form.responsibleUserId] : [],
+          responsibleUserIds: form.responsibleUserId
+            ? [form.responsibleUserId as Id<"users">]
+            : [],
           dueDate: form.dueDate || undefined,
-          committeeId: form.committeeId || undefined,
-          goalId: form.goalId || undefined,
-          filingId: form.filingId || undefined,
-          workflowId: form.workflowId || undefined,
-          documentId: form.documentId || undefined,
-          commitmentId: form.commitmentId || undefined,
+          committeeId: form.committeeId
+            ? (form.committeeId as Id<"committees">)
+            : undefined,
+          goalId: form.goalId ? (form.goalId as Id<"goals">) : undefined,
+          filingId: form.filingId ? (form.filingId as Id<"filings">) : undefined,
+          workflowId: form.workflowId
+            ? (form.workflowId as Id<"workflows">)
+            : undefined,
+          documentId: form.documentId
+            ? (form.documentId as Id<"documents">)
+            : undefined,
+          commitmentId: form.commitmentId
+            ? (form.commitmentId as Id<"commitments">)
+            : undefined,
           eventId: form.eventId || undefined,
           completionNote: form.completionNote || undefined,
-          completedByUserId: form.status === "Done" && currentUserId ? currentUserId : undefined,
+          completedByUserId:
+            form.status === "Done" && currentUserId ? currentUserId : undefined,
         }),
       });
       setOpen(false);
       toast.success("Task updated", form.title);
       return;
     }
+
     await create({
       societyId: society._id,
       title: form.title,
@@ -210,14 +304,20 @@ export function TasksPage() {
       status: form.status,
       priority: form.priority,
       assignee: form.assignee || undefined,
-      responsibleUserIds: form.responsibleUserId ? [form.responsibleUserId as any] : undefined,
+      responsibleUserIds: form.responsibleUserId
+        ? [form.responsibleUserId as Id<"users">]
+        : undefined,
       dueDate: form.dueDate || undefined,
-      committeeId: (form.committeeId || undefined) as any,
-      goalId: (form.goalId || undefined) as any,
-      filingId: (form.filingId || undefined) as any,
-      workflowId: (form.workflowId || undefined) as any,
-      documentId: (form.documentId || undefined) as any,
-      commitmentId: (form.commitmentId || undefined) as any,
+      committeeId: form.committeeId
+        ? (form.committeeId as Id<"committees">)
+        : undefined,
+      goalId: form.goalId ? (form.goalId as Id<"goals">) : undefined,
+      filingId: form.filingId ? (form.filingId as Id<"filings">) : undefined,
+      workflowId: form.workflowId ? (form.workflowId as Id<"workflows">) : undefined,
+      documentId: form.documentId ? (form.documentId as Id<"documents">) : undefined,
+      commitmentId: form.commitmentId
+        ? (form.commitmentId as Id<"commitments">)
+        : undefined,
       eventId: form.eventId || undefined,
       tags: form.tags ?? [],
     });
@@ -225,110 +325,94 @@ export function TasksPage() {
     toast.success("Task created", form.title);
   };
 
-  const confirmDelete = async (id: string, title: string) => {
-    const ok = await confirm({
+  const confirmDelete = async (id: Id<"tasks">, title: string) => {
+    const approved = await confirm({
       title: "Delete task?",
       message: `"${title}" will be permanently removed.`,
       confirmLabel: "Delete",
       tone: "danger",
     });
-    if (!ok) return;
-    await remove({ id: id as any });
+    if (!approved) return;
+    await remove({ id });
     toast.success("Task deleted");
   };
 
-  const closeCardMenu = () => setCardMenu(null);
-
-  // Dismiss the card context menu on outside click or Escape — same pattern
-  // as the sidebar nav context menu.
-  useEffect(() => {
-    if (!cardMenu) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (cardMenuRef.current?.contains(event.target as Node)) return;
-      closeCardMenu();
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeCardMenu();
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [cardMenu]);
-
-  const toggleSelected = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  const markComplete = async (task: TaskRecord) => {
+    await update({
+      id: task._id,
+      patch: {
+        status: "Done",
+        completedByUserId: currentUserId ?? undefined,
+      },
     });
+    toast.success("Task completed", task.title);
   };
 
-  const clearSelection = () => setSelectedIds(new Set());
-
-  const visibleSelectedCount = filtered.reduce(
-    (count: number, task: any) => count + (selectedIds.has(task._id) ? 1 : 0),
-    0,
-  );
-  const allVisibleSelected = filtered.length > 0 && visibleSelectedCount === filtered.length;
-  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
-
-  const toggleSelectAllVisible = () => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allVisibleSelected) {
-        for (const task of filtered) next.delete(task._id);
-      } else {
-        for (const task of filtered) next.add(task._id);
-      }
-      return next;
-    });
+  const updateInlineField = async (
+    recordId: string,
+    fieldName: string,
+    value: unknown,
+  ) => {
+    const id = recordId as Id<"tasks">;
+    if (fieldName === "status" && typeof value === "string") {
+      await update({
+        id,
+        patch: {
+          status: value,
+          completedByUserId:
+            value === "Done" && currentUserId ? currentUserId : undefined,
+        },
+      });
+      return;
+    }
+    if (fieldName === "priority" && typeof value === "string") {
+      await update({ id, patch: { priority: value } });
+      return;
+    }
+    if (fieldName === "assignee" && (typeof value === "string" || value === null)) {
+      await update({ id, patch: { assignee: value ?? "" } });
+      return;
+    }
+    if (fieldName === "dueDate" && (typeof value === "string" || value === null)) {
+      await update({ id, patch: { dueDate: value ?? "" } });
+    }
   };
 
-  const bulkDelete = async () => {
-    const ids = Array.from(selectedIds);
+  const bulkDelete = async (ids: string[], selectedRecords: TaskRecord[]) => {
     if (ids.length === 0) return;
-    const titles = (tasks ?? [])
-      .filter((task: any) => selectedIds.has(task._id))
-      .map((task: any) => task.title);
-    const previewTitles = titles.slice(0, 5);
-    const overflow = titles.length - previewTitles.length;
-    const message = (
-      <>
-        <p style={{ margin: "0 0 8px" }}>
-          This permanently removes the selected task{ids.length === 1 ? "" : "s"}. This action cannot be undone.
-        </p>
-        <ul style={{ margin: 0, paddingLeft: 18 }}>
-          {previewTitles.map((title: string, index: number) => (
-            <li key={index}>{title}</li>
-          ))}
-        </ul>
-        {overflow > 0 && (
-          <p className="muted" style={{ margin: "6px 0 0", fontSize: "var(--fs-sm)" }}>
-            …and {overflow} more
-          </p>
-        )}
-      </>
-    );
-    const ok = await confirm({
+    const previewTitles = selectedRecords.slice(0, 5).map((task) => task.title);
+    const overflow = selectedRecords.length - previewTitles.length;
+    const approved = await confirm({
       title: `Delete ${ids.length} task${ids.length === 1 ? "" : "s"}?`,
-      message,
+      message: (
+        <>
+          <p style={{ margin: "0 0 8px" }}>
+            This permanently removes the selected task{ids.length === 1 ? "" : "s"}.
+            This action cannot be undone.
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {previewTitles.map((title) => (
+              <li key={title}>{title}</li>
+            ))}
+          </ul>
+          {overflow > 0 && (
+            <p className="muted" style={{ margin: "6px 0 0", fontSize: "var(--fs-sm)" }}>
+              …and {overflow} more
+            </p>
+          )}
+        </>
+      ),
       confirmLabel: `Delete ${ids.length}`,
       tone: "danger",
     });
-    if (!ok) return;
+    if (!approved) return;
+
     setBulkDeleting(true);
     try {
-      // Sequential — Convex mutations run on the server one at a time per
-      // call anyway, and serialising keeps optimistic state consistent if a
-      // single delete fails partway through.
       let failures = 0;
       for (const id of ids) {
         try {
-          await remove({ id: id as any });
+          await remove({ id: id as Id<"tasks"> });
         } catch {
           failures += 1;
         }
@@ -340,18 +424,13 @@ export function TasksPage() {
       if (failures > 0) {
         toast.error(`${failures} task${failures === 1 ? "" : "s"} could not be deleted`);
       }
-      clearSelection();
     } finally {
       setBulkDeleting(false);
     }
   };
 
-  const columns = COLS.map((col) => ({
-    id: col.id,
-    label: col.label,
-    accent: col.accent,
-    items: filtered.filter((t: any) => t.status === col.id),
-  }));
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  const activePageFilterCount = [filterCommittee, filterGoal, filterLink].filter(Boolean).length;
 
   return (
     <div className="page">
@@ -361,43 +440,21 @@ export function TasksPage() {
         iconColor="turquoise"
         subtitle="Internal work items for your board and staff to get done. For dates set by law or regulation, use Deadlines; for promises made to funders or partners, use Commitments."
         actions={
-          <>
-            {!isMobile && (
-              <Segmented
-                value={view}
-                onChange={setView}
-                items={[
-                  { id: "kanban", label: "Kanban" },
-                  { id: "list", label: "List" },
-                ]}
-              />
-            )}
-            <button className="btn-action btn-action--primary" onClick={openNew}>
-              <Plus size={12} /> New task
-            </button>
-          </>
+          <button className="btn-action btn-action--primary" onClick={openNew}>
+            <Plus size={12} /> New task
+          </button>
         }
       />
 
-      <div className="row" style={{ marginBottom: 16, gap: 8 }}>
-        <div
-          className="table-toolbar__search"
-          style={isMobile ? { flex: "1 1 auto" } : { maxWidth: 280 }}
-        >
-          <Search />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tasks…" />
-        </div>
+      <div className="row" style={{ marginBottom: 16, gap: 8, flexWrap: "wrap" }}>
         {isMobile && (
           <button
             type="button"
             className="btn btn--sm"
-            style={{ flexShrink: 0 }}
-            onClick={() => setFiltersOpen((v) => !v)}
+            onClick={() => setFiltersOpen((value) => !value)}
             aria-expanded={filtersOpen}
           >
-            Filters{[filterCommittee, filterGoal, filterLink].filter(Boolean).length
-              ? ` (${[filterCommittee, filterGoal, filterLink].filter(Boolean).length})`
-              : ""}
+            Page filters{activePageFilterCount ? ` (${activePageFilterCount})` : ""}
           </button>
         )}
         {(!isMobile || filtersOpen) && (
@@ -409,7 +466,10 @@ export function TasksPage() {
               clearLabel="All committees"
               placeholder="All committees"
               style={{ width: isMobile ? "100%" : 200, maxWidth: "100%" }}
-              options={(committees ?? []).map((c: any) => ({ value: c._id, label: c.name }))}
+              options={((committees ?? []) as Doc<"committees">[]).map((committee) => ({
+                value: committee._id,
+                label: committee.name,
+              }))}
             />
             <Select
               value={filterGoal}
@@ -418,7 +478,10 @@ export function TasksPage() {
               clearLabel="All goals"
               placeholder="All goals"
               style={{ width: isMobile ? "100%" : 220, maxWidth: "100%" }}
-              options={(goals ?? []).map((g: any) => ({ value: g._id, label: g.title }))}
+              options={((goals ?? []) as Doc<"goals">[]).map((goal) => ({
+                value: goal._id,
+                label: goal.title,
+              }))}
             />
             <Select
               value={filterLink}
@@ -439,307 +502,124 @@ export function TasksPage() {
             />
           </>
         )}
-        <div className="muted" style={{ marginLeft: isMobile ? 0 : "auto", fontSize: "var(--fs-sm)", flexShrink: 0 }}>
-          {filtered.length} of {tasks?.length ?? 0}
+        <div
+          className="muted"
+          style={{
+            marginLeft: isMobile ? 0 : "auto",
+            fontSize: "var(--fs-sm)",
+            flexShrink: 0,
+          }}
+        >
+          {pageFilteredRecords.length} of {records.length}
         </div>
       </div>
 
-      {isMobile ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {filtered.map((t: any) => {
-            const committee = committeeById.get(t.committeeId);
-            const goal = goalById.get(t.goalId);
-            const responsible = userNames(t.responsibleUserIds, userById) || t.assignee;
-            const overdue = t.dueDate && new Date(t.dueDate).getTime() < Date.now() && t.status !== "Done";
-            return (
-              <div
-                key={t._id}
-                className="card"
-                style={{ padding: 12, cursor: "pointer" }}
-                role="button"
-                tabIndex={0}
-                onClick={() => openEdit(t)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEdit(t); }
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                  <span className={`priority-dot priority-${t.priority}`} style={{ marginTop: 6, flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <strong>{t.title}</strong>
-                    {t.description && (
-                      <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t.description}</div>
-                    )}
-                    <div
-                      className="row"
-                      style={{ gap: 6, flexWrap: "wrap", marginTop: 6, fontSize: "var(--fs-sm)", color: "var(--text-tertiary)" }}
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society._id} objectLabel="task" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="tasks"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={pageFilteredRecords}
+          onRecordClick={(_recordId, record) => openEdit(record as TaskRecord)}
+          onUpdate={({ recordId, fieldName, value }) =>
+            updateInlineField(recordId, fieldName, value)
+          }
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<ListTodo size={14} />}
+            label="All tasks"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((value) => !value)}
+          />
+          <RecordTableFilterPopover
+            open={filterOpen}
+            onClose={() => setFilterOpen(false)}
+          />
+          <RecordTableFilterChips />
+
+          {isMobile ? (
+            tableData.loading || tasks === undefined ? (
+              <div className="record-table__loading">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="record-table__loading-row" />
+                ))}
+              </div>
+            ) : (
+              <TaskPhoneList
+                hasTasks={records.length > 0}
+                committeeById={committeeById}
+                goalById={goalById}
+                userById={userById}
+                onEdit={openEdit}
+                onDelete={confirmDelete}
+                onStatusChange={(task, status) =>
+                  updateInlineField(task._id, "status", status)
+                }
+              />
+            )
+          ) : (
+            <RecordTable
+              selectable
+              loading={tableData.loading || tasks === undefined}
+              renderRowActions={(record: TaskRecord) => (
+                <>
+                  {record.status !== "Done" && (
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      onClick={() => markComplete(record)}
                     >
-                      <span>{t.priority}</span>
-                      {responsible && <span>· {responsible}</span>}
-                      {committee && (
-                        <span className="row" style={{ gap: 4 }}>
-                          <span>·</span>
-                          <span className="color-chip" style={{ background: committee.color }} />
-                          {committee.name}
-                        </span>
-                      )}
-                      {goal && <span>· {goal.title}</span>}
-                      {t.dueDate && (
-                        <span style={{ color: overdue ? "var(--danger)" : undefined }}>· {formatDate(t.dueDate)}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div
-                  className="row"
-                  style={{ marginTop: 10, gap: 8, alignItems: "center" }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Select
-                    size="sm"
-                    value={t.status}
-                    onChange={(v) => update({
-                      id: t._id,
-                      patch: {
-                        status: v,
-                        completedByUserId: v === "Done" && currentUserId ? currentUserId : undefined,
-                      },
-                    })}
-                    style={{ width: 150 }}
-                    options={COLS.map((c) => ({ value: c.id, label: c.label }))}
-                  />
+                      <Check size={12} /> Complete
+                    </button>
+                  )}
                   <button
+                    type="button"
                     className="btn btn--ghost btn--sm btn--icon"
-                    style={{ marginLeft: "auto" }}
-                    aria-label={`Delete task ${t.title}`}
-                    onClick={() => confirmDelete(t._id, t.title)}
+                    aria-label={`Edit task ${record.title}`}
+                    title="Edit task"
+                    onClick={() => openEdit(record)}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm btn--icon"
+                    aria-label={`Delete task ${record.title}`}
+                    title="Delete task"
+                    onClick={() => confirmDelete(record._id, record.title)}
                   >
                     <Trash2 size={12} />
                   </button>
-                </div>
-              </div>
-            );
-          })}
-          {filtered.length === 0 && (
-            <div className="muted" style={{ textAlign: "center", padding: 24 }}>No tasks.</div>
+                </>
+              )}
+            />
           )}
-        </div>
-      ) : view === "kanban" ? (
-        <Kanban
-          columns={columns}
-          onItemClick={(t: any) => openEdit(t)}
-          onItemContextMenu={(t: any, event) => {
-            // Position the menu at the click coordinates, clamped so it never
-            // renders off the viewport edge — quick eyeball clamp, the menu is
-            // ~180px wide and ~120px tall.
-            const x = Math.min(event.clientX, window.innerWidth - 200);
-            const y = Math.min(event.clientY, window.innerHeight - 140);
-            setCardMenu({ task: t, top: y, left: x });
-          }}
-          onMove={(id, status) => update({
-            id: id as any,
-            patch: {
-              status,
-              completedByUserId: status === "Done" && currentUserId ? currentUserId : undefined,
-            },
-          })}
-          renderCard={(t: any) => {
-            const committee = committeeById.get(t.committeeId);
-            const goal = goalById.get(t.goalId);
-            const responsible = userNames(t.responsibleUserIds, userById) || t.assignee;
-            const overdue = t.dueDate && new Date(t.dueDate).getTime() < Date.now() && t.status !== "Done";
-            return (
-              <>
-                <div className="kanban__card-title">{t.title}</div>
-                {t.description && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 4 }}>{t.description}</div>}
-                <div className="kanban__card-meta">
-                  <span className={`priority-dot priority-${t.priority}`} />
-                  <span>{t.priority}</span>
-                  {responsible && <span>· {responsible}</span>}
-                  {committee && (
-                    <>
-                      <span>·</span>
-                      <span className="row" style={{ gap: 4 }}>
-                        <span className="color-chip" style={{ background: committee.color }} />
-                        {committee.name}
-                      </span>
-                    </>
-                  )}
-                  {goal && <span>· {goal.title}</span>}
-                  {(t.filingId || t.workflowId || t.documentId || t.commitmentId || t.eventId) && <span>· linked</span>}
-                  {t.dueDate && (
-                    <span style={{ color: overdue ? "var(--danger)" : undefined, marginLeft: "auto" }}>
-                      {formatDate(t.dueDate)}
-                    </span>
-                  )}
-                </div>
-              </>
-            );
-          }}
-        />
-      ) : (
-        <>
-          {selectedIds.size > 0 && (
-            <div
-              className="row"
-              style={{
-                marginBottom: 12,
-                padding: "8px 12px",
-                background: "var(--bg-subtle)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--r-md)",
-                gap: 12,
-                alignItems: "center",
-              }}
-              role="region"
-              aria-label="Bulk actions"
-            >
-              <strong>{selectedIds.size} selected</strong>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={clearSelection}
-                disabled={bulkDeleting}
-                title="Clear selection"
-              >
-                <X size={12} /> Clear
-              </button>
-              <div style={{ marginLeft: "auto" }}>
-                <button
-                  type="button"
-                  className="btn btn--danger btn--sm"
-                  onClick={bulkDelete}
-                  disabled={bulkDeleting}
-                >
-                  <Trash2 size={12} /> {bulkDeleting ? "Deleting…" : `Delete ${selectedIds.size}`}
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th style={{ width: 32 }}>
-                    <Checkbox
-                      checked={allVisibleSelected}
-                      indeterminate={someVisibleSelected}
-                      onChange={toggleSelectAllVisible}
-                      label=""
-                      bare
-                    />
-                  </th>
-                  <th />
-                  <th>Title</th>
-                  <th>Committee</th>
-                  <th>Responsible</th>
-                  <th>Links</th>
-                  <th>Due</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((t: any) => {
-                  const committee = committeeById.get(t.committeeId);
-                  const goal = goalById.get(t.goalId);
-                  const responsible = userNames(t.responsibleUserIds, userById) || t.assignee;
-                  return (
-                    <tr key={t._id} className={selectedIds.has(t._id) ? "is-selected" : undefined}>
-                      <td onClick={(event) => event.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedIds.has(t._id)}
-                          onChange={() => toggleSelected(t._id)}
-                          label=""
-                          bare
-                        />
-                      </td>
-                      <td><span className={`priority-dot priority-${t.priority}`} /></td>
-                      <td><strong>{t.title}</strong>{t.description && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{t.description}</div>}</td>
-                    <td>
-                      {committee ? (
-                        <Link to={`/app/committees/${committee._id}`} className="row" style={{ gap: 6 }}>
-                          <span className="color-chip" style={{ background: committee.color }} />
-                          {committee.name}
-                        </Link>
-                      ) : <span className="muted">—</span>}
-                    </td>
-                    <td>{responsible || "—"}</td>
-                    <td>
-                      <LinkedTaskRecords
-                        task={t}
-                        goal={goal}
-                        filingById={filingById}
-                        workflowById={workflowById}
-                        documentById={documentById}
-                        commitmentById={commitmentById}
-                      />
-                    </td>
-                    <td className="table__cell--mono">{t.dueDate ? formatDate(t.dueDate) : "—"}</td>
-                    <td>
-                      <Select
-                        size="sm"
-                        value={t.status}
-                        onChange={(v) => update({
-                          id: t._id,
-                          patch: {
-                            status: v,
-                            completedByUserId: v === "Done" && currentUserId ? currentUserId : undefined,
-                          },
-                        })}
-                        style={{ width: 120, maxWidth: "100%" }}
-                        options={COLS.map((c) => ({ value: c.id, label: c.label }))}
-                      />
-                    </td>
-                    <td>
-                      <div className="row" style={{ justifyContent: "flex-end" }}>
-                        <button className="btn btn--ghost btn--sm" onClick={() => openEdit(t)}>Edit</button>
-                        <button className="btn btn--ghost btn--sm" onClick={() => confirmDelete(t._id, t.title)}>Delete</button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-                {filtered.length === 0 && <tr><td colSpan={9} className="muted" style={{ textAlign: "center", padding: 24 }}>No tasks.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
 
-      {cardMenu && createPortal(
-        <div
-          ref={cardMenuRef}
-          className="menu menu--actions"
-          role="menu"
-          style={{ position: "fixed", top: cardMenu.top, left: cardMenu.left, width: 180, zIndex: 1000 }}
-        >
-          <div className="menu__section">
-            <MenuRow
-              role="menuitem"
-              icon={<Pencil size={14} />}
-              label="Edit task"
-              onClick={() => {
-                const task = cardMenu.task;
-                closeCardMenu();
-                openEdit(task);
-              }}
-            />
-            <div className="menu__separator" />
-            <MenuRow
-              role="menuitem"
-              icon={<Trash2 size={14} />}
-              label="Delete task"
-              destructive
-              onClick={() => {
-                const { _id, title } = cardMenu.task;
-                closeCardMenu();
-                void confirmDelete(_id, title);
-              }}
-            />
-          </div>
-        </div>,
-        document.body,
+          <RecordTableBulkBar
+            actions={[
+              {
+                id: "delete",
+                label: bulkDeleting ? "Deleting…" : "Delete",
+                icon: <Trash2 size={12} />,
+                tone: "danger",
+                onRun: (ids, selectedRecords) =>
+                  bulkDelete(ids, selectedRecords as TaskRecord[]),
+              },
+            ]}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="record-table__loading-row" />
+          ))}
+        </div>
       )}
 
       <Drawer
@@ -753,14 +633,15 @@ export function TasksPage() {
                 className="btn btn--danger"
                 style={{ marginRight: "auto" }}
                 onClick={async () => {
-                  const ok = await confirm({
+                  if (!form._id) return;
+                  const approved = await confirm({
                     title: "Delete task?",
                     message: `"${form.title}" will be permanently removed.`,
                     confirmLabel: "Delete",
                     tone: "danger",
                   });
-                  if (!ok) return;
-                  await remove({ id: form._id as any });
+                  if (!approved) return;
+                  await remove({ id: form._id });
                   toast.success("Task deleted");
                   setOpen(false);
                 }}
@@ -768,21 +649,38 @@ export function TasksPage() {
                 Delete
               </button>
             )}
-            <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>{form?._id ? "Save" : "Create"}</button>
+            <button className="btn" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+            <button className="btn btn--accent" onClick={save}>
+              {form?._id ? "Save" : "Create"}
+            </button>
           </>
         }
       >
         {form && (
           <>
             {!form._id && (
-              <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 0, marginBottom: 12 }}>
-                Use a task for internal work your board or staff needs to do. Legal or regulatory dates belong in Deadlines; promises to funders or partners belong in Commitments.
+              <p
+                className="muted"
+                style={{
+                  fontSize: "var(--fs-sm)",
+                  marginTop: 0,
+                  marginBottom: 12,
+                }}
+              >
+                Use a task for internal work your board or staff needs to do. Legal or
+                regulatory dates belong in Deadlines; promises to funders or partners
+                belong in Commitments.
               </p>
             )}
             <TaskFormFields
               value={form}
-              onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
+              onChange={(patch) =>
+                setForm((previous) =>
+                  previous ? { ...previous, ...patch } : previous,
+                )
+              }
               data={formData}
               mode={form._id ? "edit" : "create"}
             />
@@ -793,12 +691,177 @@ export function TasksPage() {
   );
 }
 
-function userNames(ids: string[] | undefined, userById: Map<string, any>) {
-  return (ids ?? []).map((id) => userById.get(id)?.displayName).filter(Boolean).join(", ");
+function TaskPhoneList({
+  hasTasks,
+  committeeById,
+  goalById,
+  userById,
+  onEdit,
+  onDelete,
+  onStatusChange,
+}: {
+  hasTasks: boolean;
+  committeeById: Map<string, Doc<"committees">>;
+  goalById: Map<string, Doc<"goals">>;
+  userById: Map<string, Doc<"users">>;
+  onEdit: (task: TaskRecord) => void;
+  onDelete: (id: Id<"tasks">, title: string) => Promise<void>;
+  onStatusChange: (task: TaskRecord, status: string) => Promise<void>;
+}) {
+  const records = useFilteredRecords() as TaskRecord[];
+
+  if (records.length === 0) {
+    return (
+      <div className="record-table__empty">
+        <div className="record-table__empty-title">
+          {hasTasks ? "No matching tasks" : "No tasks"}
+        </div>
+        <div className="record-table__empty-desc">
+          {hasTasks
+            ? "Change or clear the current search and filters."
+            : "Create a task to start tracking internal work."}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {records.map((task) => {
+        const committee = task.committeeId
+          ? committeeById.get(String(task.committeeId))
+          : undefined;
+        const goal = task.goalId ? goalById.get(String(task.goalId)) : undefined;
+        const responsible =
+          userNames(task.responsibleUserIds, userById) || task.assignee;
+        const overdue =
+          Boolean(task.dueDate) &&
+          new Date(task.dueDate ?? "").getTime() < Date.now() &&
+          task.status !== "Done";
+
+        return (
+          <div
+            key={task._id}
+            className="card"
+            style={{ padding: 12, cursor: "pointer" }}
+            role="button"
+            tabIndex={0}
+            onClick={() => onEdit(task)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onEdit(task);
+              }
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+              <span
+                className={`priority-dot priority-${task.priority}`}
+                style={{ marginTop: 6, flexShrink: 0 }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <strong>{task.title}</strong>
+                {task.description && (
+                  <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                    {task.description}
+                  </div>
+                )}
+                <div
+                  className="row"
+                  style={{
+                    gap: 6,
+                    flexWrap: "wrap",
+                    marginTop: 6,
+                    fontSize: "var(--fs-sm)",
+                    color: "var(--text-tertiary)",
+                  }}
+                >
+                  <span>{task.priority}</span>
+                  {responsible && <span>· {responsible}</span>}
+                  {committee && (
+                    <span className="row" style={{ gap: 4 }}>
+                      <span>·</span>
+                      <span
+                        className="color-chip"
+                        style={{ background: committee.color }}
+                      />
+                      {committee.name}
+                    </span>
+                  )}
+                  {goal && <span>· {goal.title}</span>}
+                  {task.dueDate && (
+                    <span style={{ color: overdue ? "var(--danger)" : undefined }}>
+                      · {formatDate(task.dueDate)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div
+              className="row"
+              style={{ marginTop: 10, gap: 8, alignItems: "center" }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Select
+                size="sm"
+                value={task.status}
+                onChange={(status) => void onStatusChange(task, status)}
+                style={{ width: 150 }}
+                options={TASK_STATUSES.map((status) => ({
+                  value: status,
+                  label: taskStatusLabel(status),
+                }))}
+              />
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm btn--icon"
+                style={{ marginLeft: "auto" }}
+                aria-label={`Edit task ${task.title}`}
+                onClick={() => onEdit(task)}
+              >
+                <Pencil size={12} />
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm btn--icon"
+                aria-label={`Delete task ${task.title}`}
+                onClick={() => void onDelete(task._id, task.title)}
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-function matchesLinkFilter(task: any, filter: string) {
-  if (filter === "linked") return Boolean(task.goalId || task.filingId || task.workflowId || task.documentId || task.commitmentId || task.eventId);
+function recordsById<T extends { _id: string }>(records: readonly T[]) {
+  return new Map(records.map((record) => [String(record._id), record]));
+}
+
+function userNames(
+  ids: Id<"users">[] | undefined,
+  userById: Map<string, Doc<"users">>,
+) {
+  return (ids ?? [])
+    .map((id) => userById.get(String(id))?.displayName)
+    .filter((name): name is string => Boolean(name))
+    .join(", ");
+}
+
+function matchesLinkFilter(task: TaskRecord, filter: string) {
+  if (filter === "linked") {
+    return Boolean(
+      task.goalId ||
+        task.filingId ||
+        task.workflowId ||
+        task.documentId ||
+        task.commitmentId ||
+        task.eventId,
+    );
+  }
   if (filter === "goal") return Boolean(task.goalId);
   if (filter === "filing") return Boolean(task.filingId);
   if (filter === "workflow") return Boolean(task.workflowId);
@@ -808,38 +871,8 @@ function matchesLinkFilter(task: any, filter: string) {
   return true;
 }
 
-function cleanPatch<T extends Record<string, any>>(source: T) {
-  return Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined)) as T;
-}
-
-function LinkedTaskRecords({
-  task,
-  goal,
-  filingById,
-  workflowById,
-  documentById,
-  commitmentById,
-}: {
-  task: any;
-  goal?: any;
-  filingById: Map<string, any>;
-  workflowById: Map<string, any>;
-  documentById: Map<string, any>;
-  commitmentById: Map<string, any>;
-}) {
-  const filing = task.filingId ? filingById.get(task.filingId) : null;
-  const workflow = task.workflowId ? workflowById.get(task.workflowId) : null;
-  const document = task.documentId ? documentById.get(task.documentId) : null;
-  const commitment = task.commitmentId ? commitmentById.get(task.commitmentId) : null;
-  if (!goal && !filing && !workflow && !document && !commitment && !task.eventId) return <span className="muted">—</span>;
-  return (
-    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-      {goal && <Link to={`/app/goals/${goal._id}`}><Badge tone="info">{goal.title}</Badge></Link>}
-      {filing && <Link to="/app/filings"><Badge tone="orange">{filing.kind}</Badge></Link>}
-      {workflow && <Link to={`/app/workflows/${workflow._id}`}><Badge tone="purple">{workflow.name}</Badge></Link>}
-      {document && <Link to="/app/documents"><Badge>{document.title}</Badge></Link>}
-      {commitment && <Link to="/app/commitments"><Badge tone="green">{commitment.title}</Badge></Link>}
-      {task.eventId && <Badge tone="gray">{task.eventId}</Badge>}
-    </div>
-  );
+function cleanPatch<T extends Record<string, unknown>>(source: T): T {
+  return Object.fromEntries(
+    Object.entries(source).filter(([, value]) => value !== undefined),
+  ) as T;
 }

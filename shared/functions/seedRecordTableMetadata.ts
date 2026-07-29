@@ -115,7 +115,11 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
       .collect();
     const fieldByName = new Map(seededFields.map((f: any) => [f.name, f]));
     const liveFieldIds = new Set(seededFields.map((f: any) => String(f._id)));
-    const resolveFieldId = (fieldName?: string) => fieldByName.get(fieldName)?._id;
+    const resolveFieldId = (fieldName?: string): string | undefined => {
+      if (!fieldName) return undefined;
+      const field = fieldByName.get(fieldName);
+      return field ? String(field._id) : undefined;
+    };
 
     // Resolve seed view filters (expressed by field name) into the stored
     // filtersJson shape (fieldMetadataId-keyed). Undefined for no filters.
@@ -212,15 +216,31 @@ export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: s
         .query("views")
         .withIndex("by_object", (q) => q.eq("objectMetadataId", objectRow._id))
         .collect();
-      if (viewsForObject.some((v: any) => v.name === extra.name)) continue;
+      const existingExtraView = viewsForObject.find((view) => view.name === extra.name);
+      const extraViewType = extra.type ?? "table";
+      const extraKanbanFieldMetadataId = resolveFieldId(extra.kanbanFieldName);
+      if (existingExtraView) {
+        const patch: Record<string, unknown> = {};
+        if (existingExtraView.type !== extraViewType) patch.type = extraViewType;
+        if (
+          extraKanbanFieldMetadataId &&
+          String(existingExtraView.kanbanFieldMetadataId ?? "") !== extraKanbanFieldMetadataId
+        ) {
+          patch.kanbanFieldMetadataId = extraKanbanFieldMetadataId;
+        }
+        if (Object.keys(patch).length > 0) {
+          await ctx.db.patch(existingExtraView._id, { ...patch, updatedAtISO: now });
+        }
+        continue;
+      }
       const nextPosition =
         viewsForObject.reduce((max: number, v: any) => Math.max(max, v.position ?? 0), -1) + 1;
       const extraViewId = await ctx.db.insert("views", {
         societyId,
         objectMetadataId: objectRow._id,
         name: extra.name,
-        type: extra.type ?? "table",
-        kanbanFieldMetadataId: resolveFieldId(extra.kanbanFieldName),
+        type: extraViewType,
+        kanbanFieldMetadataId: extraKanbanFieldMetadataId,
         density: "compact",
         isShared: true,
         isSystem: false,
