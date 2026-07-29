@@ -47,10 +47,15 @@ export type SeedViewColumn = { fieldName: string; size?: number; position?: numb
  * src/platform/record-engine/types/View.ts. */
 export type SeedViewFilter = { fieldName: string; operator: string; value: unknown };
 
+export type SeedViewType = "table" | "kanban" | "board" | "calendar";
+
 export type SeedView = {
   name: string;
   columns?: SeedViewColumn[];
   filters?: SeedViewFilter[];
+  type?: SeedViewType;
+  /** Grouping field NAME, resolved to kanbanFieldMetadataId at seed time. */
+  kanbanFieldName?: string;
   openRecordIn?: "drawer" | "page";
 };
 
@@ -68,6 +73,8 @@ export type SeedObject = {
     name: string;
     columns: SeedViewColumn[];
     filters?: SeedViewFilter[];
+    type?: SeedViewType;
+    kanbanFieldName?: string;
     openRecordIn?: "drawer" | "page";
   };
   /** Additional seeded shared views beyond the default (e.g. an unfiltered
@@ -140,6 +147,21 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "email", size: 240 },
       ],
     },
+    extraViews: [
+      {
+        name: "Board",
+        type: "kanban",
+        kanbanFieldName: "status",
+        columns: [
+          { fieldName: "firstName", size: 160 },
+          { fieldName: "lastName", size: 160 },
+          { fieldName: "status", size: 120 },
+          { fieldName: "membershipClass", size: 140 },
+          { fieldName: "email", size: 240 },
+          { fieldName: "joinedAt", size: 140 },
+        ],
+      },
+    ],
   },
   {
     nameSingular: "director",
@@ -440,6 +462,20 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "confirmationNumber", size: 160 },
       ],
     },
+    extraViews: [
+      {
+        name: "Board",
+        type: "kanban",
+        kanbanFieldName: "status",
+        columns: [
+          { fieldName: "kind", size: 200 },
+          { fieldName: "status", size: 130 },
+          { fieldName: "periodLabel", size: 120 },
+          { fieldName: "dueDate", size: 140 },
+          { fieldName: "jurisdictionCode", size: 130 },
+        ],
+      },
+    ],
   },
 
   {
@@ -1872,6 +1908,20 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "minutes", size: 110 },
       ],
     },
+    extraViews: [
+      {
+        name: "Board",
+        type: "kanban",
+        kanbanFieldName: "status",
+        columns: [
+          { fieldName: "title", size: 240 },
+          { fieldName: "status", size: 120 },
+          { fieldName: "type", size: 120 },
+          { fieldName: "scheduledAt", size: 180 },
+          { fieldName: "location", size: 180 },
+        ],
+      },
+    ],
   },
   {
     nameSingular: "meetingTemplate",
@@ -1977,6 +2027,20 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "openTaskCount", size: 110 },
       ],
     },
+    extraViews: [
+      {
+        name: "Board",
+        type: "kanban",
+        kanbanFieldName: "status",
+        columns: [
+          { fieldName: "name", size: 260 },
+          { fieldName: "status", size: 120 },
+          { fieldName: "cadence", size: 130 },
+          { fieldName: "nextMeetingAt", size: 220 },
+          { fieldName: "memberCount", size: 110 },
+        ],
+      },
+    ],
   },
   {
     nameSingular: "insurancePolicy",
@@ -2330,6 +2394,20 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "purchaseEvidence", size: 170 },
       ],
     },
+    extraViews: [
+      {
+        name: "Board",
+        type: "kanban",
+        kanbanFieldName: "status",
+        columns: [
+          { fieldName: "name", size: 260 },
+          { fieldName: "status", size: 140 },
+          { fieldName: "assetTag", size: 130 },
+          { fieldName: "custodian", size: 180 },
+          { fieldName: "location", size: 150 },
+        ],
+      },
+    ],
   },
   {
     nameSingular: "document",
@@ -2902,6 +2980,19 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
       ],
     },
     extraViews: [
+      {
+        name: "Board",
+        type: "kanban",
+        kanbanFieldName: "status",
+        filters: [{ fieldName: "tags", operator: "notIn", value: ROUTINE_MOTION_TAGS }],
+        columns: [
+          { fieldName: "title", size: 320 },
+          { fieldName: "status", size: 120 },
+          { fieldName: "outcome", size: 110 },
+          { fieldName: "tags", size: 200 },
+          { fieldName: "meeting", size: 180 },
+        ],
+      },
       // Unfiltered — shows routine motions too.
       { name: "All motions" },
     ],
