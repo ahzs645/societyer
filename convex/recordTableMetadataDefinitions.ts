@@ -51,6 +51,7 @@ export type SeedView = {
   name: string;
   columns?: SeedViewColumn[];
   filters?: SeedViewFilter[];
+  openRecordIn?: "drawer" | "page";
 };
 
 export type SeedObject = {
@@ -67,6 +68,7 @@ export type SeedObject = {
     name: string;
     columns: SeedViewColumn[];
     filters?: SeedViewFilter[];
+    openRecordIn?: "drawer" | "page";
   };
   /** Additional seeded shared views beyond the default (e.g. an unfiltered
    * "All" view). Seeded idempotently by name; columns default to the default
@@ -1868,6 +1870,49 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         { fieldName: "location", size: 180 },
         { fieldName: "status", size: 120 },
         { fieldName: "minutes", size: 110 },
+      ],
+    },
+  },
+  {
+    nameSingular: "meetingTemplate",
+    namePlural: "meetingTemplates",
+    labelSingular: "Meeting template",
+    labelPlural: "Meeting templates",
+    icon: "BookOpen",
+    iconColor: "orange",
+    routePath: "/app/meeting-templates",
+    labelIdentifierFieldName: "name",
+    fields: [
+      { name: "name", label: "Name", fieldType: FIELD_TYPES.TEXT, icon: "BookOpen", isReadOnly: true, isSystem: true },
+      {
+        name: "meetingType",
+        label: "Meeting type",
+        fieldType: FIELD_TYPES.SELECT,
+        icon: "Tag",
+        isReadOnly: true,
+        config: {
+          options: [
+            { value: "Board", label: "Board", color: "blue" },
+            { value: "Committee", label: "Committee", color: "teal" },
+            { value: "AGM", label: "AGM", color: "purple" },
+            { value: "SGM", label: "SGM", color: "amber" },
+            { value: "Other", label: "Other", color: "gray" },
+          ],
+        },
+      },
+      { name: "isDefault", label: "Default", fieldType: FIELD_TYPES.BOOLEAN, icon: "Star", isReadOnly: true },
+      { name: "itemCount", label: "Agenda items", fieldType: FIELD_TYPES.NUMBER, icon: "List", isReadOnly: true },
+      { name: "updatedAtISO", label: "Updated", fieldType: FIELD_TYPES.DATE_TIME, icon: "Clock", isReadOnly: true },
+    ],
+    defaultView: {
+      name: "All meeting templates",
+      openRecordIn: "page",
+      columns: [
+        { fieldName: "name", size: 280 },
+        { fieldName: "meetingType", size: 140 },
+        { fieldName: "isDefault", size: 120 },
+        { fieldName: "itemCount", size: 130 },
+        { fieldName: "updatedAtISO", size: 180 },
       ],
     },
   },

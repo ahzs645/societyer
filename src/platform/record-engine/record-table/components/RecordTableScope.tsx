@@ -62,14 +62,15 @@ export function RecordTableScope({
 
   const handleRecordClick = useCallback<NonNullable<RecordTableContextValue["onRecordClick"]>>(
     (recordId, record, options) => {
-      if (options.openRecordIn === "drawer") {
+      const openRecordIn = hydratedView?.view.openRecordIn ?? options.openRecordIn;
+      if (openRecordIn === "drawer") {
         setSidePanelRecord({ recordId, record });
         return;
       }
       setSidePanelRecord(null);
-      onRecordClick?.(recordId, record, options);
+      onRecordClick?.(recordId, record, { openRecordIn });
     },
-    [onRecordClick],
+    [hydratedView?.view.openRecordIn, onRecordClick],
   );
 
   const contextValue = useMemo<RecordTableContextValue>(
