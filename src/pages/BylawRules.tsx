@@ -183,22 +183,6 @@ export function BylawRulesPage() {
 
       <div className="card bylaw-rules__card" style={{ marginBottom: 16 }}>
         <div className="card__head">
-          <h2 className="card__title">Legal minimum guide tracks</h2>
-          <span className="card__subtitle">
-            {jurisdictionPack.name} · {formatDate(legalGuideDateISO)}
-          </span>
-        </div>
-        <div className="card__body bylaw-rules__body">
-          <LegalGuideTrackList
-            rules={legalGuideRules}
-            jurisdictionCode={jurisdictionCode}
-            dateISO={legalGuideDateISO}
-          />
-        </div>
-      </div>
-
-      <div className="card bylaw-rules__card" style={{ marginBottom: 16 }}>
-        <div className="card__head">
           <h2 className="card__title">Rule source timeline</h2>
           <span className="card__subtitle">
             {form.isFallback ? "Default assumptions" : `Editing from v${form.version}`}
@@ -663,6 +647,22 @@ export function BylawRulesPage() {
           </div>
         </div>
       </div>
+
+      <details className="card bylaw-rules__card" style={{ marginTop: 16 }}>
+        <summary style={{ cursor: "pointer", padding: "var(--space-4, 16px)", fontWeight: 600 }}>
+          Legal minimum guide tracks
+          <span className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: "var(--fs-sm)" }}>
+            · {jurisdictionPack.name} · {legalGuideRules.length} tracks
+          </span>
+        </summary>
+        <div className="card__body bylaw-rules__body" style={{ paddingTop: 0 }}>
+          <LegalGuideTrackList
+            rules={legalGuideRules}
+            jurisdictionCode={jurisdictionCode}
+            dateISO={legalGuideDateISO}
+          />
+        </div>
+      </details>
     </div>
   );
 }
