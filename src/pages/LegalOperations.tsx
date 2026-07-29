@@ -607,7 +607,7 @@ export function RightsLedgerPage() {
   return (
     <div className="page page--wide">
       <PageHeader
-        title={corporationWorkspace ? "Share register" : "Rights ledger"}
+        title={corporationWorkspace ? "Share register" : "Membership classes"}
         icon={<Scale size={16} />}
         iconColor="purple"
         subtitle={

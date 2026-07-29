@@ -129,6 +129,9 @@ const ROUTE_KEYWORDS: Record<string, string[]> = {
   "/app/financials": ["money", "accounting", "budget"],
   "/app/financials/year-end": ["year end", "annual report", "actuals", "budget", "gaming grant", "restricted funds", "financial statement"],
   "/app/members": ["people", "contacts", "roster"],
+  // Sidebar shows this route as "Membership classes" (society) / "Share
+  // register" (corporation) via labelByEntityKind; make all names searchable.
+  "/app/rights-ledger": ["membership classes", "share register", "voting classes", "share classes"],
   "/app/meetings": ["agm", "sgm", "board meeting", "gathering"],
 };
 

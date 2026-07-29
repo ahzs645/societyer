@@ -95,7 +95,7 @@ import { UserPicker } from "./UserPicker";
 import { InspectorHost, InspectorProvider } from "./InspectorPanel";
 import { MenuRow, MenuSectionLabel, Pill, TintedIconTile } from "./ui";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
-import { getRouteIdentity, routeAllowedForEntityKind, type IconTone, type LucideIcon } from "../lib/routeIdentity";
+import { getRouteIdentity, routeAllowedForEntityKind, routeLabelForEntityKind, type IconTone, type LucideIcon } from "../lib/routeIdentity";
 import { organizationKind } from "../../shared/organizationDomain";
 import { useStaticCommands } from "../lib/useStaticCommands";
 import { useTranslation } from "react-i18next";
@@ -640,7 +640,10 @@ export function Layout() {
       })).filter((group) => group.items.length > 0),
     [groupedNav, society, entityKind, isMultiEntity, can],
   );
-  const getNavItemLabel = (item: NavItem) => t(NAV_ITEM_LABEL_KEYS[item.label] ?? item.label, item.label);
+  const getNavItemLabel = (item: NavItem) => {
+    const label = routeLabelForEntityKind(item, entityKind);
+    return t(NAV_ITEM_LABEL_KEYS[label] ?? label, label);
+  };
   // Drawer nav filter (mobile): match on the translated label; groups with no
   // hits drop out, matching groups render forced-open. Cheap enough (<100 rows)
   // to compute per render.

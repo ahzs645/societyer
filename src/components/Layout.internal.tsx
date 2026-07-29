@@ -237,6 +237,7 @@ function OfflineBellFallback() {
 type NavItem = {
   to: string;
   label: string;
+  labelByEntityKind?: Partial<Record<"society" | "corporation", string>>;
   icon: LucideIcon;
   color: IconTone;
   end?: boolean;
@@ -267,6 +268,7 @@ function navItem(to: string, end?: boolean): NavItem {
   return {
     to,
     label: id.label,
+    ...(id.labelByEntityKind ? { labelByEntityKind: id.labelByEntityKind } : {}),
     icon: id.icon,
     color: id.color,
     ...(end ? { end } : {}),

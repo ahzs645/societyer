@@ -162,6 +162,12 @@ export type RouteIdentity = {
   group: RouteGroup;
   /** Default label; sidebar may override via i18n. */
   label: string;
+  /**
+   * Per-entity-kind label override for routes whose default name reads wrong
+   * for one kind (e.g. "Rights ledger" → "Membership classes" for societies).
+   * Resolve via `routeLabelForEntityKind`.
+   */
+  labelByEntityKind?: Partial<Record<RouteEntityKind, string>>;
   /** Optional module gate; page is hidden when the module is disabled. */
   module?: ModuleKey;
   /**
@@ -189,6 +195,17 @@ export function routeAllowedForEntityKind(
   // Unknown/generic kind ("organization", or no society loaded): show everything
   // so nothing is hidden before the entity type is known.
   return true;
+}
+
+/** Label for the given entity kind, falling back to the default label. */
+export function routeLabelForEntityKind(
+  identity: Pick<RouteIdentity, "label" | "labelByEntityKind">,
+  kind: RouteEntityKind | "organization" | null | undefined,
+): string {
+  if (kind === "society" || kind === "corporation") {
+    return identity.labelByEntityKind?.[kind] ?? identity.label;
+  }
+  return identity.label;
 }
 
 /** Path → identity. Add new pages here. Keys are exact router paths. */
@@ -243,7 +260,18 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/auditors": { icon: Calculator, group: "records", label: "Auditors", module: "auditors" },
   "/app/court-orders": { icon: Gavel, group: "records", label: "Court orders", module: "courtOrders" },
   "/app/governance-registers": { icon: Scale, group: "records", label: "Governance registers" },
-  "/app/rights-ledger": { icon: BookKey, group: "records", label: "Rights ledger", entityKinds: ["corporation"] },
+  // Deliberately NOT gated to corporations: this is the only surface that
+  // manages rightsClasses, which societies depend on too — role holders link
+  // to them via membershipClassId and votingPower derives voting weight from
+  // them. Only the corporate-sounding *name* read wrong for societies, so the
+  // label adapts per entity kind (matching the page's own title) instead of
+  // hiding the register (see PR #55 review).
+  "/app/rights-ledger": {
+    icon: BookKey,
+    group: "records",
+    label: "Rights ledger",
+    labelByEntityKind: { society: "Membership classes", corporation: "Share register" },
+  },
   "/app/dividends": { icon: Coins, group: "records", label: "Dividends", entityKinds: ["corporation"] },
   "/app/significant-individuals": { icon: ShieldCheck, group: "records", label: "Significant individuals", entityKinds: ["corporation"] },
   "/app/service-providers": { icon: Briefcase, group: "records", label: "Service providers" },
