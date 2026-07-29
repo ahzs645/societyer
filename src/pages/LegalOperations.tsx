@@ -15,6 +15,16 @@ import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 import { StructuredAddressFields } from "../components/StructuredAddressFields";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  useObjectRecordTableData,
+} from "@/platform/record-engine";
+import type { Id } from "../../convex/_generated/dataModel";
 import {
   homeJurisdictionCode,
   isCorporation,
@@ -23,6 +33,60 @@ import {
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { deriveCurrentHoldings } from "../lib/equity";
 
+type RoleHolderDraft = {
+  _id?: Id<"roleHolders">;
+  roleType?: string;
+  status?: string;
+  fullName?: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  signerTag?: string;
+  membershipId?: string;
+  membershipClassName?: string;
+  officerTitle?: string;
+  directorTerm?: string;
+  startDate?: string;
+  endDate?: string;
+  referenceDate?: string;
+  street?: string;
+  unit?: string;
+  city?: string;
+  provinceState?: string;
+  postalCode?: string;
+  country?: string;
+  serviceStreet?: string;
+  serviceUnit?: string;
+  serviceCity?: string;
+  serviceProvinceState?: string;
+  servicePostalCode?: string;
+  serviceCountry?: string;
+  ageOver18?: boolean;
+  dateOfBirth?: string;
+  occupation?: string;
+  citizenshipResidency?: string;
+  citizenshipCountries?: string[];
+  citizenshipCountriesText?: string;
+  taxResidenceCountries?: string[];
+  taxResidenceCountriesText?: string;
+  nonNaturalPerson?: boolean;
+  nonNaturalPersonType?: string;
+  nonNaturalJurisdiction?: string;
+  natureOfControl?: string;
+  gender?: string;
+  pronouns?: string;
+  authorizedRepresentative?: boolean;
+  relatedShareholderIds?: string[];
+  relatedShareholderIdsText?: string;
+  controllingIndividualIds?: string[];
+  controllingIndividualIdsText?: string;
+  sourceExternalIds?: string[];
+  sourceExternalIdsText?: string;
+  notes?: string;
+};
+
 export function RoleHoldersPage() {
   const society = useSociety();
   const rows = useQuery(api.legalOperations.listRoleHolders, society ? { societyId: society._id } : "skip");
@@ -30,10 +94,17 @@ export function RoleHoldersPage() {
   const remove = useMutation(api.legalOperations.removeRoleHolder);
   const confirm = useConfirm();
   const toast = useToast();
-  const [draft, setDraft] = useState<any>(null);
+  const [draft, setDraft] = useState<RoleHolderDraft | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [auditFrom, setAuditFrom] = useState("");
   const [auditTo, setAuditTo] = useState("");
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "roleHolder",
+    viewId: currentViewId,
+  });
   const history = useQuery(
     api.roleHolderHistory.revisionHistory,
     historyId ? { roleHolderId: historyId as any } : "skip",
@@ -53,57 +124,60 @@ export function RoleHoldersPage() {
   const roleSummary = summarizeCorporationRoles(rows ?? []);
   const openNew = (roleType = corporationWorkspace ? "director" : "authorized_representative") =>
     setDraft(defaultRoleHolderDraft(roleType, corporationWorkspace));
+  const persistRoleHolder = async (roleHolder: RoleHolderDraft) => {
+    await upsert({
+      id: roleHolder._id,
+      societyId: society._id,
+      roleType: roleHolder.roleType || "authorized_representative",
+      status: roleHolder.status || "current",
+      fullName: roleHolder.fullName || [roleHolder.firstName, roleHolder.lastName].filter(Boolean).join(" ") || "Unnamed role holder",
+      firstName: empty(roleHolder.firstName),
+      middleName: empty(roleHolder.middleName),
+      lastName: empty(roleHolder.lastName),
+      email: empty(roleHolder.email),
+      phone: empty(roleHolder.phone),
+      signerTag: empty(roleHolder.signerTag),
+      membershipId: empty(roleHolder.membershipId),
+      membershipClassName: empty(roleHolder.membershipClassName),
+      officerTitle: empty(roleHolder.officerTitle),
+      directorTerm: empty(roleHolder.directorTerm),
+      startDate: empty(roleHolder.startDate),
+      endDate: empty(roleHolder.endDate),
+      referenceDate: empty(roleHolder.referenceDate),
+      street: empty(roleHolder.street),
+      unit: empty(roleHolder.unit),
+      city: empty(roleHolder.city),
+      provinceState: empty(roleHolder.provinceState),
+      postalCode: empty(roleHolder.postalCode),
+      country: empty(roleHolder.country),
+      serviceStreet: empty(roleHolder.serviceStreet),
+      serviceUnit: empty(roleHolder.serviceUnit),
+      serviceCity: empty(roleHolder.serviceCity),
+      serviceProvinceState: empty(roleHolder.serviceProvinceState),
+      servicePostalCode: empty(roleHolder.servicePostalCode),
+      serviceCountry: empty(roleHolder.serviceCountry),
+      ageOver18: roleHolder.ageOver18,
+      dateOfBirth: empty(roleHolder.dateOfBirth),
+      occupation: empty(roleHolder.occupation),
+      citizenshipResidency: empty(roleHolder.citizenshipResidency),
+      citizenshipCountries: csv(roleHolder.citizenshipCountriesText ?? roleHolder.citizenshipCountries),
+      taxResidenceCountries: csv(roleHolder.taxResidenceCountriesText ?? roleHolder.taxResidenceCountries),
+      nonNaturalPerson: roleHolder.nonNaturalPerson,
+      nonNaturalPersonType: empty(roleHolder.nonNaturalPersonType),
+      nonNaturalJurisdiction: empty(roleHolder.nonNaturalJurisdiction),
+      natureOfControl: empty(roleHolder.natureOfControl),
+      gender: empty(roleHolder.gender),
+      pronouns: empty(roleHolder.pronouns),
+      authorizedRepresentative: roleHolder.authorizedRepresentative,
+      relatedShareholderIds: csv(roleHolder.relatedShareholderIdsText ?? roleHolder.relatedShareholderIds),
+      controllingIndividualIds: csv(roleHolder.controllingIndividualIdsText ?? roleHolder.controllingIndividualIds),
+      sourceExternalIds: csv(roleHolder.sourceExternalIdsText ?? roleHolder.sourceExternalIds),
+      notes: empty(roleHolder.notes),
+    });
+  };
   const save = async () => {
     if (!draft) return;
-    await upsert({
-      id: draft._id,
-      societyId: society._id,
-      roleType: draft.roleType || "authorized_representative",
-      status: draft.status || "current",
-      fullName: draft.fullName || [draft.firstName, draft.lastName].filter(Boolean).join(" ") || "Unnamed role holder",
-      firstName: empty(draft.firstName),
-      middleName: empty(draft.middleName),
-      lastName: empty(draft.lastName),
-      email: empty(draft.email),
-      phone: empty(draft.phone),
-      signerTag: empty(draft.signerTag),
-      membershipId: empty(draft.membershipId),
-      membershipClassName: empty(draft.membershipClassName),
-      officerTitle: empty(draft.officerTitle),
-      directorTerm: empty(draft.directorTerm),
-      startDate: empty(draft.startDate),
-      endDate: empty(draft.endDate),
-      referenceDate: empty(draft.referenceDate),
-      street: empty(draft.street),
-      unit: empty(draft.unit),
-      city: empty(draft.city),
-      provinceState: empty(draft.provinceState),
-      postalCode: empty(draft.postalCode),
-      country: empty(draft.country),
-      serviceStreet: empty(draft.serviceStreet),
-      serviceUnit: empty(draft.serviceUnit),
-      serviceCity: empty(draft.serviceCity),
-      serviceProvinceState: empty(draft.serviceProvinceState),
-      servicePostalCode: empty(draft.servicePostalCode),
-      serviceCountry: empty(draft.serviceCountry),
-      ageOver18: draft.ageOver18,
-      dateOfBirth: empty(draft.dateOfBirth),
-      occupation: empty(draft.occupation),
-      citizenshipResidency: empty(draft.citizenshipResidency),
-      citizenshipCountries: csv(draft.citizenshipCountriesText ?? draft.citizenshipCountries),
-      taxResidenceCountries: csv(draft.taxResidenceCountriesText ?? draft.taxResidenceCountries),
-      nonNaturalPerson: draft.nonNaturalPerson,
-      nonNaturalPersonType: empty(draft.nonNaturalPersonType),
-      nonNaturalJurisdiction: empty(draft.nonNaturalJurisdiction),
-      natureOfControl: empty(draft.natureOfControl),
-      gender: empty(draft.gender),
-      pronouns: empty(draft.pronouns),
-      authorizedRepresentative: draft.authorizedRepresentative,
-      relatedShareholderIds: csv(draft.relatedShareholderIdsText ?? draft.relatedShareholderIds),
-      controllingIndividualIds: csv(draft.controllingIndividualIdsText ?? draft.controllingIndividualIds),
-      sourceExternalIds: csv(draft.sourceExternalIdsText ?? draft.sourceExternalIds),
-      notes: empty(draft.notes),
-    });
+    await persistRoleHolder(draft);
     setDraft(null);
     toast.success("Role holder saved");
   };
@@ -119,6 +193,8 @@ export function RoleHoldersPage() {
     await remove({ id: row._id });
     toast.success("Role holder deleted");
   };
+  const records = (rows ?? []) as RoleHolderDraft[];
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
     <div className="page page--wide">
@@ -200,56 +276,61 @@ export function RoleHoldersPage() {
       )}
 
       <Section title="People and controllers" count={rows?.length ?? 0}>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Role</th>
-                <th>Contact</th>
-                <th>Membership/control</th>
-                <th>Dates</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {(rows ?? []).map((row: any) => (
-                <tr key={row._id}>
-                  <td>
-                    <strong>{row.fullName}</strong>
-                    <div className="muted">{row.occupation || row.signerTag || "No occupation/signer tag"}</div>
-                  </td>
-                  <td>
-                    <div>{optionLabel("representativeTypes", row.roleType)}</div>
-                    <div className="muted">{row.officerTitle ? optionLabel("officerTitles", row.officerTitle) : row.directorTerm ? optionLabel("directorTerms", row.directorTerm) : "No title/term"}</div>
-                  </td>
-                  <td>
-                    <div>{row.email || "No email"}</div>
-                    <div className="muted">{row.phone || "No phone"}</div>
-                  </td>
-                  <td>
-                    <div>{row.membershipId || row.membershipClassName || "No membership id"}</div>
-                    <div className="muted">{row.natureOfControl || (row.authorizedRepresentative ? "Authorized representative" : "No control notes")}</div>
-                  </td>
-                  <td>
-                    <div>{dateLabel(row.startDate)} to {dateLabel(row.endDate)}</div>
-                    <div className="muted">{row.referenceDate ? `Ref ${formatDate(row.referenceDate)}` : "No reference date"}</div>
-                  </td>
-                  <td><Badge tone={toneForStatus(row.status)}>{optionLabel("roleHolderStatuses", row.status)}</Badge></td>
-                  <td>
-                    <div className="row" style={{ justifyContent: "flex-end" }}>
-                      <button className="btn btn--ghost btn--sm" onClick={() => setHistoryId(row._id)}>History</button>
-                      <button className="btn btn--ghost btn--sm" onClick={() => setDraft(editRoleHolder(row))}>Edit</button>
-                      <button className="btn btn--ghost btn--sm btn--icon" aria-label="Delete role holder" onClick={() => confirmDelete(row)}><Trash2 size={12} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {(rows ?? []).length === 0 && <EmptyRow cols={7} label="No role holders yet." />}
-            </tbody>
-          </table>
-        </div>
+        {showMetadataWarning ? (
+          <RecordTableMetadataEmpty societyId={society._id} objectLabel="role holder" />
+        ) : tableData.objectMetadata ? (
+          <RecordTableScope
+            tableId="role-holders"
+            objectMetadata={tableData.objectMetadata}
+            hydratedView={tableData.hydratedView}
+            records={records}
+            onRecordClick={(_, record) => setDraft(editRoleHolder(record))}
+            onUpdate={async ({ recordId, fieldName, value }) => {
+              const record = records.find((row) => row._id === recordId);
+              if (!record) return;
+              await persistRoleHolder({ ...record, [fieldName]: value });
+            }}
+          >
+            <RecordTableViewToolbar
+              societyId={society._id}
+              objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+              icon={<UsersRound size={14} />}
+              label="People and controllers"
+              views={tableData.views}
+              currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+              onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+              onOpenFilter={() => setFilterOpen((open) => !open)}
+            />
+            <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+            <RecordTableFilterChips />
+            <RecordTable
+              loading={tableData.loading || rows === undefined}
+              renderRowActions={(record) => (
+                <>
+                  <button className="btn btn--ghost btn--sm" onClick={() => setHistoryId(record._id)}>
+                    History
+                  </button>
+                  <button className="btn btn--ghost btn--sm" onClick={() => setDraft(editRoleHolder(record))}>
+                    Edit
+                  </button>
+                  <button
+                    className="btn btn--ghost btn--sm btn--icon"
+                    aria-label="Delete role holder"
+                    onClick={() => confirmDelete(record)}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </>
+              )}
+            />
+          </RecordTableScope>
+        ) : (
+          <div className="record-table__loading">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={index} className="record-table__loading-row" />
+            ))}
+          </div>
+        )}
       </Section>
 
       <Section title="Audit trail — changes between two dates" count={(auditDiff ?? []).filter((d) => d.op !== "unchanged").length}>
@@ -1473,7 +1554,7 @@ function defaultRoleHolderDraft(roleType: string, corporationWorkspace: boolean)
   return base;
 }
 
-function summarizeCorporationRoles(rows: any[]) {
+function summarizeCorporationRoles(rows: RoleHolderDraft[]) {
   return {
     directors: countCurrentRoles(rows, ["director"]),
     officers: countCurrentRoles(rows, ["officer", "chief_officer___manager"]),
@@ -1483,9 +1564,9 @@ function summarizeCorporationRoles(rows: any[]) {
   };
 }
 
-function countCurrentRoles(rows: any[], roleTypes: string[]) {
+function countCurrentRoles(rows: RoleHolderDraft[], roleTypes: string[]) {
   return rows.filter((row) =>
-    roleTypes.includes(row.roleType) &&
+    Boolean(row.roleType && roleTypes.includes(row.roleType)) &&
     row.status !== "former" &&
     row.status !== "inactive",
   ).length;
@@ -1496,7 +1577,7 @@ function formatChangeValue(value: unknown) {
   return String(value);
 }
 
-function editRoleHolder(row: any) {
+function editRoleHolder(row: RoleHolderDraft) {
   return {
     ...row,
     citizenshipCountriesText: (row.citizenshipCountries ?? []).join(", "),
