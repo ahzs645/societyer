@@ -672,9 +672,9 @@ export function CommunicationsPage() {
             }
             renderCell={({ record: row, field }) => {
               if (field.name === "recipientName") return (
-                <div>
-                  <strong>{row.recipientName}</strong>
-                  <div className="muted mono" style={{ fontSize: 11 }}>{row.recipientEmail || row.recipientPhone || "No contact data"}</div>
+                <div className="record-table__identifier-lines">
+                  <strong className="record-table__identifier-primary">{row.recipientName}</strong>
+                  <div className="record-table__identifier-secondary muted mono">{row.recipientEmail || row.recipientPhone || "No contact data"}</div>
                 </div>
               );
               if (field.name === "channel") return <span className="cell-tag">{row.channel}</span>;

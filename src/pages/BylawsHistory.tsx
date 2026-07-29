@@ -220,7 +220,7 @@ export function BylawsHistoryPage() {
         />
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card">
         <div className="card__head">
           <div>
             <h2 className="card__title"><Bot size={14} /> Bylaws history bot</h2>
@@ -302,7 +302,7 @@ export function BylawsHistoryPage() {
       {view === "timeline" && (
         <>
           {inFlight.length > 0 && (
-            <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card">
               <div className="card__head"><h2 className="card__title">In flight</h2></div>
               <div className="card__body col" style={{ gap: 6 }}>
                 {inFlight.map((a: any) => (

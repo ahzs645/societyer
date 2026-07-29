@@ -193,9 +193,9 @@ export function VolunteersPage() {
             loading={applicationsTable.loading || applications === undefined}
             renderCell={({ record, field }) => {
               if (field.name === "applicant") return (
-                <div>
-                  <strong>{record.firstName} {record.lastName}</strong>
-                  <div className="muted mono" style={{ fontSize: 11 }}>{record.email}</div>
+                <div className="record-table__identifier-lines">
+                  <strong className="record-table__identifier-primary">{record.firstName} {record.lastName}</strong>
+                  <div className="record-table__identifier-secondary muted mono">{record.email}</div>
                 </div>
               );
               if (field.name === "roleWanted") return <span className={record.roleWanted ? undefined : "muted"}>{record.roleWanted ?? "Not provided"}</span>;
@@ -278,9 +278,9 @@ export function VolunteersPage() {
             loading={rosterTable.loading || volunteers === undefined}
             renderCell={({ record, field }) => {
               if (field.name === "name") return (
-                <div>
-                  <strong>{record.firstName} {record.lastName}</strong>
-                  <div className="muted mono" style={{ fontSize: 11 }}>{record.email ?? "No email on file"}</div>
+                <div className="record-table__identifier-lines">
+                  <strong className="record-table__identifier-primary">{record.firstName} {record.lastName}</strong>
+                  <div className="record-table__identifier-secondary muted mono">{record.email ?? "No email on file"}</div>
                 </div>
               );
               if (field.name === "status") return <Badge tone={record.status === "Active" ? "success" : record.status === "Applied" ? "warn" : "info"}>{record.status}</Badge>;

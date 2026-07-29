@@ -138,7 +138,7 @@ export function RecordTableCell({
           className="record-table__identifier-button"
           onClick={(event) => {
             event.stopPropagation();
-            tableCtx.onRecordClick?.(recordId, record, { openRecordIn: "drawer" });
+            tableCtx.onRecordClick?.(recordId, record, { source: "row" });
           }}
         >
           {/* Hidden until the phone table scrolls sideways, when the frozen

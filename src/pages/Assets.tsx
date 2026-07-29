@@ -416,9 +416,9 @@ export function AssetsPage() {
       {stats.openRun && (
         <div className="callout callout--info">
           <ClipboardCheck size={16} />
-          <div>
-            <strong>{stats.openRun.title}</strong>
-            <div className="muted">A physical inventory run is open.</div>
+          <div className="callout__body">
+            <strong className="callout__title">{stats.openRun.title}</strong>
+            <div className="callout__note muted">A physical inventory run is open.</div>
           </div>
           <Link className="btn btn--sm" to={`/app/assets/verification/${stats.openRun._id}`}>Open</Link>
         </div>
@@ -1228,13 +1228,10 @@ function AssetMobileCard({
 
 function AssetCell({ row }: { row: any }) {
   return (
-    <div className="row" style={{ gap: 10, alignItems: "center", flexWrap: "nowrap" }}>
-      {row.imageUrl && (
-        <img className="asset-cell__thumb" src={row.imageUrl} alt="" style={{ width: 32, height: 32, flex: "0 0 auto", borderRadius: 6, objectFit: "cover", border: "1px solid var(--border, #d8dadf)" }} />
-      )}
-      <div>
-        <strong>{row.name}</strong>
-        <div className="muted">{[row.category, row.serialNumber].filter(Boolean).join(" · ")}</div>
+    <div className="record-table__identifier-lines">
+      <strong className="record-table__identifier-primary">{row.name}</strong>
+      <div className="record-table__identifier-secondary muted">
+        {[row.category, row.serialNumber].filter(Boolean).join(" · ")}
       </div>
     </div>
   );

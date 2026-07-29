@@ -679,9 +679,9 @@ export function FinancialsPage() {
         {focusedTransaction && (
           <div className="callout callout--info">
             <Link2 size={16} />
-            <div>
-              <strong>Linked accounting purchase</strong>
-              <div className="muted">{focusedTransaction.date} · {focusedTransaction.description} · {money(Math.abs(focusedTransaction.amountCents))}</div>
+            <div className="callout__body">
+              <strong className="callout__title">Linked accounting purchase</strong>
+              <div className="callout__note muted">{focusedTransaction.date} · {focusedTransaction.description} · {money(Math.abs(focusedTransaction.amountCents))}</div>
             </div>
             <button className="btn btn--sm" onClick={() => navigate("/app/financials?tab=transactions")}>Show all transactions</button>
           </div>

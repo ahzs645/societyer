@@ -1012,6 +1012,33 @@ select.record-table__menu-select,
   white-space: nowrap;
 }
 
+.record-table__identifier-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  justify-content: center;
+  min-width: 0;
+  padding-block: 3px;
+}
+
+.record-table__identifier-primary,
+.record-table__identifier-secondary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-table__identifier-primary {
+  line-height: 1.2;
+}
+
+.record-table__identifier-secondary {
+  color: token('text-tertiary');
+  font-size: token('fs-xs');
+  font-weight: 400;
+  line-height: 1.15;
+}
+
 .record-table__cell--identifier {
   // Primary column: click opens the record (the hover edit pencil handles
   // inline editing). Bold + link-style hover signals the click-to-open.
@@ -1033,7 +1060,7 @@ select.record-table__menu-select,
   display: inline-flex;
   font: inherit;
   font-weight: inherit;
-  height: 24px;
+  min-height: 24px;
   max-width: 100%;
   min-width: 0;
   padding: 0 4px;

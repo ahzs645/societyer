@@ -148,7 +148,7 @@ export function AgmWorkflowPage() {
         subtitle={`${formatDateTime(meeting.scheduledAt)} · ${daysToMeeting >= 0 ? `in ${daysToMeeting} days` : `${-daysToMeeting} days ago`}`}
       />
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card">
         <div className="card__head"><h2 className="card__title">Compliance posture</h2></div>
         <div className="card__body col" style={{ gap: 8 }}>
           <Item label="Notice window"

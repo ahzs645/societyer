@@ -395,7 +395,9 @@ export function RecordTable({
             <button
               type="button"
               className="record-table__board-card"
-              onClick={() => onRecordClick?.(String(record._id), record, { openRecordIn: "drawer" })}
+              onClick={() =>
+                onRecordClick?.(String(record._id), record, { source: "row" })
+              }
             >
               <strong>{String(record[labelColumn?.field.name ?? "_id"] ?? "Untitled")}</strong>
               <span>
@@ -437,7 +439,9 @@ export function RecordTable({
           getId={(record) => String(record._id)}
           getDate={(record) => record[dateColumn.field.name]}
           getLabel={(record) => String(record[labelColumn?.field.name ?? "_id"] ?? "Untitled")}
-          onSelect={(record) => onRecordClick?.(String(record._id), record, { openRecordIn: "drawer" })}
+          onSelect={(record) =>
+            onRecordClick?.(String(record._id), record, { source: "row" })
+          }
         />
       </div>
     );

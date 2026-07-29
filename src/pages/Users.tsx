@@ -67,7 +67,7 @@ export function UsersPage() {
       />
 
       {myRole && (
-        <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card">
           <div className="card__head">
             <h2 className="card__title">
               <ShieldCheck size={14} style={{ verticalAlign: -2, marginRight: 6 }} />

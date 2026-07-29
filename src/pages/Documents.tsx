@@ -269,9 +269,9 @@ export function DocumentsPage() {
             loading={tableData.loading || docs === undefined}
             renderCell={({ record: r, field }) => {
               if (field.name === "title") return (
-                <div>
-                  <strong>{r.title}</strong>
-                  {r.fileName && <div className="mono muted" style={{ fontSize: 11 }}>{r.fileName}</div>}
+                <div className="record-table__identifier-lines">
+                  <strong className="record-table__identifier-primary">{r.title}</strong>
+                  {r.fileName && <div className="record-table__identifier-secondary mono muted">{r.fileName}</div>}
                 </div>
               );
               if (field.name === "category") return <Badge tone={catTone(r.category)}>{CAT_LABELS[r.category] ?? r.category}</Badge>;

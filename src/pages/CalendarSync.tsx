@@ -153,7 +153,7 @@ export function CalendarSyncPage() {
         }
       />
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card">
         <div className="card__head">
           <h2 className="card__title">
             <Rss size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
@@ -206,7 +206,7 @@ export function CalendarSyncPage() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card">
         <div className="card__head"><h2 className="card__title">Source</h2></div>
         <div className="card__body col" style={{ gap: 12 }}>
           <div className="row" style={{ gap: 12 }}>
