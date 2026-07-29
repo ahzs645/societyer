@@ -76,7 +76,7 @@ export function FilingPreFillPage() {
         subtitle="Review the values we'd submit, then copy them into Societies Online or your CRA form. (Direct submission via RPA is on the roadmap — BC Registry has no public API yet.)"
       />
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card">
         <div className="card__body">
           <div className="row" style={{ gap: 12 }}>
             <Field label="Provider">

@@ -100,7 +100,7 @@ export function WebhooksPage() {
         }
       />
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card">
         <div className="card__head"><h2 className="card__title">Endpoints</h2><Badge>{subscriptions?.length ?? 0}</Badge></div>
         <table className="table">
           <thead>

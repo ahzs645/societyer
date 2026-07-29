@@ -251,7 +251,7 @@ export function ExportsPage() {
         />
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card">
         <div className="card__head">
           <div>
             <h2 className="card__title">Export options</h2>
@@ -280,7 +280,7 @@ export function ExportsPage() {
       </div>
 
       {validation && !validation.ok && (
-        <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card">
           <div className="card__head">
             <h2 className="card__title">Validation issues</h2>
             <Badge tone="danger">{validation.issues.length}</Badge>
@@ -295,7 +295,7 @@ export function ExportsPage() {
         </div>
       )}
 
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card">
         <div className="card__head">
           <div>
             <h2 className="card__title">Import preview</h2>
