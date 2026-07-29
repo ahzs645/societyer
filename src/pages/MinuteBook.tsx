@@ -16,6 +16,16 @@ import { BookOpen, Download, Plus, Trash2 } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { optionLabel } from "../lib/orgHubOptions";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
+import {
+  RecordTable,
+  RecordTableScope,
+  RecordTableViewToolbar,
+  RecordTableFilterChips,
+  RecordTableFilterPopover,
+  useObjectRecordTableData,
+} from "@/platform/record-engine";
+import type { Id } from "../../convex/_generated/dataModel";
 import {
   downloadMinuteBookHtml,
   downloadMinuteBookCsv,
@@ -71,6 +81,13 @@ export function MinuteBookPage() {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<any>(null);
   const [params, setParams] = useSearchParams();
+  const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const tableData = useObjectRecordTableData({
+    societyId: society?._id,
+    nameSingular: "minuteBookItem",
+    viewId: currentViewId,
+  });
 
   const maps = useMemo(() => {
     const d = detail ?? {};
@@ -170,13 +187,16 @@ export function MinuteBookPage() {
     toast.success("Minute book record deleted");
   };
 
-  const recordSpineScroll = useScrollEdges<HTMLDivElement>();
-
   const items = Array.isArray(detail) ? [] : detail?.items ?? [];
   const checks = safeRows(detail, "checks");
   const recordBundles = safeRows(detail, "recordBundles");
   const openCheckCount = checks.filter((check: any) => !check.ok).length;
   const bundleGapCount = recordBundles.reduce((count: number, row: any) => count + actionableGaps(row.gaps).length, 0);
+  const recordSpineRecords = items.map((row: Record<string, unknown>) => ({
+    ...row,
+    linkedSource: linkSummary(row, maps, true),
+  }));
+  const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
     <div className="page page--wide">
@@ -233,63 +253,90 @@ export function MinuteBookPage() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head">
-          <h2 className="card__title">Record spine</h2>
-          <Badge>{items.length}</Badge>
+      {showMetadataWarning ? (
+        <RecordTableMetadataEmpty societyId={society?._id} objectLabel="minute book record" />
+      ) : tableData.objectMetadata ? (
+        <RecordTableScope
+          tableId="minuteBookItems"
+          objectMetadata={tableData.objectMetadata}
+          hydratedView={tableData.hydratedView}
+          records={recordSpineRecords}
+          onRecordClick={(_recordId, row) => {
+            setDraft({ ...row, documentId: row.documentIds?.[0] });
+            setOpen(true);
+          }}
+        >
+          <RecordTableViewToolbar
+            societyId={society._id}
+            objectMetadataId={tableData.objectMetadata._id as Id<"objectMetadata">}
+            icon={<BookOpen size={14} />}
+            label="Record spine"
+            views={tableData.views}
+            currentViewId={currentViewId ?? tableData.views[0]?._id ?? null}
+            onChangeView={(viewId) => setCurrentViewId(viewId as Id<"views">)}
+            onOpenFilter={() => setFilterOpen((value) => !value)}
+            actions={<Badge>{items.length}</Badge>}
+          />
+          <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
+          <RecordTableFilterChips />
+          <RecordTable
+            loading={tableData.loading || detail === undefined}
+            emptyState={
+              <div className="record-table__empty">
+                <div className="record-table__empty-title">No manual minute book records yet.</div>
+              </div>
+            }
+            renderCell={({ record, field }) => {
+              if (field.name === "title") {
+                return (
+                  <div>
+                    <strong>{record.title}</strong>
+                    <div className="muted">{optionLabel("minuteBookRecordTypes", record.recordType)}</div>
+                  </div>
+                );
+              }
+              if (field.name === "linkedSource") return linkSummary(record, maps);
+              if (field.name === "effectiveDate") {
+                return record.effectiveDate ? <span className="mono">{formatDate(record.effectiveDate)}</span> : <span className="muted">—</span>;
+              }
+              if (field.name === "status") {
+                return <Badge tone={toneForStatus(record.status)}>{optionLabel("minuteBookStatuses", record.status)}</Badge>;
+              }
+              return undefined;
+            }}
+            renderRowActions={(row) => (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setDraft({ ...row, documentId: row.documentIds?.[0] });
+                    setOpen(true);
+                  }}
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Trash2 size={12} />}
+                  iconOnly
+                  aria-label="Delete minute book record"
+                  onClick={() => confirmDelete(row)}
+                />
+              </>
+            )}
+          />
+        </RecordTableScope>
+      ) : (
+        <div className="record-table__loading">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="record-table__loading-row" />
+          ))}
         </div>
-        <div ref={recordSpineScroll.ref} className={`table-wrap ${recordSpineScroll.className}`}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Record</th>
-                <th>Linked source</th>
-                <th>Effective</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((row: any) => (
-                <tr key={row._id}>
-                  <td>
-                    <strong>{row.title}</strong>
-                    <div className="muted">{optionLabel("minuteBookRecordTypes", row.recordType)}</div>
-                  </td>
-                  <td>{linkSummary(row, maps)}</td>
-                  <td>{row.effectiveDate ? formatDate(row.effectiveDate) : "-"}</td>
-                  <td><Badge tone={toneForStatus(row.status)}>{optionLabel("minuteBookStatuses", row.status)}</Badge></td>
-                  <td>
-                    <div className="row" style={{ justifyContent: "flex-end" }}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setDraft({ ...row, documentId: row.documentIds?.[0] });
-                          setOpen(true);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<Trash2 size={12} />}
-                        iconOnly
-                        aria-label="Delete minute book record"
-                        onClick={() => confirmDelete(row)}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {items.length === 0 && (
-                <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>No manual minute book records yet.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
+
+      <div className="spacer-4" />
 
       <div className="grid two">
         <LinkedList title="Canonical documents" rows={safeRows(detail, "documents")} getTitle={(row: any) => row.title} getMeta={(row: any) => row.category} />
@@ -485,22 +532,22 @@ function RecordSelect({ label, value, rows, onChange, getLabel }: any) {
   );
 }
 
-function linkSummary(row: any, maps: any) {
+function linkSummary(row: any, maps: any, textOnly = false) {
   const document = row.documentIds?.[0] ? maps.documents.get(row.documentIds[0]) : null;
-  if (document) return <Link to="/app/documents">{document.title}</Link>;
+  if (document) return textOnly ? document.title : <Link to="/app/documents">{document.title}</Link>;
   const meeting = row.meetingId ? maps.meetings.get(row.meetingId) : null;
-  if (meeting) return <Link to={`/app/meetings/${meeting._id}`}>{meeting.title}</Link>;
+  if (meeting) return textOnly ? meeting.title : <Link to={`/app/meetings/${meeting._id}`}>{meeting.title}</Link>;
   const minutes = row.minutesId ? maps.minutes.get(row.minutesId) : null;
-  if (minutes) return <Link to="/app/minutes">{minutes.heldAt ?? "Minutes"}</Link>;
+  if (minutes) return textOnly ? minutes.heldAt ?? "Minutes" : <Link to="/app/minutes">{minutes.heldAt ?? "Minutes"}</Link>;
   const filing = row.filingId ? maps.filings.get(row.filingId) : null;
-  if (filing) return <Link to="/app/filings">{filing.kind}</Link>;
+  if (filing) return textOnly ? filing.kind : <Link to="/app/filings">{filing.kind}</Link>;
   const policy = row.policyId ? maps.policies.get(row.policyId) : null;
-  if (policy) return <Link to="/app/policies">{policy.policyName}</Link>;
+  if (policy) return textOnly ? policy.policyName : <Link to="/app/policies">{policy.policyName}</Link>;
   const workflowPackage = row.workflowPackageId ? maps.workflowPackages.get(row.workflowPackageId) : null;
-  if (workflowPackage) return <Link to="/app/workflow-packages">{workflowPackage.packageName}</Link>;
+  if (workflowPackage) return textOnly ? workflowPackage.packageName : <Link to="/app/workflow-packages">{workflowPackage.packageName}</Link>;
   const writtenResolution = row.writtenResolutionId ? maps.writtenResolutions.get(row.writtenResolutionId) : null;
-  if (writtenResolution) return <Link to="/app/written-resolutions">{writtenResolution.title}</Link>;
-  return <span className="muted">Not linked</span>;
+  if (writtenResolution) return textOnly ? writtenResolution.title : <Link to="/app/written-resolutions">{writtenResolution.title}</Link>;
+  return textOnly ? "Not linked" : <span className="muted">Not linked</span>;
 }
 
 function safeRows(detail: any, key: string) {
