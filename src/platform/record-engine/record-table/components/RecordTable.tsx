@@ -22,6 +22,7 @@ import { RecordBoard, type RecordBoardColumn } from "../../../../components/Reco
 import { ContextMenu } from "../../../../components/ContextMenu";
 import type { MenuSection } from "../../../../components/Menu";
 import { FIELD_TYPES, type FieldMetadata, type RecordField } from "../../types";
+import { isEmptyValue } from "../utils/filterRecords";
 
 // react-virtuoso attaches refs to the four table subcomponents so it can
 // measure them for virtualization. Plain function components can't accept
@@ -359,6 +360,12 @@ export function RecordTable({
         ),
       );
     const labelColumn = getLabelColumn(columns, objectMetadata.labelIdentifierFieldName);
+    const boardDetailColumns = columns.filter(
+      (column) =>
+        column.isVisible &&
+        column.fieldMetadataId !== labelColumn?.fieldMetadataId &&
+        column.fieldMetadataId !== groupColumn?.fieldMetadataId,
+    );
     const boardColumns = buildBoardColumns(filtered, groupColumn);
 
     if (!groupColumn || boardColumns.length === 0) {
@@ -391,24 +398,41 @@ export function RecordTable({
               value,
             });
           }}
-          renderCard={(record) => (
-            <button
-              type="button"
-              className="record-table__board-card"
-              onClick={() =>
-                onRecordClick?.(String(record._id), record, { source: "row" })
-              }
-            >
-              <strong>{String(record[labelColumn?.field.name ?? "_id"] ?? "Untitled")}</strong>
-              <span>
-                <FieldDisplay
-                  record={record}
-                  field={groupColumn.field}
-                  value={record[groupColumn.field.name]}
-                />
-              </span>
-            </button>
-          )}
+          renderCard={(record) => {
+            const detailColumns = boardDetailColumns
+              .filter((column) => !isEmptyValue(record[column.field.name]))
+              .slice(0, 3);
+
+            return (
+              <button
+                type="button"
+                className="record-table__board-card"
+                onClick={() =>
+                  onRecordClick?.(String(record._id), record, { source: "row" })
+                }
+              >
+                <span className="record-table__board-card-title record-table__identifier-primary">
+                  {String(record[labelColumn?.field.name ?? "_id"] ?? "Untitled")}
+                </span>
+                {detailColumns.length > 0 && (
+                  <span className="record-table__board-card-fields">
+                    {detailColumns.map((column) => (
+                      <span
+                        key={column.fieldMetadataId}
+                        className="record-table__board-card-field record-table__identifier-secondary"
+                      >
+                        <FieldDisplay
+                          record={record}
+                          field={column.field}
+                          value={record[column.field.name]}
+                        />
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </button>
+            );
+          }}
         />
       </div>
     );

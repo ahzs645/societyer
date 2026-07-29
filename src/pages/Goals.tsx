@@ -119,16 +119,22 @@ export function GoalsPage() {
               : ("gray" as const),
           }))}
           renderCard={(g) => (
-            <Link to={`/app/goals/${g._id}`} className="col" style={{ gap: 6 }}>
-              <strong>{g.title}</strong>
-              <div className="row" style={{ gap: 6 }}>
-                <Badge>{g.category}</Badge>
+            <Link to={`/app/goals/${g._id}`} className="record-table__board-card">
+              <strong className="record-table__board-card-title record-table__identifier-primary">
+                {g.title}
+              </strong>
+              <div className="record-table__board-card-fields">
+                <div className="record-table__board-card-field record-table__identifier-secondary">
+                  <Badge>{g.category}</Badge>
+                </div>
+                <div className="record-table__board-card-field record-table__identifier-secondary row" style={{ gap: 6 }}>
+                  <Progress value={g.progressPercent} />
+                  <span className="mono" style={{ minWidth: 36, textAlign: "right" }}>{g.progressPercent}%</span>
+                </div>
+                <div className="record-table__board-card-field record-table__identifier-secondary">
+                  Target {formatDate(g.targetDate)}
+                </div>
               </div>
-              <div className="row" style={{ gap: 6 }}>
-                <Progress value={g.progressPercent} />
-                <span className="mono" style={{ minWidth: 36, textAlign: "right" }}>{g.progressPercent}%</span>
-              </div>
-              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>Target {formatDate(g.targetDate)}</div>
             </Link>
           )}
         />
