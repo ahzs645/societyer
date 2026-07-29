@@ -33,6 +33,11 @@ export function filterRecords({
     }
 
     if (!query) return true;
+    // Adapters can opt into a richer search corpus for display-only joins or
+    // fields that are not columns in the active view.
+    if (getSearchableValue(record._searchText, FIELD_TYPES.TEXT).toLowerCase().includes(query)) {
+      return true;
+    }
     return columns.some((column) => {
       const value = getSearchableValue(record[column.field.name], column.field.fieldType);
       return value.toLowerCase().includes(query);

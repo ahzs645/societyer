@@ -141,7 +141,7 @@ function MotionsTableTab() {
       const meeting = m.primaryMeetingId ? meetingById.get(String(m.primaryMeetingId)) : null;
       return {
         ...m,
-        title: m.title ?? "",
+        title: m.title || truncate(m.text, 70),
         tags: tagsForFilter,
         meeting: meeting ? `${meeting.title} (${formatDate(meeting.scheduledAt)})` : "",
       };

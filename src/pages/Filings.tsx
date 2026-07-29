@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -23,7 +23,7 @@ import {
   RecordTableFilterPopover,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
-import type { Id } from "../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
 import {
   filingKindDefinitions,
   jurisdictionDisplayCopy,
@@ -78,6 +78,25 @@ export function FilingsPage() {
     viewId: currentViewId,
   });
 
+  const openMarkFiled = useCallback((filing: Doc<"filings">) => {
+    setCompleteDraft({
+      id: filing._id,
+      kind: filing.kind,
+      jurisdictionCode: filing.jurisdictionCode,
+      contextKind: filing.contextKind,
+      sourceRegistrationId: filing.sourceRegistrationId,
+      filedAt: new Date().toISOString().slice(0, 10),
+      submissionMethod: filing.submissionMethod ?? "ManualPortal",
+      confirmationNumber: filing.confirmationNumber ?? "",
+      feePaidDollars: centsToDollarInput(filing.feePaidCents),
+      receiptDocumentId: filing.receiptDocumentId ?? "",
+      stagedPacketDocumentId: filing.stagedPacketDocumentId ?? "",
+      evidenceNotes: filing.evidenceNotes ?? "",
+      submissionChecklist: filing.submissionChecklist ?? [],
+      registryUrl: filing.registryUrl ?? "",
+    });
+  }, []);
+
   const markFiledIntentHandled = useRef(false);
   useEffect(() => {
     if (params.get("intent") !== "mark-filed") {
@@ -87,7 +106,7 @@ export function FilingsPage() {
     if (markFiledIntentHandled.current) return;
     if (!society || filings === undefined) return;
     markFiledIntentHandled.current = true;
-    const target = (filings ?? []).find((filing: any) => filing.status !== "Filed");
+    const target = (filings ?? []).find((filing) => filing.status !== "Filed");
     setParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("intent");
@@ -97,23 +116,8 @@ export function FilingsPage() {
       toast.info("No open filing found");
       return;
     }
-    setCompleteDraft({
-      id: target._id,
-      kind: target.kind,
-      jurisdictionCode: target.jurisdictionCode,
-      contextKind: target.contextKind,
-      sourceRegistrationId: target.sourceRegistrationId,
-      filedAt: new Date().toISOString().slice(0, 10),
-      submissionMethod: target.submissionMethod ?? "ManualPortal",
-      confirmationNumber: target.confirmationNumber ?? "",
-      feePaidDollars: centsToDollarInput(target.feePaidCents),
-      receiptDocumentId: target.receiptDocumentId ?? "",
-      stagedPacketDocumentId: target.stagedPacketDocumentId ?? "",
-      evidenceNotes: target.evidenceNotes ?? "",
-      submissionChecklist: target.submissionChecklist ?? [],
-      registryUrl: target.registryUrl ?? "",
-    });
-  }, [filings, params, setParams, society, toast]);
+    openMarkFiled(target);
+  }, [filings, openMarkFiled, params, setParams, society, toast]);
 
   // ?intent=add (from the "Add filing" command palette action) opens the
   // new-filing form. Mirrors the mark-filed handler above.
@@ -229,24 +233,15 @@ export function FilingsPage() {
           records={records}
           onRecordClick={(_recordId, r) => {
             if (r.status === "Filed") return;
-            setCompleteDraft({
-              id: r._id,
-              kind: r.kind,
-              jurisdictionCode: r.jurisdictionCode,
-              contextKind: r.contextKind,
-              sourceRegistrationId: r.sourceRegistrationId,
-              filedAt: new Date().toISOString().slice(0, 10),
-              submissionMethod: r.submissionMethod ?? "ManualPortal",
-              confirmationNumber: r.confirmationNumber ?? "",
-              feePaidDollars: centsToDollarInput(r.feePaidCents),
-              receiptDocumentId: r.receiptDocumentId ?? "",
-              stagedPacketDocumentId: r.stagedPacketDocumentId ?? "",
-              evidenceNotes: r.evidenceNotes ?? "",
-              submissionChecklist: r.submissionChecklist ?? [],
-              registryUrl: r.registryUrl ?? "",
-            });
+            openMarkFiled(r as Doc<"filings">);
           }}
           onUpdate={async ({ recordId, fieldName, value }) => {
+            if (fieldName === "status" && value === "Filed") {
+              const filing = filings?.find((candidate) => String(candidate._id) === recordId);
+              if (!filing || filing.status === "Filed") return;
+              openMarkFiled(filing);
+              return;
+            }
             await update({
               id: recordId as Id<"filings">,
               patch: { [fieldName]: value } as any,
@@ -281,24 +276,7 @@ export function FilingsPage() {
                   )}
                   <button
                     className="btn btn--sm"
-                    onClick={() =>
-                      setCompleteDraft({
-                        id: r._id,
-                        kind: r.kind,
-                        jurisdictionCode: r.jurisdictionCode,
-                        contextKind: r.contextKind,
-                        sourceRegistrationId: r.sourceRegistrationId,
-                        filedAt: new Date().toISOString().slice(0, 10),
-                        submissionMethod: r.submissionMethod ?? "ManualPortal",
-                        confirmationNumber: r.confirmationNumber ?? "",
-                        feePaidDollars: centsToDollarInput(r.feePaidCents),
-                        receiptDocumentId: r.receiptDocumentId ?? "",
-                        stagedPacketDocumentId: r.stagedPacketDocumentId ?? "",
-                        evidenceNotes: r.evidenceNotes ?? "",
-                        submissionChecklist: r.submissionChecklist ?? [],
-                        registryUrl: r.registryUrl ?? "",
-                      })
-                    }
+                    onClick={() => openMarkFiled(r as Doc<"filings">)}
                   >
                     <Check size={12} /> Mark filed
                   </button>

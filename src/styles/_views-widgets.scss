@@ -135,11 +135,11 @@
   border-radius: token('r-sm');
   padding: 10px;
   font-size: token('fs-md');
-  cursor: grab;
   box-shadow: token('shadow-xs');
   transition: box-shadow 0.1s ease, transform 0.1s ease;
   position: relative;
 }
+.kanban__card.is-movable { cursor: grab; }
 .kanban__card:hover { box-shadow: token('shadow-sm'); }
 /* Coarse-pointer-only move trigger — desktop keeps drag-and-drop, so the
  * button never renders visually there. */
@@ -164,8 +164,8 @@
   color: token('text-primary');
 }
 @media (hover: none), (pointer: coarse) {
-  .kanban__card { padding-right: 40px; }
-  .kanban__card-move { display: inline-flex; }
+  .kanban__card.is-movable { padding-right: 40px; }
+  .kanban__card.is-movable .kanban__card-move { display: inline-flex; }
 }
 .kanban__card.is-dragging { opacity: 0.4; }
 .kanban__card.is-clickable { cursor: pointer; }

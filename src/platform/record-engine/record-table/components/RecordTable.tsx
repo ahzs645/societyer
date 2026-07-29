@@ -17,12 +17,23 @@ import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboar
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { getMobileTableLayout, limitColumnsForPhone } from "../../../../lib/mobileTableLayout";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
+import { isFieldEditable } from "../../record-field/components/FieldInput";
 import { CalendarView } from "../../../../components/CalendarView";
 import { RecordBoard, type RecordBoardColumn } from "../../../../components/RecordBoard";
 import { ContextMenu } from "../../../../components/ContextMenu";
 import type { MenuSection } from "../../../../components/Menu";
 import { FIELD_TYPES, type FieldMetadata, type RecordField } from "../../types";
 import { isEmptyValue } from "../utils/filterRecords";
+
+const INTERACTIVE_BOARD_FIELD_TYPES: ReadonlySet<FieldMetadata["fieldType"]> = new Set([
+  FIELD_TYPES.EMAIL,
+  FIELD_TYPES.PHONE,
+  FIELD_TYPES.LINK,
+  FIELD_TYPES.EMAILS,
+  FIELD_TYPES.PHONES,
+  FIELD_TYPES.LINKS,
+  FIELD_TYPES.FILES,
+]);
 
 // react-virtuoso attaches refs to the four table subcomponents so it can
 // measure them for virtualization. Plain function components can't accept
@@ -367,6 +378,7 @@ export function RecordTable({
         column.fieldMetadataId !== groupColumn?.fieldMetadataId,
     );
     const boardColumns = buildBoardColumns(filtered, groupColumn);
+    const canMoveBoardRecords = !!onUpdate && !!groupColumn && isFieldEditable(groupColumn.field);
 
     if (!groupColumn || boardColumns.length === 0) {
       return (
@@ -384,6 +396,7 @@ export function RecordTable({
           items={filtered}
           getItemId={(record) => String(record._id)}
           getColumnId={(record) => normalizeBoardValue(record[groupColumn.field.name])}
+          canMove={canMoveBoardRecords}
           onMove={(record, toColumnId) => {
             if (!onUpdate) return;
             const value =
@@ -402,6 +415,8 @@ export function RecordTable({
             const detailColumns = boardDetailColumns
               .filter((column) => !isEmptyValue(record[column.field.name]))
               .slice(0, 3);
+            const rawTitle = record[labelColumn?.field.name ?? "_id"];
+            const title = String(rawTitle ?? "").trim() || "Untitled";
 
             return (
               <button
@@ -412,7 +427,7 @@ export function RecordTable({
                 }
               >
                 <span className="record-table__board-card-title record-table__identifier-primary">
-                  {String(record[labelColumn?.field.name ?? "_id"] ?? "Untitled")}
+                  {title}
                 </span>
                 {detailColumns.length > 0 && (
                   <span className="record-table__board-card-fields">
@@ -421,11 +436,17 @@ export function RecordTable({
                         key={column.fieldMetadataId}
                         className="record-table__board-card-field record-table__identifier-secondary"
                       >
-                        <FieldDisplay
-                          record={record}
-                          field={column.field}
-                          value={record[column.field.name]}
-                        />
+                        {INTERACTIVE_BOARD_FIELD_TYPES.has(column.field.fieldType) ? (
+                          <span className="record-cell__text">
+                            {getBoardCardPlainText(record[column.field.name])}
+                          </span>
+                        ) : (
+                          <FieldDisplay
+                            record={record}
+                            field={column.field}
+                            value={record[column.field.name]}
+                          />
+                        )}
                       </span>
                     ))}
                   </span>
@@ -627,5 +648,29 @@ function normalizeBoardValue(value: unknown): string {
     return String(record.value ?? record.id ?? record._id ?? record.label ?? record.name ?? "");
   }
   if (typeof value === "boolean") return value ? "true" : "false";
+  return String(value ?? "");
+}
+
+function getBoardCardPlainText(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map(getBoardCardPlainText).filter(Boolean).join(", ");
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const label =
+      record.label ??
+      record.name ??
+      record.title ??
+      record.email ??
+      record.phone ??
+      record.url ??
+      record.fileName;
+    if (label != null) return String(label);
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
   return String(value ?? "");
 }

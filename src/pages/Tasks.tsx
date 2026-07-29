@@ -38,6 +38,7 @@ type EditableTaskForm = TaskFormValue & {
 };
 
 type TaskRecord = Doc<"tasks"> & {
+  _searchText: string;
   responsibleUserIdsLabel?: string;
   committeeIdLabel?: string;
   meetingIdLabel?: string;
@@ -132,31 +133,60 @@ export function TasksPage() {
     () =>
       ((tasks ?? []) as Doc<"tasks">[]).map((task) => {
         const filing = task.filingId ? filingById.get(String(task.filingId)) : undefined;
+        const responsibleUserIdsLabel = userNames(task.responsibleUserIds, userById);
+        const committeeIdLabel = task.committeeId
+          ? committeeById.get(String(task.committeeId))?.name
+          : undefined;
+        const meetingIdLabel = task.meetingId
+          ? meetingById.get(String(task.meetingId))?.title
+          : undefined;
+        const goalIdLabel = task.goalId
+          ? goalById.get(String(task.goalId))?.title
+          : undefined;
+        const filingIdLabel = filing
+          ? `${filing.kind}${filing.periodLabel ? ` — ${filing.periodLabel}` : ""}`
+          : undefined;
+        const workflowIdLabel = task.workflowId
+          ? workflowById.get(String(task.workflowId))?.name
+          : undefined;
+        const documentIdLabel = task.documentId
+          ? documentById.get(String(task.documentId))?.title
+          : undefined;
+        const commitmentIdLabel = task.commitmentId
+          ? commitmentById.get(String(task.commitmentId))?.title
+          : undefined;
+        const completedByUserIdLabel = task.completedByUserId
+          ? userById.get(String(task.completedByUserId))?.displayName
+          : undefined;
         return {
           ...task,
-          responsibleUserIdsLabel: userNames(task.responsibleUserIds, userById),
-          committeeIdLabel: task.committeeId
-            ? committeeById.get(String(task.committeeId))?.name
-            : undefined,
-          meetingIdLabel: task.meetingId
-            ? meetingById.get(String(task.meetingId))?.title
-            : undefined,
-          goalIdLabel: task.goalId ? goalById.get(String(task.goalId))?.title : undefined,
-          filingIdLabel: filing
-            ? `${filing.kind}${filing.periodLabel ? ` — ${filing.periodLabel}` : ""}`
-            : undefined,
-          workflowIdLabel: task.workflowId
-            ? workflowById.get(String(task.workflowId))?.name
-            : undefined,
-          documentIdLabel: task.documentId
-            ? documentById.get(String(task.documentId))?.title
-            : undefined,
-          commitmentIdLabel: task.commitmentId
-            ? commitmentById.get(String(task.commitmentId))?.title
-            : undefined,
-          completedByUserIdLabel: task.completedByUserId
-            ? userById.get(String(task.completedByUserId))?.displayName
-            : undefined,
+          _searchText: [
+            task.title,
+            task.assignee,
+            responsibleUserIdsLabel,
+            committeeIdLabel,
+            meetingIdLabel,
+            goalIdLabel,
+            filingIdLabel,
+            workflowIdLabel,
+            documentIdLabel,
+            commitmentIdLabel,
+            completedByUserIdLabel,
+            task.eventId,
+            task.description,
+            ...(task.tags ?? []),
+          ]
+            .filter((value): value is string => typeof value === "string" && value.length > 0)
+            .join(" "),
+          responsibleUserIdsLabel,
+          committeeIdLabel,
+          meetingIdLabel,
+          goalIdLabel,
+          filingIdLabel,
+          workflowIdLabel,
+          documentIdLabel,
+          commitmentIdLabel,
+          completedByUserIdLabel,
         };
       }),
     [

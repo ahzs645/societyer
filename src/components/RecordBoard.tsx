@@ -12,6 +12,35 @@ export type RecordBoardColumn = {
   count?: number;
 };
 
+type RecordBoardProps<T> = {
+  columns: RecordBoardColumn[];
+  items: T[];
+  getItemId: (item: T) => string;
+  getColumnId: (item: T) => string;
+  renderCard: (item: T) => ReactNode;
+  onMove: (item: T, toColumnId: string) => void;
+  /** Disable every move affordance when the caller cannot persist a move. */
+  canMove?: boolean;
+  onItemClick?: (item: T) => void;
+  /** Right-click on a card. Receive the item plus the original event so the
+   * caller can position a portal'd menu at the click coordinates. */
+  onItemContextMenu?: (item: T, event: ReactMouseEvent<HTMLDivElement>) => void;
+  emptyLabel?: string;
+};
+
+function groupBoardItems<T>(
+  columns: RecordBoardColumn[],
+  items: T[],
+  getColumnId: (item: T) => string,
+) {
+  const grouped = new Map<string, T[]>(columns.map((column) => [column.id, []]));
+  for (const item of items) {
+    const columnId = getColumnId(item);
+    grouped.set(columnId, [...(grouped.get(columnId) ?? []), item]);
+  }
+  return grouped;
+}
+
 /** Generic drag-and-drop board. Works with any enum-status-ish record:
  * pass columns, items, a getColumnId to group, and onMove to persist changes. */
 export function RecordBoard<T>({
@@ -21,33 +50,15 @@ export function RecordBoard<T>({
   getColumnId,
   renderCard,
   onMove,
+  canMove = true,
   onItemClick,
   onItemContextMenu,
-  emptyLabel = "Drop here",
-}: {
-  columns: RecordBoardColumn[];
-  items: T[];
-  getItemId: (item: T) => string;
-  getColumnId: (item: T) => string;
-  renderCard: (item: T) => ReactNode;
-  onMove: (item: T, toColumnId: string) => void;
-  onItemClick?: (item: T) => void;
-  /** Right-click on a card. Receive the item plus the original event so the
-   * caller can position a portal'd menu at the click coordinates. */
-  onItemContextMenu?: (item: T, event: ReactMouseEvent<HTMLDivElement>) => void;
-  emptyLabel?: string;
-}) {
+  emptyLabel,
+}: RecordBoardProps<T>) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
 
-  const grouped = new Map<string, T[]>();
-  for (const col of columns) grouped.set(col.id, []);
-  for (const item of items) {
-    const colId = getColumnId(item);
-    const list = grouped.get(colId) ?? [];
-    list.push(item);
-    grouped.set(colId, list);
-  }
+  const grouped = groupBoardItems(columns, items, getColumnId);
 
   return (
     <div className="kanban">
@@ -64,36 +75,56 @@ export function RecordBoard<T>({
             </div>
             <div
               className={`kanban__body${overCol === col.id ? " is-dragging-over" : ""}`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setOverCol(col.id);
-              }}
-              onDragLeave={() => setOverCol((c) => (c === col.id ? null : c))}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (dragId) {
-                  const found = items.find((i) => getItemId(i) === dragId);
-                  if (found) onMove(found, col.id);
-                }
-                setDragId(null);
-                setOverCol(null);
-              }}
+              onDragOver={
+                canMove
+                  ? (e) => {
+                      e.preventDefault();
+                      setOverCol(col.id);
+                    }
+                  : undefined
+              }
+              onDragLeave={
+                canMove
+                  ? () => setOverCol((current) => (current === col.id ? null : current))
+                  : undefined
+              }
+              onDrop={
+                canMove
+                  ? (e) => {
+                      e.preventDefault();
+                      if (dragId) {
+                        const found = items.find((item) => getItemId(item) === dragId);
+                        if (found) onMove(found, col.id);
+                      }
+                      setDragId(null);
+                      setOverCol(null);
+                    }
+                  : undefined
+              }
             >
               {colItems.map((item) => {
                 const id = getItemId(item);
                 return (
                   <div
                     key={id}
-                    className={`kanban__card${dragId === id ? " is-dragging" : ""}${onItemClick ? " is-clickable" : ""}`}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.effectAllowed = "move";
-                      setDragId(id);
-                    }}
-                    onDragEnd={() => {
-                      setDragId(null);
-                      setOverCol(null);
-                    }}
+                    className={`kanban__card${canMove ? " is-movable" : ""}${dragId === id ? " is-dragging" : ""}${onItemClick ? " is-clickable" : ""}`}
+                    draggable={canMove}
+                    onDragStart={
+                      canMove
+                        ? (e) => {
+                            e.dataTransfer.effectAllowed = "move";
+                            setDragId(id);
+                          }
+                        : undefined
+                    }
+                    onDragEnd={
+                      canMove
+                        ? () => {
+                            setDragId(null);
+                            setOverCol(null);
+                          }
+                        : undefined
+                    }
                     onClick={(e) => {
                       if (!onItemClick) return;
                       // Don't fire on text selection drags inside the card.
@@ -123,35 +154,39 @@ export function RecordBoard<T>({
                       * gets a move-menu trigger (bottom sheet on phones via
                       * Menu). CSS shows it only on coarse-pointer devices —
                       * desktop keeps drag-and-drop with no extra chrome. */}
-                    <Menu
-                      trigger={
-                        <button
-                          type="button"
-                          className="kanban__card-move"
-                          aria-label={`Move to column`}
-                        >
-                          <ArrowRightLeft size={14} />
-                        </button>
-                      }
-                      align="right"
-                      sections={[
-                        {
-                          id: "move",
-                          label: "Move to",
-                          items: columns.map((c) => ({
-                            id: c.id,
-                            label: c.label,
-                            disabled: c.id === col.id,
-                            onSelect: () => onMove(item, c.id),
-                          })),
-                        },
-                      ]}
-                    />
+                    {canMove && (
+                      <Menu
+                        trigger={
+                          <button
+                            type="button"
+                            className="kanban__card-move"
+                            aria-label="Move to column"
+                          >
+                            <ArrowRightLeft size={14} />
+                          </button>
+                        }
+                        align="right"
+                        sections={[
+                          {
+                            id: "move",
+                            label: "Move to",
+                            items: columns.map((column) => ({
+                              id: column.id,
+                              label: column.label,
+                              disabled: column.id === col.id,
+                              onSelect: () => onMove(item, column.id),
+                            })),
+                          },
+                        ]}
+                      />
+                    )}
                   </div>
                 );
               })}
               {colItems.length === 0 && (
-                <div className="empty-state empty-state--sm">{emptyLabel}</div>
+                <div className="empty-state empty-state--sm">
+                  {emptyLabel ?? (canMove ? "Drop here" : "No records")}
+                </div>
               )}
             </div>
           </div>
