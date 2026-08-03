@@ -33,6 +33,7 @@ export const DesktopSchemas = {
     id: z.string(),
     name: z.string(),
     rootPath: z.string(),
+    legacyDexieWorkspace: z.boolean().optional(),
     schemaVersion: z.number(),
     createdAtISO: z.string(),
     updatedAtISO: z.string(),

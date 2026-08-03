@@ -21,12 +21,14 @@ import {
   type DesktopWorkspaceInfo,
 } from "../lib/desktopBridge";
 import {
+  persistLocalWorkspaceSnapshot,
   readLocalWorkspaceSnapshot,
   type LocalWorkspaceSnapshotReadResult,
 } from "../lib/documentStorage";
 import { createDesktopBackup } from "../lib/desktopBackup";
 import {
   downloadLocalWorkspaceSnapshot,
+  getLocalWorkspaceSnapshot,
   importLocalWorkspaceSnapshotFile,
 } from "../lib/localWorkspaceExport";
 import { getRuntimeDescriptor } from "../lib/runtimeMode";
@@ -93,6 +95,9 @@ export function DesktopSetupPage() {
     setBusy("workspace");
     setWorkspaceSnapshotOffer(null);
     try {
+      const snapshot = getLocalWorkspaceSnapshot();
+      if (!snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
+      await persistLocalWorkspaceSnapshot(JSON.stringify(snapshot, null, 2));
       const selected = await bridge.chooseWorkspaceDirectory();
       if (!selected) return;
       sessionStorage.setItem(WORKSPACE_CHANGED_KEY, "1");

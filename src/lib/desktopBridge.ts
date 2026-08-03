@@ -4,6 +4,7 @@ export type DesktopWorkspaceInfo = {
   id: string;
   name?: string;
   rootPath?: string;
+  legacyDexieWorkspace?: boolean;
   schemaVersion?: number;
   createdAtISO?: string;
   updatedAtISO?: string;
