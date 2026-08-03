@@ -452,4 +452,44 @@ for (const client of localClients) {
 }
 console.log("✓ static-demo and desktop Dexie resolve concrete trusted-workspace principals");
 
+// A local database holding several workspaces must stay fully reachable by its
+// owner, including societies that have no `users` row yet (legacy/imported
+// data). The §4 tenant binding briefly broke both by treating the principal's
+// selected societyId as a membership restriction.
+{
+  const multiWorkspace = new PortableRuntime({
+    db: new MemoryDb({
+      seed: {
+        societies: [
+          { _id: "local-a", name: "Workspace A" },
+          { _id: "local-b", name: "Workspace B" },
+          { _id: "local-legacy", name: "Imported Legacy" },
+        ],
+        users: [
+          { _id: "local-user-a", societyId: "local-a", role: "Owner", status: "Active" },
+          { _id: "local-user-b", societyId: "local-b", role: "Owner", status: "Active" },
+        ],
+      },
+    }),
+    capabilities: caps,
+    principalProvider: () => ({
+      kind: "user",
+      runtime: "browser-local",
+      assurance: "trusted-workspace",
+      subject: "local:workspace",
+      userId: "local-user-a",
+      societyId: "local-a",
+    }),
+  }).registerAll(PORTABLE_FUNCTIONS);
+
+  const listed = await multiWorkspace.runQuery<Array<{ _id: string }>>("society:list", {});
+  const listedIds = listed.map((row) => row._id).sort();
+  assert.deepEqual(
+    listedIds,
+    ["local-a", "local-b", "local-legacy"],
+    "a local principal must see every workspace in its own database, not just the selected one",
+  );
+  console.log("✓ trusted-workspace principal enumerates all local workspaces, including user-less legacy rows");
+}
+
 console.log("\nPortable principal conformance passed.");
