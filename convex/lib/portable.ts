@@ -103,8 +103,10 @@ class ConvexPortableDb implements TransactionalDb {
     this.db = db;
   }
 
-  async get<T extends PortableDoc = PortableDoc>(id: string): Promise<T | null> {
-    return (await this.db.get(id as any)) ?? null;
+  async get<T extends PortableDoc = PortableDoc>(id: string, expectedTable?: string): Promise<T | null> {
+    const normalizedId = expectedTable ? this.db.normalizeId(expectedTable, id) : id;
+    if (!normalizedId) return null;
+    return (await this.db.get(normalizedId as any)) ?? null;
   }
 
   query<T extends PortableDoc = PortableDoc>(table: string): PortableQuery<T> {

@@ -25,12 +25,19 @@ export type PortableAccess =
   | { audience: "authenticated" }
   | { audience: "service"; scopes: readonly string[] };
 
+export type PortableAccessDecision = {
+  functionName: string;
+  audience: PortableAccess["audience"];
+  principalKind: PortablePrincipal["kind"];
+  decision: "allow" | "deny";
+  reason: string;
+};
+
 const DEFAULT_PORTABLE_ACCESS: PortableAccess = { audience: "authenticated" };
 
 /**
- * Stage 1 records access intent but intentionally does not enforce it. Stage 2
- * of docs/trusted-principal-proposal.md turns this seam on after a hosted JWT
- * provider and service-token path have been selected and wired.
+ * Stage 2 evaluates access intent but intentionally does not reject yet. The
+ * opt-in shadow path below records those decisions until the final flag flip.
  */
 export const PORTABLE_ACCESS_ENFORCEMENT = false;
 
@@ -66,6 +73,8 @@ export interface PortableRuntimeOptions {
   db: TransactionalDb;
   capabilities: PortableCapabilities;
   principalProvider?: () => PortablePrincipal | Promise<PortablePrincipal>;
+  /** Overrides SOCIETYER_PORTABLE_ACCESS_SHADOW for this runtime. */
+  shadowAccessDecisions?: boolean;
 }
 
 const DEFAULT_ANONYMOUS_PRINCIPAL: PortablePrincipal = {
@@ -73,6 +82,73 @@ const DEFAULT_ANONYMOUS_PRINCIPAL: PortablePrincipal = {
   runtime: "test",
   assurance: "none",
 };
+
+const MAX_SHADOW_DECISIONS = 1_000;
+
+function shadowAccessEnabledFromEnvironment(): boolean {
+  return typeof process !== "undefined" && process.env.SOCIETYER_PORTABLE_ACCESS_SHADOW === "1";
+}
+
+function accessDecision(
+  def: PortableFunctionDef,
+  principal: PortablePrincipal,
+): PortableAccessDecision {
+  const access = def.access ?? DEFAULT_PORTABLE_ACCESS;
+  if (access.audience === "public") {
+    return {
+      functionName: def.name,
+      audience: access.audience,
+      principalKind: principal.kind,
+      decision: "allow",
+      reason: "public audience",
+    };
+  }
+  if (access.audience === "authenticated") {
+    const hasSubject = principal.kind !== "anonymous" && principal.subject.trim().length > 0;
+    const hasVerifiedIssuer =
+      principal.kind !== "user" ||
+      principal.assurance !== "verified-jwt" ||
+      Boolean(principal.issuer?.trim());
+    const allowed = hasSubject && hasVerifiedIssuer;
+    return {
+      functionName: def.name,
+      audience: access.audience,
+      principalKind: principal.kind,
+      decision: allowed ? "allow" : "deny",
+      reason: allowed ? "authenticated principal" : "valid authenticated principal required",
+    };
+  }
+  if (principal.kind !== "service") {
+    return {
+      functionName: def.name,
+      audience: access.audience,
+      principalKind: principal.kind,
+      decision: "deny",
+      reason: "service principal required",
+    };
+  }
+  if (!principal.subject.trim()) {
+    return {
+      functionName: def.name,
+      audience: access.audience,
+      principalKind: principal.kind,
+      decision: "deny",
+      reason: "valid service principal required",
+    };
+  }
+  const missingScopes = access.scopes.filter(
+    (scope) => !principal.scopes.includes("*") && !principal.scopes.includes(scope),
+  );
+  return {
+    functionName: def.name,
+    audience: access.audience,
+    principalKind: principal.kind,
+    decision: missingScopes.length === 0 ? "allow" : "deny",
+    reason: missingScopes.length === 0
+      ? "service scopes satisfied"
+      : `missing service scopes: ${missingScopes.join(", ")}`,
+  };
+}
 
 /**
  * Executes portable functions locally against one `ctx.db` and capability bag.
@@ -87,11 +163,14 @@ export class PortableRuntime {
   private readonly db: TransactionalDb;
   private readonly capabilities: PortableCapabilities;
   private readonly principalProvider: () => PortablePrincipal | Promise<PortablePrincipal>;
+  private readonly shadowAccessDecisions: boolean;
+  private readonly shadowDecisions: PortableAccessDecision[] = [];
 
   constructor(options: PortableRuntimeOptions) {
     this.db = options.db;
     this.capabilities = options.capabilities;
     this.principalProvider = options.principalProvider ?? (() => DEFAULT_ANONYMOUS_PRINCIPAL);
+    this.shadowAccessDecisions = options.shadowAccessDecisions ?? shadowAccessEnabledFromEnvironment();
   }
 
   register(def: PortableFunctionDef): this {
@@ -116,6 +195,15 @@ export class PortableRuntime {
   /** Access intent for a registered function, or undefined if unregistered. */
   access(name: string): PortableAccess | undefined {
     return this.registry.get(name)?.access;
+  }
+
+  /** Snapshot of opt-in, pre-enforcement decisions for checks/telemetry. */
+  accessDecisions(): readonly PortableAccessDecision[] {
+    return this.shadowDecisions.slice();
+  }
+
+  clearAccessDecisions(): void {
+    this.shadowDecisions.length = 0;
   }
 
   private queryCtx(principal: PortablePrincipal): PortableQueryCtx {
@@ -144,9 +232,16 @@ export class PortableRuntime {
     };
   }
 
-  private accessHook(_def: PortableFunctionDef, _principal: PortablePrincipal): void {
-    if (!PORTABLE_ACCESS_ENFORCEMENT) return;
-    // Stage 2: enforce the registered audience/scopes against the principal.
+  private accessHook(def: PortableFunctionDef, principal: PortablePrincipal): void {
+    if (!PORTABLE_ACCESS_ENFORCEMENT && !this.shadowAccessDecisions) return;
+    const result = accessDecision(def, principal);
+    if (!PORTABLE_ACCESS_ENFORCEMENT) {
+      if (this.shadowAccessDecisions && this.shadowDecisions.length < MAX_SHADOW_DECISIONS) {
+        this.shadowDecisions.push(result);
+      }
+      return;
+    }
+    if (result.decision === "deny") throw new Error(`Access denied: ${result.reason}.`);
   }
 
   private async runQueryNested<Result = unknown>(

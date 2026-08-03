@@ -123,7 +123,7 @@ export interface PortableQuery<T extends PortableDoc = PortableDoc> {
 
 /** Read surface of the database. */
 export interface PortableDbReader {
-  get<T extends PortableDoc = PortableDoc>(id: string): Promise<T | null>;
+  get<T extends PortableDoc = PortableDoc>(id: string, expectedTable?: TableName): Promise<T | null>;
   query<T extends PortableDoc = PortableDoc>(table: TableName): PortableQuery<T>;
 }
 

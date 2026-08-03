@@ -1,6 +1,6 @@
 import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
 import { PortableRuntime } from "../../shared/portable/define";
-import type { PortablePrincipal } from "../../shared/portable/ctx";
+import type { PortableDoc, PortablePrincipal, RuntimeKind } from "../../shared/portable/ctx";
 import { LocalStoreDb } from "../../shared/portable/localRowStore";
 import { PORTABLE_FUNCTIONS } from "../../shared/functions/registry";
 import { buildLocalCapabilities } from "./localCapabilities";
@@ -17,7 +17,6 @@ import {
   type StaticDemoSeed,
 } from "./staticDemoStore";
 import type { StaticArgs } from "./staticConvexFixtures";
-import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "./staticIds";
 
 const FUNCTION_NAME = Symbol.for("functionName");
 const warnedLegacyFallbacks = new Set<string>();
@@ -59,6 +58,7 @@ export class StaticConvexClient {
     seed?: StaticDemoSeed;
     url?: string;
     principalProvider?: () => PortablePrincipal | Promise<PortablePrincipal>;
+    trustedWorkspacePrincipal?: { runtime: RuntimeKind; subject: string };
   }) {
     this.store = new StaticDemoDexieStore(options?.seed ?? STATIC_DEMO_SEED, options);
     this.clientUrl = options?.url ?? "static://societyer-demo";
@@ -68,14 +68,11 @@ export class StaticConvexClient {
       // one throws a structured CAPABILITY_UNAVAILABLE rather than silently no-op.
       // buildLocalCapabilities is the seam where native Electron capabilities wire in.
       capabilities: buildLocalCapabilities(),
-      principalProvider: options?.principalProvider ?? (() => ({
-        kind: "user",
-        runtime: "browser-local",
-        assurance: "trusted-workspace",
-        subject: "demo:static_user_owner",
-        userId: STATIC_DEMO_USER_ID,
-        societyId: STATIC_DEMO_SOCIETY_ID,
-      })),
+      principalProvider: options?.principalProvider ?? (() =>
+        this.resolveTrustedWorkspacePrincipal(options?.trustedWorkspacePrincipal ?? {
+          runtime: "browser-local",
+          subject: "demo:static-workspace",
+        })),
     }).registerAll(PORTABLE_FUNCTIONS);
     this.portableQueries = new PortableQueryCache(
       this.portable,
@@ -86,6 +83,29 @@ export class StaticConvexClient {
     // so RecordTable pages (members, assets, …) render immediately instead of
     // showing the "Metadata not seeded" empty state on first visit. Idempotent.
     void this.ensureRecordTableMetadata();
+  }
+
+  /**
+   * Bind a desktop principal to rows from its trusted local database, never to
+   * request arguments. Owner is the deterministic local operator when present.
+   */
+  private resolveTrustedWorkspacePrincipal(
+    workspace: { runtime: RuntimeKind; subject: string },
+  ): PortablePrincipal {
+    const users = (this.store.listRows("users") ?? []) as PortableDoc[];
+    const eligible = users.filter(
+      (row) => typeof row.societyId === "string" && row.status !== "Disabled",
+    );
+    const user = eligible.find((row) => row.role === "Owner") ?? eligible[0];
+    return {
+      kind: "user",
+      runtime: workspace.runtime,
+      assurance: "trusted-workspace",
+      subject: workspace.subject,
+      ...(user
+        ? { userId: user._id, societyId: String(user.societyId) }
+        : {}),
+    };
   }
 
   /** Fire-and-forget metadata seed for every society in the demo store. */
