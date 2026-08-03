@@ -72,7 +72,6 @@ export function GrantSourceDetailPage() {
                   await addGrantSourceFromLibrary({
                     societyId: society._id,
                     libraryKey: source.libraryKey,
-                    actingUserId,
                   });
                   toast.success("Grant source added", source.name);
                 }}
@@ -93,7 +92,6 @@ export function GrantSourceDetailPage() {
                   sourceExternalIds: [`grantSource:${source.libraryKey}`],
                   sourceNotes: source.notes || undefined,
                   publicDescription: source.notes || undefined,
-                  actingUserId,
                 } as any);
                 toast.success("Application started", source.name);
                 navigate(`/app/grants/${grantId}/edit`);

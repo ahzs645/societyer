@@ -47,7 +47,7 @@ export function DocumentVersionsDrawer({
   const maybeSyncVersionToPaperless = async (versionId: Id<"documentVersions">) => {
     if (!paperlessConnection?.autoUpload || paperlessConnection.status !== "connected") return;
     try {
-      await syncDocument({ societyId, documentId, versionId, actingUserId });
+      await syncDocument({ societyId, documentId, versionId });
       toast.success("Sent version to Paperless-ngx");
     } catch (error: any) {
       toast.error(error?.message ?? "Uploaded version, but Paperless-ngx sync failed");
@@ -63,7 +63,6 @@ export function DocumentVersionsDrawer({
         documentId,
         file,
         changeNote,
-        actingUserId,
         createDemoVersion,
         beginUpload,
         recordUploadedVersion: recordUpload,
@@ -206,7 +205,7 @@ export function DocumentVersionsDrawer({
                 <button
                   className="btn btn--ghost btn--sm"
                   onClick={async () => {
-                    await rollback({ versionId: v._id, actingUserId });
+                    await rollback({ versionId: v._id });
                     toast.success(`Rolled back to v${v.version}`);
                   }}
                 >

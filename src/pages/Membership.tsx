@@ -235,7 +235,7 @@ export function MembershipPage() {
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Delete membership plan ${p.name}`}
-                  onClick={() => removePlan({ id: p._id, actingUserId })}
+                  onClick={() => removePlan({ id: p._id })}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -308,7 +308,7 @@ export function MembershipPage() {
                         className="btn btn--ghost btn--sm btn--icon"
                         aria-label={`Delete fee period ${period.label}`}
                         onClick={async () => {
-                          await removeFeePeriod({ id: period._id, actingUserId });
+                          await removeFeePeriod({ id: period._id });
                           toast.success("Fee period removed");
                         }}
                       >
@@ -380,7 +380,7 @@ export function MembershipPage() {
                     {s.status !== "canceled" && (
                       <button
                         className="btn btn--ghost btn--sm"
-                        onClick={() => cancelSub({ id: s._id, actingUserId })}
+                        onClick={() => cancelSub({ id: s._id })}
                       >
                         Cancel
                       </button>
@@ -413,7 +413,6 @@ export function MembershipPage() {
                 await upsertPlan({
                   ...planDraft,
                   societyId: society._id,
-                  actingUserId,
                 });
                 toast.success("Plan saved");
                 setPlanDraft(null);
@@ -512,7 +511,6 @@ export function MembershipPage() {
                   effectiveTo: feeDraft.effectiveTo || undefined,
                   status: feeDraft.status,
                   notes: feeDraft.notes || undefined,
-                  actingUserId,
                 });
                 toast.success("Fee period saved");
                 setFeeDraft(null);
@@ -734,7 +732,6 @@ export function MembershipPage() {
         onClose={() => setLevyImportOpen(false)}
         societyId={society._id}
         societyName={society.name}
-        actingUserId={actingUserId}
       />
     </div>
   );

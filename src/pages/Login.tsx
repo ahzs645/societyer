@@ -26,13 +26,28 @@ export function LoginPage() {
   const safeRedirect = redirect?.startsWith("/") && !redirect.startsWith("//")
     ? redirect
     : "/app";
-  if (auth.session && redirect) {
-    return <Navigate to={safeRedirect} replace />;
-  }
   if (auth.isAuthenticated) {
     return <Navigate to={safeRedirect} replace />;
   }
-  if (auth.session && auth.membershipStatus === "needs-invitation") {
+  if (auth.fatalError) {
+    return (
+      <div className="page">
+        <h1>{auth.fatalError.kind === "expired-session" ? "Session expired" : "Sign-in unavailable"}</h1>
+        <p>{auth.fatalError.message}</p>
+        {auth.fatalError.retryable && (
+          <button className="btn" type="button" onClick={auth.retryAuthentication}>Retry</button>
+        )}
+      </div>
+    );
+  }
+  if (auth.session && redirect && auth.membershipState === "ready") {
+    return <Navigate to={safeRedirect} replace />;
+  }
+  if (
+    auth.session &&
+    auth.membershipState === "ready" &&
+    auth.membershipStatus === "needs-invitation"
+  ) {
     return (
       <div className="page">
         <h1>Invitation required</h1>

@@ -52,6 +52,7 @@ type Actor = {
   clientId?: string;
   scopes: string[];
   role?: string;
+  convexAuthToken?: string;
 };
 
 type ResourceRoute = {
@@ -201,9 +202,9 @@ function bodyWithIdAndSociety(req: Request, actor: Actor) {
   };
 }
 
-function withActingUser<T extends Record<string, unknown>>(args: T, actor: Actor): T {
-  if (!actor.userId) return args;
-  return { ...args, actingUserId: actor.userId };
+function principalArgs<T extends Record<string, unknown>>(args: T, actor: Actor): T {
+  void actor;
+  return args;
 }
 
 function dropUndefined<T extends Record<string, unknown>>(value: T): T {
@@ -489,7 +490,7 @@ export {
   stripActor,
   bodyWithSociety,
   bodyWithIdAndSociety,
-  withActingUser,
+  principalArgs,
   dropUndefined,
   societyIdFrom,
   optionalSocietyIdFrom,

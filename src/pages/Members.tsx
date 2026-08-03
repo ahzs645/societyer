@@ -276,7 +276,6 @@ export function MembersPage() {
             keepId: keepId as any,
             dropIds: dropIds as any,
             patch: merged,
-            actingUserId: actingUserId ?? undefined,
           });
           toast.success(`Merged ${dropIds.length + 1} members`);
           setMergeRows(null);

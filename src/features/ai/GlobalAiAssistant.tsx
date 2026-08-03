@@ -117,7 +117,7 @@ export function GlobalAiAssistant() {
 
   const aiSettings = useQuery(
     api.aiSettings.getEffective,
-    society ? { societyId: society._id, actingUserId } : "skip",
+    society ? { societyId: society._id } : "skip",
   ) as any | undefined;
   const threads = useQuery(
     api.aiChat.listThreads,
@@ -190,7 +190,6 @@ export function GlobalAiAssistant() {
     listProviderModels({
       provider: effectiveProvider.provider,
       societyId: society?._id,
-      actingUserId,
     })
       .then((result: any) => {
         if (cancelled) return;
@@ -279,7 +278,6 @@ export function GlobalAiAssistant() {
         societyId: society._id,
         threadId: selectedThreadId,
         content,
-        actingUserId,
         browsingContext,
         modelId: modelIdForRequest,
         onToken: (token) => setStreamingText((text) => text + token),
@@ -288,7 +286,6 @@ export function GlobalAiAssistant() {
           societyId: society._id,
           threadId: selectedThreadId as any,
           content,
-          actingUserId,
           browsingContext,
           modelId: modelIdForRequest,
         }),
@@ -357,7 +354,7 @@ export function GlobalAiAssistant() {
   const handleApproveDraft = async (draftId: string) => {
     if (!society) return;
     try {
-      await approveDraft({ societyId: society._id, id: draftId as any, actingUserId });
+      await approveDraft({ societyId: society._id, id: draftId as any });
       toast.success("Approved draft");
     } catch (error: any) {
       toast.error(error?.message ?? "Couldn't approve");
@@ -367,7 +364,7 @@ export function GlobalAiAssistant() {
   const handleRejectDraft = async (draftId: string) => {
     if (!society) return;
     try {
-      await rejectDraft({ societyId: society._id, id: draftId as any, actingUserId });
+      await rejectDraft({ societyId: society._id, id: draftId as any });
     } catch (error: any) {
       toast.error(error?.message ?? "Couldn't reject");
     }

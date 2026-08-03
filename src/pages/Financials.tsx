@@ -285,7 +285,6 @@ export function FinancialsPage() {
         accountLabel: demo ? "Riverside demo book" : "Connected Wave book",
         externalBusinessId: demo ? "biz_demo_01" : undefined,
         demo,
-        actingUserId,
       });
       await sync({ connectionId });
       toast.success(demo ? "Connected to demo Wave workspace" : "Connected to Wave");
@@ -376,7 +375,7 @@ export function FinancialsPage() {
                     label: "Disconnect",
                     destructive: true,
                     onSelect: async () => {
-                      await disconnect({ connectionId: activeConnection._id, actingUserId });
+                      await disconnect({ connectionId: activeConnection._id });
                       toast.info("Disconnected Wave");
                     },
                   },
@@ -425,7 +424,6 @@ export function FinancialsPage() {
         <BankCsvImportCard
           societyId={society._id}
           accounts={accounts ?? []}
-          actingUserId={actingUserId}
         />
       )}
 
@@ -541,7 +539,7 @@ export function FinancialsPage() {
           onNew={() => setSubscriptionForm(newOperatingSubscriptionForm())}
           onEdit={(row) => setSubscriptionForm(operatingSubscriptionFormFromRow(row))}
           onRemove={async (row) => {
-            await removeOperatingSubscription({ id: row._id, actingUserId });
+            await removeOperatingSubscription({ id: row._id });
             toast.info("Subscription cost removed");
           }}
         />
@@ -612,7 +610,7 @@ export function FinancialsPage() {
                       <button
                         className="btn btn--ghost btn--sm btn--icon"
                         aria-label={`Delete budget ${b.name}`}
-                        onClick={() => removeBudget({ id: b._id, actingUserId })}
+                        onClick={() => removeBudget({ id: b._id })}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -658,7 +656,6 @@ export function FinancialsPage() {
                     fiscalYear,
                     category: budgetForm.category,
                     plannedCents: Math.round(Number(budgetForm.planned) * 100),
-                    actingUserId,
                   });
                   setBudgetForm(null);
                   toast.success("Budget saved");
@@ -701,7 +698,6 @@ export function FinancialsPage() {
                 await updateTransaction({
                   id: recordId as Id<"financialTransactions">,
                   patch: { [fieldName]: value } as any,
-                  actingUserId: actingUserId as any,
                 });
               }}
             >
@@ -848,7 +844,6 @@ export function FinancialsPage() {
                   status: subscriptionForm.status,
                   nextRenewalDate: optionalText(subscriptionForm.nextRenewalDate),
                   notes: optionalText(subscriptionForm.notes),
-                  actingUserId,
                 });
                 toast.success("Subscription cost saved");
                 setSubscriptionForm(null);
@@ -1019,11 +1014,9 @@ export function FinancialsPage() {
 function BankCsvImportCard({
   societyId,
   accounts,
-  actingUserId,
 }: {
   societyId: any;
   accounts: any[];
-  actingUserId: any;
 }) {
   const importCsv = useMutation(api.financialHub.importBankCsvTransactions);
   const toast = useToast();
@@ -1055,7 +1048,7 @@ function BankCsvImportCard({
     }
     setBusy(true);
     try {
-      const result = await importCsv({ societyId, accountId: accountId as any, rows: parsed, actingUserId });
+      const result = await importCsv({ societyId, accountId: accountId as any, rows: parsed });
       toast.success(
         `Imported ${result.inserted} transaction${result.inserted === 1 ? "" : "s"}${
           result.skipped ? `, skipped ${result.skipped} duplicate${result.skipped === 1 ? "" : "s"}` : ""

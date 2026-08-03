@@ -19,7 +19,7 @@ function dropUndefined<T extends Record<string, unknown>>(value: T): T {
 export async function importGcosProjectSnapshotViaConvex(
   client: ConvexHttpClient,
   convexCall: ConvexCaller,
-  args: { societyId: string; normalizedGrant: any; snapshot?: any; actingUserId?: string },
+  args: { societyId: string; normalizedGrant: any; snapshot?: any },
 ) {
   const sourceExternalIds = Array.isArray(args.normalizedGrant?.sourceExternalIds)
     ? args.normalizedGrant.sourceExternalIds.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
@@ -59,7 +59,6 @@ export async function importGcosProjectSnapshotViaConvex(
     keyFacts: mergeStringLists(args.normalizedGrant?.keyFacts, projectIntelligence.keyFacts),
     sourceNotes: typeof args.normalizedGrant?.sourceNotes === "string" ? args.normalizedGrant.sourceNotes : undefined,
     notes: "Imported from GCOS. Review against the original GCOS record before reporting or signing.",
-    actingUserId: args.actingUserId,
   });
   const grantId = await convexCall(client, mutation("grants.upsertGrant"), payload);
   return { grantId, created: !existing, updated: Boolean(existing), fallback: "grants.upsertGrant" };

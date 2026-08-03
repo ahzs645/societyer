@@ -14,13 +14,11 @@ import { useToast } from "../../../components/Toast";
 
 type GrantSourceLibrarySectionProps = {
   societyId: any;
-  actingUserId?: any;
   sourceLibrary: any;
 };
 
 export function GrantSourceLibrarySection({
   societyId,
-  actingUserId,
   sourceLibrary,
 }: GrantSourceLibrarySectionProps) {
   const toast = useToast();
@@ -155,7 +153,6 @@ export function GrantSourceLibrarySection({
     <SourceActions
       row={row}
       societyId={societyId}
-      actingUserId={actingUserId}
       addGrantSourceFromLibrary={addGrantSourceFromLibrary}
       onAdded={(name) => toast.success("Grant source added", name)}
     />
@@ -246,7 +243,6 @@ export function GrantSourceLibrarySection({
       </section>
 
       <GrantSourceDrawer
-        actingUserId={actingUserId}
         societyId={societyId}
         sourceDraft={sourceDraft}
         setSourceDraft={setSourceDraft}
@@ -290,13 +286,11 @@ function GrantSourceCard({ row, actions }: { row: any; actions: ReactNode }) {
 function SourceActions({
   row,
   societyId,
-  actingUserId,
   addGrantSourceFromLibrary,
   onAdded,
 }: {
   row: any;
   societyId: any;
-  actingUserId?: any;
   addGrantSourceFromLibrary: any;
   onAdded: (name: string) => void;
 }) {
@@ -317,7 +311,6 @@ function SourceActions({
             await addGrantSourceFromLibrary({
               societyId,
               libraryKey: row.libraryKey,
-              actingUserId,
             });
             onAdded(row.name);
           }}
@@ -346,13 +339,11 @@ function SourceTagList({ tags, limit = 4 }: { tags: string[]; limit?: number }) 
 }
 
 function GrantSourceDrawer({
-  actingUserId,
   societyId,
   sourceDraft,
   setSourceDraft,
   upsertGrantSource,
 }: {
-  actingUserId?: any;
   societyId: any;
   sourceDraft: any | null;
   setSourceDraft: (draft: any | null) => void;
@@ -390,7 +381,6 @@ function GrantSourceDrawer({
                   topicTags: splitTags(sourceDraft.topicTagsText),
                   notes: sourceDraft.notes || undefined,
                 },
-                actingUserId,
               });
               toast.success("Grant source saved");
               setSourceDraft(null);

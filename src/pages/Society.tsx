@@ -21,6 +21,7 @@ import { optionChoices, optionLabel } from "../lib/orgHubOptions";
 import { defaultsForJurisdiction, jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { homeJurisdictionCode } from "../../shared/organizationDomain";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { useAuth } from "../auth/AuthProvider";
 
 type DrawerKind = "address" | "registration" | "identifier";
 type LifecycleDateKey = "incorporationDate" | "continuanceDate" | "amalgamationDate" | "archivedAtISO" | "removedAtISO";
@@ -54,6 +55,7 @@ const OPTIONAL_ONBOARDING_STEPS = [
 export function SocietyNewPage() {
   const createWorkspace = useMutation(api.society.createWorkspace);
   const actingUserId = useCurrentUserId() ?? undefined;
+  const auth = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const [saving, setSaving] = useState(false);
@@ -91,8 +93,8 @@ export function SocietyNewPage() {
     if (!canSave) return;
     setSaving(true);
     try {
-      const result = await createWorkspace({ ...form, actingUserId });
-      setStoredSocietyId(result.societyId);
+      const result = await createWorkspace({ ...form });
+      auth.refreshMembership(result.societyId);
       toast.success("Workspace created", `${result.taskIds.length} onboarding tasks created.`);
       navigate(`/app/workflows/${result.workflowId}`);
     } catch (error: any) {

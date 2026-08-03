@@ -988,7 +988,6 @@ export function CommunicationsPage() {
                   subject: sendDraft.subject,
                   bodyText: sendDraft.bodyText,
                   customMessage: sendDraft.customMessage || undefined,
-                  actingUserId,
                 });
                 toast.success(
                   result.bouncedCount

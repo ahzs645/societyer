@@ -407,7 +407,6 @@ export function TreasurerPage() {
           { accountId: quickEntryDraft.cashAccountId as any, side: isIncome ? "debit" : "credit", amountCents },
           { accountId: categoryAccount._id, side: isIncome ? "credit" : "debit", amountCents },
         ],
-        actingUserId,
       } as any);
       toast.success("Recorded to your ledger");
       setQuickEntryDraft(null);
@@ -574,16 +573,16 @@ export function TreasurerPage() {
                     <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
                       <button className="btn btn--ghost btn--sm" onClick={() => setExpenseDraft(expenseDraftFromRow(report))}>Edit</button>
                       {report.status === "Draft" && (
-                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Submitted", actingUserId })}>Submit</button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Submitted" })}>Submit</button>
                       )}
                       {report.status === "Submitted" && (
-                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Approved", actingUserId })}>Approve</button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Approved" })}>Approve</button>
                       )}
                       {report.status === "Approved" && (
                         (financialAccounts ?? []).length > 0 ? (
                           <button className="btn btn--ghost btn--sm" onClick={() => setPayingReport({ report, expenseAccountId: "", bankAccountId: "" })}>Mark paid</button>
                         ) : (
-                          <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Paid", actingUserId })}>Mark paid</button>
+                          <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Paid" })}>Mark paid</button>
                         )
                       )}
                       <button
@@ -711,7 +710,7 @@ export function TreasurerPage() {
                           className="btn btn--ghost btn--sm btn--icon"
                           aria-label={`Delete funding source ${source.name}`}
                           onClick={async () => {
-                            await removeFundingSource({ id: source._id, actingUserId });
+                            await removeFundingSource({ id: source._id });
                             toast.success("Funding source removed");
                           }}
                         >
@@ -777,7 +776,7 @@ export function TreasurerPage() {
                       className="btn btn--ghost btn--sm btn--icon"
                       aria-label={`Delete funding event ${event.label}`}
                       onClick={async () => {
-                        await removeFundingEvent({ id: event._id, actingUserId });
+                        await removeFundingEvent({ id: event._id });
                         toast.success("Funding event removed");
                       }}
                     >
@@ -938,7 +937,6 @@ export function TreasurerPage() {
                   endDate: sourceDraft.endDate || undefined,
                   restrictedPurpose: sourceDraft.restrictedPurpose || undefined,
                   notes: sourceDraft.notes || undefined,
-                  actingUserId,
                 });
                 toast.success("Funding source saved");
                 setSourceDraft(null);
@@ -1077,7 +1075,6 @@ export function TreasurerPage() {
                   periodEnd: eventDraft.periodEnd || undefined,
                   attributionStatus: eventDraft.attributionStatus || undefined,
                   notes: eventDraft.notes || undefined,
-                  actingUserId,
                 });
                 toast.success("Funding event saved");
                 setEventDraft(null);
@@ -1157,7 +1154,6 @@ export function TreasurerPage() {
                   receiptDocumentId: expenseDraft.receiptDocumentId || undefined,
                   paymentReference: expenseDraft.paymentReference || undefined,
                   notes: expenseDraft.notes || undefined,
-                  actingUserId,
                 });
                 toast.success("Expense report saved");
                 setExpenseDraft(null);
@@ -1237,7 +1233,7 @@ export function TreasurerPage() {
               <button
                 className="btn btn--ghost"
                 onClick={async () => {
-                  await setExpenseStatus({ id: payingReport.report._id, status: "Paid", actingUserId });
+                  await setExpenseStatus({ id: payingReport.report._id, status: "Paid" });
                   setPayingReport(null);
                   toast.success("Marked paid");
                 }}
@@ -1251,7 +1247,6 @@ export function TreasurerPage() {
                   await setExpenseStatus({
                     id: payingReport.report._id,
                     status: "Paid",
-                    actingUserId,
                     expenseAccountId: payingReport.expenseAccountId as any,
                     bankAccountId: payingReport.bankAccountId as any,
                   });
@@ -1300,7 +1295,6 @@ export function TreasurerPage() {
         onClose={() => setLevyImportOpen(false)}
         societyId={society._id}
         societyName={society.name}
-        actingUserId={actingUserId}
       />
 
       <Drawer

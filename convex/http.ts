@@ -1,13 +1,167 @@
 import { httpRouter } from "convex/server";
-import { httpAction } from "./_generated/server";
+import { httpAction, query } from "./_generated/server";
 import { api, internal } from "./_generated/api";
+import { v } from "convex/values";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, streamText } from "ai";
 import { buildICalendar } from "../shared/icalendar";
+import { assertApiPlatformServiceToken, serviceTokenValidator } from "./lib/serviceAuth";
+import type { Doc, Id } from "./_generated/dataModel";
 
 const http = httpRouter();
 const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+
+/**
+ * Bootstrap the authenticated workspace picker without trusting a society id
+ * from browser storage. The verified JWT subject is the only lookup key.
+ */
+export const currentPrincipalMemberships = query({
+  args: {},
+  returns: v.any(),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity?.subject) {
+      return { status: "unauthenticated", memberships: [] };
+    }
+
+    const rows = await ctx.db
+      .query("users")
+      .withIndex("by_auth_subject", (q) => q.eq("authSubject", identity.subject))
+      .collect();
+    const activeRows = rows.filter((row) => !row.status || row.status === "Active");
+    const activeSocietyIds = new Set(activeRows.map((row) => String(row.societyId)));
+    if (activeSocietyIds.size !== activeRows.length) {
+      return { status: "ambiguous-binding", memberships: [] };
+    }
+    if (activeRows.length === 0) {
+      return {
+        status: rows.some((row) => row.status === "Disabled")
+          ? "membership-disabled"
+          : "needs-invitation",
+        memberships: [],
+      };
+    }
+
+    const memberships: Array<{
+      userId: Id<"users">;
+      role: string;
+      user: Doc<"users">;
+      society: Doc<"societies"> & {
+        logoUrl?: string;
+        logoDarkUrl?: string;
+        letterheadUrl?: string;
+      };
+    }> = [];
+    for (const user of activeRows) {
+      const society = await ctx.db.get(user.societyId);
+      if (!society) continue;
+      const [logoUrl, logoDarkUrl, letterheadUrl] = await Promise.all([
+        society.logoStorageId ? ctx.storage.getUrl(society.logoStorageId) : null,
+        society.logoDarkStorageId ? ctx.storage.getUrl(society.logoDarkStorageId) : null,
+        society.letterheadStorageId ? ctx.storage.getUrl(society.letterheadStorageId) : null,
+      ]);
+      memberships.push({
+        userId: user._id,
+        role: user.role,
+        user,
+        society: {
+          ...society,
+          logoUrl: logoUrl ?? undefined,
+          logoDarkUrl: logoDarkUrl ?? undefined,
+          letterheadUrl: letterheadUrl ?? undefined,
+        },
+      });
+    }
+    return {
+      status: memberships.length > 0 ? "bound" : "needs-invitation",
+      authSubject: identity.subject,
+      memberships,
+    };
+  },
+});
+
+/** Resolve an API token's server-derived creator to a JWT subject for Convex. */
+export const gatewayApiPrincipal = query({
+  args: {
+    societyId: v.id("societies"),
+    userId: v.id("users"),
+    serviceToken: serviceTokenValidator,
+  },
+  returns: v.union(
+    v.null(),
+    v.object({ authSubject: v.string() }),
+  ),
+  handler: async (ctx, { societyId, userId, serviceToken }) => {
+    await assertApiPlatformServiceToken(serviceToken);
+    const user = await ctx.db.get(userId);
+    if (
+      !user ||
+      user.societyId !== societyId ||
+      user.status === "Disabled" ||
+      !user.authSubject
+    ) {
+      return null;
+    }
+    return { authSubject: user.authSubject };
+  },
+});
+
+export const gatewayWorkflowBinding = query({
+  args: {
+    workflowId: v.id("workflows"),
+    runId: v.id("workflowRuns"),
+    serviceToken: serviceTokenValidator,
+  },
+  returns: v.union(
+    v.null(),
+    v.object({ societyId: v.id("societies"), authSubject: v.string() }),
+  ),
+  handler: async (ctx, { workflowId, runId, serviceToken }) => {
+    await assertApiPlatformServiceToken(serviceToken);
+    const [workflow, run] = await Promise.all([
+      ctx.db.get(workflowId),
+      ctx.db.get(runId),
+    ]);
+    if (
+      !workflow ||
+      !run ||
+      run.workflowId !== workflowId ||
+      run.societyId !== workflow.societyId
+    ) {
+      return null;
+    }
+    const principalUserId = run.triggeredByUserId ?? workflow.createdByUserId;
+    if (!principalUserId) return null;
+    const user = await ctx.db.get(principalUserId);
+    if (
+      !user ||
+      user.societyId !== run.societyId ||
+      user.status === "Disabled" ||
+      !user.authSubject
+    ) {
+      return null;
+    }
+    return { societyId: run.societyId, authSubject: user.authSubject };
+  },
+});
+
+export const gatewayGeneratedDocumentAccess = query({
+  args: {
+    societyId: v.id("societies"),
+    storageKey: v.string(),
+    serviceToken: serviceTokenValidator,
+  },
+  returns: v.boolean(),
+  handler: async (ctx, { societyId, storageKey, serviceToken }) => {
+    await assertApiPlatformServiceToken(serviceToken);
+    const versions = await ctx.db
+      .query("documentVersions")
+      .withIndex("by_storage_key", (q) => q.eq("storageKey", storageKey))
+      .collect();
+    return versions.some((version) => version.societyId === societyId);
+  },
+});
 
 http.route({
   path: "/ai-chat/stream",
@@ -30,7 +184,14 @@ http.route({
     if (!societyId || !content) {
       return new Response("Missing societyId or content", { status: 400 });
     }
-    const actingUserId = body.actingUserId || undefined;
+    const membershipLookup = await ctx.runQuery(api.http.currentPrincipalMemberships, {});
+    const membership = membershipLookup?.memberships?.find(
+      (candidate: { society?: { _id?: string } }) => candidate.society?._id === societyId,
+    );
+    if (!membership?.userId) {
+      return new Response("Workspace membership required", { status: 403 });
+    }
+    const principalUserId = membership.userId;
     let lockedModelId: string | undefined;
     if (body.threadId) {
       const existingThread = await ctx.runQuery((api as any).aiChat.getThread, { threadId: body.threadId });
@@ -39,7 +200,6 @@ http.route({
     const runtimeConfig = await resolveAiRuntimeConfig(
       ctx,
       societyId,
-      actingUserId,
       lockedModelId ?? body.modelId,
     );
     const modelId = runtimeConfig.modelId;
@@ -50,7 +210,6 @@ http.route({
         title: content,
         modelId,
         browsingContext: body.browsingContext,
-        actingUserId,
       }));
 
     await ctx.runMutation((internal as any).aiChat._appendMessage, {
@@ -58,12 +217,11 @@ http.route({
       threadId,
       role: "user",
       content,
-      createdByUserId: actingUserId,
+      createdByUserId: principalUserId,
     });
     const [context, history] = await Promise.all([
       ctx.runQuery((api as any).aiAgents.getChatContext, {
         societyId,
-        actingUserId,
         browsingContext: body.browsingContext,
       }),
       ctx.runQuery((api as any).aiChat.messagesForThread, { threadId }),
@@ -109,7 +267,7 @@ http.route({
             status: "complete",
             modelId,
             parts: { provider: "vercel_ai_sdk_sse" },
-            createdByUserId: actingUserId,
+            createdByUserId: principalUserId,
           });
           controller.enqueue(encoder.encode(sse({ threadId, messageId }, "done")));
         } catch (error: any) {
@@ -122,7 +280,7 @@ http.route({
             status: "error",
             modelId,
             parts: { provider: "sse_fallback" },
-            createdByUserId: actingUserId,
+            createdByUserId: principalUserId,
           });
           controller.enqueue(encoder.encode(sse({ error: fallback, threadId }, "error")));
         } finally {
@@ -146,10 +304,9 @@ function env(name: string) {
   return (globalThis as any)?.process?.env?.[name] as string | undefined;
 }
 
-async function resolveAiRuntimeConfig(ctx: any, societyId: any, actingUserId: any, requestedModelId?: string) {
+async function resolveAiRuntimeConfig(ctx: any, societyId: any, requestedModelId?: string) {
   const settings = await ctx.runQuery((api as any).aiSettings.getEffective, {
     societyId,
-    actingUserId,
   }).catch(() => null);
   const effective = settings?.effective;
   const secret = effective?.secretVaultItemId

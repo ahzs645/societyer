@@ -31,7 +31,7 @@ export function DocumentWorkbenchPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
   const userId = useCurrentUserId() ?? undefined;
-  const document = useQuery(api.documents.get, id ? { id: id as Id<"documents">, actingUserId: userId } : "skip");
+  const document = useQuery(api.documents.get, id ? { id: id as Id<"documents"> } : "skip");
   const latest = useQuery(api.documentVersions.latest, id ? { documentId: id as Id<"documents"> } : "skip");
   const legacyUrl = useQuery(api.files.getUrl, document?.storageId ? { storageId: document.storageId } : "skip");
   const comments = useQuery(api.documentComments.listForDocument, id ? { documentId: id as Id<"documents"> } : "skip");
@@ -265,7 +265,6 @@ export function DocumentWorkbenchPage() {
                         onClick={() => setCommentStatus({
                           id: comment._id,
                           status: comment.status === "resolved" ? "open" : "resolved",
-                          actingUserId: userId,
                         })}
                       >
                         <CheckCircle2 size={12} />

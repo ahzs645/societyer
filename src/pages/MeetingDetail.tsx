@@ -110,12 +110,12 @@ export function MeetingDetailPage() {
   const agendaRecord = useQuery(api.agendas.getForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const meetingPackage = useQuery(
     api.meetingMaterials.packageForMeeting,
-    id ? { meetingId: id as Id<"meetings">, actingUserId } : "skip",
+    id ? { meetingId: id as Id<"meetings"> } : "skip",
   );
   const sourceDocumentIds = ((minutes as any)?.sourceDocumentIds ?? []) as Id<"documents">[];
   const sourceDocuments = useQuery(
     api.documents.getMany,
-    sourceDocumentIds.length > 0 ? { ids: sourceDocumentIds, actingUserId } : "skip",
+    sourceDocumentIds.length > 0 ? { ids: sourceDocumentIds } : "skip",
   );
   const transcriptRecord = useQuery(
     api.transcripts.getByMeeting,
@@ -141,7 +141,7 @@ export function MeetingDetailPage() {
     api.committees.detail,
     meeting?.committeeId ? { id: meeting.committeeId } : "skip",
   );
-  const allDocuments = useQuery(api.documents.list, society ? { societyId: society._id, actingUserId } : "skip");
+  const allDocuments = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   // Sibling meetings power the "approved at meeting" picker — minutes are
   // typically adopted at a later meeting, so we let the user point at it.
   const allMeetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
@@ -1697,7 +1697,6 @@ export function MeetingDetailPage() {
       id: meeting._id,
       status: "source_reviewed",
       notes: sourceReviewNote.trim() || undefined,
-      actingUserId,
     });
     setSourceReviewNote("");
     toast.success("Source review completed");
@@ -1708,7 +1707,6 @@ export function MeetingDetailPage() {
       id: meeting._id,
       status: "imported_needs_review",
       notes: sourceReviewNote.trim() || "Source review reopened.",
-      actingUserId,
     });
     toast.success("Source review reopened");
   };
@@ -1722,7 +1720,6 @@ export function MeetingDetailPage() {
       id: meeting._id,
       status: "ready",
       notes: packageReviewNote.trim() || undefined,
-      actingUserId,
     });
     setPackageReviewNote("");
     toast.success("Board package marked ready");
@@ -1733,7 +1730,6 @@ export function MeetingDetailPage() {
       id: meeting._id,
       status: "needs_review",
       notes: packageReviewNote.trim() || "Package returned to review.",
-      actingUserId,
     });
     toast.success("Package returned to review");
   };

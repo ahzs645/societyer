@@ -294,7 +294,6 @@ export function SignaturePanel({
                     try {
                       await deleteProfile({
                         id: savedProfile._id as Id<"signatureProfiles">,
-                        actingUserId: user?._id,
                       });
                       toast.success("Saved signature removed", `Removed ${s.signerName}'s saved signature from their account`);
                     } catch (error) {
@@ -318,7 +317,7 @@ export function SignaturePanel({
                     return;
                   }
                   try {
-                    await revoke({ id: s._id, actingUserId: user?._id });
+                    await revoke({ id: s._id });
                     setLocalSignatures((current) => current.filter((signature) => signature._id !== s._id));
                   } catch (error) {
                     console.error("[signatures.revoke]", error);
@@ -372,7 +371,6 @@ export function SignaturePanel({
                   directorId: selectedSigner?.directorId as Id<"directors"> | undefined,
                   memberId: selectedSigner?.memberId as Id<"members"> | undefined,
                   signatureProfileId: selectedProfile?._id,
-                  actingUserId: user?._id,
                   signerName: name,
                   signerRole,
                   method: activeMethod,
@@ -428,7 +426,6 @@ export function SignaturePanel({
                   try {
                     await deleteProfile({
                       id: selectedProfile._id as Id<"signatureProfiles">,
-                      actingUserId: user?._id,
                     });
                     setCustomizeSignature(true);
                     toast.success("Saved signature removed", selectedProfile.signerName);

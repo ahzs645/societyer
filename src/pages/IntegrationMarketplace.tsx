@@ -150,7 +150,6 @@ export function IntegrationMarketplacePage() {
         result = await createBoardPack({
           societyId: society._id,
           meetingId: meetingId as any,
-          actingUserId,
         });
       } catch {
         result = await createBoardPackFallback();
@@ -192,7 +191,6 @@ export function IntegrationMarketplacePage() {
       id: meeting._id,
       status: "needs_review",
       notes: `Board pack package ${String(packageId)} created from integration marketplace.`,
-      actingUserId: actingUserId as any,
     });
     const taskIds: any[] = [];
     for (const task of boardPackTaskDrafts(meeting, String(packageId))) {
