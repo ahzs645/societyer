@@ -2014,6 +2014,22 @@
     ]
   },
   {
+    "key": "convex:apiPlatform:bootstrapUserIdentity",
+    "surface": "convex",
+    "name": "apiPlatform:bootstrapUserIdentity",
+    "kind": "mutation",
+    "access": "unclassified",
+    "source": "convex/apiPlatform.ts",
+    "idArguments": [
+      {
+        "path": "userId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:apiPlatform:createClient",
     "surface": "convex",
     "name": "apiPlatform:createClient",
@@ -9817,6 +9833,15 @@
     ]
   },
   {
+    "key": "convex:invitations:accept",
+    "surface": "convex",
+    "name": "invitations:accept",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/invitations.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:invitations:create",
     "surface": "convex",
     "name": "invitations:create",
@@ -9829,12 +9854,6 @@
         "table": "societies",
         "array": false,
         "optional": false
-      },
-      {
-        "path": "invitedByUserId",
-        "table": "users",
-        "array": false,
-        "optional": true
       }
     ]
   },
@@ -16823,6 +16842,22 @@
     ]
   },
   {
+    "key": "convex:users:ensureCurrentMembership",
+    "surface": "convex",
+    "name": "users:ensureCurrentMembership",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/users.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:users:get",
     "surface": "convex",
     "name": "users:get",
@@ -16907,22 +16942,6 @@
         "table": "users",
         "array": false,
         "optional": true
-      }
-    ]
-  },
-  {
-    "key": "convex:users:resolveAuthSession",
-    "surface": "convex",
-    "name": "users:resolveAuthSession",
-    "kind": "mutation",
-    "access": "authenticated",
-    "source": "convex/users.ts",
-    "idArguments": [
-      {
-        "path": "societyId",
-        "table": "societies",
-        "array": false,
-        "optional": false
       }
     ]
   },
@@ -27213,6 +27232,15 @@
     ]
   },
   {
+    "key": "portable:invitations:accept",
+    "surface": "portable",
+    "name": "invitations:accept",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
     "key": "portable:invitations:create",
     "surface": "portable",
     "name": "invitations:create",
@@ -27225,12 +27253,6 @@
         "table": "societies",
         "array": false,
         "optional": false
-      },
-      {
-        "path": "invitedByUserId",
-        "table": "users",
-        "array": false,
-        "optional": true
       }
     ]
   },
@@ -33386,6 +33408,22 @@
     ]
   },
   {
+    "key": "portable:users:ensureCurrentMembership",
+    "surface": "portable",
+    "name": "users:ensureCurrentMembership",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:users:get",
     "surface": "portable",
     "name": "users:get",
@@ -33446,22 +33484,6 @@
       {
         "path": "id",
         "table": "users",
-        "array": false,
-        "optional": false
-      }
-    ]
-  },
-  {
-    "key": "portable:users:resolveAuthSession",
-    "surface": "portable",
-    "name": "users:resolveAuthSession",
-    "kind": "mutation",
-    "access": "authenticated",
-    "source": "shared/functions/registry.ts",
-    "idArguments": [
-      {
-        "path": "societyId",
-        "table": "societies",
         "array": false,
         "optional": false
       }
