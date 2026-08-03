@@ -243,9 +243,9 @@ export class MemoryDb implements PortableDbWriter {
     this.idIndex.set(doc._id, table);
   }
 
-  async get<T extends PortableDoc = PortableDoc>(id: string): Promise<T | null> {
+  async get<T extends PortableDoc = PortableDoc>(id: string, expectedTable?: TableName): Promise<T | null> {
     const table = this.idIndex.get(id);
-    if (!table) return null;
+    if (!table || (expectedTable && table !== expectedTable)) return null;
     const doc = this.tables.get(table)?.get(id);
     return doc ? (clone(doc) as T) : null;
   }

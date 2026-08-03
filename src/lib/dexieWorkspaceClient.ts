@@ -8,12 +8,10 @@ export class DexieWorkspaceClient extends StaticConvexClient {
       databaseName: options?.databaseName,
       seed: options?.seed ?? {},
       url: "dexie://societyer-workspace",
-      principalProvider: () => ({
-        kind: "user",
+      trustedWorkspacePrincipal: {
         runtime: "electron-local",
-        assurance: "trusted-workspace",
         subject: `local:${workspaceId}`,
-      }),
+      },
     });
   }
 

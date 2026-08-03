@@ -7,13 +7,28 @@
  * ported to the portable contract: a portable handler calls
  * `requireRolePortable(ctx, ...)` directly, and the Convex `requireRole` wrapper
  * (convex/users.ts) delegates here so live and offline enforce the same rule.
+ *
+ * STAGE 2 TENANCY PATTERN (keep call sites boring and consistent):
+ *   const user = await requireSocietyMembership(ctx, societyId);
+ *   const row = await getOwned<Row>(ctx, "rows", id, societyId);
+ *   const child = await getOwnedChild<Child>(
+ *     ctx, "children", childId, "parents", "parentId", societyId,
+ *   );
+ *   const createdByUserId = await principalUserId(ctx, societyId);
+ *
+ * `getOwned`/`getOwnedChild` deliberately throw the same table-scoped not-found
+ * error for missing, wrong-table, and foreign-society IDs. Audit attribution
+ * always comes from `principalUserId`; client actor fields are compatibility
+ * inputs only and must not be copied into stored audit fields.
  */
 
 import type {
   PortableDoc,
   PortablePrincipal,
   PortableQueryCtx,
+  TableName,
 } from "../portable/ctx";
+import { PORTABLE_ACCESS_ENFORCEMENT } from "../portable/define";
 
 export const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"] as const;
 export type Role = (typeof ROLES)[number];
@@ -40,6 +55,8 @@ export type PortableUserRow = PortableDoc & {
   authSubject?: string;
 };
 
+export type OwnedPortableRow = PortableDoc & { societyId: string };
+
 export function requireAuthenticated(ctx: PortableQueryCtx): PortableAuthenticatedPrincipal {
   if (ctx.principal.kind === "anonymous") throw new Error("Authentication required.");
   return ctx.principal;
@@ -56,7 +73,7 @@ export async function resolvePrincipalUser(
 
   const directUserId = principal.kind === "user" ? principal.userId : principal.actorUserId;
   if (directUserId) {
-    const direct = await ctx.db.get<PortableUserRow>(directUserId);
+    const direct = await ctx.db.get<PortableUserRow>(directUserId, "users");
     return direct?.societyId === societyId ? direct : null;
   }
 
@@ -66,6 +83,72 @@ export async function resolvePrincipalUser(
     .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
     .collect();
   return matches.find((user) => user.societyId === societyId) ?? null;
+}
+
+function assertMembershipStatus(user: PortableUserRow): void {
+  // Older local/demo rows predate the status field and remain active for
+  // compatibility. New rows must be explicitly Active.
+  if (user.status && user.status !== "Active") {
+    if (user.status === "Disabled") throw new Error("User is disabled.");
+    throw new Error("Society membership is not active.");
+  }
+}
+
+/** Resolve and validate the current principal's membership in one society. */
+export async function requireSocietyMembership(
+  ctx: PortableQueryCtx,
+  societyId: string,
+): Promise<PortableUserRow> {
+  const user = await resolvePrincipalUser(ctx, societyId);
+  if (!user) throw new Error("Society membership not found.");
+  assertMembershipStatus(user);
+  return user;
+}
+
+function ownedRowNotFound(table: TableName): Error {
+  return new Error(`${table} not found.`);
+}
+
+/** Fetch a same-society row without revealing whether a foreign row exists. */
+export async function getOwned<T extends OwnedPortableRow = OwnedPortableRow>(
+  ctx: PortableQueryCtx,
+  table: TableName,
+  id: string,
+  societyId: string,
+): Promise<T> {
+  const row = await ctx.db.get<T>(id, table);
+  if (!row || row.societyId !== societyId) throw ownedRowNotFound(table);
+  return row;
+}
+
+/**
+ * Fetch a child and verify its parent belongs to the society in the same
+ * handler transaction. The child may omit `societyId`; when present it must
+ * agree with the parent.
+ */
+export async function getOwnedChild<
+  TChild extends PortableDoc = PortableDoc,
+  TParent extends OwnedPortableRow = OwnedPortableRow,
+>(
+  ctx: PortableQueryCtx,
+  childTable: TableName,
+  childId: string,
+  parentTable: TableName,
+  parentIdField: keyof TChild & string,
+  societyId: string,
+): Promise<TChild> {
+  const child = await ctx.db.get<TChild>(childId, childTable);
+  const parentId = child?.[parentIdField];
+  if (!child || typeof parentId !== "string") throw ownedRowNotFound(childTable);
+  const parent = await ctx.db.get<TParent>(parentId, parentTable);
+  if (
+    !parent ||
+    parent.societyId !== societyId ||
+    (typeof child.societyId === "string" && child.societyId !== societyId)
+  ) {
+    throw ownedRowNotFound(childTable);
+  }
+  return child;
 }
 
 async function authorizeUserRole(
@@ -111,34 +194,29 @@ export async function requirePrincipalRole(
 ): Promise<{ user: PortableUserRow | null }> {
   const principalUser = await resolvePrincipalUser(ctx, args.societyId);
   if (principalUser) {
-    if (principalUser.status === "Disabled") throw new Error("User is disabled.");
+    assertMembershipStatus(principalUser);
+    if (args.actingUserId && args.actingUserId !== principalUser._id) {
+      throw new Error("Authenticated actor does not match the current principal.");
+    }
     return authorizeUserRole(ctx, principalUser, args.societyId, args.required);
   }
-  // Stage-1 compatibility: anonymous or unresolved principals retain the exact
-  // caller-supplied actingUserId path. Stage 2 removes/rejects this fallback.
+  if (ctx.principal.kind !== "anonymous" || PORTABLE_ACCESS_ENFORCEMENT) {
+    throw new Error("Society membership not found.");
+  }
+  // Pre-flip compatibility is reachable only when there is no runtime
+  // principal at all. An authenticated-but-unbound or wrong-society principal
+  // must never regain authority through a client-supplied actor ID.
   return requireLegacyRole(ctx, args);
 }
 
 export async function principalUserId(ctx: PortableQueryCtx, societyId: string): Promise<string> {
-  const user = await resolvePrincipalUser(ctx, societyId);
-  if (!user) throw new Error("No user row resolves for the current principal.");
+  const user = await requireSocietyMembership(ctx, societyId);
   return user._id;
 }
-
-const LEGACY_COMPATIBILITY_PRINCIPAL: PortablePrincipal = {
-  kind: "anonymous",
-  runtime: "test",
-  assurance: "none",
-};
 
 export async function requireRolePortable(
   ctx: PortableQueryCtx,
   args: { actingUserId?: string | null; societyId: string; required: Role },
-): Promise<{ user: any | null }> {
-  // Compatibility wrapper: existing handlers deliberately enter the new
-  // helper's legacy fallback until Stage 2 migrates them family-by-family.
-  return requirePrincipalRole(
-    { ...ctx, principal: LEGACY_COMPATIBILITY_PRINCIPAL },
-    args,
-  );
+): Promise<{ user: PortableUserRow | null }> {
+  return requirePrincipalRole(ctx, args);
 }

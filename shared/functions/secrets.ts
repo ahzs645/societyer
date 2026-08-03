@@ -27,6 +27,7 @@ export async function removePortable(
   const existing = await ctx.db.get(id);
   if (!existing) return;
   const { user } = await requireVaultWrite(ctx, String(existing.societyId), actingUserId);
+  if (!user) throw new Error("Admin role required.");
   await ctx.db.delete(id);
   await logActivity(ctx, existing, user.displayName, "deleted", `Deleted access vault record "${existing.name}".`);
 }
@@ -40,9 +41,6 @@ function publicSecret(row: any) {
 }
 
 async function requireVaultWrite(ctx: PortableMutationCtx, societyId: string, actingUserId?: string) {
-  if (!actingUserId) {
-    throw new Error("Admin role required.");
-  }
   return requireRolePortable(ctx, { societyId, actingUserId, required: "Admin" });
 }
 

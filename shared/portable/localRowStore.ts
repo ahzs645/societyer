@@ -167,9 +167,9 @@ export class LocalStoreDb implements PortableDbWriter {
     return undefined;
   }
 
-  async get<T extends PortableDoc = PortableDoc>(id: string): Promise<T | null> {
+  async get<T extends PortableDoc = PortableDoc>(id: string, expectedTable?: TableName): Promise<T | null> {
     const table = this.findTableOf(id);
-    if (!table) return null;
+    if (!table || (expectedTable && table !== expectedTable)) return null;
     const row = this.currentRows(table).find((r) => r._id === id);
     return row ? (clone(row) as T) : null;
   }

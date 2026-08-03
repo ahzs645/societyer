@@ -63,4 +63,5 @@ export type {
   PortableFunctionDef,
   PortableRuntimeOptions,
   PortableAccess,
+  PortableAccessDecision,
 } from "./define";
