@@ -11,6 +11,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 interface ResolvedBylawRules {
   status?: string;
@@ -101,6 +102,7 @@ export interface MemberProposalPatch {
 }
 
 export async function memberProposalsList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("memberProposals")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -108,6 +110,8 @@ export async function memberProposalsList(ctx: PortableQueryCtx, { societyId }: 
 }
 
 export async function memberProposalCreate(ctx: PortableMutationCtx, args: MemberProposalCreateArgs): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.meetingId) await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   const rules = await getActiveBylawRuleSet(ctx, args.societyId);
   const thresholdPercent =
     args.thresholdPercent ?? rules.memberProposalThresholdPct;
@@ -124,7 +128,7 @@ export async function memberProposalCreate(ctx: PortableMutationCtx, args: Membe
 
   let status = meets ? "MeetsThreshold" : "Submitted";
   if (args.meetingId) {
-    const meeting = await ctx.db.get(args.meetingId);
+    const meeting = await getOwned(ctx, "meetings", args.meetingId, args.societyId);
     if (meeting?.noticeSentAt) {
       const leadMs = rules.memberProposalLeadDays * 86_400_000;
       const receivedTs = new Date(args.submittedAtISO).getTime();
@@ -146,7 +150,10 @@ export async function memberProposalUpdate(
   ctx: PortableMutationCtx,
   { id, patch }: { id: string; patch: MemberProposalPatch },
 ): Promise<void> {
-  const before = await ctx.db.get(id);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const before = await getOwned(ctx, "memberProposals", id, societyId);
+  if (patch.meetingId) await getOwned(ctx, "meetings", patch.meetingId, societyId);
   await ctx.db.patch(id, patch);
 
   // Re-evaluate the signature threshold when the count or electorate changes,
@@ -169,5 +176,8 @@ export async function memberProposalUpdate(
 }
 
 export async function memberProposalRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "memberProposals", id, societyId);
   await ctx.db.delete(id);
 }

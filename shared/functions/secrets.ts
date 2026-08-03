@@ -10,9 +10,10 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("secretVaultItems")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -24,9 +25,10 @@ export async function removePortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const existing = await ctx.db.get(id);
-  if (!existing) return;
-  const { user } = await requireVaultWrite(ctx, String(existing.societyId), actingUserId);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const existing = await getOwned(ctx, "secretVaultItems", id, societyId);
+  const { user } = await requireVaultWrite(ctx, societyId, actingUserId);
   if (!user) throw new Error("Admin role required.");
   await ctx.db.delete(id);
   await logActivity(ctx, existing, user.displayName, "deleted", `Deleted access vault record "${existing.name}".`);

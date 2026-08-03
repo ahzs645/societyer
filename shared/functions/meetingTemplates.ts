@@ -8,9 +8,11 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import { resolveMinutesMotions } from "./minutes";
 
 export async function seedDefaultsPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const existing = await ctx.db
     .query("meetingTemplates")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -90,6 +92,7 @@ export async function seedDefaultsPortable(ctx: PortableMutationCtx, { societyId
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("meetingTemplates")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -112,6 +115,10 @@ export async function createPortable(
     items: any[];
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  await Promise.all(args.items.flatMap((item) => item.motionTemplateId
+    ? [getOwned(ctx, "motionTemplates", item.motionTemplateId, args.societyId)]
+    : []));
   const now = new Date().toISOString();
   if (args.isDefault) await clearDefault(ctx, args.societyId);
   return await ctx.db.insert("meetingTemplates", {
@@ -137,8 +144,14 @@ export async function updatePortable(
     items?: any[];
   },
 ) {
-  const existing = await ctx.db.get(templateId);
-  if (!existing) throw new Error("Meeting template not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const existing = await getOwned(ctx, "meetingTemplates", templateId, societyId);
+  if (patch.items) {
+    await Promise.all(patch.items.flatMap((item) => item.motionTemplateId
+      ? [getOwned(ctx, "motionTemplates", item.motionTemplateId, societyId)]
+      : []));
+  }
   if (patch.isDefault) await clearDefault(ctx, String(existing.societyId), templateId);
   const clean: Record<string, unknown> = { updatedAtISO: new Date().toISOString() };
   for (const [key, value] of Object.entries(patch)) {
@@ -150,8 +163,9 @@ export async function updatePortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { templateId }: { templateId: string }) {
-  const existing = await ctx.db.get(templateId);
-  if (!existing) return null;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "meetingTemplates", templateId, societyId);
   await ctx.db.delete(templateId);
   return templateId;
 }
@@ -160,8 +174,9 @@ export async function duplicatePortable(
   ctx: PortableMutationCtx,
   { templateId, name }: { templateId: string; name?: string },
 ) {
-  const existing = await ctx.db.get(templateId);
-  if (!existing) throw new Error("Meeting template not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const existing = await getOwned(ctx, "meetingTemplates", templateId, societyId);
   const now = new Date().toISOString();
   return await ctx.db.insert("meetingTemplates", {
     societyId: existing.societyId,
@@ -184,8 +199,9 @@ export async function createFromMeetingPortable(
     isDefault?: boolean;
   },
 ) {
-  const meeting = await ctx.db.get(meetingId);
-  if (!meeting) throw new Error("Meeting not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const meeting = await getOwned(ctx, "meetings", meetingId, societyId);
   const minutes = await ctx.db
     .query("minutes")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))

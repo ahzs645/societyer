@@ -1,6 +1,6 @@
 import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 import {
   usersList,
   userGet,
@@ -10,7 +10,7 @@ import {
   recordLoginPortable,
   setRolePortable,
 } from "../shared/functions/users";
-import { ROLES, canActAs, requireRolePortable, type Role } from "../shared/functions/access";
+import { getOwned, ROLES, canActAs, requireRolePortable, type Role } from "../shared/functions/access";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export { ROLES, canActAs };
@@ -75,12 +75,18 @@ export const upsert = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
       societyId: args.societyId,
       required: "Admin",
     });
     const { id, actingUserId, ...rest } = args;
+    await Promise.all([
+      id ? getOwned(portableCtx, "users", id, args.societyId) : Promise.resolve(),
+      args.memberId ? getOwned(portableCtx, "members", args.memberId, args.societyId) : Promise.resolve(),
+      args.directorId ? getOwned(portableCtx, "directors", args.directorId, args.societyId) : Promise.resolve(),
+    ]);
     if (id) {
       await ctx.db.patch(id, rest);
       return id;
@@ -133,8 +139,12 @@ export const remove = mutation({
   args: { id: v.id("users"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
-    const target = await ctx.db.get(id);
-    if (!target) return;
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const societyId = portableCtx.principal.kind === "anonymous"
+      ? undefined
+      : portableCtx.principal.societyId;
+    if (!societyId) throw new Error("Society membership not found.");
+    const target = await getOwned<Doc<"users">>(portableCtx, "users", id, societyId);
     await requireRole(ctx, {
       actingUserId,
       societyId: target.societyId,

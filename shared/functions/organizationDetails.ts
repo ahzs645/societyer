@@ -13,10 +13,12 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import { cleanText } from "./text";
 import { assertAllowedOption } from "../orgHubOptions";
 
 export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const [addresses, registrations, identifiers] = await Promise.all([
     ctx.db
       .query("organizationAddresses")
@@ -60,6 +62,10 @@ export async function upsertAddressPortable(
     sourceDocumentIds?: string[];
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "organizationAddresses", id, args.societyId);
+  await Promise.all((args.sourceDocumentIds ?? []).map((documentId) =>
+    getOwned(ctx, "documents", documentId, args.societyId)));
   assertAllowedOption("addressTypes", args.type, "Address type", false);
   assertAllowedOption("addressStatuses", args.status, "Address status", false);
   const now = new Date().toISOString();
@@ -83,6 +89,9 @@ export async function upsertAddressPortable(
 }
 
 export async function removeAddressPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "organizationAddresses", id, societyId);
   await ctx.db.delete(id);
 }
 
@@ -116,6 +125,18 @@ export async function upsertRegistrationPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "organizationRegistrations", id, args.societyId);
+  await Promise.all([
+    args.profileReportDocumentId
+      ? getOwned(ctx, "documents", args.profileReportDocumentId, args.societyId)
+      : Promise.resolve(),
+    args.companyKeyVaultItemId
+      ? getOwned(ctx, "secretVaultItems", args.companyKeyVaultItemId, args.societyId)
+      : Promise.resolve(),
+    ...(args.sourceDocumentIds ?? []).map((documentId) =>
+      getOwned(ctx, "documents", documentId, args.societyId)),
+  ]);
   assertAllowedOption("entityJurisdictions", args.jurisdiction, "Registration jurisdiction", false);
   assertAllowedOption("entityJurisdictions", args.homeJurisdiction, "Home jurisdiction");
   assertAllowedOption("registrationTypes", args.registrationType, "Registration type");
@@ -140,6 +161,9 @@ export async function upsertRegistrationPortable(
 }
 
 export async function removeRegistrationPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "organizationRegistrations", id, societyId);
   await ctx.db.delete(id);
 }
 
@@ -159,6 +183,10 @@ export async function upsertIdentifierPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "organizationIdentifiers", id, args.societyId);
+  await Promise.all((args.sourceDocumentIds ?? []).map((documentId) =>
+    getOwned(ctx, "documents", documentId, args.societyId)));
   assertAllowedOption("taxNumberTypes", args.kind, "Identifier kind", false);
   assertAllowedOption("entityJurisdictions", args.jurisdiction, "Identifier jurisdiction");
   assertAllowedOption("identifierStatuses", args.status, "Identifier status");
@@ -183,6 +211,9 @@ export async function upsertIdentifierPortable(
 }
 
 export async function removeIdentifierPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "organizationIdentifiers", id, societyId);
   await ctx.db.delete(id);
 }
 
@@ -200,6 +231,7 @@ const BACKFILL_MINUTE_BOOK_SCAN_LIMIT = 500;
 const BACKFILL_INSERT_LIMIT = 100;
 
 export async function seedFromSocietyAddressesPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const society = await ctx.db.get(societyId);
   if (!society) throw new Error("Society not found.");
   const existing = await ctx.db
@@ -234,6 +266,7 @@ export async function seedFromSocietyAddressesPortable(ctx: PortableMutationCtx,
 }
 
 export async function backfillFromExistingRecordsPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const society = await ctx.db.get(societyId);
   if (!society) throw new Error("Society not found.");
   const now = new Date().toISOString();

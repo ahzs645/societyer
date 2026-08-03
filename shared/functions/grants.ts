@@ -10,7 +10,12 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import {
+  getOwned,
+  principalUserId,
+  requireRolePortable,
+  requireSocietyMembership,
+} from "./access";
 import { MODULES_BY_KEY, normalizeModuleSettings, type ModuleKey } from "../../src/lib/modules";
 
 function isoNow() {
@@ -18,6 +23,7 @@ function isoNow() {
 }
 
 async function requireEnabledModulePortable(ctx: PortableMutationCtx, societyId: string, key: ModuleKey) {
+  await requireSocietyMembership(ctx, societyId);
   const society = await ctx.db.get(societyId);
   if (!society) throw new Error("Society not found.");
   if (!normalizeModuleSettings(society as any)[key]) {
@@ -27,6 +33,7 @@ async function requireEnabledModulePortable(ctx: PortableMutationCtx, societyId:
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("grants")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -34,10 +41,14 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  return getOwned(ctx, "grants", id, societyId);
 }
 
 export async function publicOpeningsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("grants")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -46,6 +57,7 @@ export async function publicOpeningsPortable(ctx: PortableQueryCtx, { societyId 
 }
 
 export async function applicationsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("grantApplications")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -53,6 +65,7 @@ export async function applicationsPortable(ctx: PortableQueryCtx, { societyId }:
 }
 
 export async function transactionsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("grantTransactions")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -60,6 +73,7 @@ export async function transactionsPortable(ctx: PortableQueryCtx, { societyId }:
 }
 
 export async function reportsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("grantReports")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -70,7 +84,9 @@ export async function employeeLinksPortable(
   ctx: PortableQueryCtx,
   { societyId, grantId }: { societyId: string; grantId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   if (grantId) {
+    await getOwned(ctx, "grants", grantId, societyId);
     return await ctx.db
       .query("grantEmployeeLinks")
       .withIndex("by_grant", (q) => q.eq("grantId", grantId))
@@ -83,6 +99,7 @@ export async function employeeLinksPortable(
 }
 
 export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const [grants, reports, accounts, applications, ledger] = await Promise.all([
     ctx.db
       .query("grants")
@@ -155,9 +172,15 @@ export async function upsertEmployeeLinkPortable(
     actingUserId?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
+  await Promise.all([
+    getOwned(ctx, "grants", grantId, societyId),
+    getOwned(ctx, "employees", employeeId, societyId),
+  ]);
   const now = isoNow();
   if (id) {
+    await getOwned(ctx, "grantEmployeeLinks", id, societyId);
     await ctx.db.patch(id, { ...(patch ?? {}), updatedAtISO: now });
     return id;
   }
@@ -190,9 +213,10 @@ export async function removeEmployeeLinkPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const link = await ctx.db.get(id);
-  if (!link) return;
-  await requireRolePortable(ctx, { actingUserId, societyId: String(link.societyId), required: "Director" });
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const link = await getOwned(ctx, "grantEmployeeLinks", id, societyId);
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
   await ctx.db.delete(id);
 }
 
@@ -215,6 +239,8 @@ export async function submitApplicationPortable(
   },
 ) {
   await requireEnabledModulePortable(ctx, args.societyId, "grants");
+  if (args.grantId) await getOwned(ctx, "grants", args.grantId, args.societyId);
+  if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
   return await ctx.db.insert("grantApplications", {
     ...args,
     source: args.source ?? "public",
@@ -227,18 +253,19 @@ export async function reviewApplicationPortable(
   ctx: PortableMutationCtx,
   { id, status, notes, actingUserId }: { id: string; status: string; notes?: string; actingUserId?: string },
 ) {
-  const application = await ctx.db.get(id);
-  if (!application) throw new Error("Application not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const application = await getOwned(ctx, "grantApplications", id, societyId);
   await requireRolePortable(ctx, {
     actingUserId,
-    societyId: String(application.societyId),
+    societyId,
     required: "Director",
   });
   await ctx.db.patch(id, {
     status,
     notes,
     reviewedAtISO: isoNow(),
-    reviewedByUserId: actingUserId ?? undefined,
+    reviewedByUserId: await principalUserId(ctx, societyId),
   });
 }
 
@@ -246,18 +273,19 @@ export async function convertApplicationPortable(
   ctx: PortableMutationCtx,
   { id, funder, program, actingUserId }: { id: string; funder: string; program?: string; actingUserId?: string },
 ) {
-  const application = await ctx.db.get(id);
-  if (!application) throw new Error("Application not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const application = await getOwned(ctx, "grantApplications", id, societyId);
   await requireRolePortable(ctx, {
     actingUserId,
-    societyId: String(application.societyId),
+    societyId,
     required: "Director",
   });
 
   const grantId =
     application.linkedGrantId ??
     (await ctx.db.insert("grants", {
-      societyId: String(application.societyId),
+      societyId,
       title: application.projectTitle,
       funder,
       program,
@@ -272,13 +300,14 @@ export async function convertApplicationPortable(
     linkedGrantId: grantId,
     status: "Converted",
     reviewedAtISO: isoNow(),
-    reviewedByUserId: actingUserId ?? undefined,
+    reviewedByUserId: await principalUserId(ctx, societyId),
   });
 
   return grantId;
 }
 
 export async function upsertGrantPortable(ctx: PortableMutationCtx, args: Record<string, any>) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
@@ -286,6 +315,16 @@ export async function upsertGrantPortable(ctx: PortableMutationCtx, args: Record
   });
   const { id, actingUserId, ...rest } = args;
   void actingUserId;
+  await Promise.all([
+    id ? getOwned(ctx, "grants", id, args.societyId) : Promise.resolve(),
+    args.committeeId ? getOwned(ctx, "committees", args.committeeId, args.societyId) : Promise.resolve(),
+    args.boardOwnerUserId ? getOwned(ctx, "users", args.boardOwnerUserId, args.societyId) : Promise.resolve(),
+    args.linkedFinancialAccountId
+      ? getOwned(ctx, "financialAccounts", args.linkedFinancialAccountId, args.societyId)
+      : Promise.resolve(),
+    ...((args.sourceDocumentIds ?? []) as string[]).map((documentId) =>
+      getOwned(ctx, "documents", documentId, args.societyId)),
+  ]);
   const now = isoNow();
   if (id) {
     await ctx.db.patch(id, { ...rest, updatedAtISO: now });
@@ -312,6 +351,7 @@ export async function importGcosProjectSnapshotPortable(
     societyId,
     required: "Director",
   });
+  await requireSocietyMembership(ctx, societyId);
 
   const now = isoNow();
   const sourceExternalIds = Array.isArray(normalizedGrant?.sourceExternalIds)
@@ -376,11 +416,12 @@ export async function removeGrantPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const grant = await ctx.db.get(id);
-  if (!grant) return;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const grant = await getOwned(ctx, "grants", id, societyId);
   await requireRolePortable(ctx, {
     actingUserId,
-    societyId: String(grant.societyId),
+    societyId,
     required: "Director",
   });
   const [reports, ledger] = await Promise.all([
@@ -399,6 +440,7 @@ export async function removeGrantPortable(
 }
 
 export async function upsertReportPortable(ctx: PortableMutationCtx, args: Record<string, any>) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
@@ -406,6 +448,17 @@ export async function upsertReportPortable(ctx: PortableMutationCtx, args: Recor
   });
   const { id, actingUserId, ...rest } = args;
   void actingUserId;
+  await Promise.all([
+    getOwned(ctx, "grants", args.grantId, args.societyId),
+    id ? getOwned(ctx, "grantReports", id, args.societyId) : Promise.resolve(),
+    args.documentId ? getOwned(ctx, "documents", args.documentId, args.societyId) : Promise.resolve(),
+    args.submittedByUserId
+      ? getOwned(ctx, "users", args.submittedByUserId, args.societyId)
+      : Promise.resolve(),
+  ]);
+  if ("submittedByUserId" in rest) {
+    rest.submittedByUserId = await principalUserId(ctx, args.societyId);
+  }
   if (id) {
     await ctx.db.patch(id, rest);
     return id;
@@ -417,17 +470,19 @@ export async function removeReportPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const report = await ctx.db.get(id);
-  if (!report) return;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const report = await getOwned(ctx, "grantReports", id, societyId);
   await requireRolePortable(ctx, {
     actingUserId,
-    societyId: String(report.societyId),
+    societyId,
     required: "Director",
   });
   await ctx.db.delete(id);
 }
 
 export async function upsertTransactionPortable(ctx: PortableMutationCtx, args: Record<string, any>) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
@@ -435,6 +490,14 @@ export async function upsertTransactionPortable(ctx: PortableMutationCtx, args: 
   });
   const { id, actingUserId, ...rest } = args;
   void actingUserId;
+  await Promise.all([
+    getOwned(ctx, "grants", args.grantId, args.societyId),
+    id ? getOwned(ctx, "grantTransactions", id, args.societyId) : Promise.resolve(),
+    args.financialTransactionId
+      ? getOwned(ctx, "financialTransactions", args.financialTransactionId, args.societyId)
+      : Promise.resolve(),
+    args.documentId ? getOwned(ctx, "documents", args.documentId, args.societyId) : Promise.resolve(),
+  ]);
   if (id) {
     await ctx.db.patch(id, rest);
     return id;
@@ -446,11 +509,12 @@ export async function removeTransactionPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const row = await ctx.db.get(id);
-  if (!row) return;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const row = await getOwned(ctx, "grantTransactions", id, societyId);
   await requireRolePortable(ctx, {
     actingUserId,
-    societyId: String(row.societyId),
+    societyId,
     required: "Director",
   });
   await ctx.db.delete(id);

@@ -3,6 +3,7 @@ import { v, ConvexError } from "convex/values";
 import { requireRole, canActAs } from "./users";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import { listPortable, removePortable } from "../shared/functions/secrets";
+import { getOwned, requireSocietyMembership } from "../shared/functions/access";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -74,9 +75,6 @@ function previewFor(value: string) {
 }
 
 async function assertVaultWrite(ctx: any, societyId: any, actingUserId?: any) {
-  if (!actingUserId) {
-    throw new ConvexError({ code: "FORBIDDEN", message: "Admin role required." });
-  }
   return requireRole(ctx, { societyId, actingUserId, required: "Admin" });
 }
 
@@ -84,10 +82,12 @@ async function assertCanReveal(ctx: any, row: any, actingUserId?: any) {
   if (!actingUserId) {
     throw new ConvexError({ code: "FORBIDDEN", message: "Admin role required to reveal stored access values." });
   }
-  const user = await ctx.db.get(actingUserId);
-  if (!user || user.societyId !== row.societyId) {
-    throw new ConvexError({ code: "FORBIDDEN", message: "User is not part of this society." });
-  }
+  const user = await getOwned(
+    await toPortableQueryCtx(ctx),
+    "users",
+    String(actingUserId),
+    String(row.societyId),
+  );
   if (canActAs(user.role, "Owner")) return user;
 
   const policy = row.revealPolicy ?? "owner_admin_custodian";
@@ -156,7 +156,17 @@ export const create = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
     const { user } = await assertVaultWrite(ctx, args.societyId, args.actingUserId);
+    await Promise.all([
+      args.custodianUserId
+        ? getOwned(portableCtx, "users", args.custodianUserId, args.societyId)
+        : Promise.resolve(),
+      ...(args.authorizedUserIds ?? []).map((userId) =>
+        getOwned(portableCtx, "users", userId, args.societyId)),
+      ...(args.sourceDocumentIds ?? []).map((documentId) =>
+        getOwned(portableCtx, "documents", documentId, args.societyId)),
+    ]);
     const now = new Date().toISOString();
     const { secretValue, actingUserId, ...rest } = args;
     const secretPatch = secretValue
@@ -164,7 +174,7 @@ export const create = mutation({
           secretEncrypted: await encryptSecret(secretValue),
           secretPreview: previewFor(secretValue),
           secretUpdatedAtISO: now,
-          secretUpdatedByUserId: actingUserId,
+          secretUpdatedByUserId: user?._id,
         }
       : {};
     const id = await ctx.db.insert("secretVaultItems", {
@@ -216,9 +226,22 @@ export const update = mutation({
   },
   returns: v.any(),
   handler: async (ctx, { id, actingUserId, patch }) => {
-    const existing = await ctx.db.get(id);
-    if (!existing) throw new ConvexError({ code: "NOT_FOUND", message: "Access vault record not found." });
-    const { user } = await assertVaultWrite(ctx, existing.societyId, actingUserId);
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const societyId = portableCtx.principal.kind === "anonymous"
+      ? undefined
+      : portableCtx.principal.societyId;
+    if (!societyId) throw new Error("Society membership not found.");
+    const existing = await getOwned(portableCtx, "secretVaultItems", id, societyId);
+    const { user } = await assertVaultWrite(ctx, societyId, actingUserId);
+    await Promise.all([
+      patch.custodianUserId
+        ? getOwned(portableCtx, "users", patch.custodianUserId, societyId)
+        : Promise.resolve(),
+      ...(patch.authorizedUserIds ?? []).map((userId) =>
+        getOwned(portableCtx, "users", userId, societyId)),
+      ...(patch.sourceDocumentIds ?? []).map((documentId) =>
+        getOwned(portableCtx, "documents", documentId, societyId)),
+    ]);
     const now = new Date().toISOString();
     const { secretValue, ...rest } = patch;
     const secretPatch = secretValue
@@ -226,7 +249,7 @@ export const update = mutation({
           secretEncrypted: await encryptSecret(secretValue),
           secretPreview: previewFor(secretValue),
           secretUpdatedAtISO: now,
-          secretUpdatedByUserId: actingUserId,
+          secretUpdatedByUserId: user?._id,
           storageMode: rest.storageMode ?? "stored_encrypted",
         }
       : {};
@@ -242,16 +265,24 @@ export const revealSecret = mutation({
   },
   returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
-    const row = await ctx.db.get(id);
-    if (!row) throw new ConvexError({ code: "NOT_FOUND", message: "Access vault record not found." });
-    const user = await assertCanReveal(ctx, row, actingUserId);
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const societyId = portableCtx.principal.kind === "anonymous"
+      ? undefined
+      : portableCtx.principal.societyId;
+    if (!societyId) throw new Error("Society membership not found.");
+    const row = await getOwned(portableCtx, "secretVaultItems", id, societyId);
+    const principalUser = await requireSocietyMembership(portableCtx, societyId);
+    if (actingUserId !== principalUser._id) {
+      throw new ConvexError({ code: "FORBIDDEN", message: "Authenticated actor does not match the current principal." });
+    }
+    const user = await assertCanReveal(ctx, row, principalUser._id);
     if (!row.secretEncrypted) {
       throw new ConvexError({ code: "NO_SECRET_VALUE", message: "No encrypted value is stored for this record." });
     }
     const now = new Date().toISOString();
     await ctx.db.patch(id, {
       secretLastRevealedAtISO: now,
-      secretLastRevealedByUserId: actingUserId,
+      secretLastRevealedByUserId: principalUser._id,
       updatedAtISO: now,
     });
     await logActivity(ctx, row, user.displayName, "revealed", `Revealed stored access value for "${row.name}".`);
@@ -263,8 +294,13 @@ export const _revealForServer = internalQuery({
   args: { id: v.id("secretVaultItems") },
   returns: v.any(),
   handler: async (ctx, { id }) => {
-    const row = await ctx.db.get(id);
-    if (!row || !row.secretEncrypted) return null;
+    const portableCtx = await toPortableQueryCtx(ctx);
+    const societyId = portableCtx.principal.kind === "anonymous"
+      ? undefined
+      : portableCtx.principal.societyId;
+    if (!societyId) throw new Error("Society membership not found.");
+    const row = await getOwned(portableCtx, "secretVaultItems", id, societyId);
+    if (!row.secretEncrypted) return null;
     return {
       value: await decryptSecret(row.secretEncrypted),
       preview: row.secretPreview,

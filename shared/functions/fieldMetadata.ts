@@ -12,11 +12,15 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export async function listForObjectPortable(
   ctx: PortableQueryCtx,
   { objectMetadataId }: { objectMetadataId: string },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "objectMetadata", objectMetadataId, societyId);
   const rows = await ctx.db
     .query("fieldMetadata")
     .withIndex("by_object", (q) => q.eq("objectMetadataId", objectMetadataId))
@@ -29,6 +33,7 @@ export async function listForSocietyPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("fieldMetadata")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -36,13 +41,18 @@ export async function listForSocietyPortable(
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  return getOwned(ctx, "fieldMetadata", id, societyId);
 }
 
 export async function getByNamePortable(
   ctx: PortableQueryCtx,
   { objectMetadataId, name }: { objectMetadataId: string; name: string },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "objectMetadata", objectMetadataId, societyId);
   return ctx.db
     .query("fieldMetadata")
     .withIndex("by_object_name", (q) =>
@@ -70,6 +80,8 @@ export async function createPortable(
     position?: number;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  await getOwned(ctx, "objectMetadata", args.objectMetadataId, args.societyId);
   const now = new Date().toISOString();
   // Compute the next position if none provided.
   let position = args.position;
@@ -121,8 +133,9 @@ export async function updatePortable(
     };
   },
 ) {
-  const existing = await ctx.db.get(id);
-  if (!existing) throw new Error("Field not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const existing = await getOwned(ctx, "fieldMetadata", id, societyId);
   if (existing.isSystem && patch.fieldType && patch.fieldType !== existing.fieldType) {
     throw new Error("Cannot change the field type of a system field.");
   }
@@ -130,8 +143,9 @@ export async function updatePortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const field = await ctx.db.get(id);
-  if (!field) return;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const field = await getOwned(ctx, "fieldMetadata", id, societyId);
   if (field.isSystem) {
     throw new Error("Cannot delete a system field.");
   }

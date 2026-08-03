@@ -4,7 +4,8 @@ import { action, internalMutation, query } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { waveFetchSnapshot, waveHealthCheck, waveInvoicePaymentProbe } from "./providers/waveData";
 import { redactWaveDiagnostic, waveEnvironmentStatus } from "./providers/waveDiagnostics";
-import { toPortableQueryCtx } from "./lib/portable";
+import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
+import { getOwned, requireSocietyMembership } from "../shared/functions/access";
 import {
   summaryPortable,
   resourcesPortable,
@@ -87,6 +88,7 @@ export const sync = action({
   },
   returns: v.any(),
   handler: async (ctx, { societyId, connectionId, businessId }) => {
+    await ctx.runQuery(api.users.list, { societyId });
     const connection = connectionId
       ? await ctx.runQuery(api.financialHub.getConnection, { id: connectionId })
       : await findWaveConnection(ctx, societyId);
@@ -194,6 +196,11 @@ export const _replaceSnapshot = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.connectionId) {
+      await getOwned(portableCtx, "financialConnections", args.connectionId, args.societyId);
+    }
     const previous = await ctx.db
       .query("waveCacheSnapshots")
       .withIndex("by_society_provider", (q) => q.eq("societyId", args.societyId).eq("provider", args.provider))

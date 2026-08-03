@@ -8,8 +8,10 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const [documents, materials] = await Promise.all([
     ctx.db
       .query("documents")
@@ -22,7 +24,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
   ]);
 
   const meetingIds = Array.from(new Set<string>((materials as any[]).map((row) => String(row.meetingId))));
-  const meetings = await Promise.all(meetingIds.map((id) => ctx.db.get(id as any)));
+  const meetings = await Promise.all(meetingIds.map((id) => getOwned(ctx, "meetings", String(id), societyId)));
   const meetingById = new Map(meetings.filter(Boolean).map((meeting: any) => [String(meeting._id), meeting]));
   const documentById = new Map<string, any>((documents as any[]).map((document) => [String(document._id), document]));
 

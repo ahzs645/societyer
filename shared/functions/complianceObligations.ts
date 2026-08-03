@@ -9,8 +9,10 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export async function listDecisionsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("complianceRemediations")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -30,6 +32,10 @@ export async function markReviewedPortable(
     targetId?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.targetTable && args.targetId) {
+    await getOwned(ctx, args.targetTable, args.targetId, args.societyId);
+  }
   const nowISO = new Date().toISOString();
   return await upsertDecision(ctx, {
     ...args,
@@ -50,6 +56,7 @@ export async function dismissDecisionPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const nowISO = new Date().toISOString();
   return await upsertDecision(ctx, {
     ...args,
@@ -69,6 +76,7 @@ export async function reopenDecisionPortable(
     evidenceRequired: string[];
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   return upsertDecision(ctx, {
     ...args,
     status: "open",

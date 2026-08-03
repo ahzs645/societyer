@@ -8,6 +8,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export interface CommandMenuItemListArgs {
   societyId: string;
@@ -34,6 +35,10 @@ export interface CommandMenuItemUpsertArgs {
 }
 
 export async function commandMenuItemsListForScope(ctx: PortableQueryCtx, args: CommandMenuItemListArgs) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.objectMetadataId) {
+    await getOwned(ctx, "objectMetadata", args.objectMetadataId, args.societyId);
+  }
   let rows: any[] = [];
   try {
     rows = await ctx.db
@@ -63,6 +68,11 @@ export async function commandMenuItemsListForScope(ctx: PortableQueryCtx, args: 
 }
 
 export async function commandMenuItemUpsert(ctx: PortableMutationCtx, args: CommandMenuItemUpsertArgs): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.id) await getOwned(ctx, "commandMenuItems", args.id, args.societyId);
+  if (args.objectMetadataId) {
+    await getOwned(ctx, "objectMetadata", args.objectMetadataId, args.societyId);
+  }
   const now = new Date().toISOString();
   if (args.id) {
     await ctx.db.patch(args.id, {
@@ -106,8 +116,9 @@ export async function commandMenuItemUpsert(ctx: PortableMutationCtx, args: Comm
 }
 
 export async function commandMenuItemRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
-  const row = await ctx.db.get(id);
-  if (!row) return;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const row = await getOwned(ctx, "commandMenuItems", id, societyId);
   if (row.isSystem) throw new Error("Cannot delete a system command.");
   await ctx.db.delete(id);
 }

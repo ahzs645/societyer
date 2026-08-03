@@ -8,6 +8,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import {
   computeDividend,
   reconcileDividend,
@@ -22,6 +23,7 @@ function centsToAmount(cents: number): string {
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("dividends")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -43,6 +45,7 @@ export async function createPortable(
     nowISO: string;
   },
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
   const declaration: DividendDeclaration = {
     declaredOn: args.declaredOn,
     shareClass: args.shareClass,
@@ -82,10 +85,14 @@ export async function createPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "dividends", id, societyId);
   await ctx.db.delete(id);
 }
 
 export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("dividends")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))

@@ -13,6 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
 
 /* ----------------------- Inlined bylaw / quorum helpers ----------------------- */
@@ -315,6 +316,7 @@ async function buildTemplateMotions(
   ctx: any,
   items: TemplateItem[],
   templateContext: Record<string, string>,
+  societyId: string,
   previousMinutesId?: string,
 ) {
   const motions: any[] = [];
@@ -324,15 +326,13 @@ async function buildTemplateMotions(
     let text = item.motionText;
     let resolutionType = "Ordinary";
     if (item.motionTemplateId) {
-      const template = await ctx.db.get(item.motionTemplateId);
-      if (template) {
-        text = text || template.body;
-        resolutionType = template.requiresSpecialResolution ? "Special" : "Ordinary";
-        await ctx.db.patch(template._id, {
-          usageCount: (template.usageCount ?? 0) + 1,
-          updatedAtISO: now,
-        });
-      }
+      const template = await getOwned(ctx, "motionTemplates", item.motionTemplateId, societyId);
+      text = text || template.body;
+      resolutionType = template.requiresSpecialResolution ? "Special" : "Ordinary";
+      await ctx.db.patch(template._id, {
+        usageCount: (template.usageCount ?? 0) + 1,
+        updatedAtISO: now,
+      });
     }
     text = resolveTemplateText(text, templateContext);
     if (!text?.trim()) continue;
@@ -421,6 +421,7 @@ export async function listPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("meetings")
     .withIndex("by_society_date", (q) => q.eq("societyId", societyId))
@@ -429,7 +430,9 @@ export async function listPortable(
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  return getOwned(ctx, "meetings", id, societyId);
 }
 
 export async function createPortable(
@@ -467,6 +470,12 @@ export async function createPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  await Promise.all([
+    args.committeeId ? getOwned(ctx, "committees", args.committeeId, args.societyId) : Promise.resolve(),
+    args.bylawRuleSetId ? getOwned(ctx, "bylawRuleSets", args.bylawRuleSetId, args.societyId) : Promise.resolve(),
+    args.meetingTemplateId ? getOwned(ctx, "meetingTemplates", args.meetingTemplateId, args.societyId) : Promise.resolve(),
+  ]);
   const rules = await getBylawRuleSetForDate(
     ctx,
     args.societyId,
@@ -487,7 +496,7 @@ export async function createPortable(
   });
 
   const template = args.meetingTemplateId
-    ? await ctx.db.get(args.meetingTemplateId)
+    ? await getOwned(ctx, "meetingTemplates", args.meetingTemplateId, args.societyId)
     : null;
   if (args.meetingTemplateId && !template) {
     throw new Error("Meeting template not found.");
@@ -506,7 +515,7 @@ export async function createPortable(
     args.type,
   );
   const templateMotions = template
-    ? await buildTemplateMotions(ctx, templateItems, templateContext, previousMinutesId)
+    ? await buildTemplateMotions(ctx, templateItems, templateContext, args.societyId, previousMinutesId)
     : [];
   const templateSnapshotJson = template
     ? JSON.stringify({
@@ -520,8 +529,11 @@ export async function createPortable(
     : undefined;
 
   const { agendaJson: _agendaJsonInput, ...meetingArgs } = args;
+  const actorUserId = await principalUserId(ctx, args.societyId);
   const meetingId = await ctx.db.insert("meetings", {
     ...meetingArgs,
+    sourceReviewedByUserId: args.sourceReviewedByUserId ? actorUserId : undefined,
+    packageReviewedByUserId: args.packageReviewedByUserId ? actorUserId : undefined,
     templateSnapshotJson,
     bylawRuleSetId: args.bylawRuleSetId ?? snapshot.bylawRuleSetId,
     quorumRuleVersion: args.quorumRuleVersion ?? snapshot.quorumRuleVersion,
@@ -534,6 +546,14 @@ export async function createPortable(
       args.quorumComputedAtISO ?? snapshot.quorumComputedAtISO,
   });
   const agendaJsonItems = !templateItems.length ? normalizeAgendaJsonItems(args.agendaJson) : [];
+  await Promise.all(agendaJsonItems.flatMap((item) => [
+    item.motionTemplateId
+      ? getOwned(ctx, "motionTemplates", item.motionTemplateId, args.societyId)
+      : Promise.resolve(),
+    item.adoptsMinutesId
+      ? getOwned(ctx, "minutes", item.adoptsMinutesId, args.societyId)
+      : Promise.resolve(),
+  ]));
   if (templateItems.length > 0 || args.agendaJson) {
     const agendaId = await ctx.db.insert("agendas", {
       societyId: args.societyId,
@@ -679,10 +699,10 @@ export async function applyTemplatePortable(
     replace?: boolean;
   },
 ) {
-  const meeting = await ctx.db.get(meetingId);
-  if (!meeting) throw new Error("Meeting not found.");
-  const template = await ctx.db.get(meetingTemplateId);
-  if (!template) throw new Error("Meeting template not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const meeting = await getOwned(ctx, "meetings", meetingId, societyId);
+  const template = await getOwned(ctx, "meetingTemplates", meetingTemplateId, societyId);
   if (template.societyId !== meeting.societyId) {
     throw new Error("Meeting template belongs to a different society.");
   }
@@ -697,7 +717,13 @@ export async function applyTemplatePortable(
     meeting.scheduledAt,
     meeting.type,
   );
-  const templateMotions = await buildTemplateMotions(ctx, templateItems, templateContext, previousMinutesId);
+  const templateMotions = await buildTemplateMotions(
+    ctx,
+    templateItems,
+    templateContext,
+    societyId,
+    previousMinutesId,
+  );
   const now = new Date().toISOString();
 
   // Resolve (or create) the meeting's agenda.
@@ -762,7 +788,7 @@ export async function applyTemplatePortable(
   // unless the caller explicitly asked to replace.
   let minutesScaffolded = false;
   if (meeting.minutesId) {
-    const minutes = await ctx.db.get(meeting.minutesId);
+    const minutes = await getOwned(ctx, "minutes", meeting.minutesId, societyId);
     const hasSections = Array.isArray(minutes?.sections) && minutes.sections.length > 0;
     // Read motions from the first-class table (Phase 2C) so this "don't clobber
     // recorded minutes" guard still detects motions once the embedded array is
@@ -847,11 +873,25 @@ export async function updatePortable(
     };
   },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "meetings", id, societyId);
+  await Promise.all([
+    patch.committeeId ? getOwned(ctx, "committees", patch.committeeId, societyId) : Promise.resolve(),
+    patch.bylawRuleSetId ? getOwned(ctx, "bylawRuleSets", patch.bylawRuleSetId, societyId) : Promise.resolve(),
+    patch.meetingTemplateId ? getOwned(ctx, "meetingTemplates", patch.meetingTemplateId, societyId) : Promise.resolve(),
+    patch.minutesId ? getOwned(ctx, "minutes", patch.minutesId, societyId) : Promise.resolve(),
+  ]);
+  const actorUserId = await principalUserId(ctx, societyId);
   const { clearNoticeSent, clearCommitteeId, ...rest } = patch;
   const next: Record<string, unknown> = { ...rest };
+  if (rest.sourceReviewedByUserId) next.sourceReviewedByUserId = actorUserId;
+  if (rest.packageReviewedByUserId) next.packageReviewedByUserId = actorUserId;
   if (clearNoticeSent) next.noticeSentAt = undefined;
   if (clearCommitteeId) next.committeeId = undefined;
-  const existing = rest.scheduledAt !== undefined ? await ctx.db.get(id) : null;
+  const existing = rest.scheduledAt !== undefined
+    ? await getOwned(ctx, "meetings", id, societyId)
+    : null;
   await ctx.db.patch(id, next);
   // Rescheduling: keep the auto-created minutes stub in step. Only touch
   // minutes whose heldAt still mirrors the old scheduledAt and that aren't
@@ -882,11 +922,12 @@ export async function markSourceReviewPortable(
     actingUserId?: string;
   },
 ) {
-  const meeting = await ctx.db.get(id);
-  if (!meeting) throw new Error("Meeting not found.");
-  const actor = actingUserId ? await ctx.db.get(actingUserId) : null;
-  if (actor && actor.societyId !== meeting.societyId) {
-    throw new Error("Reviewer is not part of this society.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const meeting = await getOwned(ctx, "meetings", id, societyId);
+  const actor = await requireSocietyMembership(ctx, societyId);
+  if (actingUserId && actingUserId !== actor._id) {
+    throw new Error("Authenticated actor does not match the current principal.");
   }
   const now = new Date().toISOString();
   const patch: any = {
@@ -895,7 +936,7 @@ export async function markSourceReviewPortable(
   };
   if (status === "source_reviewed") {
     patch.sourceReviewedAtISO = now;
-    patch.sourceReviewedByUserId = actingUserId;
+    patch.sourceReviewedByUserId = actor._id;
   }
   await ctx.db.patch(id, patch);
 
@@ -908,7 +949,7 @@ export async function markSourceReviewPortable(
       sourceReviewStatus: status,
       sourceReviewNotes: notes || undefined,
       sourceReviewedAtISO: status === "source_reviewed" ? now : undefined,
-      sourceReviewedByUserId: status === "source_reviewed" ? actingUserId : undefined,
+      sourceReviewedByUserId: status === "source_reviewed" ? actor._id : undefined,
     });
   }
 
@@ -934,11 +975,12 @@ export async function setPackageReviewStatusPortable(
     actingUserId?: string;
   },
 ) {
-  const meeting = await ctx.db.get(id);
-  if (!meeting) throw new Error("Meeting not found.");
-  const actor = actingUserId ? await ctx.db.get(actingUserId) : null;
-  if (actor && actor.societyId !== meeting.societyId) {
-    throw new Error("Reviewer is not part of this society.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const meeting = await getOwned(ctx, "meetings", id, societyId);
+  const actor = await requireSocietyMembership(ctx, societyId);
+  if (actingUserId && actingUserId !== actor._id) {
+    throw new Error("Authenticated actor does not match the current principal.");
   }
   const now = new Date().toISOString();
   const patch: any = {
@@ -947,7 +989,7 @@ export async function setPackageReviewStatusPortable(
   };
   if (status === "ready" || status === "released") {
     patch.packageReviewedAtISO = now;
-    patch.packageReviewedByUserId = actingUserId;
+    patch.packageReviewedByUserId = actor._id;
   }
   await ctx.db.patch(id, patch);
   await ctx.db.insert("activity", {
@@ -964,6 +1006,9 @@ export async function setPackageReviewStatusPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "meetings", id, societyId);
   // Cascade to the scaffolding created alongside the meeting so deletes don't
   // leave orphan minutes/agendas that render as broken links elsewhere.
   const agendas = await ctx.db
@@ -987,8 +1032,9 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
 }
 
 export async function backfillQuorumSnapshotPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const meeting = await ctx.db.get(id);
-  if (!meeting) return null;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const meeting = await getOwned(ctx, "meetings", id, societyId);
   const snapshot = await buildQuorumSnapshot(ctx, {
     societyId: String(meeting.societyId),
     meetingDateISO: meeting.scheduledAt,
