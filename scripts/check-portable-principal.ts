@@ -22,8 +22,10 @@ import {
   makeCapabilities,
   type PortablePrincipal,
 } from "../shared/portable/index";
+import { PORTABLE_ACCESS_ENFORCEMENT } from "../shared/portable/define";
 
 const caps = makeCapabilities({});
+const accessMode = PORTABLE_ACCESS_ENFORCEMENT ? "enforced" : "shadow";
 
 // 1. A local invocation resolves its provider once and reuses the exact same
 // principal object through nested query and mutation calls.
@@ -81,12 +83,13 @@ assert.equal(seen[0], configuredPrincipal);
 assert.deepEqual(runtime.accessDecisions().map((decision) => ({
   functionName: decision.functionName,
   decision: decision.decision,
+  mode: decision.mode,
   principalKind: decision.principalKind,
 })), [
-  { functionName: "principal:rootMutation", decision: "allow", principalKind: "user" },
-  { functionName: "principal:leafQuery", decision: "allow", principalKind: "user" },
-  { functionName: "principal:leafMutation", decision: "allow", principalKind: "user" },
-  { functionName: "principal:leafQuery", decision: "allow", principalKind: "user" },
+  { functionName: "principal:rootMutation", decision: "allow", mode: accessMode, principalKind: "user" },
+  { functionName: "principal:leafQuery", decision: "allow", mode: accessMode, principalKind: "user" },
+  { functionName: "principal:leafMutation", decision: "allow", mode: accessMode, principalKind: "user" },
+  { functionName: "principal:leafQuery", decision: "allow", mode: accessMode, principalKind: "user" },
 ]);
 console.log("✓ local runtime injects one principal per invocation chain");
 
@@ -186,11 +189,19 @@ const unresolvedRuntime = new PortableRuntime({
     actingUserId: "forged-viewer",
   }),
 }));
-await assert.rejects(
-  () => unresolvedRuntime.runQuery("principal:unresolvedCompatibility"),
-  /Role Admin required — you have Viewer/,
-  "unresolved principals retain the pre-enforcement fallback",
-);
+if (PORTABLE_ACCESS_ENFORCEMENT) {
+  await assert.rejects(
+    () => unresolvedRuntime.runQuery("principal:unresolvedCompatibility"),
+    /Access denied: valid authenticated principal required/,
+    "enforcement must reject an anonymous principal before legacy compatibility",
+  );
+} else {
+  await assert.rejects(
+    () => unresolvedRuntime.runQuery("principal:unresolvedCompatibility"),
+    /Role Admin required — you have Viewer/,
+    "unresolved principals retain the pre-enforcement fallback",
+  );
+}
 console.log("✓ resolvable principal wins over a forged actingUserId");
 
 // 4. Membership and owned-row helpers resolve the principal, reject inactive
@@ -328,15 +339,30 @@ const metadataRuntime = new PortableRuntime({
   }))
   .registerAll(PORTABLE_FUNCTIONS);
 assert.deepEqual(metadataRuntime.access("metadata:default"), { audience: "authenticated" });
-assert.equal(await metadataRuntime.runQuery("metadata:default"), "still-runs");
+if (PORTABLE_ACCESS_ENFORCEMENT) {
+  await assert.rejects(
+    () => metadataRuntime.runQuery("metadata:default"),
+    /Access denied: valid authenticated principal required/,
+  );
+} else {
+  assert.equal(await metadataRuntime.runQuery("metadata:default"), "still-runs");
+}
 assert.equal(await metadataRuntime.runQuery("metadata:public"), "public-runs");
-assert.equal(await metadataRuntime.runQuery("metadata:service"), "shadow-denied-but-runs");
+if (PORTABLE_ACCESS_ENFORCEMENT) {
+  await assert.rejects(
+    () => metadataRuntime.runQuery("metadata:service"),
+    /Access denied: service principal required/,
+  );
+} else {
+  assert.equal(await metadataRuntime.runQuery("metadata:service"), "shadow-denied-but-runs");
+}
 assert.deepEqual(metadataRuntime.accessDecisions(), [
   {
     functionName: "metadata:default",
     audience: "authenticated",
     principalKind: "anonymous",
     decision: "deny",
+    mode: accessMode,
     reason: "valid authenticated principal required",
   },
   {
@@ -344,6 +370,7 @@ assert.deepEqual(metadataRuntime.accessDecisions(), [
     audience: "public",
     principalKind: "anonymous",
     decision: "allow",
+    mode: accessMode,
     reason: "public audience",
   },
   {
@@ -351,6 +378,7 @@ assert.deepEqual(metadataRuntime.accessDecisions(), [
     audience: "service",
     principalKind: "anonymous",
     decision: "deny",
+    mode: accessMode,
     reason: "service principal required",
   },
 ]);
@@ -378,20 +406,30 @@ const scopedServiceRuntime = new PortableRuntime({
     handler: async () => true,
   }));
 assert.equal(await scopedServiceRuntime.runQuery("metadata:serviceAllowed"), true);
-assert.equal(await scopedServiceRuntime.runQuery("metadata:serviceMissingScope"), true);
+if (PORTABLE_ACCESS_ENFORCEMENT) {
+  await assert.rejects(
+    () => scopedServiceRuntime.runQuery("metadata:serviceMissingScope"),
+    /Access denied: missing service scopes: documents:write/,
+  );
+} else {
+  assert.equal(await scopedServiceRuntime.runQuery("metadata:serviceMissingScope"), true);
+}
 assert.deepEqual(scopedServiceRuntime.accessDecisions().map((decision) => ({
   functionName: decision.functionName,
   decision: decision.decision,
+  mode: decision.mode,
   reason: decision.reason,
 })), [
   {
     functionName: "metadata:serviceAllowed",
     decision: "allow",
+    mode: accessMode,
     reason: "service scopes satisfied",
   },
   {
     functionName: "metadata:serviceMissingScope",
     decision: "deny",
+    mode: accessMode,
     reason: "missing service scopes: documents:write",
   },
 ]);
@@ -408,7 +446,7 @@ const publicFunctions = [
 for (const name of publicFunctions) {
   assert.deepEqual(metadataRuntime.access(name), { audience: "public" }, `${name} should be public`);
 }
-console.log("✓ access metadata defaults authenticated and exposes opt-in shadow decisions");
+console.log(`✓ access metadata defaults authenticated and exposes opt-in ${accessMode} decisions`);
 
 // 6. Static-demo and desktop Dexie clients both resolve a concrete trusted
 // workspace user, preserving matching local actor inputs on the principal path.

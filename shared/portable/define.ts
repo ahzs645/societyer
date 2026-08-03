@@ -30,16 +30,49 @@ export type PortableAccessDecision = {
   audience: PortableAccess["audience"];
   principalKind: PortablePrincipal["kind"];
   decision: "allow" | "deny";
+  mode: "shadow" | "enforced";
   reason: string;
 };
 
+type PortableAccessDecisionResult = Omit<PortableAccessDecision, "mode">;
+
 const DEFAULT_PORTABLE_ACCESS: PortableAccess = { audience: "authenticated" };
 
+const DEFAULT_PORTABLE_ACCESS_ENFORCEMENT = false;
+const PORTABLE_ACCESS_ENFORCEMENT_ENV = "SOCIETYER_PORTABLE_ACCESS_ENFORCEMENT";
+const VITE_PORTABLE_ACCESS_ENFORCEMENT_ENV = "VITE_SOCIETYER_PORTABLE_ACCESS_ENFORCEMENT";
+
+type RuntimeImportMeta = ImportMeta & {
+  readonly env?: Record<string, string | boolean | undefined>;
+};
+
+function environmentValue(name: string): string | boolean | undefined {
+  const processValue = (globalThis as {
+    process?: { env?: Record<string, string | undefined> };
+  }).process?.env?.[name];
+  if (processValue !== undefined) return processValue;
+  return (import.meta as RuntimeImportMeta).env?.[name];
+}
+
+function configuredPortableAccessEnforcement(): boolean {
+  const configured = environmentValue(PORTABLE_ACCESS_ENFORCEMENT_ENV)
+    ?? environmentValue(VITE_PORTABLE_ACCESS_ENFORCEMENT_ENV);
+  if (configured === undefined) return DEFAULT_PORTABLE_ACCESS_ENFORCEMENT;
+  return configured === true || String(configured).trim().toLowerCase() === "1";
+}
+
 /**
- * Stage 2 evaluates access intent but intentionally does not reject yet. The
- * opt-in shadow path below records those decisions until the final flag flip.
+ * Stage 2 evaluates access intent but defaults to shadow-only behavior. This
+ * live binding is refreshed at each local/runtime decision so Node canary
+ * rollback does not require a process restart; hosted importers continue to
+ * receive the boolean export they already consume.
  */
-export const PORTABLE_ACCESS_ENFORCEMENT = false;
+export let PORTABLE_ACCESS_ENFORCEMENT = configuredPortableAccessEnforcement();
+
+function portableAccessEnforcementEnabled(): boolean {
+  PORTABLE_ACCESS_ENFORCEMENT = configuredPortableAccessEnforcement();
+  return PORTABLE_ACCESS_ENFORCEMENT;
+}
 
 export interface PortableQueryDef<Args = any, Result = any> {
   kind: "query";
@@ -92,7 +125,7 @@ function shadowAccessEnabledFromEnvironment(): boolean {
 function accessDecision(
   def: PortableFunctionDef,
   principal: PortablePrincipal,
-): PortableAccessDecision {
+): PortableAccessDecisionResult {
   const access = def.access ?? DEFAULT_PORTABLE_ACCESS;
   if (access.audience === "public") {
     return {
@@ -197,7 +230,7 @@ export class PortableRuntime {
     return this.registry.get(name)?.access;
   }
 
-  /** Snapshot of opt-in, pre-enforcement decisions for checks/telemetry. */
+  /** Snapshot of opt-in shadow/enforced decisions for checks/telemetry. */
   accessDecisions(): readonly PortableAccessDecision[] {
     return this.shadowDecisions.slice();
   }
@@ -233,14 +266,16 @@ export class PortableRuntime {
   }
 
   private accessHook(def: PortableFunctionDef, principal: PortablePrincipal): void {
-    if (!PORTABLE_ACCESS_ENFORCEMENT && !this.shadowAccessDecisions) return;
-    const result = accessDecision(def, principal);
-    if (!PORTABLE_ACCESS_ENFORCEMENT) {
-      if (this.shadowAccessDecisions && this.shadowDecisions.length < MAX_SHADOW_DECISIONS) {
-        this.shadowDecisions.push(result);
-      }
-      return;
+    const enforcementEnabled = portableAccessEnforcementEnabled();
+    if (!enforcementEnabled && !this.shadowAccessDecisions) return;
+    const result: PortableAccessDecision = {
+      ...accessDecision(def, principal),
+      mode: enforcementEnabled ? "enforced" : "shadow",
+    };
+    if (this.shadowAccessDecisions && this.shadowDecisions.length < MAX_SHADOW_DECISIONS) {
+      this.shadowDecisions.push(result);
     }
+    if (!enforcementEnabled) return;
     if (result.decision === "deny") throw new Error(`Access denied: ${result.reason}.`);
   }
 

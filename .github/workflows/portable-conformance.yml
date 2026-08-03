@@ -39,6 +39,9 @@ jobs:
       - name: Static-mirror parity gate
         run: npm run test:static-parity
 
+      - name: Stage 2 enforcement-readiness gate
+        run: npm run test:stage2-enforced
+
       - name: Domain regressions
         run: |
           npm run test:voting-power

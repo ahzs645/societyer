@@ -458,7 +458,9 @@ const baselineLeaks = new Set(baseline.leaks);
 const observedLeakSet = new Set(observedLeaks);
 const newLeaks = observedLeaks.filter((key) => !baselineLeaks.has(key));
 const resolvedLeaks = baseline.leaks.filter((key) => !observedLeakSet.has(key));
-writeFileSync(reportPath, renderReport(inventory, findings, newLeaks, resolvedLeaks, inventoryMatches));
+if (process.env.SOCIETYER_STAGE2_TENANCY_SKIP_REPORT !== "1") {
+  writeFileSync(reportPath, renderReport(inventory, findings, newLeaks, resolvedLeaks, inventoryMatches));
+}
 
 const outcomes: Outcome[] = ["blocked", "leaked-read", "leaked-write", "error", "not-applicable"];
 console.log(`Stage 2 tenancy: ${outcomes.map((outcome) => `${outcome}=${findings.filter((finding) => finding.outcome === outcome).length}`).join(", ")}; new-leaks=${newLeaks.length}.`);
