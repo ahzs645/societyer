@@ -6,7 +6,7 @@ import type {
   BrowserSession,
   BrowserSessionRequest,
 } from "./types.js";
-import { normalizeProfileKey } from "./profileKeys.js";
+import { deriveProfileIdentity } from "./profileKeys.js";
 
 export class BlitzBrowserBackend implements BrowserBackend {
   readonly provider: BrowserProvider = "blitz";
@@ -18,9 +18,9 @@ export class BlitzBrowserBackend implements BrowserBackend {
 
   async createSession(input: BrowserSessionRequest): Promise<BrowserSession> {
     const url = new URL(this.cdpBaseUrl);
-    const profileKey = normalizeProfileKey(input.profileKey);
+    const profile = deriveProfileIdentity(input.tenantKey, input.connectorId, input.profileKey);
 
-    if (input.persist) url.searchParams.set("userDataId", profileKey);
+    if (input.persist) url.searchParams.set("userDataId", profile.userDataId);
     if (input.readOnly) url.searchParams.set("userDataReadOnly", "true");
     if (input.liveView) url.searchParams.set("liveView", "true");
     if (input.timezone) url.searchParams.set("timezone", input.timezone);
@@ -30,7 +30,7 @@ export class BlitzBrowserBackend implements BrowserBackend {
     return {
       provider: this.provider,
       providerSessionId: crypto.randomUUID(),
-      profileKey,
+      profileKey: profile.profileKey,
       cdpUrl: url.toString(),
       dashboardUrl: this.dashboardUrl,
       liveViewEnabled: input.liveView,
@@ -42,7 +42,8 @@ export class BlitzBrowserBackend implements BrowserBackend {
     // closes the Playwright browser handle; no extra provider API is needed.
   }
 
-  async deleteProfile(_profileKey: string): Promise<void> {
+  async deleteProfile(input: Pick<BrowserSessionRequest, "tenantKey" | "connectorId" | "profileKey">): Promise<void> {
+    deriveProfileIdentity(input.tenantKey, input.connectorId, input.profileKey);
     throw new Error("BlitzBrowser profile deletion is not exposed through the CDP endpoint.");
   }
 
@@ -53,8 +54,12 @@ export class BlitzBrowserBackend implements BrowserBackend {
         return { ok: false, provider: this.provider, detail: "BLITZBROWSER_CDP_URL must be ws:// or wss://." };
       }
       return { ok: true, provider: this.provider };
-    } catch (error: any) {
-      return { ok: false, provider: this.provider, detail: error?.message ?? "Invalid BlitzBrowser URL." };
+    } catch (error: unknown) {
+      return {
+        ok: false,
+        provider: this.provider,
+        detail: error instanceof Error ? error.message : "Invalid BlitzBrowser URL.",
+      };
     }
   }
 }

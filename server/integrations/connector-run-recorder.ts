@@ -15,7 +15,9 @@ export async function recordConnectorRun(
     connectorId: string;
     actionId: string;
     sessionId?: string;
+    sessionSocietyId?: string;
     profileKey?: string;
+    profileSocietyId?: string;
     output?: any;
     error?: string;
     triggeredByUserId?: string;
@@ -30,7 +32,9 @@ export async function recordConnectorRun(
     status: input.error ? "failed" : "success",
     externalRunId: stringValue(input.output?.runId ?? input.output?.id),
     profileKey: stringValue(input.output?.profileKey ?? input.profileKey),
+    profileSocietyId: input.profileSocietyId,
     sessionId: input.sessionId,
+    sessionSocietyId: input.sessionSocietyId,
     output: compactConnectorRunOutput(input.output),
     error: input.error,
     triggeredByUserId: input.triggeredByUserId,
@@ -42,6 +46,9 @@ function compactConnectorRunOutput(output: any) {
   return dropUndefined({
     runId: output.runId ?? output.id,
     profileKey: output.profileKey,
+    profileSocietyId: output.profileSocietyId,
+    sessionId: output.sessionId,
+    sessionSocietyId: output.sessionSocietyId,
     businessId: output.businessId,
     currentUrl: output.currentUrl,
     transactionCount: output.transactionCount ?? output.normalized?.transactions?.length,

@@ -1,6 +1,8 @@
 export type BrowserProvider = "blitz";
 
 export type BrowserSessionRequest = {
+  tenantKey: string;
+  connectorId: string;
   profileKey: string;
   persist: boolean;
   liveView: boolean;
@@ -34,6 +36,6 @@ export type BrowserBackend = {
   readonly provider: BrowserProvider;
   createSession(input: BrowserSessionRequest): Promise<BrowserSession>;
   stopSession(sessionId: string): Promise<void>;
-  deleteProfile(profileKey: string): Promise<void>;
+  deleteProfile(input: Pick<BrowserSessionRequest, "tenantKey" | "connectorId" | "profileKey">): Promise<void>;
   healthCheck(): Promise<BrowserBackendHealth>;
 };

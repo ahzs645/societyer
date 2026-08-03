@@ -903,7 +903,9 @@ export const recordConnectorRun = mutation({
     status: v.string(),
     externalRunId: v.optional(v.string()),
     profileKey: v.optional(v.string()),
+    profileSocietyId: v.optional(v.string()),
     sessionId: v.optional(v.string()),
+    sessionSocietyId: v.optional(v.string()),
     startedAtISO: v.optional(v.string()),
     completedAtISO: v.optional(v.string()),
     output: v.optional(v.any()),
@@ -912,6 +914,13 @@ export const recordConnectorRun = mutation({
   },
   returns: v.id("workflowRuns"),
   handler: async (ctx, args) => {
+    const societyId = String(args.societyId);
+    if (args.profileKey && args.profileSocietyId !== societyId) {
+      throw new Error("Browser profile reference is missing or belongs to another society.");
+    }
+    if (args.sessionId && args.sessionSocietyId !== societyId) {
+      throw new Error("Browser session reference is missing or belongs to another society.");
+    }
     const now = new Date().toISOString();
     const recipe = `connector_${cleanConnectorKey(args.connectorId)}`;
     const connectorLabel = args.connectorName ?? labelizeConnector(args.connectorId);
@@ -991,14 +1000,18 @@ export const recordConnectorRun = mutation({
       externalRunId: args.externalRunId,
       externalStatus: args.status,
       output: {
+        ...(args.output ?? {}),
         connectorId: args.connectorId,
         connectorName: connectorLabel,
         actionId: args.actionId,
         actionName: actionLabel,
         profileKey: args.profileKey,
+        profileSocietyId: args.profileSocietyId,
         sessionId: args.sessionId,
+        sessionSocietyId: args.sessionSocietyId,
+        profileRef: args.profileKey ? { societyId, profileKey: args.profileKey } : undefined,
+        sessionRef: args.sessionId ? { societyId, sessionId: args.sessionId } : undefined,
         error: args.error,
-        ...(args.output ?? {}),
       },
       demo: false,
       triggeredBy: "connector",

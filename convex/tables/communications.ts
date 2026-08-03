@@ -146,6 +146,8 @@ export const communicationsTables = {
     accountLabel: v.optional(v.string()),
     externalBusinessId: v.optional(v.string()),
     syncMode: v.optional(v.string()), // public_api | browser | demo
+    browserProfileKey: v.optional(v.string()),
+    browserProfileSocietyId: v.optional(v.string()),
     connectedAtISO: v.string(),
     lastSyncAtISO: v.optional(v.string()),
     lastError: v.optional(v.string()),
