@@ -16,6 +16,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 import {
   applyProceduralTags,
   classifyProceduralMotion,
@@ -244,6 +245,13 @@ export async function syncMotionsForMinutes(
   ctx: PortableMutationCtx,
   args: { societyId: any; minutesId: any; meetingId?: any; motions?: any[] },
 ) {
+  await requireSocietyMembership(ctx, String(args.societyId));
+  await getOwned(ctx, "minutes", String(args.minutesId), String(args.societyId));
+  if (args.meetingId) {
+    await getOwned(ctx, "meetings", String(args.meetingId), String(args.societyId));
+  }
+  await assertMinutesForeignKeys(ctx, String(args.societyId), { motions: args.motions ?? [] });
+  await assertMotionPersonLinksBelongToSociety(ctx, String(args.societyId), args.motions ?? []);
   // Best-effort: a mirror failure must never roll back the minutes save that
   // triggered it. A stale mirror is corrected by the step-2 backfill or the
   // next edit; a broken minutes save is a user-facing regression.
@@ -362,6 +370,7 @@ export async function syncMotionsForMinutes(
 // ----- queries --------------------------------------------------------------
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("minutes")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -379,6 +388,9 @@ export async function getByMeetingPortable(
   ctx: PortableQueryCtx,
   { meetingId }: { meetingId: string },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "meetings", meetingId, societyId);
   const rows = await ctx.db
     .query("minutes")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -412,15 +424,21 @@ export async function resolveMinutesMotions(ctx: PortableQueryCtx, minutes: any)
     return minutes.motionSnapshots;
   }
   const ids: any[] = Array.isArray(minutes.motionIds) ? minutes.motionIds : [];
-  const rows = await Promise.all(ids.map((id) => ctx.db.get(id)));
+  const rows = await Promise.all(ids.map((id) =>
+    getOwned(ctx, "motions", String(id), String(minutes.societyId))));
   return rows.filter(Boolean).map(motionRowToEmbedded);
 }
 
 // ----- mutations ------------------------------------------------------------
 
 export async function createPortable(ctx: PortableMutationCtx, args: any) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.sourceReviewedByUserId) {
+    await getOwned(ctx, "users", args.sourceReviewedByUserId, args.societyId);
+  }
+  await assertMinutesForeignKeys(ctx, args.societyId, args);
   await assertMotionPersonLinksBelongToSociety(ctx, args.societyId, args.motions);
-  const meeting = await ctx.db.get(args.meetingId);
+  const meeting = await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   const snapshot = meeting
     ? await quorumSnapshotForMeeting(ctx, meeting, args.quorumRequired)
     : null;
@@ -430,6 +448,9 @@ export async function createPortable(ctx: PortableMutationCtx, args: any) {
   const { motions: _motions, ...minutesFields } = args;
   const id = await ctx.db.insert("minutes", {
     ...minutesFields,
+    sourceReviewedByUserId: args.sourceReviewedByUserId
+      ? await principalUserId(ctx, args.societyId)
+      : undefined,
     ...minutesSnapshotFields(args, snapshot),
   });
   await ctx.db.patch(args.meetingId, { minutesId: id });
@@ -472,9 +493,8 @@ async function applyAdoptionApprovals(
     const key = String(targetId);
     if (previouslyCarried.has(key) || stamped.has(key)) continue;
     if (key === String(minutes._id)) continue;
-    const target = await ctx.db.get(targetId);
-    if (!target || target.approvedAt) continue;
-    if (String(target.societyId) !== String(minutes.societyId)) continue;
+    const target = await getOwned(ctx, "minutes", targetId, String(minutes.societyId));
+    if (target.approvedAt) continue;
     const now = new Date().toISOString();
     const targetPatch: Record<string, unknown> = {
       approvedAt: minutes.heldAt || now,
@@ -488,7 +508,9 @@ async function applyAdoptionApprovals(
     }
     await ctx.db.patch(target._id, targetPatch);
     stamped.add(key);
-    const targetMeeting = target.meetingId ? await ctx.db.get(target.meetingId) : null;
+    const targetMeeting = target.meetingId
+      ? await getOwned(ctx, "meetings", target.meetingId, String(minutes.societyId))
+      : null;
     await ctx.db.insert("activity", {
       societyId: minutes.societyId,
       actor: "You",
@@ -507,11 +529,16 @@ export async function updatePortable(
   ctx: PortableMutationCtx,
   { id, patch: rawPatch }: { id: string; patch: any },
 ) {
-  const minutes = await ctx.db.get(id);
-  if (!minutes) throw new Error("Minutes not found");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const minutes = await getOwned(ctx, "minutes", id, societyId);
+  await assertMinutesForeignKeys(ctx, societyId, rawPatch);
   // `undefined` fields are stripped from the wire, so unsetting approval
   // arrives as explicit clear flags (mirrors meetings.clearNoticeSent).
   const { clearApproval, clearApprovedInMeeting, motions: submittedMotions, ...patch } = rawPatch;
+  if (patch.sourceReviewedByUserId) {
+    patch.sourceReviewedByUserId = await principalUserId(ctx, societyId);
+  }
   if (clearApproval) {
     patch.approvedAt = undefined;
     patch.approvedInMeetingId = undefined;
@@ -567,8 +594,13 @@ export async function updatePortable(
 
 // Upsert a minutes row from an AI-generated draft (transcripts.runPipeline).
 export async function upsertFromDraftPortable(ctx: PortableMutationCtx, args: any) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.sourceReviewedByUserId) {
+    await getOwned(ctx, "users", args.sourceReviewedByUserId, args.societyId);
+  }
+  await assertMinutesForeignKeys(ctx, args.societyId, args);
   await assertMotionPersonLinksBelongToSociety(ctx, args.societyId, args.motions);
-  const meeting = await ctx.db.get(args.meetingId);
+  const meeting = await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   const snapshot = meeting
     ? await quorumSnapshotForMeeting(ctx, meeting, args.quorumRequired)
     : null;
@@ -578,6 +610,9 @@ export async function upsertFromDraftPortable(ctx: PortableMutationCtx, args: an
   const { motions: _motions, ...argsFields } = args;
   const payload = {
     ...argsFields,
+    sourceReviewedByUserId: args.sourceReviewedByUserId
+      ? await principalUserId(ctx, args.societyId)
+      : undefined,
     ...minutesSnapshotFields(args, snapshot),
     quorumMet:
       quorumRequired == null
@@ -613,6 +648,7 @@ export async function backfillMotionPersonLinksPortable(
   ctx: PortableMutationCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const [rows, members, directors] = await Promise.all([
     ctx.db
       .query("minutes")
@@ -680,10 +716,10 @@ export async function backfillMotionPersonLinksPortable(
 }
 
 export async function backfillQuorumSnapshotPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const minutes = await ctx.db.get(id);
-  if (!minutes) return null;
-  const meeting = await ctx.db.get(minutes.meetingId);
-  if (!meeting) return null;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const minutes = await getOwned(ctx, "minutes", id, societyId);
+  const meeting = await getOwned(ctx, "meetings", minutes.meetingId, societyId);
   const snapshot = await quorumSnapshotForMeeting(
     ctx,
     meeting,
@@ -761,6 +797,56 @@ async function assertMotionPersonLinksBelongToSociety(ctx: PortableMutationCtx, 
   }
 }
 
+type MinutesForeignKeyFields = {
+  meetingId?: string;
+  bylawRuleSetId?: string;
+  approvedInMeetingId?: string;
+  sourceDocumentIds?: string[];
+  sections?: Array<{
+    motionTemplateId?: string;
+    motionId?: string;
+    linkedTaskIds?: string[];
+  }>;
+  motions?: Array<{
+    motionTemplateId?: string;
+    motionId?: string;
+    adoptsMinutesId?: string;
+  }>;
+};
+
+async function assertMinutesForeignKeys(
+  ctx: PortableMutationCtx,
+  societyId: string,
+  fields: MinutesForeignKeyFields,
+) {
+  await Promise.all([
+    fields.meetingId ? getOwned(ctx, "meetings", fields.meetingId, societyId) : Promise.resolve(),
+    fields.bylawRuleSetId ? getOwned(ctx, "bylawRuleSets", fields.bylawRuleSetId, societyId) : Promise.resolve(),
+    fields.approvedInMeetingId
+      ? getOwned(ctx, "meetings", fields.approvedInMeetingId, societyId)
+      : Promise.resolve(),
+    ...(fields.sourceDocumentIds ?? []).map((id: string) =>
+      getOwned(ctx, "documents", id, societyId)),
+    ...(fields.sections ?? []).flatMap((section) => [
+      section.motionTemplateId
+        ? getOwned(ctx, "motionTemplates", section.motionTemplateId, societyId)
+        : Promise.resolve(),
+      section.motionId ? getOwned(ctx, "motions", section.motionId, societyId) : Promise.resolve(),
+      ...(section.linkedTaskIds ?? []).map((id: string) =>
+        getOwned(ctx, "tasks", id, societyId)),
+    ]),
+    ...(fields.motions ?? []).flatMap((motion) => [
+      motion.motionTemplateId
+        ? getOwned(ctx, "motionTemplates", motion.motionTemplateId, societyId)
+        : Promise.resolve(),
+      motion.motionId ? getOwned(ctx, "motions", motion.motionId, societyId) : Promise.resolve(),
+      motion.adoptsMinutesId
+        ? getOwned(ctx, "minutes", motion.adoptsMinutesId, societyId)
+        : Promise.resolve(),
+    ]),
+  ]);
+}
+
 async function assertPersonLinkBelongsToSociety(
   ctx: PortableMutationCtx,
   societyId: string,
@@ -769,10 +855,7 @@ async function assertPersonLinkBelongsToSociety(
   fieldName: string,
 ) {
   if (!id) return;
-  const row = await ctx.db.get(id);
-  if (!row || row.societyId !== societyId) {
-    throw new Error(`Motion ${fieldName} must reference a ${table.slice(0, -1)} in the same society.`);
-  }
+  await getOwned(ctx, table, id, societyId);
 }
 
 function resolveMotionPersonLink(

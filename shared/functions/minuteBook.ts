@@ -10,6 +10,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import { assertAllowedOption } from "../orgHubOptions";
 
 const BINDER_DOCUMENT_CATEGORIES = ["Constitution", "Bylaws", "Minutes", "Policy", "Filing", "FinancialStatement", "WorkflowGenerated"];
@@ -21,6 +22,7 @@ const SUPPORT_RECORD_LIMIT = 20;
 const DELIVERY_RECORD_LIMIT = 20;
 
 export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const [
     items,
     meetings,
@@ -177,6 +179,19 @@ export async function upsertPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  await Promise.all([
+    id ? getOwned(ctx, "minuteBookItems", id, args.societyId) : Promise.resolve(),
+    ...(args.documentIds ?? []).map((rowId) => getOwned(ctx, "documents", rowId, args.societyId)),
+    args.meetingId ? getOwned(ctx, "meetings", args.meetingId, args.societyId) : Promise.resolve(),
+    args.minutesId ? getOwned(ctx, "minutes", args.minutesId, args.societyId) : Promise.resolve(),
+    args.filingId ? getOwned(ctx, "filings", args.filingId, args.societyId) : Promise.resolve(),
+    args.policyId ? getOwned(ctx, "policies", args.policyId, args.societyId) : Promise.resolve(),
+    args.workflowPackageId ? getOwned(ctx, "workflowPackages", args.workflowPackageId, args.societyId) : Promise.resolve(),
+    args.writtenResolutionId ? getOwned(ctx, "writtenResolutions", args.writtenResolutionId, args.societyId) : Promise.resolve(),
+    ...(args.signatureIds ?? []).map((rowId) => getOwned(ctx, "signatures", rowId, args.societyId)),
+    ...(args.sourceEvidenceIds ?? []).map((rowId) => getOwned(ctx, "sourceEvidence", rowId, args.societyId)),
+  ]);
   assertAllowedOption("minuteBookRecordTypes", args.recordType, "Minute-book record type", false);
   assertAllowedOption("minuteBookStatuses", args.status, "Minute-book status");
   const now = new Date().toISOString();
@@ -210,6 +225,9 @@ export async function upsertPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "minuteBookItems", id, societyId);
   await ctx.db.delete(id);
 }
 

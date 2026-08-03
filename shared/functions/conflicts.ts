@@ -6,6 +6,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export interface ConflictCreateArgs {
   societyId: string;
@@ -24,6 +25,7 @@ export interface ConflictCreateArgs {
 }
 
 export async function conflictsListPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("conflicts")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -31,6 +33,9 @@ export async function conflictsListPortable(ctx: PortableQueryCtx, { societyId }
 }
 
 export async function conflictsForMeetingPortable(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "meetings", meetingId, societyId);
   return ctx.db
     .query("conflicts")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -38,13 +43,22 @@ export async function conflictsForMeetingPortable(ctx: PortableQueryCtx, { meeti
 }
 
 export async function conflictsCreatePortable(ctx: PortableMutationCtx, args: ConflictCreateArgs): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  await getOwned(ctx, "directors", args.directorId, args.societyId);
+  if (args.meetingId) await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   return ctx.db.insert("conflicts", args);
 }
 
 export async function conflictsResolvePortable(ctx: PortableMutationCtx, { id, resolvedAt }: { id: string; resolvedAt: string }): Promise<void> {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "conflicts", id, societyId);
   await ctx.db.patch(id, { resolvedAt });
 }
 
 export async function conflictsRemovePortable(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "conflicts", id, societyId);
   await ctx.db.delete(id);
 }

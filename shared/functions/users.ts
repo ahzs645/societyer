@@ -8,7 +8,7 @@
  */
 
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { ROLES, requireRolePortable, type Role } from "./access";
+import { getOwned, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
 
 export type MembershipResolution =
   | { status: "bound"; societyId: string; userId: string }
@@ -57,14 +57,16 @@ export async function setRolePortable(
   ctx: PortableMutationCtx,
   { id, role, actingUserId }: { id: string; role: string; actingUserId?: string },
 ) {
-  const target = await ctx.db.get(id);
-  if (!target) throw new Error("User not found.");
-  await requireRolePortable(ctx, { actingUserId, societyId: String(target.societyId), required: "Admin" });
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const target = await getOwned(ctx, "users", id, societyId);
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
   if (role !== "Owner") await assertNotLastOwnerPortable(ctx, target);
   await ctx.db.patch(id, { role });
 }
 
 export async function usersList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("users")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -72,23 +74,31 @@ export async function usersList(ctx: PortableQueryCtx, { societyId }: { societyI
 }
 
 export async function userGet(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  return getOwned(ctx, "users", id, societyId);
 }
 
 export async function userGetByEmail(ctx: PortableQueryCtx, { email }: { email: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("users")
     .withIndex("by_email", (q) => q.eq("email", email))
     .collect();
-  return rows[0] ?? null;
+  return rows.find((row) => row.societyId === societyId) ?? null;
 }
 
 export async function userGetByAuthSubject(ctx: PortableQueryCtx, { authSubject }: { authSubject: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("users")
     .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
     .collect();
-  return rows[0] ?? null;
+  return rows.find((row) => row.societyId === societyId) ?? null;
 }
 
 export async function ensureCurrentMembershipPortable(
@@ -103,6 +113,9 @@ export async function ensureCurrentMembershipPortable(
     !principal.subject
   ) {
     return { status: "unauthenticated" };
+  }
+  if (principal.societyId && principal.societyId !== args.societyId) {
+    throw new Error("Society membership not found.");
   }
 
   const existingByAuth = await ctx.db
@@ -182,8 +195,9 @@ export async function bootstrapUserIdentityPortable(
   const authSubject = args.authSubject.trim();
   if (!authSubject) throw new Error("Auth subject is required.");
 
-  const target = await ctx.db.get<UserRow>(args.userId);
-  if (!target) throw new Error("User not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const target = await getOwned<UserRow>(ctx, "users", args.userId, societyId);
   if (target.authSubject && target.authSubject !== authSubject) {
     throw new Error("User is already bound to a different auth subject.");
   }
@@ -221,5 +235,8 @@ export async function bootstrapUserIdentityPortable(
 }
 
 export async function recordLoginPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "users", id, societyId);
   await ctx.db.patch(id, { lastLoginAtISO: new Date().toISOString() });
 }

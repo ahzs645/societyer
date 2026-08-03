@@ -13,6 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import {
   activeCertificates,
   certificateChain,
@@ -35,6 +36,7 @@ function toEvent(row: Record<string, any>): CertificateEvent {
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("shareCertificates")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -46,6 +48,7 @@ export async function registerPortable(
   ctx: PortableQueryCtx,
   { societyId, asOf }: { societyId: string; asOf: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("shareCertificates")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -62,6 +65,7 @@ export async function chainPortable(
   ctx: PortableQueryCtx,
   { societyId, certificateNumber }: { societyId: string; certificateNumber: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("shareCertificates")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -83,6 +87,7 @@ export async function createPortable(
     nowISO: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const event: CertificateEvent = {
     certificateNumber: args.certificateNumber,
     holderName: args.holderName,
@@ -123,10 +128,16 @@ export async function updatePortable(
     };
   },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "shareCertificates", id, societyId);
   await ctx.db.patch(id, patch);
   return null;
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "shareCertificates", id, societyId);
   await ctx.db.delete(id);
 }

@@ -10,6 +10,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 /**
  * Notifications historically stored app-relative links as bare paths
@@ -42,6 +43,8 @@ export async function notificationsList(
     includeDismissed?: boolean;
   },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (userId) await getOwned(ctx, "users", userId, societyId);
   const nowISO = new Date().toISOString();
   const rows = await ctx.db
     .query("notifications")
@@ -65,6 +68,8 @@ export async function notificationsUnreadCount(
   ctx: PortableQueryCtx,
   { societyId, userId }: { societyId: string; userId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (userId) await getOwned(ctx, "users", userId, societyId);
   const nowISO = new Date().toISOString();
   const rows = await ctx.db
     .query("notifications")
@@ -92,6 +97,8 @@ export async function notificationCreate(
     linkHref?: string;
   },
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.userId) await getOwned(ctx, "users", args.userId, args.societyId);
   return await ctx.db.insert("notifications", {
     ...args,
     createdAtISO: new Date().toISOString(),
@@ -99,6 +106,9 @@ export async function notificationCreate(
 }
 
 export async function notificationMarkRead(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "notifications", id, societyId);
   await ctx.db.patch(id, { readAt: new Date().toISOString() });
 }
 
@@ -106,6 +116,8 @@ export async function notificationMarkAllRead(
   ctx: PortableMutationCtx,
   { societyId, userId }: { societyId: string; userId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (userId) await getOwned(ctx, "users", userId, societyId);
   const rows = await ctx.db
     .query("notifications")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -123,7 +135,9 @@ export async function notificationMarkAllRead(
  * the row survives on the Notifications page until `purgeDismissed` runs. */
 export async function notificationDismiss(ctx: PortableMutationCtx, { id }: { id: string }) {
   const now = new Date().toISOString();
-  const existing = await ctx.db.get(id);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const existing = await getOwned(ctx, "notifications", id, societyId);
   await ctx.db.patch(id, {
     dismissedAt: now,
     readAt: existing?.readAt ?? now,
@@ -136,6 +150,9 @@ export async function notificationSnooze(
   ctx: PortableMutationCtx,
   { id, untilISO }: { id: string; untilISO: string | null },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "notifications", id, societyId);
   await ctx.db.patch(id, { snoozedUntilISO: untilISO ?? undefined });
 }
 
@@ -144,6 +161,8 @@ export async function notificationDismissAll(
   ctx: PortableMutationCtx,
   { societyId, userId }: { societyId: string; userId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (userId) await getOwned(ctx, "users", userId, societyId);
   const rows = await ctx.db
     .query("notifications")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -160,6 +179,9 @@ export async function notificationDismissAll(
  * retention purge. Used by the "Delete permanently" action on the
  * Notifications page (Dismissed tab). */
 export async function notificationRemove(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "notifications", id, societyId);
   await ctx.db.delete(id);
 }
 
@@ -168,6 +190,8 @@ export async function notificationRemoveAllDismissed(
   ctx: PortableMutationCtx,
   { societyId, userId }: { societyId: string; userId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (userId) await getOwned(ctx, "users", userId, societyId);
   const rows = await ctx.db
     .query("notifications")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -183,6 +207,9 @@ export async function notificationRemoveAllDismissed(
 }
 
 export async function notificationsListPrefs(ctx: PortableQueryCtx, { userId }: { userId: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "users", userId, societyId);
   return ctx.db
     .query("notificationPrefs")
     .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -193,6 +220,9 @@ export async function notificationUpsertPref(
   ctx: PortableMutationCtx,
   args: { userId: string; channel: string; kind: string; enabled: boolean },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "users", args.userId, societyId);
   const existing = await ctx.db
     .query("notificationPrefs")
     .withIndex("by_user", (q) => q.eq("userId", args.userId))

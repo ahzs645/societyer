@@ -12,7 +12,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import { getOwned, principalUserId, requireRolePortable, requireSocietyMembership } from "./access";
 import { transactionBackfillSides, validateBalancedJournalLines } from "../accountingCore";
 
 const ACCOUNT_TYPES = ["Asset", "Liability", "Equity", "Income", "Expense"] as const;
@@ -65,8 +65,7 @@ async function assertPeriodOpen(ctx: any, args: { societyId: string; fiscalPerio
   if (args.allowClosed) return null;
   let period: any = null;
   if (args.fiscalPeriodId) {
-    period = await ctx.db.get(args.fiscalPeriodId as any);
-    if (!period || period.societyId !== args.societyId) throw new Error("Fiscal period does not belong to this society.");
+    period = await getOwned(ctx, "accountingFiscalPeriods", args.fiscalPeriodId, args.societyId);
   } else {
     const periods = await ctx.db
       .query("accountingFiscalPeriods")
@@ -151,6 +150,7 @@ async function buildGeneralLedger(ctx: any, societyId: string, fiscalYear?: stri
 }
 
 export async function chartAccountsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const accounts = await ctx.db
     .query("financialAccounts")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -162,6 +162,7 @@ export async function fiscalPeriodsPortable(
   ctx: PortableQueryCtx,
   { societyId, fiscalYear }: { societyId: string; fiscalYear?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("accountingFiscalPeriods")
     .withIndex("by_society_fiscal_year", (q) =>
@@ -175,6 +176,7 @@ export async function counterpartiesPortable(
   ctx: PortableQueryCtx,
   { societyId, kind }: { societyId: string; kind?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await (kind
     ? ctx.db
         .query("accountingCounterparties")
@@ -191,6 +193,7 @@ export async function fundRestrictionsPortable(
   ctx: PortableQueryCtx,
   { societyId, status }: { societyId: string; status?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await (status
     ? ctx.db
         .query("fundRestrictions")
@@ -207,6 +210,7 @@ export async function restrictedFundBalancesPortable(
   ctx: PortableQueryCtx,
   { societyId, fiscalYear }: { societyId: string; fiscalYear?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const [restrictions, entries, lines] = await Promise.all([
     ctx.db.query("fundRestrictions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "posted")).collect(),
@@ -243,6 +247,7 @@ export async function accountMappingsPortable(
   ctx: PortableQueryCtx,
   { societyId, provider, status }: { societyId: string; provider?: string; status?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await (provider
     ? ctx.db
         .query("accountingAccountMappings")
@@ -264,6 +269,7 @@ export async function journalEntriesPortable(
   ctx: PortableQueryCtx,
   { societyId, status, limit }: { societyId: string; status?: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const entries = await (status
     ? ctx.db
         .query("journalEntries")
@@ -290,8 +296,9 @@ export async function journalEntriesPortable(
 }
 
 export async function journalEntryPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const entry = await ctx.db.get(id);
-  if (!entry) return null;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const entry = await getOwned(ctx, "journalEntries", id, societyId);
   const lines = await ctx.db
     .query("journalLines")
     .withIndex("by_entry", (q) => q.eq("journalEntryId", id))
@@ -303,6 +310,7 @@ export async function trialBalancePortable(
   ctx: PortableQueryCtx,
   { societyId, fiscalYear }: { societyId: string; fiscalYear?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return buildTrialBalance(ctx, societyId, fiscalYear);
 }
 
@@ -310,6 +318,8 @@ export async function generalLedgerPortable(
   ctx: PortableQueryCtx,
   { societyId, fiscalYear, accountId }: { societyId: string; fiscalYear?: string; accountId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (accountId) await getOwned(ctx, "financialAccounts", accountId, societyId);
   return buildGeneralLedger(ctx, societyId, fiscalYear, accountId);
 }
 
@@ -317,6 +327,7 @@ export async function exportCsvPortable(
   ctx: PortableQueryCtx,
   { societyId, kind, fiscalYear }: { societyId: string; kind: string; fiscalYear?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   if (kind === "chart_of_accounts") {
     const accounts = await ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
     const rows = [["code", "name", "type", "subtype", "currency", "normal_balance", "external_id"]];
@@ -358,6 +369,7 @@ export async function boardAuditorPackagePortable(
   ctx: PortableQueryCtx,
   { societyId, fiscalYear, packageKind }: { societyId: string; fiscalYear?: string; packageKind?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const [society, trial, ledger, entries, restrictions, reconciliations] = await Promise.all([
     ctx.db.get(societyId),
     buildTrialBalance(ctx, societyId, fiscalYear),
@@ -373,7 +385,7 @@ export async function boardAuditorPackagePortable(
   for (const line of ledger) for (const id of line.documentIds ?? []) documentIds.add(String(id));
   for (const restriction of restrictions) for (const id of restriction.sourceDocumentIds ?? []) documentIds.add(String(id));
   for (const run of reconciliations) for (const id of run.sourceDocumentIds ?? []) documentIds.add(String(id));
-  const documents = await Promise.all(Array.from(documentIds).map((id) => ctx.db.get(id as any)));
+  const documents = await Promise.all(Array.from(documentIds).map((id) => getOwned(ctx, "documents", id, societyId)));
   const attachments = documents
     .filter(Boolean)
     .map((document: any) => ({
@@ -423,6 +435,7 @@ export async function ensureSocietyerConnectionPortable(
   { societyId, actingUserId }: { societyId: string; actingUserId?: string },
 ) {
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
+  await requireSocietyMembership(ctx, societyId);
   const existing = await ctx.db
     .query("financialConnections")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -445,6 +458,7 @@ export async function seedSocietyChartOfAccountsPortable(
   { societyId, actingUserId }: { societyId: string; actingUserId?: string },
 ) {
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
+  await requireSocietyMembership(ctx, societyId);
   const existingConnections = await ctx.db
     .query("financialConnections")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -503,7 +517,9 @@ export async function upsertFiscalPeriodPortable(
     actingUserId?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Director" });
+  if (args.id) await getOwned(ctx, "accountingFiscalPeriods", args.id, args.societyId);
   requireOption(args.status, FISCAL_PERIOD_STATUSES, "Fiscal period status");
   const { id, actingUserId, ...payload } = args;
   const now = new Date().toISOString();
@@ -518,13 +534,14 @@ export async function closeFiscalPeriodPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const period = await ctx.db.get(id);
-  if (!period) throw new Error("Fiscal period not found.");
-  await requireRolePortable(ctx, { actingUserId, societyId: String(period.societyId), required: "Admin" });
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const period = await getOwned(ctx, "accountingFiscalPeriods", id, societyId);
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
   await ctx.db.patch(id, {
     status: "closed",
     closedAtISO: new Date().toISOString(),
-    closedByUserId: actingUserId,
+    closedByUserId: await principalUserId(ctx, societyId),
     updatedAtISO: new Date().toISOString(),
   });
   return id;
@@ -534,9 +551,10 @@ export async function reopenFiscalPeriodPortable(
   ctx: PortableMutationCtx,
   { id, notes, actingUserId }: { id: string; notes?: string; actingUserId?: string },
 ) {
-  const period = await ctx.db.get(id);
-  if (!period) throw new Error("Fiscal period not found.");
-  await requireRolePortable(ctx, { actingUserId, societyId: String(period.societyId), required: "Admin" });
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const period = await getOwned(ctx, "accountingFiscalPeriods", id, societyId);
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
   await ctx.db.patch(id, {
     status: "open",
     closedAtISO: undefined,
@@ -563,6 +581,7 @@ export async function upsertCounterpartyPortable(
   },
 ) {
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Director" });
+  if (args.id) await getOwned(ctx, "accountingCounterparties", args.id, args.societyId);
   requireOption(args.kind, COUNTERPARTY_KINDS, "Counterparty kind");
   const { id, actingUserId, ...payload } = args;
   const now = new Date().toISOString();
@@ -591,6 +610,15 @@ export async function upsertFundRestrictionPortable(
   },
 ) {
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Director" });
+  await Promise.all([
+    args.id ? getOwned(ctx, "fundRestrictions", args.id, args.societyId) : Promise.resolve(),
+    args.linkedGrantId ? getOwned(ctx, "grants", args.linkedGrantId, args.societyId) : Promise.resolve(),
+    args.linkedFinancialAccountId
+      ? getOwned(ctx, "financialAccounts", args.linkedFinancialAccountId, args.societyId)
+      : Promise.resolve(),
+    ...(args.sourceDocumentIds ?? []).map((documentId) =>
+      getOwned(ctx, "documents", documentId, args.societyId)),
+  ]);
   requireOption(args.status, FUND_RESTRICTION_STATUSES, "Fund restriction status");
   const { id, actingUserId, ...payload } = args;
   const now = new Date().toISOString();
@@ -620,8 +648,8 @@ export async function upsertAccountMappingPortable(
 ) {
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Director" });
   requireOption(args.status, ACCOUNT_MAPPING_STATUSES, "Account mapping status");
-  const account = await ctx.db.get(args.financialAccountId);
-  if (!account || account.societyId !== args.societyId) throw new Error("Mapped account must belong to this society.");
+  await getOwned(ctx, "financialAccounts", args.financialAccountId, args.societyId);
+  if (args.id) await getOwned(ctx, "accountingAccountMappings", args.id, args.societyId);
   const { id, actingUserId, ...payload } = args;
   const now = new Date().toISOString();
   if (id) {
@@ -668,6 +696,23 @@ export async function upsertJournalEntryPortable(
   },
 ) {
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Director" });
+  await Promise.all([
+    args.id ? getOwned(ctx, "journalEntries", args.id, args.societyId) : Promise.resolve(),
+    args.connectionId ? getOwned(ctx, "financialConnections", args.connectionId, args.societyId) : Promise.resolve(),
+    args.fiscalPeriodId ? getOwned(ctx, "accountingFiscalPeriods", args.fiscalPeriodId, args.societyId) : Promise.resolve(),
+    ...(args.sourceDocumentIds ?? []).map((documentId) =>
+      getOwned(ctx, "documents", documentId, args.societyId)),
+    ...args.lines.flatMap((line) => [
+      getOwned(ctx, "financialAccounts", line.accountId, args.societyId),
+      line.counterpartyId ? getOwned(ctx, "accountingCounterparties", line.counterpartyId, args.societyId) : Promise.resolve(),
+      line.grantId ? getOwned(ctx, "grants", line.grantId, args.societyId) : Promise.resolve(),
+      line.fundRestrictionId ? getOwned(ctx, "fundRestrictions", line.fundRestrictionId, args.societyId) : Promise.resolve(),
+      line.financialTransactionId ? getOwned(ctx, "financialTransactions", line.financialTransactionId, args.societyId) : Promise.resolve(),
+      line.transactionCandidateId ? getOwned(ctx, "transactionCandidates", line.transactionCandidateId, args.societyId) : Promise.resolve(),
+      ...(line.documentIds ?? []).map((documentId) =>
+        getOwned(ctx, "documents", documentId, args.societyId)),
+    ]),
+  ]);
   requireOption(args.status, JOURNAL_STATUSES, "Journal entry status");
   validateJournalLines(args.lines);
   await assertPeriodOpen(ctx, {
@@ -683,7 +728,7 @@ export async function upsertJournalEntryPortable(
     ? (await ctx.db.patch(id, { ...entry, postedAtISO, updatedAtISO: now }), id)
     : await ctx.db.insert("journalEntries", {
         ...entry,
-        createdByUserId: actingUserId,
+        createdByUserId: await principalUserId(ctx, args.societyId),
         postedAtISO,
         createdAtISO: now,
         updatedAtISO: now,
@@ -725,9 +770,20 @@ export async function postTransactionCandidatePortable(
     actingUserId?: string;
   },
 ) {
-  const candidate = await ctx.db.get(args.transactionCandidateId);
-  if (!candidate) throw new Error("Transaction candidate not found.");
-  await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: String(candidate.societyId), required: "Director" });
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const candidate = await getOwned(ctx, "transactionCandidates", args.transactionCandidateId, societyId);
+  await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId, required: "Director" });
+  await Promise.all([
+    getOwned(ctx, "financialAccounts", args.cashAccountId, societyId),
+    getOwned(ctx, "financialAccounts", args.offsetAccountId, societyId),
+    args.counterpartyId ? getOwned(ctx, "accountingCounterparties", args.counterpartyId, societyId) : Promise.resolve(),
+    args.grantId ? getOwned(ctx, "grants", args.grantId, societyId) : Promise.resolve(),
+    args.fundRestrictionId ? getOwned(ctx, "fundRestrictions", args.fundRestrictionId, societyId) : Promise.resolve(),
+    args.fiscalPeriodId ? getOwned(ctx, "accountingFiscalPeriods", args.fiscalPeriodId, societyId) : Promise.resolve(),
+    ...(Array.isArray(candidate.sourceDocumentIds) ? candidate.sourceDocumentIds : []).map((documentId: string) =>
+      getOwned(ctx, "documents", documentId, societyId)),
+  ]);
   if (String(candidate.status).toLowerCase() === "posted") {
     throw new Error("Transaction candidate has already been posted.");
   }
@@ -741,7 +797,7 @@ export async function postTransactionCandidatePortable(
   const amountCents = candidate.amountCents ?? signedAmountFromDebitCredit(candidate.debitCents, candidate.creditCents);
   if (!amountCents) throw new Error("Transaction candidate needs an amount before it can be posted.");
   await assertPeriodOpen(ctx, {
-    societyId: String(candidate.societyId),
+    societyId,
     fiscalPeriodId: args.fiscalPeriodId,
     date: candidate.transactionDate,
     allowClosed: args.allowClosedPeriodAdjustment === true,
@@ -756,7 +812,7 @@ export async function postTransactionCandidatePortable(
     sourceExternalId: (candidate.sourceExternalIds ?? [])[0],
     status: "posted",
     fiscalYear: args.fiscalYear ?? candidate.periodLabel,
-    createdByUserId: args.actingUserId,
+    createdByUserId: await principalUserId(ctx, societyId),
     postedAtISO: now,
     sourceDocumentIds: candidate.sourceDocumentIds,
     rawJson: JSON.stringify(candidate),
@@ -824,9 +880,24 @@ export async function postTransactionCandidateAllocationPortable(
     actingUserId?: string;
   },
 ) {
-  const candidate = await ctx.db.get(args.transactionCandidateId);
-  if (!candidate) throw new Error("Transaction candidate not found.");
-  await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: String(candidate.societyId), required: "Director" });
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const candidate = await getOwned(ctx, "transactionCandidates", args.transactionCandidateId, societyId);
+  await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId, required: "Director" });
+  await Promise.all([
+    getOwned(ctx, "financialAccounts", args.cashAccountId, societyId),
+    args.fiscalPeriodId ? getOwned(ctx, "accountingFiscalPeriods", args.fiscalPeriodId, societyId) : Promise.resolve(),
+    ...(Array.isArray(candidate.sourceDocumentIds) ? candidate.sourceDocumentIds : []).map((documentId: string) =>
+      getOwned(ctx, "documents", documentId, societyId)),
+    ...args.allocations.flatMap((allocation) => [
+      getOwned(ctx, "financialAccounts", allocation.accountId, societyId),
+      allocation.counterpartyId ? getOwned(ctx, "accountingCounterparties", allocation.counterpartyId, societyId) : Promise.resolve(),
+      allocation.grantId ? getOwned(ctx, "grants", allocation.grantId, societyId) : Promise.resolve(),
+      allocation.fundRestrictionId ? getOwned(ctx, "fundRestrictions", allocation.fundRestrictionId, societyId) : Promise.resolve(),
+      ...(allocation.documentIds ?? []).map((documentId) =>
+        getOwned(ctx, "documents", documentId, societyId)),
+    ]),
+  ]);
   if (String(candidate.status).toLowerCase() === "posted") {
     throw new Error("Transaction candidate has already been posted.");
   }
@@ -843,7 +914,7 @@ export async function postTransactionCandidateAllocationPortable(
   const allocationTotal = args.allocations.reduce((sum: number, row: any) => sum + row.amountCents, 0);
   if (allocationTotal !== absoluteCents) throw new Error("Allocation total must equal the candidate amount.");
   await assertPeriodOpen(ctx, {
-    societyId: String(candidate.societyId),
+    societyId,
     fiscalPeriodId: args.fiscalPeriodId,
     date: candidate.transactionDate,
     allowClosed: args.allowClosedPeriodAdjustment === true,
@@ -858,7 +929,7 @@ export async function postTransactionCandidateAllocationPortable(
     sourceExternalId: (candidate.sourceExternalIds ?? [])[0],
     status: "posted",
     fiscalYear: args.fiscalYear ?? candidate.periodLabel,
-    createdByUserId: args.actingUserId,
+    createdByUserId: await principalUserId(ctx, societyId),
     postedAtISO: now,
     sourceDocumentIds: candidate.sourceDocumentIds,
     rawJson: JSON.stringify(candidate),
@@ -914,6 +985,7 @@ export async function backfillFinancialTransactionsToJournalPortable(
   { societyId, fiscalYear, limit, actingUserId }: { societyId: string; fiscalYear?: string; limit?: number; actingUserId?: string },
 ) {
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
+  const createdByUserId = await principalUserId(ctx, societyId);
   const [transactions, existingLines, accounts, mappings] = await Promise.all([
     ctx.db.query("financialTransactions").withIndex("by_society_date", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("journalLines").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
@@ -971,7 +1043,7 @@ export async function backfillFinancialTransactionsToJournalPortable(
       sourceExternalId: transaction.externalId,
       status: "posted",
       fiscalYear: fiscalYear ?? period?.fiscalYear,
-      createdByUserId: actingUserId,
+      createdByUserId,
       postedAtISO: now,
       rawJson: JSON.stringify(transaction),
       createdAtISO: now,
@@ -1030,6 +1102,19 @@ export async function postOpeningBalancesPortable(
   },
 ) {
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Admin" });
+  await Promise.all([
+    args.fiscalPeriodId
+      ? getOwned(ctx, "accountingFiscalPeriods", args.fiscalPeriodId, args.societyId)
+      : Promise.resolve(),
+    ...(args.sourceDocumentIds ?? []).map((documentId) =>
+      getOwned(ctx, "documents", documentId, args.societyId)),
+    ...args.lines.flatMap((line) => [
+      getOwned(ctx, "financialAccounts", line.accountId, args.societyId),
+      line.fundRestrictionId
+        ? getOwned(ctx, "fundRestrictions", line.fundRestrictionId, args.societyId)
+        : Promise.resolve(),
+    ]),
+  ]);
   validateJournalLines(args.lines);
   await assertPeriodOpen(ctx, { societyId: args.societyId, fiscalPeriodId: args.fiscalPeriodId, date: args.date });
   const existing = await ctx.db
@@ -1046,7 +1131,7 @@ export async function postOpeningBalancesPortable(
     source: "opening_balance",
     status: "posted",
     fiscalYear: args.fiscalYear,
-    createdByUserId: args.actingUserId,
+    createdByUserId: await principalUserId(ctx, args.societyId),
     postedAtISO: now,
     sourceDocumentIds: args.sourceDocumentIds,
     createdAtISO: now,
@@ -1082,9 +1167,11 @@ export async function createReconciliationRunPortable(
     actingUserId?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Director" });
-  const account = await ctx.db.get(args.financialAccountId);
-  if (!account || account.societyId !== args.societyId) throw new Error("Account must belong to this society.");
+  await getOwned(ctx, "financialAccounts", args.financialAccountId, args.societyId);
+  await Promise.all((args.sourceDocumentIds ?? []).map((documentId) =>
+    getOwned(ctx, "documents", documentId, args.societyId)));
   const [entries, lines] = await Promise.all([
     ctx.db.query("journalEntries").withIndex("by_society_status", (q) => q.eq("societyId", args.societyId).eq("status", "posted")).collect(),
     ctx.db.query("journalLines").withIndex("by_account", (q) => q.eq("accountId", args.financialAccountId)).collect(),
@@ -1142,13 +1229,16 @@ export async function setReconciliationRunStatusPortable(
   { id, status, actingUserId }: { id: string; status: string; actingUserId?: string },
 ) {
   requireOption(status, RECONCILIATION_STATUSES, "Reconciliation status");
-  const run = await ctx.db.get(id);
-  if (!run) throw new Error("Reconciliation run not found.");
-  await requireRolePortable(ctx, { actingUserId, societyId: String(run.societyId), required: "Director" });
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const run = await getOwned(ctx, "reconciliationRuns", id, societyId);
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
   await ctx.db.patch(id, {
     status,
     reconciledAtISO: status === "reconciled" ? new Date().toISOString() : run.reconciledAtISO,
-    reconciledByUserId: status === "reconciled" ? actingUserId : run.reconciledByUserId,
+    reconciledByUserId: status === "reconciled"
+      ? await principalUserId(ctx, societyId)
+      : run.reconciledByUserId,
     updatedAtISO: new Date().toISOString(),
   });
   return id;

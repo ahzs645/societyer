@@ -12,6 +12,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 type TranscriptSegmentRow = {
   speaker: string;
@@ -190,6 +191,9 @@ function parseVttTranscript(vttText: string): {
 }
 
 export async function getByMeetingPortable(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "meetings", meetingId, societyId);
   const rows = await ctx.db
     .query("transcripts")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -198,6 +202,9 @@ export async function getByMeetingPortable(ctx: PortableQueryCtx, { meetingId }:
 }
 
 export async function jobForMeetingPortable(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "meetings", meetingId, societyId);
   const rows = await ctx.db
     .query("transcriptionJobs")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -209,6 +216,8 @@ export async function createJobPortable(
   ctx: PortableMutationCtx,
   args: { societyId: string; meetingId: string; provider: string },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   return await ctx.db.insert("transcriptionJobs", {
     societyId: args.societyId,
     meetingId: args.meetingId,
@@ -231,6 +240,10 @@ export async function updateJobPortable(
     };
   },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "transcriptionJobs", id, societyId);
+  if (patch.transcriptId) await getOwned(ctx, "transcripts", patch.transcriptId, societyId);
   await ctx.db.patch(id, patch);
 }
 
@@ -248,6 +261,8 @@ export async function saveTranscriptPortable(
     demo: boolean;
   },
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   return await upsertTranscriptRow(ctx, args);
 }
 
@@ -264,6 +279,8 @@ export async function saveTextPortable(
     demo?: boolean;
   },
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   const text = args.text.trim();
   const transcriptId = await upsertTranscriptRow(ctx, {
     societyId: args.societyId,
@@ -284,6 +301,8 @@ export async function importVttPortable(
   ctx: PortableMutationCtx,
   args: { societyId: string; meetingId: string; vttText: string },
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   const parsed = parseVttTranscript(args.vttText);
   if (!parsed.text) throw new Error("No transcript cues were found in that VTT file.");
   const transcriptId = await upsertTranscriptRow(ctx, {

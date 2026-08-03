@@ -10,8 +10,27 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
+
+const SUBJECT_TABLES: Record<string, string> = {
+  director: "directors",
+  employee: "employees",
+  volunteer: "volunteers",
+};
+
+async function requireOwnedSubject(
+  ctx: PortableQueryCtx | PortableMutationCtx,
+  societyId: string,
+  subjectType: string,
+  subjectId: string,
+) {
+  const table = SUBJECT_TABLES[subjectType];
+  if (!table) throw new Error("Unsupported org-chart subject type.");
+  await getOwned(ctx, table, subjectId, societyId);
+}
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("orgChartAssignments")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -28,6 +47,7 @@ export async function listAsOfPortable(
   ctx: PortableQueryCtx,
   { societyId, asOf }: { societyId: string; asOf: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const asOfEnd = `${asOf}T23:59:59.999Z`;
   const revisions = await ctx.db
     .query("orgChartAssignmentRevisions")
@@ -85,6 +105,11 @@ export async function upsertPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  await requireOwnedSubject(ctx, args.societyId, args.subjectType, args.subjectId);
+  if (args.managerType && args.managerId) {
+    await requireOwnedSubject(ctx, args.societyId, args.managerType, args.managerId);
+  }
   const existing = await ctx.db
     .query("orgChartAssignments")
     .withIndex("by_subject", (q) =>
@@ -133,6 +158,8 @@ export async function removePortable(
     subjectId: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  await requireOwnedSubject(ctx, args.societyId, args.subjectType, args.subjectId);
   const existing = await ctx.db
     .query("orgChartAssignments")
     .withIndex("by_subject", (q) =>

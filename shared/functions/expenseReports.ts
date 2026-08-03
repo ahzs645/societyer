@@ -9,8 +9,10 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const reports = await ctx.db
     .query("expenseReports")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -18,9 +20,15 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
   const rows = await Promise.all(
     reports.map(async (report) => ({
       ...report,
-      receiptDocument: report.receiptDocumentId ? await ctx.db.get(report.receiptDocumentId) : null,
-      claimantUser: report.claimantUserId ? await ctx.db.get(report.claimantUserId) : null,
-      approverUser: report.approverUserId ? await ctx.db.get(report.approverUserId) : null,
+      receiptDocument: report.receiptDocumentId
+        ? await getOwned(ctx, "documents", report.receiptDocumentId, societyId)
+        : null,
+      claimantUser: report.claimantUserId
+        ? await getOwned(ctx, "users", report.claimantUserId, societyId)
+        : null,
+      approverUser: report.approverUserId
+        ? await getOwned(ctx, "users", report.approverUserId, societyId)
+        : null,
     })),
   );
   return rows.sort((a: any, b: any) => String(b.incurredAtISO).localeCompare(String(a.incurredAtISO)));
@@ -46,15 +54,19 @@ export async function upsertPortable(
     actingUserId?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  const principalId = await principalUserId(ctx, args.societyId);
+  if (args.actingUserId && args.actingUserId !== principalId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
+  await Promise.all([
+    args.id ? getOwned(ctx, "expenseReports", args.id, args.societyId) : Promise.resolve(),
+    args.claimantUserId ? getOwned(ctx, "users", args.claimantUserId, args.societyId) : Promise.resolve(),
+    args.receiptDocumentId ? getOwned(ctx, "documents", args.receiptDocumentId, args.societyId) : Promise.resolve(),
+  ]);
   if (!args.title.trim()) throw new Error("Expense title is required.");
   if (!args.claimantName.trim()) throw new Error("Claimant name is required.");
   if (args.amountCents < 0) throw new Error("Amount cannot be negative.");
-  if (args.receiptDocumentId) {
-    const receipt = await ctx.db.get(args.receiptDocumentId);
-    if (!receipt || receipt.societyId !== args.societyId) {
-      throw new Error("Receipt document is not in this society.");
-    }
-  }
   const nowISO = new Date().toISOString();
   const payload = {
     societyId: args.societyId,
@@ -100,8 +112,21 @@ export async function setStatusPortable(
     bankAccountId?: string;
   },
 ) {
-  const report = await ctx.db.get(id);
-  if (!report) return;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const report = await getOwned(ctx, "expenseReports", id, societyId);
+  const principalId = await principalUserId(ctx, societyId);
+  if (actingUserId && actingUserId !== principalId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
+  await Promise.all([
+    expenseAccountId
+      ? getOwned(ctx, "financialAccounts", expenseAccountId, societyId)
+      : Promise.resolve(),
+    bankAccountId
+      ? getOwned(ctx, "financialAccounts", bankAccountId, societyId)
+      : Promise.resolve(),
+  ]);
   const nowISO = new Date().toISOString();
   const patch: any = {
     status,
@@ -109,7 +134,7 @@ export async function setStatusPortable(
   };
   if (status === "Submitted" && !report.submittedAtISO) patch.submittedAtISO = nowISO;
   if (status === "Approved") {
-    patch.approverUserId = actingUserId;
+    patch.approverUserId = await principalUserId(ctx, societyId);
     patch.approvedAtISO = nowISO;
   }
   if (status === "Paid") {
@@ -120,8 +145,8 @@ export async function setStatusPortable(
     // (never guess accounts for a money posting).
     if (expenseAccountId && bankAccountId && !report.journalEntryId) {
       const [expenseAccount, bankAccount] = await Promise.all([
-        ctx.db.get(expenseAccountId),
-        ctx.db.get(bankAccountId),
+        getOwned(ctx, "financialAccounts", expenseAccountId, societyId),
+        getOwned(ctx, "financialAccounts", bankAccountId, societyId),
       ]);
       if (
         expenseAccount?.societyId === report.societyId &&
@@ -135,7 +160,7 @@ export async function setStatusPortable(
             memo: `Reimbursement: ${report.title} (${report.claimantName})`,
             source: "expenseReport",
             status: "posted",
-            createdByUserId: actingUserId,
+            createdByUserId: await principalUserId(ctx, societyId),
             postedAtISO: nowISO,
             sourceDocumentIds: report.receiptDocumentId ? [report.receiptDocumentId] : undefined,
             createdAtISO: nowISO,
@@ -153,5 +178,8 @@ export async function setStatusPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await getOwned(ctx, "expenseReports", id, societyId);
   await ctx.db.delete(id);
 }

@@ -12,8 +12,10 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const snapshot = await latestSnapshot(ctx, societyId);
   if (!snapshot) return null;
   return {
@@ -26,6 +28,7 @@ export async function resourcesPortable(
   ctx: PortableQueryCtx,
   { societyId, resourceType, search, limit }: { societyId: string; resourceType?: string; search?: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const snapshot = await latestSnapshot(ctx, societyId);
   if (!snapshot) return [];
   const rows = await ctx.db
@@ -51,8 +54,9 @@ export async function resourcesPortable(
 }
 
 export async function resourcePortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const row = await ctx.db.get(id);
-  if (!row) return null;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  const row = await getOwned(ctx, "waveCacheResources", id, societyId);
   const snapshotRows = await ctx.db
     .query("waveCacheResources")
     .withIndex("by_snapshot", (q) => q.eq("snapshotId", row.snapshotId))
@@ -73,6 +77,7 @@ export async function resourceByExternalIdPortable(
   ctx: PortableQueryCtx,
   { societyId, externalId, resourceType }: { societyId: string; externalId: string; resourceType?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const snapshot = await latestSnapshot(ctx, societyId);
   if (!snapshot) return null;
   const rows = await ctx.db
@@ -101,6 +106,7 @@ export async function structuresPortable(
   ctx: PortableQueryCtx,
   { societyId, search, limit }: { societyId: string; search?: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const snapshot = await latestSnapshot(ctx, societyId);
   if (!snapshot) return [];
   const needle = search?.trim().toLowerCase();
