@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, ClipboardPaste, ExternalLink, MonitorPlay, Play, RefreshCw, ShieldCheck, Square, Upload, XCircle } from "lucide-react";
 import { PageLoading, SeedPrompt } from "./_helpers";
@@ -23,13 +23,15 @@ type RunnerHealth = {
 };
 
 type BrowserSession = {
+  societyId: string;
   sessionId: string;
+  sessionSocietyId: string;
   connectorId?: string;
   profileKey: string;
+  profileSocietyId: string;
   provider: string;
   startedAtISO: string;
   currentUrl: string;
-  dashboardUrl?: string;
   vncWebSocketUrl?: string;
   liveViewEnabled?: boolean;
 };
@@ -65,7 +67,6 @@ type ConnectorManifest = {
 
 type StartLoginResponse = BrowserSession & {
   connectorId?: string;
-  dashboardUrl?: string;
 };
 
 const DEFAULT_CONNECTOR_ID = "wave";
@@ -200,11 +201,14 @@ function mergeConnectorManifests(remoteConnectors: ConnectorManifest[]) {
 }
 
 function connectorForSession(session: BrowserSession, availableConnectors: ConnectorManifest[]) {
-  return availableConnectors.find((connector) => connector.id === session.connectorId)
-    ?? availableConnectors.find((connector) => {
-      const prefix = connector.auth.profileKeyPrefix ?? connector.id;
-      return session.profileKey.startsWith(`${prefix}-`);
-    });
+  return availableConnectors.find((connector) => connector.id === session.connectorId);
+}
+
+function requireSocietyOwned<T extends { societyId?: string }>(value: T, societyId: string): T {
+  if (value.societyId !== societyId) {
+    throw new Error("The browser connector reference is missing society ownership or belongs to another society.");
+  }
+  return value;
 }
 
 export function BrowserConnectorsPage() {
@@ -220,7 +224,6 @@ export function BrowserConnectorsPage() {
   const [profileKey, setProfileKey] = useState(DEFAULT_PROFILE);
   const [startUrl, setStartUrl] = useState(DEFAULT_URL);
   const [busy, setBusy] = useState(false);
-  const [activeDashboardUrl, setActiveDashboardUrl] = useState("http://127.0.0.1:3003");
   const [authCheck, setAuthCheck] = useState<any | null>(null);
   const [savedConnection, setSavedConnection] = useState<any | null>(null);
   const [lastRun, setLastRun] = useState<any | null>(null);
@@ -247,10 +250,6 @@ export function BrowserConnectorsPage() {
   const visibleSessions = workspaceConnector
     ? sessions.filter((session) => connectorForSession(session, availableConnectors)?.id === workspaceConnector.id)
     : sessions;
-  const liveViewUrl = useMemo(() => {
-    if (!liveSession?.dashboardUrl) return activeDashboardUrl;
-    return liveSession.dashboardUrl;
-  }, [activeDashboardUrl, liveSession?.dashboardUrl]);
   const connectorPanelRenderers: Record<string, () => JSX.Element> = {
     wave: renderWaveProviderPanel,
     "bc-registry": renderBcRegistryProviderPanel,
@@ -269,6 +268,16 @@ export function BrowserConnectorsPage() {
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [society?._id, staticDemo]);
+
+  useEffect(() => {
+    setSessions([]);
+    setProfileKey(profileKeyFor(availableConnectors.find((connector) => connector.id === connectorId)));
+    setAuthCheck(null);
+    setSavedConnection(null);
+    setLastRun(null);
+    // Profile and session references are valid only inside one society namespace.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [society?._id]);
 
   useEffect(() => {
     if (!requestedConnectorId) return;
@@ -323,10 +332,13 @@ export function BrowserConnectorsPage() {
       ]);
       setConnectors(connectorsPayload.connectors ?? []);
       setHealth(healthPayload.data);
-      setSessions(sessionsPayload.sessions ?? []);
-      const primarySession = sessionsPayload.sessions?.[0];
-      const dashboardUrl = primarySession?.dashboardUrl;
-      if (dashboardUrl) setActiveDashboardUrl(dashboardUrl);
+      const ownedSessions = (sessionsPayload.sessions ?? []).filter((session) =>
+        session.societyId === String(society._id)
+        && session.profileSocietyId === String(society._id)
+        && session.sessionSocietyId === String(society._id),
+      );
+      setSessions(ownedSessions);
+      const primarySession = ownedSessions[0];
       if (primarySession?.connectorId === connectorId) {
         setProfileKey((current) => {
           const connectorDefault = profileKeyFor(availableConnectors.find((connector) => connector.id === connectorId));
@@ -360,6 +372,7 @@ export function BrowserConnectorsPage() {
     const connector = encodeURIComponent(input.connectorId);
     const action = encodeURIComponent(input.actionId);
     if (input.session) {
+      requireSocietyOwned(input.session, String(society._id));
       const sessionId = encodeURIComponent(input.session.sessionId);
       return input.importAlias
         ? `/connectors/${connector}/auth/sessions/${sessionId}/${input.importAlias}`
@@ -409,9 +422,9 @@ export function BrowserConnectorsPage() {
           browserVersion: connector?.browserDefaults?.browserVersion,
         }),
       });
-      if (payload.data.dashboardUrl) setActiveDashboardUrl(payload.data.dashboardUrl);
-      setProfileKey(payload.data.profileKey);
-      toast.success("Browser app session started", payload.data.currentUrl);
+      const owned = requireSocietyOwned(payload.data, String(society._id));
+      setProfileKey(owned.profileKey);
+      toast.success("Browser app session started", owned.currentUrl);
       await refresh();
     } catch (error: any) {
       toast.error(error?.message ?? "Could not start browser session");
@@ -448,13 +461,14 @@ export function BrowserConnectorsPage() {
           url: startUrl,
         }),
       });
-      setAuthCheck(payload.data);
-      if (payload.data?.authenticated) {
-        toast.success(`${selectedConnector.name} profile is authenticated`, payload.data?.currentUrl);
-      } else if (payload.data?.authenticated === false) {
-        toast.error(`${selectedConnector.name} needs login`, payload.data?.currentUrl);
+      const owned = requireSocietyOwned(payload.data, String(society._id));
+      setAuthCheck(owned);
+      if (owned.authenticated) {
+        toast.success(`${selectedConnector.name} profile is authenticated`, owned.currentUrl);
+      } else if (owned.authenticated === false) {
+        toast.error(`${selectedConnector.name} needs login`, owned.currentUrl);
       } else {
-        toast.success(`${selectedConnector.name} profile checked`, payload.data?.currentUrl);
+        toast.success(`${selectedConnector.name} profile checked`, owned.currentUrl);
       }
       await refresh();
     } catch (error: any) {
@@ -765,10 +779,11 @@ export function BrowserConnectorsPage() {
         method: "POST",
         body: JSON.stringify({ societyId: society._id }),
       });
-      setAuthCheck(payload.data);
-      setSavedConnection(payload.data);
-      setProfileKey(payload.data.profileKey ?? session.profileKey);
-      toast.success(`${sessionConnector?.name ?? "Connector"} profile saved`, payload.data.profileKey);
+      const owned = requireSocietyOwned(payload.data, String(society._id));
+      setAuthCheck(owned);
+      setSavedConnection(owned);
+      setProfileKey(owned.profileKey ?? session.profileKey);
+      toast.success(`${sessionConnector?.name ?? "Connector"} profile saved`, owned.profileKey);
       await refresh();
     } catch (error: any) {
       toast.error(error?.message ?? "Profile is not ready to save");
@@ -1100,9 +1115,6 @@ export function BrowserConnectorsPage() {
             <Button size="sm" disabled={busy} onClick={refresh}>
               <RefreshCw size={12} /> Refresh
             </Button>
-            <a className="btn btn--sm" href={activeDashboardUrl} target="_blank" rel="noreferrer">
-              <ExternalLink size={12} /> Open runtime
-            </a>
           </>
         }
       >
@@ -1247,17 +1259,11 @@ export function BrowserConnectorsPage() {
                       onPasteText={(text) => pasteIntoSession(liveSession.sessionId, text)}
                     />
                   ) : liveSession ? (
-                    <iframe
-                      title="BlitzBrowser dashboard"
-                      src={liveViewUrl}
-                      style={{
-                        width: "100%",
-                        height: 720,
-                        border: 0,
-                        display: "block",
-                        background: "var(--bg-surface)",
-                      }}
-                    />
+                    <div className="empty-state empty-state--start" style={{ padding: 24 }}>
+                      <MonitorPlay size={18} />
+                      <div className="empty-state__title">Live view unavailable</div>
+                      <div className="empty-state__description">Restart this browser session with live view enabled.</div>
+                    </div>
                   ) : (
                     <div className="empty-state empty-state--start" style={{ padding: 24 }}>
                       <MonitorPlay size={18} />

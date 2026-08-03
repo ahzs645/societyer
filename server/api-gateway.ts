@@ -120,6 +120,8 @@ import { safeJson, arrayOf, stringValue, compactStrings } from "./api-gateway/sh
 import {
   emitWebhookEvent,
   connectorRunnerRequest,
+  connectorTenantContext,
+  withConnectorOwnership,
   recordConnectorRun,
   deliverWebhook,
   query,
@@ -770,6 +772,17 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
   );
 }
 
+async function tenantConnectorRunnerRequest(
+  req: Request,
+  method: "GET" | "POST",
+  path: string,
+  body?: Record<string, unknown>,
+) {
+  const tenant = connectorTenantContext(req);
+  const result = await connectorRunnerRequest(method, path, body, tenant.tenantKey);
+  return withConnectorOwnership(result, tenant.societyId);
+}
+
 function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
   router.get(
     "/browser-connectors/connectors",
@@ -790,8 +803,8 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
   router.get(
     "/browser-connectors/sessions",
     requireScope(client, "settings:manage"),
-    asyncHandler(async (_req, res) => {
-      res.json(await connectorRunnerRequest("GET", "/sessions"));
+    asyncHandler(async (req, res) => {
+      res.json(await tenantConnectorRunnerRequest(req, "GET", "/sessions"));
     }),
   );
 
@@ -800,7 +813,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
       const body = stripActor(req.body ?? {});
-      res.status(201).json(singleResponse(await connectorRunnerRequest("POST", "/sessions/start-login", body)));
+      res.status(201).json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", "/sessions/start-login", body)));
     }),
   );
 
@@ -808,7 +821,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/sessions/:sessionId/finish-login",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      res.json(singleResponse(await connectorRunnerRequest("POST", `/sessions/${encodeURIComponent(req.params.sessionId)}/finish-login`)));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", `/sessions/${encodeURIComponent(req.params.sessionId)}/finish-login`)));
     }),
   );
 
@@ -816,7 +829,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/sessions/:sessionId/stop",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      res.json(singleResponse(await connectorRunnerRequest("POST", `/sessions/${encodeURIComponent(req.params.sessionId)}/stop`)));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", `/sessions/${encodeURIComponent(req.params.sessionId)}/stop`)));
     }),
   );
 
@@ -824,7 +837,8 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/sessions/:sessionId/paste",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      res.json(singleResponse(await connectorRunnerRequest(
+      res.json(singleResponse(await tenantConnectorRunnerRequest(
+        req,
         "POST",
         `/sessions/${encodeURIComponent(req.params.sessionId)}/paste`,
         stripActor(req.body ?? {}),
@@ -836,7 +850,15 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/profiles/validate",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      res.json(singleResponse(await connectorRunnerRequest("POST", "/profiles/validate", stripActor(req.body ?? {}))));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", "/profiles/validate", stripActor(req.body ?? {}))));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/profiles/delete",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", "/profiles/delete", stripActor(req.body ?? {}))));
     }),
   );
 
@@ -844,7 +866,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/runs/open-page",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      res.json(singleResponse(await connectorRunnerRequest("POST", "/runs/open-page", stripActor(req.body ?? {}))));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", "/runs/open-page", stripActor(req.body ?? {}))));
     }),
   );
 
@@ -853,7 +875,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
       const connectorId = encodeURIComponent(String(req.params.connectorId));
-      res.status(201).json(singleResponse(await connectorRunnerRequest("POST", `/connectors/${connectorId}/auth/start`, stripActor(req.body ?? {}))));
+      res.status(201).json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", `/connectors/${connectorId}/auth/start`, stripActor(req.body ?? {}))));
     }),
   );
 
@@ -862,7 +884,16 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
       const connectorId = encodeURIComponent(String(req.params.connectorId));
-      res.json(singleResponse(await connectorRunnerRequest("POST", `/connectors/${connectorId}/auth/verify`, stripActor(req.body ?? {}))));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", `/connectors/${connectorId}/auth/verify`, stripActor(req.body ?? {}))));
+    }),
+  );
+
+  router.post(
+    "/browser-connectors/connectors/:connectorId/profiles/delete",
+    requireScope(client, "settings:manage"),
+    asyncHandler(async (req, res) => {
+      const connectorId = encodeURIComponent(String(req.params.connectorId));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", `/connectors/${connectorId}/profiles/delete`, stripActor(req.body ?? {}))));
     }),
   );
 
@@ -872,7 +903,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     asyncHandler(async (req, res) => {
       const connectorId = encodeURIComponent(String(req.params.connectorId));
       const sessionId = encodeURIComponent(String(req.params.sessionId));
-      res.json(singleResponse(await connectorRunnerRequest("POST", `/connectors/${connectorId}/auth/sessions/${sessionId}/confirm`, stripActor(req.body ?? {}))));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", `/connectors/${connectorId}/auth/sessions/${sessionId}/confirm`, stripActor(req.body ?? {}))));
     }),
   );
 
@@ -886,7 +917,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       const connectorId = encodeURIComponent(connectorIdRaw);
       const sessionId = encodeURIComponent(sessionIdRaw);
       const actionId = encodeURIComponent(actionIdRaw);
-      const runnerOutput: any = await connectorRunnerRequest("POST", `/connectors/${connectorId}/auth/sessions/${sessionId}/actions/${actionId}`, stripActor(req.body ?? {}));
+      const runnerOutput: any = await tenantConnectorRunnerRequest(req, "POST", `/connectors/${connectorId}/auth/sessions/${sessionId}/actions/${actionId}`, stripActor(req.body ?? {}));
       const workflowRunId = await recordConnectorRun(client, req, {
         connectorId: connectorIdRaw,
         actionId: actionIdRaw,
@@ -903,7 +934,8 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     asyncHandler(async (req, res) => {
       const sessionId = encodeURIComponent(String(req.params.sessionId));
       const body = stripActor(req.body ?? {});
-      const runnerOutput: any = await connectorRunnerRequest(
+      const runnerOutput: any = await tenantConnectorRunnerRequest(
+        req,
         "POST",
         `/connectors/wave/auth/sessions/${sessionId}/actions/importTransactions`,
         body,
@@ -918,6 +950,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
             societyId,
             businessId: runnerOutput.businessId,
             profileKey: runnerOutput.profileKey ?? body.profileKey,
+            profileSocietyId: societyId,
             accounts: normalized.accounts,
             transactions: normalized.transactions,
             actingUserId: req.actor?.userId,
@@ -942,7 +975,8 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
       const body = stripActor(req.body ?? {});
-      const runnerOutput: any = await connectorRunnerRequest(
+      const runnerOutput: any = await tenantConnectorRunnerRequest(
+        req,
         "POST",
         "/connectors/wave/actions/importTransactions",
         body,
@@ -957,6 +991,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
             societyId,
             businessId: runnerOutput.businessId,
             profileKey: runnerOutput.profileKey ?? body.profileKey,
+            profileSocietyId: societyId,
             accounts: normalized.accounts,
             transactions: normalized.transactions,
             actingUserId: req.actor?.userId,
@@ -981,7 +1016,8 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     asyncHandler(async (req, res) => {
       const sessionId = encodeURIComponent(String(req.params.sessionId));
       const body = stripActor(req.body ?? {});
-      const runnerOutput: any = await connectorRunnerRequest(
+      const runnerOutput: any = await tenantConnectorRunnerRequest(
+        req,
         "POST",
         `/connectors/gcos/auth/sessions/${sessionId}/actions/exportProjectSnapshot`,
         body,
@@ -1017,7 +1053,8 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
       const body = stripActor(req.body ?? {});
-      const runnerOutput: any = await connectorRunnerRequest(
+      const runnerOutput: any = await tenantConnectorRunnerRequest(
+        req,
         "POST",
         "/connectors/gcos/actions/exportProjectSnapshot",
         body,
@@ -1092,7 +1129,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       const actionIdRaw = String(req.params.actionId);
       const connectorId = encodeURIComponent(connectorIdRaw);
       const actionId = encodeURIComponent(actionIdRaw);
-      const runnerOutput: any = await connectorRunnerRequest("POST", `/connectors/${connectorId}/actions/${actionId}`, stripActor(req.body ?? {}));
+      const runnerOutput: any = await tenantConnectorRunnerRequest(req, "POST", `/connectors/${connectorId}/actions/${actionId}`, stripActor(req.body ?? {}));
       const workflowRunId = await recordConnectorRun(client, req, {
         connectorId: connectorIdRaw,
         actionId: actionIdRaw,

@@ -406,6 +406,7 @@ export const importBrowserWaveTransactions = mutation({
     societyId: v.id("societies"),
     businessId: v.string(),
     profileKey: v.optional(v.string()),
+    profileSocietyId: v.optional(v.string()),
     accounts: v.array(
       v.object({
         externalId: v.string(),
@@ -440,15 +441,24 @@ export const importBrowserWaveTransactions = mutation({
       societyId: args.societyId,
       required: "Admin",
     });
+    const societyId = String(args.societyId);
+    if (args.profileKey && args.profileSocietyId !== societyId) {
+      throw new Error("Browser profile reference is missing or belongs to another society.");
+    }
 
     const now = new Date().toISOString();
     const existingConnections = await ctx.db
       .query("financialConnections")
       .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
       .collect();
-    const connection =
-      existingConnections.find((row) => row.provider === "wave" && row.externalBusinessId === args.businessId) ??
-      existingConnections.find((row) => row.provider === "wave");
+    const connection = existingConnections.find((row) =>
+      row.provider === "wave"
+      && row.externalBusinessId === args.businessId
+      && (!args.profileKey || (
+        row.browserProfileKey === args.profileKey
+        && row.browserProfileSocietyId === societyId
+      )),
+    );
 
     const connectionPayload = {
       societyId: args.societyId,
@@ -457,6 +467,8 @@ export const importBrowserWaveTransactions = mutation({
       accountLabel: args.profileKey ? `Wave browser profile ${args.profileKey}` : "Wave browser connector",
       externalBusinessId: args.businessId,
       syncMode: "browser",
+      browserProfileKey: args.profileKey,
+      browserProfileSocietyId: args.profileKey ? societyId : undefined,
       connectedAtISO: connection?.connectedAtISO ?? now,
       lastSyncAtISO: now,
       lastError: undefined,

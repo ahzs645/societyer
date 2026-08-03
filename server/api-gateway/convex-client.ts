@@ -42,18 +42,66 @@ async function emitWebhookEvent(client: ConvexHttpClient, actor: Actor, type: st
   }
 }
 
-async function connectorRunnerRequest(method: "GET" | "POST", path: string, body?: Record<string, unknown>) {
+function connectorTenantKey(societyId: string): string {
+  const signingKey = process.env.CONNECTOR_TENANT_KEY_SECRET?.trim()
+    || process.env.CONNECTOR_RUNNER_SECRET?.trim()
+    || (process.env.NODE_ENV === "production" ? "" : "societyer-local-dev-connector-tenant-key");
+  if (!signingKey) {
+    throw httpError(500, "connector_tenant_key_unavailable", "Connector tenant signing is not configured.");
+  }
+  const digest = crypto.createHmac("sha256", signingKey)
+    .update(`society\0${societyId}`)
+    .digest("base64url");
+  return `ct1_${digest}`;
+}
+
+function connectorTenantContext(req: Request): { societyId: string; tenantKey: string } {
+  const societyId = societyIdFrom(req, req.actor!);
+  return { societyId, tenantKey: connectorTenantKey(societyId) };
+}
+
+function withConnectorOwnership(value: unknown, societyId: string): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  if (Array.isArray(record.sessions)) {
+    return {
+      ...record,
+      sessions: record.sessions.map((session) => withConnectorOwnership(session, societyId)),
+    };
+  }
+  return {
+    ...record,
+    societyId,
+    ...(typeof record.profileKey === "string" ? { profileSocietyId: societyId } : {}),
+    ...(typeof record.sessionId === "string" ? { sessionSocietyId: societyId } : {}),
+  };
+}
+
+async function connectorRunnerRequest(
+  method: "GET" | "POST",
+  path: string,
+  body?: Record<string, unknown>,
+  tenantKey?: string,
+) {
   // Treat an empty/whitespace value as unset (compose injects "" when the var
   // is not provided) so it falls back to the default rather than fetching "".
   const baseUrl = process.env.CONNECTOR_RUNNER_BASE_URL?.trim() || "http://127.0.0.1:8890";
   const secret = process.env.CONNECTOR_RUNNER_SECRET;
+  const internalBody = body ? { ...body } : undefined;
+  if (internalBody) {
+    delete internalBody.tenantKey;
+    delete internalBody.societyId;
+    delete internalBody.profileSocietyId;
+    delete internalBody.sessionSocietyId;
+  }
   const response = await fetch(new URL(path, baseUrl).toString(), {
     method,
     headers: {
       ...(body ? { "content-type": "application/json" } : {}),
       ...(secret ? { "x-connector-runner-secret": secret } : {}),
+      ...(tenantKey ? { "x-connector-tenant-key": tenantKey } : {}),
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: internalBody ? JSON.stringify(internalBody) : undefined,
   });
   const text = await response.text();
   const data = text ? safeJson(text) : null;
@@ -75,12 +123,16 @@ async function recordConnectorRun(
     error?: string;
   },
 ) {
+  const societyId = societyIdFrom(req, req.actor!);
+  const profileKey = stringValue(input.output?.profileKey ?? req.body?.profileKey);
   return await recordConnectorRunHistory(client, convexCall, {
-    societyId: societyIdFrom(req, req.actor!),
+    societyId,
     connectorId: input.connectorId,
     actionId: input.actionId,
-    profileKey: stringValue(input.output?.profileKey ?? req.body?.profileKey),
+    profileKey,
+    profileSocietyId: profileKey ? societyId : undefined,
     sessionId: input.sessionId,
+    sessionSocietyId: input.sessionId ? societyId : undefined,
     output: input.output,
     error: input.error,
     triggeredByUserId: req.actor?.userId,
@@ -178,6 +230,8 @@ async function convexCall(client: ConvexHttpClient, call: ConvexCall, args: Reco
 export {
   emitWebhookEvent,
   connectorRunnerRequest,
+  connectorTenantContext,
+  withConnectorOwnership,
   recordConnectorRun,
   deliverWebhook,
   query,

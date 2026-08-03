@@ -6,6 +6,7 @@ import { chromium, type Browser, type BrowserContext, type Page } from "playwrig
 import { WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import { createBrowserBackend } from "./browserBackend.js";
+import { TenantSessionStore } from "./tenantSessions.js";
 import {
   ConnectorActionError,
   connectorAuthIncompleteMessage,
@@ -22,14 +23,18 @@ const runnerSecret = process.env.CONNECTOR_RUNNER_SECRET;
 const exposeCdpUrl = process.env.CONNECTOR_DEBUG_EXPOSE_CDP_URL === "true";
 const publicWebSocketBaseUrl = process.env.CONNECTOR_RUNNER_PUBLIC_WS_URL ?? `ws://127.0.0.1:${port}`;
 const backend = createBrowserBackend();
+const liveViewTicketKey = crypto.createHash("sha256")
+  .update(process.env.CONNECTOR_LIVE_VIEW_TICKET_SECRET?.trim() || crypto.randomBytes(32))
+  .digest();
+const liveViewTicketTtlMs = 60_000;
 
 type ActiveSession = {
+  tenantKey: string;
   sessionId: string;
   connectorId?: string;
   providerSessionId: string;
   profileKey: string;
   startedAtISO: string;
-  dashboardUrl?: string;
   browser: Browser;
   context: BrowserContext;
   page: Page;
@@ -37,7 +42,7 @@ type ActiveSession = {
   vncPort?: number;
 };
 
-const activeSessions = new Map<string, ActiveSession>();
+const activeSessions = new TenantSessionStore<ActiveSession>();
 
 const sessionStartSchema = z.object({
   profileKey: z.string().min(1),
@@ -78,6 +83,15 @@ const sessionPasteSchema = z.object({
   pressEnter: z.boolean().default(false),
   selector: z.string().optional(),
 });
+
+function tenantKeyFrom(req: Request): string {
+  const header = req.headers["x-connector-tenant-key"];
+  const tenantKey = Array.isArray(header) ? header[0] : header;
+  if (typeof tenantKey !== "string" || !/^ct1_[a-zA-Z0-9_-]{32,}$/.test(tenantKey)) {
+    throw new ConnectorActionError(400, "tenant_key_required", "A valid internal tenant namespace is required.");
+  }
+  return tenantKey;
+}
 
 function requireRunnerSecret(req: Request, res: Response, next: NextFunction) {
   if (!runnerSecret) {
@@ -170,7 +184,7 @@ async function applyBrowserSessionDefaults(
 async function closeActiveSession(session: ActiveSession) {
   await session.browser.close().catch(() => undefined);
   await backend.stopSession(session.providerSessionId).catch(() => undefined);
-  activeSessions.delete(session.sessionId);
+  activeSessions.delete(session.tenantKey, session.sessionId);
 }
 
 function isAuthRiskUrl(url: string) {
@@ -250,9 +264,56 @@ async function selectorVisible(page: Page, selector?: string) {
   }
 }
 
+type LiveViewTicketPayload = {
+  tenantKey: string;
+  sessionId: string;
+  expiresAt: number;
+  nonce: string;
+};
+
+function signLiveViewTicket(session: ActiveSession): string {
+  const payload: LiveViewTicketPayload = {
+    tenantKey: session.tenantKey,
+    sessionId: session.sessionId,
+    expiresAt: Date.now() + liveViewTicketTtlMs,
+    nonce: crypto.randomBytes(12).toString("base64url"),
+  };
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = crypto.createHmac("sha256", liveViewTicketKey).update(encoded).digest("base64url");
+  return `${encoded}.${signature}`;
+}
+
+function verifyLiveViewTicket(ticket: string, sessionId: string): LiveViewTicketPayload | undefined {
+  const [encoded, signature, extra] = ticket.split(".");
+  if (!encoded || !signature || extra) return undefined;
+  const expected = crypto.createHmac("sha256", liveViewTicketKey).update(encoded).digest();
+  let provided: Buffer;
+  try {
+    provided = Buffer.from(signature, "base64url");
+  } catch {
+    return undefined;
+  }
+  if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const candidate = parsed as Partial<LiveViewTicketPayload>;
+    if (
+      typeof candidate.tenantKey !== "string"
+      || candidate.sessionId !== sessionId
+      || typeof candidate.expiresAt !== "number"
+      || candidate.expiresAt <= Date.now()
+      || typeof candidate.nonce !== "string"
+    ) return undefined;
+    return candidate as LiveViewTicketPayload;
+  } catch {
+    return undefined;
+  }
+}
+
 function publicSession(session: ActiveSession) {
   const vncWebSocketUrl = session.vncPort
-    ? `${publicWebSocketBaseUrl.replace(/\/$/, "")}/sessions/${encodeURIComponent(session.sessionId)}/vnc`
+    ? `${publicWebSocketBaseUrl.replace(/\/$/, "")}/sessions/${encodeURIComponent(session.sessionId)}/vnc?ticket=${encodeURIComponent(signLiveViewTicket(session))}`
     : undefined;
   return {
     sessionId: session.sessionId,
@@ -261,7 +322,6 @@ function publicSession(session: ActiveSession) {
     provider: backend.provider,
     startedAtISO: session.startedAtISO,
     currentUrl: session.page.url(),
-    dashboardUrl: session.dashboardUrl,
     vncWebSocketUrl,
   };
 }
@@ -274,7 +334,6 @@ app.get("/healthz", asyncRoute(async (_req, res) => {
     ok: true,
     runner: "connector-runner",
     browser: await backend.healthCheck(),
-    activeSessions: activeSessions.size,
   });
 }));
 
@@ -284,16 +343,20 @@ app.get("/connectors", (_req, res) => {
   res.json({ connectors });
 });
 
-app.get("/sessions", (_req, res) => {
-  res.json({ sessions: [...activeSessions.values()].map(publicSession) });
+app.get("/sessions", (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
+  res.json({ sessions: activeSessions.list(tenantKey).map(publicSession) });
 });
 
 app.post("/sessions/start-login", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
   const input = sessionStartSchema.parse(req.body);
   const browserInput = mergeBrowserDefaults(input);
   const vncHost = blitzVncHost();
   const beforeVncPorts = browserInput.liveView ? await discoverVncPorts(vncHost) : new Set<number>();
   const browserSession = await backend.createSession({
+    tenantKey,
+    connectorId: "browser",
     profileKey: browserInput.profileKey,
     persist: true,
     liveView: browserInput.liveView,
@@ -312,18 +375,18 @@ app.post("/sessions/start-login", asyncRoute(async (req, res) => {
   const vncPort = browserInput.liveView ? await detectNewVncPort(beforeVncPorts, vncHost) : undefined;
 
   const session: ActiveSession = {
+    tenantKey,
     sessionId: crypto.randomUUID(),
     providerSessionId: browserSession.providerSessionId,
     profileKey: browserSession.profileKey,
     startedAtISO: new Date().toISOString(),
-    dashboardUrl: browserSession.dashboardUrl,
     browser,
     context,
     page,
     vncHost: vncPort ? vncHost : undefined,
     vncPort,
   };
-  activeSessions.set(session.sessionId, session);
+  activeSessions.set(session);
 
   res.json({
     ...publicSession(session),
@@ -333,8 +396,9 @@ app.post("/sessions/start-login", asyncRoute(async (req, res) => {
 }));
 
 app.post("/sessions/:sessionId/finish-login", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
   const sessionId = String(req.params.sessionId);
-  const session = activeSessions.get(sessionId);
+  const session = activeSessions.get(tenantKey, sessionId);
   if (!session) {
     res.status(404).json({ error: "Session not found." });
     return;
@@ -352,8 +416,9 @@ app.post("/sessions/:sessionId/finish-login", asyncRoute(async (req, res) => {
 }));
 
 app.post("/sessions/:sessionId/stop", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
   const sessionId = String(req.params.sessionId);
-  const session = activeSessions.get(sessionId);
+  const session = activeSessions.get(tenantKey, sessionId);
   if (!session) {
     res.status(404).json({ error: "Session not found." });
     return;
@@ -364,8 +429,9 @@ app.post("/sessions/:sessionId/stop", asyncRoute(async (req, res) => {
 }));
 
 app.post("/sessions/:sessionId/paste", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
   const sessionId = String(req.params.sessionId);
-  const session = activeSessions.get(sessionId);
+  const session = activeSessions.get(tenantKey, sessionId);
   if (!session) {
     res.status(404).json({ error: "Session not found." });
     return;
@@ -452,6 +518,7 @@ app.post("/sessions/:sessionId/paste", asyncRoute(async (req, res) => {
 }));
 
 app.post("/connectors/:connectorId/auth/start", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
   const connector = requireKnownConnector(String(req.params.connectorId));
   const input = sessionStartSchema.parse({
     ...req.body,
@@ -461,6 +528,8 @@ app.post("/connectors/:connectorId/auth/start", asyncRoute(async (req, res) => {
   const vncHost = blitzVncHost();
   const beforeVncPorts = browserInput.liveView ? await discoverVncPorts(vncHost) : new Set<number>();
   const browserSession = await backend.createSession({
+    tenantKey,
+    connectorId: connector.id,
     profileKey: browserInput.profileKey,
     persist: true,
     liveView: browserInput.liveView,
@@ -477,19 +546,19 @@ app.post("/connectors/:connectorId/auth/start", asyncRoute(async (req, res) => {
   const vncPort = browserInput.liveView ? await detectNewVncPort(beforeVncPorts, vncHost) : undefined;
 
   const session: ActiveSession = {
+    tenantKey,
     sessionId: crypto.randomUUID(),
     connectorId: connector.id,
     providerSessionId: browserSession.providerSessionId,
     profileKey: browserSession.profileKey,
     startedAtISO: new Date().toISOString(),
-    dashboardUrl: browserSession.dashboardUrl,
     browser,
     context,
     page,
     vncHost: vncPort ? vncHost : undefined,
     vncPort,
   };
-  activeSessions.set(session.sessionId, session);
+  activeSessions.set(session);
 
   res.json({
     ...publicSession(session),
@@ -499,6 +568,7 @@ app.post("/connectors/:connectorId/auth/start", asyncRoute(async (req, res) => {
 }));
 
 app.post("/connectors/:connectorId/auth/verify", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
   const connector = requireKnownConnector(String(req.params.connectorId));
   const input = profilePageSchema.parse({
     ...req.body,
@@ -508,6 +578,8 @@ app.post("/connectors/:connectorId/auth/verify", asyncRoute(async (req, res) => 
   });
   const browserInput = mergeBrowserDefaults(input, connector.id);
   const browserSession = await backend.createSession({
+    tenantKey,
+    connectorId: connector.id,
     profileKey: browserInput.profileKey,
     persist: true,
     liveView: browserInput.liveView,
@@ -522,16 +594,20 @@ app.post("/connectors/:connectorId/auth/verify", asyncRoute(async (req, res) => 
   const { browser, context, page } = await connectSession(browserSession.cdpUrl);
   try {
     await applyBrowserSessionDefaults(context, page, browserInput);
-    res.json(await verifyConnectorAuth(page, connector, browserInput));
+    res.json(await verifyConnectorAuth(page, connector, {
+      ...browserInput,
+      profileKey: browserSession.profileKey,
+    }));
   } finally {
     await browser.close().catch(() => undefined);
   }
 }));
 
 app.post("/connectors/:connectorId/auth/sessions/:sessionId/confirm", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
   const connector = requireKnownConnector(String(req.params.connectorId));
   const sessionId = String(req.params.sessionId);
-  const session = activeSessions.get(sessionId);
+  const session = activeSessions.get(tenantKey, sessionId);
   if (!session) {
     res.status(404).json({ error: "Session not found." });
     return;
@@ -586,10 +662,11 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/confirm", asyncRoute
 }));
 
 app.post("/connectors/:connectorId/auth/sessions/:sessionId/actions/:actionId", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
   const connector = requireKnownConnector(String(req.params.connectorId));
   const sessionId = String(req.params.sessionId);
   const actionId = String(req.params.actionId);
-  const session = activeSessions.get(sessionId);
+  const session = activeSessions.get(tenantKey, sessionId);
   if (!session) {
     res.status(404).json({ error: "Session not found." });
     return;
@@ -605,6 +682,7 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/actions/:actionId", 
   const startedAtISO = new Date().toISOString();
   const output = await runConnectorAction(session.page, connector.id, actionId, "session", input, session.profileKey);
   res.json({
+    ...output,
     runId: crypto.randomUUID(),
     connectorId: connector.id,
     actionId,
@@ -615,16 +693,18 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/actions/:actionId", 
     completedAtISO: new Date().toISOString(),
     currentUrl: session.page.url(),
     title: await session.page.title().catch(() => undefined),
-    ...output,
   });
 }));
 
 app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
   const connector = requireKnownConnector(String(req.params.connectorId));
   const actionId = String(req.params.actionId);
   const input: any = parseConnectorActionInput(connector.id, actionId, "profile", req.body);
   const browserInput = mergeBrowserDefaults(input, connector.id);
   const browserSession = await backend.createSession({
+    tenantKey,
+    connectorId: connector.id,
     profileKey: browserInput.profileKey,
     persist: true,
     liveView: false,
@@ -644,6 +724,7 @@ app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, re
     if (connector.id === "gcos") assertGcosActionReady(page.url());
     const output = await runConnectorAction(page, connector.id, actionId, "profile", input, browserSession.profileKey);
     res.json({
+      ...output,
       runId,
       connectorId: connector.id,
       actionId,
@@ -653,7 +734,6 @@ app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, re
       completedAtISO: new Date().toISOString(),
       currentUrl: page.url(),
       title: await page.title().catch(() => undefined),
-      ...output,
     });
   } finally {
     await browser.close().catch(() => undefined);
@@ -661,9 +741,12 @@ app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, re
 }));
 
 app.post("/profiles/validate", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
   const input = profilePageSchema.parse(req.body);
   const browserInput = mergeBrowserDefaults(input);
   const browserSession = await backend.createSession({
+    tenantKey,
+    connectorId: "browser",
     profileKey: browserInput.profileKey,
     persist: true,
     liveView: browserInput.liveView,
@@ -706,10 +789,28 @@ app.post("/profiles/validate", asyncRoute(async (req, res) => {
   }
 }));
 
+app.post("/profiles/delete", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
+  const input = z.object({ profileKey: z.string().min(1) }).parse(req.body);
+  await backend.deleteProfile({ tenantKey, connectorId: "browser", profileKey: input.profileKey });
+  res.json({ profileKey: input.profileKey, deletedAtISO: new Date().toISOString() });
+}));
+
+app.post("/connectors/:connectorId/profiles/delete", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
+  const connector = requireKnownConnector(String(req.params.connectorId));
+  const input = z.object({ profileKey: z.string().min(1) }).parse(req.body);
+  await backend.deleteProfile({ tenantKey, connectorId: connector.id, profileKey: input.profileKey });
+  res.json({ profileKey: input.profileKey, deletedAtISO: new Date().toISOString() });
+}));
+
 app.post("/runs/open-page", asyncRoute(async (req, res) => {
+  const tenantKey = tenantKeyFrom(req);
   const input = profilePageSchema.parse(req.body);
   const browserInput = mergeBrowserDefaults(input);
   const browserSession = await backend.createSession({
+    tenantKey,
+    connectorId: "browser",
     profileKey: browserInput.profileKey,
     persist: true,
     liveView: browserInput.liveView,
@@ -748,7 +849,7 @@ app.post("/runs/open-page", asyncRoute(async (req, res) => {
   }
 }));
 
-app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof z.ZodError) {
     res.status(400).json({ error: "Invalid request body.", issues: error.issues });
     return;
@@ -757,7 +858,7 @@ app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
     res.status(error.statusCode).json({ error: error.message, code: error.code });
     return;
   }
-  res.status(500).json({ error: error?.message ?? "Connector runner error." });
+  res.status(500).json({ error: error instanceof Error ? error.message : "Connector runner error." });
 });
 
 const vncWebSocketServer = new WebSocketServer({ noServer: true });
@@ -766,7 +867,7 @@ function toBuffer(data: WebSocket.RawData) {
   if (Buffer.isBuffer(data)) return data;
   if (data instanceof ArrayBuffer) return Buffer.from(data);
   if (Array.isArray(data)) return Buffer.concat(data);
-  return Buffer.from(data as any);
+  return Buffer.from(data as Uint8Array);
 }
 
 function attachVncProxy(ws: WebSocket, _request: IncomingMessage, session: ActiveSession) {
@@ -809,7 +910,12 @@ server.on("upgrade", (request, socket, head) => {
     return;
   }
 
-  const session = activeSessions.get(decodeURIComponent(match[1]));
+  const sessionId = decodeURIComponent(match[1]);
+  const ticket = url.searchParams.get("ticket");
+  const ticketPayload = ticket ? verifyLiveViewTicket(ticket, sessionId) : undefined;
+  const session = ticketPayload
+    ? activeSessions.get(ticketPayload.tenantKey, ticketPayload.sessionId)
+    : undefined;
   if (!session?.vncPort) {
     socket.destroy();
     return;
