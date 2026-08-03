@@ -114,6 +114,7 @@ import type {
   RecipeKey,
   SetupCheck,
 } from "./workflowCatalog";
+import { assertConvexOutboundUrl, fetchConvexOutbound } from "./lib/outboundUrlPolicy";
 
 export const listCatalog = query({
   args: {},
@@ -162,11 +163,16 @@ export const inspectPdfTemplate = action({
       throw new Error("Demo documents do not contain real PDF bytes to inspect.");
     }
 
-    const response = await fetch(url);
+    const response = await fetchConvexOutbound(url, {}, {
+      source: "storage",
+      operation: "workflow_pdf_inspection",
+      maxResponseBytes: 25_000_000,
+      timeoutMs: 10_000,
+    });
     if (!response.ok) {
       throw new Error(`Could not read selected PDF (${response.status}).`);
     }
-    const bytes = await response.arrayBuffer();
+    const bytes = response.arrayBuffer;
     return await inspectPdfTemplateBytes(bytes, {
       documentId: String(documentId),
       versionId: String(version._id),
@@ -214,11 +220,16 @@ export const createPdfTemplateImportSession = action({
       throw new Error("Demo documents do not contain real PDF bytes to inspect.");
     }
 
-    const response = await fetch(url);
+    const response = await fetchConvexOutbound(url, {}, {
+      source: "storage",
+      operation: "workflow_pdf_import",
+      maxResponseBytes: 25_000_000,
+      timeoutMs: 10_000,
+    });
     if (!response.ok) {
       throw new Error(`Could not read selected PDF (${response.status}).`);
     }
-    const bytes = await response.arrayBuffer();
+    const bytes = response.arrayBuffer;
     const inspection = await inspectPdfTemplateBytes(bytes, {
       documentId: String(documentId),
       versionId: String(version._id),
@@ -333,6 +344,12 @@ export const create = mutation({
       provider === "n8n"
         ? { ...providerConfigForRecipe(recipe), ...(args.providerConfig ?? {}) }
         : args.providerConfig;
+    if (providerConfig?.externalWebhookUrl) {
+      assertConvexOutboundUrl(providerConfig.externalWebhookUrl, {
+        source: args.providerConfig?.externalWebhookUrl ? "tenant" : "operator",
+        operation: "workflow_endpoint_save",
+      });
+    }
     const nodePreview = args.nodePreview ? parseWorkflowNodes(args.nodePreview) : nodePreviewForRecipe(recipe);
 
     return await ctx.db.insert("workflows", {
@@ -495,6 +512,12 @@ export const configure = mutation({
       required: "Director",
     });
     const next: any = { ...patch };
+    if (patch.providerConfig?.externalWebhookUrl) {
+      assertConvexOutboundUrl(patch.providerConfig.externalWebhookUrl, {
+        source: "tenant",
+        operation: "workflow_endpoint_save",
+      });
+    }
     if (patch.trigger) {
       next.trigger = parseWorkflowTrigger(patch.trigger);
       const nextRunAtISO = computeNextRunAt(next.trigger);
@@ -528,6 +551,12 @@ export const updateProviderLink = mutation({
       societyId: wf.societyId,
       required: "Director",
     });
+    if (providerConfig.externalWebhookUrl) {
+      assertConvexOutboundUrl(providerConfig.externalWebhookUrl, {
+        source: "tenant",
+        operation: "workflow_endpoint_save",
+      });
+    }
     await ctx.db.patch(id, {
       provider: provider ?? wf.provider ?? "n8n",
       providerConfig,

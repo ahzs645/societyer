@@ -162,7 +162,8 @@ services:
   connector-runner:
     profiles: ["connectors"]
     build:
-      context: ./services/connector-runner
+      context: .
+      dockerfile: services/connector-runner/Dockerfile
     container_name: societyer-connector-runner
     environment:
       - CONNECTOR_RUNNER_PORT=8890

@@ -17,6 +17,7 @@ import {
   listIntegrationSyncStatesPortable,
 } from "../shared/functions/apiPlatform";
 import { bootstrapUserIdentityPortable } from "../shared/functions/users";
+import { assertConvexOutboundUrl } from "./lib/outboundUrlPolicy";
 
 const idString = v.string();
 
@@ -441,9 +442,20 @@ export const listWebhookSubscriptionsForEvent = query({
         q.eq("societyId", societyId).eq("status", "active"),
       )
       .collect();
-    return rows
-      .filter((row) => row.eventTypes.includes("*") || row.eventTypes.includes(eventType))
-      .map(privateWebhookSubscription);
+    const subscriptions: ReturnType<typeof privateWebhookSubscription>[] = [];
+    for (const row of rows) {
+      if (!row.eventTypes.includes("*") && !row.eventTypes.includes(eventType)) continue;
+      try {
+        assertConvexOutboundUrl(row.targetUrl, {
+          source: "tenant",
+          operation: "webhook_delivery",
+        });
+        subscriptions.push(privateWebhookSubscription(row));
+      } catch {
+        // Rejection is audited by the shared Convex policy wrapper.
+      }
+    }
+    return subscriptions;
   },
 });
 
@@ -469,6 +481,10 @@ export const upsertWebhookSubscription = mutation({
       args.createdByUserId,
       args.serviceToken,
     );
+    assertConvexOutboundUrl(args.targetUrl, {
+      source: "tenant",
+      operation: "webhook_subscription_save",
+    });
     const at = nowISO();
     const { id, serviceToken: _serviceToken, ...rest } = args;
     if (id) {

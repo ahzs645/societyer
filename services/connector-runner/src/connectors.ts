@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { Page } from "playwright";
 import { z } from "zod";
+import { validateOutboundUrl } from "../../../shared/outboundUrlPolicy.js";
 
 export type ConnectorManifest = {
   id: string;
@@ -83,7 +84,13 @@ export const connectors: ConnectorManifest[] = [
     description: "User-authorized Wave browser connector for transaction exports beyond the public API.",
     auth: {
       startUrl: "https://next.waveapps.com/",
-      allowedOrigins: ["https://next.waveapps.com", "https://gql.waveapps.com"],
+      allowedOrigins: [
+        "https://next.waveapps.com",
+        "https://my.waveapps.com",
+        "https://auth.waveapps.com",
+        "https://accounts.google.com",
+        "https://gql.waveapps.com",
+      ],
       profileKeyPrefix: "wave",
       confirmMode: "verified",
     },
@@ -116,7 +123,13 @@ export const connectors: ConnectorManifest[] = [
     description: "Browser utility profile for authenticated BC Registry filing-history exports.",
     auth: {
       startUrl: "https://www.bcregistry.ca/societies/",
-      allowedOrigins: ["https://www.bcregistry.ca"],
+      allowedOrigins: [
+        "https://www.bcregistry.ca",
+        "https://account.bcregistry.gov.bc.ca",
+        "https://id.gov.bc.ca",
+        "https://loginproxy.gov.bc.ca",
+        "https://logon7.gov.bc.ca",
+      ],
       profileKeyPrefix: "bc-registry",
       confirmMode: "profile",
     },
@@ -144,7 +157,13 @@ export const connectors: ConnectorManifest[] = [
     description: "User-authorized Grants and Contributions Online Services project snapshot exports.",
     auth: {
       startUrl: "https://www.canada.ca/en/employment-social-development/services/funding/gcos.html",
-      allowedOrigins: ["https://www.canada.ca", "https://srv136.services.gc.ca"],
+      allowedOrigins: [
+        "https://www.canada.ca",
+        "https://srv136.services.gc.ca",
+        "https://clegc-gckey.gc.ca",
+        "https://www.clegc-gckey.gc.ca",
+        "https://signin-partner.interac.ca",
+      ],
       profileKeyPrefix: "gcos",
       confirmMode: "profile",
     },
@@ -559,7 +578,29 @@ export function connectorOriginStatus(connector: ConnectorManifest, url: string)
   }
 }
 
+export function assertConnectorNavigationUrl(connector: ConnectorManifest, url: string) {
+  try {
+    return validateOutboundUrl(url, { allowedOrigins: connector.auth.allowedOrigins });
+  } catch {
+    throw new ConnectorActionError(
+      400,
+      "connector_navigation_blocked",
+      `Navigation is not allowed for the ${connector.name} connector.`,
+    );
+  }
+}
+
+export function isConnectorNavigationUrlAllowed(connector: ConnectorManifest, url: string) {
+  try {
+    assertConnectorNavigationUrl(connector, url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function verifyGenericConnectorAuth(page: Page, connector: ConnectorManifest, input: ConnectorProfileInput) {
+  assertConnectorNavigationUrl(connector, input.url);
   await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
   if (input.waitForSelector) {
     await page.waitForSelector(input.waitForSelector, { timeout: 10_000 });
@@ -861,6 +902,7 @@ async function openWaveTransactionsPage(page: Page, businessId: string) {
   const businessUuid = businessUuidFromWaveBusinessId(businessId);
   if (!businessUuid) return;
   const transactionsUrl = `https://next.waveapps.com/${businessUuid}/transactions`;
+  assertConnectorNavigationUrl(WAVE_CONNECTOR, transactionsUrl);
   if (page.url().startsWith(transactionsUrl)) return;
   await page.goto(transactionsUrl, { waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);
   await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
@@ -943,6 +985,7 @@ export async function runBcRegistryFilingHistoryExport(page: Page, input: BcRegi
       "Open a BC Registry society page or provide corpNum/url before running the filing-history export.",
     );
   }
+  assertConnectorNavigationUrl(BC_REGISTRY_CONNECTOR, targetUrl);
 
   resultLog.push({
     level: "info",
@@ -1338,6 +1381,7 @@ async function openGcosPage(page: Page, pathOrUrl: string) {
   const target = pathOrUrl.startsWith("http")
     ? pathOrUrl
     : `https://srv136.services.gc.ca${pathOrUrl}`;
+  assertConnectorNavigationUrl(GCOS_CONNECTOR, target);
   await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
   await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
   await assertGcosAuthenticated(page);

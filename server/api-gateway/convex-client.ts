@@ -18,6 +18,7 @@ import {
   stringValue,
 } from "./shared";
 import type { ConvexCall, Actor } from "./shared";
+import { nodeDevelopmentPolicy, requestOutboundUrl } from "../outbound-url-policy";
 
 async function emitWebhookEvent(client: ConvexHttpClient, actor: Actor, type: string, data: unknown) {
   if (!actor.societyId || !EVENT_TYPES.includes(type as any)) return;
@@ -94,7 +95,7 @@ async function connectorRunnerRequest(
     delete internalBody.profileSocietyId;
     delete internalBody.sessionSocietyId;
   }
-  const response = await fetch(new URL(path, baseUrl).toString(), {
+  const response = await requestOutboundUrl(new URL(path, baseUrl).toString(), {
     method,
     headers: {
       ...(body ? { "content-type": "application/json" } : {}),
@@ -102,8 +103,12 @@ async function connectorRunnerRequest(
       ...(tenantKey ? { "x-connector-tenant-key": tenantKey } : {}),
     },
     body: internalBody ? JSON.stringify(internalBody) : undefined,
+    policy: nodeDevelopmentPolicy(),
+    connectTimeoutMs: 3_000,
+    readTimeoutMs: 10_000,
+    maxResponseBytes: 2_000_000,
   });
-  const text = await response.text();
+  const text = response.text;
   const data = text ? safeJson(text) : null;
   if (!response.ok) {
     const message = data?.message ?? data?.error ?? `Connector runner returned ${response.status}.`;
@@ -159,10 +164,8 @@ async function deliverWebhook(client: ConvexHttpClient, subscription: any, event
   });
 
   const attemptNumber = attemptsAlready + 1;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const response = await fetch(subscription.targetUrl, {
+    const response = await requestOutboundUrl(subscription.targetUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -171,9 +174,11 @@ async function deliverWebhook(client: ConvexHttpClient, subscription: any, event
         "X-Societyer-Signature": `v1=${signature}`,
       },
       body,
-      signal: controller.signal,
+      policy: nodeDevelopmentPolicy(),
+      connectTimeoutMs: 3_000,
+      readTimeoutMs: 5_000,
+      maxResponseBytes: 128_000,
     });
-    clearTimeout(timeout);
     if (!response.ok) {
       throw Object.assign(new Error(`Webhook returned ${response.status}`), {
         statusCode: response.status,
@@ -187,8 +192,10 @@ async function deliverWebhook(client: ConvexHttpClient, subscription: any, event
       deliveredAtISO: new Date().toISOString(),
       serviceToken: apiPlatformServiceToken(),
     });
-  } catch (error: any) {
-    clearTimeout(timeout);
+  } catch (error: unknown) {
+    const failure: Error & { statusCode?: number } = error instanceof Error
+      ? error as Error & { statusCode?: number }
+      : new Error("Webhook delivery failed.");
     const retryDelay = [60_000, 300_000, 1_800_000][attemptsAlready];
     const shouldRetry = attemptNumber < 3 && retryDelay;
     await convexCall(client, mutation("apiPlatform.updateWebhookDelivery"), {
@@ -196,8 +203,8 @@ async function deliverWebhook(client: ConvexHttpClient, subscription: any, event
       status: shouldRetry ? "pending" : "failed",
       attempts: attemptNumber,
       nextAttemptAtISO: shouldRetry ? new Date(Date.now() + retryDelay).toISOString() : undefined,
-      lastStatusCode: error?.statusCode,
-      lastError: error?.message ?? "Webhook delivery failed.",
+      lastStatusCode: failure.statusCode,
+      lastError: failure.message,
       serviceToken: apiPlatformServiceToken(),
     });
     if (shouldRetry) {
