@@ -7,8 +7,10 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { requireSocietyMembership } from "./access";
 
 export async function recordsLocationGet(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("recordsLocation")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -27,6 +29,7 @@ export async function recordsLocationUpsert(
     notes?: string;
   },
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
   const existing = await ctx.db
     .query("recordsLocation")
     .withIndex("by_society", (q) => q.eq("societyId", args.societyId))

@@ -13,6 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 interface ResolvedBylawRules {
   status?: string;
@@ -96,6 +97,7 @@ export interface ProxyPatch {
 }
 
 export async function proxiesList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("proxies")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -103,6 +105,10 @@ export async function proxiesList(ctx: PortableQueryCtx, { societyId }: { societ
 }
 
 export async function proxiesForMeeting(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "meetings", meetingId, societyId);
   return ctx.db
     .query("proxies")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -110,6 +116,14 @@ export async function proxiesForMeeting(ctx: PortableQueryCtx, { meetingId }: { 
 }
 
 export async function proxyCreate(ctx: PortableMutationCtx, args: ProxyCreateArgs): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  await getOwned(ctx, "meetings", args.meetingId, args.societyId);
+  if (args.grantorMemberId) {
+    await getOwned(ctx, "members", args.grantorMemberId, args.societyId);
+  }
+  if (args.proxyHolderMemberId) {
+    await getOwned(ctx, "members", args.proxyHolderMemberId, args.societyId);
+  }
   const rules = await getActiveBylawRuleSet(ctx, args.societyId);
   if (!rules.allowProxyVoting) {
     throw new Error(
@@ -143,13 +157,25 @@ export async function proxyCreate(ctx: PortableMutationCtx, args: ProxyCreateArg
 }
 
 export async function proxyUpdate(ctx: PortableMutationCtx, { id, patch }: { id: string; patch: ProxyPatch }): Promise<void> {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "proxies", id, societyId);
   await ctx.db.patch(id, patch);
 }
 
 export async function proxyRevoke(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "proxies", id, societyId);
   await ctx.db.patch(id, { revokedAtISO: new Date().toISOString() });
 }
 
 export async function proxyRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "proxies", id, societyId);
   await ctx.db.delete(id);
 }

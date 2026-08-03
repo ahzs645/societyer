@@ -18,6 +18,7 @@ import {
 } from "../shared/functions/motions";
 import { syncMotionsForMinutes } from "../shared/functions/minutes";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import { requireSocietyMembership } from "../shared/functions/access";
 
 // Standalone first-class motion store. See
 // docs/motions-first-class-object-design.md. During the dual-write phase the
@@ -84,13 +85,17 @@ export const backfillFromLegacy = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx: any, { societyId, dryRun }: any) => {
+    const portable = await toPortableMutationCtx(ctx);
+    const resolvedSocietyId = societyId ?? (
+      portable.principal.kind === "anonymous" ? undefined : portable.principal.societyId
+    );
+    if (!resolvedSocietyId) throw new Error("Society membership not found.");
+    await requireSocietyMembership(portable, resolvedSocietyId);
     // --- Minutes embedded motions[] ---
-    const minutesRows = societyId
-      ? await ctx.db
-          .query("minutes")
-          .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-          .collect()
-      : await ctx.db.query("minutes").collect();
+    const minutesRows = await ctx.db
+      .query("minutes")
+      .withIndex("by_society", (q) => q.eq("societyId", resolvedSocietyId))
+      .collect();
 
     let minutesProcessed = 0;
     let minutesMotions = 0;
@@ -111,7 +116,7 @@ export const backfillFromLegacy = internalMutation({
 
     return {
       dryRun: dryRun === true,
-      societyScope: societyId ? String(societyId) : "all",
+      societyScope: String(resolvedSocietyId),
       minutesProcessed,
       minutesMotions,
     };
@@ -132,12 +137,16 @@ export const backfillProceduralClassification = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx: any, { societyId, dryRun }: any) => {
-    const rows = societyId
-      ? await ctx.db
-          .query("motions")
-          .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
-          .collect()
-      : await ctx.db.query("motions").collect();
+    const portable = await toPortableMutationCtx(ctx);
+    const resolvedSocietyId = societyId ?? (
+      portable.principal.kind === "anonymous" ? undefined : portable.principal.societyId
+    );
+    if (!resolvedSocietyId) throw new Error("Society membership not found.");
+    await requireSocietyMembership(portable, resolvedSocietyId);
+    const rows = await ctx.db
+      .query("motions")
+      .withIndex("by_society", (q) => q.eq("societyId", resolvedSocietyId))
+      .collect();
 
     let scanned = 0;
     let updated = 0;
@@ -164,7 +173,7 @@ export const backfillProceduralClassification = internalMutation({
 
     return {
       dryRun: dryRun === true,
-      societyScope: societyId ? String(societyId) : "all",
+      societyScope: String(resolvedSocietyId),
       scanned,
       updated,
     };

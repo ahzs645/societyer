@@ -13,12 +13,14 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 function firstStableMatch<T extends { _id: unknown }>(rows: T[]): T | null {
   return rows.slice().sort((a, b) => String(a._id).localeCompare(String(b._id)))[0] ?? null;
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("objectMetadata")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -26,13 +28,17 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  return getOwned(ctx, "objectMetadata", id, societyId);
 }
 
 export async function getByNameSingularPortable(
   ctx: PortableQueryCtx,
   { societyId, nameSingular }: { societyId: string; nameSingular: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("objectMetadata")
     .withIndex("by_society_name", (q) =>
@@ -46,6 +52,7 @@ export async function getByNamePluralPortable(
   ctx: PortableQueryCtx,
   { societyId, namePlural }: { societyId: string; namePlural: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("objectMetadata")
     .withIndex("by_society_name_plural", (q) =>
@@ -63,8 +70,10 @@ export async function getWithFieldsPortable(
   ctx: PortableQueryCtx,
   { objectMetadataId }: { objectMetadataId: string },
 ) {
-  const object = await ctx.db.get(objectMetadataId);
-  if (!object) return null;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const object = await getOwned(ctx, "objectMetadata", objectMetadataId, societyId);
   const fields = await ctx.db
     .query("fieldMetadata")
     .withIndex("by_object", (q) => q.eq("objectMetadataId", objectMetadataId))
@@ -89,6 +98,7 @@ export async function getFullTableSetupPortable(
   ctx: PortableQueryCtx,
   { societyId, nameSingular, viewId }: { societyId: string; nameSingular: string; viewId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const matchingObjects = await ctx.db
     .query("objectMetadata")
     .withIndex("by_society_name", (q) =>
@@ -123,6 +133,8 @@ export async function getFullTableSetupPortable(
   } | null = null;
 
   if (targetViewId) {
+    const ownedView = await getOwned(ctx, "views", targetViewId, societyId);
+    if (ownedView.objectMetadataId !== object._id) throw new Error("views not found.");
     const view = views.find((v: any) => v._id === targetViewId);
     if (view) {
       const viewFields = await ctx.db
@@ -189,6 +201,7 @@ export async function createPortable(
     routePath?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const now = new Date().toISOString();
   return ctx.db.insert("objectMetadata", {
     societyId: args.societyId,
@@ -229,12 +242,18 @@ export async function updatePortable(
     };
   },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "objectMetadata", id, societyId);
   await ctx.db.patch(id, { ...patch, updatedAtISO: new Date().toISOString() });
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const object = await ctx.db.get(id);
-  if (!object) return;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const object = await getOwned(ctx, "objectMetadata", id, societyId);
   if (object.isSystem) {
     throw new Error("Cannot delete a system object.");
   }

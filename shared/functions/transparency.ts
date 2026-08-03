@@ -12,7 +12,12 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import {
+  getOwned,
+  principalUserId,
+  requireRolePortable,
+  requireSocietyMembership,
+} from "./access";
 import { createDownloadUrl } from "../storage/signedUrl";
 import { normalizeModuleSettings, type ModuleKey } from "../../src/lib/modules";
 
@@ -24,6 +29,7 @@ export async function listPublicationsPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ): Promise<any[]> {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("publications")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -49,21 +55,35 @@ export async function upsertPublicationPortable(
     actingUserId?: string;
   },
 ): Promise<any> {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
     required: "Director",
   });
-  const { id, actingUserId, ...rest } = args;
+  if (args.id) await getOwned(ctx, "publications", args.id, args.societyId);
+  if (args.documentId) {
+    await getOwned(ctx, "documents", args.documentId, args.societyId);
+  }
+  const approvedByUserId = args.approvedByUserId
+    ? await principalUserId(ctx, args.societyId)
+    : undefined;
+  if (args.approvedByUserId && args.approvedByUserId !== approvedByUserId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
+  const { id, actingUserId, approvedByUserId: clientApprovedByUserId, ...rest } = args;
+  void clientApprovedByUserId;
+  const approvalFields = approvedByUserId ? { approvedByUserId } : {};
   if (rest.status === "Published" && rest.reviewStatus !== "Approved") {
     throw new Error("Publication must be reviewed and approved before it goes live.");
   }
   if (id) {
-    await ctx.db.patch(id, rest);
+    await ctx.db.patch(id, { ...rest, ...approvalFields });
     return id;
   }
   const payload: any = {
     ...rest,
+    ...approvalFields,
     createdAtISO: new Date().toISOString(),
   };
   return await ctx.db.insert("publications", {
@@ -75,11 +95,13 @@ export async function removePublicationPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ): Promise<void> {
-  const publication: any = await ctx.db.get(id);
-  if (!publication) return;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "publications", id, societyId);
   await requireRolePortable(ctx, {
     actingUserId,
-    societyId: publication.societyId,
+    societyId,
     required: "Director",
   });
   await ctx.db.delete(id);

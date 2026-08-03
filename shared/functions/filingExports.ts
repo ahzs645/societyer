@@ -8,6 +8,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { requireSocietyMembership } from "./access";
 
 /**
  * Returns JSON payloads matching the field shape of Societies Online filing
@@ -18,6 +19,7 @@ export async function societiesOnlinePreFillPortable(
   ctx: PortableQueryCtx,
   { societyId, kind }: { societyId: string; kind: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const society = await ctx.db.get(societyId);
   if (!society) throw new Error("Society not found");
 
@@ -116,6 +118,7 @@ export async function craPreFillPortable(
   ctx: PortableQueryCtx,
   { societyId, kind, fiscalYear }: { societyId: string; kind: string; fiscalYear: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const financials = (
     await ctx.db
       .query("financials")

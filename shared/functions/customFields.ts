@@ -9,6 +9,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import { optionalSubjectId, requireSubjectId, type SubjectIdArgs } from "./subjectId";
 
 const ENTITY_TYPES = ["members", "directors", "volunteers", "employees"] as const;
@@ -23,6 +24,7 @@ export async function listDefinitionsPortable(
   ctx: PortableQueryCtx,
   { societyId, entityType }: { societyId: string; entityType?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   if (entityType) {
     const rows = await ctx.db
       .query("customFieldDefinitions")
@@ -54,6 +56,7 @@ export async function createDefinitionPortable(
     description?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   assertEntityType(args.entityType);
   const existing = await ctx.db
     .query("customFieldDefinitions")
@@ -95,14 +98,18 @@ export async function updateDefinitionPortable(
     description?: string;
   },
 ) {
-  const existing = await ctx.db.get(id);
-  if (!existing) throw new Error("Custom field definition not found");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "customFieldDefinitions", id, societyId);
   await ctx.db.patch(id, patch);
 }
 
 export async function deleteDefinitionPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const existing = await ctx.db.get(id);
-  if (!existing) return;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "customFieldDefinitions", id, societyId);
   const values = await ctx.db
     .query("customFieldValues")
     .withIndex("by_definition", (q) => q.eq("definitionId", id))
@@ -115,7 +122,11 @@ export async function listValuesPortable(
   ctx: PortableQueryCtx,
   { entityType, subjectId, entityId }: { entityType: string } & SubjectIdArgs,
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
   const resolvedSubjectId = requireSubjectId({ subjectId, entityId });
+  await getOwned(ctx, entityType, resolvedSubjectId, societyId);
   // TODO(H0-flip): query by_subject after the hosted backfill is complete.
   const rows = await ctx.db
     .query("customFieldValues")
@@ -133,10 +144,11 @@ export async function setValuePortable(
     value: any;
   } & SubjectIdArgs,
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   assertEntityType(args.entityType);
   const subjectId = requireSubjectId(args);
-  const def = await ctx.db.get(args.definitionId);
-  if (!def) throw new Error("Custom field definition not found");
+  await getOwned(ctx, args.entityType, subjectId, args.societyId);
+  await getOwned(ctx, "customFieldDefinitions", args.definitionId, args.societyId);
   const indexedValues = await ctx.db
     .query("customFieldValues")
     // TODO(H0-flip): query by_subject_def after the hosted backfill is complete.
@@ -166,7 +178,13 @@ export async function clearValuePortable(
   ctx: PortableMutationCtx,
   args: { entityType: string; definitionId: string } & SubjectIdArgs,
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
   const subjectId = requireSubjectId(args);
+  assertEntityType(args.entityType);
+  await getOwned(ctx, args.entityType, subjectId, societyId);
+  await getOwned(ctx, "customFieldDefinitions", args.definitionId, societyId);
   const indexedValues = await ctx.db
     .query("customFieldValues")
     // TODO(H0-flip): query by_subject_def after the hosted backfill is complete.

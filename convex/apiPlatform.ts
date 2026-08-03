@@ -1,6 +1,6 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { assertApiPlatformServiceToken, serviceTokenValidator } from "./lib/serviceAuth";
 import { requireRole } from "./users";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
@@ -18,6 +18,10 @@ import {
 } from "../shared/functions/apiPlatform";
 import { bootstrapUserIdentityPortable } from "../shared/functions/users";
 import { assertConvexOutboundUrl } from "./lib/outboundUrlPolicy";
+import {
+  getOwned,
+  requireSocietyMembership,
+} from "../shared/functions/access";
 
 const idString = v.string();
 
@@ -195,12 +199,6 @@ async function assertCanManageApiPlatform(
     await assertApiPlatformServiceToken(serviceToken);
     return;
   }
-  if (!actingUserId) {
-    throw new ConvexError({
-      code: "FORBIDDEN",
-      message: "Admin role required.",
-    });
-  }
   await requireRole(ctx, { societyId, actingUserId, required: "Admin" });
 }
 
@@ -276,9 +274,16 @@ export const createToken = mutation({
       args.createdByUserId,
       args.serviceToken,
     );
+    const portable = await toPortableMutationCtx(ctx);
+    await getOwned(portable, "apiClients", args.clientId, args.societyId);
+    const actor = args.serviceToken
+      ? null
+      : await requireSocietyMembership(portable, args.societyId);
+    const createdByUserId = actor?._id as Id<"users"> | undefined;
     const { serviceToken: _serviceToken, ...rest } = args;
     return await ctx.db.insert("apiTokens", {
       ...rest,
+      createdByUserId,
       status: "active",
       createdAtISO: nowISO(),
     });
@@ -317,8 +322,14 @@ export const verifyToken = mutation({
     if (token.expiresAtISO && token.expiresAtISO <= nowISO()) {
       return invalidToken("token_expired");
     }
-    const client = await ctx.db.get(token.clientId);
-    if (!client || client.status !== "active") {
+    const portable = await toPortableMutationCtx(ctx);
+    const client = await getOwned<Doc<"apiClients">>(
+      portable,
+      "apiClients",
+      token.clientId,
+      token.societyId,
+    );
+    if (client.status !== "active") {
       return invalidToken("client_disabled");
     }
     if (!scopeAllows(token.scopes, requiredScope)) {
@@ -361,6 +372,13 @@ export const revokeToken = mutation({
   args: { id: v.id("apiTokens") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
+    const portable = await toPortableMutationCtx(ctx);
+    const societyId = portable.principal.kind === "anonymous"
+      ? undefined
+      : portable.principal.societyId;
+    if (!societyId) throw new Error("Society membership not found.");
+    await requireSocietyMembership(portable, societyId);
+    await getOwned(portable, "apiTokens", id, societyId);
     await ctx.db.patch(id, { status: "revoked", revokedAtISO: nowISO() });
     return null;
   },
@@ -421,10 +439,13 @@ export const listWebhookSubscriptions = query({
   args: { societyId: v.id("societies") },
   returns: v.array(webhookSubscriptionReturn),
   handler: async (ctx, { societyId }) =>
-    (await ctx.db
+    (await (async () => {
+      await requireSocietyMembership(await toPortableQueryCtx(ctx), societyId);
+      return ctx.db
       .query("webhookSubscriptions")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect()).map(redactWebhookSubscription),
+      .collect();
+    })()).map(redactWebhookSubscription),
 });
 
 export const listWebhookSubscriptionsForEvent = query({
@@ -481,15 +502,40 @@ export const upsertWebhookSubscription = mutation({
       args.createdByUserId,
       args.serviceToken,
     );
+    const portable = await toPortableMutationCtx(ctx);
+    if (args.id) {
+      await getOwned(portable, "webhookSubscriptions", args.id, args.societyId);
+    }
+    if (args.clientId) {
+      await getOwned(portable, "apiClients", args.clientId, args.societyId);
+    }
+    if (args.pluginInstallationId) {
+      await getOwned(
+        portable,
+        "pluginInstallations",
+        args.pluginInstallationId,
+        args.societyId,
+      );
+    }
+    const actor = args.serviceToken
+      ? null
+      : await requireSocietyMembership(portable, args.societyId);
+    const createdByUserId = actor?._id as Id<"users"> | undefined;
     assertConvexOutboundUrl(args.targetUrl, {
       source: "tenant",
       operation: "webhook_subscription_save",
     });
     const at = nowISO();
-    const { id, serviceToken: _serviceToken, ...rest } = args;
+    const {
+      id,
+      serviceToken: _serviceToken,
+      createdByUserId: _clientCreatedByUserId,
+      ...rest
+    } = args;
     if (id) {
       await ctx.db.patch(id, {
         ...rest,
+        createdByUserId,
         status: rest.status ?? "active",
         updatedAtISO: at,
       });
@@ -497,6 +543,7 @@ export const upsertWebhookSubscription = mutation({
     }
     return await ctx.db.insert("webhookSubscriptions", {
       ...rest,
+      createdByUserId,
       status: rest.status ?? "active",
       createdAtISO: at,
       updatedAtISO: at,
@@ -515,6 +562,12 @@ export const setWebhookSubscriptionStatus = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await assertCanManageApiPlatform(ctx, args.societyId, args.actingUserId, args.serviceToken);
+    await getOwned(
+      await toPortableMutationCtx(ctx),
+      "webhookSubscriptions",
+      args.id,
+      args.societyId,
+    );
     await ctx.db.patch(args.id, { status: args.status, updatedAtISO: nowISO() });
     return null;
   },
@@ -537,6 +590,12 @@ export const createWebhookDelivery = mutation({
   returns: v.id("webhookDeliveries"),
   handler: async (ctx, args) => {
     await assertApiPlatformServiceToken(args.serviceToken);
+    await getOwned(
+      await toPortableMutationCtx(ctx),
+      "webhookSubscriptions",
+      args.subscriptionId,
+      args.societyId,
+    );
     return await ctx.db.insert("webhookDeliveries", {
       societyId: args.societyId,
       subscriptionId: args.subscriptionId,
@@ -568,6 +627,13 @@ export const updateWebhookDelivery = mutation({
   handler: async (ctx, { id, serviceToken, ...patch }) => {
     await assertApiPlatformServiceToken(serviceToken);
     const existing = await ctx.db.get(id);
+    if (!existing) throw new Error("webhookDeliveries not found.");
+    await getOwned(
+      await toPortableMutationCtx(ctx),
+      "webhookDeliveries",
+      id,
+      existing.societyId,
+    );
     const at = nowISO();
     const history = existing?.attemptHistoryJson
       ? JSON.parse(existing.attemptHistoryJson)
@@ -593,6 +659,11 @@ export const listWebhookDeliveries = query({
   args: { societyId: v.id("societies"), subscriptionId: v.optional(v.id("webhookSubscriptions")) },
   returns: v.array(webhookDeliveryReturn),
   handler: async (ctx, { societyId, subscriptionId }) => {
+    const portable = await toPortableQueryCtx(ctx);
+    await requireSocietyMembership(portable, societyId);
+    if (subscriptionId) {
+      await getOwned(portable, "webhookSubscriptions", subscriptionId, societyId);
+    }
     const rows = subscriptionId
       ? await ctx.db
           .query("webhookDeliveries")
@@ -645,6 +716,16 @@ export const upsertIntegrationSyncState = mutation({
   returns: v.id("integrationSyncStates"),
   handler: async (ctx, { id, actingUserId, serviceToken, ...args }) => {
     await assertCanManageApiPlatform(ctx, args.societyId, actingUserId, serviceToken);
+    const portable = await toPortableMutationCtx(ctx);
+    if (id) await getOwned(portable, "integrationSyncStates", id, args.societyId);
+    if (args.pluginInstallationId) {
+      await getOwned(
+        portable,
+        "pluginInstallations",
+        args.pluginInstallationId,
+        args.societyId,
+      );
+    }
     const now = nowISO();
     const payload = {
       ...args,

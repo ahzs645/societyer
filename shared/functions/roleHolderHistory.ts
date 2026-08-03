@@ -10,6 +10,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import {
   buildTimeline,
   changesBetween as changesBetweenPure,
@@ -35,9 +36,13 @@ export async function revisionHistoryPortable(
   ctx: PortableQueryCtx,
   { roleHolderId }: { roleHolderId: string },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const ownedLiveRow = await getOwned(ctx, "roleHolders", roleHolderId, societyId);
   const [revisionRows, liveRow] = await Promise.all([
     ctx.db.query("roleHolderRevisions").withIndex("by_role_holder", (q) => q.eq("roleHolderId", roleHolderId)).collect(),
-    ctx.db.get(roleHolderId),
+    Promise.resolve(ownedLiveRow),
   ]);
   const timeline = buildTimeline(
     toStoredRevisions(revisionRows),
@@ -59,6 +64,7 @@ export async function registerAsOfPortable(
   ctx: PortableQueryCtx,
   { societyId, asOfISO }: { societyId: string; asOfISO: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const [revisionRows, liveRows] = await Promise.all([
     ctx.db.query("roleHolderRevisions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
@@ -75,6 +81,7 @@ export async function changesBetweenPortable(
   ctx: PortableQueryCtx,
   { societyId, fromISO, toISO }: { societyId: string; fromISO: string; toISO: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const [revisionRows, liveRows] = await Promise.all([
     ctx.db.query("roleHolderRevisions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),

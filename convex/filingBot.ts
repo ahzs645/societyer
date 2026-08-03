@@ -5,7 +5,12 @@ import { query, internalMutation, mutation, action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { requireRole } from "./users";
-import { toPortableQueryCtx } from "./lib/portable";
+import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
+import {
+  getOwned,
+  principalUserId,
+  requireSocietyMembership,
+} from "../shared/functions/access";
 import {
   listRunsPortable,
   runsForFilingPortable,
@@ -70,6 +75,9 @@ export const _createRun = internalMutation({
       societyId: args.societyId,
       required: "Director",
     });
+    const portable = await toPortableMutationCtx(ctx);
+    await getOwned(portable, "filings", args.filingId, args.societyId);
+    const triggeredByUserId = await principalUserId(portable, args.societyId);
     const steps = (STEP_DEFINITIONS[args.kind] ?? []).map((s) => ({
       label: s.label,
       status: "pending",
@@ -83,7 +91,7 @@ export const _createRun = internalMutation({
       startedAtISO: new Date().toISOString(),
       steps,
       demo: args.demo,
-      triggeredByUserId: args.actingUserId,
+      triggeredByUserId,
     });
   },
 });
@@ -97,8 +105,13 @@ export const _updateStep = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx, { id, stepIndex, status, note }) => {
-    const run = await ctx.db.get(id);
-    if (!run) return;
+    const portable = await toPortableMutationCtx(ctx);
+    const societyId = portable.principal.kind === "anonymous"
+      ? undefined
+      : portable.principal.societyId;
+    if (!societyId) throw new Error("Society membership not found.");
+    await requireSocietyMembership(portable, societyId);
+    const run = await getOwned(portable, "filingBotRuns", id, societyId);
     const steps = run.steps.map((s, i) =>
       i === stepIndex
         ? { ...s, status, atISO: new Date().toISOString(), note: note ?? s.note }
@@ -117,6 +130,16 @@ export const _completeRun = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const portable = await toPortableMutationCtx(ctx);
+    const societyId = portable.principal.kind === "anonymous"
+      ? undefined
+      : portable.principal.societyId;
+    if (!societyId) throw new Error("Society membership not found.");
+    await requireSocietyMembership(portable, societyId);
+    await getOwned(portable, "filingBotRuns", args.id, societyId);
+    if (args.pdfDocumentId) {
+      await getOwned(portable, "documents", args.pdfDocumentId, societyId);
+    }
     await ctx.db.patch(args.id, {
       status: args.status,
       completedAtISO: new Date().toISOString(),
@@ -135,6 +158,13 @@ export const _patchFiling = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const portable = await toPortableMutationCtx(ctx);
+    const societyId = portable.principal.kind === "anonymous"
+      ? undefined
+      : portable.principal.societyId;
+    if (!societyId) throw new Error("Society membership not found.");
+    await requireSocietyMembership(portable, societyId);
+    await getOwned(portable, "filings", args.filingId, societyId);
     const { filingId, ...rest } = args;
     const patch: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(rest)) if (v !== undefined) patch[k] = v;
@@ -150,6 +180,7 @@ export const buildFilingPacket = query({
   args: { societyId: v.id("societies"), kind: v.string() },
   returns: v.any(),
   handler: async (ctx, { societyId, kind }) => {
+    await requireSocietyMembership(await toPortableQueryCtx(ctx), societyId);
     const [society, directors, members, minutes, meetings] = await Promise.all([
       ctx.db.get(societyId),
       ctx.db.query("directors").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),

@@ -13,6 +13,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { requireSocietyMembership } from "./access";
 import { createDownloadUrl } from "../storage/signedUrl";
 
 const EXPORT_VERSION = 2;
@@ -230,6 +231,7 @@ export async function listExportableTablesPortable(
   if (!societyId) {
     return EXPORTABLE_TABLES.map((name) => ({ name, rowCount: null, exportable: true }));
   }
+  await requireSocietyMembership(ctx, societyId);
   const society = await ctx.db.get(societyId);
   if (!society) throw new Error("Society not found.");
   return EXPORTABLE_TABLES.map((name) => ({ name, rowCount: null, exportable: true }));
@@ -239,6 +241,7 @@ export async function exportTablePortable(
   ctx: PortableQueryCtx,
   { societyId, table, includeRecoverySecrets }: { societyId: string; table: string; includeRecoverySecrets?: boolean },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const result = await paginateForSociety(
     ctx,
     table,
@@ -256,6 +259,7 @@ export async function exportTablePagePortable(
   ctx: PortableQueryCtx,
   { societyId, table, paginationOpts, includeRecoverySecrets }: { societyId: string; table: string; paginationOpts: any; includeRecoverySecrets?: boolean },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return await paginateForSociety(ctx, table, societyId, paginationOpts, {
     includeRecoverySecrets: includeRecoverySecrets === true,
   });
@@ -265,6 +269,7 @@ export async function countTablePagePortable(
   ctx: PortableQueryCtx,
   { societyId, table, paginationOpts }: { societyId: string; table: string; paginationOpts: any },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const result = await paginateForSociety(ctx, table, societyId, paginationOpts);
   return {
     count: result.page.length,
@@ -277,6 +282,7 @@ export async function exportAttachmentPagePortable(
   ctx: PortableQueryCtx,
   { societyId, source, paginationOpts }: { societyId: string; source: "documents" | "documentVersions"; paginationOpts: any },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const society = await ctx.db.get(societyId);
   if (!society) throw new Error("Society not found.");
 
@@ -349,6 +355,7 @@ export async function exportWorkspacePortable(
   ctx: PortableQueryCtx,
   { societyId, includeEmptyTables, includeRecoverySecrets }: { societyId: string; includeEmptyTables?: boolean; includeRecoverySecrets?: boolean },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const society = await ctx.db.get(societyId);
   if (!society) throw new Error("Society not found.");
 
@@ -380,6 +387,7 @@ export async function validateCurrentDatabasePortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const society = await ctx.db.get(societyId);
   if (!society) {
     return {

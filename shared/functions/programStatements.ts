@@ -6,6 +6,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 
 function isoNow() {
   return new Date().toISOString();
@@ -46,6 +47,7 @@ export interface ProgramStatementPatch {
 }
 
 export async function programStatementsList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("programStatements")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -53,13 +55,23 @@ export async function programStatementsList(ctx: PortableQueryCtx, { societyId }
 }
 
 export async function programStatementGet(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  return getOwned(ctx, "programStatements", id, societyId);
 }
 
 export async function programStatementCreate(ctx: PortableMutationCtx, args: ProgramStatementCreateArgs): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.grantId) await getOwned(ctx, "grants", args.grantId, args.societyId);
+  const createdByUserId = await principalUserId(ctx, args.societyId);
+  if (args.createdByUserId && args.createdByUserId !== createdByUserId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
   const now = isoNow();
   return ctx.db.insert("programStatements", {
     ...args,
+    createdByUserId,
     status: args.status ?? "Draft",
     createdAtISO: now,
     updatedAtISO: now,
@@ -67,9 +79,18 @@ export async function programStatementCreate(ctx: PortableMutationCtx, args: Pro
 }
 
 export async function programStatementUpdate(ctx: PortableMutationCtx, { id, patch }: { id: string; patch: ProgramStatementPatch }): Promise<void> {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "programStatements", id, societyId);
+  if (patch.grantId) await getOwned(ctx, "grants", patch.grantId, societyId);
   await ctx.db.patch(id, { ...patch, updatedAtISO: isoNow() });
 }
 
 export async function programStatementRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "programStatements", id, societyId);
   await ctx.db.delete(id);
 }

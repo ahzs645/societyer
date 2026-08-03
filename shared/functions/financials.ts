@@ -9,8 +9,10 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export async function financialsList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("financials")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -21,6 +23,7 @@ export async function detailByFiscalYearPortable(
   ctx: PortableQueryCtx,
   { societyId, fiscalYear }: { societyId: string; fiscalYear: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("financials")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -54,15 +57,16 @@ export async function detailByFiscalYearPortable(
   for (const row of importsWithLines as any[]) {
     for (const id of row.sourceDocumentIds ?? []) documentIds.add(id);
   }
-  const documents = (await Promise.all(Array.from(documentIds).map((id) => ctx.db.get(String(id)))))
-    .filter(Boolean);
+  const documents = await Promise.all(
+    Array.from(documentIds).map((id) => getOwned(ctx, "documents", String(id), societyId)),
+  );
 
   const budgets = await ctx.db
     .query("budgets")
     .withIndex("by_society_fy", (q) => q.eq("societyId", societyId).eq("fiscalYear", fiscalYear))
     .collect();
   const presentedAtMeeting = financial?.presentedAtMeetingId
-    ? await ctx.db.get(String(financial.presentedAtMeetingId))
+    ? await getOwned(ctx, "meetings", String(financial.presentedAtMeetingId), societyId)
     : null;
 
   return {
@@ -89,6 +93,7 @@ export interface FinancialCreateArgs {
 }
 
 export async function financialCreate(ctx: PortableMutationCtx, args: FinancialCreateArgs): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
   return ctx.db.insert("financials", args);
 }
 
@@ -110,9 +115,20 @@ export async function financialUpdate(
   ctx: PortableMutationCtx,
   { id, patch }: { id: string; patch: FinancialPatch },
 ): Promise<void> {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "financials", id, societyId);
+  if (patch.presentedAtMeetingId) {
+    await getOwned(ctx, "meetings", patch.presentedAtMeetingId, societyId);
+  }
   await ctx.db.patch(id, patch);
 }
 
 export async function financialRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "financials", id, societyId);
   await ctx.db.delete(id);
 }
