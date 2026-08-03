@@ -25,8 +25,17 @@ spec:
           env:
             - name: NODE_ENV
               value: production
+            # Stage 1 remains the default. Before changing this to better-auth,
+            # populate BETTER_AUTH_SECRET in societyer-app-secret; startup fails
+            # closed when that key is absent or empty.
             - name: AUTH_MODE
               value: "none"
+            - name: BETTER_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: BETTER_AUTH_SECRET
+                  optional: true
             - name: AUTH_SERVER_PORT
               value: "8787"
             - name: CONVEX_SELF_HOSTED_URL
