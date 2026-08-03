@@ -16,6 +16,7 @@ import {
   upsertPluginInstallationPortable,
   listIntegrationSyncStatesPortable,
 } from "../shared/functions/apiPlatform";
+import { bootstrapUserIdentityPortable } from "../shared/functions/users";
 
 const idString = v.string();
 
@@ -675,6 +676,25 @@ export const actorForBetterAuthSubject = query({
       .collect();
     const user = rows.find((row) => row.societyId === societyId);
     return user ? { userId: user._id, role: user.role, societyId: user.societyId } : null;
+  },
+});
+
+/** Operator-only recovery for Owner placeholders created before creator binding. */
+export const bootstrapUserIdentity = mutation({
+  args: {
+    userId: v.id("users"),
+    authSubject: v.string(),
+    serviceToken: serviceTokenValidator,
+  },
+  returns: v.id("users"),
+  handler: async (ctx, { userId, authSubject, serviceToken }) => {
+    await assertApiPlatformServiceToken(serviceToken);
+    const boundUserId = await bootstrapUserIdentityPortable(await toPortableMutationCtx(ctx), {
+      userId,
+      authSubject,
+      authProvider: "better-auth",
+    });
+    return boundUserId as Id<"users">;
   },
 });
 

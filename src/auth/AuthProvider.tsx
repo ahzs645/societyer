@@ -6,8 +6,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { useConvex, useMutation } from "convex/react";
+import { useConvex, useConvexAuth, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
+import type { MembershipResolution } from "../../shared/functions/users";
+import type { Id } from "../../convex/_generated/dataModel";
 import { getAuthMode, type AuthMode } from "../lib/authMode";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { setStoredUserId } from "../hooks/useCurrentUser";
@@ -21,6 +23,9 @@ type AuthContextValue = {
   session: BetterAuthSession | null;
   isPending: boolean;
   isAuthenticated: boolean;
+  isConvexAuthenticated: boolean;
+  membershipStatus: MembershipResolution["status"] | null;
+  refreshMembership: () => void;
   signOut: () => Promise<void>;
 };
 
@@ -49,6 +54,9 @@ function NoAuthProvider({
       session: null,
       isPending: false,
       isAuthenticated: true,
+      isConvexAuthenticated: false,
+      membershipStatus: "bound",
+      refreshMembership: () => undefined,
       signOut: async () => {
         setStoredUserId(null);
       },
@@ -121,10 +129,13 @@ function BetterAuthProviderReady({
   const session = sessionState.data;
   const authUser = session?.user;
   const convex = useConvex();
+  const convexAuth = useConvexAuth();
   const society = useSociety();
-  const resolveAuthSession = useMutation(api.users.resolveAuthSession);
+  const ensureCurrentMembership = useMutation(api.users.ensureCurrentMembership);
   const syncKeyRef = useRef<string | null>(null);
   const [syncPending, setSyncPending] = useState(false);
+  const [membershipStatus, setMembershipStatus] = useState<MembershipResolution["status"] | null>(null);
+  const [membershipRefresh, setMembershipRefresh] = useState(0);
 
   useEffect(() => {
     if (mode !== "better-auth" || !session) {
@@ -148,9 +159,10 @@ function BetterAuthProviderReady({
   useEffect(() => {
     if (mode !== "better-auth") return;
 
-    if (!authUser || !society) {
+    if (!authUser || !society || !convexAuth.isAuthenticated) {
       syncKeyRef.current = null;
       setStoredUserId(null);
+      setMembershipStatus(null);
       setSyncPending(false);
       return;
     }
@@ -158,9 +170,7 @@ function BetterAuthProviderReady({
     const syncKey = [
       society._id,
       authUser.id,
-      authUser.email,
-      authUser.name ?? "",
-      authUser.emailVerified ? "verified" : "unverified",
+      membershipRefresh,
     ].join(":");
 
     if (syncKeyRef.current === syncKey) return;
@@ -168,20 +178,23 @@ function BetterAuthProviderReady({
     let cancelled = false;
     setSyncPending(true);
 
-    resolveAuthSession({
+    ensureCurrentMembership({
       societyId: society._id,
-      authSubject: authUser.id,
-      email: authUser.email,
-      displayName: authUser.name ?? authUser.email,
-      emailVerified: !!authUser.emailVerified,
     })
-      .then((resolved) => {
+      .then((result: MembershipResolution) => {
         if (cancelled) return;
-        setStoredUserId(resolved.userId);
+        setMembershipStatus(result.status);
+        if (result.status === "bound" || result.status === "invitation-accepted") {
+          setStoredUserId(result.userId as Id<"users">);
+        } else {
+          setStoredUserId(null);
+        }
         syncKeyRef.current = syncKey;
       })
       .catch((error) => {
         if (cancelled) return;
+        setStoredUserId(null);
+        setMembershipStatus(null);
         console.error("[societyer-auth] failed to resolve auth session", error);
       })
       .finally(() => {
@@ -193,8 +206,10 @@ function BetterAuthProviderReady({
     };
   }, [
     mode,
-    resolveAuthSession,
+    ensureCurrentMembership,
     authUser,
+    convexAuth.isAuthenticated,
+    membershipRefresh,
     society,
   ]);
 
@@ -203,18 +218,44 @@ function BetterAuthProviderReady({
       mode,
       session: mode === "better-auth" ? sessionState.data ?? null : null,
       isPending:
-        mode === "better-auth" ? sessionState.isPending || syncPending : false,
+        mode === "better-auth"
+          ? sessionState.isPending ||
+            (!!session && (
+              convexAuth.isLoading ||
+              syncPending ||
+              (convexAuth.isAuthenticated && membershipStatus === null)
+            ))
+          : false,
       isAuthenticated:
-        mode === "better-auth" ? !!sessionState.data && !syncPending : true,
+        mode === "better-auth"
+          ? !!sessionState.data && convexAuth.isAuthenticated && membershipStatus === "bound"
+          : true,
+      isConvexAuthenticated: convexAuth.isAuthenticated,
+      membershipStatus,
+      refreshMembership: () => {
+        syncKeyRef.current = null;
+        setMembershipRefresh((value) => value + 1);
+      },
       signOut: async () => {
         setStoredUserId(null);
         syncKeyRef.current = null;
+        setMembershipStatus(null);
         if (mode === "better-auth") {
           await authClient.signOut();
         }
       },
     }),
-    [authClient, mode, sessionState.data, sessionState.isPending, syncPending],
+    [
+      authClient,
+      convexAuth.isAuthenticated,
+      convexAuth.isLoading,
+      membershipStatus,
+      mode,
+      session,
+      sessionState.data,
+      sessionState.isPending,
+      syncPending,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

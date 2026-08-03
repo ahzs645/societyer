@@ -92,6 +92,7 @@ assert.deepEqual(hostedQuery.principal, {
   assurance: "verified-jwt",
   subject: identity.subject,
   issuer: identity.issuer,
+  authProvider: "better-auth",
   tokenIdentifier: identity.tokenIdentifier,
   email: identity.email,
   emailVerified: identity.emailVerified,

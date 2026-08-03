@@ -22,6 +22,7 @@ import {
   clearDarkLogoPortable,
   setLetterheadPortable,
   clearLetterheadPortable,
+  seedNewSocietyOwnerPortable,
 } from "../shared/functions/society";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { buildConvexCapabilities } from "./providers/capabilities";
@@ -178,12 +179,10 @@ export const upsert = mutation({
     // Seed an Owner user so the workspace has an admin actor from the start
     // (matches createWorkspace). Without this the Users page is stranded.
     const ownerEmail = rest.officialEmail || `owner@${rest.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`;
-    await ctx.db.insert("users", {
+    await seedNewSocietyOwnerPortable(await toPortableMutationCtx(ctx), {
       societyId: newId,
-      email: ownerEmail,
-      displayName: rest.privacyOfficerName || "Owner",
-      role: "Owner",
-      status: "Active",
+      placeholderEmail: ownerEmail,
+      placeholderDisplayName: rest.privacyOfficerName || "Owner",
       createdAtISO: new Date().toISOString(),
     });
     return newId;
@@ -285,17 +284,13 @@ export const createWorkspace = mutation({
       await seedDocumentPacketsForEntityHelper(ctx, societyId);
     }
 
-    // Seed an Owner user so the new workspace has an admin actor from the
-    // start. Without this the Users page is stranded: no admin → can't create
-    // an admin. The Owner is a placeholder; the operator can rename or replace
-    // it via Users & roles.
+    // A hosted verified creator becomes the initial Owner immediately. Local
+    // trusted-workspace callers retain the placeholder behavior.
     const ownerEmail = blankToUndefined(args.officialEmail) ?? blankToUndefined(args.privacyOfficerEmail) ?? `owner@${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`;
-    await ctx.db.insert("users", {
+    await seedNewSocietyOwnerPortable(await toPortableMutationCtx(ctx), {
       societyId,
-      email: ownerEmail,
-      displayName: blankToUndefined(args.privacyOfficerName) ?? "Owner",
-      role: "Owner",
-      status: "Active",
+      placeholderEmail: ownerEmail,
+      placeholderDisplayName: blankToUndefined(args.privacyOfficerName) ?? "Owner",
       createdAtISO: now,
     });
 

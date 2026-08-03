@@ -16,7 +16,14 @@ Exit criterion: tests demonstrate the current Stage 1 gaps and can run with enfo
 2. Replace `users.resolveAuthSession` in `convex/users.ts` and `resolveAuthSessionPortable` in `shared/functions/users.ts` with an authenticated `ensureCurrentMembership({ societyId, invitationToken? })`. It must read `ctx.principal`, accept no subject, email, verification flag, user ID, or role from the client, and only update profile fields on the row already bound to the same `(issuer, subject)`.
 3. Remove the current fallback that finds a user by email and then writes a new `authSubject`; that is the rebinding/account-takeover path. An unbound principal may join only by consuming a single-use, society-bound invitation from `convex/invitations.ts`/the invitations table, or by an explicit Owner/Admin linking workflow that records an audit event. Existing email matches must remain unlinked pending that workflow.
 4. Backfill existing Better Auth rows in a dry-run migration. Fail on duplicate subjects, duplicate verified bindings, disabled users, or one subject bound to multiple people unexpectedly. Export a reconciliation report before applying changes.
-5. Change `src/auth/AuthProvider.tsx` to call the new no-identity-input mutation after Convex confirms the JWT. Clear the stored local user ID when membership resolution fails; do not infer membership from the selected society or email.
+5. Migrate societies created before creator binding by explicitly binding each stranded placeholder Owner with the operator-only mutation. Obtain the immutable subject from the verified Better Auth JWT/auth store, identify the exact `users` document ID independently (never by accepting a browser-supplied email), and run:
+
+   ```sh
+   ./node_modules/.bin/convex run --prod apiPlatform:bootstrapUserIdentity '{"userId":"<users document id>","authSubject":"<verified JWT subject>","serviceToken":"<API platform service token>"}'
+   ```
+
+   The deployment must configure `SOCIETYER_API_PLATFORM_TOKEN` (or the existing `CONVEX_INSTANCE_SECRET` fallback). The mutation refuses a row already bound to a different subject/provider, refuses a subject already used by another row, and writes an `identity-bound` activity record. This service credential is an operator secret and must never be placed in browser code or a client request.
+6. Change `src/auth/AuthProvider.tsx` to call the new no-identity-input mutation after Convex confirms the JWT. Clear the stored local user ID when membership resolution fails; do not infer membership from the selected society or email.
 
 Exit criterion: logging in cannot create, claim, or change a membership without an invitation/admin action, and changing an email cannot change the bound Societyer user.
 

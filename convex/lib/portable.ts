@@ -145,9 +145,11 @@ function hostedPrincipal(identity: UserIdentity | null): PortablePrincipal {
     assurance: "verified-jwt",
     subject: identity.subject,
     issuer: identity.issuer,
+    authProvider: "better-auth",
     tokenIdentifier: identity.tokenIdentifier,
     email: identity.email,
     emailVerified: identity.emailVerified,
+    ...(identity.name ? { name: identity.name } : {}),
   };
 }
 

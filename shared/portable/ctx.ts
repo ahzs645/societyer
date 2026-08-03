@@ -48,9 +48,11 @@ export type PortablePrincipal =
       assurance: "verified-jwt" | "trusted-workspace";
       subject: string;
       issuer?: string;
+      authProvider?: string;
       tokenIdentifier?: string;
       email?: string;
       emailVerified?: boolean;
+      name?: string;
       userId?: string;
       societyId?: string;
     }

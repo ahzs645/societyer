@@ -99,6 +99,7 @@ const BylawDiffPage = React.lazy(() => import("./pages/BylawDiff").then((m) => (
 const BylawsHistoryPage = React.lazy(() => import("./pages/BylawsHistory").then((m) => ({ default: m.BylawsHistoryPage })));
 const ReconciliationPage = React.lazy(() => import("./pages/Reconciliation").then((m) => ({ default: m.ReconciliationPage })));
 const LoginPage = React.lazy(() => import("./pages/Login").then((m) => ({ default: m.LoginPage })));
+const InvitationAcceptPage = React.lazy(() => import("./pages/InvitationAccept").then((m) => ({ default: m.InvitationAcceptPage })));
 const LandingPage = React.lazy(() => import("./pages/Landing").then((m) => ({ default: m.LandingPage })));
 const BylawRulesPage = React.lazy(() => import("./pages/BylawRules").then((m) => ({ default: m.BylawRulesPage })));
 const ElectionsPage = React.lazy(() => import("./pages/Elections").then((m) => ({ default: m.ElectionsPage })));
@@ -276,6 +277,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               </Route>
             )}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/invite/:token" element={<InvitationAcceptPage />} />
             <Route path="/public" element={<PublicTransparencyPage />} />
             <Route path="/public/:slug" element={<PublicTransparencyPage />} />
             {/* External stakeholder portal — token-gated, no app account. */}

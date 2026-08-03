@@ -6,7 +6,7 @@ import {
   userGet,
   userGetByEmail,
   userGetByAuthSubject,
-  resolveAuthSessionPortable,
+  ensureCurrentMembershipPortable,
   recordLoginPortable,
   setRolePortable,
 } from "../shared/functions/users";
@@ -51,16 +51,13 @@ export const getByAuthSubject = query({
   handler: async (ctx, args) => userGetByAuthSubject(await toPortableQueryCtx(ctx), args),
 });
 
-export const resolveAuthSession = mutation({
+export const ensureCurrentMembership = mutation({
   args: {
     societyId: v.id("societies"),
-    authSubject: v.string(),
-    email: v.string(),
-    displayName: v.string(),
-    emailVerified: v.boolean(),
+    invitationToken: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => resolveAuthSessionPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => ensureCurrentMembershipPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const upsert = mutation({

@@ -92,6 +92,7 @@ export const governanceTables = {
     invitedByUserId: v.optional(v.id("users")),
     createdAtISO: v.string(),
     acceptedAtISO: v.optional(v.string()),
+    acceptedByUserId: v.optional(v.id("users")),
     revokedAtISO: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
