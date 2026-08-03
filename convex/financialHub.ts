@@ -27,6 +27,10 @@ import {
   summaryPortable,
 } from "../shared/functions/financialHub";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import {
+  getOwned,
+  requireSocietyMembership,
+} from "../shared/functions/access";
 
 export const connections = query({
   args: { societyId: v.id("societies") },
@@ -158,6 +162,7 @@ export const oauthUrl = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
+    await requireSocietyMembership(await toPortableQueryCtx(ctx), societyId);
     const p = providers.accounting();
     const society = await ctx.db.get(societyId);
     return {
@@ -215,9 +220,16 @@ export const disconnect = mutation({
   args: { connectionId: v.id("financialConnections"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, { connectionId, actingUserId }) => {
-    const conn = await ctx.db.get(connectionId);
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const conn = await portableCtx.db.get(connectionId, "financialConnections");
     if (!conn) return;
-    await requireRole(ctx, { actingUserId, societyId: conn.societyId, required: "Admin" });
+    await requireSocietyMembership(portableCtx, String(conn.societyId));
+    await requireRole(ctx, {
+      actingUserId,
+      societyId: conn.societyId as Id<"societies">,
+      required: "Admin",
+    });
+    await getOwned(portableCtx, "financialConnections", connectionId, String(conn.societyId));
     await ctx.db.patch(connectionId, { status: "disconnected" });
   },
 });
@@ -344,6 +356,12 @@ export const _replaceSyncedData = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    await getOwned(
+      await toPortableMutationCtx(ctx),
+      "financialConnections",
+      args.connectionId,
+      args.societyId,
+    );
     const prevAccounts = await ctx.db
       .query("financialAccounts")
       .withIndex("by_connection", (q) => q.eq("connectionId", args.connectionId))
@@ -626,6 +644,16 @@ export const _markSyncError = internalMutation({
   args: { connectionId: v.id("financialConnections"), error: v.string() },
   returns: v.any(),
   handler: async (ctx, { connectionId, error }) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const connection = await portableCtx.db.get(connectionId, "financialConnections");
+    if (!connection) throw new Error("financialConnections not found.");
+    await requireSocietyMembership(portableCtx, String(connection.societyId));
+    await getOwned(
+      portableCtx,
+      "financialConnections",
+      connectionId,
+      String(connection.societyId),
+    );
     await ctx.db.patch(connectionId, { status: "error", lastError: error });
   },
 });
@@ -663,10 +691,12 @@ export const importBankCsvTransactions = mutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     await requireRole(ctx, { actingUserId: args.actingUserId, societyId: args.societyId, required: "Admin" });
-    const account = await ctx.db.get(args.accountId);
-    if (!account || account.societyId !== args.societyId) {
-      throw new Error("Account must belong to this society.");
-    }
+    const account = await getOwned(
+      await toPortableMutationCtx(ctx),
+      "financialAccounts",
+      args.accountId,
+      args.societyId,
+    );
     const existing = await ctx.db
       .query("financialTransactions")
       .withIndex("by_society", (q) => q.eq("societyId", args.societyId))

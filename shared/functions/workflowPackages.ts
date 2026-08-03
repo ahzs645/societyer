@@ -9,6 +9,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 import { assertAllowedOption } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
 
@@ -16,6 +17,8 @@ export async function listPortable(
   ctx: PortableQueryCtx,
   { societyId, workflowId }: { societyId: string; workflowId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (workflowId) await getOwned(ctx, "workflows", workflowId, societyId);
   const packagesQuery = workflowId
     ? ctx.db
         .query("workflowPackages")
@@ -62,6 +65,15 @@ export async function upsertPortable(
     stripeCheckoutSessionId?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "workflowPackages", id, args.societyId);
+  if (args.workflowId) await getOwned(ctx, "workflows", args.workflowId, args.societyId);
+  if (args.workflowRunId) {
+    await getOwned(ctx, "workflowRuns", args.workflowRunId, args.societyId);
+  }
+  for (const documentId of args.supportingDocumentIds ?? []) {
+    await getOwned(ctx, "documents", documentId, args.societyId);
+  }
   assertAllowedOption("eventTypes", args.eventType, "Event type", false);
   assertAllowedOption("workflowPackageStatuses", args.status, "Workflow package status");
   const now = new Date().toISOString();
@@ -95,6 +107,10 @@ export async function upsertPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const candidate = await ctx.db.get(id, "workflowPackages");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "workflowPackages", id, String(candidate.societyId));
   await ctx.db.delete(id);
 }
 
@@ -102,8 +118,10 @@ export async function createFollowUpTaskPortable(
   ctx: PortableMutationCtx,
   { packageId, title, dueDate }: { packageId: string; title?: string; dueDate?: string },
 ) {
-  const pkg = await ctx.db.get(packageId);
-  if (!pkg) throw new Error("Workflow package not found.");
+  const candidate = await ctx.db.get(packageId, "workflowPackages");
+  if (!candidate) throw new Error("workflowPackages not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const pkg = await getOwned(ctx, "workflowPackages", packageId, String(candidate.societyId));
   return await ctx.db.insert("tasks", {
     societyId: pkg.societyId,
     title: cleanText(title) || `Complete package: ${pkg.packageName}`,
@@ -127,8 +145,10 @@ export async function markFiledPortable(
   ctx: PortableMutationCtx,
   { packageId, transactionId, notes }: { packageId: string; transactionId?: string; notes?: string },
 ) {
-  const pkg = await ctx.db.get(packageId);
-  if (!pkg) throw new Error("Workflow package not found.");
+  const candidate = await ctx.db.get(packageId, "workflowPackages");
+  if (!candidate) throw new Error("workflowPackages not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const pkg = await getOwned(ctx, "workflowPackages", packageId, String(candidate.societyId));
   await ctx.db.patch(packageId, {
     status: "filed",
     transactionId: cleanText(transactionId) || pkg.transactionId,
@@ -146,12 +166,18 @@ export async function createBoardPackPortable(
     actingUserId?: string;
   },
 ): Promise<{ packageId: string; taskIds: string[] }> {
-  const meeting = await ctx.db.get(meetingId);
-  if (!meeting || meeting.societyId !== societyId) throw new Error("Meeting not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const meeting = await getOwned(ctx, "meetings", meetingId, societyId);
+  if (workflowId) await getOwned(ctx, "workflows", workflowId, societyId);
+  const packageReviewedByUserId = await principalUserId(ctx, societyId);
   const [materials, minutes] = await Promise.all([
     ctx.db.query("meetingMaterials").withIndex("by_meeting", (q) => q.eq("meetingId", meetingId)).collect(),
     meeting.minutesId ? ctx.db.get(meeting.minutesId) : Promise.resolve(null),
   ]);
+  if (meeting.minutesId) await getOwned(ctx, "minutes", meeting.minutesId, societyId);
+  for (const material of materials) {
+    await getOwned(ctx, "documents", material.documentId, societyId);
+  }
   const now = new Date().toISOString();
   const packageName = `Board pack - ${meeting.title}`;
   const effectiveDate = meeting.scheduledAt.slice(0, 10);
@@ -201,7 +227,7 @@ export async function createBoardPackPortable(
   await ctx.db.patch(meetingId, {
     packageReviewStatus: "needs_review",
     packageReviewedAtISO: now,
-    packageReviewedByUserId: actingUserId,
+    packageReviewedByUserId,
     packageReviewNotes: appendNote(
       meeting.packageReviewNotes,
       `Board pack package ${String(packageId)} created ${now.slice(0, 10)}.`,

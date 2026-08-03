@@ -14,7 +14,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
 
 function normalizeCategoryLabel(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
@@ -66,6 +66,7 @@ function computeLedgerBalances(accounts: any[], entries: any[], lines: any[]) {
 }
 
 export async function connectionsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("financialConnections")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -73,6 +74,7 @@ export async function connectionsPortable(ctx: PortableQueryCtx, { societyId }: 
 }
 
 export async function accountsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("financialAccounts")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -83,6 +85,7 @@ export async function transactionsPortable(
   ctx: PortableQueryCtx,
   { societyId, limit }: { societyId: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("financialTransactions")
     .withIndex("by_society_date", (q) => q.eq("societyId", societyId))
@@ -94,6 +97,7 @@ export async function transactionsForAccountExternalIdPortable(
   ctx: PortableQueryCtx,
   { societyId, externalId, limit }: { societyId: string; externalId: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const accounts = await ctx.db
     .query("financialAccounts")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -125,6 +129,7 @@ export async function transactionsForCounterpartyExternalIdPortable(
     limit,
   }: { societyId: string; externalId: string; resourceType?: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const transactionQuery = resourceType
     ? ctx.db
         .query("financialTransactions")
@@ -190,6 +195,7 @@ export async function transactionsForCategoryAccountExternalIdPortable(
     limit,
   }: { societyId: string; externalId: string; label?: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const labelText = label?.trim();
   const normalizedLabel = normalizeCategoryLabel(labelText);
   const [accounts, rowsByExternalId, rowsByLabel, snapshots] = (await Promise.all([
@@ -259,6 +265,7 @@ export async function budgetsPortable(
   ctx: PortableQueryCtx,
   { societyId, fiscalYear }: { societyId: string; fiscalYear?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("budgets")
     .withIndex("by_society_fy", (q) =>
@@ -269,6 +276,7 @@ export async function budgetsPortable(
 }
 
 export async function operatingSubscriptionsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("operatingSubscriptions")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -297,6 +305,7 @@ export async function upsertBudgetPortable(
     actingUserId?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
@@ -304,6 +313,7 @@ export async function upsertBudgetPortable(
   });
   const { id, actingUserId, ...rest } = args;
   if (id) {
+    await getOwned(ctx, "budgets", id, args.societyId);
     await ctx.db.patch(id, rest);
     return id;
   }
@@ -327,6 +337,7 @@ export async function upsertOperatingSubscriptionPortable(
     actingUserId?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
@@ -335,9 +346,7 @@ export async function upsertOperatingSubscriptionPortable(
   const { id, actingUserId, ...rest } = args;
   const now = new Date().toISOString();
   if (id) {
-    const row = await ctx.db.get(id);
-    if (!row) throw new Error("Subscription cost row not found.");
-    if (row.societyId !== args.societyId) throw new Error("Subscription cost row belongs to another society.");
+    await getOwned(ctx, "operatingSubscriptions", id, args.societyId);
     await ctx.db.patch(id, { ...rest, updatedAtISO: now });
     return id;
   }
@@ -352,9 +361,11 @@ export async function removeOperatingSubscriptionPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const row = await ctx.db.get(id);
+  const row = await ctx.db.get(id, "operatingSubscriptions");
   if (!row) return;
+  await requireSocietyMembership(ctx, String(row.societyId));
   await requireRolePortable(ctx, { actingUserId, societyId: String(row.societyId), required: "Director" });
+  await getOwned(ctx, "operatingSubscriptions", id, String(row.societyId));
   await ctx.db.delete(id);
 }
 
@@ -362,14 +373,19 @@ export async function removeBudgetPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const row = await ctx.db.get(id);
+  const row = await ctx.db.get(id, "budgets");
   if (!row) return;
+  await requireSocietyMembership(ctx, String(row.societyId));
   await requireRolePortable(ctx, { actingUserId, societyId: String(row.societyId), required: "Director" });
+  await getOwned(ctx, "budgets", id, String(row.societyId));
   await ctx.db.delete(id);
 }
 
 export async function getConnectionPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const connection = await ctx.db.get(id, "financialConnections");
+  if (!connection) return null;
+  await requireSocietyMembership(ctx, String(connection.societyId));
+  return getOwned(ctx, "financialConnections", id, String(connection.societyId));
 }
 
 // Edit a single imported/synced transaction. Only the user-correctable fields
@@ -393,9 +409,11 @@ export async function updateTransactionPortable(
     actingUserId?: string;
   },
 ) {
-  const row = await ctx.db.get(id);
+  const row = await ctx.db.get(id, "financialTransactions");
   if (!row) throw new Error("Transaction not found.");
+  await requireSocietyMembership(ctx, String(row.societyId));
   await requireRolePortable(ctx, { actingUserId, societyId: String(row.societyId), required: "Director" });
+  await getOwned(ctx, "financialTransactions", id, String(row.societyId));
   await ctx.db.patch(id, patch);
   return id;
 }
@@ -404,6 +422,7 @@ export async function updateTransactionPortable(
 // Prefers balances computed from posted journal lines (the durable double-entry
 // ledger) where an account has any, falling back to the imported balanceCents.
 export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const [accounts, transactions, budgets, journalEntries, journalLines] = await Promise.all([
     ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("financialTransactions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),

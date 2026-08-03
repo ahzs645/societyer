@@ -16,7 +16,12 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import {
+  getOwned,
+  principalUserId,
+  requireRolePortable,
+  requireSocietyMembership,
+} from "./access";
 
 export type SkillDefinition = {
   _id?: string;
@@ -236,10 +241,12 @@ export async function listDefinitionsPortable(_ctx: PortableQueryCtx) {
 }
 
 export async function listSkillsPortable(ctx: PortableQueryCtx, { societyId }: { societyId?: string }) {
+  if (societyId) await requireSocietyMembership(ctx, societyId);
   return getActiveSkills(ctx, societyId);
 }
 
 export async function listAllSkillsPortable(ctx: PortableQueryCtx, { societyId }: { societyId?: string }) {
+  if (societyId) await requireSocietyMembership(ctx, societyId);
   return getSkills(ctx, societyId, false);
 }
 
@@ -247,6 +254,7 @@ export async function loadSkillsPortable(
   ctx: PortableQueryCtx,
   { societyId, skillNames }: { societyId?: string; skillNames: string[] },
 ) {
+  if (societyId) await requireSocietyMembership(ctx, societyId);
   const skills = await getActiveSkills(ctx, societyId);
   const requested = new Set(skillNames);
   const loaded = skills.filter((skill) => requested.has(skill.name));
@@ -273,12 +281,14 @@ export async function upsertSkillPortable(
     isActive?: boolean;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
     required: "Admin",
   });
   const now = new Date().toISOString();
+  const createdByUserId = await principalUserId(ctx, args.societyId);
   const name = normalizeSkillName(args.name);
   if (!name) throw new Error("Skill name is required.");
   if (BUILT_IN_SKILLS.some((skill) => skill.name === name)) {
@@ -286,8 +296,7 @@ export async function upsertSkillPortable(
   }
 
   if (args.id) {
-    const existing = await ctx.db.get(args.id);
-    if (!existing || existing.societyId !== args.societyId) throw new Error("Skill not found.");
+    await getOwned(ctx, "aiSkills", args.id, args.societyId);
     await ctx.db.patch(args.id, {
       name,
       label: args.label.trim() || name,
@@ -312,7 +321,7 @@ export async function upsertSkillPortable(
     content: args.content.trim(),
     isActive: args.isActive !== false,
     isCustom: true,
-    createdByUserId: args.actingUserId,
+    createdByUserId,
     createdAtISO: now,
     updatedAtISO: now,
   });
@@ -322,13 +331,13 @@ export async function setSkillActivePortable(
   ctx: PortableMutationCtx,
   args: { societyId: string; actingUserId?: string; id: string; isActive: boolean },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
     required: "Admin",
   });
-  const existing = await ctx.db.get(args.id);
-  if (!existing || existing.societyId !== args.societyId) throw new Error("Skill not found.");
+  await getOwned(ctx, "aiSkills", args.id, args.societyId);
   await ctx.db.patch(args.id, { isActive: args.isActive, updatedAtISO: new Date().toISOString() });
   return args.id;
 }
@@ -337,18 +346,19 @@ export async function removeSkillPortable(
   ctx: PortableMutationCtx,
   args: { societyId: string; actingUserId?: string; id: string },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
     required: "Admin",
   });
-  const existing = await ctx.db.get(args.id);
-  if (!existing || existing.societyId !== args.societyId) throw new Error("Skill not found.");
+  await getOwned(ctx, "aiSkills", args.id, args.societyId);
   await ctx.db.delete(args.id);
   return args.id;
 }
 
 export async function listLogicFunctionsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("aiLogicFunctions")
     .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
@@ -359,6 +369,7 @@ export async function listToolDraftsPortable(
   ctx: PortableQueryCtx,
   args: { societyId: string; status?: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const rows = await ctx.db
     .query("aiToolDrafts")
     .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
@@ -371,13 +382,14 @@ export async function approveToolDraftPortable(
   ctx: PortableMutationCtx,
   args: { societyId: string; actingUserId?: string; id: string },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const { user } = await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
     required: "Director",
   });
-  const draft = await ctx.db.get(args.id);
-  if (!draft || draft.societyId !== args.societyId) throw new Error("Draft not found.");
+  const draft = await getOwned(ctx, "aiToolDrafts", args.id, args.societyId);
+  const actorUserId = await principalUserId(ctx, args.societyId);
   if (draft.status !== "draft" && draft.status !== "approved") throw new Error(`Draft is ${draft.status}.`);
   const now = new Date().toISOString();
   let result: any = { status: "approved" };
@@ -409,7 +421,7 @@ export async function approveToolDraftPortable(
   await ctx.db.patch(args.id, {
     status: result.status,
     updatedAtISO: now,
-    payload: { ...(draft.payload ?? {}), approval: { approvedByUserId: args.actingUserId, approvedAtISO: now, result } },
+    payload: { ...(draft.payload ?? {}), approval: { approvedByUserId: actorUserId, approvedAtISO: now, result } },
   });
   await insertAgentAudit(ctx, {
     societyId: args.societyId,
@@ -419,7 +431,7 @@ export async function approveToolDraftPortable(
     toolName: draft.toolName,
     summary: `Approved AI tool draft ${String(args.id)}.`,
     metadata: result,
-    actorUserId: args.actingUserId,
+    actorUserId,
   });
   return result;
 }
@@ -428,13 +440,14 @@ export async function rejectToolDraftPortable(
   ctx: PortableMutationCtx,
   args: { societyId: string; actingUserId?: string; id: string },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
     required: "Director",
   });
-  const draft = await ctx.db.get(args.id);
-  if (!draft || draft.societyId !== args.societyId) throw new Error("Draft not found.");
+  const draft = await getOwned(ctx, "aiToolDrafts", args.id, args.societyId);
+  const actorUserId = await principalUserId(ctx, args.societyId);
   await ctx.db.patch(args.id, { status: "rejected", updatedAtISO: new Date().toISOString() });
   await insertAgentAudit(ctx, {
     societyId: args.societyId,
@@ -443,7 +456,7 @@ export async function rejectToolDraftPortable(
     eventType: "tool_draft_rejected",
     toolName: draft.toolName,
     summary: `Rejected AI tool draft ${String(args.id)}.`,
-    actorUserId: args.actingUserId,
+    actorUserId,
   });
   return args.id;
 }
@@ -467,12 +480,17 @@ export async function upsertLogicFunctionPortable(
     requiredPermission?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
     required: "Admin",
   });
   const now = new Date().toISOString();
+  const createdByUserId = await principalUserId(ctx, args.societyId);
+  if (args.workflowId) {
+    await getOwned(ctx, "workflows", args.workflowId, args.societyId);
+  }
   const name = normalizeAppName(args.name);
   if (!name) throw new Error("Logic function name is required.");
   const patch = {
@@ -491,8 +509,7 @@ export async function upsertLogicFunctionPortable(
     updatedAtISO: now,
   } as any;
   if (args.id) {
-    const existing = await ctx.db.get(args.id);
-    if (!existing || existing.societyId !== args.societyId) throw new Error("Logic function not found.");
+    await getOwned(ctx, "aiLogicFunctions", args.id, args.societyId);
     await ctx.db.patch(args.id, patch);
     return args.id;
   }
@@ -503,7 +520,7 @@ export async function upsertLogicFunctionPortable(
   if (existing) throw new Error("A logic function with that name already exists.");
   return await ctx.db.insert("aiLogicFunctions", {
     ...patch,
-    createdByUserId: args.actingUserId,
+    createdByUserId,
     createdAtISO: now,
   });
 }

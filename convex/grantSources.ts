@@ -19,6 +19,7 @@ import {
   addFromLibraryPortable,
 } from "../shared/functions/grantSources";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import { getOwned, principalUserId } from "../shared/functions/access";
 import {
   assertConvexOutboundUrl,
   fetchConvexOutbound,
@@ -74,6 +75,8 @@ export const upsert = mutation({
   returns: v.any(),
   handler: async (ctx, { id, societyId, patch, actingUserId }) => {
     await requireRole(ctx, { actingUserId, societyId, required: "Director" });
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const createdByUserId = await principalUserId(portableCtx, societyId);
     if (patch.url?.trim()) {
       assertConvexOutboundUrl(patch.url.trim(), {
         source: "tenant",
@@ -96,15 +99,14 @@ export const upsert = mutation({
       updatedAtISO: now,
     };
     if (id) {
-      const existing = await ctx.db.get(id);
-      if (!existing || existing.societyId !== societyId) throw new Error("Grant source not found.");
+      await getOwned(portableCtx, "grantSources", id, societyId);
       await ctx.db.patch(id, payload);
       return id;
     }
     return await ctx.db.insert("grantSources", {
       societyId,
       ...payload,
-      createdByUserId: actingUserId,
+      createdByUserId,
       createdAtISO: now,
     });
   },
@@ -168,6 +170,14 @@ export const _recordDiscoveredCandidates = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx, { societyId, sourceId, items }) => {
+    if (sourceId) {
+      await getOwned(
+        await toPortableMutationCtx(ctx),
+        "grantSources",
+        sourceId,
+        societyId,
+      );
+    }
     const existing = sourceId
       ? await ctx.db.query("grantOpportunityCandidates").withIndex("by_source", (q: any) => q.eq("sourceId", sourceId)).collect()
       : await ctx.db.query("grantOpportunityCandidates").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();

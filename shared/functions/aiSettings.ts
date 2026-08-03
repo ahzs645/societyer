@@ -10,7 +10,12 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import {
+  getOwned,
+  principalUserId,
+  requireRolePortable,
+  requireSocietyMembership,
+} from "./access";
 
 function publicSetting(row: any) {
   return {
@@ -45,10 +50,12 @@ export async function getEffectivePortable(
   ctx: PortableQueryCtx,
   { societyId, actingUserId }: { societyId: string; actingUserId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  const userId = await principalUserId(ctx, societyId);
   const personal = actingUserId
     ? await ctx.db
         .query("aiProviderSettings")
-        .withIndex("by_society_user", (q: any) => q.eq("societyId", societyId).eq("userId", actingUserId))
+        .withIndex("by_society_user", (q: any) => q.eq("societyId", societyId).eq("userId", userId))
         .collect()
     : [];
   const workspace = await ctx.db
@@ -89,13 +96,17 @@ export async function upsertPortable(
     required: args.scope === "workspace" ? "Admin" : "Viewer",
   });
   const now = new Date().toISOString();
+  const principalId = await principalUserId(ctx, args.societyId);
+  if (args.secretVaultItemId) {
+    await getOwned(ctx, "secretVaultItems", args.secretVaultItemId, args.societyId);
+  }
   const provider = normalizeProvider(args.provider);
   const scope = args.scope === "workspace" ? "workspace" : "personal";
   const status = args.validationStatus === "ok" ? "active" : "needs_validation";
   const patch = {
     societyId: args.societyId,
     scope,
-    userId: scope === "personal" ? args.actingUserId : undefined,
+    userId: scope === "personal" ? principalId : undefined,
     provider,
     label: args.label.trim() || labelForProvider(provider),
     modelId: args.modelId.trim() || defaultModelForProvider(provider),
@@ -110,15 +121,14 @@ export async function upsertPortable(
     updatedAtISO: now,
   };
   if (args.id) {
-    const existing = await ctx.db.get(args.id);
-    if (!existing || existing.societyId !== args.societyId) throw new Error("AI provider setting not found.");
-    if (existing.scope === "personal" && existing.userId !== args.actingUserId) throw new Error("Cannot edit another user's AI provider setting.");
+    const existing = await getOwned(ctx, "aiProviderSettings", args.id, args.societyId);
+    if (existing.scope === "personal" && existing.userId !== principalId) throw new Error("Cannot edit another user's AI provider setting.");
     await ctx.db.patch(args.id, args.secretVaultItemId ? patch : { ...patch, secretVaultItemId: existing.secretVaultItemId });
     return args.id;
   }
   const id = await ctx.db.insert("aiProviderSettings", {
     ...patch,
-    createdByUserId: args.actingUserId,
+    createdByUserId: principalId,
     createdAtISO: now,
   });
   await ctx.db.insert("activity", {
@@ -144,14 +154,14 @@ export async function setStatusPortable(
     status: string;
   },
 ) {
-  const existing = await ctx.db.get(args.id);
-  if (!existing || existing.societyId !== args.societyId) throw new Error("AI provider setting not found.");
+  const existing = await getOwned(ctx, "aiProviderSettings", args.id, args.societyId);
   await requireRolePortable(ctx, {
     societyId: args.societyId,
     actingUserId: args.actingUserId,
     required: existing.scope === "workspace" ? "Admin" : "Viewer",
   });
-  if (existing.scope === "personal" && existing.userId !== args.actingUserId) throw new Error("Cannot edit another user's AI provider setting.");
+  const principalId = await principalUserId(ctx, args.societyId);
+  if (existing.scope === "personal" && existing.userId !== principalId) throw new Error("Cannot edit another user's AI provider setting.");
   await ctx.db.patch(args.id, { status: args.status, updatedAtISO: new Date().toISOString() });
   return args.id;
 }

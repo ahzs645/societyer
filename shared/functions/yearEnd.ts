@@ -13,6 +13,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import {
   buildOrgRevenueStatement,
   deriveFiscalRange as deriveRange,
@@ -24,6 +25,7 @@ export async function annualStatementPortable(
   ctx: PortableQueryCtx,
   { societyId, fiscalYear }: { societyId: string; fiscalYear: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const financialRows = await ctx.db
     .query("financials")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -102,7 +104,7 @@ export async function annualStatementPortable(
   }
 
   const presentedAtMeeting = financial?.presentedAtMeetingId
-    ? await ctx.db.get(financial.presentedAtMeetingId)
+    ? await getOwned(ctx, "meetings", financial.presentedAtMeetingId, societyId)
     : null;
 
   const revenueCents = financial?.revenueCents ?? Array.from(incomeByCategory.values()).reduce((a, b) => a + b, 0);
@@ -141,7 +143,8 @@ export async function orgRevenueExpensePortable(
   ctx: PortableQueryCtx,
   { societyId, fiscalYear }: { societyId: string; fiscalYear: string },
 ) {
-  const society = await ctx.db.get(societyId);
+  await requireSocietyMembership(ctx, societyId);
+  const society = await ctx.db.get(societyId, "societies");
   const transactions = await ctx.db
     .query("financialTransactions")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -162,6 +165,7 @@ export async function restrictedFundStatementPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string; fiscalYear?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const grants = await ctx.db
     .query("grants")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -216,7 +220,8 @@ export async function readinessPortable(
   ctx: PortableQueryCtx,
   { societyId, fiscalYear }: { societyId: string; fiscalYear: string },
 ) {
-  const society = await ctx.db.get(societyId);
+  await requireSocietyMembership(ctx, societyId);
+  const society = await ctx.db.get(societyId, "societies");
 
   const financialRows = await ctx.db
     .query("financials")

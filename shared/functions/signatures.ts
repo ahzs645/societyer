@@ -9,6 +9,11 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import {
+  getOwned,
+  principalUserId,
+  requireSocietyMembership,
+} from "./access";
 import { optionalSubjectId, requireSubjectId, type SubjectIdArgs } from "./subjectId";
 
 // Role-rank check, copied (pure) from convex/users.ts so this file stays free of
@@ -36,10 +41,8 @@ async function assertSignatureActor(
   ctx: PortableMutationCtx,
   args: { societyId: string; actingUserId?: string; userId?: string },
 ) {
-  if (!args.actingUserId) return;
-  const actor = await ctx.db.get(args.actingUserId);
-  if (!actor || actor.societyId !== args.societyId) throw new Error("Signature actor is not part of this society.");
-  if (args.userId && args.userId !== args.actingUserId && !canActAs(actor.role as Role, "Admin")) {
+  const actor = await requireSocietyMembership(ctx, args.societyId);
+  if (args.userId && args.userId !== actor._id && !canActAs(actor.role as Role, "Admin")) {
     throw new Error("Only an admin can sign on behalf of another user.");
   }
 }
@@ -128,6 +131,7 @@ export async function listForEntityPortable(
     .query("signatures")
     .withIndex("by_entity", (q) => q.eq("entityType", entityType).eq("entityId", resolvedSubjectId))
     .collect();
+  if (rows[0]) await requireSocietyMembership(ctx, String(rows[0].societyId));
   return rows.filter((row) => optionalSubjectId(row) === resolvedSubjectId);
 }
 
@@ -135,6 +139,7 @@ export async function listProfilesForSocietyPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("signatureProfiles")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -158,7 +163,11 @@ export async function saveProfilePortable(
   },
 ) {
   await assertSignatureActor(ctx, args);
-  return upsertSignatureProfile(ctx, args);
+  if (args.userId) await getOwned(ctx, "users", args.userId, args.societyId);
+  if (args.directorId) await getOwned(ctx, "directors", args.directorId, args.societyId);
+  if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
+  const actingUserId = await principalUserId(ctx, args.societyId);
+  return upsertSignatureProfile(ctx, { ...args, actingUserId });
 }
 
 export async function signPortable(
@@ -185,10 +194,17 @@ export async function signPortable(
   // enforce the actor check when one is provided AND a userId link is being
   // claimed — that's where the "admin can sign for another user" rule matters.
   await assertSignatureActor(ctx, args);
+  if (args.userId) await getOwned(ctx, "users", args.userId, args.societyId);
+  if (args.directorId) await getOwned(ctx, "directors", args.directorId, args.societyId);
+  if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
+  if (args.signatureProfileId) {
+    await getOwned(ctx, "signatureProfiles", args.signatureProfileId, args.societyId);
+  }
+  const actingUserId = await principalUserId(ctx, args.societyId);
 
   let signatureProfileId = args.signatureProfileId;
   if (args.saveToProfile) {
-    signatureProfileId = await upsertSignatureProfile(ctx, args);
+    signatureProfileId = await upsertSignatureProfile(ctx, { ...args, actingUserId });
   }
   const subjectId = requireSubjectId(args);
 
@@ -238,17 +254,15 @@ export async function revokePortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const sig = await ctx.db.get(id);
+  const sig = await ctx.db.get(id, "signatures");
   if (!sig) return;
-  // Symmetric with sign(): only enforce the actor check when one is given
-  // AND the signature is linked to a specific user. Without an actor we
-  // assume kiosk-style usage where revoking is local-session housekeeping.
-  if (actingUserId) {
-    const actor = await ctx.db.get(actingUserId);
-    if (!actor || actor.societyId !== sig.societyId) throw new Error("Signature actor is not part of this society.");
-    if (sig.userId && sig.userId !== actingUserId && !canActAs(actor.role as Role, "Admin")) {
-      throw new Error("Only an admin can revoke another user's signature.");
-    }
+  const actor = await requireSocietyMembership(ctx, String(sig.societyId));
+  await getOwned(ctx, "signatures", id, String(sig.societyId));
+  if (actingUserId && actingUserId !== actor._id) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
+  if (sig.userId && sig.userId !== actor._id && !canActAs(actor.role as Role, "Admin")) {
+    throw new Error("Only an admin can revoke another user's signature.");
   }
   await ctx.db.delete(id);
   const subjectId = optionalSubjectId(sig);
@@ -269,19 +283,15 @@ export async function deleteProfilePortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const profile = await ctx.db.get(id);
+  const profile = await ctx.db.get(id, "signatureProfiles");
   if (!profile) return;
-  // Same actor rule as revoke(): only enforced when an actor is provided and
-  // the saved signature is linked to a specific user — an admin may remove
-  // another user's saved signature, otherwise you can only remove your own.
-  if (actingUserId) {
-    const actor = await ctx.db.get(actingUserId);
-    if (!actor || actor.societyId !== profile.societyId) {
-      throw new Error("Signature actor is not part of this society.");
-    }
-    if (profile.userId && profile.userId !== actingUserId && !canActAs(actor.role as Role, "Admin")) {
-      throw new Error("Only an admin can remove another user's saved signature.");
-    }
+  const actor = await requireSocietyMembership(ctx, String(profile.societyId));
+  await getOwned(ctx, "signatureProfiles", id, String(profile.societyId));
+  if (actingUserId && actingUserId !== actor._id) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
+  if (profile.userId && profile.userId !== actor._id && !canActAs(actor.role as Role, "Admin")) {
+    throw new Error("Only an admin can remove another user's saved signature.");
   }
   await ctx.db.delete(id);
 }
