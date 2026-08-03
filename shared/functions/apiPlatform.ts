@@ -12,7 +12,12 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import {
+  getOwned,
+  principalUserId,
+  requireRolePortable,
+  requireSocietyMembership,
+} from "./access";
 import { INTEGRATION_CATALOG, getIntegrationManifest } from "../integrationCatalog";
 
 function nowISO() {
@@ -63,6 +68,7 @@ function healthForInstallation(row: any | undefined, manifest: any) {
 }
 
 export async function listClientsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }): Promise<any> {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("apiClients")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -73,6 +79,11 @@ export async function createClientPortable(
   ctx: PortableMutationCtx,
   args: { societyId: string; name: string; description?: string; kind?: string; createdByUserId?: string },
 ): Promise<any> {
+  await requireSocietyMembership(ctx, args.societyId);
+  const createdByUserId = await principalUserId(ctx, args.societyId);
+  if (args.createdByUserId && args.createdByUserId !== createdByUserId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
   const at = nowISO();
   return await ctx.db.insert("apiClients", {
     societyId: args.societyId,
@@ -80,7 +91,7 @@ export async function createClientPortable(
     description: args.description,
     kind: args.kind ?? "plugin",
     status: "active",
-    createdByUserId: args.createdByUserId,
+    createdByUserId,
     createdAtISO: at,
     updatedAtISO: at,
   });
@@ -90,6 +101,10 @@ export async function updateClientPortable(
   ctx: PortableMutationCtx,
   { id, patch }: { id: string; patch: { name?: string; description?: string; kind?: string; status?: string } },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "apiClients", id, societyId);
   await ctx.db.patch(id, { ...patch, updatedAtISO: nowISO() });
   return null;
 }
@@ -98,6 +113,8 @@ export async function listTokensPortable(
   ctx: PortableQueryCtx,
   { societyId, clientId }: { societyId: string; clientId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (clientId) await getOwned(ctx, "apiClients", clientId, societyId);
   const rows = clientId
     ? await ctx.db
         .query("apiTokens")
@@ -111,6 +128,7 @@ export async function listTokensPortable(
 }
 
 export async function listPluginInstallationsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }): Promise<any> {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("pluginInstallations")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -121,6 +139,7 @@ export async function listIntegrationCatalogPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId?: string },
 ) {
+  if (societyId) await requireSocietyMembership(ctx, societyId);
   const installations = societyId
     ? await ctx.db
         .query("pluginInstallations")
@@ -143,11 +162,14 @@ export async function installIntegrationPortable(
   ctx: PortableMutationCtx,
   args: { societyId: string; slug: string; status?: string; installedByUserId?: string },
 ): Promise<any> {
+  await requireRolePortable(ctx, {
+    societyId: args.societyId,
+    actingUserId: args.installedByUserId,
+    required: "Admin",
+  });
+  const installedByUserId = await principalUserId(ctx, args.societyId);
   const manifest = getIntegrationManifest(args.slug);
   if (!manifest) throw new Error("Integration manifest not found.");
-  if (args.installedByUserId) {
-    await requireRolePortable(ctx, { societyId: args.societyId, actingUserId: args.installedByUserId, required: "Admin" });
-  }
   const existing = (await ctx.db
     .query("pluginInstallations")
     .withIndex("by_society_slug", (q) => q.eq("societyId", args.societyId).eq("slug", manifest.slug))
@@ -170,7 +192,7 @@ export async function installIntegrationPortable(
     status: args.status ?? "installed",
     capabilities: manifest.capabilities,
     configJson: JSON.stringify(config, null, 2),
-    installedByUserId: args.installedByUserId,
+    installedByUserId,
     updatedAtISO: nowISO(),
   };
   if (existing) {
@@ -196,8 +218,10 @@ export async function updateIntegrationHealthPortable(
     status?: string;
   },
 ) {
-  const row = await ctx.db.get(id);
-  if (!row) throw new Error("Integration installation not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const row = await getOwned(ctx, "pluginInstallations", id, societyId);
   const config = parseConfigJson(row.configJson);
   await ctx.db.patch(id, {
     status: patch.status ?? row.status,
@@ -227,11 +251,28 @@ export async function upsertPluginInstallationPortable(
     installedByUserId?: string;
   },
 ): Promise<any> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.id) {
+    await getOwned(ctx, "pluginInstallations", args.id, args.societyId);
+  }
+  if (args.clientId) await getOwned(ctx, "apiClients", args.clientId, args.societyId);
+  const installedByUserId = args.installedByUserId
+    ? await principalUserId(ctx, args.societyId)
+    : undefined;
+  if (
+    args.installedByUserId &&
+    args.installedByUserId !== installedByUserId
+  ) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
   const at = nowISO();
-  const { id, ...rest } = args;
+  const { id, installedByUserId: clientInstalledByUserId, ...rest } = args;
+  void clientInstalledByUserId;
+  const actorFields = installedByUserId ? { installedByUserId } : {};
   if (id) {
     await ctx.db.patch(id, {
       ...rest,
+      ...actorFields,
       status: rest.status ?? "installed",
       updatedAtISO: at,
     });
@@ -239,6 +280,7 @@ export async function upsertPluginInstallationPortable(
   }
   return await ctx.db.insert("pluginInstallations", {
     ...rest,
+    ...actorFields,
     status: rest.status ?? "installed",
     createdAtISO: at,
     updatedAtISO: at,
@@ -249,6 +291,7 @@ export async function listIntegrationSyncStatesPortable(
   ctx: PortableQueryCtx,
   { societyId, provider, resourceType }: { societyId: string; provider?: string; resourceType?: string },
 ): Promise<any> {
+  await requireSocietyMembership(ctx, societyId);
   const rows = provider && resourceType
     ? await ctx.db
         .query("integrationSyncStates")

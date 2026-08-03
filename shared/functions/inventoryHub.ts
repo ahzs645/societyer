@@ -12,6 +12,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 
 function movementSign(type: string, direction: "from" | "to") {
   if (type === "reserve" || type === "unreserve") return 0;
@@ -165,6 +166,7 @@ export async function connectionsPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("inventoryConnections")
     .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
@@ -175,6 +177,7 @@ export async function itemsPortable(
   ctx: PortableQueryCtx,
   { societyId, itemType }: { societyId: string; itemType?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await (itemType
     ? ctx.db
         .query("inventoryItems")
@@ -197,6 +200,7 @@ export async function locationsPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("inventoryLocations")
     .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
@@ -208,6 +212,10 @@ export async function balancesPortable(
   ctx: PortableQueryCtx,
   { societyId, inventoryItemId }: { societyId: string; inventoryItemId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (inventoryItemId) {
+    await getOwned(ctx, "inventoryItems", inventoryItemId, societyId);
+  }
   const rows = inventoryItemId
     ? await ctx.db
         .query("inventoryBalances")
@@ -224,6 +232,10 @@ export async function lotsPortable(
   ctx: PortableQueryCtx,
   { societyId, inventoryItemId }: { societyId: string; inventoryItemId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (inventoryItemId) {
+    await getOwned(ctx, "inventoryItems", inventoryItemId, societyId);
+  }
   const rows = inventoryItemId
     ? await ctx.db
         .query("inventoryLots")
@@ -242,6 +254,7 @@ export async function stockMovementsPortable(
   ctx: PortableQueryCtx,
   { societyId, limit }: { societyId: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("stockMovements")
     .withIndex("by_society_date", (q: any) => q.eq("societyId", societyId))
@@ -253,6 +266,10 @@ export async function receiptLinksPortable(
   ctx: PortableQueryCtx,
   { societyId, inventoryItemId }: { societyId: string; inventoryItemId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (inventoryItemId) {
+    await getOwned(ctx, "inventoryItems", inventoryItemId, societyId);
+  }
   const rows = inventoryItemId
     ? await ctx.db
         .query("assetReceiptLinks")
@@ -263,9 +280,16 @@ export async function receiptLinksPortable(
         .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
         .collect();
   const scoped = rows.filter((row: any) => row.societyId === societyId);
-  const documents = await Promise.all(scoped.map((row: any) => (row.receiptDocumentId ? ctx.db.get(row.receiptDocumentId) : null)));
-  const assets = await Promise.all(scoped.map((row: any) => (row.assetId ? ctx.db.get(row.assetId) : null)));
-  const inventoryItems = await Promise.all(scoped.map((row: any) => (row.inventoryItemId ? ctx.db.get(row.inventoryItemId) : null)));
+  const documents = await Promise.all(scoped.map((row) =>
+    row.receiptDocumentId
+      ? getOwned(ctx, "documents", row.receiptDocumentId, societyId)
+      : null));
+  const assets = await Promise.all(scoped.map((row) =>
+    row.assetId ? getOwned(ctx, "assets", row.assetId, societyId) : null));
+  const inventoryItems = await Promise.all(scoped.map((row) =>
+    row.inventoryItemId
+      ? getOwned(ctx, "inventoryItems", row.inventoryItemId, societyId)
+      : null));
   return scoped.map((row: any, index: number) => ({
     ...row,
     receiptDocument: documents[index],
@@ -278,6 +302,7 @@ export async function countsPortable(
   ctx: PortableQueryCtx,
   { societyId, status }: { societyId: string; status?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await (status
     ? ctx.db
         .query("inventoryCounts")
@@ -312,6 +337,8 @@ export async function upsertConnectionPortable(
     settingsJson?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.id) await getOwned(ctx, "inventoryConnections", args.id, args.societyId);
   const now = new Date().toISOString();
   const { id, ...payload } = args;
   if (id) {
@@ -326,6 +353,10 @@ export async function upsertConnectionPortable(
 }
 
 export async function deleteConnectionPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "inventoryConnections", id, societyId);
   // Detach any items/locations/movements that referenced this connection so
   // their imported records remain but stop pointing at a deleted library.
   const items = await ctx.db
@@ -367,6 +398,12 @@ export async function upsertItemPortable(
     rawJson?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.id) await getOwned(ctx, "inventoryItems", args.id, args.societyId);
+  if (args.connectionId) {
+    await getOwned(ctx, "inventoryConnections", args.connectionId, args.societyId);
+  }
+  if (args.assetId) await getOwned(ctx, "assets", args.assetId, args.societyId);
   const now = new Date().toISOString();
   const { id, clearImage, ...payload } = args;
   const row: any = {
@@ -411,6 +448,17 @@ export async function upsertLocationPortable(
     rawJson?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.id) await getOwned(ctx, "inventoryLocations", args.id, args.societyId);
+  if (args.connectionId) {
+    await getOwned(ctx, "inventoryConnections", args.connectionId, args.societyId);
+  }
+  if (args.parentLocationId) {
+    await getOwned(ctx, "inventoryLocations", args.parentLocationId, args.societyId);
+  }
+  if (args.custodianMemberId) {
+    await getOwned(ctx, "members", args.custodianMemberId, args.societyId);
+  }
   const now = new Date().toISOString();
   const { id, ...payload } = args;
   // A location can't be its own parent.
@@ -431,8 +479,10 @@ export async function upsertLocationPortable(
 }
 
 export async function deleteLocationPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const location = await ctx.db.get(id);
-  if (!location) return { deleted: false };
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "inventoryLocations", id, societyId);
   // Refuse to delete a location that still holds stock — that would orphan
   // the balance and break the "where is this item" answer.
   const balances = await ctx.db
@@ -456,8 +506,10 @@ export async function deleteLocationPortable(ctx: PortableMutationCtx, { id }: {
 }
 
 export async function deleteItemPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const item = await ctx.db.get(id);
-  if (!item) return { deleted: false };
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "inventoryItems", id, societyId);
   const movements = await ctx.db
     .query("stockMovements")
     .withIndex("by_item_date", (q: any) => q.eq("inventoryItemId", id))
@@ -498,6 +550,10 @@ export async function upsertLotPortable(
     rawJson?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.id) await getOwned(ctx, "inventoryLots", args.id, args.societyId);
+  await getOwned(ctx, "inventoryItems", args.inventoryItemId, args.societyId);
+  if (args.assetId) await getOwned(ctx, "assets", args.assetId, args.societyId);
   const now = new Date().toISOString();
   const { id, ...payload } = args;
   const row = {
@@ -514,6 +570,10 @@ export async function upsertLotPortable(
 }
 
 export async function deleteLotPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "inventoryLots", id, societyId);
   const movements = await ctx.db
     .query("stockMovements")
     .withIndex("by_lot", (q: any) => q.eq("inventoryLotId", id))
@@ -539,6 +599,10 @@ export async function createCountPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.locationId) {
+    await getOwned(ctx, "inventoryLocations", args.locationId, args.societyId);
+  }
   const now = new Date().toISOString();
   const scope = args.locationId
     ? "location"
@@ -605,8 +669,15 @@ export async function addCountLinePortable(
     notes?: string;
   },
 ) {
-  const count = await ctx.db.get(args.inventoryCountId);
-  if (!count) throw new Error("Count not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const count = await getOwned(ctx, "inventoryCounts", args.inventoryCountId, societyId);
+  await getOwned(ctx, "inventoryItems", args.inventoryItemId, societyId);
+  await getOwned(ctx, "inventoryLocations", args.locationId, societyId);
+  if (args.inventoryLotId) {
+    await getOwned(ctx, "inventoryLots", args.inventoryLotId, societyId);
+  }
   const now = new Date().toISOString();
   return ctx.db.insert("inventoryCountLines", {
     societyId: count.societyId,
@@ -635,8 +706,11 @@ export async function setCountLinePortable(
     notes?: string;
   },
 ) {
-  const line = await ctx.db.get(args.id);
-  if (!line) throw new Error("Count line not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const line = await getOwned(ctx, "inventoryCountLines", args.id, societyId);
+  await getOwned(ctx, "inventoryCounts", line.inventoryCountId, societyId);
   const now = new Date().toISOString();
   const countedQuantity = args.countedQuantity ?? line.countedQuantity;
   await ctx.db.patch(args.id, {
@@ -654,6 +728,10 @@ export async function voidCountPortable(
   ctx: PortableMutationCtx,
   { inventoryCountId }: { inventoryCountId: string },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "inventoryCounts", inventoryCountId, societyId);
   const now = new Date().toISOString();
   await ctx.db.patch(inventoryCountId, { status: "void", completedAtISO: now, updatedAtISO: now });
   return { voided: true };
@@ -680,6 +758,19 @@ export async function upsertCandidatePortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.connectionId) {
+    await getOwned(ctx, "inventoryConnections", args.connectionId, args.societyId);
+  }
+  if (args.importSessionId) {
+    await getOwned(ctx, "importSessions", args.importSessionId, args.societyId);
+  }
+  if (args.suggestedInventoryItemId) {
+    await getOwned(ctx, "inventoryItems", args.suggestedInventoryItemId, args.societyId);
+  }
+  if (args.suggestedLocationId) {
+    await getOwned(ctx, "inventoryLocations", args.suggestedLocationId, args.societyId);
+  }
   const now = new Date().toISOString();
   return ctx.db.insert("inventoryCandidates", {
     ...args,
@@ -695,6 +786,7 @@ export async function candidatesPortable(
   ctx: PortableQueryCtx,
   { societyId, status }: { societyId: string; status?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("inventoryCandidates")
     .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
@@ -710,6 +802,10 @@ export async function setCandidateStatusPortable(
   ctx: PortableMutationCtx,
   { candidateId, status }: { candidateId: string; status: string },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "inventoryCandidates", candidateId, societyId);
   await ctx.db.patch(candidateId, { status, updatedAtISO: new Date().toISOString() });
   return candidateId;
 }
@@ -728,19 +824,22 @@ export async function promoteCandidateToMovementPortable(
     movementType?: string;
   },
 ) {
-  const candidate = await ctx.db.get(args.candidateId);
-  if (!candidate) throw new Error("Candidate not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const candidate = await getOwned(ctx, "inventoryCandidates", args.candidateId, societyId);
   if (candidate.status === "posted") throw new Error("Candidate has already been posted.");
 
   const itemId = args.inventoryItemId ?? candidate.suggestedInventoryItemId;
   if (!itemId) throw new Error("Resolve an inventory item before posting this candidate.");
-  const item = await ctx.db.get(itemId);
-  if (!item || item.societyId !== candidate.societyId) {
-    throw new Error("Inventory item must belong to this society.");
-  }
+  const item = await getOwned(ctx, "inventoryItems", itemId, societyId);
   const toLocationId = args.toLocationId ?? candidate.suggestedLocationId;
   if (!toLocationId && !args.fromLocationId) {
     throw new Error("Choose a destination (or source) location for the movement.");
+  }
+  if (toLocationId) await getOwned(ctx, "inventoryLocations", toLocationId, societyId);
+  if (args.fromLocationId) {
+    await getOwned(ctx, "inventoryLocations", args.fromLocationId, societyId);
   }
   const quantity = Math.abs(candidate.quantity ?? 0);
   if (quantity <= 0) throw new Error("Candidate has no positive quantity to post.");
@@ -796,6 +895,27 @@ export async function linkReceiptPortable(
     createdByUserId?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.id) await getOwned(ctx, "assetReceiptLinks", args.id, args.societyId);
+  if (args.inventoryItemId) {
+    await getOwned(ctx, "inventoryItems", args.inventoryItemId, args.societyId);
+  }
+  if (args.assetId) await getOwned(ctx, "assets", args.assetId, args.societyId);
+  if (args.receiptDocumentId) {
+    await getOwned(ctx, "documents", args.receiptDocumentId, args.societyId);
+  }
+  if (args.financialTransactionId) {
+    await getOwned(
+      ctx,
+      "financialTransactions",
+      args.financialTransactionId,
+      args.societyId,
+    );
+  }
+  const createdByUserId = await principalUserId(ctx, args.societyId);
+  if (args.createdByUserId && args.createdByUserId !== createdByUserId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
   if (!args.inventoryItemId && !args.assetId) {
     throw new Error("Link a receipt to an inventory item or an asset.");
   }
@@ -806,11 +926,12 @@ export async function linkReceiptPortable(
   // Resolve the linked asset: explicit assetId wins, else inherit from the inventory item.
   let assetId = args.assetId;
   if (!assetId && args.inventoryItemId) {
-    const item = await ctx.db.get(args.inventoryItemId);
+    const item = await getOwned(ctx, "inventoryItems", args.inventoryItemId, args.societyId);
     assetId = item?.assetId;
   }
-  const { id, ...rest } = args;
-  const payload = { ...rest, assetId, updatedAtISO: now };
+  const { id, createdByUserId: clientCreatedByUserId, ...rest } = args;
+  void clientCreatedByUserId;
+  const payload = { ...rest, assetId, createdByUserId, updatedAtISO: now };
   let linkId = id;
   if (linkId) {
     await ctx.db.patch(linkId, payload);
@@ -819,7 +940,7 @@ export async function linkReceiptPortable(
   }
   // Keep the asset register's purchase evidence in sync when an asset is involved.
   if (assetId) {
-    const asset = await ctx.db.get(assetId);
+    const asset = await getOwned(ctx, "assets", assetId, args.societyId);
     if (asset) {
       const patch: any = { updatedAtISO: now };
       if (!asset.receiptDocumentId && args.receiptDocumentId) patch.receiptDocumentId = args.receiptDocumentId;
@@ -834,6 +955,10 @@ export async function linkReceiptPortable(
 }
 
 export async function unlinkReceiptPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "assetReceiptLinks", id, societyId);
   await ctx.db.delete(id);
   return { deleted: true };
 }
@@ -867,6 +992,25 @@ export async function postStockMovementPortable(
     rawJson?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  const foreignKeys = [
+    [args.connectionId, "inventoryConnections"],
+    [args.inventoryItemId, "inventoryItems"],
+    [args.inventoryLotId, "inventoryLots"],
+    [args.fromLocationId, "inventoryLocations"],
+    [args.toLocationId, "inventoryLocations"],
+    [args.assetEventId, "assetEvents"],
+    [args.purchaseTransactionId, "financialTransactions"],
+    [args.receiptDocumentId, "documents"],
+    [args.grantId, "grants"],
+    [args.fundRestrictionId, "fundRestrictions"],
+  ] as const;
+  for (const [id, table] of foreignKeys) {
+    if (id) await getOwned(ctx, table, id, args.societyId);
+  }
+  for (const documentId of args.documentIds ?? []) {
+    await getOwned(ctx, "documents", documentId, args.societyId);
+  }
   if (args.quantity <= 0) throw new Error("Stock movement quantity must be positive.");
   if (!args.fromLocationId && !args.toLocationId) {
     throw new Error("Stock movement needs at least one source or destination location.");
@@ -908,8 +1052,10 @@ export async function postCountVarianceAdjustmentsPortable(
   ctx: PortableMutationCtx,
   { inventoryCountId, reason }: { inventoryCountId: string; reason?: string },
 ) {
-  const count = await ctx.db.get(inventoryCountId);
-  if (!count) return { adjusted: 0 };
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const count = await getOwned(ctx, "inventoryCounts", inventoryCountId, societyId);
   const now = new Date().toISOString();
   const lines = await ctx.db
     .query("inventoryCountLines")
@@ -920,7 +1066,11 @@ export async function postCountVarianceAdjustmentsPortable(
     if (line.adjustmentMovementId || line.countedQuantity == null || line.expectedQuantity == null) continue;
     const variance = line.countedQuantity - line.expectedQuantity;
     if (variance === 0) continue;
-    const item = await ctx.db.get(line.inventoryItemId);
+    const item = await getOwned(ctx, "inventoryItems", line.inventoryItemId, societyId);
+    await getOwned(ctx, "inventoryLocations", line.locationId, societyId);
+    if (line.inventoryLotId) {
+      await getOwned(ctx, "inventoryLots", line.inventoryLotId, societyId);
+    }
     const movementId = await ctx.db.insert("stockMovements", {
       societyId: count.societyId,
       movementDate: now.slice(0, 10),
@@ -993,6 +1143,10 @@ export async function importOpenBoxesSnapshotPortable(
     }>;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.connectionId) {
+    await getOwned(ctx, "inventoryConnections", args.connectionId, args.societyId);
+  }
   const now = new Date().toISOString();
   let connectionId = args.connectionId;
   if (!connectionId) {
@@ -1108,8 +1262,10 @@ export async function createItemFromAssetPortable(
   ctx: PortableMutationCtx,
   { assetId }: { assetId: string },
 ) {
-  const asset = await ctx.db.get(assetId);
-  if (!asset) return null;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const asset = await getOwned(ctx, "assets", assetId, societyId);
   const existing = await ctx.db
     .query("inventoryItems")
     .withIndex("by_asset", (q: any) => q.eq("assetId", assetId))
@@ -1147,8 +1303,21 @@ export async function recordAssetStockIntakePortable(
   },
 ) {
   if (args.quantityAdded <= 0) return null;
-  const asset = await ctx.db.get(args.assetId);
-  if (!asset) return null;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const asset = await getOwned(ctx, "assets", args.assetId, societyId);
+  await getOwned(ctx, "assetEvents", args.assetEventId, societyId);
+  if (asset.purchaseTransactionId) {
+    await getOwned(ctx, "financialTransactions", asset.purchaseTransactionId, societyId);
+  }
+  if (asset.receiptDocumentId) {
+    await getOwned(ctx, "documents", asset.receiptDocumentId, societyId);
+  }
+  if (asset.grantId) await getOwned(ctx, "grants", asset.grantId, societyId);
+  for (const documentId of asset.sourceDocumentIds ?? []) {
+    await getOwned(ctx, "documents", documentId, societyId);
+  }
   const itemId = await createInventoryItemForAsset(ctx, asset);
   const locationId = await findOrCreateLocation(ctx, {
     societyId: asset.societyId,
@@ -1189,6 +1358,7 @@ export async function backfillAssetsPortable(
   ctx: PortableMutationCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const assets = await ctx.db
     .query("assets")
     .withIndex("by_society", (q: any) => q.eq("societyId", societyId))

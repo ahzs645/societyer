@@ -26,6 +26,7 @@ import {
 } from "../shared/functions/society";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { buildConvexCapabilities } from "./providers/capabilities";
+import { getOwned, requireSocietyMembership } from "../shared/functions/access";
 
 export const get = query({
   args: {},
@@ -149,6 +150,26 @@ export const upsert = mutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     const { id, ...rest } = args;
+    const portable = await toPortableMutationCtx(ctx);
+    if (id) {
+      await requireSocietyMembership(portable, id);
+      if (rest.primaryRegistrationId) {
+        await getOwned(
+          portable,
+          "organizationRegistrations",
+          rest.primaryRegistrationId,
+          id,
+        );
+      }
+      if (rest.corporationKeyVaultItemId) {
+        await getOwned(
+          portable,
+          "secretVaultItems",
+          rest.corporationKeyVaultItemId,
+          id,
+        );
+      }
+    }
     assertAllowedOption("entityTypes", rest.entityType, "Entity type");
     assertAllowedOption("actsFormedUnder", rest.actFormedUnder, "Act formed under");
     assertAllowedOption("organizationStatuses", rest.organizationStatus, "Organization status");
@@ -172,6 +193,22 @@ export const upsert = mutation({
       return id;
     }
     const newId = await ctx.db.insert("societies", payload);
+    if (rest.primaryRegistrationId) {
+      await getOwned(
+        portable,
+        "organizationRegistrations",
+        rest.primaryRegistrationId,
+        newId,
+      );
+    }
+    if (rest.corporationKeyVaultItemId) {
+      await getOwned(
+        portable,
+        "secretVaultItems",
+        rest.corporationKeyVaultItemId,
+        newId,
+      );
+    }
     // Seed record-table object/field/view metadata for the new society so
     // pages that render record tables (Members, Directors, etc.) render
     // immediately instead of showing a "Metadata not seeded" empty state.
@@ -262,6 +299,14 @@ export const createWorkspace = mutation({
       isMemberFunded: args.isMemberFunded ?? false,
       updatedAt: Date.now(),
     });
+    if (args.corporationKeyVaultItemId) {
+      await getOwned(
+        await toPortableMutationCtx(ctx),
+        "secretVaultItems",
+        args.corporationKeyVaultItemId,
+        societyId,
+      );
+    }
     const homeRegistrationId = await ctx.db.insert("organizationRegistrations", {
       societyId,
       registrationType: "home",
@@ -287,7 +332,7 @@ export const createWorkspace = mutation({
     // A hosted verified creator becomes the initial Owner immediately. Local
     // trusted-workspace callers retain the placeholder behavior.
     const ownerEmail = blankToUndefined(args.officialEmail) ?? blankToUndefined(args.privacyOfficerEmail) ?? `owner@${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`;
-    await seedNewSocietyOwnerPortable(await toPortableMutationCtx(ctx), {
+    const ownerUserId = await seedNewSocietyOwnerPortable(await toPortableMutationCtx(ctx), {
       societyId,
       placeholderEmail: ownerEmail,
       placeholderDisplayName: blankToUndefined(args.privacyOfficerName) ?? "Owner",
@@ -325,7 +370,7 @@ export const createWorkspace = mutation({
           "board_adoption_packet",
         ],
       },
-      createdByUserId: args.actingUserId,
+      createdByUserId: ownerUserId,
     });
 
     const taskIds = [];

@@ -14,6 +14,7 @@ import type {
   PortablePrincipal,
   PortableQueryCtx,
 } from "../portable/ctx";
+import { requireSocietyMembership } from "./access";
 
 export type NewSocietyOwnerInput = {
   societyId: string;
@@ -97,17 +98,25 @@ async function withLogoUrl(ctx: PortableQueryCtx, society: any) {
 }
 
 export async function getPortable(ctx: PortableQueryCtx, _args: Record<string, never>) {
-  const all = await ctx.db.query("societies").collect();
-  return withLogoUrl(ctx, all[0] ?? null);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  return withLogoUrl(ctx, await ctx.db.get(societyId, "societies"));
 }
 
 export async function listPortable(ctx: PortableQueryCtx) {
-  const all = await ctx.db.query("societies").collect();
-  return Promise.all(all.map((society) => withLogoUrl(ctx, society)));
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const society = await ctx.db.get(societyId, "societies");
+  return society ? [await withLogoUrl(ctx, society)] : [];
 }
 
 export async function getByIdPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return withLogoUrl(ctx, await ctx.db.get(id));
+  await requireSocietyMembership(ctx, id);
+  const society = await ctx.db.get(id, "societies");
+  if (!society) throw new Error("societies not found.");
+  return withLogoUrl(ctx, society);
 }
 
 /**
@@ -118,7 +127,8 @@ export async function getByIdPortable(ctx: PortableQueryCtx, { id }: { id: strin
  * Convex `_storage` id live, or a data: URL on the local runtime.
  */
 async function setStorageField(ctx: PortableMutationCtx, societyId: string, field: string, storageId?: string) {
-  const society = await ctx.db.get(societyId);
+  await requireSocietyMembership(ctx, societyId);
+  const society = await ctx.db.get(societyId, "societies");
   if (!society) throw new Error("Society not found.");
   const previous = society[field];
   if (previous && previous !== storageId) {
@@ -149,7 +159,8 @@ export async function setLogoInvertInDarkModePortable(
   ctx: PortableMutationCtx,
   { societyId, invert }: { societyId: string; invert: boolean },
 ) {
-  const society = await ctx.db.get(societyId);
+  await requireSocietyMembership(ctx, societyId);
+  const society = await ctx.db.get(societyId, "societies");
   if (!society) throw new Error("Society not found.");
   await ctx.db.patch(societyId, {
     logoInvertInDarkMode: invert,
@@ -162,6 +173,7 @@ export async function updateModulesPortable(
   ctx: PortableMutationCtx,
   { societyId, disabledModules }: { societyId: string; disabledModules: any },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   await ctx.db.patch(societyId, {
     disabledModules,
     updatedAt: Date.now(),
@@ -215,6 +227,7 @@ export async function cloneSocietyPortable(
   ctx: PortableMutationCtx,
   args: { sourceSocietyId: string; newName: string; nowISO: string },
 ) {
+  await requireSocietyMembership(ctx, args.sourceSocietyId);
   const name = args.newName.trim();
   if (!name) throw new Error("New society name is required.");
   const source = await ctx.db.get(args.sourceSocietyId);
@@ -290,6 +303,7 @@ export async function updateComplianceSettingsPortable(
     includeDocumentIdHeader?: boolean;
   },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   await ctx.db.patch(societyId, { ...settings, updatedAt: Date.now() });
   return societyId;
 }
@@ -301,6 +315,7 @@ export async function updateInventorySettingsPortable(
     consumableIntakeCountPromptEnabled: boolean;
   },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   await ctx.db.patch(societyId, {
     consumableIntakeCountPromptEnabled,
     updatedAt: Date.now(),
@@ -316,6 +331,7 @@ export async function updateNotificationSettingsPortable(
     notificationRetentionDays: number;
   },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   await ctx.db.patch(societyId, {
     notificationRetentionDays: Math.max(0, Math.round(notificationRetentionDays)),
     updatedAt: Date.now(),

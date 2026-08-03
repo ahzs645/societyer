@@ -17,6 +17,39 @@ import {
   applyProceduralTags,
   classifyProceduralMotion,
 } from "../proceduralMotions";
+import { getOwned, requireSocietyMembership } from "./access";
+
+async function validateMotionForeignKeys(
+  ctx: PortableMutationCtx,
+  input: Record<string, unknown>,
+  societyId: string,
+) {
+  const foreignKeys = [
+    ["movedByMemberId", "members"],
+    ["movedByDirectorId", "directors"],
+    ["secondedByMemberId", "members"],
+    ["secondedByDirectorId", "directors"],
+    ["primaryMeetingId", "meetings"],
+    ["targetMeetingId", "meetings"],
+    ["minutesId", "minutes"],
+    ["agendaId", "agendas"],
+    ["agendaItemId", "agendaItems"],
+    ["motionTemplateId", "motionTemplates"],
+    ["sourceMotionEvidenceId", "motionEvidence"],
+    ["sourceMinutesId", "minutes"],
+  ] as const;
+  for (const [field, table] of foreignKeys) {
+    const value = input[field];
+    if (typeof value === "string") await getOwned(ctx, table, value, societyId);
+  }
+  if (Array.isArray(input.sourceDocumentIds)) {
+    for (const documentId of input.sourceDocumentIds) {
+      if (typeof documentId === "string") {
+        await getOwned(ctx, "documents", documentId, societyId);
+      }
+    }
+  }
+}
 
 function stripUndefined(obj: Record<string, any>) {
   const out: Record<string, any> = {};
@@ -81,6 +114,7 @@ async function patchMotion(ctx: PortableMutationCtx, motionId: any, patch: Recor
 // landed in the `alreadyConverted` dedupe set. See Phase 4A in
 // docs/motions-migration-finish-scope.md.
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("motions")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -88,6 +122,10 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 }
 
 export async function listForMinutesPortable(ctx: PortableQueryCtx, { minutesId }: { minutesId: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "minutes", minutesId, societyId);
   return ctx.db
     .query("motions")
     .withIndex("by_minutes", (q) => q.eq("minutesId", minutesId))
@@ -95,6 +133,10 @@ export async function listForMinutesPortable(ctx: PortableQueryCtx, { minutesId 
 }
 
 export async function listForMeetingPortable(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "meetings", meetingId, societyId);
   return ctx.db
     .query("motions")
     .withIndex("by_meeting", (q) => q.eq("primaryMeetingId", meetingId))
@@ -105,6 +147,7 @@ export async function listForMeetingPortable(ctx: PortableQueryCtx, { meetingId 
 // motionBacklog query surface; the "backlog" is just a status filter now.
 const BACKLOG_STATUSES = new Set(["Backlog", "Tabled", "Deferred"]);
 export async function backlogPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("motions")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -115,6 +158,9 @@ export async function backlogPortable(ctx: PortableQueryCtx, { societyId }: { so
 // ----- mutations ------------------------------------------------------------
 
 export async function createPortable(ctx: PortableMutationCtx, args: Record<string, any>) {
+  const societyId = typeof args.societyId === "string" ? args.societyId : "";
+  await requireSocietyMembership(ctx, societyId);
+  await validateMotionForeignKeys(ctx, args, societyId);
   return insertMotion(ctx, args);
 }
 
@@ -122,6 +168,11 @@ export async function updatePortable(
   ctx: PortableMutationCtx,
   { motionId, patch }: { motionId: string; patch: Record<string, any> },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "motions", motionId, societyId);
+  await validateMotionForeignKeys(ctx, patch, societyId);
   return patchMotion(ctx, motionId, patch);
 }
 
@@ -139,8 +190,11 @@ export async function setStatusPortable(
     note?: string;
   },
 ) {
-  const row = await ctx.db.get(motionId);
-  if (!row) return null;
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const row = await getOwned(ctx, "motions", motionId, societyId);
+  if (meetingId) await getOwned(ctx, "meetings", meetingId, societyId);
   const now = new Date().toISOString();
   const entry = stripUndefined({
     at: now,
@@ -173,6 +227,10 @@ export async function setTagsPortable(
   ctx: PortableMutationCtx,
   { motionId, tags }: { motionId: string; tags: string[] },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "motions", motionId, societyId);
   const normalized = Array.from(
     new Set(
       (tags ?? [])
@@ -192,10 +250,18 @@ export async function recordVotePortable(
     abstentions?: number;
   },
 ) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "motions", motionId, societyId);
   return patchMotion(ctx, motionId, { votesFor, votesAgainst, abstentions });
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { motionId }: { motionId: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "motions", motionId, societyId);
   await ctx.db.delete(motionId);
   return null;
 }

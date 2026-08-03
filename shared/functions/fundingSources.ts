@@ -10,7 +10,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
 
 function inRange(date: string | undefined, from?: string, to?: string) {
   if (!date) return true;
@@ -97,6 +97,7 @@ function getRollupGroup(groups: Map<string, any>, name: string, sourceType: stri
 }
 
 export async function fundingSourcesList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const [sources, events, grants, members] = await Promise.all([
     ctx.db
       .query("fundingSources")
@@ -151,6 +152,7 @@ export async function fundingSourcesRollup(
   ctx: PortableQueryCtx,
   { societyId, from, to }: { societyId: string; from?: string; to?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const [sources, sourceEvents, grants, grantTransactions, receipts, subscriptions, plans] = await Promise.all([
     ctx.db
       .query("fundingSources")
@@ -324,16 +326,17 @@ export async function applyOtenFeeStructurePortable(
   ctx: PortableMutationCtx,
   args: { confirm: string; societyId?: string; societyName?: string },
 ) {
+  const principalSocietyId = ctx.principal.kind === "anonymous"
+    ? undefined
+    : ctx.principal.societyId;
+  const societyId = args.societyId ?? principalSocietyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
   if (args.confirm !== "apply-oten-fee-structure") {
     throw new Error('Pass confirm: "apply-oten-fee-structure" to apply the OTEN local fixture.');
   }
 
-  const society =
-    (args.societyId ? await ctx.db.get(args.societyId) : null) ??
-    (await ctx.db
-      .query("societies")
-      .collect()
-      .then((rows) => rows.find((row) => row.name === (args.societyName ?? OTEN_SOCIETY_NAME))));
+  const society = await ctx.db.get(societyId, "societies");
 
   if (!society) {
     throw new Error(`Society not found: ${args.societyName ?? OTEN_SOCIETY_NAME}. Create/import the society first, then rerun this mutation.`);
@@ -422,11 +425,19 @@ export async function applyOtenFeeStructurePortable(
 }
 
 export async function upsertSourcePortable(ctx: PortableMutationCtx, args: Record<string, any>) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
     required: "Director",
   });
+  if (args.id) await getOwned(ctx, "fundingSources", args.id, args.societyId);
+  if (args.linkedMemberId) {
+    await getOwned(ctx, "members", args.linkedMemberId, args.societyId);
+  }
+  if (args.linkedGrantId) {
+    await getOwned(ctx, "grants", args.linkedGrantId, args.societyId);
+  }
   const { id, actingUserId, ...rest } = args;
   void actingUserId;
   const now = new Date().toISOString();
@@ -445,9 +456,10 @@ export async function removeSourcePortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const source = await ctx.db.get(id);
-  if (!source) return;
-  await requireRolePortable(ctx, { actingUserId, societyId: String(source.societyId), required: "Director" });
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
+  await getOwned(ctx, "fundingSources", id, societyId);
   const events = await ctx.db
     .query("fundingSourceEvents")
     .withIndex("by_source", (q) => q.eq("sourceId", id))
@@ -457,15 +469,21 @@ export async function removeSourcePortable(
 }
 
 export async function upsertEventPortable(ctx: PortableMutationCtx, args: Record<string, any>) {
-  const source = await ctx.db.get(args.sourceId);
-  if (!source || source.societyId !== args.societyId) {
-    throw new Error("Funding source does not belong to this society.");
-  }
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
     required: "Director",
   });
+  await getOwned(ctx, "fundingSources", args.sourceId, args.societyId);
+  if (args.id) await getOwned(ctx, "fundingSourceEvents", args.id, args.societyId);
+  if (args.financialTransactionId) {
+    await getOwned(ctx, "financialTransactions", args.financialTransactionId, args.societyId);
+  }
+  if (args.donationReceiptId) {
+    await getOwned(ctx, "donationReceipts", args.donationReceiptId, args.societyId);
+  }
+  if (args.documentId) await getOwned(ctx, "documents", args.documentId, args.societyId);
   const { id, actingUserId, ...rest } = args;
   void actingUserId;
   const now = new Date().toISOString();
@@ -484,9 +502,10 @@ export async function removeEventPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const event = await ctx.db.get(id);
-  if (!event) return;
-  await requireRolePortable(ctx, { actingUserId, societyId: String(event.societyId), required: "Director" });
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
+  await getOwned(ctx, "fundingSourceEvents", id, societyId);
   await ctx.db.delete(id);
 }
 
@@ -533,11 +552,20 @@ export async function importStudentLevyPortable(
     actingUserId?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
     required: "Admin",
   });
+  if (args.sourceId) {
+    await getOwned(ctx, "fundingSources", args.sourceId, args.societyId);
+  }
+  for (const feePeriod of args.feePeriods) {
+    if (feePeriod.id) {
+      await getOwned(ctx, "membershipFeePeriods", feePeriod.id, args.societyId);
+    }
+  }
 
   const sourceName = args.sourceName.trim();
   if (!sourceName) throw new Error("Funding source name is required.");
@@ -577,10 +605,9 @@ export async function importStudentLevyPortable(
     .query("fundingSources")
     .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
     .collect();
-  const sourceFromId = args.sourceId ? await ctx.db.get(args.sourceId) : null;
-  if (sourceFromId && sourceFromId.societyId !== args.societyId) {
-    throw new Error("Funding source does not belong to this society.");
-  }
+  const sourceFromId = args.sourceId
+    ? await getOwned(ctx, "fundingSources", args.sourceId, args.societyId)
+    : null;
   const sourceByName = existingSources.find(
     (source) => source.name.trim().toLowerCase() === sourceName.toLowerCase(),
   );
@@ -600,10 +627,9 @@ export async function importStudentLevyPortable(
     const label = feePeriod.label.trim();
     if (!label) throw new Error("Every fee period needs a label.");
     if (!feePeriod.effectiveFrom) throw new Error(`Fee period "${label}" needs an effective-from date.`);
-    const periodFromId = feePeriod.id ? await ctx.db.get(feePeriod.id) : null;
-    if (periodFromId && periodFromId.societyId !== args.societyId) {
-      throw new Error("Fee period does not belong to this society.");
-    }
+    const periodFromId = feePeriod.id
+      ? await getOwned(ctx, "membershipFeePeriods", feePeriod.id, args.societyId)
+      : null;
     const periodByKey = existingPeriods.find(
       (period) =>
         period.label.trim().toLowerCase() === label.toLowerCase() &&

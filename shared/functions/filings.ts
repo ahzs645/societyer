@@ -13,6 +13,7 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { filingKindDefinition } from "../jurisdictionWorkspace";
+import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 
 function filingDefaults(kind: string, jurisdictionCode?: string | null) {
   const definition = filingKindDefinition(kind, jurisdictionCode);
@@ -25,10 +26,14 @@ async function jurisdictionCodeForSociety(ctx: PortableQueryCtx | PortableMutati
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  return getOwned(ctx, "filings", id, societyId);
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("filings")
     .withIndex("by_society_due", (q) => q.eq("societyId", societyId))
@@ -61,12 +66,20 @@ export async function createPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  const submittedByUserId = args.submittedByUserId
+    ? await principalUserId(ctx, args.societyId)
+    : undefined;
+  if (args.submittedByUserId && args.submittedByUserId !== submittedByUserId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
   const defaults = filingDefaults(
     args.kind,
     args.jurisdictionCode ?? await jurisdictionCodeForSociety(ctx, args.societyId),
   );
   return await ctx.db.insert("filings", {
     ...args,
+    submittedByUserId,
     registryUrl: args.registryUrl ?? defaults.registryUrl,
     submissionChecklist: args.submissionChecklist ?? defaults.checklist,
   });
@@ -88,9 +101,36 @@ export async function markFiledPortable(
     submissionChecklist?: string[];
   },
 ) {
-  const existing = await ctx.db.get(id);
-  if (!existing) throw new Error("Filing not found.");
-  const jurisdictionCode = await jurisdictionCodeForSociety(ctx, existing.societyId);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const existing = await getOwned(ctx, "filings", id, societyId);
+  if (rest.receiptDocumentId) {
+    await getOwned(ctx, "documents", rest.receiptDocumentId, societyId);
+  }
+  if (rest.stagedPacketDocumentId) {
+    await getOwned(ctx, "documents", rest.stagedPacketDocumentId, societyId);
+  }
+  const submittedByUserId = rest.submittedByUserId
+    ? await principalUserId(ctx, societyId)
+    : undefined;
+  const attestedByUserId = rest.attestedByUserId
+    ? await principalUserId(ctx, societyId)
+    : undefined;
+  if (
+    (rest.submittedByUserId && rest.submittedByUserId !== submittedByUserId) ||
+    (rest.attestedByUserId && rest.attestedByUserId !== attestedByUserId)
+  ) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
+  const {
+    submittedByUserId: clientSubmittedByUserId,
+    attestedByUserId: clientAttestedByUserId,
+    ...safeRest
+  } = rest;
+  void clientSubmittedByUserId;
+  void clientAttestedByUserId;
+  const jurisdictionCode = await jurisdictionCodeForSociety(ctx, societyId);
   if (!rest.filedAt || !rest.submissionMethod) {
     throw new Error("Filed date and submission method are required.");
   }
@@ -103,13 +143,15 @@ export async function markFiledPortable(
     throw new Error("Add a confirmation number, evidence document, packet, or evidence note before marking filed.");
   }
   await ctx.db.patch(id, {
-    ...rest,
+    ...safeRest,
+    ...(submittedByUserId ? { submittedByUserId } : {}),
+    ...(attestedByUserId ? { attestedByUserId } : {}),
     registryUrl: existing.registryUrl ?? filingDefaults(existing.kind, jurisdictionCode).registryUrl,
     submissionChecklist:
-      rest.submissionChecklist ??
+      safeRest.submissionChecklist ??
       existing.submissionChecklist ??
       filingDefaults(existing.kind, jurisdictionCode).checklist,
-    attestedAtISO: rest.attestedByUserId ? new Date().toISOString() : existing.attestedAtISO,
+    attestedAtISO: attestedByUserId ? new Date().toISOString() : existing.attestedAtISO,
     status: "Filed",
   });
 }
@@ -145,17 +187,49 @@ export async function updatePortable(
     };
   },
 ) {
-  const existing = await ctx.db.get(id);
-  if (!existing) throw new Error("Filing not found.");
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  const existing = await getOwned(ctx, "filings", id, societyId);
+  if (patch.receiptDocumentId) {
+    await getOwned(ctx, "documents", patch.receiptDocumentId, societyId);
+  }
+  if (patch.stagedPacketDocumentId) {
+    await getOwned(ctx, "documents", patch.stagedPacketDocumentId, societyId);
+  }
+  for (const documentId of patch.sourceDocumentIds ?? []) {
+    await getOwned(ctx, "documents", documentId, societyId);
+  }
+  const submittedByUserId = patch.submittedByUserId
+    ? await principalUserId(ctx, societyId)
+    : undefined;
+  const attestedByUserId = patch.attestedByUserId
+    ? await principalUserId(ctx, societyId)
+    : undefined;
+  if (
+    (patch.submittedByUserId && patch.submittedByUserId !== submittedByUserId) ||
+    (patch.attestedByUserId && patch.attestedByUserId !== attestedByUserId)
+  ) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
+  const {
+    submittedByUserId: clientSubmittedByUserId,
+    attestedByUserId: clientAttestedByUserId,
+    ...safePatch
+  } = patch;
+  void clientSubmittedByUserId;
+  void clientAttestedByUserId;
   const defaults = filingDefaults(
-    patch.kind ?? existing.kind,
-    patch.jurisdictionCode ?? existing.jurisdictionCode ?? await jurisdictionCodeForSociety(ctx, existing.societyId),
+    safePatch.kind ?? existing.kind,
+    safePatch.jurisdictionCode ?? existing.jurisdictionCode ?? await jurisdictionCodeForSociety(ctx, societyId),
   );
   await ctx.db.patch(id, {
-    ...patch,
-    registryUrl: patch.registryUrl ?? existing.registryUrl ?? defaults.registryUrl,
+    ...safePatch,
+    ...(submittedByUserId ? { submittedByUserId } : {}),
+    ...(attestedByUserId ? { attestedByUserId } : {}),
+    registryUrl: safePatch.registryUrl ?? existing.registryUrl ?? defaults.registryUrl,
     submissionChecklist:
-      patch.submissionChecklist ??
+      safePatch.submissionChecklist ??
       existing.submissionChecklist ??
       defaults.checklist,
   });
@@ -189,6 +263,7 @@ export async function importBcRegistryHistoryPortable(
     }>;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const existing = await ctx.db
     .query("filings")
     .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
@@ -200,6 +275,15 @@ export async function importBcRegistryHistoryPortable(
   const claimed = new Set<string>();
 
   for (const record of args.records) {
+    if (record.receiptDocumentId) {
+      await getOwned(ctx, "documents", record.receiptDocumentId, args.societyId);
+    }
+    if (record.stagedPacketDocumentId) {
+      await getOwned(ctx, "documents", record.stagedPacketDocumentId, args.societyId);
+    }
+    for (const documentId of record.sourceDocumentIds ?? []) {
+      await getOwned(ctx, "documents", documentId, args.societyId);
+    }
     const defaults = filingDefaults(
       record.kind,
       record.jurisdictionCode ?? await jurisdictionCodeForSociety(ctx, args.societyId),
@@ -263,5 +347,9 @@ export async function importBcRegistryHistoryPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "filings", id, societyId);
   await ctx.db.delete(id);
 }

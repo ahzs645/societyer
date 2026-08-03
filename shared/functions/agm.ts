@@ -9,8 +9,13 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export async function runForMeeting(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "meetings", meetingId, societyId);
   const rows = await ctx.db
     .query("agmRuns")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -22,6 +27,8 @@ export async function agmInit(
   ctx: PortableMutationCtx,
   args: { societyId: string; meetingId: string },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   const existing = await ctx.db
     .query("agmRuns")
     .withIndex("by_meeting", (q) => q.eq("meetingId", args.meetingId))
@@ -51,6 +58,13 @@ export async function agmMarkStep(
     };
   },
 ): Promise<void> {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "agmRuns", id, societyId);
+  if (patch?.annualReportFilingId) {
+    await getOwned(ctx, "filings", patch.annualReportFilingId, societyId);
+  }
   await ctx.db.patch(id, {
     step,
     ...(patch ?? {}),
@@ -77,6 +91,12 @@ export async function logNoticeDelivery(
     status: string;
   },
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  await getOwned(ctx, "meetings", args.meetingId, args.societyId);
+  if (args.campaignId) {
+    await getOwned(ctx, "communicationCampaigns", args.campaignId, args.societyId);
+  }
+  if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
   return ctx.db.insert("noticeDeliveries", {
     ...args,
     sentAtISO: new Date().toISOString(),
@@ -84,6 +104,10 @@ export async function logNoticeDelivery(
 }
 
 export async function noticeDeliveries(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "meetings", meetingId, societyId);
   return ctx.db
     .query("noticeDeliveries")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -101,6 +125,8 @@ export async function queueNoticeToAllVotingMembers(
   ctx: PortableMutationCtx,
   { societyId, meetingId, channel }: { societyId: string; meetingId: string; channel: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "meetings", meetingId, societyId);
   const members = await ctx.db
     .query("members")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))

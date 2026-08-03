@@ -12,11 +12,13 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export async function listRunsPortable(
   ctx: PortableQueryCtx,
   { societyId, limit }: { societyId: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("filingBotRuns")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -25,6 +27,10 @@ export async function listRunsPortable(
 }
 
 export async function runsForFilingPortable(ctx: PortableQueryCtx, { filingId }: { filingId: string }) {
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  await getOwned(ctx, "filings", filingId, societyId);
   return ctx.db
     .query("filingBotRuns")
     .withIndex("by_filing", (q) => q.eq("filingId", filingId))
@@ -33,5 +39,8 @@ export async function runsForFilingPortable(ctx: PortableQueryCtx, { filingId }:
 }
 
 export async function getRunPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
+  if (!societyId) throw new Error("Society membership not found.");
+  await requireSocietyMembership(ctx, societyId);
+  return getOwned(ctx, "filingBotRuns", id, societyId);
 }
