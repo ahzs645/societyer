@@ -108,9 +108,23 @@ export async function requireSocietyMembership(
   societyId: string,
 ): Promise<PortableUserRow> {
   const user = await resolvePrincipalUser(ctx, societyId);
-  if (!user) throw new Error("Society membership not found.");
-  assertMembershipStatus(user);
-  return user;
+  if (user) {
+    assertMembershipStatus(user);
+    return user;
+  }
+  // A `trusted-workspace` principal is minted by the local client from the
+  // local database itself, so that file is the trust boundary — every society
+  // in it belongs to the person holding it. Legacy and freshly-imported
+  // workspaces routinely have societies with no `users` row yet; requiring one
+  // would lock the owner out of their own offline data. Hosted principals get
+  // no such fallback.
+  if (ctx.principal.kind !== "anonymous" && ctx.principal.assurance === "trusted-workspace") {
+    const society = await ctx.db.get(societyId, "societies");
+    if (society) {
+      return { _id: `local-workspace-owner:${societyId}`, societyId, role: "Owner", status: "Active" };
+    }
+  }
+  throw new Error("Society membership not found.");
 }
 
 function ownedRowNotFound(table: TableName): Error {

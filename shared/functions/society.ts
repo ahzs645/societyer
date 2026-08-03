@@ -98,8 +98,23 @@ async function withLogoUrl(ctx: PortableQueryCtx, society: any) {
   return { ...society, logoUrl, logoDarkUrl, letterheadUrl };
 }
 
+/**
+ * Societies the caller may enumerate.
+ *
+ * A `trusted-workspace` principal's `societyId` names the workspace currently
+ * selected in the local app, NOT a membership restriction: the local database
+ * file is itself the trust boundary and legitimately holds several societies
+ * (see `check-local-snapshot-roundtrip`). Scoping the list to the selected one
+ * hides the user's other local workspaces from them.
+ */
 async function principalMemberships(ctx: PortableQueryCtx): Promise<PortableDoc[]> {
   const principal = requireAuthenticated(ctx);
+  if (principal.assurance === "trusted-workspace") {
+    // Enumerate the societies themselves rather than user rows: a legacy or
+    // freshly-imported local database can hold societies with no user row yet.
+    const localSocieties = await ctx.db.query<PortableDoc>("societies").collect();
+    return localSocieties.map((society) => ({ ...society, societyId: society._id }));
+  }
   if (principal.societyId) {
     return [await requireSocietyMembership(ctx, principal.societyId)];
   }
