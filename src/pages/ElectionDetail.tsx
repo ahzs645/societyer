@@ -20,7 +20,7 @@ export function ElectionDetailPage() {
   const electionBundle = useQuery(
     api.elections.get,
     id
-      ? { id: id as Id<"elections">, actingUserId: actingUserId as Id<"users"> | undefined }
+      ? { id: id as Id<"elections"> }
       : "skip",
   );
   const tally = useQuery(
@@ -28,7 +28,6 @@ export function ElectionDetailPage() {
     id
       ? {
           electionId: id as Id<"elections">,
-          actingUserId: actingUserId as Id<"users"> | undefined,
       }
       : "skip",
   );
@@ -37,7 +36,6 @@ export function ElectionDetailPage() {
     id
       ? {
           electionId: id as Id<"elections">,
-          actingUserId: actingUserId as Id<"users"> | undefined,
         }
       : "skip",
   );
@@ -129,7 +127,6 @@ export function ElectionDetailPage() {
   const saveBallot = async () => {
     await castBallot({
       electionId: election._id,
-      actingUserId,
       choices: electionBundle.questions.map((question: any) => ({
         questionId: question._id,
         optionIds: selected[question._id] ?? [],
@@ -147,7 +144,6 @@ export function ElectionDetailPage() {
       nomineeName: nominationDraft.nomineeName,
       nomineeEmail: nominationDraft.nomineeEmail || undefined,
       statement: nominationDraft.statement || undefined,
-      actingUserId,
     });
     toast.success("Nomination submitted");
     setNominationDraft({
@@ -171,7 +167,6 @@ export function ElectionDetailPage() {
       scrutineerUserIds: adminDraft.scrutineerUserIds,
       resultsSummary: adminDraft.resultsSummary || undefined,
       evidenceDocumentId: adminDraft.evidenceDocumentId || undefined,
-      actingUserId,
     });
     toast.success("Election settings saved");
   };
@@ -197,7 +192,6 @@ export function ElectionDetailPage() {
                   onClick={async () => {
                     await closeElection({
                       electionId: election._id,
-                      actingUserId,
                     });
                     toast.info("Election closed");
                   }}
@@ -213,7 +207,6 @@ export function ElectionDetailPage() {
                       electionId: election._id,
                       resultsSummary: adminDraft?.resultsSummary || undefined,
                       evidenceDocumentId: adminDraft?.evidenceDocumentId || undefined,
-                      actingUserId,
                     });
                     toast.success("Results published");
                   }}
@@ -390,7 +383,6 @@ export function ElectionDetailPage() {
                               await reviewNomination({
                                 id: nomination._id,
                                 status: "Accepted",
-                                actingUserId,
                               });
                               toast.success("Nomination accepted");
                             }}
@@ -405,7 +397,6 @@ export function ElectionDetailPage() {
                               await reviewNomination({
                                 id: nomination._id,
                                 status: "Rejected",
-                                actingUserId,
                               });
                               toast.info("Nomination rejected");
                             }}
@@ -422,7 +413,6 @@ export function ElectionDetailPage() {
                                 questionId:
                                   (nomination.questionId as Id<"electionQuestions">) ??
                                   electionBundle.questions[0]._id,
-                                actingUserId,
                               });
                               toast.success("Nomination added to ballot");
                             }}

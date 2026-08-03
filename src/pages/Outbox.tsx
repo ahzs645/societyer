@@ -155,7 +155,6 @@ export function OutboxPage() {
           status: rest.status,
           notes: rest.notes,
         },
-        actingUserId,
       });
       toast.success("Saved");
     } else {
@@ -172,7 +171,6 @@ export function OutboxPage() {
         attachments: rest.attachments,
         status: rest.status ?? "ready",
         notes: rest.notes,
-        actingUserId,
       });
       toast.success("Email queued");
       setSelected({ ...selected, _id: id as unknown as string });
@@ -180,7 +178,7 @@ export function OutboxPage() {
   };
 
   const doMarkSent = async (row: PendingEmail, channel: string = "personal_email") => {
-    await markSent({ id: row._id as any, sentChannel: channel, actingUserId });
+    await markSent({ id: row._id as any, sentChannel: channel });
     toast.success("Marked as sent");
     if (selected?._id === row._id) {
       setSelected({ ...row, status: "sent", sentAtISO: new Date().toISOString(), sentChannel: channel });
@@ -195,7 +193,7 @@ export function OutboxPage() {
       tone: "danger",
     });
     if (!reason) return;
-    await cancel({ id: row._id as any, actingUserId });
+    await cancel({ id: row._id as any });
     toast.success("Cancelled");
   };
 
@@ -207,7 +205,7 @@ export function OutboxPage() {
       tone: "danger",
     });
     if (!ok) return;
-    await remove({ id: row._id as any, actingUserId });
+    await remove({ id: row._id as any });
     toast.success("Deleted");
     setDrawerOpen(false);
   };

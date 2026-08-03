@@ -98,7 +98,6 @@ export function RecordShowPage({
       ? {
           societyId: layoutOptions.societyId as any,
           scopeKey: sharedLayoutScopeKey,
-          actingUserId,
         }
       : "skip",
   );
@@ -192,13 +191,11 @@ export function RecordShowPage({
             societyId: layoutOptions.societyId as any,
             scopeKey: sharedLayoutScopeKey,
             layoutJson: JSON.stringify(next),
-            actingUserId,
           }).catch((error) => console.error("Shared record layout save failed", error));
         } else {
           void removeSharedLayout({
             societyId: layoutOptions.societyId as any,
             scopeKey: sharedLayoutScopeKey,
-            actingUserId,
           }).catch((error) => console.error("Shared record layout reset failed", error));
         }
         return;

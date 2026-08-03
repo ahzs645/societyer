@@ -135,7 +135,7 @@ export function UsersPage() {
                         tone: "warn",
                       });
                       if (!ok) return;
-                      await setRole({ id: u._id, role: v, actingUserId });
+                      await setRole({ id: u._id, role: v });
                       toast.success("Role updated");
                     }}
                     options={ROLES.map((r) => ({ value: r, label: r }))}
@@ -172,7 +172,7 @@ export function UsersPage() {
                         tone: "danger",
                       });
                       if (!ok) return;
-                      await remove({ id: u._id, actingUserId });
+                      await remove({ id: u._id });
                       toast.success("User access removed");
                     }}
                   >
@@ -220,7 +220,6 @@ export function UsersPage() {
                     status: draft.status,
                     memberId: draft.memberId,
                     directorId: draft.directorId,
-                    actingUserId,
                   });
                   toast.success("Saved");
                   setDraft(null);

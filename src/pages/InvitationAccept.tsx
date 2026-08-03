@@ -6,8 +6,6 @@ import { api } from "@/lib/convexApi";
 import type { MembershipResolution } from "../../shared/functions/users";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useAuth } from "../auth/AuthProvider";
-import { setStoredUserId } from "../hooks/useCurrentUser";
-import { setStoredSocietyId } from "../hooks/useSociety";
 
 const FAILURE_MESSAGES: Partial<Record<MembershipResolution["status"], string>> = {
   "invalid-invitation": "This invitation link is invalid.",
@@ -30,7 +28,12 @@ export function InvitationAcceptPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token || !auth.session || !auth.isConvexAuthenticated) return;
+    if (
+      !token ||
+      !auth.session ||
+      !auth.isConvexAuthenticated ||
+      auth.membershipState !== "ready"
+    ) return;
     if (attemptedToken.current === token) return;
     attemptedToken.current = token;
     setError(null);
@@ -39,9 +42,7 @@ export function InvitationAcceptPage() {
       .then((outcome: MembershipResolution) => {
         setResult(outcome);
         if (outcome.status !== "invitation-accepted" && outcome.status !== "bound") return;
-        setStoredSocietyId(outcome.societyId as Id<"societies">);
-        setStoredUserId(outcome.userId as Id<"users">);
-        auth.refreshMembership();
+        auth.refreshMembership(outcome.societyId as Id<"societies">);
       })
       .catch((cause: unknown) => {
         console.error("[societyer-auth] invitation acceptance failed", cause);

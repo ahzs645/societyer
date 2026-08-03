@@ -116,11 +116,10 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
         grantId: grant._id,
         employeeId,
         patch: { status: "eed_pending", source: "manual", ...patch },
-        actingUserId,
       });
     },
     onUnlinkEmployee: async (linkId: any) => {
-      await removeEmployeeLink({ id: linkId, actingUserId });
+      await removeEmployeeLink({ id: linkId });
     },
     onCreateEmployee: async (draft: any) => {
       return createEmployee({
@@ -160,13 +159,11 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
         body: buildCsjOrientationEmailBody(employee),
         status: "ready",
         notes: `System workflow: CSJ remote worker orientation. Grant: ${currentGrant.title}. Evidence for GCOS Young Workers/EED attestation.`,
-        actingUserId,
       });
     },
     onCreateSinVaultRecord: async (draft: any) => {
       return createSecret({
         societyId: society._id,
-        actingUserId,
         name: String(draft.name ?? "SIN - funded employee"),
         service: "Employee SIN",
         credentialType: "Social Insurance Number",

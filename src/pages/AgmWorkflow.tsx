@@ -246,7 +246,6 @@ export function AgmWorkflowPage() {
                                 societyId: society._id,
                                 meetingId: meeting._id,
                                 channel: noticeChannel,
-                                actingUserId,
                               });
                               await advance("notice", { noticeSentAt: new Date().toISOString(), noticeRecipientCount: res.deliveredCount });
                             }}>

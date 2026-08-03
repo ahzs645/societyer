@@ -210,7 +210,7 @@ export function VolunteersPage() {
                   <button
                     className="btn btn--ghost btn--sm"
                     onClick={async () => {
-                      await reviewApplication({ id: row._id, status: "Reviewing", actingUserId });
+                      await reviewApplication({ id: row._id, status: "Reviewing" });
                       toast.success("Application moved to review");
                     }}
                   >
@@ -225,7 +225,6 @@ export function VolunteersPage() {
                         id: row._id,
                         committeeId: undefined,
                         screeningRequired: true,
-                        actingUserId,
                       });
                       toast.success("Application converted into volunteer record");
                     }}
@@ -237,7 +236,7 @@ export function VolunteersPage() {
                   <button
                     className="btn btn--ghost btn--sm"
                     onClick={async () => {
-                      await reviewApplication({ id: row._id, status: "Declined", actingUserId });
+                      await reviewApplication({ id: row._id, status: "Declined" });
                       toast.success("Application declined");
                     }}
                   >
@@ -300,7 +299,7 @@ export function VolunteersPage() {
                   aria-label={`Delete volunteer ${row.firstName} ${row.lastName}`}
                   onClick={async (e) => {
                     e.stopPropagation();
-                    await removeVolunteer({ id: row._id, actingUserId });
+                    await removeVolunteer({ id: row._id });
                     toast.success("Volunteer removed");
                   }}
                 >
@@ -357,7 +356,7 @@ export function VolunteersPage() {
                   aria-label={`Delete screening check for ${row.volunteerName}`}
                   onClick={async (e) => {
                     e.stopPropagation();
-                    await removeScreening({ id: row._id, actingUserId });
+                    await removeScreening({ id: row._id });
                     toast.success("Screening removed");
                   }}
                 >
@@ -395,7 +394,6 @@ export function VolunteersPage() {
                   committeeId: volunteerDraft.committeeId || undefined,
                   publicApplicationId: volunteerDraft.publicApplicationId || undefined,
                   intakeSource: volunteerDraft.intakeSource || undefined,
-                  actingUserId,
                 });
                 toast.success("Volunteer saved");
                 setVolunteerDraft(null);
@@ -512,7 +510,6 @@ export function VolunteersPage() {
                   resultDocumentId: screeningDraft.resultDocumentId || undefined,
                   verifiedByUserId: actingUserId,
                   notes: screeningDraft.notes || undefined,
-                  actingUserId,
                 });
                 toast.success("Screening saved");
                 setScreeningDraft(null);

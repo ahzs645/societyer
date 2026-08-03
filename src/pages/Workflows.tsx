@@ -215,7 +215,6 @@ export function WorkflowsPage() {
       trigger,
       provider: form.provider,
       status: "active",
-      actingUserId,
     });
     setOpen(false);
     toast.success("Workflow created");
@@ -293,7 +292,6 @@ export function WorkflowsPage() {
                     try {
                       const result = await setupGovernanceN8nRecipes({
                         societyId: society._id,
-                        actingUserId,
                       });
                       toast.success("Governance automations set up", `${result.created.length} created, ${result.updated.length} updated`);
                     } catch (error: any) {
@@ -333,7 +331,6 @@ export function WorkflowsPage() {
             await update({
               id: recordId as Id<"workflows">,
               patch,
-              actingUserId,
             });
           }}
         >
@@ -378,7 +375,6 @@ export function WorkflowsPage() {
                         societyId: society._id,
                         workflowId: r._id,
                         triggeredBy: "manual",
-                        actingUserId,
                       });
                       toast.success(
                         result?.status === "running"
@@ -401,7 +397,6 @@ export function WorkflowsPage() {
                     setStatus({
                       id: r._id,
                       status: r.status === "active" ? "paused" : "active",
-                      actingUserId,
                     });
                   }}
                 >
@@ -412,7 +407,7 @@ export function WorkflowsPage() {
                   aria-label={`Remove ${r.name}`}
                   onClick={async (e) => {
                     e.stopPropagation();
-                    await remove({ id: r._id, actingUserId });
+                    await remove({ id: r._id });
                     toast.success("Workflow removed");
                   }}
                 >

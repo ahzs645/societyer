@@ -337,7 +337,7 @@ export function GrantsPage() {
                   <button
                     className="btn btn--ghost btn--sm"
                     onClick={async () => {
-                      await reviewApplication({ id: row._id, status: "Reviewing", actingUserId });
+                      await reviewApplication({ id: row._id, status: "Reviewing" });
                       toast.success("Application moved to review");
                     }}
                   >
@@ -352,7 +352,6 @@ export function GrantsPage() {
                         id: row._id,
                         funder: grantById.get(String(row.grantId))?.funder ?? "Public intake",
                         program: grantById.get(String(row.grantId))?.program ?? undefined,
-                        actingUserId,
                       });
                       toast.success("Application converted into grant pipeline item");
                     }}
@@ -364,7 +363,7 @@ export function GrantsPage() {
                   <button
                     className="btn btn--ghost btn--sm"
                     onClick={async () => {
-                      await reviewApplication({ id: row._id, status: "Declined", actingUserId });
+                      await reviewApplication({ id: row._id, status: "Declined" });
                       toast.success("Application declined");
                     }}
                   >
@@ -463,7 +462,7 @@ export function GrantsPage() {
                   aria-label={`Delete grant ${row.title}`}
                   onClick={async (e) => {
                     e.stopPropagation();
-                    await removeGrant({ id: row._id, actingUserId });
+                    await removeGrant({ id: row._id });
                     toast.success("Grant removed");
                   }}
                 >
@@ -516,7 +515,7 @@ export function GrantsPage() {
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Delete ledger entry for ${row.description}`}
                   onClick={async () => {
-                    await removeTransaction({ id: row._id, actingUserId });
+                    await removeTransaction({ id: row._id });
                     toast.success("Ledger entry removed");
                   }}
                 >
@@ -570,7 +569,7 @@ export function GrantsPage() {
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Delete report ${row.title}`}
                   onClick={async () => {
-                    await removeReport({ id: row._id, actingUserId });
+                    await removeReport({ id: row._id });
                     toast.success("Report removed");
                   }}
                 >
@@ -620,12 +619,11 @@ export function GrantsPage() {
                 grantId: selectedGrant._id,
                 employeeId,
                 patch: { status: "eed_pending", source: "manual", ...patch },
-                actingUserId,
               });
               toast.success("Employee linked to grant");
             }}
             onUnlinkEmployee={async (linkId) => {
-              await removeEmployeeLink({ id: linkId, actingUserId });
+              await removeEmployeeLink({ id: linkId });
               toast.success("Employee unlinked from grant");
             }}
             onCreateEmployee={async (draft) => {
@@ -668,14 +666,12 @@ export function GrantsPage() {
                 body: buildCsjOrientationEmailBody(employee),
                 status: "ready",
                 notes: `System workflow: CSJ remote worker orientation. Grant: ${grant.title}. Evidence for GCOS Young Workers/EED attestation.`,
-                actingUserId,
               });
               toast.success("Orientation email queued in Outbox");
             }}
             onCreateSinVaultRecord={async (draft) => {
               const id = await createSecret({
                 societyId: society._id,
-                actingUserId,
                 name: String(draft.name ?? "SIN - funded employee"),
                 service: "Employee SIN",
                 credentialType: "Social Insurance Number",

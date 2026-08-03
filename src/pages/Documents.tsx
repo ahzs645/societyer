@@ -38,8 +38,8 @@ const CAT_LABELS: Record<string, string> = {
 export function DocumentsPage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
-  const docs = useQuery(api.documents.list, society ? { societyId: society._id, actingUserId } : "skip");
-  const reviewQueues = useQuery(api.documents.reviewQueues, society ? { societyId: society._id, actingUserId } : "skip");
+  const docs = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
+  const reviewQueues = useQuery(api.documents.reviewQueues, society ? { societyId: society._id } : "skip");
   const importSessions = useQuery(api.importSessions.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.documents.create);
   const flag = useMutation(api.documents.flagForDeletion);
@@ -94,7 +94,6 @@ export function DocumentsPage() {
       societyId: society._id,
       documentId,
       file,
-      actingUserId,
       createDemoVersion,
       beginUpload: beginVersionUpload,
       recordUploadedVersion: recordVersionUpload,
@@ -109,7 +108,7 @@ export function DocumentsPage() {
       return;
     }
     try {
-      await syncDocument({ societyId: society._id, documentId, actingUserId });
+      await syncDocument({ societyId: society._id, documentId });
       toast.success("Uploaded and sent to Paperless-ngx");
     } catch (error: any) {
       toast.error(error?.message ?? "Uploaded locally, but Paperless-ngx sync failed");

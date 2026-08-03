@@ -54,7 +54,7 @@ export function FilingBotRunner({
               if (!filingId) return;
               setBusy(true);
               try {
-                await runBot({ societyId, filingId, actingUserId });
+                await runBot({ societyId, filingId });
                 toast.success("Filing prepared — submit it in Societies Online, then record your confirmation #");
               } catch (err: any) {
                 toast.error(err?.message ?? "Bot failed");

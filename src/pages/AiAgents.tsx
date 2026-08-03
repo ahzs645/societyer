@@ -76,7 +76,7 @@ export function AiAgentsPage() {
   const allSkills = useQuery(api.aiAgents.listAllSkills, society ? { societyId: society._id } : "skip") as SkillDefinition[] | undefined;
   const toolCatalog = useQuery(
     api.aiAgents.getToolCatalog,
-    society ? { societyId: society._id, actingUserId } : "skip",
+    society ? { societyId: society._id } : "skip",
   ) as ToolCatalog | undefined;
   const runs = useQuery(
     api.aiAgents.listRuns,
@@ -84,7 +84,7 @@ export function AiAgentsPage() {
   ) as any[] | undefined;
   const threads = useQuery(api.aiChat.listThreads, society ? { societyId: society._id, limit: 12 } : "skip") as any[] | undefined;
   const toolDrafts = useQuery(api.aiAgents.listToolDrafts, society ? { societyId: society._id, limit: 20 } : "skip") as any[] | undefined;
-  const aiSettings = useQuery(api.aiSettings.getEffective, society ? { societyId: society._id, actingUserId } : "skip") as any | undefined;
+  const aiSettings = useQuery(api.aiSettings.getEffective, society ? { societyId: society._id } : "skip") as any | undefined;
   const runAgent = useAction(api.aiChatActions.runAgentLive);
   const sendChatMessage = useAction(api.aiChatActions.sendChatMessage);
   const validateProviderKey = useAction(api.aiSettingsActions.validateProviderKey);
@@ -185,7 +185,6 @@ export function AiAgentsPage() {
         societyId: society._id,
         agentKey: selectedAgent.key,
         input: input.trim(),
-        actingUserId,
         browsingContext: { route: window.location.pathname, surface: "ai-agents" },
       });
       setLastResult(result);
@@ -207,7 +206,6 @@ export function AiAgentsPage() {
         societyId: society._id,
         threadId: selectedThreadId,
         content: chatInput.trim(),
-        actingUserId,
         browsingContext: { route: window.location.pathname, surface: "ai-agents-chat" },
         onToken: (token) => setStreamingText((text) => text + token),
       }).catch(async () =>
@@ -215,7 +213,6 @@ export function AiAgentsPage() {
           societyId: society._id,
           threadId: selectedThreadId as any,
           content: chatInput.trim(),
-          actingUserId,
           browsingContext: { route: window.location.pathname, surface: "ai-agents-chat" },
         }),
       );
@@ -235,7 +232,6 @@ export function AiAgentsPage() {
     try {
       await upsertSkill({
         societyId: society._id,
-        actingUserId,
         id: skillDraft.id ? skillDraft.id as any : undefined,
         name: skillDraft.name,
         label: skillDraft.label || skillDraft.name,
@@ -284,7 +280,6 @@ export function AiAgentsPage() {
       const secretId = aiSetup.apiKey.trim()
         ? await createSecret({
             societyId: society._id,
-            actingUserId,
             name: `${aiSetup.scope === "workspace" ? "Workspace" : "Personal"} AI provider key - ${aiSetup.label || providerLabel(aiSetup.provider)}`,
             service: `Societyer AI:${aiSetup.provider}`,
             credentialType: "api_key",
@@ -301,7 +296,6 @@ export function AiAgentsPage() {
         : undefined;
       await upsertAiSetting({
         societyId: society._id,
-        actingUserId,
         id: savedProviderReady ? effectiveProvider._id : undefined,
         scope: aiSetup.scope,
         provider: aiSetup.provider,
@@ -332,7 +326,6 @@ export function AiAgentsPage() {
         apiKey: aiSetup.apiKey.trim() || undefined,
         baseUrl: aiSetup.provider === "openai-compatible" ? aiSetup.baseUrl.trim() : undefined,
         societyId: society._id,
-        actingUserId,
         forceRefresh,
       });
       setModelCatalog(result);
@@ -586,7 +579,7 @@ export function AiAgentsPage() {
                       <button
                         className="btn btn--accent btn--sm"
                         onClick={async () => {
-                          await approveToolDraft({ societyId: society._id, actingUserId, id: draft._id });
+                          await approveToolDraft({ societyId: society._id, id: draft._id });
                           toast.success("AI draft approved");
                         }}
                       >
@@ -595,7 +588,7 @@ export function AiAgentsPage() {
                       <button
                         className="btn btn--ghost btn--sm"
                         onClick={async () => {
-                          await rejectToolDraft({ societyId: society._id, actingUserId, id: draft._id });
+                          await rejectToolDraft({ societyId: society._id, id: draft._id });
                           toast.success("AI draft rejected");
                         }}
                       >
@@ -801,7 +794,6 @@ export function AiAgentsPage() {
                         className="btn btn--ghost btn--sm"
                         onClick={() => skill._id && setSkillActive({
                           societyId: society._id,
-                          actingUserId,
                           id: skill._id as any,
                           isActive: skill.isActive === false,
                         })}
@@ -810,7 +802,7 @@ export function AiAgentsPage() {
                       </button>
                       <button
                         className="btn btn--ghost btn--sm"
-                        onClick={() => skill._id && removeSkill({ societyId: society._id, actingUserId, id: skill._id as any })}
+                        onClick={() => skill._id && removeSkill({ societyId: society._id, id: skill._id as any })}
                       >
                         <Trash2 size={12} /> Delete
                       </button>

@@ -995,7 +995,6 @@ function mutCasesImportSessions2(name: string, args: StaticArgs, store?: StaticD
     const threadId = args?.threadId ?? mutationResult("aiChat:createThread", {
       societyId: args?.societyId,
       title: args?.content,
-      actingUserId: args?.actingUserId,
     });
     aiMessages.push({
       _id: `static_ai_message_user_${Date.now()}`,

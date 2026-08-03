@@ -212,7 +212,7 @@ export function AccountingWorkbenchPage() {
 
   const savePeriod = () =>
     run(async () => {
-      await upsertPeriod({ societyId: society._id, ...periodForm, status: "open", actingUserId });
+      await upsertPeriod({ societyId: society._id, ...periodForm, status: "open" });
       setDrawer(null);
     }, "Fiscal period created");
 
@@ -229,7 +229,6 @@ export function AccountingWorkbenchPage() {
             side: row.side,
             amountCents: centsFromInput(row.amount),
           })),
-        actingUserId,
       });
       setDrawer(null);
     }, "Opening balances posted");
@@ -255,7 +254,6 @@ export function AccountingWorkbenchPage() {
             fundRestrictionId: (line.fundRestrictionId || undefined) as any,
             grantId: (line.grantId || undefined) as any,
           })),
-        actingUserId,
       });
       setDrawer(null);
     }, "Journal entry posted");
@@ -276,7 +274,6 @@ export function AccountingWorkbenchPage() {
           },
         ],
         fiscalYear: currentYear(),
-        actingUserId,
       });
       setDrawer(null);
     }, "Candidate posted to journal");
@@ -288,10 +285,9 @@ export function AccountingWorkbenchPage() {
         financialAccountId: reconciliationForm.financialAccountId as any,
         statementDate: reconciliationForm.statementDate,
         statementBalanceCents: centsFromInput(reconciliationForm.statementBalance),
-        actingUserId,
       });
       if (result.differenceCents === 0) {
-        await setReconStatus({ id: result.runId, status: "reconciled", actingUserId });
+        await setReconStatus({ id: result.runId, status: "reconciled" });
       }
       setDrawer(null);
       toast.info(`Book balance ${money(result.bookBalanceCents)} · difference ${money(result.differenceCents)}`);
@@ -372,7 +368,7 @@ export function AccountingWorkbenchPage() {
           <span>Set up, post, and reconcile the ledger.</span>
         </div>
         <div className="accounting-action-bar" role="group" aria-label="Accounting tools">
-          <button className="btn-action btn-action--primary" disabled={busy} onClick={() => run(async () => { await seedChart({ societyId: society._id, actingUserId }); }, "Chart of accounts seeded")}>
+          <button className="btn-action btn-action--primary" disabled={busy} onClick={() => run(async () => { await seedChart({ societyId: society._id }); }, "Chart of accounts seeded")}>
             <Landmark size={12} /> Seed chart
           </button>
           <button className="btn-action" onClick={() => setDrawer("period")}><PlusCircle size={12} /> Fiscal period</button>
@@ -381,7 +377,7 @@ export function AccountingWorkbenchPage() {
           <button className="btn-action" onClick={() => setDrawer("candidate")}><Split size={12} /> Post candidate</button>
           <button className="btn-action" onClick={() => setDrawer("reconciliation")}><Scale size={12} /> Reconcile</button>
           <button className="btn-action" disabled={busy} onClick={() => run(async () => {
-            const result = await backfillTransactions({ societyId: society._id, fiscalYear: currentYear(), actingUserId });
+            const result = await backfillTransactions({ societyId: society._id, fiscalYear: currentYear() });
             toast.success(`Backfilled ${result.posted} transaction${result.posted === 1 ? "" : "s"}`);
           })}>
             <FileSpreadsheet size={12} /> Backfill imports
@@ -422,9 +418,9 @@ export function AccountingWorkbenchPage() {
                 <div className="accounting-row__actions">
                   <Badge tone={period.status === "open" ? "success" : "warn"}>{period.status}</Badge>
                   {period.status === "open" ? (
-                    <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await closePeriod({ id: period._id, actingUserId }); }, "Period closed")}><Lock size={12} /> Close</button>
+                    <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await closePeriod({ id: period._id }); }, "Period closed")}><Lock size={12} /> Close</button>
                   ) : (
-                    <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await reopenPeriod({ id: period._id, actingUserId }); }, "Period reopened")}><Unlock size={12} /> Reopen</button>
+                    <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await reopenPeriod({ id: period._id }); }, "Period reopened")}><Unlock size={12} /> Reopen</button>
                   )}
                 </div>
               </div>

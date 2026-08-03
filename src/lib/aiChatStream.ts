@@ -1,10 +1,10 @@
 import { convexSiteUrl } from "./convexSite";
+import { getAuthMode } from "./authMode";
 
 export async function streamChatMessage({
   societyId,
   threadId,
   content,
-  actingUserId,
   browsingContext,
   modelId,
   onToken,
@@ -12,15 +12,20 @@ export async function streamChatMessage({
   societyId: string;
   threadId?: string;
   content: string;
-  actingUserId?: string;
   browsingContext?: unknown;
   modelId?: string;
   onToken: (token: string) => void;
 }) {
+  const token = getAuthMode() === "better-auth"
+    ? (await import("./authClient")).authClient.token().then((result) => result.data?.token)
+    : undefined;
   const response = await fetch(`${convexSiteUrl()}/ai-chat/stream`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ societyId, threadId, content, actingUserId, browsingContext, modelId }),
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ societyId, threadId, content, browsingContext, modelId }),
   });
   if (!response.ok || !response.body) throw new Error(`Stream failed with ${response.status}`);
 
@@ -58,4 +63,3 @@ function parseSseEvent(chunk: string) {
   if (!data) return null;
   return { event, data: JSON.parse(data) };
 }
-

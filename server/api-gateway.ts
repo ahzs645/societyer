@@ -52,7 +52,7 @@ import {
   stripActor,
   bodyWithSociety,
   bodyWithIdAndSociety,
-  withActingUser,
+  principalArgs,
   dropUndefined,
   societyIdFrom,
   optionalSocietyIdFrom,
@@ -129,6 +129,8 @@ import {
   mutation,
   action,
   convexCall,
+  convexCallWithAuth,
+  runWithConvexAuth,
 } from "./api-gateway/convex-client";
 import {
   importGovernanceDocumentsFromBcRegistry,
@@ -201,9 +203,9 @@ const RESOURCE_ROUTES: ResourceRoute[] = [
     create: mutation("users.upsert"),
     update: mutation("users.upsert"),
     remove: mutation("users.remove"),
-    createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
-    updateArgs: (req, actor) => withActingUser(bodyWithIdAndSociety(req, actor), actor),
-    removeArgs: (req, actor) => withActingUser({ id: req.params.id }, actor),
+    createArgs: (req, actor) => principalArgs(bodyWithSociety(req, actor), actor),
+    updateArgs: (req, actor) => principalArgs(bodyWithIdAndSociety(req, actor), actor),
+    removeArgs: (req, actor) => principalArgs({ id: req.params.id }, actor),
   }),
   resource("members", "People", "members", crud("members")),
   resource("directors", "People", "directors", collection("directors")),
@@ -218,9 +220,9 @@ const RESOURCE_ROUTES: ResourceRoute[] = [
     create: mutation("volunteers.upsertVolunteer"),
     update: mutation("volunteers.upsertVolunteer"),
     remove: mutation("volunteers.removeVolunteer"),
-    createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
-    updateArgs: (req, actor) => withActingUser(bodyWithIdAndSociety(req, actor), actor),
-    removeArgs: (req, actor) => withActingUser({ id: req.params.id }, actor),
+    createArgs: (req, actor) => principalArgs(bodyWithSociety(req, actor), actor),
+    updateArgs: (req, actor) => principalArgs(bodyWithIdAndSociety(req, actor), actor),
+    removeArgs: (req, actor) => principalArgs({ id: req.params.id }, actor),
   }),
   resource("volunteer-applications", "People", "volunteers", {
     list: query("volunteers.applications"),
@@ -232,9 +234,9 @@ const RESOURCE_ROUTES: ResourceRoute[] = [
     create: mutation("volunteers.upsertScreening"),
     update: mutation("volunteers.upsertScreening"),
     remove: mutation("volunteers.removeScreening"),
-    createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
-    updateArgs: (req, actor) => withActingUser(bodyWithIdAndSociety(req, actor), actor),
-    removeArgs: (req, actor) => withActingUser({ id: req.params.id }, actor),
+    createArgs: (req, actor) => principalArgs(bodyWithSociety(req, actor), actor),
+    updateArgs: (req, actor) => principalArgs(bodyWithIdAndSociety(req, actor), actor),
+    removeArgs: (req, actor) => principalArgs({ id: req.params.id }, actor),
   }),
   resource("meetings", "Governance", "meetings", {
     ...crud("meetings"),
@@ -271,18 +273,17 @@ const RESOURCE_ROUTES: ResourceRoute[] = [
     get: query("elections.get"),
     create: mutation("elections.create"),
     update: mutation("elections.updateSettings"),
-    createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
+    createArgs: (req, actor) => principalArgs(bodyWithSociety(req, actor), actor),
     updateArgs: (req, actor) =>
-      withActingUser({ ...stripActor(req.body), electionId: req.params.id }, actor),
+      principalArgs({ ...stripActor(req.body), electionId: req.params.id }, actor),
   }),
   resource("election-nominations", "Governance", "elections", {
     list: query("elections.listNominations"),
     create: mutation("elections.submitNomination"),
     listArgs: (req, actor) => ({
       electionId: stringQuery(req.query.electionId),
-      actingUserId: actor.userId,
     }),
-    createArgs: (req, actor) => withActingUser(stripActor(req.body), actor),
+    createArgs: (req, actor) => principalArgs(stripActor(req.body), actor),
   }),
   resource("proxies", "Governance", "proxies", {
     list: query("proxies.list"),
@@ -346,7 +347,7 @@ const RESOURCE_ROUTES: ResourceRoute[] = [
     create: mutation("documentVersions.recordUploadedVersion"),
     createEvent: "document.uploaded",
     listArgs: (req) => ({ documentId: stringQuery(req.query.documentId) }),
-    createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
+    createArgs: (req, actor) => principalArgs(bodyWithSociety(req, actor), actor),
   }),
   resource("inspections", "Compliance", "documents", {
     list: query("inspections.list"),
@@ -363,9 +364,9 @@ const RESOURCE_ROUTES: ResourceRoute[] = [
     create: mutation("transparency.upsertPublication"),
     update: mutation("transparency.upsertPublication"),
     remove: mutation("transparency.removePublication"),
-    createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
-    updateArgs: (req, actor) => withActingUser(bodyWithIdAndSociety(req, actor), actor),
-    removeArgs: (req, actor) => withActingUser({ id: req.params.id }, actor),
+    createArgs: (req, actor) => principalArgs(bodyWithSociety(req, actor), actor),
+    updateArgs: (req, actor) => principalArgs(bodyWithIdAndSociety(req, actor), actor),
+    removeArgs: (req, actor) => principalArgs({ id: req.params.id }, actor),
   }),
   resource("financials", "Finance", "financials", collection("financials")),
   resource("treasurer-profit-and-loss", "Finance", "financials", {
@@ -379,7 +380,7 @@ const RESOURCE_ROUTES: ResourceRoute[] = [
   resource("financial-connections", "Finance", "financials", {
     list: query("financialHub.connections"),
     create: mutation("financialHub.markConnectionConnected"),
-    createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
+    createArgs: (req, actor) => principalArgs(bodyWithSociety(req, actor), actor),
   }),
   resource("financial-accounts", "Finance", "financials", {
     list: query("financialHub.accounts"),
@@ -400,18 +401,18 @@ const RESOURCE_ROUTES: ResourceRoute[] = [
       societyId: societyIdFrom(req, actor),
       fiscalYear: stringQuery(req.query.fiscalYear),
     }),
-    createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
-    updateArgs: (req, actor) => withActingUser(bodyWithIdAndSociety(req, actor), actor),
-    removeArgs: (req, actor) => withActingUser({ id: req.params.id }, actor),
+    createArgs: (req, actor) => principalArgs(bodyWithSociety(req, actor), actor),
+    updateArgs: (req, actor) => principalArgs(bodyWithIdAndSociety(req, actor), actor),
+    removeArgs: (req, actor) => principalArgs({ id: req.params.id }, actor),
   }),
   resource("grants", "Finance", "grants", {
     list: query("grants.list"),
     create: mutation("grants.upsertGrant"),
     update: mutation("grants.upsertGrant"),
     remove: mutation("grants.removeGrant"),
-    createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
-    updateArgs: (req, actor) => withActingUser(bodyWithIdAndSociety(req, actor), actor),
-    removeArgs: (req, actor) => withActingUser({ id: req.params.id }, actor),
+    createArgs: (req, actor) => principalArgs(bodyWithSociety(req, actor), actor),
+    updateArgs: (req, actor) => principalArgs(bodyWithIdAndSociety(req, actor), actor),
+    removeArgs: (req, actor) => principalArgs({ id: req.params.id }, actor),
   }),
   resource("grant-applications", "Finance", "grants", {
     list: query("grants.applications"),
@@ -423,18 +424,18 @@ const RESOURCE_ROUTES: ResourceRoute[] = [
     create: mutation("grants.upsertReport"),
     update: mutation("grants.upsertReport"),
     remove: mutation("grants.removeReport"),
-    createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
-    updateArgs: (req, actor) => withActingUser(bodyWithIdAndSociety(req, actor), actor),
-    removeArgs: (req, actor) => withActingUser({ id: req.params.id }, actor),
+    createArgs: (req, actor) => principalArgs(bodyWithSociety(req, actor), actor),
+    updateArgs: (req, actor) => principalArgs(bodyWithIdAndSociety(req, actor), actor),
+    removeArgs: (req, actor) => principalArgs({ id: req.params.id }, actor),
   }),
   resource("grant-transactions", "Finance", "grants", {
     list: query("grants.transactions"),
     create: mutation("grants.upsertTransaction"),
     update: mutation("grants.upsertTransaction"),
     remove: mutation("grants.removeTransaction"),
-    createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
-    updateArgs: (req, actor) => withActingUser(bodyWithIdAndSociety(req, actor), actor),
-    removeArgs: (req, actor) => withActingUser({ id: req.params.id }, actor),
+    createArgs: (req, actor) => principalArgs(bodyWithSociety(req, actor), actor),
+    updateArgs: (req, actor) => principalArgs(bodyWithIdAndSociety(req, actor), actor),
+    removeArgs: (req, actor) => principalArgs({ id: req.params.id }, actor),
   }),
   resource("reconciliation", "Finance", "financials", {
     list: query("reconciliation.overview"),
@@ -449,9 +450,9 @@ const RESOURCE_ROUTES: ResourceRoute[] = [
     create: mutation("subscriptions.upsertPlan"),
     update: mutation("subscriptions.upsertPlan"),
     remove: mutation("subscriptions.removePlan"),
-    createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
-    updateArgs: (req, actor) => withActingUser(bodyWithIdAndSociety(req, actor), actor),
-    removeArgs: (req, actor) => withActingUser({ id: req.params.id }, actor),
+    createArgs: (req, actor) => principalArgs(bodyWithSociety(req, actor), actor),
+    updateArgs: (req, actor) => principalArgs(bodyWithIdAndSociety(req, actor), actor),
+    removeArgs: (req, actor) => principalArgs({ id: req.params.id }, actor),
   }),
   resource("member-subscriptions", "Finance", "financials", {
     list: query("subscriptions.allSubscriptions"),
@@ -502,7 +503,6 @@ const ACTION_ROUTES: ActionRoute[] = [
   })),
   actionRoute("/document-versions/:id/rollback", "Compliance", "documents:write", mutation("documentVersions.rollback"), (req, actor) => ({
     versionId: req.params.id,
-    actingUserId: actor.userId,
   })),
   actionRoute("/minutes/:id/approve", "Governance", "minutes:approve", mutation("minutes.update"), (req) => ({
     id: req.params.id,
@@ -525,33 +525,27 @@ const ACTION_ROUTES: ActionRoute[] = [
   })),
   actionRoute("/elections/:id/close", "Governance", "elections:tally", mutation("elections.close"), (req, actor) => ({
     electionId: req.params.id,
-    actingUserId: actor.userId,
   }), "election.closed"),
   actionRoute("/elections/:id/tally", "Governance", "elections:tally", mutation("elections.tallyElection"), (req, actor) => ({
     electionId: req.params.id,
     resultsSummary: req.body?.resultsSummary,
     evidenceDocumentId: req.body?.evidenceDocumentId,
-    actingUserId: actor.userId,
   }), "election.tallied"),
   actionRoute("/communications/campaigns/send", "People", "communications:write", action("communications.sendCampaign"), (req, actor) => ({
     ...stripActor(req.body),
-    actingUserId: actor.userId,
   })),
   actionRoute("/grants/applications/:id/review", "Finance", "grants:write", mutation("grants.reviewApplication"), (req, actor) => ({
     id: req.params.id,
     status: req.body?.status,
     notes: req.body?.notes,
-    actingUserId: actor.userId,
   }), "grant.reviewed"),
   actionRoute("/volunteer-applications/:id/review", "People", "volunteers:write", mutation("volunteers.reviewApplication"), (req, actor) => ({
     id: req.params.id,
     status: req.body?.status,
-    actingUserId: actor.userId,
   }), "volunteer.reviewed"),
   actionRoute("/paperless/documents/:id/sync", "Integrations", "documents:write", action("paperless.syncDocument"), (req, actor) => ({
     documentId: req.params.id,
     societyId: societyIdFrom(req, actor),
-    actingUserId: actor.userId,
   })),
 ];
 
@@ -566,7 +560,9 @@ export function mountApiGateway(app: express.Express) {
 
   router.use(express.json({ limit: "10mb" }));
 
-  mountMaintenanceRoutes(router, client);
+  if (shouldRegisterLocalMaintenanceRoutes()) {
+    mountMaintenanceRoutes(router, client);
+  }
   mountPlatformRoutes(router, client);
   mountBrowserConnectorRoutes(router, client);
   mountWorkflowBridgeRoutes(router, client);
@@ -609,6 +605,10 @@ function mountMaintenanceRoutes(router: Router, client: ConvexHttpClient) {
   );
 }
 
+function shouldRegisterLocalMaintenanceRoutes() {
+  return getAuthMode() === "none" && process.env.NODE_ENV !== "production";
+}
+
 function requireLocalMaintenanceAccess(req: Request, _res: Response, next: NextFunction) {
   if (getAuthMode() !== "none" || process.env.NODE_ENV === "production" || !isLocalRequest(req)) {
     throw httpError(403, "maintenance_unavailable", "Maintenance endpoints are local development only.");
@@ -648,6 +648,7 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
     "/api-clients/:id",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
+      await assertTenantId(client, req, req.params.id, "API client");
       await convexCall(client, mutation("apiPlatform.updateClient"), {
         id: req.params.id,
         patch: stripActor(req.body),
@@ -660,9 +661,11 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
     "/api-tokens",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
+      const clientId = stringQuery(req.query.clientId);
+      if (clientId) await assertTenantId(client, req, clientId, "API client");
       const rows = await convexCall(client, query("apiPlatform.listTokens"), {
         societyId: societyIdFrom(req, req.actor!),
-        clientId: req.query.clientId,
+        clientId,
       });
       res.json(listResponse(rows));
     }),
@@ -672,11 +675,14 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
     "/api-tokens",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
+      const clientId = stringValue(req.body?.clientId);
+      if (!clientId) throw httpError(400, "client_required", "clientId is required.");
+      await assertTenantId(client, req, clientId, "API client");
       const rawToken = createApiToken();
       const tokenHash = hashApiToken(rawToken);
       const id = await convexCall(client, mutation("apiPlatform.createToken"), {
         societyId: societyIdFrom(req, req.actor!),
-        clientId: req.body?.clientId,
+        clientId,
         name: req.body?.name,
         tokenHash,
         tokenStart: rawToken.slice(0, 14),
@@ -693,6 +699,7 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
     "/api-tokens/:id/revoke",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
+      await assertTenantId(client, req, req.params.id, "API token");
       await convexCall(client, mutation("apiPlatform.revokeToken"), { id: req.params.id });
       res.json(singleResponse({ id: req.params.id, status: "revoked" }));
     }),
@@ -713,9 +720,11 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
     "/plugin-installations",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
+      const clientId = stringValue(req.body?.clientId);
+      if (clientId) await assertTenantId(client, req, clientId, "API client");
       const id = await convexCall(client, mutation("apiPlatform.upsertPluginInstallation"), {
         societyId: societyIdFrom(req, req.actor!),
-        clientId: req.body?.clientId,
+        clientId,
         name: req.body?.name,
         slug: req.body?.slug,
         status: req.body?.status,
@@ -742,6 +751,12 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
     "/webhook-subscriptions",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
+      const clientId = stringValue(req.body?.clientId);
+      const pluginInstallationId = stringValue(req.body?.pluginInstallationId);
+      if (clientId) await assertTenantId(client, req, clientId, "API client");
+      if (pluginInstallationId) {
+        await assertTenantId(client, req, pluginInstallationId, "Plugin installation");
+      }
       const targetUrl = stringValue(req.body?.targetUrl);
       if (!targetUrl) {
         throw httpError(400, "invalid_webhook_url", "targetUrl is required.");
@@ -756,8 +771,8 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
       const secretEncrypted = encryptSecret(rawSecret);
       const id = await convexCall(client, mutation("apiPlatform.upsertWebhookSubscription"), {
         societyId: societyIdFrom(req, req.actor!),
-        clientId: req.body?.clientId,
-        pluginInstallationId: req.body?.pluginInstallationId,
+        clientId,
+        pluginInstallationId,
         name: req.body?.name,
         targetUrl,
         eventTypes: normalizeEventTypes(req.body?.eventTypes),
@@ -774,9 +789,13 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
     "/webhook-deliveries",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
+      const subscriptionId = stringQuery(req.query.subscriptionId);
+      if (subscriptionId) {
+        await assertTenantId(client, req, subscriptionId, "Webhook subscription");
+      }
       const rows = await convexCall(client, query("apiPlatform.listWebhookDeliveries"), {
         societyId: societyIdFrom(req, req.actor!),
-        subscriptionId: req.query.subscriptionId,
+        subscriptionId,
       });
       res.json(listResponse(rows));
     }),
@@ -964,7 +983,6 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
             profileSocietyId: societyId,
             accounts: normalized.accounts,
             transactions: normalized.transactions,
-            actingUserId: req.actor?.userId,
           }))
         : await stageConnectorImportSession(client, convexCall, {
             societyId,
@@ -1005,7 +1023,6 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
             profileSocietyId: societyId,
             accounts: normalized.accounts,
             transactions: normalized.transactions,
-            actingUserId: req.actor?.userId,
           }))
         : await stageConnectorImportSession(client, convexCall, {
             societyId,
@@ -1042,7 +1059,6 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
             societyId,
             normalizedGrant: runnerOutput.normalizedGrant,
             snapshot: runnerOutput,
-            actingUserId: req.actor?.userId,
           })
         : await stageConnectorImportSession(client, convexCall, {
             societyId,
@@ -1079,7 +1095,6 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
             societyId,
             normalizedGrant: runnerOutput.normalizedGrant,
             snapshot: runnerOutput,
-            actingUserId: req.actor?.userId,
           })
         : await stageConnectorImportSession(client, convexCall, {
             societyId,
@@ -1116,7 +1131,6 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
             societyId,
             normalizedGrant,
             snapshot,
-            actingUserId: req.actor?.userId,
           })
         : await stageConnectorImportSession(client, convexCall, {
             societyId,
@@ -1157,7 +1171,6 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       const societyId = societyIdFrom(req, req.actor!);
       const result = await importGovernanceDocumentsFromBcRegistry(client, {
         societyId,
-        actingUserId: req.actor?.userId,
         corpNum: typeof req.body?.corpNum === "string" ? req.body.corpNum : undefined,
         refresh: req.body?.refresh === true,
         stageOnly: req.body?.stageOnly === true,
@@ -1178,7 +1191,6 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       const societyId = societyIdFrom(req, req.actor!);
       const result = await importBcRegistryFilingHistory(client, {
         societyId,
-        actingUserId: req.actor?.userId,
         corpNum: typeof req.body?.corpNum === "string" ? req.body.corpNum : undefined,
         refresh: req.body?.refresh === true,
         importDocuments: req.body?.importDocuments !== false,
@@ -1200,7 +1212,6 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       const societyId = societyIdFrom(req, req.actor!);
       const result = await importBylawsHistoryFromBcRegistry(client, {
         societyId,
-        actingUserId: req.actor?.userId,
         corpNum: typeof req.body?.corpNum === "string" ? req.body.corpNum : undefined,
         refresh: req.body?.refresh === true,
       });
@@ -1329,6 +1340,18 @@ function mountWorkflowBridgeRoutes(router: Router, client: ConvexHttpClient) {
       if (!body.workflowId || !body.runId || !body.event) {
         throw httpError(400, "invalid_workflow_callback", "workflowId, runId, and event are required.");
       }
+      const binding = await convexCall(client, query("http.gatewayWorkflowBinding"), {
+        workflowId: body.workflowId,
+        runId: body.runId,
+        serviceToken: apiPlatformServiceToken(),
+      });
+      if (!binding?.authSubject) {
+        throw httpError(404, "workflow_run_not_found", "Workflow run not found.");
+      }
+      const signed = await auth.api.signJWT({
+        body: { payload: { sub: binding.authSubject } },
+      });
+      const callbackAuthToken = signed.token;
 
       let generatedDocument:
         | {
@@ -1340,7 +1363,7 @@ function mountWorkflowBridgeRoutes(router: Router, client: ConvexHttpClient) {
         | undefined;
 
       if (body.generatedPdf?.base64) {
-        const run = await convexCall(client, query("workflows.getRun"), {
+        const run = await convexCallWithAuth(client, callbackAuthToken, query("workflows.getRun"), {
           id: body.runId,
         });
         if (!run) throw httpError(404, "workflow_run_not_found", "Workflow run not found.");
@@ -1353,7 +1376,7 @@ function mountWorkflowBridgeRoutes(router: Router, client: ConvexHttpClient) {
         await mkdir(dir, { recursive: true });
         await writeFile(path.join(dir, storageKey), pdf);
 
-        const recorded = await convexCall(client, mutation("workflows.recordGeneratedDocument"), {
+        const recorded = await convexCallWithAuth(client, callbackAuthToken, mutation("workflows.recordGeneratedDocument"), {
           societyId: run.societyId,
           workflowId: body.workflowId,
           runId: body.runId,
@@ -1370,7 +1393,7 @@ function mountWorkflowBridgeRoutes(router: Router, client: ConvexHttpClient) {
         };
       }
 
-      await convexCall(client, mutation("workflows.receiveExternalCallback"), {
+      await convexCallWithAuth(client, callbackAuthToken, mutation("workflows.receiveExternalCallback"), {
         workflowId: body.workflowId,
         runId: body.runId,
         externalRunId: body.externalRunId,
@@ -1387,8 +1410,17 @@ function mountWorkflowBridgeRoutes(router: Router, client: ConvexHttpClient) {
 
   router.get(
     "/workflow-generated-documents/:key",
+    requireScope(client, "documents:read"),
     asyncHandler(async (req, res) => {
       const key = sanitizeStorageKey(req.params.key);
+      const allowed = await convexCall(client, query("http.gatewayGeneratedDocumentAccess"), {
+        societyId: societyIdFrom(req, req.actor!),
+        storageKey: key,
+        serviceToken: apiPlatformServiceToken(),
+      });
+      if (!allowed) {
+        throw httpError(404, "generated_document_not_found", "Generated workflow document not found.");
+      }
       const file = await readFile(path.join(generatedWorkflowDocumentDir(), key)).catch(() => null);
       if (!file) throw httpError(404, "generated_document_not_found", "Generated workflow document not found.");
       res.setHeader("Content-Type", "application/pdf");
@@ -1476,15 +1508,24 @@ async function assertResourceTenant(
   req: Request,
   resourceName: string,
 ) {
+  await assertTenantId(client, req, req.params.id, `${resourceName} record`);
+}
+
+async function assertTenantId(
+  client: ConvexHttpClient,
+  req: Request,
+  id: string,
+  resourceLabel: string,
+) {
   const actor = req.actor!;
   if (actor.type === "local-dev" || !actor.societyId) return;
   const status = await convexCall(client, query("apiPlatform.resourceTenantStatus"), {
-    id: req.params.id,
+    id,
     societyId: actor.societyId,
     serviceToken: apiPlatformServiceToken(),
   });
   if (status === "missing") {
-    throw httpError(404, "not_found", `${resourceName} record not found.`);
+    throw httpError(404, "not_found", `${resourceLabel} not found.`);
   }
   if (status !== "allowed") {
     throw httpError(
@@ -1500,6 +1541,9 @@ function mountActionRoute(router: Router, client: ConvexHttpClient, route: Actio
     route.path,
     requireScope(client, route.scope),
     asyncHandler(async (req, res) => {
+      if (req.params.id) {
+        await assertTenantId(client, req, req.params.id, route.operationId);
+      }
       const data = await convexCall(client, route.call, dropUndefined(route.args(req, req.actor!)));
       if (route.event) await emitWebhookEvent(client, req.actor!, route.event, { id: req.params.id, result: data });
       res.json(singleResponse(data ?? { ok: true }));
@@ -1511,7 +1555,7 @@ function requireScope(client: ConvexHttpClient, requiredScope: Scope) {
   return asyncHandler(async (req, _res, next) => {
     req.actor = await resolveActor(client, req, requiredScope);
     societyIdFrom(req, req.actor);
-    next();
+    runWithConvexAuth(req.actor.convexAuthToken, next);
   });
 }
 
@@ -1532,12 +1576,27 @@ async function resolveActor(client: ConvexHttpClient, req: Request, requiredScop
           : "API token is invalid.",
       );
     }
+    if (!result.userId || !result.societyId) {
+      throw httpError(401, "api_principal_unbound", "API token is not bound to an active user principal.");
+    }
+    const principal = await convexCall(client, query("http.gatewayApiPrincipal"), {
+      societyId: result.societyId,
+      userId: result.userId,
+      serviceToken: apiPlatformServiceToken(),
+    });
+    if (!principal?.authSubject) {
+      throw httpError(401, "api_principal_unbound", "API token creator is no longer an active workspace user.");
+    }
+    const signed = await auth.api.signJWT({
+      body: { payload: { sub: principal.authSubject } },
+    });
     return {
       type: "api-key",
       societyId: result.societyId,
       userId: result.userId,
       clientId: result.client?._id,
       scopes: result.scopes,
+      convexAuthToken: signed.token,
     };
   }
 
@@ -1580,24 +1639,57 @@ async function resolveLocalDevActor(client: ConvexHttpClient, req: Request): Pro
 
 async function resolveBetterAuthActor(client: ConvexHttpClient, req: Request): Promise<Actor | null> {
   if (getAuthMode() !== "better-auth") return null;
-  const societyId = optionalSocietyIdFrom(req);
-  if (!societyId) return null;
-  const session = await auth.api
-    .getSession({ headers: headersFromRequest(req) })
-    .catch(() => null);
+  const requestHeaders = headersFromRequest(req);
+  const session = await auth.api.getSession({ headers: requestHeaders }).catch((error: unknown) => {
+    console.error("[societyer-api] Better Auth session lookup failed", error);
+    throw httpError(503, "auth_unavailable", "Authentication is temporarily unavailable.");
+  });
   const authSubject = session?.user?.id;
   if (!authSubject) return null;
-  const actor = await convexCall(client, query("apiPlatform.actorForBetterAuthSubject"), {
-    societyId,
-    authSubject,
+  const tokenResult = await auth.api.getToken({ headers: requestHeaders }).catch((error: unknown) => {
+    console.error("[societyer-api] Better Auth token lookup failed", error);
+    throw httpError(503, "convex_token_unavailable", "Secure workspace authentication is temporarily unavailable.");
   });
-  if (!actor) return null;
+  const convexAuthToken = tokenResult?.token;
+  if (!convexAuthToken) {
+    throw httpError(401, "convex_token_missing", "The authenticated session did not provide a workspace token.");
+  }
+
+  const lookup = await convexCallWithAuth(
+    client,
+    convexAuthToken,
+    query("http.currentPrincipalMemberships"),
+    {},
+  );
+  if (lookup?.authSubject && lookup.authSubject !== authSubject) {
+    throw httpError(401, "principal_mismatch", "The session and workspace token identify different users.");
+  }
+  if (lookup?.status === "membership-disabled") {
+    throw httpError(403, "membership_disabled", "The workspace user is disabled.");
+  }
+  if (lookup?.status === "ambiguous-binding") {
+    throw httpError(403, "ambiguous_membership", "The authenticated account has conflicting workspace bindings.");
+  }
+  const memberships = Array.isArray(lookup?.memberships) ? lookup.memberships : [];
+  const requestedSocietyId = optionalSocietyIdFrom(req);
+  const membership = requestedSocietyId
+    ? memberships.find((candidate) => candidate?.society?._id === requestedSocietyId)
+    : memberships.length === 1
+      ? memberships[0]
+      : null;
+  if (!membership) {
+    if (memberships.length > 1 && !requestedSocietyId) {
+      throw httpError(400, "society_required", "societyId is required for an account with multiple workspaces.");
+    }
+    throw httpError(403, "membership_required", "The authenticated account is not a member of the requested workspace.");
+  }
   return {
     type: "better-auth",
-    societyId: actor.societyId,
-    userId: actor.userId,
+    societyId: membership.society._id,
+    userId: membership.userId,
     scopes: [],
-    role: actor.role,
+    role: membership.role,
+    convexAuthToken,
   };
 }
 

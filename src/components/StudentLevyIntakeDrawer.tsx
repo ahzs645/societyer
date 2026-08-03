@@ -166,13 +166,11 @@ export function StudentLevyIntakeDrawer({
   onClose,
   societyId,
   societyName,
-  actingUserId,
 }: {
   open: boolean;
   onClose: () => void;
   societyId: any;
   societyName?: string | null;
-  actingUserId?: any;
 }) {
   const [draft, setDraft] = useState<any>(() => newLevyDraft(societyName));
   const importStudentLevy = useMutation(api.fundingSources.importStudentLevy);
@@ -248,7 +246,6 @@ export function StudentLevyIntakeDrawer({
                   status: row.status,
                   notes: row.notes || undefined,
                 })),
-                actingUserId,
               });
               toast.success(
                 "Student levy imported",

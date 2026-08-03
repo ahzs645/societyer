@@ -22,7 +22,6 @@ async function importGovernanceDocumentsFromBcRegistry(
   client: ConvexHttpClient,
   input: {
     societyId: string;
-    actingUserId?: string;
     corpNum?: string;
     refresh?: boolean;
     stageOnly?: boolean;
@@ -146,7 +145,6 @@ async function importGovernanceDocumentsFromBcRegistry(
       changeNote: candidate.combined
         ? "Imported from BC Registry filing history; constitution appears to be bundled with bylaws."
         : "Imported from BC Registry filing history.",
-      actingUserId: input.actingUserId,
     }));
     imported.push({
       kind: candidate.kind,
@@ -184,7 +182,6 @@ async function importBcRegistryFilingHistory(
   client: ConvexHttpClient,
   input: {
     societyId: string;
-    actingUserId?: string;
     corpNum?: string;
     refresh?: boolean;
     importDocuments?: boolean;
@@ -205,7 +202,6 @@ async function importBcRegistryFilingHistory(
     ? { byFilename: new Map<string, string>(), created: 0, reused: 0, skipped: 0 }
     : await importBcRegistryPdfDocuments(client, {
         societyId: input.societyId,
-        actingUserId: input.actingUserId,
         exportDirectory: exportInfo.directory,
         records,
       });
@@ -274,7 +270,6 @@ async function importBylawsHistoryFromBcRegistry(
   client: ConvexHttpClient,
   input: {
     societyId: string;
-    actingUserId?: string;
     corpNum?: string;
     refresh?: boolean;
   },
@@ -291,7 +286,6 @@ async function importBylawsHistoryFromBcRegistry(
   const records = await readBcRegistryFilingRecords(exportInfo.directory, corpNum);
   const documentImport = await importBcRegistryPdfDocuments(client, {
     societyId: input.societyId,
-    actingUserId: input.actingUserId,
     exportDirectory: exportInfo.directory,
     records,
   });
@@ -354,7 +348,6 @@ async function importBcRegistryPdfDocuments(
   client: ConvexHttpClient,
   input: {
     societyId: string;
-    actingUserId?: string;
     exportDirectory: string;
     records: BcRegistryCsvRecord[];
   },
@@ -431,7 +424,6 @@ async function importBcRegistryPdfDocuments(
       sourceExternalIds,
       sourcePayloadJson: JSON.stringify(row),
       changeNote: "Imported from BC Registry filing-history export.",
-      actingUserId: input.actingUserId,
       skipDuplicateCheck: true,
     }));
     if (result?.documentId) {

@@ -3,6 +3,7 @@
 // recording, and webhook emission/delivery.
 
 import crypto from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Request } from "express";
 import { ConvexHttpClient } from "convex/browser";
 import { recordConnectorRun as recordConnectorRunHistory } from "../integrations/connector-run-recorder";
@@ -19,6 +20,8 @@ import {
 } from "./shared";
 import type { ConvexCall, Actor } from "./shared";
 import { nodeDevelopmentPolicy, requestOutboundUrl } from "../outbound-url-policy";
+
+const convexAuthStorage = new AsyncLocalStorage<string | undefined>();
 
 async function emitWebhookEvent(client: ConvexHttpClient, actor: Actor, type: string, data: unknown) {
   if (!actor.societyId || !EVENT_TYPES.includes(type as any)) return;
@@ -228,10 +231,27 @@ function action(name: string): ConvexCall {
 }
 
 async function convexCall(client: ConvexHttpClient, call: ConvexCall, args: Record<string, unknown>) {
+  const authToken = convexAuthStorage.getStore();
+  const requestClient = authToken
+    ? new ConvexHttpClient(client.url, { auth: authToken })
+    : client;
   const ref = functionRef(call.name);
-  if (call.kind === "query") return await client.query(ref as any, args);
-  if (call.kind === "mutation") return await client.mutation(ref as any, args);
-  return await client.action(ref as any, args);
+  if (call.kind === "query") return await requestClient.query(ref as any, args);
+  if (call.kind === "mutation") return await requestClient.mutation(ref as any, args);
+  return await requestClient.action(ref as any, args);
+}
+
+async function convexCallWithAuth(
+  client: ConvexHttpClient,
+  authToken: string,
+  call: ConvexCall,
+  args: Record<string, unknown>,
+) {
+  return await convexAuthStorage.run(authToken, () => convexCall(client, call, args));
+}
+
+function runWithConvexAuth<T>(authToken: string | undefined, callback: () => T): T {
+  return convexAuthStorage.run(authToken, callback);
 }
 
 export {
@@ -245,4 +265,6 @@ export {
   mutation,
   action,
   convexCall,
+  convexCallWithAuth,
+  runWithConvexAuth,
 };

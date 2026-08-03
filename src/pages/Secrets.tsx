@@ -164,9 +164,9 @@ export function SecretsPage() {
       setError("");
       const payload = normalizeDraft(form);
       if (editingId) {
-        await update({ id: editingId as any, actingUserId, patch: payload });
+        await update({ id: editingId as any, patch: payload });
       } else {
-        await create({ societyId: society._id, actingUserId, ...payload });
+        await create({ societyId: society._id, ...payload });
       }
       setOpen(false);
     } catch (err: any) {
@@ -178,7 +178,7 @@ export function SecretsPage() {
     if (!editingId || !actingUserId) return;
     try {
       setError("");
-      const result = await revealSecret({ id: editingId as any, actingUserId });
+      const result = await revealSecret({ id: editingId as any });
       setRevealedSecret(result.value);
       setShowRevealedSecret(true);
     } catch (err: any) {
@@ -255,7 +255,6 @@ export function SecretsPage() {
             if (!editable.has(fieldName)) return;
             await update({
               id: recordId as Id<"secretVaultItems">,
-              actingUserId,
               patch: { [fieldName]: value } as any,
             });
           }}
@@ -291,7 +290,7 @@ export function SecretsPage() {
                   aria-label={`Delete access custody record ${r.name}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    remove({ id: r._id, actingUserId });
+                    remove({ id: r._id });
                   }}
                 >
                   <Trash2 size={12} />

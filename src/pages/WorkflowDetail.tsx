@@ -159,7 +159,6 @@ export function WorkflowDetailPage() {
         societyId: society._id,
         workflowId: workflow._id,
         triggeredBy: "manual",
-        actingUserId,
         input,
       });
       toast.success(result?.status === "running" ? "Workflow queued in n8n" : "Workflow run complete");
@@ -199,7 +198,6 @@ export function WorkflowDetailPage() {
               setStatus({
                 id: workflow._id,
                 status: isActive ? "paused" : "active",
-                actingUserId,
               })
             }
           >
@@ -294,7 +292,6 @@ export function WorkflowDetailPage() {
                       await removeNode({
                         id: workflow._id,
                         key: selectedNode.key,
-                        actingUserId,
                       });
                       setSelectedKey(null);
                       toast.success("Node removed");
@@ -316,7 +313,6 @@ export function WorkflowDetailPage() {
                     id: workflow._id,
                     key: selectedNode.key,
                     config: patch,
-                    actingUserId,
                   });
                 }}
               />
@@ -376,7 +372,6 @@ export function WorkflowDetailPage() {
                       description: entry.description,
                     },
                     afterKey: selectedNode?.key,
-                    actingUserId,
                   });
                   if (result?.key) setSelectedKey(result.key);
                   setAddOpen(false);
@@ -485,4 +480,3 @@ export function WorkflowDetailPage() {
     </div>
   );
 }
-

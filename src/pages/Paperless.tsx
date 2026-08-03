@@ -48,7 +48,6 @@ export function PaperlessPage() {
         autoCreateTags,
         autoUpload,
         tagPrefix,
-        actingUserId,
       });
       toast.success("Paperless-ngx connection enabled");
     } catch (error: any) {
@@ -132,7 +131,7 @@ export function PaperlessPage() {
                   className="btn"
                   disabled={busy}
                   onClick={async () => {
-                    await disconnect({ societyId: society._id, actingUserId });
+                    await disconnect({ societyId: society._id });
                     toast.success("Paperless-ngx connection disabled");
                   }}
                 >

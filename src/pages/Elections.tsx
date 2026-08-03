@@ -96,7 +96,6 @@ export function ElectionsPage() {
         ? new Date(form.nominationsCloseAtISO).toISOString()
         : undefined,
       scrutineerUserIds: form.scrutineerUserIds,
-      actingUserId,
     });
     const options = form.optionLabels
       .map((label) => label.trim())
@@ -111,7 +110,6 @@ export function ElectionsPage() {
         title: form.questionTitle || "Election",
         maxSelections: 1,
         options,
-        actingUserId,
       });
     }
     toast.success("Election created");
@@ -270,7 +268,6 @@ export function ElectionsPage() {
                             onClick={async () => {
                               const result = await snapshotEligibleVoters({
                                 electionId: election._id,
-                                actingUserId,
                               });
                               toast.success(
                                 `Snapshotted ${result.eligibleCount} eligible voter(s) and opened voting`,
@@ -286,7 +283,6 @@ export function ElectionsPage() {
                             onClick={async () => {
                               await closeElection({
                                 electionId: election._id,
-                                actingUserId,
                               });
                               toast.info("Election closed");
                             }}
@@ -300,7 +296,6 @@ export function ElectionsPage() {
                             onClick={async () => {
                               await tallyElection({
                                 electionId: election._id,
-                                actingUserId,
                               });
                               toast.success("Results published");
                             }}

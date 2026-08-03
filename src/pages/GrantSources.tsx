@@ -43,7 +43,6 @@ export function GrantSourcesPage() {
       <GrantOpportunityQueue societyId={society._id} />
 
       <GrantSourceLibrarySection
-        actingUserId={actingUserId}
         societyId={society._id}
         sourceLibrary={sourceLibrary}
       />

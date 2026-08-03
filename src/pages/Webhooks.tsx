@@ -75,7 +75,7 @@ export function WebhooksPage() {
 
   const toggle = async (sub: any) => {
     const next = sub.status === "active" ? "disabled" : "active";
-    await setStatus({ id: sub._id, societyId: society._id, status: next, actingUserId } as any);
+    await setStatus({ id: sub._id, societyId: society._id, status: next } as any);
     toast.success(next === "active" ? "Endpoint enabled" : "Endpoint disabled");
   };
 

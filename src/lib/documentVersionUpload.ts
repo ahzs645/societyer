@@ -10,7 +10,6 @@ export async function uploadDocumentVersion({
   documentId,
   file,
   changeNote,
-  actingUserId,
   createDemoVersion,
   beginUpload,
   recordUploadedVersion,
@@ -19,7 +18,6 @@ export async function uploadDocumentVersion({
   documentId: any;
   file: File;
   changeNote?: string;
-  actingUserId?: any;
   createDemoVersion: (args: any) => Promise<any>;
   beginUpload: (args: any) => Promise<any>;
   recordUploadedVersion: (args: any) => Promise<any>;
@@ -44,7 +42,6 @@ export async function uploadDocumentVersion({
       fileSizeBytes: ref.byteLength ?? file.size,
       sha256: ref.sha256,
       changeNote: changeNote || undefined,
-      actingUserId,
     });
     return { versionId: recorded.versionId, version: recorded.version, provider: ref.provider };
   }
@@ -57,7 +54,6 @@ export async function uploadDocumentVersion({
       mimeType: file.type,
       fileSizeBytes: file.size,
       changeNote: changeNote || undefined,
-      actingUserId,
     });
     return { versionId: recorded.versionId, version: recorded.version, provider: "demo" };
   }
@@ -68,7 +64,6 @@ export async function uploadDocumentVersion({
     fileName: file.name,
     mimeType: file.type,
     fileSizeBytes: file.size,
-    actingUserId,
   });
   if (presigned.provider === "rustfs") {
     const res = await fetch(presigned.url, {
@@ -88,7 +83,6 @@ export async function uploadDocumentVersion({
     mimeType: file.type,
     fileSizeBytes: file.size,
     changeNote: changeNote || undefined,
-    actingUserId,
   });
   return { versionId: recorded.versionId, version: recorded.version, provider: presigned.provider };
 }

@@ -393,7 +393,6 @@ export function buildGrantPayload(draft: any, societyId: any, actingUserId: any)
     endDate: optionalString(draft.endDate),
     nextReportDueAtISO: optionalString(draft.nextReportDueAtISO),
     notes: optionalString(draft.notes),
-    actingUserId,
   };
 }
 
@@ -464,7 +463,6 @@ export function buildReportPayload(draft: any, societyId: any, actingUserId: any
     documentId: draft.documentId || undefined,
     submittedByUserId: draft.submittedAtISO ? actingUserId : undefined,
     notes: optionalString(draft.notes),
-    actingUserId,
   };
 }
 
@@ -480,6 +478,5 @@ export function buildTransactionPayload(draft: any, societyId: any, actingUserId
     amountCents: dollarInputToCents(draft.amountDollars) ?? 0,
     description: draft.description,
     notes: optionalString(draft.notes),
-    actingUserId,
   };
 }

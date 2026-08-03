@@ -306,7 +306,6 @@ export function TransparencyPage() {
               approvedByUserId: merged.approvedByUserId,
               approvedAtISO: merged.approvedAtISO,
               featured: merged.featured,
-              actingUserId,
             });
           }}
         >
@@ -351,7 +350,7 @@ export function TransparencyPage() {
                       tone: "danger",
                     });
                     if (!ok) return;
-                    await removePublication({ id: row._id, actingUserId });
+                    await removePublication({ id: row._id });
                     toast.success("Publication removed");
                   }}
                 >
@@ -451,7 +450,6 @@ export function TransparencyPage() {
                       : publicationDraft.reviewStatus || "Draft",
                   approvedByUserId: publicationDraft.status === "Published" ? actingUserId : undefined,
                   approvedAtISO: publicationDraft.status === "Published" ? new Date().toISOString() : undefined,
-                  actingUserId,
                 });
                 toast.success("Publication saved");
                 setPublicationDraft(null);

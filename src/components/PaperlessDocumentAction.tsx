@@ -32,7 +32,6 @@ export function PaperlessDocumentAction({
       const result = await syncDocument({
         societyId: resolvedSocietyId,
         documentId,
-        actingUserId,
       });
       toast.success(
         result.status === "complete"
