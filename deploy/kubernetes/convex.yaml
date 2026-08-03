@@ -38,6 +38,10 @@ spec:
               value: http://societyer.k8s.home:3220
             - name: CONVEX_SITE_ORIGIN
               value: http://societyer.k8s.home:3221
+            - name: BETTER_AUTH_BASE_URL
+              value: http://societyer.k8s.home
+            - name: BETTER_AUTH_JWKS_URL
+              value: http://societyer-api:8787/api/auth/jwks
             - name: DISABLE_BEACON
               value: "true"
             - name: REDACT_LOGS_TO_CLIENT

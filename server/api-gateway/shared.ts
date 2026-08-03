@@ -190,11 +190,15 @@ function stripActor(body: any) {
 }
 
 function bodyWithSociety(req: Request, actor: Actor) {
-  return { societyId: societyIdFrom(req, actor), ...stripActor(req.body) };
+  return { ...stripActor(req.body), societyId: societyIdFrom(req, actor) };
 }
 
 function bodyWithIdAndSociety(req: Request, actor: Actor) {
-  return { id: req.params.id, societyId: societyIdFrom(req, actor), ...stripActor(req.body) };
+  return {
+    ...stripActor(req.body),
+    id: req.params.id,
+    societyId: societyIdFrom(req, actor),
+  };
 }
 
 function withActingUser<T extends Record<string, unknown>>(args: T, actor: Actor): T {
@@ -207,7 +211,18 @@ function dropUndefined<T extends Record<string, unknown>>(value: T): T {
 }
 
 function societyIdFrom(req: Request, actor: Actor) {
-  const value = optionalSocietyIdFrom(req) ?? actor.societyId;
+  const requested = optionalSocietyIdFrom(req);
+  if (actor.societyId) {
+    if (requested && requested !== actor.societyId) {
+      throw httpError(
+        403,
+        "society_mismatch",
+        "The authenticated principal is not bound to the requested society.",
+      );
+    }
+    return actor.societyId;
+  }
+  const value = requested;
   if (!value) throw httpError(400, "society_required", "societyId is required.");
   return value;
 }

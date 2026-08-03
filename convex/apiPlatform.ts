@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { assertApiPlatformServiceToken, serviceTokenValidator } from "./lib/serviceAuth";
 import { requireRole } from "./users";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
@@ -330,6 +331,27 @@ export const verifyToken = mutation({
       scopes: token.scopes,
       userId: token.createdByUserId,
     };
+  },
+});
+
+export const resourceTenantStatus = query({
+  args: {
+    id: v.string(),
+    societyId: v.id("societies"),
+    serviceToken: serviceTokenValidator,
+  },
+  returns: v.union(
+    v.literal("allowed"),
+    v.literal("forbidden"),
+    v.literal("missing"),
+  ),
+  handler: async (ctx, { id, societyId, serviceToken }) => {
+    await assertApiPlatformServiceToken(serviceToken);
+    const record = await ctx.db.get(id as Id<"users">);
+    if (!record) return "missing" as const;
+    return String(record._id) === String(societyId) || record.societyId === societyId
+      ? "allowed" as const
+      : "forbidden" as const;
   },
 });
 

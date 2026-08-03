@@ -190,7 +190,7 @@ const RESOURCE_ROUTES: ResourceRoute[] = [
     update: mutation("society.upsert"),
     listArgs: () => ({}),
     createArgs: (req) => stripActor(req.body),
-    updateArgs: (req) => ({ id: req.params.id, ...stripActor(req.body) }),
+    updateArgs: (req) => ({ ...stripActor(req.body), id: req.params.id }),
   }),
   resource("users", "System", "users", {
     list: query("users.list"),
@@ -270,7 +270,7 @@ const RESOURCE_ROUTES: ResourceRoute[] = [
     update: mutation("elections.updateSettings"),
     createArgs: (req, actor) => withActingUser(bodyWithSociety(req, actor), actor),
     updateArgs: (req, actor) =>
-      withActingUser({ electionId: req.params.id, ...stripActor(req.body) }, actor),
+      withActingUser({ ...stripActor(req.body), electionId: req.params.id }, actor),
   }),
   resource("election-nominations", "Governance", "elections", {
     list: query("elections.listNominations"),
@@ -1369,6 +1369,7 @@ function mountResourceRoute(router: Router, client: ConvexHttpClient, route: Res
       `/${route.name}/:id`,
       requireScope(client, `${route.scope}:read`),
       asyncHandler(async (req, res) => {
+        await assertResourceTenant(client, req, route.name);
         const data = await convexCall(client, route.get!, route.getArgs?.(req, req.actor!) ?? { id: req.params.id });
         if (!data) throw httpError(404, "not_found", `${route.name} record not found.`);
         res.json(singleResponse(data));
@@ -1383,7 +1384,7 @@ function mountResourceRoute(router: Router, client: ConvexHttpClient, route: Res
       asyncHandler(async (req, res) => {
         const args =
           route.createArgs?.(req, req.actor!) ??
-          { societyId: societyIdFrom(req, req.actor!), ...stripActor(req.body) };
+          { ...stripActor(req.body), societyId: societyIdFrom(req, req.actor!) };
         const id = await convexCall(client, route.create!, dropUndefined(args));
         if (route.createEvent) await emitWebhookEvent(client, req.actor!, route.createEvent, { id, input: stripActor(req.body) });
         res.status(201).json(singleResponse({ id }));
@@ -1396,6 +1397,7 @@ function mountResourceRoute(router: Router, client: ConvexHttpClient, route: Res
       `/${route.name}/:id`,
       requireScope(client, `${route.scope}:write`),
       asyncHandler(async (req, res) => {
+        await assertResourceTenant(client, req, route.name);
         const args =
           route.updateArgs?.(req, req.actor!) ??
           { id: req.params.id, patch: stripActor(req.body) };
@@ -1411,11 +1413,36 @@ function mountResourceRoute(router: Router, client: ConvexHttpClient, route: Res
       `/${route.name}/:id`,
       requireScope(client, `${route.scope}:write`),
       asyncHandler(async (req, res) => {
+        await assertResourceTenant(client, req, route.name);
         const args = route.removeArgs?.(req, req.actor!) ?? { id: req.params.id };
         await convexCall(client, route.remove!, dropUndefined(args));
         if (route.deleteEvent) await emitWebhookEvent(client, req.actor!, route.deleteEvent, { id: req.params.id });
         res.status(204).send();
       }),
+    );
+  }
+}
+
+async function assertResourceTenant(
+  client: ConvexHttpClient,
+  req: Request,
+  resourceName: string,
+) {
+  const actor = req.actor!;
+  if (actor.type === "local-dev" || !actor.societyId) return;
+  const status = await convexCall(client, query("apiPlatform.resourceTenantStatus"), {
+    id: req.params.id,
+    societyId: actor.societyId,
+    serviceToken: apiPlatformServiceToken(),
+  });
+  if (status === "missing") {
+    throw httpError(404, "not_found", `${resourceName} record not found.`);
+  }
+  if (status !== "allowed") {
+    throw httpError(
+      403,
+      "society_mismatch",
+      "The requested record belongs to another society.",
     );
   }
 }
@@ -1435,6 +1462,7 @@ function mountActionRoute(router: Router, client: ConvexHttpClient, route: Actio
 function requireScope(client: ConvexHttpClient, requiredScope: Scope) {
   return asyncHandler(async (req, _res, next) => {
     req.actor = await resolveActor(client, req, requiredScope);
+    societyIdFrom(req, req.actor);
     next();
   });
 }
@@ -1733,5 +1761,3 @@ function actionRoute(
     operationId: operationId(path.split("/").filter(Boolean).join("-"), "action"),
   };
 }
-
-

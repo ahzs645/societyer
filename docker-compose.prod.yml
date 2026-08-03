@@ -27,6 +27,8 @@ services:
       - INSTANCE_SECRET=${CONVEX_INSTANCE_SECRET:?Set CONVEX_INSTANCE_SECRET}
       - CONVEX_CLOUD_ORIGIN=${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3220}
       - CONVEX_SITE_ORIGIN=${CONVEX_SITE_ORIGIN:-http://127.0.0.1:3221}
+      - BETTER_AUTH_BASE_URL=${BETTER_AUTH_BASE_URL:-http://127.0.0.1:8080}
+      - BETTER_AUTH_JWKS_URL=http://api:8787/api/auth/jwks
       - DISABLE_BEACON=true
       - REDACT_LOGS_TO_CLIENT=true
     volumes:
@@ -52,7 +54,10 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - AUTH_SERVER_PORT=8787
+      # Auth stays disabled by default. To enable it, set both AUTH_MODE=better-auth
+      # and a strong BETTER_AUTH_SECRET; the API refuses to start without one.
       - AUTH_MODE=${AUTH_MODE:-none}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-}
       - CONVEX_SELF_HOSTED_URL=http://convex:3210
       - VITE_CONVEX_URL=http://convex:3210
       - SOCIETYER_API_PUBLIC_URL=${SOCIETYER_API_PUBLIC_URL:-http://127.0.0.1:8080}
@@ -74,6 +79,8 @@ services:
       dockerfile: docker/frontend.Dockerfile
       args:
         VITE_CONVEX_URL: ${PUBLIC_CONVEX_URL:-http://127.0.0.1:3220}
+        # Keep this aligned with AUTH_MODE. Enabling both modes requires the
+        # BETTER_AUTH_SECRET marker on the api service above.
         VITE_AUTH_MODE: ${VITE_AUTH_MODE:-none}
     image: societyer-frontend:local
     container_name: societyer-prod-frontend
