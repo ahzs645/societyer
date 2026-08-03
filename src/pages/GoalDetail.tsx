@@ -4,7 +4,7 @@ import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge } from "../components/ui";
+import { Badge, EmptyState } from "../components/ui";
 import { Progress } from "../components/primitives";
 import { Select } from "../components/Select";
 import { Checkbox } from "../components/Controls";
@@ -30,7 +30,23 @@ export function GoalDetailPage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!goal) return <PageLoading />;
+  if (goal === undefined) return <PageLoading />;
+  if (goal === null) {
+    return (
+      <div className="page">
+        <EmptyState
+          icon={<Target size={18} />}
+          title="Goal not found"
+          description="This goal may have been deleted, or the link is out of date."
+          action={
+            <Link className="btn btn--accent" to="/app/goals">
+              Back to goals
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   const committee = (committees ?? []).find((c: any) => c._id === goal.committeeId);
   const tasks = (allTasks ?? []).filter((t: any) => t.goalId === goal._id);

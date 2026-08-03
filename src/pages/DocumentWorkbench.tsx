@@ -7,7 +7,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Field } from "../components/ui";
+import { Badge, EmptyState, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { SignaturePanel } from "../components/SignaturePanel";
 import { useToast } from "../components/Toast";
@@ -63,7 +63,23 @@ export function DocumentWorkbenchPage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!document) return <PageLoading />;
+  if (document === undefined) return <PageLoading />;
+  if (document === null) {
+    return (
+      <div className="page page--narrow">
+        <EmptyState
+          icon={<FileText size={18} />}
+          title="Document not found"
+          description="This document may have been deleted, or the link is out of date."
+          action={
+            <Link className="btn btn--accent" to="/app/documents">
+              Back to documents
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   const openFile = async () => {
     if (latest) {

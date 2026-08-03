@@ -5,7 +5,7 @@ import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Drawer, EmptyState, Field } from "../components/ui";
 import { RecordShowPage } from "../components/RecordShowPage";
 import { ActivityTimeline } from "../components/ActivityTimeline";
 import { NotesPanel } from "../components/NotesPanel";
@@ -38,18 +38,36 @@ export function CommitteeDetailPage() {
   const [taskDrawer, setTaskDrawer] = useState(false);
   const [taskForm, setTaskForm] = useState<any>(null);
 
+  const recentCommittee = detail?.committee;
+  useTrackRecentRecord(
+    "committee",
+    recentCommittee?._id ? String(recentCommittee._id) : null,
+    recentCommittee?.name ?? null,
+    recentCommittee?._id ? `/app/committees/${recentCommittee._id}` : null,
+  );
+
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!detail) return <PageLoading />;
+  if (detail === undefined) return <PageLoading />;
+  if (detail === null) {
+    return (
+      <div className="page">
+        <EmptyState
+          icon={<Users size={18} />}
+          title="Committee not found"
+          description="This committee may have been deleted, or the link is out of date."
+          action={
+            <Link className="btn btn--accent" to="/app/committees">
+              Back to committees
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   const { committee, members, meetings, tasks, goals } = detail;
   const openTasks = tasks.filter((t: any) => t.status !== "Done").length;
-  useTrackRecentRecord(
-    "committee",
-    String(committee._id),
-    committee.name,
-    `/app/committees/${committee._id}`,
-  );
 
   const saveMember = async () => {
     await addMember({

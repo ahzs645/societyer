@@ -95,9 +95,10 @@ export function usePersistView({
         openRecordIn: state.openRecordIn,
         isShared: false,
       });
+      const newColumns = [] as typeof state.columns;
       for (let i = 0; i < state.columns.length; i++) {
         const col = state.columns[i];
-        await addField({
+        const newViewFieldId = await addField({
           societyId,
           viewId,
           fieldMetadataId: col.fieldMetadataId as Id<"fieldMetadata">,
@@ -107,8 +108,14 @@ export function usePersistView({
           aggregateOperation: col.aggregateOperation ?? undefined,
           viewFieldGroupId: col.viewFieldGroupId ?? undefined,
         });
+        newColumns.push({
+          ...col,
+          viewFieldId: String(newViewFieldId),
+          position: i,
+        });
       }
-      // New view is now the saved baseline.
+      // Future saves must target the newly-created view and its fields.
+      handle.set({ viewId: String(viewId), columns: newColumns });
       handle.get().markSaved();
       return viewId;
     },
