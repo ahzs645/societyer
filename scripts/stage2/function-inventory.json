@@ -18712,12 +18712,6 @@
     "source": "convex/http.ts",
     "idArguments": [
       {
-        "path": "actingUserId",
-        "table": "unknown",
-        "array": false,
-        "optional": false
-      },
-      {
         "path": "modelId",
         "table": "unknown",
         "array": false,

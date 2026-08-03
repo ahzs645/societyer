@@ -50,6 +50,22 @@ Exit criterion: deleting every client-supplied `actingUserId` produces no author
 
 Exit criterion: the adversarial suite can substitute every foreign Society B ID into every Society A function without observing or changing Society B data.
 
+### Status (as of the §4 migration)
+
+Done. `scripts/check-stage2-tenancy.ts` reports **0 leaked reads and 5 leaked writes**, down from 667 and 1214. Handlers use `requireOwnedRow` (derives the society from the row, then requires membership) or `getOwned`/`getOwnedChild` when an authoritative society is already in hand; `getGlobalOrOwned` covers rows that are legitimately global. All are in `shared/functions/access.ts`.
+
+The 5 residual writes share one root cause and are baselined, not fixed:
+
+    portable:assets:create            imageStorageId
+    portable:inventoryHub:upsertItem  imageStorageId
+    portable:society:setLogo          storageId
+    portable:society:setDarkLogo      storageId
+    portable:society:setLetterhead    storageId
+
+Convex `_storage` rows carry no `societyId`, so no helper can prove that a storage ID belongs to the caller's society. The practical exposure: a member of Society A who learns a Society B storage ID can attach it to an A-owned row (for example, set B's uploaded image as A's logo) and thereby view it. It cannot write to or read any B database row.
+
+Fixing it requires tenant-owned storage metadata — a table mapping `storageId -> societyId`, written whenever a file is stored, plus an ownership check in these five handlers. That is a schema change with a backfill for existing files, so it was scoped out of the §4 migration. Do it before treating §4 as fully closed.
+
 ## 5. Finish frontend authentication behavior
 
 1. In `src/auth/AuthProvider.tsx`, expose separate Better Auth session, Convex-auth confirmation, membership-resolution, and fatal-error states. `src/components/AuthGate.tsx` must render application routes only when all three authenticated states are ready.
