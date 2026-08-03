@@ -9,8 +9,10 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("goals")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -18,10 +20,17 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "goals");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("goals not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  return getOwned(ctx, "goals", id, candidate.societyId);
 }
 
 export async function byCommitteePortable(ctx: PortableQueryCtx, { committeeId }: { committeeId: string }) {
+  const committee = await ctx.db.get(committeeId, "committees");
+  if (!committee || typeof committee.societyId !== "string") throw new Error("committees not found.");
+  await requireSocietyMembership(ctx, committee.societyId);
+  await getOwned(ctx, "committees", committeeId, committee.societyId);
   return ctx.db
     .query("goals")
     .withIndex("by_committee", (q) => q.eq("committeeId", committeeId))
@@ -71,6 +80,8 @@ export interface GoalPatch {
 }
 
 export async function createPortable(ctx: PortableMutationCtx, args: GoalCreateArgs) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.committeeId) await getOwned(ctx, "committees", args.committeeId, args.societyId);
   const id = await ctx.db.insert("goals", {
     ...args,
     createdAtISO: new Date().toISOString(),
@@ -90,12 +101,19 @@ export async function createPortable(ctx: PortableMutationCtx, args: GoalCreateA
 }
 
 export async function updatePortable(ctx: PortableMutationCtx, { id, patch }: { id: string; patch: GoalPatch }) {
+  const candidate = await ctx.db.get(id, "goals");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("goals not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "goals", id, candidate.societyId);
+  if (patch.committeeId) await getOwned(ctx, "committees", patch.committeeId, candidate.societyId);
   await ctx.db.patch(id, patch);
 }
 
 export async function toggleMilestonePortable(ctx: PortableMutationCtx, { id, index }: { id: string; index: number }) {
-  const goal = await ctx.db.get(id);
-  if (!goal) return;
+  const candidate = await ctx.db.get(id, "goals");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("goals not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const goal = await getOwned(ctx, "goals", id, candidate.societyId);
   const milestones = [...goal.milestones];
   milestones[index] = { ...milestones[index], done: !milestones[index].done };
   const pct = Math.round(
@@ -105,5 +123,9 @@ export async function toggleMilestonePortable(ctx: PortableMutationCtx, { id, in
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const candidate = await ctx.db.get(id, "goals");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("goals not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "goals", id, candidate.societyId);
   await ctx.db.delete(id);
 }

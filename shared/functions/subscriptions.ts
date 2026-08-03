@@ -10,7 +10,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -78,6 +78,7 @@ async function syncCurrentFeePeriod(ctx: PortableMutationCtx, planId: string, pl
 }
 
 export async function plansPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("subscriptionPlans")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -88,6 +89,7 @@ export async function mySubscriptionsPortable(
   ctx: PortableQueryCtx,
   { societyId, email }: { societyId: string; email: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("memberSubscriptions")
     .withIndex("by_email", (q) => q.eq("email", email))
@@ -99,6 +101,7 @@ export async function allSubscriptionsPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("memberSubscriptions")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -109,6 +112,7 @@ export async function feeTimelinePortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const [plans, periods] = await Promise.all([
     ctx.db
       .query("subscriptionPlans")
@@ -164,10 +168,16 @@ export async function feeTimelinePortable(
 
 export async function cancelSubscriptionPortable(
   ctx: PortableMutationCtx,
-  { id }: { id: string; actingUserId?: string },
+  { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const sub = await ctx.db.get(id);
-  if (!sub) return;
+  const candidate = await ctx.db.get(id, "memberSubscriptions");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("memberSubscriptions not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const principalId = (await requireSocietyMembership(ctx, candidate.societyId))._id;
+  if (actingUserId && actingUserId !== principalId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
+  const sub = await getOwned(ctx, "memberSubscriptions", id, candidate.societyId);
   // Member can cancel their own subscription; admin can cancel any.
   await ctx.db.patch(id, {
     status: "canceled",
@@ -185,10 +195,14 @@ export async function cancelSubscriptionPortable(
 }
 
 export async function getPlanPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "subscriptionPlans");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("subscriptionPlans not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  return getOwned(ctx, "subscriptionPlans", id, candidate.societyId);
 }
 
 export async function upsertPlanPortable(ctx: PortableMutationCtx, args: Record<string, any>) {
+  await requireSocietyMembership(ctx, String(args.societyId));
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
@@ -197,7 +211,7 @@ export async function upsertPlanPortable(ctx: PortableMutationCtx, args: Record<
   const { id, actingUserId, ...rest } = args;
   void actingUserId;
   if (id) {
-    const before = await ctx.db.get(id);
+    const before = await getOwned(ctx, "subscriptionPlans", String(id), String(args.societyId));
     await ctx.db.patch(id, rest);
     if (
       before &&
@@ -218,6 +232,7 @@ export async function upsertPlanPortable(ctx: PortableMutationCtx, args: Record<
 }
 
 export async function upsertFeePeriodPortable(ctx: PortableMutationCtx, args: Record<string, any>) {
+  await requireSocietyMembership(ctx, String(args.societyId));
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
@@ -226,13 +241,11 @@ export async function upsertFeePeriodPortable(ctx: PortableMutationCtx, args: Re
   const { id, actingUserId, ...rest } = args;
   void actingUserId;
   if (rest.planId) {
-    const plan = await ctx.db.get(rest.planId);
-    if (!plan || plan.societyId !== rest.societyId) {
-      throw new Error("Plan does not belong to this society.");
-    }
+    await getOwned(ctx, "subscriptionPlans", String(rest.planId), String(rest.societyId));
   }
   const now = new Date().toISOString();
   if (id) {
+    await getOwned(ctx, "membershipFeePeriods", String(id), String(rest.societyId));
     await ctx.db.patch(id, { ...rest, updatedAtISO: now });
     return id;
   }
@@ -247,8 +260,10 @@ export async function removeFeePeriodPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const row = await ctx.db.get(id);
-  if (!row) return;
+  const candidate = await ctx.db.get(id, "membershipFeePeriods");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("membershipFeePeriods not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const row = await getOwned(ctx, "membershipFeePeriods", id, candidate.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId: String(row.societyId), required: "Admin" });
   await ctx.db.delete(id);
 }
@@ -257,13 +272,18 @@ export async function removePlanPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const row = await ctx.db.get(id);
-  if (!row) return;
+  const candidate = await ctx.db.get(id, "subscriptionPlans");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("subscriptionPlans not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const row = await getOwned(ctx, "subscriptionPlans", id, candidate.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId: String(row.societyId), required: "Admin" });
   const feePeriods = await ctx.db
     .query("membershipFeePeriods")
     .withIndex("by_plan", (q) => q.eq("planId", id))
     .collect();
+  for (const period of feePeriods) {
+    await getOwned(ctx, "membershipFeePeriods", period._id, candidate.societyId);
+  }
   for (const period of feePeriods) await ctx.db.delete(period._id);
   await ctx.db.delete(id);
 }

@@ -53,11 +53,16 @@ import {
   upsertTemplateDataFieldPortable,
   removeTemplateDataFieldPortable,
 } from "../shared/functions/legalDocuments";
+import { getOwned, principalUserId, requireSocietyMembership } from "../shared/functions/access";
 
 export const listRoleHolders = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, args) => listRoleHoldersPortable(await toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableQueryCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    return listRoleHoldersPortable(portableCtx, args);
+  },
 });
 
 export const upsertRoleHolder = mutation({
@@ -123,13 +128,31 @@ export const upsertRoleHolder = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => upsertRoleHolderPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.id) await getOwned(portableCtx, "roleHolders", args.id, args.societyId);
+    if (args.membershipClassId) await getOwned(portableCtx, "rightsClasses", args.membershipClassId, args.societyId);
+    if (args.relatedRoleHolderId) await getOwned(portableCtx, "roleHolders", args.relatedRoleHolderId, args.societyId);
+    if (args.extraProvincialRegistrationId) await getOwned(portableCtx, "organizationRegistrations", args.extraProvincialRegistrationId, args.societyId);
+    for (const documentId of args.sourceDocumentIds ?? []) await getOwned(portableCtx, "documents", documentId, args.societyId);
+    const actorUserId = await principalUserId(portableCtx, args.societyId);
+    return upsertRoleHolderPortable(portableCtx, { ...args, actorUserId });
+  },
 });
 
 export const removeRoleHolder = mutation({
   args: { id: v.id("roleHolders"), actorUserId: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, args) => removeRoleHolderPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("roleHolders not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    await getOwned(portableCtx, "roleHolders", args.id, candidate.societyId);
+    const actorUserId = await principalUserId(portableCtx, candidate.societyId);
+    return removeRoleHolderPortable(portableCtx, { ...args, actorUserId });
+  },
 });
 
 export const rightsLedger = query({
@@ -138,7 +161,11 @@ export const rightsLedger = query({
   // register. Omitted = live state from the stored holdings.
   args: { societyId: v.id("societies"), asOf: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx, args) => rightsLedgerPortable(await toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableQueryCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    return rightsLedgerPortable(portableCtx, args);
+  },
 });
 
 /**
@@ -156,8 +183,11 @@ export const votingPower = query({
   // runtime. The marshalling that used to be hand-copied into the static mirror
   // now lives once in shared/functions/votingPower.ts.
   // See docs/portable-functions-architecture.md.
-  handler: async (ctx, { societyId, asOf }) =>
-    votingPowerPortable(await toPortableQueryCtx(ctx), { societyId, asOf }),
+  handler: async (ctx, { societyId, asOf }) => {
+    const portableCtx = await toPortableQueryCtx(ctx);
+    await requireSocietyMembership(portableCtx, societyId);
+    return votingPowerPortable(portableCtx, { societyId, asOf });
+  },
 });
 
 export const upsertRightsClass = mutation({
@@ -184,7 +214,13 @@ export const upsertRightsClass = mutation({
   returns: v.any(),
   // Portable handler: the same insert/patch runs on the local runtime and the
   // convex-test oracle. See shared/functions/rightsClasses.ts.
-  handler: async (ctx, args) => upsertRightsClassPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.id) await getOwned(portableCtx, "rightsClasses", args.id, args.societyId);
+    for (const documentId of args.sourceDocumentIds ?? []) await getOwned(portableCtx, "documents", documentId, args.societyId);
+    return upsertRightsClassPortable(portableCtx, args);
+  },
 });
 
 export const upsertRightsholdingTransfer = mutation({
@@ -215,43 +251,83 @@ export const upsertRightsholdingTransfer = mutation({
   returns: v.any(),
   // Portable handler: validate-ledger + multi-row syncRightsHoldings runs on the
   // local runtime (inside one atomic transaction) and convex-test alike.
-  handler: async (ctx, args) => upsertRightsholdingTransferPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.id) await getOwned(portableCtx, "rightsholdingTransfers", args.id, args.societyId);
+    if (args.precedentRunId) await getOwned(portableCtx, "legalPrecedentRuns", args.precedentRunId, args.societyId);
+    if (args.rightsClassId) await getOwned(portableCtx, "rightsClasses", args.rightsClassId, args.societyId);
+    if (args.sourceRoleHolderId) await getOwned(portableCtx, "roleHolders", args.sourceRoleHolderId, args.societyId);
+    if (args.destinationRoleHolderId) await getOwned(portableCtx, "roleHolders", args.destinationRoleHolderId, args.societyId);
+    for (const documentId of args.sourceDocumentIds ?? []) await getOwned(portableCtx, "documents", documentId, args.societyId);
+    return upsertRightsholdingTransferPortable(portableCtx, args);
+  },
 });
 
 export const removeRightsClass = mutation({
   args: { id: v.id("rightsClasses") },
   returns: v.any(),
-  handler: async (ctx, args) => removeRightsClassPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("rightsClasses not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    await getOwned(portableCtx, "rightsClasses", args.id, candidate.societyId);
+    return removeRightsClassPortable(portableCtx, args);
+  },
 });
 
 export const removeRightsholdingTransfer = mutation({
   args: { id: v.id("rightsholdingTransfers") },
   returns: v.any(),
-  handler: async (ctx, args) => removeRightsholdingTransferPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("rightsholdingTransfers not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    await getOwned(portableCtx, "rightsholdingTransfers", args.id, candidate.societyId);
+    return removeRightsholdingTransferPortable(portableCtx, args);
+  },
 });
 
 export const templateEngine = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, args) => templateEnginePortable(await toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableQueryCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    return templateEnginePortable(portableCtx, args);
+  },
 });
 
 export const seedStarterPolicyTemplates = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, args) => seedStarterPolicyTemplatesPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    return seedStarterPolicyTemplatesPortable(portableCtx, args);
+  },
 });
 
 export const seedCorporationDocumentPackets = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, args) => seedCorporationDocumentPacketsPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    return seedCorporationDocumentPacketsPortable(portableCtx, args);
+  },
 });
 
 export const seedSocietyDocumentPackets = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, args) => seedSocietyDocumentPacketsPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    return seedSocietyDocumentPacketsPortable(portableCtx, args);
+  },
 });
 
 /**
@@ -267,7 +343,11 @@ export const generateDocumentFromCatalog = mutation({
     effectiveDate: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => generateDocumentFromCatalogPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    return generateDocumentFromCatalogPortable(portableCtx, args);
+  },
 });
 
 /**
@@ -291,7 +371,11 @@ export async function generatePacketForSociety(
 export const seedDocumentPacketsForEntity = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, { societyId }) => seedDocumentPacketsForEntityPortable(await toPortableMutationCtx(ctx), societyId),
+  handler: async (ctx, { societyId }) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, societyId);
+    return seedDocumentPacketsForEntityPortable(portableCtx, societyId);
+  },
 });
 
 /**
@@ -318,7 +402,12 @@ export const stageCorporationDocumentPacket = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => stageCorporationDocumentPacketPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.filingId) await getOwned(portableCtx, "filings", args.filingId, args.societyId);
+    return stageCorporationDocumentPacketPortable(portableCtx, args);
+  },
 });
 
 export const stageShareIssuancePacket = mutation({
@@ -328,7 +417,12 @@ export const stageShareIssuancePacket = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => stageShareIssuancePacketPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    await getOwned(portableCtx, "rightsholdingTransfers", args.transferId, args.societyId);
+    return stageShareIssuancePacketPortable(portableCtx, args);
+  },
 });
 
 export const stageShareSplitPacket = mutation({
@@ -340,7 +434,12 @@ export const stageShareSplitPacket = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => stageShareSplitPacketPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    await getOwned(portableCtx, "rightsClasses", args.rightsClassId, args.societyId);
+    return stageShareSplitPacketPortable(portableCtx, args);
+  },
 });
 
 export const upsertTemplateDataField = mutation({
@@ -358,7 +457,20 @@ export const upsertTemplateDataField = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
   },
   returns: v.any(),
-  handler: async (ctx, args) => upsertTemplateDataFieldPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    if (args.societyId) await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.id && args.societyId) {
+      await getOwned(portableCtx, "legalTemplateDataFields", args.id, args.societyId);
+    } else if (args.id) {
+      const candidate = await ctx.db.get(args.id);
+      if (candidate && typeof candidate.societyId === "string") {
+        await requireSocietyMembership(portableCtx, candidate.societyId);
+        await getOwned(portableCtx, "legalTemplateDataFields", args.id, candidate.societyId);
+      }
+    }
+    return upsertTemplateDataFieldPortable(portableCtx, args);
+  },
 });
 
 export const upsertLegalTemplate = mutation({
@@ -394,7 +506,29 @@ export const upsertLegalTemplate = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
   },
   returns: v.any(),
-  handler: async (ctx, args) => upsertLegalTemplatePortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    let societyId = args.societyId;
+    if (!societyId && args.id) {
+      const candidate = await ctx.db.get(args.id);
+      if (typeof candidate?.societyId === "string") societyId = candidate.societyId;
+    }
+    if (societyId) {
+      await requireSocietyMembership(portableCtx, societyId);
+      if (args.id) await getOwned(portableCtx, "legalTemplates", args.id, societyId);
+      for (const documentId of [args.templateDocumentId, args.docxDocumentId, args.pdfDocumentId]) {
+        if (documentId) await getOwned(portableCtx, "documents", documentId, societyId);
+      }
+      for (const fieldId of [
+        ...(args.requiredDataFieldIds ?? []),
+        ...(args.optionalDataFieldIds ?? []),
+        ...(args.reviewDataFieldIds ?? []),
+      ]) {
+        await getOwned(portableCtx, "legalTemplateDataFields", fieldId, societyId);
+      }
+    }
+    return upsertLegalTemplatePortable(portableCtx, args);
+  },
 });
 
 export const upsertLegalPrecedent = mutation({
@@ -424,7 +558,22 @@ export const upsertLegalPrecedent = mutation({
     sourceExternalIds: v.optional(v.array(v.string())),
   },
   returns: v.any(),
-  handler: async (ctx, args) => upsertLegalPrecedentPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    let societyId = args.societyId;
+    if (!societyId && args.id) {
+      const candidate = await ctx.db.get(args.id);
+      if (typeof candidate?.societyId === "string") societyId = candidate.societyId;
+    }
+    if (societyId) {
+      await requireSocietyMembership(portableCtx, societyId);
+      if (args.id) await getOwned(portableCtx, "legalPrecedents", args.id, societyId);
+      for (const templateId of args.templateIds ?? []) {
+        await getOwned(portableCtx, "legalTemplates", templateId, societyId);
+      }
+    }
+    return upsertLegalPrecedentPortable(portableCtx, args);
+  },
 });
 
 export const upsertLegalPrecedentRun = mutation({
@@ -452,7 +601,16 @@ export const upsertLegalPrecedentRun = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => upsertLegalPrecedentRunPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.id) await getOwned(portableCtx, "legalPrecedentRuns", args.id, args.societyId);
+    if (args.precedentId) await getOwned(portableCtx, "legalPrecedents", args.precedentId, args.societyId);
+    for (const filingId of args.filingIds ?? []) await getOwned(portableCtx, "filings", filingId, args.societyId);
+    for (const documentId of args.generatedDocumentIds ?? []) await getOwned(portableCtx, "generatedLegalDocuments", documentId, args.societyId);
+    for (const roleHolderId of args.signerRoleHolderIds ?? []) await getOwned(portableCtx, "roleHolders", roleHolderId, args.societyId);
+    return upsertLegalPrecedentRunPortable(portableCtx, args);
+  },
 });
 
 export const upsertGeneratedLegalDocument = mutation({
@@ -484,7 +642,19 @@ export const upsertGeneratedLegalDocument = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => upsertGeneratedLegalDocumentPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.id) await getOwned(portableCtx, "generatedLegalDocuments", args.id, args.societyId);
+    for (const documentId of [args.draftDocumentId, args.signedDocumentId, ...(args.sourceDocumentIds ?? [])]) {
+      if (documentId) await getOwned(portableCtx, "documents", documentId, args.societyId);
+    }
+    if (args.sourceTemplateId) await getOwned(portableCtx, "legalTemplates", args.sourceTemplateId, args.societyId);
+    if (args.precedentRunId) await getOwned(portableCtx, "legalPrecedentRuns", args.precedentRunId, args.societyId);
+    for (const roleHolderId of args.signersRequiredRoleHolderIds ?? []) await getOwned(portableCtx, "roleHolders", roleHolderId, args.societyId);
+    for (const signerId of args.signersWhoSignedIds ?? []) await getOwned(portableCtx, "legalSigners", signerId, args.societyId);
+    return upsertGeneratedLegalDocumentPortable(portableCtx, args);
+  },
 });
 
 export const upsertLegalSigner = mutation({
@@ -506,49 +676,105 @@ export const upsertLegalSigner = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => upsertLegalSignerPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.id) await getOwned(portableCtx, "legalSigners", args.id, args.societyId);
+    if (args.generatedDocumentId) await getOwned(portableCtx, "generatedLegalDocuments", args.generatedDocumentId, args.societyId);
+    if (args.roleHolderId) await getOwned(portableCtx, "roleHolders", args.roleHolderId, args.societyId);
+    return upsertLegalSignerPortable(portableCtx, args);
+  },
 });
 
 export const removeTemplateDataField = mutation({
   args: { id: v.id("legalTemplateDataFields") },
   returns: v.any(),
-  handler: async (ctx, args) => removeTemplateDataFieldPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (candidate && typeof candidate.societyId === "string") {
+      await requireSocietyMembership(portableCtx, candidate.societyId);
+      await getOwned(portableCtx, "legalTemplateDataFields", args.id, candidate.societyId);
+    }
+    return removeTemplateDataFieldPortable(portableCtx, args);
+  },
 });
 
 export const removeLegalTemplate = mutation({
   args: { id: v.id("legalTemplates") },
   returns: v.any(),
-  handler: async (ctx, args) => removeLegalTemplatePortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (candidate && typeof candidate.societyId === "string") {
+      await requireSocietyMembership(portableCtx, candidate.societyId);
+      await getOwned(portableCtx, "legalTemplates", args.id, candidate.societyId);
+    }
+    return removeLegalTemplatePortable(portableCtx, args);
+  },
 });
 
 export const removeLegalPrecedent = mutation({
   args: { id: v.id("legalPrecedents") },
   returns: v.any(),
-  handler: async (ctx, args) => removeLegalPrecedentPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (candidate && typeof candidate.societyId === "string") {
+      await requireSocietyMembership(portableCtx, candidate.societyId);
+      await getOwned(portableCtx, "legalPrecedents", args.id, candidate.societyId);
+    }
+    return removeLegalPrecedentPortable(portableCtx, args);
+  },
 });
 
 export const removeLegalPrecedentRun = mutation({
   args: { id: v.id("legalPrecedentRuns") },
   returns: v.any(),
-  handler: async (ctx, args) => removeLegalPrecedentRunPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("legalPrecedentRuns not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    await getOwned(portableCtx, "legalPrecedentRuns", args.id, candidate.societyId);
+    return removeLegalPrecedentRunPortable(portableCtx, args);
+  },
 });
 
 export const removeGeneratedLegalDocument = mutation({
   args: { id: v.id("generatedLegalDocuments") },
   returns: v.any(),
-  handler: async (ctx, args) => removeGeneratedLegalDocumentPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("generatedLegalDocuments not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    await getOwned(portableCtx, "generatedLegalDocuments", args.id, candidate.societyId);
+    return removeGeneratedLegalDocumentPortable(portableCtx, args);
+  },
 });
 
 export const removeLegalSigner = mutation({
   args: { id: v.id("legalSigners") },
   returns: v.any(),
-  handler: async (ctx, args) => removeLegalSignerPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("legalSigners not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    await getOwned(portableCtx, "legalSigners", args.id, candidate.societyId);
+    return removeLegalSignerPortable(portableCtx, args);
+  },
 });
 
 export const formationMaintenance = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
-  handler: async (ctx, args) => formationMaintenancePortable(await toPortableQueryCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableQueryCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    return formationMaintenancePortable(portableCtx, args);
+  },
 });
 
 export const upsertFormationRecord = mutation({
@@ -581,7 +807,16 @@ export const upsertFormationRecord = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => upsertFormationRecordPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.id) await getOwned(portableCtx, "formationRecords", args.id, args.societyId);
+    if (args.relatedUserId) await getOwned(portableCtx, "users", args.relatedUserId, args.societyId);
+    for (const documentId of [...(args.draftDocumentIds ?? []), ...(args.supportingDocumentIds ?? [])]) {
+      await getOwned(portableCtx, "documents", documentId, args.societyId);
+    }
+    return upsertFormationRecordPortable(portableCtx, args);
+  },
 });
 
 export const upsertNameSearchItem = mutation({
@@ -604,7 +839,14 @@ export const upsertNameSearchItem = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => upsertNameSearchItemPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.id) await getOwned(portableCtx, "nameSearchItems", args.id, args.societyId);
+    if (args.formationRecordId) await getOwned(portableCtx, "formationRecords", args.formationRecordId, args.societyId);
+    if (args.reportDocumentId) await getOwned(portableCtx, "documents", args.reportDocumentId, args.societyId);
+    return upsertNameSearchItemPortable(portableCtx, args);
+  },
 });
 
 export const upsertEntityAmendment = mutation({
@@ -624,7 +866,14 @@ export const upsertEntityAmendment = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => upsertEntityAmendmentPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.id) await getOwned(portableCtx, "entityAmendments", args.id, args.societyId);
+    if (args.relatedPrecedentRunId) await getOwned(portableCtx, "legalPrecedentRuns", args.relatedPrecedentRunId, args.societyId);
+    for (const documentId of args.sourceDocumentIds ?? []) await getOwned(portableCtx, "documents", documentId, args.societyId);
+    return upsertEntityAmendmentPortable(portableCtx, args);
+  },
 });
 
 export const upsertAnnualMaintenanceRecord = mutation({
@@ -659,7 +908,26 @@ export const upsertAnnualMaintenanceRecord = mutation({
     notes: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => upsertAnnualMaintenanceRecordPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.id) await getOwned(portableCtx, "annualMaintenanceRecords", args.id, args.societyId);
+    for (const documentId of [
+      args.draftFilingDocumentId,
+      args.signedFilingDocumentId,
+      args.processedFilingDocumentId,
+      args.financialStatementsDocumentId,
+      ...(args.sourceDocumentIds ?? []),
+    ]) {
+      if (documentId) await getOwned(portableCtx, "documents", documentId, args.societyId);
+    }
+    if (args.relatedPrecedentRunId) await getOwned(portableCtx, "legalPrecedentRuns", args.relatedPrecedentRunId, args.societyId);
+    if (args.filingId) await getOwned(portableCtx, "filings", args.filingId, args.societyId);
+    if (args.keyVaultItemId) await getOwned(portableCtx, "secretVaultItems", args.keyVaultItemId, args.societyId);
+    if (args.templateFilingId) await getOwned(portableCtx, "legalTemplates", args.templateFilingId, args.societyId);
+    if (args.authorizingRoleHolderId) await getOwned(portableCtx, "roleHolders", args.authorizingRoleHolderId, args.societyId);
+    return upsertAnnualMaintenanceRecordPortable(portableCtx, args);
+  },
 });
 
 export const upsertJurisdictionMetadata = mutation({
@@ -706,25 +974,53 @@ export const upsertSupportLog = mutation({
 export const removeFormationRecord = mutation({
   args: { id: v.id("formationRecords") },
   returns: v.any(),
-  handler: async (ctx, args) => removeFormationRecordPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("formationRecords not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    await getOwned(portableCtx, "formationRecords", args.id, candidate.societyId);
+    return removeFormationRecordPortable(portableCtx, args);
+  },
 });
 
 export const removeNameSearchItem = mutation({
   args: { id: v.id("nameSearchItems") },
   returns: v.any(),
-  handler: async (ctx, args) => removeNameSearchItemPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("nameSearchItems not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    await getOwned(portableCtx, "nameSearchItems", args.id, candidate.societyId);
+    return removeNameSearchItemPortable(portableCtx, args);
+  },
 });
 
 export const removeEntityAmendment = mutation({
   args: { id: v.id("entityAmendments") },
   returns: v.any(),
-  handler: async (ctx, args) => removeEntityAmendmentPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("entityAmendments not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    await getOwned(portableCtx, "entityAmendments", args.id, candidate.societyId);
+    return removeEntityAmendmentPortable(portableCtx, args);
+  },
 });
 
 export const removeAnnualMaintenanceRecord = mutation({
   args: { id: v.id("annualMaintenanceRecords") },
   returns: v.any(),
-  handler: async (ctx, args) => removeAnnualMaintenanceRecordPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("annualMaintenanceRecords not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    await getOwned(portableCtx, "annualMaintenanceRecords", args.id, candidate.societyId);
+    return removeAnnualMaintenanceRecordPortable(portableCtx, args);
+  },
 });
 
 export const removeJurisdictionMetadata = mutation({

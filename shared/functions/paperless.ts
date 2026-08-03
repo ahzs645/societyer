@@ -13,7 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
 
 export async function tagProfilesPortable() {
   return [
@@ -41,6 +41,7 @@ export async function tagProfilesPortable() {
 }
 
 export async function listConnectionPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("paperlessConnections")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -52,6 +53,7 @@ export async function recentSyncsPortable(
   ctx: PortableQueryCtx,
   { societyId, limit }: { societyId: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("paperlessDocumentSyncs")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -61,7 +63,7 @@ export async function recentSyncsPortable(
     .slice(0, limit ?? 20);
   return await Promise.all(
     sorted.map(async (row: any) => {
-      const document = await ctx.db.get(row.documentId);
+      const document = await getOwned(ctx, "documents", String(row.documentId), societyId);
       return {
         ...row,
         documentTitle: document?.title ?? row.title,
@@ -72,6 +74,10 @@ export async function recentSyncsPortable(
 }
 
 export async function syncForDocumentPortable(ctx: PortableQueryCtx, { documentId }: { documentId: string }) {
+  const document = await ctx.db.get(documentId, "documents");
+  if (!document || typeof document.societyId !== "string") throw new Error("documents not found.");
+  await requireSocietyMembership(ctx, document.societyId);
+  await getOwned(ctx, "documents", documentId, document.societyId);
   const rows = await ctx.db
     .query("paperlessDocumentSyncs")
     .withIndex("by_document", (q) => q.eq("documentId", documentId))
@@ -83,17 +89,13 @@ export async function sourcePullContextPortable(
   ctx: PortableQueryCtx,
   args: { societyId: string; documentId: string; actingUserId?: string },
 ) {
-  if (args.actingUserId) {
-    await requireRolePortable(ctx, {
-      actingUserId: args.actingUserId,
-      societyId: args.societyId,
-      required: "Director",
-    });
-  }
-  const document = await ctx.db.get(args.documentId);
-  if (!document || document.societyId !== args.societyId) {
-    throw new Error("Document not found.");
-  }
+  await requireSocietyMembership(ctx, args.societyId);
+  await requireRolePortable(ctx, {
+    actingUserId: args.actingUserId,
+    societyId: args.societyId,
+    required: "Director",
+  });
+  const document = await getOwned(ctx, "documents", args.documentId, args.societyId);
   return { document };
 }
 
@@ -101,6 +103,7 @@ export async function authorizeMeetingImportPortable(
   ctx: PortableQueryCtx,
   args: { societyId: string; actingUserId: string },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
@@ -110,7 +113,10 @@ export async function authorizeMeetingImportPortable(
 }
 
 export async function getSyncPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "paperlessDocumentSyncs");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("paperlessDocumentSyncs not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  return getOwned(ctx, "paperlessDocumentSyncs", id, candidate.societyId);
 }
 
 export async function recordConnectionTestPortable(
@@ -125,12 +131,14 @@ export async function recordConnectionTestPortable(
     demo: boolean;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const connection = await ctx.db
     .query("paperlessConnections")
     .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
     .collect()
     .then((rows: any[]) => rows[0] ?? null);
   if (!connection) return null;
+  await getOwned(ctx, "paperlessConnections", connection._id, args.societyId);
   await ctx.db.patch(connection._id, {
     status: args.ok ? "connected" : "error",
     baseUrl: args.baseUrl,

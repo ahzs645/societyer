@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { v } from "convex/values";
-import { action, internalMutation, mutation, query } from "./_generated/server";
+import { action, internalMutation, mutation, query, type ActionCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { api, internal } from "./_generated/api";
 import { sendEmail } from "./providers/email";
 import { sendSms } from "./providers/sms";
@@ -20,6 +21,7 @@ import {
   markDeliveryBouncedPortable,
 } from "../shared/functions/communications";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import { getOwned, principalUserId, requireSocietyMembership } from "../shared/functions/access";
 
 const DEFAULT_TEMPLATE_SLUGS = [
   {
@@ -89,12 +91,20 @@ function roleRank(role?: string | null) {
   }
 }
 
-async function assertCampaignRole(ctx: any, actingUserId?: string) {
-  if (!actingUserId) return;
-  const actor = await ctx.runQuery(api.users.get, { id: actingUserId as any });
-  if (!actor || roleRank(actor.role) < roleRank("Director")) {
+async function assertCampaignRole(ctx: ActionCtx, societyId: string, actingUserId?: string) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity?.subject) throw new Error("Authentication required.");
+  const actor = await ctx.runQuery(api.users.getByAuthSubject, { authSubject: identity.subject });
+  if (!actor || String(actor.societyId) !== societyId) {
+    throw new Error("Society membership not found.");
+  }
+  if (actingUserId && String(actor._id) !== actingUserId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
+  if (roleRank(actor.role) < roleRank("Director")) {
     throw new Error("Only directors or admins can send society communications.");
   }
+  return String(actor._id);
 }
 
 function mergeRecipients(rows: Recipient[]) {
@@ -384,6 +394,7 @@ export const ensureDefaultTemplates = mutation({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
+    await requireSocietyMembership(await toPortableMutationCtx(ctx), societyId);
     const existing = await ctx.db
       .query("communicationTemplates")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -444,15 +455,23 @@ export const _createCampaign = internalMutation({
     createdByUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args) =>
-    ctx.db.insert("communicationCampaigns", {
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.templateId) await getOwned(portableCtx, "communicationTemplates", args.templateId, args.societyId);
+    if (args.segmentId) await getOwned(portableCtx, "communicationSegments", args.segmentId, args.societyId);
+    if (args.meetingId) await getOwned(portableCtx, "meetings", args.meetingId, args.societyId);
+    const createdByUserId = await principalUserId(portableCtx, args.societyId);
+    return ctx.db.insert("communicationCampaigns", {
       ...args,
+      createdByUserId,
       memberCount: 0,
       deliveredCount: 0,
       openedCount: 0,
       bouncedCount: 0,
       createdAtISO: new Date().toISOString(),
-    }),
+    });
+  },
 });
 
 export const _completeCampaign = internalMutation({
@@ -466,6 +485,11 @@ export const _completeCampaign = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("communicationCampaigns not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    await getOwned(portableCtx, "communicationCampaigns", args.id, candidate.societyId);
     await ctx.db.patch(args.id, {
       status: args.status,
       memberCount: args.memberCount,
@@ -502,11 +526,18 @@ export const _recordDelivery = internalMutation({
     unsubscribedAtISO: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) =>
-    ctx.db.insert("communicationDeliveries", {
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.campaignId) await getOwned(portableCtx, "communicationCampaigns", args.campaignId, args.societyId);
+    if (args.templateId) await getOwned(portableCtx, "communicationTemplates", args.templateId, args.societyId);
+    if (args.meetingId) await getOwned(portableCtx, "meetings", args.meetingId, args.societyId);
+    if (args.memberId) await getOwned(portableCtx, "members", args.memberId, args.societyId);
+    return ctx.db.insert("communicationDeliveries", {
       ...args,
       sentAtISO: new Date().toISOString(),
-    }),
+    });
+  },
 });
 
 export const markDeliveryOpened = mutation({
@@ -573,7 +604,7 @@ async function sendCampaignInternal(
     customMessage?: string;
   },
 ) {
-  await assertCampaignRole(ctx, args.actingUserId);
+  const createdByUserId = await assertCampaignRole(ctx, args.societyId, args.actingUserId);
 
   const [societies, template, meeting, prefs, users] = await Promise.all([
     ctx.runQuery(api.society.list, {}),
@@ -610,7 +641,12 @@ async function sendCampaignInternal(
   const segmentId = args.audience.startsWith("segment:")
     ? args.audience.slice("segment:".length).trim()
     : undefined;
-  const segment = segmentId ? await ctx.db.get(segmentId as any) : null;
+  const segment = segmentId
+    ? (await ctx.runQuery(api.communications.listSegments, {
+      societyId: args.societyId as Id<"societies">,
+    })).find((row: Record<string, unknown>) => String(row._id) === segmentId)
+    : null;
+  if (segmentId && !segment) throw new Error("communicationSegments not found.");
 
   const campaignId = await ctx.runMutation(internal.communications._createCampaign, {
     societyId: args.societyId,
@@ -624,7 +660,7 @@ async function sendCampaignInternal(
     subject: subjectTemplate,
     bodyText: bodyTemplate,
     status: "sending",
-    createdByUserId: args.actingUserId as any,
+    createdByUserId: createdByUserId as Id<"users">,
   });
 
   let deliveredCount = 0;

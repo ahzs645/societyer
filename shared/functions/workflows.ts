@@ -16,7 +16,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
 import { parseWorkflowStatus } from "../workflows/schemas";
 
 // The node types a user can append to a workflow's preview graph. Kept in sync
@@ -33,6 +33,7 @@ export const NODE_TYPE_CATALOG: Array<{ type: string; label: string; description
 ];
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("workflows")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -44,6 +45,7 @@ export async function listRunsPortable(
   ctx: PortableQueryCtx,
   { societyId, limit }: { societyId: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("workflowRuns")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -52,6 +54,10 @@ export async function listRunsPortable(
 }
 
 export async function runsForWorkflowPortable(ctx: PortableQueryCtx, { workflowId }: { workflowId: string }) {
+  const candidate = await ctx.db.get(workflowId, "workflows");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("workflows not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "workflows", workflowId, candidate.societyId);
   return ctx.db
     .query("workflowRuns")
     .withIndex("by_workflow", (q) => q.eq("workflowId", workflowId))
@@ -60,7 +66,10 @@ export async function runsForWorkflowPortable(ctx: PortableQueryCtx, { workflowI
 }
 
 export async function getRunPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "workflowRuns");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("workflowRuns not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  return getOwned(ctx, "workflowRuns", id, candidate.societyId);
 }
 
 export async function listNodeTypesPortable() {
@@ -71,8 +80,10 @@ export async function setStatusPortable(
   ctx: PortableMutationCtx,
   { id, status, actingUserId }: { id: string; status: string; actingUserId?: string },
 ) {
-  const wf = await ctx.db.get(id);
-  if (!wf) throw new Error("Workflow not found");
+  const candidate = await ctx.db.get(id, "workflows");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("workflows not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const wf = await getOwned(ctx, "workflows", id, candidate.societyId);
   await requireRolePortable(ctx, {
     actingUserId,
     societyId: String(wf.societyId),
@@ -90,8 +101,10 @@ export async function updatePortable(
   ctx: PortableMutationCtx,
   { id, patch, actingUserId }: { id: string; patch: { name?: string; status?: string }; actingUserId?: string },
 ) {
-  const wf = await ctx.db.get(id);
-  if (!wf) throw new Error("Workflow not found");
+  const candidate = await ctx.db.get(id, "workflows");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("workflows not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const wf = await getOwned(ctx, "workflows", id, candidate.societyId);
   await requireRolePortable(ctx, {
     actingUserId,
     societyId: String(wf.societyId),
@@ -122,8 +135,10 @@ export async function addNodePortable(
     actingUserId?: string;
   },
 ) {
-  const wf = await ctx.db.get(id);
-  if (!wf) throw new Error("Workflow not found");
+  const candidate = await ctx.db.get(id, "workflows");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("workflows not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const wf = await getOwned(ctx, "workflows", id, candidate.societyId);
   await requireRolePortable(ctx, {
     actingUserId,
     societyId: String(wf.societyId),
@@ -170,8 +185,10 @@ export async function removePortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const wf = await ctx.db.get(id);
-  if (!wf) return;
+  const candidate = await ctx.db.get(id, "workflows");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("workflows not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const wf = await getOwned(ctx, "workflows", id, candidate.societyId);
   await requireRolePortable(ctx, {
     actingUserId,
     societyId: String(wf.societyId),
@@ -198,8 +215,10 @@ export async function updateNodeConfigPortable(
     actingUserId?: string;
   },
 ) {
-  const wf = await ctx.db.get(id);
-  if (!wf) throw new Error("Workflow not found");
+  const candidate = await ctx.db.get(id, "workflows");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("workflows not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const wf = await getOwned(ctx, "workflows", id, candidate.societyId);
   await requireRolePortable(ctx, {
     actingUserId,
     societyId: String(wf.societyId),
@@ -223,8 +242,10 @@ export async function removeNodePortable(
   ctx: PortableMutationCtx,
   { id, key, actingUserId }: { id: string; key: string; actingUserId?: string },
 ) {
-  const wf = await ctx.db.get(id);
-  if (!wf) throw new Error("Workflow not found");
+  const candidate = await ctx.db.get(id, "workflows");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("workflows not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const wf = await getOwned(ctx, "workflows", id, candidate.societyId);
   await requireRolePortable(ctx, {
     actingUserId,
     societyId: String(wf.societyId),

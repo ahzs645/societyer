@@ -13,6 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
 
 // ----- queries --------------------------------------------------------------
@@ -21,6 +22,10 @@ export async function listForMeetingPortable(
   ctx: PortableQueryCtx,
   { meetingId }: { meetingId: string },
 ) {
+  const meeting = await ctx.db.get(meetingId, "meetings");
+  if (!meeting || typeof meeting.societyId !== "string") throw new Error("meetings not found.");
+  await requireSocietyMembership(ctx, meeting.societyId);
+  await getOwned(ctx, "meetings", meetingId, meeting.societyId);
   const agendas = await ctx.db
     .query("agendas")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -32,6 +37,10 @@ export async function getForMeetingPortable(
   ctx: PortableQueryCtx,
   { meetingId }: { meetingId: string },
 ) {
+  const meeting = await ctx.db.get(meetingId, "meetings");
+  if (!meeting || typeof meeting.societyId !== "string") throw new Error("meetings not found.");
+  await requireSocietyMembership(ctx, meeting.societyId);
+  await getOwned(ctx, "meetings", meetingId, meeting.societyId);
   const agendas = await ctx.db
     .query("agendas")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -48,8 +57,10 @@ export async function getForMeetingPortable(
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { agendaId }: { agendaId: string }) {
-  const agenda = await ctx.db.get(agendaId);
-  if (!agenda) return null;
+  const candidate = await ctx.db.get(agendaId, "agendas");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("agendas not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const agenda = await getOwned(ctx, "agendas", agendaId, candidate.societyId);
   const items = await ctx.db
     .query("agendaItems")
     .withIndex("by_agenda", (q) => q.eq("agendaId", agendaId))
@@ -62,6 +73,7 @@ export async function listForSocietyPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return await ctx.db
     .query("agendas")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -79,6 +91,8 @@ export async function createPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  await getOwned(ctx, "meetings", args.meetingId, args.societyId);
   const now = new Date().toISOString();
   return await ctx.db.insert("agendas", {
     ...args,
@@ -97,6 +111,10 @@ export async function updateAgendaPortable(
     notes?: string;
   },
 ) {
+  const candidate = await ctx.db.get(agendaId, "agendas");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("agendas not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "agendas", agendaId, candidate.societyId);
   const updatedAtISO = new Date().toISOString();
   const clean: Record<string, unknown> = { updatedAtISO };
   for (const [k, v] of Object.entries(patch)) if (v !== undefined) clean[k] = v;
@@ -105,10 +123,15 @@ export async function updateAgendaPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { agendaId }: { agendaId: string }) {
+  const candidate = await ctx.db.get(agendaId, "agendas");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("agendas not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "agendas", agendaId, candidate.societyId);
   const items = await ctx.db
     .query("agendaItems")
     .withIndex("by_agenda", (q) => q.eq("agendaId", agendaId))
     .collect();
+  for (const item of items) await getOwned(ctx, "agendaItems", item._id, candidate.societyId);
   for (const item of items) await ctx.db.delete(item._id);
   await ctx.db.delete(agendaId);
   return agendaId;
@@ -129,8 +152,14 @@ export async function addItemPortable(
     motionText?: string;
   },
 ) {
-  const agenda = await ctx.db.get(args.agendaId);
-  if (!agenda) throw new Error("Agenda not found");
+  const candidate = await ctx.db.get(args.agendaId, "agendas");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("agendas not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const agenda = await getOwned(ctx, "agendas", args.agendaId, candidate.societyId);
+  if (args.motionTemplateId) {
+    await getOwned(ctx, "motionTemplates", args.motionTemplateId, candidate.societyId);
+  }
+  if (args.motionId) await getOwned(ctx, "motions", args.motionId, candidate.societyId);
   const existing = await ctx.db
     .query("agendaItems")
     .withIndex("by_agenda", (q) => q.eq("agendaId", args.agendaId))
@@ -140,14 +169,12 @@ export async function addItemPortable(
 
   let motionText = args.motionText;
   if (args.motionTemplateId && !motionText) {
-    const template = await ctx.db.get(args.motionTemplateId);
-    if (template) {
-      motionText = template.body;
-      await ctx.db.patch(template._id, {
-        usageCount: (template.usageCount ?? 0) + 1,
-        updatedAtISO: now,
-      });
-    }
+    const template = await getOwned(ctx, "motionTemplates", args.motionTemplateId, candidate.societyId);
+    motionText = template.body;
+    await ctx.db.patch(template._id, {
+      usageCount: (template.usageCount ?? 0) + 1,
+      updatedAtISO: now,
+    });
   }
 
   return await ctx.db.insert("agendaItems", {
@@ -180,6 +207,10 @@ export async function updateItemPortable(
     outcome?: string;
   },
 ) {
+  const candidate = await ctx.db.get(itemId, "agendaItems");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("agendaItems not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "agendaItems", itemId, candidate.societyId);
   const clean: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) if (v !== undefined) clean[k] = v;
   await ctx.db.patch(itemId, clean);
@@ -206,9 +237,14 @@ export async function syncForMeetingPortable(
     }>;
   },
 ) {
-  const meeting = await ctx.db.get(args.meetingId);
-  if (!meeting) throw new Error("Meeting not found");
-  if (meeting.societyId !== args.societyId) throw new Error("Meeting belongs to a different society");
+  await requireSocietyMembership(ctx, args.societyId);
+  const meeting = await getOwned(ctx, "meetings", args.meetingId, args.societyId);
+  for (const item of args.items) {
+    if (item.motionTemplateId) {
+      await getOwned(ctx, "motionTemplates", item.motionTemplateId, args.societyId);
+    }
+    if (item.motionId) await getOwned(ctx, "motions", item.motionId, args.societyId);
+  }
 
   const now = new Date().toISOString();
   const existingAgendas = await ctx.db
@@ -257,7 +293,7 @@ export async function syncForMeetingPortable(
     const match = (byTitle.get(key) ?? []).find((candidate) => !usedIds.has(String(candidate._id)));
     let motionText = item.motionText;
     if (item.motionTemplateId && !motionText) {
-      const template = await ctx.db.get(item.motionTemplateId);
+      const template = await getOwned(ctx, "motionTemplates", item.motionTemplateId, args.societyId);
       motionText = template?.body;
     }
 
@@ -306,10 +342,11 @@ export async function startMinutesFromAgendaPortable(
   ctx: PortableMutationCtx,
   { agendaId }: { agendaId: string },
 ) {
-  const agenda = await ctx.db.get(agendaId);
-  if (!agenda) throw new Error("Agenda not found");
-  const meeting = await ctx.db.get(agenda.meetingId);
-  if (!meeting) throw new Error("Meeting not found");
+  const candidate = await ctx.db.get(agendaId, "agendas");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("agendas not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const agenda = await getOwned(ctx, "agendas", agendaId, candidate.societyId);
+  const meeting = await getOwned(ctx, "meetings", String(agenda.meetingId), candidate.societyId);
   const items = await ctx.db
     .query("agendaItems")
     .withIndex("by_agenda", (q) => q.eq("agendaId", agendaId))
@@ -564,9 +601,12 @@ function sectionHasDetails(section: any) {
 }
 
 export async function removeItemPortable(ctx: PortableMutationCtx, { itemId }: { itemId: string }) {
-  const item = await ctx.db.get(itemId);
-  if (!item) return;
+  const candidate = await ctx.db.get(itemId, "agendaItems");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("agendaItems not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const item = await getOwned(ctx, "agendaItems", itemId, candidate.societyId);
   if (item.motionId) {
+    await getOwned(ctx, "motions", String(item.motionId), candidate.societyId);
     await ctx.db.patch(item.motionId, {
       status: "Backlog",
       updatedAtISO: new Date().toISOString(),
@@ -592,9 +632,13 @@ export async function reorderItemsPortable(
     orderedItemIds: string[];
   },
 ) {
+  const candidate = await ctx.db.get(agendaId, "agendas");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("agendas not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "agendas", agendaId, candidate.societyId);
   for (let i = 0; i < orderedItemIds.length; i++) {
-    const item = await ctx.db.get(orderedItemIds[i]);
-    if (!item || item.agendaId !== agendaId) continue;
+    const item = await getOwned(ctx, "agendaItems", orderedItemIds[i], candidate.societyId);
+    if (item.agendaId !== agendaId) throw new Error("agendaItems not found.");
     await ctx.db.patch(orderedItemIds[i], { order: i });
   }
   await ctx.db.patch(agendaId, { updatedAtISO: new Date().toISOString() });

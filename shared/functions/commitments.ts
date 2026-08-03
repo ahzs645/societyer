@@ -10,8 +10,10 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("commitments")
     .withIndex("by_society_due", (q) => q.eq("societyId", societyId))
@@ -19,10 +21,14 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "commitments");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("commitments not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  return getOwned(ctx, "commitments", id, candidate.societyId);
 }
 
 export async function eventsForSocietyPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("commitmentEvents")
     .withIndex("by_society_happened", (q) => q.eq("societyId", societyId))
@@ -31,6 +37,10 @@ export async function eventsForSocietyPortable(ctx: PortableQueryCtx, { societyI
 }
 
 export async function eventsForCommitmentPortable(ctx: PortableQueryCtx, { commitmentId }: { commitmentId: string }) {
+  const candidate = await ctx.db.get(commitmentId, "commitments");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("commitments not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "commitments", commitmentId, candidate.societyId);
   return ctx.db
     .query("commitmentEvents")
     .withIndex("by_commitment", (q) => q.eq("commitmentId", commitmentId))
@@ -60,6 +70,7 @@ export async function createPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   await assertSocietyRefs(ctx, args.societyId, {
     sourceDocumentId: args.sourceDocumentId,
   });
@@ -108,8 +119,10 @@ export async function updatePortable(
     };
   },
 ) {
-  const commitment = await ctx.db.get(id);
-  if (!commitment) throw new Error("Commitment not found.");
+  const candidate = await ctx.db.get(id, "commitments");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("commitments not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const commitment = await getOwned(ctx, "commitments", id, candidate.societyId);
   await assertSocietyRefs(ctx, String(commitment.societyId), {
     sourceDocumentId: patch.sourceDocumentId,
   });
@@ -133,8 +146,10 @@ export async function recordEventPortable(
     nextDueDate?: string;
   },
 ) {
-  const commitment = await ctx.db.get(args.commitmentId);
-  if (!commitment) throw new Error("Commitment not found.");
+  const candidate = await ctx.db.get(args.commitmentId, "commitments");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("commitments not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const commitment = await getOwned(ctx, "commitments", args.commitmentId, candidate.societyId);
   await assertSocietyRefs(ctx, String(commitment.societyId), {
     meetingId: args.meetingId,
     evidenceDocumentIds: args.evidenceDocumentIds,
@@ -184,8 +199,11 @@ export async function recordEventPortable(
 }
 
 export async function removeEventPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const event = await ctx.db.get(id);
-  if (!event) return;
+  const candidate = await ctx.db.get(id, "commitmentEvents");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("commitmentEvents not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const event = await getOwned(ctx, "commitmentEvents", id, candidate.societyId);
+  await getOwned(ctx, "commitments", String(event.commitmentId), candidate.societyId);
   await ctx.db.delete(id);
   const remaining = await ctx.db
     .query("commitmentEvents")
@@ -200,10 +218,17 @@ export async function removeEventPortable(ctx: PortableMutationCtx, { id }: { id
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const candidate = await ctx.db.get(id, "commitments");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("commitments not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "commitments", id, candidate.societyId);
   const events = await ctx.db
     .query("commitmentEvents")
     .withIndex("by_commitment", (q) => q.eq("commitmentId", id))
     .collect();
+  for (const event of events) {
+    await getOwned(ctx, "commitmentEvents", event._id, candidate.societyId);
+  }
   await Promise.all(events.map((event) => ctx.db.delete(event._id)));
   await ctx.db.delete(id);
 }
@@ -218,21 +243,12 @@ async function assertSocietyRefs(
   },
 ) {
   if (refs.sourceDocumentId) {
-    const document = await ctx.db.get(refs.sourceDocumentId);
-    if (!document || String(document.societyId) !== String(societyId)) {
-      throw new Error("Source document is not in this society.");
-    }
+    await getOwned(ctx, "documents", refs.sourceDocumentId, societyId);
   }
   if (refs.meetingId) {
-    const meeting = await ctx.db.get(refs.meetingId);
-    if (!meeting || String(meeting.societyId) !== String(societyId)) {
-      throw new Error("Meeting is not in this society.");
-    }
+    await getOwned(ctx, "meetings", refs.meetingId, societyId);
   }
   for (const documentId of refs.evidenceDocumentIds ?? []) {
-    const document = await ctx.db.get(documentId);
-    if (!document || String(document.societyId) !== String(societyId)) {
-      throw new Error("Evidence document is not in this society.");
-    }
+    await getOwned(ctx, "documents", documentId, societyId);
   }
 }

@@ -10,12 +10,14 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import {
   reviewsDue as computeReviewsDue,
   type SignificanceStep,
 } from "../significantIndividuals";
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("significantIndividualSteps")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -35,6 +37,8 @@ export async function createPortable(
     nowISO: string;
   },
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.roleHolderId) await getOwned(ctx, "roleHolders", args.roleHolderId, args.societyId);
   const { nowISO, ...rest } = args;
   return ctx.db.insert("significantIndividualSteps", {
     ...rest,
@@ -46,6 +50,7 @@ export async function reviewsDuePortable(
   ctx: PortableQueryCtx,
   { societyId, asOf }: { societyId: string; asOf: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("significantIndividualSteps")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -60,5 +65,11 @@ export async function reviewsDuePortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  const candidate = await ctx.db.get(id, "significantIndividualSteps");
+  if (!candidate || typeof candidate.societyId !== "string") {
+    throw new Error("significantIndividualSteps not found.");
+  }
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "significantIndividualSteps", id, candidate.societyId);
   await ctx.db.delete(id);
 }
