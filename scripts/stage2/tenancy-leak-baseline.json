@@ -1,10 +1,4 @@
 {
   "version": 1,
-  "leaks": [
-    "portable:assets:create|foreign-id|imageStorageId|user-A|leaked-write",
-    "portable:inventoryHub:upsertItem|foreign-id|imageStorageId|user-A|leaked-write",
-    "portable:society:setDarkLogo|foreign-id|storageId|user-A|leaked-write",
-    "portable:society:setLetterhead|foreign-id|storageId|user-A|leaked-write",
-    "portable:society:setLogo|foreign-id|storageId|user-A|leaked-write"
-  ]
+  "leaks": []
 }

@@ -16031,6 +16031,15 @@
     ]
   },
   {
+    "key": "convex:storageOwnershipBackfill:run",
+    "surface": "convex",
+    "name": "storageOwnershipBackfill:run",
+    "kind": "mutation",
+    "access": "unclassified",
+    "source": "convex/storageOwnershipBackfill.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:subjectIdBackfill:backfillPage",
     "surface": "convex",
     "name": "subjectIdBackfill:backfillPage",
@@ -16533,6 +16542,28 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:transcripts:_claimPipelineStorage",
+    "surface": "convex",
+    "name": "transcripts:_claimPipelineStorage",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/transcripts.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "storageId",
+        "table": "_storage",
+        "array": false,
+        "optional": false
       }
     ]
   },
