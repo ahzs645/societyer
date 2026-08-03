@@ -142,12 +142,9 @@ export function LoginPage() {
                 : "Already have an account? Sign in"}
             </button>
             {mode === "sign-in" && (
-              <a
-                className="landing__btn landing__btn--ghost"
-                href="mailto:?subject=Societyer%20password%20reset"
-              >
-                Forgot password? Request a reset
-              </a>
+              <p className="muted" style={{ margin: 0, textAlign: "center" }}>
+                Contact your workspace administrator to reset your password.
+              </p>
             )}
           </form>
         </div>

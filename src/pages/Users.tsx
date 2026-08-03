@@ -336,16 +336,6 @@ function InvitationsPanel({
     toast.success("Invitation created");
   };
 
-  const copyLink = async (token: string) => {
-    const url = `${window.location.origin}/invite/${token}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("Invite link copied");
-    } catch {
-      toast.error("Clipboard unavailable");
-    }
-  };
-
   const pending = (invitations ?? []).filter(
     (i: any) => !i.acceptedAtISO && !i.revokedAtISO,
   );
@@ -355,7 +345,7 @@ function InvitationsPanel({
       <div className="card__head">
         <h2 className="card__title">Invitations</h2>
         <span className="card__subtitle">
-          Invite by email — share the copy-link in the meantime.
+          Create and manage pending workspace invitations.
         </span>
         <button
           className="btn-action btn-action--primary"
@@ -394,30 +384,22 @@ function InvitationsPanel({
                 <td className="mono muted">{inv.createdAtISO?.slice(0, 10)}</td>
                 <td className="table__actions">
                   {status === "pending" && (
-                    <>
-                      <button
-                        className="btn btn--sm btn--ghost"
-                        onClick={() => copyLink(inv.token)}
-                      >
-                        Copy link
-                      </button>
-                      <button
-                        className="btn btn--sm btn--ghost btn--icon"
-                        aria-label="Revoke invitation"
-                        onClick={async () => {
-                          const ok = await confirm({
-                            title: "Revoke invitation?",
-                            message: `${inv.email} will no longer be able to use this link.`,
-                            confirmLabel: "Revoke",
-                            tone: "danger",
-                          });
-                          if (!ok) return;
-                          await revokeInvite({ id: inv._id });
-                        }}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </>
+                    <button
+                      className="btn btn--sm btn--ghost btn--icon"
+                      aria-label="Revoke invitation"
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: "Revoke invitation?",
+                          message: `The pending invitation for ${inv.email} will be cancelled.`,
+                          confirmLabel: "Revoke",
+                          tone: "danger",
+                        });
+                        if (!ok) return;
+                        await revokeInvite({ id: inv._id });
+                      }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   )}
                 </td>
               </tr>
