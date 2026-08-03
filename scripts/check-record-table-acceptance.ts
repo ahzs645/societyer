@@ -1,27 +1,27 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { FIELD_TYPES } from "../src/modules/object-record/types/FieldType";
-import { isFieldEditable } from "../src/modules/object-record/record-field/components/FieldInput";
+import { FIELD_TYPES } from "../src/platform/record-engine/types/FieldType";
+import { isFieldEditable } from "../src/platform/record-engine/record-field/components/FieldInput";
 import {
   LAB_EDIT_VALUES,
   LAB_FIELDS,
   applyLabEdit,
   initialLabRecord,
-} from "../src/modules/object-record/record-table/testing/fieldLabFixture";
+} from "../src/platform/record-engine/record-table/testing/fieldLabFixture";
 
 const ROOT = join(process.cwd(), "src");
 
 const recordTableContextSource = readFileSync(
-  join(ROOT, "modules/object-record/record-table/contexts/RecordTableContext.ts"),
+  join(ROOT, "platform/record-engine/record-table/contexts/RecordTableContext.ts"),
   "utf8",
 );
 const recordTableScopeSource = readFileSync(
-  join(ROOT, "modules/object-record/record-table/components/RecordTableScope.tsx"),
+  join(ROOT, "platform/record-engine/record-table/components/RecordTableScope.tsx"),
   "utf8",
 );
 const recordTableSidePanelSource = readFileSync(
-  join(ROOT, "modules/object-record/record-table/components/RecordTableSidePanel.tsx"),
+  join(ROOT, "platform/record-engine/record-table/components/RecordTableSidePanel.tsx"),
   "utf8",
 );
 const meetingsSource = readFileSync(join(ROOT, "pages/Meetings.tsx"), "utf8");
@@ -34,6 +34,7 @@ const REVIEWED_RECORD_TABLE_FILES: Record<string, number> = {
   "src/pages/AuditLog.tsx": 1,
   "src/pages/Auditors.tsx": 1,
   "src/pages/Commitments.tsx": 1,
+  "src/pages/Committees.tsx": 1,
   "src/pages/Communications.tsx": 4,
   "src/pages/Conflicts.tsx": 1,
   "src/pages/CourtOrders.tsx": 1,
@@ -47,9 +48,12 @@ const REVIEWED_RECORD_TABLE_FILES: Record<string, number> = {
   "src/pages/Grants.tsx": 4,
   "src/pages/Inspections.tsx": 1,
   "src/pages/Insurance.tsx": 1,
+  "src/pages/LegalOperations.tsx": 1,
+  "src/pages/MeetingTemplates.tsx": 1,
   "src/pages/Meetings.tsx": 1,
   "src/pages/MemberProposals.tsx": 1,
   "src/pages/Members.tsx": 1,
+  "src/pages/MinuteBook.tsx": 1,
   "src/pages/Minutes.tsx": 1,
   "src/pages/Motions.tsx": 1,
   "src/pages/OrganizationHistory.tsx": 1,
@@ -61,6 +65,7 @@ const REVIEWED_RECORD_TABLE_FILES: Record<string, number> = {
   "src/pages/RecordTableFieldLab.tsx": 1,
   "src/pages/Retention.tsx": 1,
   "src/pages/Secrets.tsx": 1,
+  "src/pages/Tasks.tsx": 1,
   "src/pages/Transparency.tsx": 1,
   "src/pages/Volunteers.tsx": 3,
   "src/pages/WorkflowRuns.tsx": 1,
@@ -118,7 +123,7 @@ assert.match(
 );
 assert.match(
   recordTableScopeSource,
-  /options\.openRecordIn === "drawer"[\s\S]*setSidePanelRecord/,
+  /openRecordIn === "drawer"[\s\S]*setSidePanelRecord/,
   "normal record opens are intercepted by the shared preview sidebar",
 );
 assert.match(
