@@ -321,6 +321,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "invitations:getByToken", handler: invitationsFns.getByTokenPortable }),
   definePortableMutation({ name: "invitations:create", handler: invitationsFns.createPortable }),
   definePortableMutation({ name: "invitations:revoke", handler: invitationsFns.revokePortable }),
+  definePortableMutation({ name: "invitations:accept", handler: invitationsFns.acceptPortable }),
 
   // significantIndividualSteps
   definePortableQuery({ name: "significantIndividualSteps:list", handler: significantIndividualStepsFns.listPortable }),
@@ -867,7 +868,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "users:get", handler: usersFns.userGet }),
   definePortableQuery({ name: "users:getByEmail", handler: usersFns.userGetByEmail }),
   definePortableQuery({ name: "users:getByAuthSubject", handler: usersFns.userGetByAuthSubject }),
-  definePortableMutation({ name: "users:resolveAuthSession", handler: usersFns.resolveAuthSessionPortable }),
+  definePortableMutation({ name: "users:ensureCurrentMembership", handler: usersFns.ensureCurrentMembershipPortable }),
   definePortableMutation({ name: "users:recordLogin", handler: usersFns.recordLoginPortable }),
   definePortableMutation({ name: "users:setRole", handler: usersFns.setRolePortable }),
 

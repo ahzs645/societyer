@@ -23,6 +23,7 @@ import {
   type StoredRevision,
 } from "../../shared/roleHolderHistory";
 import { summarizeVotingPower, transfersAsOf } from "../../shared/functions/votingPower";
+import { newSocietyOwnerFields } from "../../shared/functions/society";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../../shared/societyDocumentPackets";
 import {
   ycnQueryResult,
@@ -894,6 +895,15 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
         createdAtISO: now,
         updatedAtISO: now,
       });
+      staticSeedNewSocietyOwner(store, {
+        societyId,
+        placeholderEmail:
+          args?.officialEmail ??
+          args?.privacyOfficerEmail ??
+          `owner@${String(args?.name ?? "workspace").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`,
+        placeholderDisplayName: args?.privacyOfficerName ?? "Owner",
+        createdAtISO: now,
+      });
       store?.upsertRow("workflows", {
         _id: workflowId,
         _creationTime: Date.now(),
@@ -1440,6 +1450,16 @@ export function mutationResult(name: string, args: StaticArgs, store?: StaticDem
       validateLedger(proposedTransfers);
     }
     store?.upsertRow(tableName, row);
+    if (name === "society:upsert" && !args?.id) {
+      staticSeedNewSocietyOwner(store, {
+        societyId: String(id),
+        placeholderEmail:
+          row.officialEmail ??
+          `owner@${String(row.name ?? "workspace").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`,
+        placeholderDisplayName: row.privacyOfficerName ?? "Owner",
+        createdAtISO: row.createdAtISO,
+      });
+    }
     if (tableName === "rightsholdingTransfers") {
       staticSyncRightsHoldings(store, row.societyId);
     }
@@ -1542,6 +1562,31 @@ function staticStoredRoleHolderRevisions(store: StaticDemoDexieStore | null | un
 
 function staticLocalId(moduleName: string, exportName = "row") {
   return `static_${moduleName}_${exportName}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function staticSeedNewSocietyOwner(
+  store: StaticDemoDexieStore | null | undefined,
+  input: {
+    societyId: string;
+    placeholderEmail: string;
+    placeholderDisplayName: string;
+    createdAtISO: string;
+  },
+) {
+  const owner = newSocietyOwnerFields(
+    {
+      kind: "user",
+      runtime: "browser-local",
+      assurance: "trusted-workspace",
+      subject: `local:${input.societyId}`,
+    },
+    input,
+  );
+  store?.upsertRow("users", {
+    ...owner,
+    _id: staticLocalId("user", "owner"),
+    _creationTime: Date.now(),
+  });
 }
 
 function staticUniqueStrings(values: Array<string | undefined>) {

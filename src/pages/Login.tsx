@@ -1,11 +1,12 @@
 import { FormEvent, useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { authClient } from "../lib/authClient";
 import { useAuth } from "../auth/AuthProvider";
 import { ArrowRight, LockKeyhole } from "lucide-react";
 
 export function LoginPage() {
   const auth = useAuth();
+  const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -21,8 +22,26 @@ export function LoginPage() {
   if (auth.mode !== "better-auth") {
     return <Navigate to="/app" replace />;
   }
+  const redirect = searchParams.get("redirect");
+  const safeRedirect = redirect?.startsWith("/") && !redirect.startsWith("//")
+    ? redirect
+    : "/app";
+  if (auth.session && redirect) {
+    return <Navigate to={safeRedirect} replace />;
+  }
   if (auth.isAuthenticated) {
-    return <Navigate to="/app" replace />;
+    return <Navigate to={safeRedirect} replace />;
+  }
+  if (auth.session && auth.membershipStatus === "needs-invitation") {
+    return (
+      <div className="page">
+        <h1>Invitation required</h1>
+        <p>Open the invitation link sent by your workspace administrator.</p>
+        <button className="btn" type="button" onClick={() => void auth.signOut()}>
+          Sign out
+        </button>
+      </div>
+    );
   }
 
   const onSubmit = async (event: FormEvent) => {
@@ -42,8 +61,8 @@ export function LoginPage() {
           password,
         });
       }
-    } catch (err: any) {
-      setError(err?.message ?? "Authentication failed");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Authentication failed");
     } finally {
       setBusy(false);
     }

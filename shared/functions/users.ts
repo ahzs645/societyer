@@ -1,14 +1,44 @@
 /**
  * PORTABLE FUNCTIONS: the users domain (list / get / getByEmail /
- * getByAuthSubject / resolveAuthSession / recordLogin).
+ * getByAuthSubject / ensureCurrentMembership / recordLogin).
  *
  * Pure `ctx.db` reads and writes over the `users`/`members` tables. Each handler
  * runs unchanged on hosted Convex, the local Dexie runtime, and the convex-test
  * oracle. `setRole` is role-gated through the portable `requireRolePortable`.
  */
 
-import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { ROLES, requireRolePortable, type Role } from "./access";
+
+export type MembershipResolution =
+  | { status: "bound"; societyId: string; userId: string }
+  | { status: "invitation-accepted"; societyId: string; userId: string }
+  | { status: "needs-invitation" }
+  | { status: "unauthenticated" }
+  | { status: "membership-disabled" }
+  | { status: "ambiguous-binding" }
+  | { status: "invalid-invitation" }
+  | { status: "invitation-society-mismatch" }
+  | { status: "invitation-revoked" }
+  | { status: "invitation-already-accepted" }
+  | { status: "invitation-email-mismatch" };
+
+type UserRow = PortableDoc & {
+  societyId: string;
+  email: string;
+  displayName: string;
+  status: string;
+  authProvider?: string;
+  authSubject?: string;
+};
+
+type InvitationRow = PortableDoc & {
+  societyId: string;
+  email: string;
+  role: string;
+  acceptedAtISO?: string;
+  revokedAtISO?: string;
+};
 
 /** Refuse to demote the society's last Owner (FilterBuilder rewritten as a JS predicate). */
 async function assertNotLastOwnerPortable(ctx: PortableMutationCtx, target: any) {
@@ -61,73 +91,133 @@ export async function userGetByAuthSubject(ctx: PortableQueryCtx, { authSubject 
   return rows[0] ?? null;
 }
 
-export async function resolveAuthSessionPortable(
+export async function ensureCurrentMembershipPortable(
   ctx: PortableMutationCtx,
-  args: {
-    societyId: string;
-    authSubject: string;
-    email: string;
-    displayName: string;
-    emailVerified: boolean;
-  },
-) {
-  const [existingByAuth, members, users] = await Promise.all([
-    ctx.db
-      .query("users")
-      .withIndex("by_auth_subject", (q) => q.eq("authSubject", args.authSubject))
-      .collect(),
-    ctx.db
-      .query("members")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect(),
-    ctx.db
-      .query("users")
-      .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-      .collect(),
-  ]);
-
-  const email = args.email.toLowerCase();
-  const existing =
-    existingByAuth.find((row) => row.societyId === args.societyId) ??
-    users.find(
-      (row) =>
-        row.societyId === args.societyId &&
-        row.email.toLowerCase() === email,
-    ) ??
-    null;
-  const linkedMember =
-    members.find((member) => member.email?.toLowerCase() === email) ?? null;
-  const now = new Date().toISOString();
-
-  if (existing) {
-    await ctx.db.patch(existing._id, {
-      email: args.email,
-      displayName: args.displayName,
-      authProvider: "better-auth",
-      authSubject: args.authSubject,
-      memberId: existing.memberId ?? linkedMember?._id,
-      emailVerifiedAtISO: args.emailVerified ? now : existing.emailVerifiedAtISO,
-      lastLoginAtISO: now,
-      status: existing.status === "Invited" ? "Active" : existing.status,
-    });
-    return { userId: existing._id };
+  args: { societyId: string; invitationToken?: string },
+): Promise<MembershipResolution> {
+  const principal = ctx.principal;
+  if (
+    principal.kind !== "user" ||
+    principal.assurance !== "verified-jwt" ||
+    !principal.issuer ||
+    !principal.subject
+  ) {
+    return { status: "unauthenticated" };
   }
 
-  const ownerRole = users.length === 0 ? "Owner" : linkedMember ? "Member" : "Viewer";
+  const existingByAuth = await ctx.db
+    .query<UserRow>("users")
+    .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
+    .collect();
+  const matchingBindings = existingByAuth.filter(
+    (row) => row.societyId === args.societyId,
+  );
+  if (matchingBindings.length > 1) return { status: "ambiguous-binding" };
+
+  const existing = matchingBindings[0];
+  const now = new Date().toISOString();
+  if (existing) {
+    if (existing.status === "Disabled") return { status: "membership-disabled" };
+    const profilePatch: Record<string, string> = { lastLoginAtISO: now };
+    if (principal.email) profilePatch.email = principal.email;
+    if (principal.name?.trim()) profilePatch.displayName = principal.name.trim();
+    if (principal.emailVerified) profilePatch.emailVerifiedAtISO = now;
+    await ctx.db.patch(existing._id, profilePatch);
+    return { status: "bound", societyId: args.societyId, userId: existing._id };
+  }
+
+  if (!args.invitationToken) return { status: "needs-invitation" };
+  const invitations = await ctx.db
+    .query<InvitationRow>("invitations")
+    .withIndex("by_token", (q) => q.eq("token", args.invitationToken))
+    .collect();
+  if (invitations.length !== 1) return { status: "invalid-invitation" };
+
+  const invitation = invitations[0];
+  if (invitation.societyId !== args.societyId) {
+    return { status: "invitation-society-mismatch" };
+  }
+  if (invitation.revokedAtISO) return { status: "invitation-revoked" };
+  if (invitation.acceptedAtISO) return { status: "invitation-already-accepted" };
+  if (!ROLES.includes(invitation.role as Role)) return { status: "invalid-invitation" };
+  if (
+    !principal.email ||
+    principal.email.toLowerCase() !== invitation.email.toLowerCase()
+  ) {
+    return { status: "invitation-email-mismatch" };
+  }
+
   const userId = await ctx.db.insert("users", {
-    societyId: args.societyId,
-    email: args.email,
-    displayName: args.displayName,
-    role: ownerRole,
-    authProvider: "better-auth",
-    authSubject: args.authSubject,
-    memberId: linkedMember?._id,
+    societyId: invitation.societyId,
+    email: principal.email,
+    displayName: principal.name?.trim() || principal.email,
+    role: invitation.role,
+    authProvider: principal.authProvider || principal.issuer,
+    authSubject: principal.subject,
     status: "Active",
     createdAtISO: now,
-    emailVerifiedAtISO: args.emailVerified ? now : undefined,
+    emailVerifiedAtISO: principal.emailVerified ? now : undefined,
     lastLoginAtISO: now,
   });
-  return { userId };
+  await ctx.db.patch(invitation._id, {
+    acceptedAtISO: now,
+    acceptedByUserId: userId,
+  });
+  return {
+    status: "invitation-accepted",
+    societyId: invitation.societyId,
+    userId,
+  };
+}
+
+/**
+ * Internal operator-only primitive for reconciling a pre-existing unbound row.
+ * It is intentionally absent from the portable registry; the sole hosted
+ * wrapper authenticates the API-platform service token before invoking it.
+ */
+export async function bootstrapUserIdentityPortable(
+  ctx: PortableMutationCtx,
+  args: { userId: string; authSubject: string; authProvider: string },
+): Promise<string> {
+  const authSubject = args.authSubject.trim();
+  if (!authSubject) throw new Error("Auth subject is required.");
+
+  const target = await ctx.db.get<UserRow>(args.userId);
+  if (!target) throw new Error("User not found.");
+  if (target.authSubject && target.authSubject !== authSubject) {
+    throw new Error("User is already bound to a different auth subject.");
+  }
+  if (target.authProvider && target.authProvider !== args.authProvider) {
+    throw new Error("User is already bound to a different auth provider.");
+  }
+
+  const subjectBindings = await ctx.db
+    .query<UserRow>("users")
+    .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
+    .collect();
+  if (subjectBindings.some((row) => row._id !== target._id)) {
+    throw new Error("Auth subject is already bound to another user.");
+  }
+  if (target.authSubject === authSubject && target.authProvider === args.authProvider) {
+    return target._id;
+  }
+
+  const now = new Date().toISOString();
+  await ctx.db.patch(target._id, {
+    authProvider: args.authProvider,
+    authSubject,
+  });
+  await ctx.db.insert("activity", {
+    societyId: target.societyId,
+    actor: "API platform operator",
+    entityType: "user",
+    subjectId: target._id,
+    entityId: target._id,
+    action: "identity-bound",
+    summary: `Bound ${args.authProvider} subject ${authSubject} to ${target.displayName}`,
+    createdAtISO: now,
+  });
+  return target._id;
 }
 
 export async function recordLoginPortable(ctx: PortableMutationCtx, { id }: { id: string }) {

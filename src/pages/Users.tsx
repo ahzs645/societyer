@@ -6,7 +6,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
-import { UserCog, PlusCircle, Trash2, KeyRound, ShieldCheck } from "lucide-react";
+import { Copy, UserCog, PlusCircle, Trash2, KeyRound, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
@@ -193,7 +193,9 @@ export function UsersPage() {
         </table>
       </div>
 
-      <InvitationsPanel societyId={society._id} actingUserId={actingUserId} />
+      {canManageUsers && (
+        <InvitationsPanel societyId={society._id} />
+      )}
 
       <Drawer
         open={!!draft}
@@ -293,10 +295,8 @@ function roleSummary(role?: string | null): string {
 
 function InvitationsPanel({
   societyId,
-  actingUserId,
 }: {
   societyId: any;
-  actingUserId?: any;
 }) {
   const invitations = useQuery(api.invitations.list, { societyId });
   const create = useMutation(api.invitations.create);
@@ -330,7 +330,6 @@ function InvitationsPanel({
       societyId,
       email: form.email.trim(),
       role: form.role,
-      invitedByUserId: actingUserId,
     });
     setForm(null);
     toast.success("Invitation created");
@@ -339,6 +338,17 @@ function InvitationsPanel({
   const pending = (invitations ?? []).filter(
     (i: any) => !i.acceptedAtISO && !i.revokedAtISO,
   );
+
+  const copyInvitationLink = async (token: string) => {
+    const basePath = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+    const link = new URL(`${basePath}invite/${encodeURIComponent(token)}`, window.location.origin).toString();
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success("Invitation link copied");
+    } catch {
+      toast.error("Could not copy the invitation link");
+    }
+  };
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
@@ -384,22 +394,31 @@ function InvitationsPanel({
                 <td className="mono muted">{inv.createdAtISO?.slice(0, 10)}</td>
                 <td className="table__actions">
                   {status === "pending" && (
-                    <button
-                      className="btn btn--sm btn--ghost btn--icon"
-                      aria-label="Revoke invitation"
-                      onClick={async () => {
-                        const ok = await confirm({
-                          title: "Revoke invitation?",
-                          message: `The pending invitation for ${inv.email} will be cancelled.`,
-                          confirmLabel: "Revoke",
-                          tone: "danger",
-                        });
-                        if (!ok) return;
-                        await revokeInvite({ id: inv._id });
-                      }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    <>
+                      <button
+                        className="btn btn--sm btn--ghost btn--icon"
+                        aria-label="Copy invitation link"
+                        onClick={() => void copyInvitationLink(inv.token)}
+                      >
+                        <Copy size={12} />
+                      </button>
+                      <button
+                        className="btn btn--sm btn--ghost btn--icon"
+                        aria-label="Revoke invitation"
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: "Revoke invitation?",
+                            message: `The pending invitation for ${inv.email} will be cancelled.`,
+                            confirmLabel: "Revoke",
+                            tone: "danger",
+                          });
+                          if (!ok) return;
+                          await revokeInvite({ id: inv._id });
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </>
                   )}
                 </td>
               </tr>

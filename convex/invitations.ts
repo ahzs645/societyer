@@ -1,6 +1,12 @@
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
-import { listPortable, createPortable, revokePortable, getByTokenPortable } from "../shared/functions/invitations";
+import {
+  acceptPortable,
+  createPortable,
+  getByTokenPortable,
+  listPortable,
+  revokePortable,
+} from "../shared/functions/invitations";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = query({
@@ -14,7 +20,6 @@ export const create = mutation({
     societyId: v.id("societies"),
     email: v.string(),
     role: v.string(),
-    invitedByUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
@@ -30,4 +35,10 @@ export const getByToken = query({
   args: { token: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => getByTokenPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const accept = mutation({
+  args: { token: v.string() },
+  returns: v.any(),
+  handler: async (ctx, args) => acceptPortable(await toPortableMutationCtx(ctx), args),
 });

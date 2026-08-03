@@ -9,7 +9,79 @@
  * the storage capability covers the write side.
  */
 
-import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import type {
+  PortableMutationCtx,
+  PortablePrincipal,
+  PortableQueryCtx,
+} from "../portable/ctx";
+
+export type NewSocietyOwnerInput = {
+  societyId: string;
+  placeholderEmail: string;
+  placeholderDisplayName: string;
+  createdAtISO: string;
+};
+
+type NewSocietyOwnerFields = {
+  societyId: string;
+  email: string;
+  displayName: string;
+  role: "Owner";
+  status: "Active";
+  createdAtISO: string;
+  authProvider?: string;
+  authSubject?: string;
+  emailVerifiedAtISO?: string;
+  lastLoginAtISO?: string;
+};
+
+/**
+ * Build the initial Owner without treating profile fields as identity proof.
+ * Only the hosted adapter can supply a verified-JWT principal; local/desktop
+ * trusted-workspace principals deliberately retain the placeholder shape.
+ */
+export function newSocietyOwnerFields(
+  principal: PortablePrincipal,
+  input: NewSocietyOwnerInput,
+): NewSocietyOwnerFields {
+  const verifiedCreator =
+    principal.kind === "user" &&
+    principal.assurance === "verified-jwt" &&
+    Boolean(principal.issuer) &&
+    Boolean(principal.subject);
+  if (!verifiedCreator || principal.kind !== "user") {
+    return {
+      societyId: input.societyId,
+      email: input.placeholderEmail,
+      displayName: input.placeholderDisplayName,
+      role: "Owner",
+      status: "Active",
+      createdAtISO: input.createdAtISO,
+    };
+  }
+
+  const principalEmail = principal.email?.trim();
+  const principalName = principal.name?.trim();
+  return {
+    societyId: input.societyId,
+    email: principalEmail || input.placeholderEmail,
+    displayName: principalName || principalEmail || input.placeholderDisplayName,
+    role: "Owner",
+    status: "Active",
+    createdAtISO: input.createdAtISO,
+    authProvider: principal.authProvider || principal.issuer,
+    authSubject: principal.subject,
+    emailVerifiedAtISO: principal.emailVerified ? input.createdAtISO : undefined,
+    lastLoginAtISO: input.createdAtISO,
+  };
+}
+
+export async function seedNewSocietyOwnerPortable(
+  ctx: PortableMutationCtx,
+  input: NewSocietyOwnerInput,
+): Promise<string> {
+  return ctx.db.insert("users", newSocietyOwnerFields(ctx.principal, input));
+}
 
 /** Resolve a society's logo/letterhead blob ids to URLs via the storage capability. */
 async function withLogoUrl(ctx: PortableQueryCtx, society: any) {
