@@ -6,8 +6,11 @@ import { chromium, type Browser, type BrowserContext, type Page } from "playwrig
 import { WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import { createBrowserBackend } from "./browserBackend.js";
+import { resolveOutboundUrl } from "../../../server/outbound-url-policy.js";
 import {
+  assertConnectorNavigationUrl,
   ConnectorActionError,
+  type ConnectorManifest,
   connectorAuthIncompleteMessage,
   connectors,
   parseConnectorActionInput,
@@ -38,6 +41,7 @@ type ActiveSession = {
 };
 
 const activeSessions = new Map<string, ActiveSession>();
+const guardedContexts = new WeakSet<BrowserContext>();
 
 const sessionStartSchema = z.object({
   profileKey: z.string().min(1),
@@ -129,6 +133,11 @@ type BrowserSessionDefaults = {
   browserVersion?: string;
 };
 
+type ConnectorActionBrowserInput = BrowserSessionDefaults & {
+  profileKey: string;
+  proxyUrl?: string;
+};
+
 function connectorBrowserDefaults(connectorId?: string): BrowserSessionDefaults {
   const connectorDefaults = connectorId ? requireKnownConnector(connectorId).browserDefaults ?? {} : {};
   return {
@@ -164,6 +173,69 @@ async function applyBrowserSessionDefaults(
   }
   if (input.viewport) {
     await page.setViewportSize(input.viewport).catch(() => undefined);
+  }
+}
+
+async function prepareBrowserContext(context: BrowserContext, page: Page, connector?: ConnectorManifest) {
+  if (!guardedContexts.has(context)) {
+    await context.routeWebSocket(/.*/, async (webSocket) => {
+      const requestUrl = webSocket.url();
+      try {
+        const policyUrl = new URL(requestUrl);
+        policyUrl.protocol = policyUrl.protocol === "wss:" ? "https:" : "http:";
+        await resolveOutboundUrl(policyUrl.toString(), { policy: {} });
+        webSocket.connectToServer();
+      } catch (error: unknown) {
+        console.warn("connector_websocket_rejected", {
+          connectorId: connector?.id ?? "unregistered",
+          hostname: (() => {
+            try { return new URL(requestUrl).hostname; } catch { return "invalid"; }
+          })(),
+          reason: error instanceof Error ? error.name : "policy_error",
+        });
+        await webSocket.close({ code: 1008, reason: "Outbound URL policy rejected this connection." });
+      }
+    });
+    await context.route("**/*", async (route) => {
+      const request = route.request();
+      const requestUrl = request.url();
+      const protocol = (() => {
+        try {
+          return new URL(requestUrl).protocol;
+        } catch {
+          return "invalid:";
+        }
+      })();
+      if (["about:", "blob:", "data:"].includes(protocol)) {
+        await route.continue();
+        return;
+      }
+      try {
+        await resolveOutboundUrl(requestUrl, { policy: {} });
+        if (connector && request.isNavigationRequest()) assertConnectorNavigationUrl(connector, requestUrl);
+        await route.continue();
+      } catch (error: unknown) {
+        console.warn("connector_request_rejected", {
+          connectorId: connector?.id ?? "unregistered",
+          hostname: (() => {
+            try { return new URL(requestUrl).hostname; } catch { return "invalid"; }
+          })(),
+          resourceType: request.resourceType(),
+          reason: error instanceof Error ? error.name : "policy_error",
+        });
+        await route.abort("blockedbyclient");
+      }
+    });
+    guardedContexts.add(context);
+  }
+
+  const currentUrl = page.url();
+  if (!currentUrl || currentUrl === "about:blank") return;
+  try {
+    if (connector) assertConnectorNavigationUrl(connector, currentUrl);
+    await resolveOutboundUrl(currentUrl, { policy: {} });
+  } catch {
+    await page.goto("about:blank");
   }
 }
 
@@ -289,7 +361,7 @@ app.get("/sessions", (_req, res) => {
 });
 
 app.post("/sessions/start-login", asyncRoute(async (req, res) => {
-  const input = sessionStartSchema.parse(req.body);
+  const input = sessionStartSchema.parse({ ...req.body, startUrl: undefined, proxyUrl: undefined });
   const browserInput = mergeBrowserDefaults(input);
   const vncHost = blitzVncHost();
   const beforeVncPorts = browserInput.liveView ? await discoverVncPorts(vncHost) : new Set<number>();
@@ -305,10 +377,8 @@ app.post("/sessions/start-login", asyncRoute(async (req, res) => {
   });
 
   const { browser, context, page } = await connectSession(browserSession.cdpUrl);
+  await prepareBrowserContext(context, page);
   await applyBrowserSessionDefaults(context, page, browserInput);
-  if (browserInput.startUrl) {
-    await page.goto(browserInput.startUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
-  }
   const vncPort = browserInput.liveView ? await detectNewVncPort(beforeVncPorts, vncHost) : undefined;
 
   const session: ActiveSession = {
@@ -455,7 +525,8 @@ app.post("/connectors/:connectorId/auth/start", asyncRoute(async (req, res) => {
   const connector = requireKnownConnector(String(req.params.connectorId));
   const input = sessionStartSchema.parse({
     ...req.body,
-    startUrl: req.body?.startUrl ?? connector.auth.startUrl,
+    startUrl: connector.auth.startUrl,
+    proxyUrl: undefined,
   });
   const browserInput = mergeBrowserDefaults(input, connector.id);
   const vncHost = blitzVncHost();
@@ -472,6 +543,7 @@ app.post("/connectors/:connectorId/auth/start", asyncRoute(async (req, res) => {
   });
 
   const { browser, context, page } = await connectSession(browserSession.cdpUrl);
+  await prepareBrowserContext(context, page, connector);
   await applyBrowserSessionDefaults(context, page, browserInput);
   await page.goto(browserInput.startUrl!, { waitUntil: "domcontentloaded", timeout: 45_000 });
   const vncPort = browserInput.liveView ? await detectNewVncPort(beforeVncPorts, vncHost) : undefined;
@@ -502,9 +574,10 @@ app.post("/connectors/:connectorId/auth/verify", asyncRoute(async (req, res) => 
   const connector = requireKnownConnector(String(req.params.connectorId));
   const input = profilePageSchema.parse({
     ...req.body,
-    url: req.body?.url ?? connector.auth.startUrl,
+    url: connector.auth.startUrl,
     readOnly: req.body?.readOnly ?? true,
     liveView: req.body?.liveView ?? false,
+    proxyUrl: undefined,
   });
   const browserInput = mergeBrowserDefaults(input, connector.id);
   const browserSession = await backend.createSession({
@@ -521,6 +594,7 @@ app.post("/connectors/:connectorId/auth/verify", asyncRoute(async (req, res) => 
 
   const { browser, context, page } = await connectSession(browserSession.cdpUrl);
   try {
+    await prepareBrowserContext(context, page, connector);
     await applyBrowserSessionDefaults(context, page, browserInput);
     res.json(await verifyConnectorAuth(page, connector, browserInput));
   } finally {
@@ -537,8 +611,8 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/confirm", asyncRoute
     return;
   }
 
-  if (session.connectorId && session.connectorId !== connector.id) {
-    res.status(409).json({ error: `Session belongs to ${session.connectorId}, not ${connector.id}.` });
+  if (session.connectorId !== connector.id) {
+    res.status(409).json({ error: "Session is not bound to this connector." });
     return;
   }
 
@@ -594,11 +668,12 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/actions/:actionId", 
     res.status(404).json({ error: "Session not found." });
     return;
   }
-  if (session.connectorId && session.connectorId !== connector.id) {
-    res.status(409).json({ error: `Session belongs to ${session.connectorId}, not ${connector.id}.` });
+  if (session.connectorId !== connector.id) {
+    res.status(409).json({ error: "Session is not bound to this connector." });
     return;
   }
 
+  await prepareBrowserContext(session.context, session.page, connector);
   const input = parseConnectorActionInput(connector.id, actionId, "session", req.body);
   if (connector.id === "gcos") assertGcosActionReady(session.page.url());
   await applyBrowserSessionDefaults(session.context, session.page, connectorBrowserDefaults(connector.id));
@@ -622,7 +697,10 @@ app.post("/connectors/:connectorId/auth/sessions/:sessionId/actions/:actionId", 
 app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, res) => {
   const connector = requireKnownConnector(String(req.params.connectorId));
   const actionId = String(req.params.actionId);
-  const input: any = parseConnectorActionInput(connector.id, actionId, "profile", req.body);
+  const input = parseConnectorActionInput(connector.id, actionId, "profile", {
+    ...req.body,
+    proxyUrl: undefined,
+  }) as ConnectorActionBrowserInput;
   const browserInput = mergeBrowserDefaults(input, connector.id);
   const browserSession = await backend.createSession({
     profileKey: browserInput.profileKey,
@@ -640,6 +718,7 @@ app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, re
   const runId = crypto.randomUUID();
   const startedAtISO = new Date().toISOString();
   try {
+    await prepareBrowserContext(context, page, connector);
     await applyBrowserSessionDefaults(context, page, browserInput);
     if (connector.id === "gcos") assertGcosActionReady(page.url());
     const output = await runConnectorAction(page, connector.id, actionId, "profile", input, browserSession.profileKey);
@@ -661,91 +740,13 @@ app.post("/connectors/:connectorId/actions/:actionId", asyncRoute(async (req, re
 }));
 
 app.post("/profiles/validate", asyncRoute(async (req, res) => {
-  const input = profilePageSchema.parse(req.body);
-  const browserInput = mergeBrowserDefaults(input);
-  const browserSession = await backend.createSession({
-    profileKey: browserInput.profileKey,
-    persist: true,
-    liveView: browserInput.liveView,
-    readOnly: browserInput.readOnly,
-    timezone: browserInput.timezone,
-    locale: browserInput.locale,
-    viewport: browserInput.viewport,
-    browserVersion: browserInput.browserVersion,
-    proxyUrl: browserInput.proxyUrl,
-  });
-
-  const { browser, context, page } = await connectSession(browserSession.cdpUrl);
-  try {
-    await applyBrowserSessionDefaults(context, page, browserInput);
-    await page.goto(browserInput.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
-    if (browserInput.waitForSelector) {
-      await page.waitForSelector(browserInput.waitForSelector, { timeout: 10_000 });
-    }
-
-    const unauthenticated = await selectorVisible(page, browserInput.unauthenticatedSelector);
-    const authenticated = await selectorVisible(page, browserInput.authenticatedSelector);
-    const bodyText = browserInput.includeBodyText
-      ? (await page.locator("body").innerText({ timeout: 5_000 }).catch(() => "")).slice(0, 4000)
-      : undefined;
-
-    res.json({
-      profileKey: browserSession.profileKey,
-      provider: backend.provider,
-      currentUrl: page.url(),
-      title: await page.title().catch(() => undefined),
-      authenticated:
-        authenticated === true ? true :
-        unauthenticated === true ? false :
-        undefined,
-      checkedAtISO: new Date().toISOString(),
-      bodyText,
-    });
-  } finally {
-    await browser.close().catch(() => undefined);
-  }
+  profilePageSchema.parse(req.body);
+  res.status(400).json({ error: "Profile navigation requires a registered connector." });
 }));
 
 app.post("/runs/open-page", asyncRoute(async (req, res) => {
-  const input = profilePageSchema.parse(req.body);
-  const browserInput = mergeBrowserDefaults(input);
-  const browserSession = await backend.createSession({
-    profileKey: browserInput.profileKey,
-    persist: true,
-    liveView: browserInput.liveView,
-    readOnly: browserInput.readOnly,
-    timezone: browserInput.timezone,
-    locale: browserInput.locale,
-    viewport: browserInput.viewport,
-    browserVersion: browserInput.browserVersion,
-    proxyUrl: browserInput.proxyUrl,
-  });
-
-  const { browser, context, page } = await connectSession(browserSession.cdpUrl);
-  const startedAtISO = new Date().toISOString();
-  try {
-    await applyBrowserSessionDefaults(context, page, browserInput);
-    await page.goto(browserInput.url, { waitUntil: "domcontentloaded", timeout: 45_000 });
-    if (browserInput.waitForSelector) {
-      await page.waitForSelector(browserInput.waitForSelector, { timeout: 10_000 });
-    }
-    const bodyText = browserInput.includeBodyText
-      ? (await page.locator("body").innerText({ timeout: 5_000 }).catch(() => "")).slice(0, 4000)
-      : undefined;
-
-    res.json({
-      runId: crypto.randomUUID(),
-      profileKey: browserSession.profileKey,
-      provider: backend.provider,
-      startedAtISO,
-      completedAtISO: new Date().toISOString(),
-      currentUrl: page.url(),
-      title: await page.title().catch(() => undefined),
-      bodyText,
-    });
-  } finally {
-    await browser.close().catch(() => undefined);
-  }
+  profilePageSchema.parse(req.body);
+  res.status(400).json({ error: "Page navigation requires a registered connector." });
 }));
 
 app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {

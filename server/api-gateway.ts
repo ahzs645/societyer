@@ -117,6 +117,7 @@ import {
   downloadFileNameFromStorageKey,
 } from "./api-gateway/pdf";
 import { safeJson, arrayOf, stringValue, compactStrings } from "./api-gateway/shared";
+import { nodeDevelopmentPolicy, resolveOutboundUrl } from "./outbound-url-policy";
 import {
   emitWebhookEvent,
   connectorRunnerRequest,
@@ -739,6 +740,16 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
     "/webhook-subscriptions",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
+      const targetUrl = stringValue(req.body?.targetUrl);
+      if (!targetUrl) {
+        throw httpError(400, "invalid_webhook_url", "targetUrl is required.");
+      }
+      try {
+        await resolveOutboundUrl(targetUrl, { policy: nodeDevelopmentPolicy() });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Webhook target URL is not allowed.";
+        throw httpError(400, "invalid_webhook_url", message);
+      }
       const rawSecret = createWebhookSecret();
       const secretEncrypted = encryptSecret(rawSecret);
       const id = await convexCall(client, mutation("apiPlatform.upsertWebhookSubscription"), {
@@ -746,7 +757,7 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
         clientId: req.body?.clientId,
         pluginInstallationId: req.body?.pluginInstallationId,
         name: req.body?.name,
-        targetUrl: req.body?.targetUrl,
+        targetUrl,
         eventTypes: normalizeEventTypes(req.body?.eventTypes),
         secretEncrypted,
         status: req.body?.status,

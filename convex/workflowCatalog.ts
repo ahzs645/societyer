@@ -52,6 +52,7 @@ import type {
   NodePreview,
   RecipeKey,
 } from "./workflowRecipeData";
+import { fetchConvexOutbound } from "./lib/outboundUrlPolicy";
 
 const RECIPE_CATALOG = (Object.keys(RECIPE_STEPS) as RecipeKey[]).map(
   (key) => ({
@@ -484,12 +485,17 @@ async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
       },
     };
 
-    const response = await fetch(webhookUrl, {
+    const response = await fetchConvexOutbound(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+    }, {
+      source: workflowEndpointSource(wf, webhookUrl),
+      operation: "workflow_webhook_delivery",
+      maxResponseBytes: 512_000,
+      timeoutMs: 8_000,
     });
-    const text = await response.text();
+    const text = response.text;
     if (!response.ok) {
       throw new Error(`n8n webhook returned ${response.status}: ${text.slice(0, 240)}`);
     }
@@ -584,12 +590,17 @@ async function runExternalGovernanceRecipe(ctx: any, wf: any, runId: any, args: 
       },
     };
 
-    const response = await fetch(webhookUrl, {
+    const response = await fetchConvexOutbound(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+    }, {
+      source: workflowEndpointSource(wf, webhookUrl),
+      operation: "workflow_webhook_delivery",
+      maxResponseBytes: 512_000,
+      timeoutMs: 8_000,
     });
-    const text = await response.text();
+    const text = response.text;
     if (!response.ok) {
       throw new Error(`n8n webhook returned ${response.status}: ${text.slice(0, 240)}`);
     }
@@ -693,12 +704,17 @@ async function runExternalNotificationWorkflow(ctx: any, wf: any, runId: any, ar
       },
     };
 
-    const response = await fetch(webhookUrl, {
+    const response = await fetchConvexOutbound(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+    }, {
+      source: workflowEndpointSource(wf, webhookUrl),
+      operation: "workflow_webhook_delivery",
+      maxResponseBytes: 512_000,
+      timeoutMs: 8_000,
     });
-    const text = await response.text();
+    const text = response.text;
     if (!response.ok) {
       throw new Error(`n8n webhook returned ${response.status}: ${text.slice(0, 240)}`);
     }
@@ -1084,6 +1100,12 @@ function providerConfigForRecipe(recipe: RecipeKey) {
     externalWebhookUrl: `${base.replace(/\/$/, "")}/${webhookPaths[recipe]}`,
     externalEditUrl,
   };
+}
+
+function workflowEndpointSource(wf: { recipe?: string }, webhookUrl: string): "operator" | "tenant" {
+  if (!wf.recipe || !(wf.recipe in RECIPE_STEPS)) return "tenant";
+  const configured = providerConfigForRecipe(wf.recipe as RecipeKey)?.externalWebhookUrl;
+  return configured === webhookUrl ? "operator" : "tenant";
 }
 
 

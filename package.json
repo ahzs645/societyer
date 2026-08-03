@@ -53,6 +53,7 @@
     "test:api-contract": "tsx scripts/check-api-contract.ts",
     "test:static-parity": "tsx scripts/check-static-convex-parity.ts",
     "test:identity-binding": "tsx scripts/check-identity-binding.ts",
+    "test:outbound-url-policy": "tsx scripts/check-outbound-url-policy.ts",
     "test:stage2-tenancy": "tsx scripts/check-stage2-tenancy.ts",
     "test:accounting-core": "tsx scripts/check-accounting-core.ts",
     "test:accounting-csv-injection": "tsx scripts/check-accounting-csv-injection.ts",

@@ -19,6 +19,11 @@ import {
   addFromLibraryPortable,
 } from "../shared/functions/grantSources";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
+import {
+  assertConvexOutboundUrl,
+  fetchConvexOutbound,
+  type ConvexOutboundResponse,
+} from "./lib/outboundUrlPolicy";
 
 function isoNow() {
   return new Date().toISOString();
@@ -69,6 +74,12 @@ export const upsert = mutation({
   returns: v.any(),
   handler: async (ctx, { id, societyId, patch, actingUserId }) => {
     await requireRole(ctx, { actingUserId, societyId, required: "Director" });
+    if (patch.url?.trim()) {
+      assertConvexOutboundUrl(patch.url.trim(), {
+        source: "tenant",
+        operation: "grant_source_save",
+      });
+    }
     const now = isoNow();
     const payload = {
       name: cleanText(patch.name) || "Custom grant source",
@@ -205,14 +216,24 @@ export const discoverFromSource = action({
     const profile = source.profile;
     const kind = profile?.profileKind ?? (source.sourceType === "rss" ? "rss" : undefined);
 
-    let res: Response;
+    let res: ConvexOutboundResponse;
     try {
-      res = await fetch(source.url, { headers: { "user-agent": "societyer-grant-discovery/1.0" } });
-    } catch (err: any) {
-      throw new Error(`Could not fetch ${source.url}: ${String(err?.message ?? err)}`);
+      res = await fetchConvexOutbound(
+        source.url,
+        { headers: { "user-agent": "societyer-grant-discovery/1.0" } },
+        {
+          source: source.libraryKey ? "operator" : "tenant",
+          operation: "grant_source_discovery",
+          maxResponseBytes: 2_000_000,
+          timeoutMs: 8_000,
+        },
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Could not fetch ${source.url}: ${message}`);
     }
     if (!res.ok) throw new Error(`Fetching ${source.url} returned ${res.status}.`);
-    const body = await res.text();
+    const body = res.text;
 
     let items: DiscoveredOpportunity[];
     if (kind === "json_feed") {
