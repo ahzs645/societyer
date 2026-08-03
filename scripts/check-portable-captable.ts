@@ -24,6 +24,12 @@ import {
   type TransactionalDb,
 } from "../shared/portable/index";
 import { upsertRightsholdingTransferPortable } from "../shared/functions/rightsholdingTransfers";
+import {
+  PORTABLE_TEST_AUTH_SUBJECT,
+  PORTABLE_TEST_IDENTITY,
+  portableTestPrincipal,
+  portableTestSeed,
+} from "./portable-test-fixture";
 
 interface Ids {
   societyId: string;
@@ -66,7 +72,7 @@ async function capTableScenario(ids: Ids, exec: Exec) {
 // --- local engines (MemoryDb, LocalStoreDb over MemoryRowStore) ----------------
 const transferDef = definePortableMutation({ name: "legalOperations:upsertRightsholdingTransfer", handler: upsertRightsholdingTransferPortable });
 function localExec(db: TransactionalDb, ids: Ids): Exec {
-  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) })
+  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: portableTestPrincipal })
     .register(transferDef)
     .register(definePortableQuery({
       name: "_holdings",
@@ -80,8 +86,19 @@ function localExec(db: TransactionalDb, ids: Ids): Exec {
 }
 
 const localIds: Ids = { societyId: "soc_cap", classId: "classA", alice: "alice", bob: "bob" };
-const memResult = await capTableScenario(localIds, localExec(new MemoryDb(), localIds));
-const locResult = await capTableScenario(localIds, localExec(new LocalStoreDb(new MemoryRowStore()), localIds));
+const localSeed = {
+  ...portableTestSeed(localIds.societyId),
+  rightsClasses: [{ _id: localIds.classId, societyId: localIds.societyId, className: "Class A" }],
+  roleHolders: [
+    { _id: localIds.alice, societyId: localIds.societyId, fullName: "Alice", status: "current" },
+    { _id: localIds.bob, societyId: localIds.societyId, fullName: "Bob", status: "current" },
+  ],
+};
+const memResult = await capTableScenario(localIds, localExec(new MemoryDb({ seed: localSeed }), localIds));
+const locResult = await capTableScenario(
+  localIds,
+  localExec(new LocalStoreDb(new MemoryRowStore(localSeed)), localIds),
+);
 
 assert.deepEqual(quantities(memResult.afterIssue), [100], "issuance -> one 100-share holding");
 assert.deepEqual(quantities(memResult.afterTransfer), [25, 75], "transfer -> alice 75, bob 25");
@@ -100,6 +117,16 @@ const t = convexTest(schema, modules as any);
 const cids: Ids = await t.run(async (ctx: any) => {
   const iso = "2026-01-01T00:00:00.000Z";
   const societyId = await ctx.db.insert("societies", { name: "Cap", isCharity: false, isMemberFunded: false, updatedAt: 0 });
+  await ctx.db.insert("users", {
+    societyId,
+    email: "owner@portable-fixture.test",
+    displayName: "Portable fixture owner",
+    role: "Owner",
+    status: "Active",
+    authProvider: PORTABLE_TEST_IDENTITY.issuer,
+    authSubject: PORTABLE_TEST_AUTH_SUBJECT,
+    createdAtISO: iso,
+  });
   const classId = await ctx.db.insert("rightsClasses", {
     societyId, className: "Class A", classType: "share", status: "active",
     sourceDocumentIds: [], sourceExternalIds: [], createdAtISO: iso, updatedAtISO: iso,
@@ -111,8 +138,9 @@ const cids: Ids = await t.run(async (ctx: any) => {
   });
   return { societyId, classId, alice: await role("Alice"), bob: await role("Bob") };
 });
+const authedT = t.withIdentity(PORTABLE_TEST_IDENTITY);
 const convexExec: Exec = {
-  transfer: (args) => t.mutation(api.legalOperations.upsertRightsholdingTransfer, { societyId: cids.societyId, ...args }),
+  transfer: (args) => authedT.mutation(api.legalOperations.upsertRightsholdingTransfer, { societyId: cids.societyId, ...args }),
   holdings: () => t.run(async (ctx: any) =>
     sortHoldings(await ctx.db.query("rightsHoldings").withIndex("by_society", (q: any) => q.eq("societyId", cids.societyId)).collect())),
 };

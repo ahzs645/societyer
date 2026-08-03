@@ -19,10 +19,11 @@ import {
   createFromMinutesMotionPortable,
   carryForwardToMeetingPortable,
 } from "../shared/functions/motionBacklog";
+import { portableTestPrincipal, seedPortableTestMembership } from "./portable-test-fixture";
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
-const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) });
+const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: portableTestPrincipal });
 const query = (name: string, handler: any) => rt().register(definePortableQuery({ name, handler })).runQuery(name, {});
 const mutate = (name: string, handler: any) => rt().register(definePortableMutation({ name, handler })).runMutation(name, {});
 
@@ -32,6 +33,7 @@ const mutate = (name: string, handler: any) => rt().register(definePortableMutat
 // (reading motions[i]) would pick the wrong motion.
 const approved: any = await mutate("setupApproved", async (ctx: any) => {
   const societyId = await ctx.db.insert("societies", { name: "Carryforward Co" });
+  await seedPortableTestMembership(ctx, societyId);
   const sourceMeetingId = await ctx.db.insert("meetings", { societyId, title: "AGM 2025", status: "Complete" });
   const minutesId = await ctx.db.insert("minutes", {
     societyId,
@@ -69,6 +71,7 @@ console.log("✓ approved: createFromMinutesMotion converts the resolved snapsho
 // raw[0] != resolved[0]. carry-forward must follow motionIds, not the raw array.
 const draft: any = await mutate("setupDraft", async (ctx: any) => {
   const societyId = await ctx.db.insert("societies", { name: "Draft Co" });
+  await seedPortableTestMembership(ctx, societyId);
   const sourceMeetingId = await ctx.db.insert("meetings", { societyId, title: "Board Q1", status: "Complete" });
   const targetMeetingId = await ctx.db.insert("meetings", { societyId, title: "Board Q2", status: "Scheduled" });
   const minutesId = await ctx.db.insert("minutes", { societyId, meetingId: sourceMeetingId, status: "Draft", motions: [] });

@@ -16,15 +16,17 @@ import {
 } from "../shared/portable/index";
 import { syncMotionsForMinutes, resolveMinutesMotions } from "../shared/functions/minutes";
 import { seedToMinutesPortable } from "../shared/functions/motionBacklog";
+import { portableTestPrincipal, seedPortableTestMembership } from "./portable-test-fixture";
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
-const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) });
+const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: portableTestPrincipal });
 const query = (name: string, handler: any) => rt().register(definePortableQuery({ name, handler })).runQuery(name, {});
 const mutate = (name: string, handler: any) => rt().register(definePortableMutation({ name, handler })).runMutation(name, {});
 
 const setup: any = await mutate("setup", async (ctx: any) => {
   const societyId = await ctx.db.insert("societies", { name: "Seed Co" });
+  await seedPortableTestMembership(ctx, societyId);
   const meetingId = await ctx.db.insert("meetings", { societyId, title: "Board Q1", status: "Scheduled" });
   const minutesId = await ctx.db.insert("minutes", { societyId, meetingId, status: "Draft" });
   // One existing minutes motion, materialized into the table (motionIds set).

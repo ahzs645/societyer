@@ -23,10 +23,11 @@ import { listPortable, resolveMinutesMotions, syncMotionsForMinutes } from "../s
 import { minutesMotionsForDisplay } from "../shared/minutesMotions";
 import { listPortable as orgHistoryListPortable } from "../shared/functions/organizationHistory";
 import { summaryPortable as annualCycleSummaryPortable } from "../shared/functions/annualCycle";
+import { portableTestPrincipal } from "./portable-test-fixture";
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
-const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) });
+const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: portableTestPrincipal });
 
 // 1) Seed. The Phase 1 finalization routes every seeded minutes through the
 //    dual-write, so each carries ordered motionIds + mirror rows.

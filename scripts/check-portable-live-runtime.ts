@@ -11,10 +11,12 @@ import assert from "node:assert/strict";
 
 import { StaticConvexClient } from "../src/lib/staticConvex";
 import type { PortableDoc } from "../shared/portable/index";
+import { portableTestSeed } from "./portable-test-fixture";
 
 const societyId = "soc_riverside";
 function buildSeed(): Record<string, PortableDoc[]> {
   return {
+    ...portableTestSeed(societyId),
     rightsClasses: [
       { _id: "classA", societyId, className: "Class A", votesPerShare: 10 },
       { _id: "classB", societyId, className: "Class B", votingRights: "Non-Voting" },
@@ -125,8 +127,14 @@ const watch = client.watchQuery("legalOperations:votingPower", { societyId });
 
 // === 6. a promoted transfer mutation derives holdings live (multi-row sync) ====
 {
-  const fresh = new StaticConvexClient({ seed: {}, databaseName: "portable-transfer-live" });
   const soc = "soc_xfer_live";
+  const fresh = new StaticConvexClient({
+    seed: {
+      ...portableTestSeed(soc),
+      roleHolders: [{ _id: "rh_x", societyId: soc, fullName: "Transfer recipient", status: "current" }],
+    },
+    databaseName: "portable-transfer-live",
+  });
   const classId: any = await fresh.mutation("legalOperations:upsertRightsClass", {
     societyId: soc, className: "Common", classType: "share", status: "active", votesPerShare: 1,
   });

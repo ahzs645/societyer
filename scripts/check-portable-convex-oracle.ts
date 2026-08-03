@@ -30,6 +30,13 @@ import { votingPowerPortable } from "../shared/functions/votingPower";
 import { upsertRightsClassPortable } from "../shared/functions/rightsClasses";
 import { memberCreate, memberUpdate, memberRemove, membersList } from "../shared/functions/members";
 import { buildConvexCapabilities } from "../convex/providers/capabilities";
+import {
+  PORTABLE_TEST_AUTH_SUBJECT,
+  PORTABLE_TEST_IDENTITY,
+  createPortableTestWorkspace,
+  portableTestPrincipal,
+  portableTestSeed,
+} from "./portable-test-fixture";
 
 // convex-test resolves api.legalOperations.* from this module map (we only invoke
 // votingPower, which makes no nested calls, so the one module suffices).
@@ -48,6 +55,16 @@ const seeded = await t.run(async (ctx: any) => {
   const iso = "2026-01-01T00:00:00.000Z";
   const societyId = await ctx.db.insert("societies", {
     name: "Riverside", isCharity: false, isMemberFunded: false, updatedAt: 0,
+  });
+  await ctx.db.insert("users", {
+    societyId,
+    email: "owner@portable-fixture.test",
+    displayName: "Portable fixture owner",
+    role: "Owner",
+    status: "Active",
+    authProvider: PORTABLE_TEST_IDENTITY.issuer,
+    authSubject: PORTABLE_TEST_AUTH_SUBJECT,
+    createdAtISO: iso,
   });
   const person = (fullName: string, extra: Record<string, unknown>) =>
     ctx.db.insert("peopleDirectory", { fullName, searchName: fullName.toLowerCase(), createdAtISO: iso, updatedAtISO: iso, ...extra });
@@ -87,13 +104,15 @@ const seeded = await t.run(async (ctx: any) => {
   await hold(classB, rhCarol, "carol", 300);
   return { societyId };
 });
+const authedT = t.withIdentity(PORTABLE_TEST_IDENTITY);
 
 // --- run the SAME handler via the real Convex stack ---------------------------
-const convexResult: any = await t.query(api.legalOperations.votingPower, { societyId: seeded.societyId });
+const convexResult: any = await authedT.query(api.legalOperations.votingPower, { societyId: seeded.societyId });
 
 // --- run it on the local oracle with the matching logical fixture -------------
 const societyId = "soc_local";
 const localFixture: Record<string, PortableDoc[]> = {
+  ...portableTestSeed(societyId),
   rightsClasses: [
     { _id: "classA", societyId, className: "Class A", votesPerShare: 10 },
     { _id: "classB", societyId, className: "Class B", votingRights: "Non-Voting" },
@@ -117,7 +136,7 @@ const localFixture: Record<string, PortableDoc[]> = {
     { _id: "h4", societyId, holderKey: "carol", holderRoleHolderId: "rh_carol", rightsClassId: "classB", quantity: 300, status: "current" },
   ],
 };
-const runtime = new PortableRuntime({ db: new MemoryDb({ seed: localFixture }), capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) })
+const runtime = new PortableRuntime({ db: new MemoryDb({ seed: localFixture }), capabilities: makeCapabilities({}), principalProvider: portableTestPrincipal })
   .register(definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }));
 const localResult: any = await runtime.runQuery("legalOperations:votingPower", { societyId });
 
@@ -134,7 +153,7 @@ const COMPARABLE = ["className", "classType", "status", "votesPerShare", "source
 const normalizeClass = (row: any) => Object.fromEntries(COMPARABLE.map((k) => [k, row?.[k]]));
 
 // Real Convex stack: create, then update by id.
-const convexCreatedId = await t.mutation(api.legalOperations.upsertRightsClass, {
+const convexCreatedId = await authedT.mutation(api.legalOperations.upsertRightsClass, {
   societyId: seeded.societyId, className: "Class C", classType: "share", status: "active", votesPerShare: 5,
 });
 const convexCreated = await t.run(async (ctx: any) => ctx.db.get(convexCreatedId));
@@ -142,7 +161,7 @@ assert.equal(convexCreated.className, "Class C");
 assert.equal(convexCreated.votesPerShare, 5);
 assert.ok(convexCreated.createdAtISO && convexCreated.updatedAtISO, "timestamps stamped");
 
-await t.mutation(api.legalOperations.upsertRightsClass, {
+await authedT.mutation(api.legalOperations.upsertRightsClass, {
   id: convexCreatedId, societyId: seeded.societyId, className: "Class C2", classType: "share", status: "inactive",
 });
 const convexUpdated = await t.run(async (ctx: any) => ctx.db.get(convexCreatedId));
@@ -152,10 +171,11 @@ assert.equal(convexUpdated._id, convexCreatedId, "update patches in place (same 
 
 // Local engines: the same portable mutation produces the same normalized row.
 const upsertDef = definePortableMutation({ name: "legalOperations:upsertRightsClass", handler: upsertRightsClassPortable });
-async function localCreate(db: TransactionalDb) {
-  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) }).register(upsertDef);
+async function localCreate(db: TransactionalDb, classType = "share") {
+  const localSocietyId = await createPortableTestWorkspace(db);
+  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: portableTestPrincipal }).register(upsertDef);
   const id = await rt.runMutation<string>("legalOperations:upsertRightsClass", {
-    societyId: "soc_local", className: "Class C", classType: "share", status: "active", votesPerShare: 5,
+    societyId: localSocietyId, className: "Class C", classType, status: "active", votesPerShare: 5,
   });
   return db.get(id);
 }
@@ -166,14 +186,12 @@ assert.deepEqual(normalizeClass(locCreated), normalizeClass(convexCreated), "Loc
 
 // Option validation is enforced identically (real Convex + local).
 await assert.rejects(
-  () => t.mutation(api.legalOperations.upsertRightsClass, { societyId: seeded.societyId, className: "X", classType: "not_a_real_type", status: "active" }),
+  () => authedT.mutation(api.legalOperations.upsertRightsClass, { societyId: seeded.societyId, className: "X", classType: "not_a_real_type", status: "active" }),
   /must be one of the configured/,
   "Convex should reject an invalid classType",
 );
 await assert.rejects(
-  () => localCreate(new MemoryDb()).then(() =>
-    new PortableRuntime({ db: new MemoryDb(), capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) }).register(upsertDef)
-      .runMutation("legalOperations:upsertRightsClass", { societyId: "s", className: "X", classType: "not_a_real_type", status: "active" })),
+  () => localCreate(new MemoryDb(), "not_a_real_type"),
   /must be one of the configured/,
   "local runtime should reject the same invalid classType",
 );
@@ -183,30 +201,31 @@ console.log("✓ upsertRightsClass mutation: real Convex == MemoryDb == LocalSto
 const memberArgs = { firstName: "Dana", lastName: "Lee", membershipClass: "Regular", status: "Active", joinedAt: "2026-01-01", votingRights: true };
 
 // Real Convex stack.
-const cMemberId = await t.mutation(api.members.create, { societyId: seeded.societyId, ...memberArgs });
-let cList: any[] = await t.query(api.members.list, { societyId: seeded.societyId });
+const cMemberId = await authedT.mutation(api.members.create, { societyId: seeded.societyId, ...memberArgs });
+let cList: any[] = await authedT.query(api.members.list, { societyId: seeded.societyId });
 assert.equal(cList.length, 1, "Convex member created");
 assert.equal(cList[0].firstName, "Dana");
-await t.mutation(api.members.update, { id: cMemberId, patch: { status: "Lapsed" } });
+await authedT.mutation(api.members.update, { id: cMemberId, patch: { status: "Lapsed" } });
 const cMember = await t.run(async (ctx: any) => ctx.db.get(cMemberId));
 assert.equal(cMember.status, "Lapsed", "Convex member patched");
-await t.mutation(api.members.remove, { id: cMemberId });
-cList = await t.query(api.members.list, { societyId: seeded.societyId });
+await authedT.mutation(api.members.remove, { id: cMemberId });
+cList = await authedT.query(api.members.list, { societyId: seeded.societyId });
 assert.equal(cList.length, 0, "Convex member removed");
 
 // Local engines: the same CRUD sequence, identical observable behavior.
 async function localMembersCrud(db: TransactionalDb) {
-  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) })
+  const localSocietyId = await createPortableTestWorkspace(db);
+  const rt = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: portableTestPrincipal })
     .register(definePortableMutation({ name: "members:create", handler: memberCreate }))
     .register(definePortableMutation({ name: "members:update", handler: memberUpdate }))
     .register(definePortableMutation({ name: "members:remove", handler: memberRemove }))
     .register(definePortableQuery({ name: "members:list", handler: membersList }));
-  const id = await rt.runMutation<string>("members:create", { societyId: "soc_local", ...memberArgs });
-  assert.equal((await rt.runQuery<any[]>("members:list", { societyId: "soc_local" })).length, 1);
+  const id = await rt.runMutation<string>("members:create", { societyId: localSocietyId, ...memberArgs });
+  assert.equal((await rt.runQuery<any[]>("members:list", { societyId: localSocietyId })).length, 1);
   await rt.runMutation("members:update", { id, patch: { status: "Lapsed" } });
   assert.equal((await db.get(id))?.status, "Lapsed");
   await rt.runMutation("members:remove", { id });
-  assert.equal((await rt.runQuery<any[]>("members:list", { societyId: "soc_local" })).length, 0);
+  assert.equal((await rt.runQuery<any[]>("members:list", { societyId: localSocietyId })).length, 0);
 }
 await localMembersCrud(new MemoryDb());
 await localMembersCrud(new LocalStoreDb(new MemoryRowStore()));
