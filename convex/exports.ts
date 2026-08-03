@@ -183,6 +183,7 @@ export const EXPORTABLE_TABLES = [
   "recordsLocation",
   "sourceEvidence",
   "secretVaultItems",
+  "storageOwnership",
   "archiveAccessions",
   "assetReceiptLinks",
   "inventoryConnections",

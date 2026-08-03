@@ -36,11 +36,30 @@ export async function revisionHistoryPortable(
   ctx: PortableQueryCtx,
   { roleHolderId }: { roleHolderId: string },
 ) {
-  const ownedLiveRow = await requireOwnedRow(ctx, "roleHolders", roleHolderId);
-  const [revisionRows, liveRow] = await Promise.all([
+  // Revisions deliberately outlive their role holder: deleting one must not
+  // destroy its audit trail. Authorizing against the live row alone made a
+  // deleted role holder's history unreadable even to its own society's Owner.
+  // Fall back to the surviving revisions' own society — the tenancy check still
+  // runs, it just uses the rows that still exist.
+  const [liveRow, revisionRows] = await Promise.all([
+    ctx.db.get(roleHolderId, "roleHolders"),
     ctx.db.query("roleHolderRevisions").withIndex("by_role_holder", (q) => q.eq("roleHolderId", roleHolderId)).collect(),
-    Promise.resolve(ownedLiveRow),
   ]);
+  const societyIds = new Set(
+    [liveRow?.societyId, ...revisionRows.map((row) => row.societyId)]
+      .filter(Boolean)
+      .map(String),
+  );
+  // Unknown ID, or rows that disagree about their owner: same uniform
+  // not-found `requireOwnedRow` would have produced, so this cannot be used to
+  // probe whether a foreign role holder exists.
+  if (societyIds.size !== 1) throw new Error("roleHolders not found.");
+  const [societyId] = [...societyIds];
+  try {
+    await requireSocietyMembership(ctx, societyId);
+  } catch {
+    throw new Error("roleHolders not found.");
+  }
   const timeline = buildTimeline(
     toStoredRevisions(revisionRows),
     liveRow ? ({ ...liveRow, _id: String(liveRow._id) } as LiveRoleHolder) : undefined,
