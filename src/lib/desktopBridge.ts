@@ -12,7 +12,6 @@ export type DesktopWorkspaceInfo = {
 export type DesktopWriteDocumentVersionInput = {
   societyId: string;
   documentId: string;
-  version: number;
   fileName: string;
   mimeType?: string;
   bytes: ArrayBuffer;

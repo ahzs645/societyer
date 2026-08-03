@@ -94,7 +94,6 @@ export function DocumentsPage() {
       societyId: society._id,
       documentId,
       file,
-      nextVersion: 1,
       actingUserId,
       createDemoVersion,
       beginUpload: beginVersionUpload,

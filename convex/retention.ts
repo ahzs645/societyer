@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { internalMutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { expiredForSocietyPortable } from "../shared/functions/retention";
 import { toPortableQueryCtx } from "./lib/portable";
@@ -10,13 +11,16 @@ import { toPortableQueryCtx } from "./lib/portable";
  * notification on each society that has at least one newly-flagged record.
  */
 export const flagExpired = internalMutation({
-  args: {},
+  args: { cursor: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx) => {
-    const all = await ctx.db.query("documents").collect();
+  handler: async (ctx, { cursor }) => {
+    const batch = await ctx.db.query("documents").paginate({
+      cursor: cursor ?? null,
+      numItems: 200,
+    });
     const now = Date.now();
     const perSociety = new Map<string, number>();
-    for (const d of all) {
+    for (const d of batch.page) {
       if (d.archivedAtISO) continue;
       if (d.flaggedForDeletion) continue;
       if (!d.retentionYears || d.retentionYears >= 99) continue;
@@ -41,7 +45,15 @@ export const flagExpired = internalMutation({
         createdAtISO: new Date().toISOString(),
       });
     }
-    return { flagged: Array.from(perSociety.values()).reduce((a, b) => a + b, 0) };
+    if (!batch.isDone) {
+      await ctx.scheduler.runAfter(0, internal.retention.flagExpired, {
+        cursor: batch.continueCursor,
+      });
+    }
+    return {
+      flagged: Array.from(perSociety.values()).reduce((a, b) => a + b, 0),
+      isDone: batch.isDone,
+    };
   },
 });
 

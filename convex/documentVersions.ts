@@ -1,10 +1,10 @@
 import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-import { Id } from "./_generated/dataModel";
 import { canActAs, requireRole } from "./users";
 import {
   buildStorageKey,
+  buildUploadStorageKey,
   createUploadUrl,
   createDownloadUrl,
 } from "./providers/storage";
@@ -53,22 +53,14 @@ export const beginUpload = action({
       throw new Error(`Role Director required — you have ${actor.role}.`);
     }
 
-    // Look up the latest version number inside the action via a query.
-    const latestVersion = await ctx.runQuery(api.documentVersions.latest, {
-      documentId: args.documentId,
-    });
-    const nextVersion = (latestVersion?.version ?? 0) + 1;
-    const key = buildStorageKey(
+    const key = buildUploadStorageKey(
       args.societyId,
       args.documentId,
-      nextVersion,
+      crypto.randomUUID(),
       args.fileName,
     );
     const presigned = await createUploadUrl({ key, mimeType: args.mimeType });
-    return {
-      version: nextVersion,
-      presigned,
-    };
+    return { presigned };
   },
 });
 
@@ -76,7 +68,6 @@ export const recordUploadedVersion = mutation({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
-    version: v.number(),
     storageProvider: v.string(),
     storageKey: v.string(),
     fileName: v.string(),
@@ -95,11 +86,22 @@ export const recordUploadedVersion = mutation({
       required: "Director",
     });
 
-    // Mark old versions non-current.
+    // Allocate the authoritative version in this mutation. Concurrent recorders
+    // conflict on this read and Convex retries one against the committed row.
     const existing = await ctx.db
       .query("documentVersions")
       .withIndex("by_document", (q) => q.eq("documentId", args.documentId))
       .collect();
+    const nextVersion = Math.max(0, ...existing.map((row) => row.version)) + 1;
+    const storageKeyOwner = await ctx.db
+      .query("documentVersions")
+      .withIndex("by_storage_key", (q) => q.eq("storageKey", args.storageKey))
+      .first();
+    if (storageKeyOwner) {
+      throw new Error("This uploaded file has already been recorded as a document version.");
+    }
+
+    // Mark old versions non-current.
     for (const row of existing) {
       if (row.isCurrent) await ctx.db.patch(row._id, { isCurrent: false });
     }
@@ -111,7 +113,7 @@ export const recordUploadedVersion = mutation({
     const id = await ctx.db.insert("documentVersions", {
       societyId: args.societyId,
       documentId: args.documentId,
-      version: args.version,
+      version: nextVersion,
       storageProvider: args.storageProvider,
       storageKey: args.storageKey,
       fileName: args.fileName,
@@ -141,7 +143,7 @@ export const recordUploadedVersion = mutation({
       // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
       entityId: args.documentId,
       action: "version-uploaded",
-      summary: `Uploaded ${args.fileName} as v${args.version}${args.changeNote ? ` — ${args.changeNote}` : ""}`,
+      summary: `Uploaded ${args.fileName} as v${nextVersion}${args.changeNote ? ` — ${args.changeNote}` : ""}`,
       createdAtISO: new Date().toISOString(),
     });
 
@@ -164,7 +166,7 @@ export const recordUploadedVersion = mutation({
       });
     }
 
-    return id;
+    return { versionId: id, version: nextVersion };
   },
 });
 
@@ -256,7 +258,7 @@ export const createDemoVersion = mutation({
     actingUserId: v.optional(v.id("users")),
   },
   returns: v.any(),
-  handler: async (ctx, args): Promise<Id<"documentVersions">> => {
+  handler: async (ctx, args) => {
     assertNativeFileStorageEnabled();
     const existing = await ctx.db
       .query("documentVersions")
@@ -307,7 +309,7 @@ export const createDemoVersion = mutation({
       summary: `Uploaded ${args.fileName} as v${nextVersion}${args.changeNote ? ` — ${args.changeNote}` : ""}`,
       createdAtISO: new Date().toISOString(),
     });
-    return id;
+    return { versionId: id, version: nextVersion };
   },
 });
 

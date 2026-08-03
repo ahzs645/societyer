@@ -1045,16 +1045,14 @@ export const _listDue = query({
   args: { dueBefore: v.string() },
   returns: v.any(),
   handler: async (ctx, { dueBefore }) => {
-    const rows = await ctx.db
+    return await ctx.db
       .query("workflows")
-      .withIndex("by_next_run")
-      .collect();
-    return rows.filter(
-      (w) =>
-        w.status === "active" &&
-        typeof w.nextRunAtISO === "string" &&
-        w.nextRunAtISO <= dueBefore,
-    );
+      .withIndex("by_status_next_run", (q) =>
+        // Lower bound excludes unscheduled workflows: an absent nextRunAtISO
+        // sorts before every string, so lte alone would match them.
+        q.eq("status", "active").gt("nextRunAtISO", "").lte("nextRunAtISO", dueBefore),
+      )
+      .take(25);
   },
 });
 

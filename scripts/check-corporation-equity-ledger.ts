@@ -25,6 +25,15 @@ function expectEqual(label: string, actual: unknown, expected: unknown) {
   }
 }
 
+async function expectRejects(label: string, fn: () => Promise<unknown>) {
+  try {
+    await fn();
+  } catch {
+    return;
+  }
+  throw new Error(`${label} should have rejected.`);
+}
+
 const rightsClass: RightsClassRecord = {
   societyId: "society-1",
   className: "Class A Common Shares",
@@ -193,5 +202,44 @@ expectEqual("materialized static holding quantity", ledger.holdings[0].quantity,
 expectEqual("materialized static holding class", ledger.holdings[0].rightsClassId, classId);
 expectEqual("materialized static holding holder", ledger.holdings[0].holderRoleHolderId, holderId);
 expectEqual("materialized static holding last transaction", ledger.holdings[0].lastTransactionId, issuanceId);
+
+await expectRejects("referenced rights class deletion", () =>
+  client.mutation("legalOperations:removeRightsClass", { id: classId }),
+);
+
+const destination = await client.mutation("society:createWorkspace", {
+  name: "Destination Holdings Inc.",
+  incorporationNumber: "765432-1",
+  incorporationDate: "2026-01-01",
+  jurisdictionCode: "CA-FED-CBCA",
+  entityType: "corporation__business_",
+  actFormedUnder: "canada_business_corporations_act",
+});
+const destinationHolderId = await client.mutation("legalOperations:upsertRoleHolder", {
+  societyId: destination.societyId,
+  roleType: "shareholder",
+  status: "current",
+  fullName: "Destination Holder",
+});
+const destinationClassId = await client.mutation("legalOperations:upsertRightsClass", {
+  societyId: destination.societyId,
+  className: "Destination common shares",
+  classType: "share",
+  status: "active",
+});
+await client.mutation("legalOperations:upsertRightsholdingTransfer", {
+  id: issuanceId,
+  societyId: destination.societyId,
+  transferType: "issuance",
+  status: "posted",
+  transferDate: "2026-01-02",
+  rightsClassId: destinationClassId,
+  destinationRoleHolderId: destinationHolderId,
+  quantity: 100,
+});
+const oldLedger = await client.query("legalOperations:rightsLedger", { societyId: created.societyId });
+const destinationLedger = await client.query("legalOperations:rightsLedger", { societyId: destination.societyId });
+expectEqual("old society holdings rebuilt after transfer move", oldLedger.holdings.length, 0);
+expectEqual("new society holdings rebuilt after transfer move", destinationLedger.holdings.length, 1);
 
 console.log("Corporation equity ledger checks passed.");

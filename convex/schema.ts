@@ -348,7 +348,9 @@ export default defineSchema({
   })
     .index("by_society", ["societyId"])
     .index("by_society_date", ["societyId", "transferDate"])
-    .index("by_society_status", ["societyId", "status"]),
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_society_class", ["societyId", "rightsClassId"])
+    .index("by_class", ["rightsClassId"]),
 
   rightsHoldings: defineTable({
     societyId: v.id("societies"),
@@ -365,6 +367,7 @@ export default defineSchema({
   })
     .index("by_society", ["societyId"])
     .index("by_society_class", ["societyId", "rightsClassId"])
+    .index("by_class", ["rightsClassId"])
     .index("by_society_holder", ["societyId", "holderKey"]),
 
   // legalDocs — extracted to convex/tables/legalDocs.ts

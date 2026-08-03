@@ -86,7 +86,6 @@ export function localFilesystemStorage(): DocumentStorageAdapter {
 export async function writeLocalDocumentVersion(args: {
   societyId: string;
   documentId: string;
-  version: number;
   file: File;
 }): Promise<DocumentVersionRef> {
   const bridge = requireDesktopBridge();
@@ -94,7 +93,6 @@ export async function writeLocalDocumentVersion(args: {
   return await bridge.writeDocumentVersion({
     societyId: args.societyId,
     documentId: args.documentId,
-    version: args.version,
     fileName: args.file.name,
     mimeType: args.file.type,
     bytes,

@@ -1261,8 +1261,10 @@ function mutCasesAssets9(name: string, args: StaticArgs, store?: StaticDemoDexie
   if (name === "documentVersions:recordUploadedVersion") {
     const now = new Date().toISOString();
     const id = `static_documentVersion_${Date.now()}`;
-    const existing = store?.listRows("documentVersions", { documentId: args?.documentId }) ?? [];
+    let version = 1;
     store?.transaction(() => {
+      const existing = store.listRows("documentVersions", { documentId: args?.documentId });
+      version = Math.max(0, ...existing.map((row) => Number(row.version) || 0)) + 1;
       for (const row of existing) {
         if (row.isCurrent) store.upsertRow("documentVersions", { ...row, isCurrent: false });
       }
@@ -1271,7 +1273,7 @@ function mutCasesAssets9(name: string, args: StaticArgs, store?: StaticDemoDexie
         _creationTime: Date.now(),
         societyId: args?.societyId ?? SOCIETY_ID,
         documentId: args?.documentId,
-        version: args?.version ?? Math.max(0, ...existing.map((row) => Number(row.version) || 0)) + 1,
+        version,
         storageProvider: args?.storageProvider ?? "demo",
         storageKey: args?.storageKey ?? `demo://document-version/${id}`,
         fileName: args?.fileName ?? "document",
@@ -1310,7 +1312,7 @@ function mutCasesAssets9(name: string, args: StaticArgs, store?: StaticDemoDexie
         });
       }
     });
-    return id;
+    return { versionId: id, version };
   }
   if (name === "documentVersions:createDemoVersion") {
     return mutationResult("documentVersions:recordUploadedVersion", {

@@ -34,6 +34,17 @@ export function buildStorageKey(
   return `societies/${societyId}/documents/${documentId}/v${version}-${safe}`;
 }
 
+export function buildUploadStorageKey(
+  societyId: string,
+  documentId: string,
+  uploadId: string,
+  fileName: string,
+): string {
+  const safeUploadId = uploadId.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `societies/${societyId}/documents/${documentId}/uploads/${safeUploadId}-${safeFileName}`;
+}
+
 export async function createUploadUrl(args: {
   key: string;
   mimeType?: string;

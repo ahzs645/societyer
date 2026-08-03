@@ -57,7 +57,6 @@ export const DesktopSchemas = {
   writeDocumentVersionInput: z.object({
     societyId: z.string(),
     documentId: z.string(),
-    version: z.number(),
     fileName: z.string(),
     mimeType: z.string().optional(),
     bytes: z.any().refine(
