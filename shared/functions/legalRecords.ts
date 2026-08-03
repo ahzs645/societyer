@@ -13,6 +13,41 @@
 import { assertAllowedOption } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import type { PortableDoc, TableName } from "../portable/ctx";
+import {
+  getGlobalOrOwned,
+  getOwned,
+  requireAuthenticated,
+  requireOwnedRow,
+  requireSocietyMembership,
+} from "./access";
+
+async function authorizeOptionalSocietyUpsert(
+  ctx: PortableMutationCtx,
+  table: TableName,
+  id: string | undefined,
+  societyId: string | undefined,
+): Promise<{ existing: PortableDoc | null; societyId: string | undefined }> {
+  const existing = id ? await getGlobalOrOwned(ctx, table, id, societyId) : null;
+  if (existing && typeof existing.societyId !== "string" && societyId) {
+    throw new Error(`${table} not found.`);
+  }
+  const resolvedSocietyId = societyId ?? existing?.societyId;
+  if (resolvedSocietyId) await requireSocietyMembership(ctx, String(resolvedSocietyId));
+  else requireAuthenticated(ctx);
+  return { existing, societyId: resolvedSocietyId ? String(resolvedSocietyId) : undefined };
+}
+
+async function requireOwnedIds(
+  ctx: PortableMutationCtx,
+  table: TableName,
+  ids: readonly (string | undefined)[],
+  societyId: string,
+): Promise<void> {
+  for (const id of ids) {
+    if (id) await getOwned(ctx, table, id, societyId);
+  }
+}
 
 export interface UpsertLegalTemplateArgs {
   id?: string;
@@ -50,13 +85,29 @@ export async function upsertLegalTemplatePortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertLegalTemplateArgs,
 ): Promise<string> {
+  const scope = await authorizeOptionalSocietyUpsert(ctx, "legalTemplates", id, args.societyId);
+  if (scope.societyId) {
+    await requireOwnedIds(
+      ctx,
+      "documents",
+      [args.templateDocumentId, args.docxDocumentId, args.pdfDocumentId],
+      scope.societyId,
+    );
+  }
+  for (const fieldId of [
+    ...(args.requiredDataFieldIds ?? []),
+    ...(args.optionalDataFieldIds ?? []),
+    ...(args.reviewDataFieldIds ?? []),
+  ]) {
+    await getGlobalOrOwned(ctx, "legalTemplateDataFields", fieldId, scope.societyId);
+  }
   assertAllowedOption("templateTypes", args.templateType, "Template type", false);
   assertAllowedOption("templateStatuses", args.status, "Template status");
   assertAllowedOption("documentTags", args.documentTag, "Document tag");
   assertAllowedOption("filingTypes", args.filingType, "Filing type");
   const now = new Date().toISOString();
   const payload = {
-    societyId: args.societyId,
+    societyId: scope.societyId,
     templateType: cleanText(args.templateType) || "document",
     name: cleanText(args.name) || "Untitled template",
     status: cleanText(args.status) || "draft",
@@ -97,6 +148,7 @@ export async function removeLegalTemplatePortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
+  await getGlobalOrOwned(ctx, "legalTemplates", id);
   await ctx.db.delete(id);
 }
 
@@ -130,11 +182,15 @@ export async function upsertLegalPrecedentPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertLegalPrecedentArgs,
 ): Promise<string> {
+  const scope = await authorizeOptionalSocietyUpsert(ctx, "legalPrecedents", id, args.societyId);
+  for (const templateId of args.templateIds ?? []) {
+    await getGlobalOrOwned(ctx, "legalTemplates", templateId, scope.societyId);
+  }
   assertAllowedOption("precedentStatuses", args.status, "Precedent status");
   assertAllowedOption("partTypes", args.partType, "Part type");
   const now = new Date().toISOString();
   const payload = {
-    societyId: args.societyId,
+    societyId: scope.societyId,
     packageName: cleanText(args.packageName) || "Untitled precedent",
     partType: cleanText(args.partType),
     status: cleanText(args.status) || "draft",
@@ -169,6 +225,7 @@ export async function removeLegalPrecedentPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
+  await getGlobalOrOwned(ctx, "legalPrecedents", id);
   await ctx.db.delete(id);
 }
 
@@ -200,6 +257,19 @@ export async function upsertLegalPrecedentRunPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertLegalPrecedentRunArgs,
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "legalPrecedentRuns", id, args.societyId);
+  if (args.precedentId) {
+    await getGlobalOrOwned(ctx, "legalPrecedents", args.precedentId, args.societyId);
+  }
+  await requireOwnedIds(ctx, "filings", args.filingIds ?? [], args.societyId);
+  await requireOwnedIds(
+    ctx,
+    "generatedLegalDocuments",
+    args.generatedDocumentIds ?? [],
+    args.societyId,
+  );
+  await requireOwnedIds(ctx, "roleHolders", args.signerRoleHolderIds ?? [], args.societyId);
   assertAllowedOption("precedentRunStatuses", args.status, "Precedent run status");
   const now = new Date().toISOString();
   const payload = {
@@ -236,6 +306,7 @@ export async function removeLegalPrecedentRunPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
+  await requireOwnedRow(ctx, "legalPrecedentRuns", id);
   await ctx.db.delete(id);
 }
 
@@ -271,6 +342,27 @@ export async function upsertGeneratedLegalDocumentPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertGeneratedLegalDocumentArgs,
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "generatedLegalDocuments", id, args.societyId);
+  await requireOwnedIds(
+    ctx,
+    "documents",
+    [args.draftDocumentId, args.signedDocumentId, ...(args.sourceDocumentIds ?? [])],
+    args.societyId,
+  );
+  if (args.sourceTemplateId) {
+    await getGlobalOrOwned(ctx, "legalTemplates", args.sourceTemplateId, args.societyId);
+  }
+  if (args.precedentRunId) {
+    await getOwned(ctx, "legalPrecedentRuns", args.precedentRunId, args.societyId);
+  }
+  await requireOwnedIds(
+    ctx,
+    "roleHolders",
+    args.signersRequiredRoleHolderIds ?? [],
+    args.societyId,
+  );
+  await requireOwnedIds(ctx, "legalSigners", args.signersWhoSignedIds ?? [], args.societyId);
   assertAllowedOption("generatedDocumentStatuses", args.status, "Generated document status");
   assertAllowedOption("documentTags", args.documentTag, "Generated document tag");
   const now = new Date().toISOString();
@@ -312,6 +404,7 @@ export async function removeGeneratedLegalDocumentPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
+  await requireOwnedRow(ctx, "generatedLegalDocuments", id);
   await ctx.db.delete(id);
 }
 
@@ -337,6 +430,12 @@ export async function upsertLegalSignerPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertLegalSignerArgs,
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "legalSigners", id, args.societyId);
+  if (args.generatedDocumentId) {
+    await getOwned(ctx, "generatedLegalDocuments", args.generatedDocumentId, args.societyId);
+  }
+  if (args.roleHolderId) await getOwned(ctx, "roleHolders", args.roleHolderId, args.societyId);
   assertAllowedOption("signerStatuses", args.status, "Signer status");
   const now = new Date().toISOString();
   const payload = {
@@ -367,6 +466,7 @@ export async function removeLegalSignerPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
+  await requireOwnedRow(ctx, "legalSigners", id);
   await ctx.db.delete(id);
 }
 
@@ -374,6 +474,7 @@ export async function formationMaintenancePortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const [formations, nameSearches, amendments, annualRecords, jurisdictionRows, logs] = await Promise.all([
     ctx.db.query("formationRecords").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("nameSearchItems").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
@@ -425,6 +526,15 @@ export async function upsertFormationRecordPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertFormationRecordArgs,
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "formationRecords", id, args.societyId);
+  if (args.relatedUserId) await getOwned(ctx, "users", args.relatedUserId, args.societyId);
+  await requireOwnedIds(
+    ctx,
+    "documents",
+    [...(args.draftDocumentIds ?? []), ...(args.supportingDocumentIds ?? [])],
+    args.societyId,
+  );
   assertAllowedOption("formationStatuses", args.status, "Formation status");
   assertAllowedOption("entityJurisdictions", args.jurisdiction, "Formation jurisdiction");
   assertAllowedOption("entityJurisdictions", args.extraProvincialRegistrationJurisdiction, "Extra-provincial jurisdiction");
@@ -468,6 +578,7 @@ export async function removeFormationRecordPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
+  await requireOwnedRow(ctx, "formationRecords", id);
   await ctx.db.delete(id);
 }
 
@@ -494,6 +605,14 @@ export async function upsertNameSearchItemPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertNameSearchItemArgs,
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "nameSearchItems", id, args.societyId);
+  if (args.formationRecordId) {
+    await getOwned(ctx, "formationRecords", args.formationRecordId, args.societyId);
+  }
+  if (args.reportDocumentId) {
+    await getOwned(ctx, "documents", args.reportDocumentId, args.societyId);
+  }
   assertAllowedOption("suffixCompanyNames", args.suffix, "Name suffix");
   const now = new Date().toISOString();
   const payload = {
@@ -525,6 +644,7 @@ export async function removeNameSearchItemPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
+  await requireOwnedRow(ctx, "nameSearchItems", id);
   await ctx.db.delete(id);
 }
 
@@ -548,6 +668,12 @@ export async function upsertEntityAmendmentPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertEntityAmendmentArgs,
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "entityAmendments", id, args.societyId);
+  if (args.relatedPrecedentRunId) {
+    await getOwned(ctx, "legalPrecedentRuns", args.relatedPrecedentRunId, args.societyId);
+  }
+  await requireOwnedIds(ctx, "documents", args.sourceDocumentIds ?? [], args.societyId);
   assertAllowedOption("amendmentStatuses", args.status, "Amendment status");
   assertAllowedOption("entityJurisdictions", args.jurisdictionNew, "New jurisdiction");
   const now = new Date().toISOString();
@@ -577,6 +703,7 @@ export async function removeEntityAmendmentPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
+  await requireOwnedRow(ctx, "entityAmendments", id);
   await ctx.db.delete(id);
 }
 
@@ -615,6 +742,33 @@ export async function upsertAnnualMaintenanceRecordPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertAnnualMaintenanceRecordArgs,
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "annualMaintenanceRecords", id, args.societyId);
+  await requireOwnedIds(
+    ctx,
+    "documents",
+    [
+      args.draftFilingDocumentId,
+      args.signedFilingDocumentId,
+      args.processedFilingDocumentId,
+      args.financialStatementsDocumentId,
+      ...(args.sourceDocumentIds ?? []),
+    ],
+    args.societyId,
+  );
+  if (args.relatedPrecedentRunId) {
+    await getOwned(ctx, "legalPrecedentRuns", args.relatedPrecedentRunId, args.societyId);
+  }
+  if (args.filingId) await getOwned(ctx, "filings", args.filingId, args.societyId);
+  if (args.keyVaultItemId) {
+    await getOwned(ctx, "secretVaultItems", args.keyVaultItemId, args.societyId);
+  }
+  if (args.templateFilingId) {
+    await getGlobalOrOwned(ctx, "legalTemplates", args.templateFilingId, args.societyId);
+  }
+  if (args.authorizingRoleHolderId) {
+    await getOwned(ctx, "roleHolders", args.authorizingRoleHolderId, args.societyId);
+  }
   assertAllowedOption("annualMaintenanceStatuses", args.status, "Annual maintenance status");
   assertAllowedOption("annualFinancialStatementOptions", args.annualFinancialStatementOption, "Annual financial statement option");
   const now = new Date().toISOString();
@@ -659,6 +813,7 @@ export async function removeAnnualMaintenanceRecordPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
+  await requireOwnedRow(ctx, "annualMaintenanceRecords", id);
   await ctx.db.delete(id);
 }
 
@@ -678,6 +833,8 @@ export async function upsertJurisdictionMetadataPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertJurisdictionMetadataArgs,
 ): Promise<string> {
+  requireAuthenticated(ctx);
+  if (id) await getGlobalOrOwned(ctx, "jurisdictionMetadata", id);
   assertAllowedOption("entityJurisdictions", args.jurisdiction, "Jurisdiction", false);
   assertAllowedOption("actsFormedUnder", args.actFormedUnder, "Act formed under");
   const now = new Date().toISOString();
@@ -703,6 +860,7 @@ export async function removeJurisdictionMetadataPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
+  await getGlobalOrOwned(ctx, "jurisdictionMetadata", id);
   await ctx.db.delete(id);
 }
 
@@ -731,10 +889,22 @@ export async function upsertSupportLogPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertSupportLogArgs,
 ): Promise<string> {
+  const scope = await authorizeOptionalSocietyUpsert(ctx, "supportLogs", id, args.societyId);
+  for (const userId of [args.userId, args.relatedUserId]) {
+    if (!userId) continue;
+    if (scope.societyId) await getOwned(ctx, "users", userId, scope.societyId);
+    else await requireOwnedRow(ctx, "users", userId);
+  }
+  if (args.relatedEntityId) {
+    if (scope.societyId && args.relatedEntityId !== scope.societyId) {
+      throw new Error("societies not found.");
+    }
+    await requireSocietyMembership(ctx, args.relatedEntityId);
+  }
   assertAllowedOption("logTypes", args.logType, "Log type", false);
   assertAllowedOption("logSeverities", args.severity, "Log severity");
   const payload = {
-    societyId: args.societyId,
+    societyId: scope.societyId,
     logType: cleanText(args.logType) || "edit",
     severity: cleanText(args.severity) || "info",
     page: cleanText(args.page),
@@ -763,5 +933,6 @@ export async function removeSupportLogPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
+  await getGlobalOrOwned(ctx, "supportLogs", id);
   await ctx.db.delete(id);
 }

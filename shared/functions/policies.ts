@@ -10,7 +10,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { assertAllowedOption, invalidOptionListIssues } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
 
@@ -108,16 +108,12 @@ export async function upsertPortable(ctx: PortableMutationCtx, { id, ...args }: 
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "policies", id, societyId);
+  await requireOwnedRow(ctx, "policies", id);
   await ctx.db.delete(id);
 }
 
 export async function createReviewTaskPortable(ctx: PortableMutationCtx, { policyId, dueDate }: { policyId: string; dueDate?: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const policy = await getOwned(ctx, "policies", policyId, societyId);
+  const policy = await requireOwnedRow(ctx, "policies", policyId);
   return await ctx.db.insert("tasks", {
     societyId: policy.societyId,
     title: `Review policy: ${policy.policyName}`,
@@ -133,9 +129,7 @@ export async function createReviewTaskPortable(ctx: PortableMutationCtx, { polic
 }
 
 export async function createRequiredSignerTaskPortable(ctx: PortableMutationCtx, { policyId }: { policyId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const policy = await getOwned(ctx, "policies", policyId, societyId);
+  const policy = await requireOwnedRow(ctx, "policies", policyId);
   if (!policy.signatureRequired) throw new Error("This policy does not require signatures.");
   return await ctx.db.insert("tasks", {
     societyId: policy.societyId,
@@ -152,9 +146,7 @@ export async function createRequiredSignerTaskPortable(ctx: PortableMutationCtx,
 }
 
 export async function createTransparencyDraftPortable(ctx: PortableMutationCtx, { policyId }: { policyId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const policy = await getOwned(ctx, "policies", policyId, societyId);
+  const policy = await requireOwnedRow(ctx, "policies", policyId);
   const documentId = policy.pdfDocumentId ?? policy.docxDocumentId;
   const existing = await ctx.db
     .query("publications")

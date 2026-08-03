@@ -12,7 +12,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 type TranscriptSegmentRow = {
   speaker: string;
@@ -191,9 +191,7 @@ function parseVttTranscript(vttText: string): {
 }
 
 export async function getByMeetingPortable(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "meetings", meetingId, societyId);
+  await requireOwnedRow(ctx, "meetings", meetingId);
   const rows = await ctx.db
     .query("transcripts")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -202,9 +200,7 @@ export async function getByMeetingPortable(ctx: PortableQueryCtx, { meetingId }:
 }
 
 export async function jobForMeetingPortable(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "meetings", meetingId, societyId);
+  await requireOwnedRow(ctx, "meetings", meetingId);
   const rows = await ctx.db
     .query("transcriptionJobs")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -240,9 +236,8 @@ export async function updateJobPortable(
     };
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "transcriptionJobs", id, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "transcriptionJobs", id);
+  const societyId = String(authorizedRow.societyId);
   if (patch.transcriptId) await getOwned(ctx, "transcripts", patch.transcriptId, societyId);
   await ctx.db.patch(id, patch);
 }

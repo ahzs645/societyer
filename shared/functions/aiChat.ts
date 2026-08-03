@@ -10,7 +10,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireSocietyMembership } from "./access";
+import { requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 
 export async function listThreadsPortable(
   ctx: PortableQueryCtx,
@@ -28,10 +28,7 @@ export async function messagesForThreadPortable(
   ctx: PortableQueryCtx,
   { threadId }: { threadId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "aiChatThreads", threadId, societyId);
+  await requireOwnedRow(ctx, "aiChatThreads", threadId);
   return ctx.db
     .query("aiMessages")
     .withIndex("by_thread", (q: any) => q.eq("threadId", threadId))
@@ -43,10 +40,7 @@ export async function getThreadPortable(
   ctx: PortableQueryCtx,
   { threadId }: { threadId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  return getOwned(ctx, "aiChatThreads", threadId, societyId);
+  return requireOwnedRow(ctx, "aiChatThreads", threadId);
 }
 
 export async function createThreadPortable(
@@ -83,10 +77,7 @@ export async function archiveThreadPortable(
   ctx: PortableMutationCtx,
   { threadId }: { threadId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "aiChatThreads", threadId, societyId);
+  await requireOwnedRow(ctx, "aiChatThreads", threadId);
   await ctx.db.patch(threadId, { status: "archived", updatedAtISO: new Date().toISOString() });
   return threadId;
 }
@@ -95,10 +86,7 @@ export async function renameThreadPortable(
   ctx: PortableMutationCtx,
   { threadId, title }: { threadId: string; title: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "aiChatThreads", threadId, societyId);
+  await requireOwnedRow(ctx, "aiChatThreads", threadId);
   const trimmed = title.trim();
   if (!trimmed) return threadId;
   await ctx.db.patch(threadId, {
@@ -112,10 +100,7 @@ export async function deleteThreadPortable(
   ctx: PortableMutationCtx,
   { threadId }: { threadId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "aiChatThreads", threadId, societyId);
+  await requireOwnedRow(ctx, "aiChatThreads", threadId);
   const messages = await ctx.db
     .query("aiMessages")
     .withIndex("by_thread", (q: any) => q.eq("threadId", threadId))

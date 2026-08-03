@@ -8,7 +8,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -42,10 +42,8 @@ export async function signPortable(
   ctx: PortableMutationCtx,
   { id, signerName, memberId }: { id: string; signerName: string; memberId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const row = await getOwned(ctx, "writtenResolutions", id, societyId);
+  const row = await requireOwnedRow(ctx, "writtenResolutions", id);
+  const societyId = String(row.societyId);
   if (memberId) await getOwned(ctx, "members", memberId, societyId);
   const signatures = [
     ...row.signatures,
@@ -62,17 +60,11 @@ export async function markFailedPortable(
   ctx: PortableMutationCtx,
   { id, note }: { id: string; note?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "writtenResolutions", id, societyId);
+  await requireOwnedRow(ctx, "writtenResolutions", id);
   await ctx.db.patch(id, { status: "Failed", notes: note });
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "writtenResolutions", id, societyId);
+  await requireOwnedRow(ctx, "writtenResolutions", id);
   await ctx.db.delete(id);
 }

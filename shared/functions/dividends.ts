@@ -8,7 +8,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { requireOwnedRow, requireSocietyMembership } from "./access";
 import {
   computeDividend,
   reconcileDividend,
@@ -85,9 +85,7 @@ export async function createPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "dividends", id, societyId);
+  await requireOwnedRow(ctx, "dividends", id);
   await ctx.db.delete(id);
 }
 

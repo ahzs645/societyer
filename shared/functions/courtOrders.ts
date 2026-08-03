@@ -6,7 +6,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 export interface CourtOrderCreateArgs {
   societyId: string;
@@ -46,16 +46,13 @@ export async function createPortable(ctx: PortableMutationCtx, args: CourtOrderC
 }
 
 export async function updatePortable(ctx: PortableMutationCtx, { id, patch }: { id: string; patch: CourtOrderPatch }): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "courtOrders", id, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "courtOrders", id);
+  const societyId = String(authorizedRow.societyId);
   if (patch.documentId) await getOwned(ctx, "documents", patch.documentId, societyId);
   await ctx.db.patch(id, patch);
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "courtOrders", id, societyId);
+  await requireOwnedRow(ctx, "courtOrders", id);
   await ctx.db.delete(id);
 }

@@ -9,7 +9,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { optionalSubjectId, requireSubjectId, type SubjectIdArgs } from "./subjectId";
 
 const ENTITY_TYPES = ["members", "directors", "volunteers", "employees"] as const;
@@ -98,18 +98,12 @@ export async function updateDefinitionPortable(
     description?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "customFieldDefinitions", id, societyId);
+  await requireOwnedRow(ctx, "customFieldDefinitions", id);
   await ctx.db.patch(id, patch);
 }
 
 export async function deleteDefinitionPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "customFieldDefinitions", id, societyId);
+  await requireOwnedRow(ctx, "customFieldDefinitions", id);
   const values = await ctx.db
     .query("customFieldValues")
     .withIndex("by_definition", (q) => q.eq("definitionId", id))
@@ -122,11 +116,8 @@ export async function listValuesPortable(
   ctx: PortableQueryCtx,
   { entityType, subjectId, entityId }: { entityType: string } & SubjectIdArgs,
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
   const resolvedSubjectId = requireSubjectId({ subjectId, entityId });
-  await getOwned(ctx, entityType, resolvedSubjectId, societyId);
+  await requireOwnedRow(ctx, entityType, resolvedSubjectId);
   // TODO(H0-flip): query by_subject after the hosted backfill is complete.
   const rows = await ctx.db
     .query("customFieldValues")
@@ -178,12 +169,10 @@ export async function clearValuePortable(
   ctx: PortableMutationCtx,
   args: { entityType: string; definitionId: string } & SubjectIdArgs,
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
   const subjectId = requireSubjectId(args);
   assertEntityType(args.entityType);
-  await getOwned(ctx, args.entityType, subjectId, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, args.entityType, subjectId);
+  const societyId = String(authorizedRow.societyId);
   await getOwned(ctx, "customFieldDefinitions", args.definitionId, societyId);
   const indexedValues = await ctx.db
     .query("customFieldValues")

@@ -10,7 +10,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireRolePortable, requireSocietyMembership } from "./access";
 
 function inRange(date: string | undefined, from?: string, to?: string) {
   if (!date) return true;
@@ -456,10 +456,9 @@ export async function removeSourcePortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
+  const authorizedRow = await requireOwnedRow(ctx, "fundingSources", id);
+  const societyId = String(authorizedRow.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
-  await getOwned(ctx, "fundingSources", id, societyId);
   const events = await ctx.db
     .query("fundingSourceEvents")
     .withIndex("by_source", (q) => q.eq("sourceId", id))
@@ -502,10 +501,9 @@ export async function removeEventPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
+  const authorizedRow = await requireOwnedRow(ctx, "fundingSourceEvents", id);
+  const societyId = String(authorizedRow.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
-  await getOwned(ctx, "fundingSourceEvents", id, societyId);
   await ctx.db.delete(id);
 }
 

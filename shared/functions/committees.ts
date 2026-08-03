@@ -8,7 +8,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 export async function committeesListPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -34,15 +34,11 @@ export async function committeesListPortable(ctx: PortableQueryCtx, { societyId 
 }
 
 export async function committeeGetPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  return getOwned(ctx, "committees", id, societyId);
+  return requireOwnedRow(ctx, "committees", id);
 }
 
 export async function committeeDetailPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const committee = await getOwned(ctx, "committees", id, societyId);
+  const committee = await requireOwnedRow(ctx, "committees", id);
   const [members, meetings, tasks, goals] = await Promise.all([
     ctx.db
       .query("committeeMembers")
@@ -115,17 +111,14 @@ export async function committeeUpdatePortable(
     };
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "committees", id, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "committees", id);
+  const societyId = String(authorizedRow.societyId);
   if (patch.chairDirectorId) await getOwned(ctx, "directors", patch.chairDirectorId, societyId);
   await ctx.db.patch(id, patch);
 }
 
 export async function committeeRemovePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "committees", id, societyId);
+  await requireOwnedRow(ctx, "committees", id);
   const members = await ctx.db
     .query("committeeMembers")
     .withIndex("by_committee", (q) => q.eq("committeeId", id))
@@ -157,8 +150,6 @@ export async function committeeAddMemberPortable(
 }
 
 export async function committeeRemoveMemberPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "committeeMembers", id, societyId);
+  await requireOwnedRow(ctx, "committeeMembers", id);
   await ctx.db.delete(id);
 }

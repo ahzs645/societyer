@@ -13,7 +13,7 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { filingKindDefinition } from "../jurisdictionWorkspace";
-import { getOwned, principalUserId, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 
 function filingDefaults(kind: string, jurisdictionCode?: string | null) {
   const definition = filingKindDefinition(kind, jurisdictionCode);
@@ -26,10 +26,7 @@ async function jurisdictionCodeForSociety(ctx: PortableQueryCtx | PortableMutati
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  return getOwned(ctx, "filings", id, societyId);
+  return requireOwnedRow(ctx, "filings", id);
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
@@ -101,10 +98,8 @@ export async function markFiledPortable(
     submissionChecklist?: string[];
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const existing = await getOwned(ctx, "filings", id, societyId);
+  const existing = await requireOwnedRow(ctx, "filings", id);
+  const societyId = String(existing.societyId);
   if (rest.receiptDocumentId) {
     await getOwned(ctx, "documents", rest.receiptDocumentId, societyId);
   }
@@ -187,10 +182,8 @@ export async function updatePortable(
     };
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const existing = await getOwned(ctx, "filings", id, societyId);
+  const existing = await requireOwnedRow(ctx, "filings", id);
+  const societyId = String(existing.societyId);
   if (patch.receiptDocumentId) {
     await getOwned(ctx, "documents", patch.receiptDocumentId, societyId);
   }
@@ -347,9 +340,6 @@ export async function importBcRegistryHistoryPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "filings", id, societyId);
+  await requireOwnedRow(ctx, "filings", id);
   await ctx.db.delete(id);
 }

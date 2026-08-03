@@ -9,7 +9,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 export async function financialsList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -115,10 +115,8 @@ export async function financialUpdate(
   ctx: PortableMutationCtx,
   { id, patch }: { id: string; patch: FinancialPatch },
 ): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "financials", id, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "financials", id);
+  const societyId = String(authorizedRow.societyId);
   if (patch.presentedAtMeetingId) {
     await getOwned(ctx, "meetings", patch.presentedAtMeetingId, societyId);
   }
@@ -126,9 +124,6 @@ export async function financialUpdate(
 }
 
 export async function financialRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "financials", id, societyId);
+  await requireOwnedRow(ctx, "financials", id);
   await ctx.db.delete(id);
 }

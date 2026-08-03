@@ -14,6 +14,7 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import {
   getOwned,
+  requireOwnedRow,
   principalUserId,
   requireRolePortable,
   requireSocietyMembership,
@@ -95,10 +96,8 @@ export async function removePublicationPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "publications", id, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "publications", id);
+  const societyId = String(authorizedRow.societyId);
   await requireRolePortable(ctx, {
     actingUserId,
     societyId,

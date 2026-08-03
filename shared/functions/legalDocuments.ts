@@ -17,6 +17,12 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { cleanText, cleanList } from "./text";
 import {
+  getGlobalOrOwned,
+  getOwned,
+  requireAuthenticated,
+  requireSocietyMembership,
+} from "./access";
+import {
   STARTER_POLICY_TEMPLATES,
   starterTemplateHtml,
   starterTemplateMarker,
@@ -58,6 +64,7 @@ import { buildAnnualResolutionContext } from "../annualResolution";
 import { buildDividendResolutionContext } from "../dividendResolution";
 
 export async function templateEnginePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }): Promise<any> {
+  await requireSocietyMembership(ctx, societyId);
   const [dataFields, templates, precedents, runs, generatedDocuments, signers] = await Promise.all([
     ctx.db.query("legalTemplateDataFields").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("legalTemplates").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
@@ -77,6 +84,7 @@ export async function templateEnginePortable(ctx: PortableQueryCtx, { societyId 
 }
 
 export async function seedStarterPolicyTemplatesPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }): Promise<any> {
+  await requireSocietyMembership(ctx, societyId);
   const now = new Date().toISOString();
   const existing = await ctx.db
     .query("legalTemplates")
@@ -142,10 +150,12 @@ export async function seedStarterPolicyTemplatesPortable(ctx: PortableMutationCt
 }
 
 export async function seedCorporationDocumentPacketsPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }): Promise<any> {
+  await requireSocietyMembership(ctx, societyId);
   return seedCorporationDocumentPacketsForSociety(ctx, societyId);
 }
 
 export async function seedSocietyDocumentPacketsPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }): Promise<any> {
+  await requireSocietyMembership(ctx, societyId);
   return seedSocietyDocumentPacketsForSociety(ctx, societyId);
 }
 
@@ -213,6 +223,7 @@ export async function generateDocumentFromCatalogPortable(
   ctx: PortableMutationCtx,
   args: { societyId: string; packetKey: string; effectiveDate?: string },
 ): Promise<any> {
+  await requireSocietyMembership(ctx, args.societyId);
   return generatePacketForSocietyPortable(ctx, args);
 }
 
@@ -227,6 +238,14 @@ export async function seedDocumentPacketsForEntityPortable(ctx: PortableMutation
     return { kind: "corporation", ...(await seedCorporationDocumentPacketsForSociety(ctx, societyId)) };
   }
   return { kind: "society", ...(await seedSocietyDocumentPacketsForSociety(ctx, societyId)) };
+}
+
+export async function seedDocumentPacketsForEntityRegisteredPortable(
+  ctx: PortableMutationCtx,
+  { societyId }: { societyId: string },
+): Promise<any> {
+  await requireSocietyMembership(ctx, societyId);
+  return seedDocumentPacketsForEntityPortable(ctx, societyId);
 }
 
 export async function stageCorporationDocumentPacketPortable(
@@ -244,6 +263,8 @@ export async function stageCorporationDocumentPacketPortable(
     notes?: string;
   },
 ): Promise<any> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.filingId) await getOwned(ctx, "filings", args.filingId, args.societyId);
   await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
   const packet = args.packetKey
     ? CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.key === args.packetKey)
@@ -317,10 +338,8 @@ export async function stageShareIssuancePacketPortable(
   ctx: PortableMutationCtx,
   args: { societyId: string; transferId: string; notes?: string },
 ): Promise<any> {
-  const transfer = await ctx.db.get(args.transferId);
-  if (!transfer || transfer.societyId !== args.societyId) {
-    throw new Error("Share issuance transfer was not found for this workspace.");
-  }
+  await requireSocietyMembership(ctx, args.societyId);
+  const transfer = await getOwned(ctx, "rightsholdingTransfers", args.transferId, args.societyId);
   if (transfer.transferType !== "issuance") {
     throw new Error("Only issuance transfers can stage the share issuance packet.");
   }
@@ -412,10 +431,8 @@ export async function stageShareSplitPacketPortable(
   ctx: PortableMutationCtx,
   args: { societyId: string; rightsClassId: string; numerator: number; denominator: number; notes?: string },
 ): Promise<any> {
-  const rightsClass = await ctx.db.get(args.rightsClassId);
-  if (!rightsClass || rightsClass.societyId !== args.societyId) {
-    throw new Error("Rights class was not found for this workspace.");
-  }
+  await requireSocietyMembership(ctx, args.societyId);
+  const rightsClass = await getOwned(ctx, "rightsClasses", args.rightsClassId, args.societyId);
   const ratio: SplitRatio = { numerator: args.numerator, denominator: args.denominator };
   const validation = validateRatio(ratio);
   if (!validation.ok) {
@@ -566,9 +583,18 @@ export async function upsertTemplateDataFieldPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertTemplateDataFieldArgs,
 ): Promise<string> {
+  const existing = id
+    ? await getGlobalOrOwned(ctx, "legalTemplateDataFields", id, args.societyId)
+    : null;
+  const societyId = args.societyId ?? existing?.societyId;
+  if (societyId) await requireSocietyMembership(ctx, String(societyId));
+  else requireAuthenticated(ctx);
+  if (existing && typeof existing.societyId !== "string" && args.societyId) {
+    throw new Error("legalTemplateDataFields not found.");
+  }
   const now = new Date().toISOString();
   const payload = {
-    societyId: args.societyId,
+    societyId,
     name: cleanText(args.name) || "Unnamed data field",
     label: cleanText(args.label),
     fieldType: cleanText(args.fieldType),
@@ -588,6 +614,7 @@ export async function upsertTemplateDataFieldPortable(
 }
 
 export async function removeTemplateDataFieldPortable(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  await getGlobalOrOwned(ctx, "legalTemplateDataFields", id);
   await ctx.db.delete(id);
 }
 

@@ -22,6 +22,12 @@ import { planRoleHolderRevision } from "../roleHolderHistory";
 import { personReferenceConstraint, validatePersonReference } from "../personReference";
 import { materializeRightsHoldings } from "../equityLedger";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import {
+  getOwned,
+  principalUserId,
+  requireOwnedRow,
+  requireSocietyMembership,
+} from "./access";
 
 /** Keep transfers on/before an as-of date (date-only compare, inclusive). */
 function transfersAsOf(transfers: any[], asOf?: string): any[] {
@@ -46,8 +52,8 @@ async function enforcePersonReference(
 
   let exists = false;
   if (candidate) {
-    const person = await ctx.db.get(directoryPersonId);
-    exists = person != null;
+    await getOwned(ctx, "peopleDirectory", candidate, societyId);
+    exists = true;
   }
 
   const result = validatePersonReference(
@@ -67,6 +73,7 @@ export async function listRoleHoldersPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
   return rows.sort((a, b) => String(a.fullName).localeCompare(String(b.fullName)));
 }
@@ -137,6 +144,21 @@ export async function upsertRoleHolderPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertRoleHolderArgs,
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "roleHolders", id, args.societyId);
+  if (args.membershipClassId) {
+    await getOwned(ctx, "rightsClasses", args.membershipClassId, args.societyId);
+  }
+  if (args.relatedRoleHolderId) {
+    await getOwned(ctx, "roleHolders", args.relatedRoleHolderId, args.societyId);
+  }
+  if (args.extraProvincialRegistrationId) {
+    await getOwned(ctx, "organizationRegistrations", args.extraProvincialRegistrationId, args.societyId);
+  }
+  for (const documentId of args.sourceDocumentIds ?? []) {
+    await getOwned(ctx, "documents", documentId, args.societyId);
+  }
+  args.actorUserId = await principalUserId(ctx, args.societyId);
   assertAllowedOption("representativeTypes", args.roleType, "Role-holder type", false);
   assertAllowedOption("roleHolderStatuses", args.status, "Role-holder status");
   assertAllowedOption("officerTitles", args.officerTitle, "Officer title");
@@ -236,12 +258,11 @@ export async function removeRoleHolderPortable(
 ): Promise<void> {
   // Capture a final closed revision before deleting, so the audit trail records
   // the removal (and the last known values).
-  const existing = await ctx.db.get(id);
-  if (existing) {
-    const now = new Date().toISOString();
-    const { revision } = planRoleHolderRevision(existing, now, actorUserId);
-    await ctx.db.insert("roleHolderRevisions", { societyId: existing.societyId, ...revision, createdAtISO: now });
-  }
+  const existing = await requireOwnedRow(ctx, "roleHolders", id);
+  actorUserId = await principalUserId(ctx, String(existing.societyId));
+  const now = new Date().toISOString();
+  const { revision } = planRoleHolderRevision(existing, now, actorUserId);
+  await ctx.db.insert("roleHolderRevisions", { societyId: existing.societyId, ...revision, createdAtISO: now });
   await ctx.db.delete(id);
 }
 
@@ -249,6 +270,7 @@ export async function rightsLedgerPortable(
   ctx: PortableQueryCtx,
   { societyId, asOf }: { societyId: string; asOf?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const [classes, transfers, roleHolders] = await Promise.all([
     ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),

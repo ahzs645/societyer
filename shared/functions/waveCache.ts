@@ -12,7 +12,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { requireOwnedRow, requireSocietyMembership } from "./access";
 
 export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -54,9 +54,7 @@ export async function resourcesPortable(
 }
 
 export async function resourcePortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const row = await getOwned(ctx, "waveCacheResources", id, societyId);
+  const row = await requireOwnedRow(ctx, "waveCacheResources", id);
   const snapshotRows = await ctx.db
     .query("waveCacheResources")
     .withIndex("by_snapshot", (q) => q.eq("snapshotId", row.snapshotId))

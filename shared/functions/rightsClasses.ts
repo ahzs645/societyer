@@ -14,6 +14,7 @@
 import { assertAllowedOption } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
 import type { PortableMutationCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export interface UpsertRightsClassArgs {
   id?: string;
@@ -41,6 +42,11 @@ export async function upsertRightsClassPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertRightsClassArgs,
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await getOwned(ctx, "rightsClasses", id, args.societyId);
+  for (const documentId of args.sourceDocumentIds ?? []) {
+    await getOwned(ctx, "documents", documentId, args.societyId);
+  }
   assertAllowedOption("rightsClassTypes", args.classType, "Rights class type", false);
   assertAllowedOption("rightsClassStatuses", args.status, "Rights class status");
   const now = new Date().toISOString();

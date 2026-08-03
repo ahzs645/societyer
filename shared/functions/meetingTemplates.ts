@@ -8,7 +8,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { resolveMinutesMotions } from "./minutes";
 
 export async function seedDefaultsPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }) {
@@ -144,9 +144,8 @@ export async function updatePortable(
     items?: any[];
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const existing = await getOwned(ctx, "meetingTemplates", templateId, societyId);
+  const existing = await requireOwnedRow(ctx, "meetingTemplates", templateId);
+  const societyId = String(existing.societyId);
   if (patch.items) {
     await Promise.all(patch.items.flatMap((item) => item.motionTemplateId
       ? [getOwned(ctx, "motionTemplates", item.motionTemplateId, societyId)]
@@ -163,9 +162,7 @@ export async function updatePortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { templateId }: { templateId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "meetingTemplates", templateId, societyId);
+  await requireOwnedRow(ctx, "meetingTemplates", templateId);
   await ctx.db.delete(templateId);
   return templateId;
 }
@@ -174,9 +171,7 @@ export async function duplicatePortable(
   ctx: PortableMutationCtx,
   { templateId, name }: { templateId: string; name?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const existing = await getOwned(ctx, "meetingTemplates", templateId, societyId);
+  const existing = await requireOwnedRow(ctx, "meetingTemplates", templateId);
   const now = new Date().toISOString();
   return await ctx.db.insert("meetingTemplates", {
     societyId: existing.societyId,
@@ -199,9 +194,7 @@ export async function createFromMeetingPortable(
     isDefault?: boolean;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const meeting = await getOwned(ctx, "meetings", meetingId, societyId);
+  const meeting = await requireOwnedRow(ctx, "meetings", meetingId);
   const minutes = await ctx.db
     .query("minutes")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))

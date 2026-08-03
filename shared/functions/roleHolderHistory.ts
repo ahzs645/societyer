@@ -10,7 +10,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { requireOwnedRow, requireSocietyMembership } from "./access";
 import {
   buildTimeline,
   changesBetween as changesBetweenPure,
@@ -36,10 +36,7 @@ export async function revisionHistoryPortable(
   ctx: PortableQueryCtx,
   { roleHolderId }: { roleHolderId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const ownedLiveRow = await getOwned(ctx, "roleHolders", roleHolderId, societyId);
+  const ownedLiveRow = await requireOwnedRow(ctx, "roleHolders", roleHolderId);
   const [revisionRows, liveRow] = await Promise.all([
     ctx.db.query("roleHolderRevisions").withIndex("by_role_holder", (q) => q.eq("roleHolderId", roleHolderId)).collect(),
     Promise.resolve(ownedLiveRow),

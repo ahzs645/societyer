@@ -10,7 +10,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { assertAllowedOption } from "../orgHubOptions";
 
 const BINDER_DOCUMENT_CATEGORIES = ["Constitution", "Bylaws", "Minutes", "Policy", "Filing", "FinancialStatement", "WorkflowGenerated"];
@@ -225,9 +225,7 @@ export async function upsertPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "minuteBookItems", id, societyId);
+  await requireOwnedRow(ctx, "minuteBookItems", id);
   await ctx.db.delete(id);
 }
 

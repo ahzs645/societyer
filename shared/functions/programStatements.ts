@@ -6,7 +6,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 
 function isoNow() {
   return new Date().toISOString();
@@ -55,10 +55,7 @@ export async function programStatementsList(ctx: PortableQueryCtx, { societyId }
 }
 
 export async function programStatementGet(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  return getOwned(ctx, "programStatements", id, societyId);
+  return requireOwnedRow(ctx, "programStatements", id);
 }
 
 export async function programStatementCreate(ctx: PortableMutationCtx, args: ProgramStatementCreateArgs): Promise<string> {
@@ -79,18 +76,13 @@ export async function programStatementCreate(ctx: PortableMutationCtx, args: Pro
 }
 
 export async function programStatementUpdate(ctx: PortableMutationCtx, { id, patch }: { id: string; patch: ProgramStatementPatch }): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "programStatements", id, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "programStatements", id);
+  const societyId = String(authorizedRow.societyId);
   if (patch.grantId) await getOwned(ctx, "grants", patch.grantId, societyId);
   await ctx.db.patch(id, { ...patch, updatedAtISO: isoNow() });
 }
 
 export async function programStatementRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "programStatements", id, societyId);
+  await requireOwnedRow(ctx, "programStatements", id);
   await ctx.db.delete(id);
 }

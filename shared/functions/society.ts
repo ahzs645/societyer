@@ -10,11 +10,12 @@
  */
 
 import type {
+  PortableDoc,
   PortableMutationCtx,
   PortablePrincipal,
   PortableQueryCtx,
 } from "../portable/ctx";
-import { requireSocietyMembership } from "./access";
+import { requireAuthenticated, requireSocietyMembership } from "./access";
 
 export type NewSocietyOwnerInput = {
   societyId: string;
@@ -97,19 +98,38 @@ async function withLogoUrl(ctx: PortableQueryCtx, society: any) {
   return { ...society, logoUrl, logoDarkUrl, letterheadUrl };
 }
 
+async function principalMemberships(ctx: PortableQueryCtx): Promise<PortableDoc[]> {
+  const principal = requireAuthenticated(ctx);
+  if (principal.societyId) {
+    return [await requireSocietyMembership(ctx, principal.societyId)];
+  }
+  if (principal.kind === "service" && principal.actorUserId) {
+    const actor = await ctx.db.get(principal.actorUserId, "users");
+    if (actor?.societyId) return [await requireSocietyMembership(ctx, String(actor.societyId))];
+  }
+  if (principal.kind !== "user") throw new Error("Society membership not found.");
+  const memberships = await ctx.db
+    .query("users")
+    .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
+    .collect();
+  const activeMemberships = memberships.filter(
+    (membership) => !membership.status || membership.status === "Active",
+  );
+  if (!activeMemberships.length) throw new Error("Society membership not found.");
+  return activeMemberships;
+}
+
 export async function getPortable(ctx: PortableQueryCtx, _args: Record<string, never>) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  return withLogoUrl(ctx, await ctx.db.get(societyId, "societies"));
+  const [membership] = await principalMemberships(ctx);
+  return withLogoUrl(ctx, await ctx.db.get(String(membership.societyId), "societies"));
 }
 
 export async function listPortable(ctx: PortableQueryCtx) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const society = await ctx.db.get(societyId, "societies");
-  return society ? [await withLogoUrl(ctx, society)] : [];
+  const memberships = await principalMemberships(ctx);
+  const societies = await Promise.all(
+    memberships.map((membership) => ctx.db.get(String(membership.societyId), "societies")),
+  );
+  return Promise.all(societies.filter(Boolean).map((society) => withLogoUrl(ctx, society)));
 }
 
 export async function getByIdPortable(ctx: PortableQueryCtx, { id }: { id: string }) {

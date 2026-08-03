@@ -5,6 +5,7 @@ import {
   getOwned,
   getOwnedChild,
   principalUserId,
+  requireOwnedRow,
   requirePrincipalRole,
   requireRolePortable,
   requireSocietyMembership,
@@ -274,6 +275,36 @@ const disabledRuntime = new PortableRuntime({
 }));
 await assert.rejects(() => disabledRuntime.runQuery("principal:disabledMembership"), /^Error: User is disabled\.$/);
 console.log("✓ membership and owned-row helpers enforce status, table, tenant, and parent ownership");
+
+const hostedPrincipalRuntime = new PortableRuntime({
+  db: new MemoryDb({
+    seed: {
+      users: [
+        { _id: "hosted-owner", societyId: "hosted-society", role: "Owner", status: "Active", authSubject: "hosted:owner" },
+      ],
+      documents: [
+        { _id: "hosted-document", societyId: "hosted-society", title: "Hosted" },
+      ],
+    },
+  }),
+  capabilities: caps,
+  principalProvider: () => ({
+    kind: "user",
+    runtime: "convex-hosted",
+    assurance: "verified-jwt",
+    subject: "hosted:owner",
+    issuer: "https://hosted.test",
+  }),
+}).register(definePortableQuery({
+  name: "principal:hostedOwnedRow",
+  handler: (ctx) => requireOwnedRow(ctx, "documents", "hosted-document"),
+}));
+assert.equal(
+  (await hostedPrincipalRuntime.runQuery("principal:hostedOwnedRow"))._id,
+  "hosted-document",
+  "row-derived ownership must support hosted principals without a societyId",
+);
+console.log("✓ hosted principal without societyId can authorize a row-derived society");
 
 // 5. Metadata is authenticated by default and the proposal's registered public
 // allowlist is explicitly public. Enforcement is off, so opted-in shadow
