@@ -5,6 +5,10 @@ import { hasPermission, type Permission } from "./lib/permissions";
 import { requireRole } from "./users";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import {
+  getOwned,
+  requireSocietyMembership,
+} from "../shared/functions/access";
+import {
   AGENTS_BY_KEY,
   EMPTY_SCHEMA,
   getActiveSkills,
@@ -399,7 +403,10 @@ export const executeTool = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    const { role } = await resolveActorRole(ctx, args.societyId, args.actingUserId);
+    const { role, user } = await resolveActorRole(ctx, args.societyId, args.actingUserId);
+    const portableCtx = await toPortableMutationCtx(ctx);
+    if (args.threadId) await getOwned(portableCtx, "aiChatThreads", args.threadId, args.societyId);
+    if (args.runId) await getOwned(portableCtx, "aiAgentRuns", args.runId, args.societyId);
     const availableTools = await getAvailableTools(ctx, args.societyId, role);
     const tool = availableTools.find((entry) => entry.name === args.toolName);
     if (!tool) {
@@ -410,7 +417,7 @@ export const executeTool = mutation({
     }
     const result = await executeToolWithEffects(ctx, {
       societyId: args.societyId,
-      actingUserId: args.actingUserId,
+      actingUserId: user._id as Id<"users">,
       role,
       tool,
       arguments: args.arguments ?? {},
@@ -431,7 +438,7 @@ export const executeTool = mutation({
           resultPreview: JSON.stringify(result).slice(0, 1200),
           threadId: args.threadId ? String(args.threadId) : undefined,
         },
-        actorUserId: args.actingUserId,
+        actorUserId: user._id,
       });
     }
     return result;
@@ -559,7 +566,7 @@ export const _recordAgentRun = internalMutation({
   handler: async (ctx, args) => {
     const agent = AGENTS_BY_KEY.get(args.agentKey);
     if (!agent) throw new Error("Unknown AI agent.");
-    const { role } = await resolveActorRole(ctx, args.societyId, args.actingUserId);
+    const { role, user } = await resolveActorRole(ctx, args.societyId, args.actingUserId);
     const availableTools = (await getAvailableTools(ctx, args.societyId, role)).filter((tool: any) =>
       agent.allowedTools.includes(tool.name),
     );
@@ -589,7 +596,7 @@ export const _recordAgentRun = internalMutation({
       provider: args.provider,
       createdAtISO: now,
       completedAtISO: now,
-      triggeredByUserId: args.actingUserId,
+      triggeredByUserId: user._id,
       loadedSkillNames: loadedSkills.map((skill: any) => skill.name),
       toolCatalogSnapshot: availableTools.map(toCatalogEntry),
       unavailableTools,
@@ -600,9 +607,9 @@ export const _recordAgentRun = internalMutation({
       runId,
       agentKey: agent.key,
       eventType: "run_requested",
-      summary: `${agent.name} requested by ${args.actorDisplayName ?? "workspace user"}.`,
+      summary: `${agent.name} requested by ${user.displayName ?? "workspace user"}.`,
       metadata: { inputLength: args.input.trim().length, role, provider: args.provider },
-      actorUserId: args.actingUserId,
+      actorUserId: user._id,
     });
     await insertAgentAudit(ctx, {
       societyId: args.societyId,
@@ -611,11 +618,11 @@ export const _recordAgentRun = internalMutation({
       eventType: "run_completed",
       summary: `${agent.name} completed via ${args.provider}.`,
       metadata: { provider: args.provider, unavailableTools },
-      actorUserId: args.actingUserId,
+      actorUserId: user._id,
     });
     await ctx.db.insert("activity", {
       societyId: args.societyId,
-      actor: args.actorDisplayName ?? "AI workspace tool",
+      actor: user.displayName ?? "AI workspace tool",
       entityType: "aiAgentRun",
       subjectId: String(runId),
       // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
@@ -649,6 +656,7 @@ export const listRuns = query({
   },
   returns: v.any(),
   handler: async (ctx, { societyId, agentKey, limit }) => {
+    await requireSocietyMembership(await toPortableQueryCtx(ctx), societyId);
     if (agentKey) {
       return ctx.db
         .query("aiAgentRuns")
@@ -667,12 +675,18 @@ export const listRuns = query({
 export const auditForRun = query({
   args: { runId: v.id("aiAgentRuns") },
   returns: v.any(),
-  handler: async (ctx, { runId }) =>
-    ctx.db
+  handler: async (ctx, { runId }) => {
+    const portableCtx = await toPortableQueryCtx(ctx);
+    const candidate = await portableCtx.db.get(runId, "aiAgentRuns");
+    if (!candidate) throw new Error("aiAgentRuns not found.");
+    await requireSocietyMembership(portableCtx, String(candidate.societyId));
+    await getOwned(portableCtx, "aiAgentRuns", runId, String(candidate.societyId));
+    return ctx.db
       .query("aiAgentAuditEvents")
       .withIndex("by_run", (q: any) => q.eq("runId", runId))
       .order("asc")
-      .collect(),
+      .collect();
+  },
 });
 
 export const runAgent = mutation({
@@ -694,6 +708,7 @@ export const runAgent = mutation({
     });
 
     const role = user?.role ?? "Viewer";
+    const actorUserId = user?._id;
     const availableTools = (await getAvailableTools(ctx, args.societyId, role)).filter((tool) => agent.allowedTools.includes(tool.name));
     const skills = await getActiveSkills(ctx, args.societyId);
     const loadedSkills = skills.filter((skill) => agent.skillNames.includes(skill.name));
@@ -734,7 +749,7 @@ export const runAgent = mutation({
       provider: "deterministic_skill_router",
       createdAtISO: now,
       completedAtISO: now,
-      triggeredByUserId: args.actingUserId,
+      triggeredByUserId: actorUserId,
       loadedSkillNames: loadedSkills.map((skill) => skill.name),
       toolCatalogSnapshot: availableTools.map(toCatalogEntry),
       unavailableTools,
@@ -747,7 +762,7 @@ export const runAgent = mutation({
       eventType: "run_requested",
       summary: `${agent.name} requested by ${user?.displayName ?? "workspace user"}.`,
       metadata: { inputLength: args.input.trim().length, role },
-      actorUserId: args.actingUserId,
+      actorUserId,
     });
     for (const skill of loadedSkills) {
       await insertAgentAudit(ctx, {
@@ -757,7 +772,7 @@ export const runAgent = mutation({
         eventType: "skill_loaded",
         summary: `${agent.name} loaded skill ${skill.name}.`,
         metadata: { label: skill.label },
-        actorUserId: args.actingUserId,
+        actorUserId,
       });
     }
     for (const tool of learnedTools) {
@@ -769,7 +784,7 @@ export const runAgent = mutation({
         toolName: tool.name,
         summary: `${agent.name} learned ${tool.name} schema.`,
         metadata: { category: tool.category, inputSchema: tool.inputSchema },
-        actorUserId: args.actingUserId,
+        actorUserId,
       });
     }
     for (const toolCall of plannedToolCalls) {
@@ -780,7 +795,7 @@ export const runAgent = mutation({
         eventType: "tool_planned",
         toolName: toolCall.toolName,
         summary: `${agent.name} planned ${toolCall.toolName}: ${toolCall.purpose}`,
-        actorUserId: args.actingUserId,
+        actorUserId,
       });
     }
     await insertAgentAudit(ctx, {
@@ -790,7 +805,7 @@ export const runAgent = mutation({
       eventType: "run_completed",
       summary: `${agent.name} returned deterministic skill-router guidance for human review.`,
       metadata: { provider: "deterministic_skill_router", unavailableTools },
-      actorUserId: args.actingUserId,
+      actorUserId,
     });
     await ctx.db.insert("activity", {
       societyId: args.societyId,
@@ -828,9 +843,11 @@ function databaseTool(name: string, label: string, requiredPermission: Permissio
 }
 
 async function resolveActorRole(ctx: any, societyId: Id<"societies">, actingUserId?: Id<"users">) {
-  if (!actingUserId) return { role: "Viewer", user: null };
-  const user = await ctx.db.get(actingUserId);
-  if (!user || user.societyId !== societyId) return { role: "Viewer", user: null };
+  const portableCtx = await toPortableQueryCtx(ctx);
+  const user = await requireSocietyMembership(portableCtx, societyId);
+  if (actingUserId && actingUserId !== user._id) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
   return { role: user.role as string, user };
 }
 

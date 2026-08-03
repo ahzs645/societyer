@@ -9,8 +9,10 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export async function receiptsListPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("donationReceipts")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -34,6 +36,7 @@ export async function receiptIssuePortable(
     appraiserName?: string;
   },
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
   // Serial receipt numbers per society — next = count + 1, zero-padded.
   const existing = await ctx.db
     .query("donationReceipts")
@@ -51,6 +54,10 @@ export async function receiptVoidPortable(
   ctx: PortableMutationCtx,
   { id, reason }: { id: string; reason: string },
 ): Promise<void> {
+  const candidate = await ctx.db.get(id, "donationReceipts");
+  if (!candidate) throw new Error("donationReceipts not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "donationReceipts", id, String(candidate.societyId));
   await ctx.db.patch(id, {
     voidedAtISO: new Date().toISOString(),
     voidReason: reason,
@@ -61,7 +68,10 @@ export async function receiptRemovePortable(ctx: PortableMutationCtx, { id }: { 
   // Receipt numbers are serial (next = count + 1). Deleting a receipt would
   // make a future issue reuse a number, breaking the CRA audit-trail
   // invariant — void it instead (voidReceipt) to preserve the sequence.
-  const receipt = await ctx.db.get(id);
+  const receipt = await ctx.db.get(id, "donationReceipts");
+  if (!receipt) return;
+  await requireSocietyMembership(ctx, String(receipt.societyId));
+  await getOwned(ctx, "donationReceipts", id, String(receipt.societyId));
   if (receipt?.receiptNumber) {
     throw new Error(
       "Issued donation receipts cannot be deleted — void the receipt instead to preserve serial numbering.",

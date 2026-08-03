@@ -14,6 +14,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export const DEFAULT_BYLAW_RULES = {
   societyId: "placeholder",
@@ -118,6 +119,7 @@ function timestampOrNegativeInfinity(value?: string) {
 }
 
 export async function getActivePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const active = await getActiveBylawRuleSet(ctx, societyId);
   return {
     ...active,
@@ -126,6 +128,7 @@ export async function getActivePortable(ctx: PortableQueryCtx, { societyId }: { 
 }
 
 export async function getForDatePortable(ctx: PortableQueryCtx, { societyId, dateISO }: { societyId: string; dateISO: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rules = await getBylawRuleSetForDate(ctx, societyId, dateISO);
   return {
     ...rules,
@@ -134,6 +137,7 @@ export async function getForDatePortable(ctx: PortableQueryCtx, { societyId, dat
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("bylawRuleSets")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -146,6 +150,14 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 }
 
 export async function upsertActivePortable(ctx: PortableMutationCtx, args: Record<string, any>) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.id) await getOwned(ctx, "bylawRuleSets", args.id, args.societyId);
+  if (args.sourceBylawDocumentId) {
+    await getOwned(ctx, "documents", args.sourceBylawDocumentId, args.societyId);
+  }
+  if (args.sourceAmendmentId) {
+    await getOwned(ctx, "bylawAmendments", args.sourceAmendmentId, args.societyId);
+  }
   const now = new Date().toISOString();
   const {
     id: _previousId,
@@ -176,6 +188,7 @@ export async function upsertActivePortable(ctx: PortableMutationCtx, args: Recor
 }
 
 export async function resetToDefaultPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const now = new Date().toISOString();
   const defaults = {
     ...getDefaultBylawRules(societyId),

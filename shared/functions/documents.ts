@@ -15,6 +15,11 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import {
+  getOwned,
+  principalUserId,
+  requireSocietyMembership,
+} from "./access";
 
 const VISIBLE_DOCUMENT_CATEGORIES = [
   "Constitution",
@@ -204,8 +209,7 @@ async function documentAccessContextForActor(
   actingUserId?: any,
 ): Promise<AccessSubjectContext | null> {
   if (!actingUserId) return null;
-  const user = await ctx.db.get(actingUserId as any);
-  if (!user || String(user.societyId) !== String(societyId)) return null;
+  const user = await getOwned(ctx, "users", String(actingUserId), String(societyId));
 
   const committeeRows = await ctx.db
     .query("committeeMembers")
@@ -239,6 +243,7 @@ export async function listPortable(
   ctx: PortableQueryCtx,
   { societyId, actingUserId }: { societyId: string; actingUserId?: string },
 ) {
+  const principalId = await principalUserId(ctx, societyId);
   const [groups, linkedMaterials, accessContext] = await Promise.all([
     Promise.all(VISIBLE_DOCUMENT_CATEGORIES.map((category) =>
       ctx.db
@@ -250,7 +255,7 @@ export async function listPortable(
       .query("meetingMaterials")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect(),
-    documentAccessContextForActor(ctx, societyId, actingUserId),
+    documentAccessContextForActor(ctx, societyId, principalId),
   ]);
   return groups
     .flat()
@@ -262,14 +267,17 @@ export async function getPortable(
   ctx: PortableQueryCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const document = await ctx.db.get(id);
-  if (!document || !actingUserId) return document;
+  const candidate = await ctx.db.get(id, "documents");
+  if (!candidate) return null;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const document = await getOwned(ctx, "documents", id, String(candidate.societyId));
+  const principalId = await principalUserId(ctx, String(document.societyId));
   const [linkedMaterials, accessContext] = await Promise.all([
     ctx.db
       .query("meetingMaterials")
       .withIndex("by_society", (q) => q.eq("societyId", document.societyId))
       .collect(),
-    documentAccessContextForActor(ctx, document.societyId, actingUserId),
+    documentAccessContextForActor(ctx, document.societyId, principalId),
   ]);
   return accessContext && canAccessDocument(document, linkedMaterials, accessContext) ? document : null;
 }
@@ -278,20 +286,26 @@ export async function getManyPortable(
   ctx: PortableQueryCtx,
   { ids, actingUserId }: { ids: string[]; actingUserId?: string },
 ) {
-  const rows = await Promise.all(ids.map((id) => ctx.db.get(id)));
-  const documents = rows.filter(Boolean);
-  if (!actingUserId || !documents.length) return documents;
+  const documents = [];
+  for (const id of ids) {
+    const candidate = await ctx.db.get(id, "documents");
+    if (!candidate) continue;
+    await requireSocietyMembership(ctx, String(candidate.societyId));
+    documents.push(await getOwned(ctx, "documents", id, String(candidate.societyId)));
+  }
+  if (!documents.length) return documents;
 
   const societyIds = Array.from(new Set(documents.map((doc: any) => String(doc.societyId))));
   const materialsBySociety = new Map<string, any[]>();
   const contextBySociety = new Map<string, any>();
   for (const societyId of societyIds) {
+    const principalId = await principalUserId(ctx, societyId);
     const [materials, accessContext] = await Promise.all([
       ctx.db
         .query("meetingMaterials")
         .withIndex("by_society", (q) => q.eq("societyId", societyId as any))
         .collect(),
-      documentAccessContextForActor(ctx, societyId as any, actingUserId),
+      documentAccessContextForActor(ctx, societyId as any, principalId),
     ]);
     materialsBySociety.set(societyId, materials);
     contextBySociety.set(societyId, accessContext);
@@ -322,6 +336,10 @@ export async function createPortable(
     tags: string[];
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.committeeId) await getOwned(ctx, "committees", args.committeeId, args.societyId);
+  if (args.meetingId) await getOwned(ctx, "meetings", args.meetingId, args.societyId);
+  if (args.agendaItemId) await getOwned(ctx, "agendaItems", args.agendaItemId, args.societyId);
   return ctx.db.insert("documents", {
     ...args,
     tags: uniqueStrings(args.tags),
@@ -347,15 +365,17 @@ export async function markOpenedPortable(
   ctx: PortableMutationCtx,
   { id, userId, actorName }: { id: string; userId?: string; actorName?: string },
 ) {
-  const document = await ctx.db.get(id);
-  if (!document) throw new Error("Document not found.");
+  const candidate = await ctx.db.get(id, "documents");
+  if (!candidate) throw new Error("documents not found.");
+  const user = await requireSocietyMembership(ctx, String(candidate.societyId));
+  const document = await getOwned(ctx, "documents", id, String(candidate.societyId));
   const nowISO = new Date().toISOString();
-  const patch: any = { lastOpenedAtISO: nowISO };
-  if (userId) patch.lastOpenedByUserId = userId;
+  const patch: any = { lastOpenedAtISO: nowISO, lastOpenedByUserId: user._id };
+  if (userId) await getOwned(ctx, "users", userId, String(document.societyId));
   await ctx.db.patch(id, patch);
   await ctx.db.insert("activity", {
     societyId: document.societyId,
-    actor: actorName ?? "You",
+    actor: user.displayName ?? "You",
     entityType: "document",
     subjectId: id,
     // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
@@ -371,12 +391,14 @@ export async function updateReviewStatusPortable(
   ctx: PortableMutationCtx,
   { id, reviewStatus, actorName }: { id: string; reviewStatus?: string; actorName?: string },
 ) {
-  const document = await ctx.db.get(id);
-  if (!document) throw new Error("Document not found.");
+  const candidate = await ctx.db.get(id, "documents");
+  if (!candidate) throw new Error("documents not found.");
+  const user = await requireSocietyMembership(ctx, String(candidate.societyId));
+  const document = await getOwned(ctx, "documents", id, String(candidate.societyId));
   await ctx.db.patch(id, { reviewStatus });
   await ctx.db.insert("activity", {
     societyId: document.societyId,
-    actor: actorName ?? "You",
+    actor: user.displayName ?? "You",
     entityType: "document",
     subjectId: id,
     // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
@@ -391,6 +413,7 @@ export async function reviewQueuesPortable(
   ctx: PortableQueryCtx,
   { societyId, actingUserId }: { societyId: string; actingUserId?: string },
 ) {
+  const principalId = await principalUserId(ctx, societyId);
   const [documentGroups, recentlyOpened, tasks, comments, signatures, materials, accessContext] = await Promise.all([
     Promise.all(
       VISIBLE_DOCUMENT_CATEGORIES.map((category) =>
@@ -421,7 +444,7 @@ export async function reviewQueuesPortable(
       .query("meetingMaterials")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .take(DOCUMENT_QUEUE_RELATED_SCAN_LIMIT),
-    documentAccessContextForActor(ctx, societyId, actingUserId),
+    documentAccessContextForActor(ctx, societyId, principalId),
   ]);
 
   const documentsById = new Map<string, any>();
@@ -447,7 +470,9 @@ export async function reviewQueuesPortable(
   const relatedDocIds = topDocumentIds([taskCounts, openCommentCounts, signatureCounts], materialDocIds)
     .filter((id) => !documentsById.has(id))
     .slice(0, DOCUMENT_QUEUE_RELATED_DOC_LIMIT);
-  const relatedDocuments = await Promise.all(relatedDocIds.map((id) => ctx.db.get(id as any)));
+  const relatedDocuments = await Promise.all(
+    relatedDocIds.map((id) => getOwned(ctx, "documents", id, societyId)),
+  );
   for (const doc of relatedDocuments) {
     if (
       doc &&
@@ -517,7 +542,8 @@ export async function createPipaPolicyDraftPortable(
   ctx: PortableMutationCtx,
   { societyId }: { societyId: string },
 ) {
-  const society = await ctx.db.get(societyId);
+  await requireSocietyMembership(ctx, societyId);
+  const society = await ctx.db.get(societyId, "societies");
   if (!society) throw new Error("Society not found.");
 
   const existing = await findExistingPrivacyDraft(ctx, societyId, "privacy-policy");
@@ -552,7 +578,7 @@ export async function createPipaPolicyDraftPortable(
     createdAtISO: nowISO,
   });
 
-  const document = await ctx.db.get(documentId);
+  const document = await getOwned(ctx, "documents", documentId, societyId);
   return { document, reused: false };
 }
 
@@ -560,9 +586,11 @@ export async function rebuildPipaPolicyDraftFromSocietyPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ) {
-  const document = await ctx.db.get(id);
-  if (!document) throw new Error("Document not found.");
-  const society = await ctx.db.get(String(document.societyId));
+  const candidate = await ctx.db.get(id, "documents");
+  if (!candidate) throw new Error("documents not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const document = await getOwned(ctx, "documents", id, String(candidate.societyId));
+  const society = await ctx.db.get(String(document.societyId), "societies");
   if (!society) throw new Error("Society not found.");
 
   const title = `Draft PIPA privacy policy - ${society.name}`;
@@ -589,14 +617,15 @@ export async function rebuildPipaPolicyDraftFromSocietyPortable(
     summary: `Rebuilt ${title} from the current society details.`,
     createdAtISO: new Date().toISOString(),
   });
-  return await ctx.db.get(id);
+  return await getOwned(ctx, "documents", id, String(document.societyId));
 }
 
 export async function createMemberDataGapMemoDraftPortable(
   ctx: PortableMutationCtx,
   { societyId }: { societyId: string },
 ) {
-  const society = await ctx.db.get(societyId);
+  await requireSocietyMembership(ctx, societyId);
+  const society = await ctx.db.get(societyId, "societies");
   if (!society) throw new Error("Society not found.");
 
   const existing = await findExistingPrivacyDraft(ctx, societyId, "member-data-gap");
@@ -628,7 +657,7 @@ export async function createMemberDataGapMemoDraftPortable(
     createdAtISO: nowISO,
   });
 
-  const document = await ctx.db.get(documentId);
+  const document = await getOwned(ctx, "documents", documentId, societyId);
   return { document, reused: false };
 }
 
@@ -636,8 +665,10 @@ export async function updateDraftContentPortable(
   ctx: PortableMutationCtx,
   args: { id: string; title: string; content: string; tags?: string[] },
 ) {
-  const document = await ctx.db.get(args.id);
-  if (!document) throw new Error("Document not found.");
+  const candidate = await ctx.db.get(args.id, "documents");
+  if (!candidate) throw new Error("documents not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const document = await getOwned(ctx, "documents", args.id, String(candidate.societyId));
   const tags = args.tags ? Array.from(new Set(args.tags)) : document.tags;
   await ctx.db.patch(args.id, {
     title: args.title.trim() || document.title,
@@ -655,16 +686,17 @@ export async function updateDraftContentPortable(
     summary: `Updated ${args.title.trim() || document.title}.`,
     createdAtISO: new Date().toISOString(),
   });
-  return await ctx.db.get(args.id);
+  return await getOwned(ctx, "documents", args.id, String(document.societyId));
 }
 
 export async function linkPrivacyPolicyEvidencePortable(
   ctx: PortableMutationCtx,
   { societyId, documentId }: { societyId: string; documentId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const [society, document] = await Promise.all([
-    ctx.db.get(societyId),
-    ctx.db.get(documentId),
+    ctx.db.get(societyId, "societies"),
+    getOwned(ctx, "documents", documentId, societyId),
   ]);
   if (!society) throw new Error("Society not found.");
   if (!document || document.societyId !== societyId) {
@@ -707,11 +739,15 @@ export async function createGovernanceDocumentFromLocalFilePortable(
     replaceExisting?: boolean;
   },
 ) {
-  const society = await ctx.db.get(args.societyId);
+  const uploader = await requireSocietyMembership(ctx, args.societyId);
+  const society = await ctx.db.get(args.societyId, "societies");
   if (!society) throw new Error("Society not found.");
 
   const nowISO = new Date().toISOString();
-  const uploader = args.actingUserId ? await ctx.db.get(args.actingUserId) : null;
+  const uploadedByUserId = await principalUserId(ctx, args.societyId);
+  if (args.actingUserId && args.actingUserId !== uploadedByUserId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
   const category =
     args.category ??
     (args.documentKind === "privacyPolicy"
@@ -744,7 +780,7 @@ export async function createGovernanceDocumentFromLocalFilePortable(
     mimeType: args.mimeType,
     fileSizeBytes: args.fileSizeBytes,
     sha256: args.sha256,
-    uploadedByUserId: args.actingUserId,
+    uploadedByUserId,
     uploadedByName: uploader?.displayName ?? "BC Registry connector",
     uploadedAtISO: nowISO,
     changeNote: args.changeNote ?? "Imported from BC Registry filing history.",
@@ -817,6 +853,7 @@ export async function createLocalDocumentFromConnectorPortable(
     skipDuplicateCheck?: boolean;
   },
 ) {
+  const uploader = await requireSocietyMembership(ctx, args.societyId);
   const sourceIds = args.sourceExternalIds ?? [];
   if (!args.skipDuplicateCheck) {
     const existing = await ctx.db
@@ -834,7 +871,10 @@ export async function createLocalDocumentFromConnectorPortable(
   }
 
   const nowISO = new Date().toISOString();
-  const uploader = args.actingUserId ? await ctx.db.get(args.actingUserId) : null;
+  const uploadedByUserId = await principalUserId(ctx, args.societyId);
+  if (args.actingUserId && args.actingUserId !== uploadedByUserId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
   const tags = Array.from(new Set(args.tags));
   const documentId = await ctx.db.insert("documents", {
     societyId: args.societyId,
@@ -861,7 +901,7 @@ export async function createLocalDocumentFromConnectorPortable(
     mimeType: args.mimeType,
     fileSizeBytes: args.fileSizeBytes,
     sha256: args.sha256,
-    uploadedByUserId: args.actingUserId,
+    uploadedByUserId,
     uploadedByName: uploader?.displayName ?? "Browser connector",
     uploadedAtISO: nowISO,
     changeNote: args.changeNote ?? "Imported from browser connector export.",
@@ -900,8 +940,15 @@ export async function mergeConnectorDocumentMetadataPortable(
     changeNote?: string;
   },
 ) {
-  const document = await ctx.db.get(args.documentId);
-  if (!document) throw new Error("Document not found.");
+  const candidate = await ctx.db.get(args.documentId, "documents");
+  if (!candidate) throw new Error("documents not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const document = await getOwned(
+    ctx,
+    "documents",
+    args.documentId,
+    String(candidate.societyId),
+  );
   const existingTags = document.tags ?? [];
   const existingSourceIds = document.sourceExternalIds ?? [];
   await ctx.db.patch(args.documentId, {
@@ -924,6 +971,12 @@ export async function mergeConnectorDocumentMetadataPortable(
     .collect();
   const currentVersion = versions.find((version) => version.isCurrent) ?? versions[0];
   if (currentVersion) {
+    await getOwned(
+      ctx,
+      "documentVersions",
+      currentVersion._id,
+      String(document.societyId),
+    );
     await ctx.db.patch(currentVersion._id, {
       fileName: args.fileName ?? currentVersion.fileName,
       mimeType: args.mimeType ?? currentVersion.mimeType,
@@ -940,6 +993,10 @@ export async function flagForDeletionPortable(
   ctx: PortableMutationCtx,
   { id, flagged }: { id: string; flagged: boolean },
 ) {
+  const candidate = await ctx.db.get(id, "documents");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "documents", id, String(candidate.societyId));
   await ctx.db.patch(id, { flaggedForDeletion: flagged });
 }
 
@@ -947,6 +1004,10 @@ export async function archivePortable(
   ctx: PortableMutationCtx,
   { id, reason }: { id: string; reason: string },
 ) {
+  const candidate = await ctx.db.get(id, "documents");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "documents", id, String(candidate.societyId));
   await ctx.db.patch(id, {
     archivedAtISO: new Date().toISOString(),
     archivedReason: reason,
@@ -955,6 +1016,10 @@ export async function archivePortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const candidate = await ctx.db.get(id, "documents");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "documents", id, String(candidate.societyId));
   await ctx.db.delete(id);
 }
 
@@ -1002,7 +1067,7 @@ async function refreshGenericPipaPolicyDraft(ctx: PortableMutationCtx, document:
     summary: `Filled ${title} with current society details.`,
     createdAtISO: new Date().toISOString(),
   });
-  return await ctx.db.get(document._id);
+  return await getOwned(ctx, "documents", document._id, String(document.societyId));
 }
 
 function isGenericPipaPolicyTemplate(document: any) {

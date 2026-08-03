@@ -10,6 +10,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 function deriveStatus(doc: any): "open" | "complete" | "closed" {
   if (doc?.status === "open" || doc?.status === "complete" || doc?.status === "closed") {
@@ -132,6 +133,7 @@ async function applyStatusTransition(
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("deadlines")
     .withIndex("by_society_due", (q) => q.eq("societyId", societyId))
@@ -157,6 +159,10 @@ export async function createPortable(
     linkedFilingId?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.linkedFilingId) {
+    await getOwned(ctx, "filings", args.linkedFilingId, args.societyId);
+  }
   const { status, ...rest } = args;
   const initial = status ?? "open";
   return ctx.db.insert("deadlines", {
@@ -170,6 +176,10 @@ export async function setStatusPortable(
   ctx: PortableMutationCtx,
   { id, status }: { id: string; status: "open" | "complete" | "closed" },
 ) {
+  const candidate = await ctx.db.get(id, "deadlines");
+  if (!candidate) throw new Error("deadlines not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "deadlines", id, String(candidate.societyId));
   return applyStatusTransition(ctx, id, status);
 }
 
@@ -177,6 +187,10 @@ export async function toggleDonePortable(
   ctx: PortableMutationCtx,
   { id, done }: { id: string; done: boolean },
 ) {
+  const candidate = await ctx.db.get(id, "deadlines");
+  if (!candidate) throw new Error("deadlines not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "deadlines", id, String(candidate.societyId));
   return applyStatusTransition(ctx, id, done ? "complete" : "open");
 }
 
@@ -200,7 +214,13 @@ export async function updatePortable(
     };
   },
 ) {
-  const before = await ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "deadlines");
+  if (!candidate) throw new Error("deadlines not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const before = await getOwned(ctx, "deadlines", id, String(candidate.societyId));
+  if (patch.linkedFilingId) {
+    await getOwned(ctx, "filings", patch.linkedFilingId, String(candidate.societyId));
+  }
   const next: Record<string, unknown> = { ...patch };
   if (patch.status !== undefined) {
     next.done = patch.status === "complete";
@@ -219,6 +239,10 @@ export async function updatePortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const candidate = await ctx.db.get(id, "deadlines");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "deadlines", id, String(candidate.societyId));
   await ctx.db.delete(id);
 }
 
@@ -226,6 +250,7 @@ export async function backfillStatusPortable(
   ctx: PortableMutationCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("deadlines")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))

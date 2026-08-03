@@ -11,11 +11,13 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import { createDownloadUrl } from "../storage/signedUrl";
 
 const VALID_SCOPES = ["board", "publications", "documents"];
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return (await ctx.db
     .query("partyPortals")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -35,6 +37,7 @@ export async function createPortable(
     expiresAtISO?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const scopes = args.scopes.filter((s) => VALID_SCOPES.includes(s));
   return await ctx.db.insert("partyPortals", {
     societyId: args.societyId,
@@ -49,6 +52,10 @@ export async function createPortable(
 }
 
 export async function revokePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const portal = await ctx.db.get(id, "partyPortals");
+  if (!portal) return;
+  await requireSocietyMembership(ctx, String(portal.societyId));
+  await getOwned(ctx, "partyPortals", id, String(portal.societyId));
   await ctx.db.patch(id, { revokedAtISO: new Date().toISOString() });
 }
 

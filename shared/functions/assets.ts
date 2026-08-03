@@ -11,6 +11,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 
 /* ----------------------------- Helpers ----------------------------- */
 
@@ -130,6 +131,7 @@ async function recordConsumableStockMovement(
 /* ----------------------------- Queries ----------------------------- */
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("assets")
     .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
@@ -143,11 +145,17 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const row = await ctx.db.get(id, "assets");
+  if (!row) return null;
+  await requireSocietyMembership(ctx, String(row.societyId));
+  return getOwned(ctx, "assets", id, String(row.societyId));
 }
 
 export async function bundlePortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const asset = await ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "assets");
+  if (!candidate) return null;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const asset = await getOwned(ctx, "assets", id, String(candidate.societyId));
   if (!asset) return null;
   if (asset.imageStorageId) {
     asset.imageUrl = (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(asset.imageStorageId) })).url ?? asset.imageUrl;
@@ -177,6 +185,7 @@ export async function resolveScanPortable(
   ctx: PortableQueryCtx,
   { societyId, code }: { societyId: string; code: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const raw = code.trim();
   if (!raw) return null;
   // Pull an /app/assets/<id> id out of a URL if present, else use the raw text.
@@ -184,8 +193,8 @@ export async function resolveScanPortable(
   const candidateId = urlMatch ? urlMatch[1] : raw;
   // Try a direct document lookup (works for QR URLs encoding the _id).
   try {
-    const byId = await ctx.db.get(candidateId as any);
-    if (byId && (byId as any).societyId === societyId) return byId;
+    const byId = await getOwned(ctx, "assets", candidateId, societyId);
+    if (byId) return byId;
   } catch {
     // Not a valid id — fall through to tag lookup.
   }
@@ -201,6 +210,10 @@ export async function receiptLinksPortable(
   ctx: PortableQueryCtx,
   { societyId, receiptDocumentId }: { societyId: string; receiptDocumentId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (receiptDocumentId) {
+    await getOwned(ctx, "documents", receiptDocumentId, societyId);
+  }
   const rows = receiptDocumentId
     ? await ctx.db
         .query("assetReceiptLinks")
@@ -214,6 +227,10 @@ export async function receiptLinksPortable(
 }
 
 export async function eventsPortable(ctx: PortableQueryCtx, { assetId }: { assetId: string }) {
+  const asset = await ctx.db.get(assetId, "assets");
+  if (!asset) throw new Error("assets not found.");
+  await requireSocietyMembership(ctx, String(asset.societyId));
+  await getOwned(ctx, "assets", assetId, String(asset.societyId));
   return ctx.db
     .query("assetEvents")
     .withIndex("by_asset_happened", (q) => q.eq("assetId", assetId))
@@ -222,6 +239,7 @@ export async function eventsPortable(ctx: PortableQueryCtx, { assetId }: { asset
 }
 
 export async function maintenancePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("assetMaintenance")
     .withIndex("by_society_due", (q) => q.eq("societyId", societyId))
@@ -229,6 +247,7 @@ export async function maintenancePortable(ctx: PortableQueryCtx, { societyId }: 
 }
 
 export async function verificationRunsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("assetVerificationRuns")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -236,6 +255,10 @@ export async function verificationRunsPortable(ctx: PortableQueryCtx, { societyI
 }
 
 export async function verificationItemsPortable(ctx: PortableQueryCtx, { runId }: { runId: string }) {
+  const run = await ctx.db.get(runId, "assetVerificationRuns");
+  if (!run) throw new Error("assetVerificationRuns not found.");
+  await requireSocietyMembership(ctx, String(run.societyId));
+  await getOwned(ctx, "assetVerificationRuns", runId, String(run.societyId));
   return ctx.db
     .query("assetVerificationItems")
     .withIndex("by_run", (q) => q.eq("runId", runId))
@@ -293,6 +316,20 @@ export async function createPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.grantId) await getOwned(ctx, "grants", args.grantId, args.societyId);
+  if (args.insurancePolicyId) {
+    await getOwned(ctx, "insurancePolicies", args.insurancePolicyId, args.societyId);
+  }
+  if (args.purchaseTransactionId) {
+    await getOwned(ctx, "financialTransactions", args.purchaseTransactionId, args.societyId);
+  }
+  if (args.receiptDocumentId) {
+    await getOwned(ctx, "documents", args.receiptDocumentId, args.societyId);
+  }
+  for (const documentId of args.sourceDocumentIds ?? []) {
+    await getOwned(ctx, "documents", documentId, args.societyId);
+  }
   const now = new Date().toISOString();
   const tag = args.assetTag.trim();
   if (!tag) throw new Error("Asset tag is required.");
@@ -351,6 +388,23 @@ export async function updatePortable(
   ctx: PortableMutationCtx,
   { id, patch }: { id: string; patch: Record<string, any> },
 ) {
+  const candidate = await ctx.db.get(id, "assets");
+  if (!candidate) throw new Error("assets not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "assets", id, String(candidate.societyId));
+  if (patch.grantId) await getOwned(ctx, "grants", patch.grantId, String(candidate.societyId));
+  if (patch.insurancePolicyId) {
+    await getOwned(ctx, "insurancePolicies", patch.insurancePolicyId, String(candidate.societyId));
+  }
+  if (patch.purchaseTransactionId) {
+    await getOwned(ctx, "financialTransactions", patch.purchaseTransactionId, String(candidate.societyId));
+  }
+  if (patch.receiptDocumentId) {
+    await getOwned(ctx, "documents", patch.receiptDocumentId, String(candidate.societyId));
+  }
+  for (const documentId of patch.sourceDocumentIds ?? []) {
+    await getOwned(ctx, "documents", documentId, String(candidate.societyId));
+  }
   const { clearImage, clearReceiptDocument, clearPurchaseTransaction, ...rest } = patch as any;
   const next: any = { ...rest, updatedAtISO: new Date().toISOString() };
   // Convex patch ignores undefined args, so clearing a linked record needs an explicit signal.
@@ -362,7 +416,7 @@ export async function updatePortable(
   if (clearPurchaseTransaction) next.purchaseTransactionId = undefined;
   if (typeof next.assetTag === "string") {
     const tag = next.assetTag.trim();
-    const current = await ctx.db.get(id);
+    const current = candidate;
     if (current && tag && tag !== current.assetTag) {
       const clash = await ctx.db
         .query("assets")
@@ -390,7 +444,10 @@ export async function addConsumableStockPortable(
   if (observedQuantityBefore < 0 || quantityAdded < 0) {
     throw new Error("Consumable quantities cannot be negative.");
   }
-  const asset = await ctx.db.get(assetId);
+  const candidate = await ctx.db.get(assetId, "assets");
+  if (!candidate) return null;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const asset = await getOwned(ctx, "assets", assetId, String(candidate.societyId));
   if (!asset) return null;
   if (asset.category !== "Consumable") {
     throw new Error("Stock intake can only be recorded for consumable items.");
@@ -448,14 +505,16 @@ export async function linkReceiptLinePortable(
     actingUserId?: string;
   },
 ) {
-  const [asset, document, transaction] = await Promise.all([
-    ctx.db.get(args.assetId),
-    ctx.db.get(args.receiptDocumentId),
-    args.financialTransactionId ? ctx.db.get(args.financialTransactionId) : Promise.resolve(null),
-  ]);
-  if (!asset || asset.societyId !== args.societyId) throw new Error("Asset must belong to this society.");
-  if (!document || document.societyId !== args.societyId) throw new Error("Receipt document must belong to this society.");
-  if (transaction && transaction.societyId !== args.societyId) throw new Error("Financial transaction must belong to this society.");
+  await requireSocietyMembership(ctx, args.societyId);
+  const asset = await getOwned(ctx, "assets", args.assetId, args.societyId);
+  await getOwned(ctx, "documents", args.receiptDocumentId, args.societyId);
+  if (args.financialTransactionId) {
+    await getOwned(ctx, "financialTransactions", args.financialTransactionId, args.societyId);
+  }
+  const createdByUserId = await principalUserId(ctx, args.societyId);
+  if (args.actingUserId && args.actingUserId !== createdByUserId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
   if (args.quantity !== undefined && args.quantity <= 0) throw new Error("Receipt line quantity must be positive.");
   const now = new Date().toISOString();
   const inventoryItemId = args.createInventoryItem ? await findOrCreateInventoryItemForAsset(ctx, asset) : undefined;
@@ -473,7 +532,7 @@ export async function linkReceiptLinePortable(
     totalCostCents: args.totalCostCents,
     sourceText: args.sourceText,
     notes: args.notes,
-    createdByUserId: args.actingUserId,
+    createdByUserId,
     createdAtISO: now,
     updatedAtISO: now,
   });
@@ -519,7 +578,13 @@ export async function recordEventPortable(
     };
   },
 ) {
-  const asset = await ctx.db.get(assetId);
+  const candidate = await ctx.db.get(assetId, "assets");
+  if (!candidate) return null;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const asset = await getOwned(ctx, "assets", assetId, String(candidate.societyId));
+  for (const documentId of event.documentIds ?? []) {
+    await getOwned(ctx, "documents", documentId, String(asset.societyId));
+  }
   if (!asset) return null;
   const now = new Date().toISOString();
   const eventId = await ctx.db.insert("assetEvents", {
@@ -587,7 +652,10 @@ export async function scheduleMaintenancePortable(
     createTask?: boolean;
   },
 ) {
-  const asset = await ctx.db.get(args.assetId);
+  const candidate = await ctx.db.get(args.assetId, "assets");
+  if (!candidate) return null;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const asset = await getOwned(ctx, "assets", args.assetId, String(candidate.societyId));
   if (!asset) return null;
   const now = new Date().toISOString();
   let taskId;
@@ -632,7 +700,12 @@ export async function completeMaintenancePortable(
     notes?: string;
   },
 ) {
-  const row = await ctx.db.get(args.id);
+  const candidate = await ctx.db.get(args.id, "assetMaintenance");
+  if (!candidate) return null;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const row = await getOwned(ctx, "assetMaintenance", args.id, String(candidate.societyId));
+  await getOwned(ctx, "assets", row.assetId, String(row.societyId));
+  if (row.taskId) await getOwned(ctx, "tasks", row.taskId, String(row.societyId));
   if (!row) return null;
   const now = new Date().toISOString();
   await ctx.db.patch(args.id, {
@@ -667,6 +740,7 @@ export async function startVerificationRunPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const now = new Date().toISOString();
   const assets = await ctx.db
     .query("assets")
@@ -737,7 +811,17 @@ export async function verifyAssetPortable(
     notes?: string;
   },
 ) {
-  const item = await ctx.db.get(args.itemId);
+  const candidate = await ctx.db.get(args.itemId, "assetVerificationItems");
+  if (!candidate) return null;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const item = await getOwned(
+    ctx,
+    "assetVerificationItems",
+    args.itemId,
+    String(candidate.societyId),
+  );
+  await getOwned(ctx, "assets", item.assetId, String(item.societyId));
+  await getOwned(ctx, "assetVerificationRuns", item.runId, String(item.societyId));
   if (!item) return null;
   const now = new Date().toISOString();
   await ctx.db.patch(args.itemId, {
@@ -772,14 +856,14 @@ export async function verifyAssetPortable(
     ...(statusFromVerification ? { status: statusFromVerification } : {}),
     updatedAtISO: now,
   });
-  const asset = await ctx.db.get(item.assetId);
+  const asset = await getOwned(ctx, "assets", item.assetId, String(item.societyId));
   if (asset) {
     const inventoryItem = await ctx.db
       .query("inventoryItems")
       .withIndex("by_asset", (q) => q.eq("assetId", item.assetId))
       .first();
     if (inventoryItem) {
-      const run = await ctx.db.get(item.runId);
+      const run = await getOwned(ctx, "assetVerificationRuns", item.runId, String(item.societyId));
       const counts = run
         ? await ctx.db
             .query("inventoryCounts")
@@ -814,9 +898,12 @@ export async function completeVerificationRunPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ) {
+  const candidate = await ctx.db.get(id, "assetVerificationRuns");
+  if (!candidate) return null;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const run = await getOwned(ctx, "assetVerificationRuns", id, String(candidate.societyId));
   const now = new Date().toISOString();
   await ctx.db.patch(id, { status: "Completed", completedAtISO: now, updatedAtISO: now });
-  const run = await ctx.db.get(id);
   if (run) {
     const counts = await ctx.db
       .query("inventoryCounts")
@@ -841,7 +928,16 @@ export async function disposePortable(
     notes?: string;
   },
 ) {
-  const asset = await ctx.db.get(args.assetId);
+  const candidate = await ctx.db.get(args.assetId, "assets");
+  if (!candidate) return null;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const asset = await getOwned(ctx, "assets", args.assetId, String(candidate.societyId));
+  if (args.disposalApprovedMeetingId) {
+    await getOwned(ctx, "meetings", args.disposalApprovedMeetingId, String(asset.societyId));
+  }
+  for (const documentId of args.disposalDocumentIds ?? []) {
+    await getOwned(ctx, "documents", documentId, String(asset.societyId));
+  }
   if (!asset) return null;
   const now = new Date().toISOString();
   await ctx.db.patch(args.assetId, {
@@ -869,6 +965,10 @@ export async function disposePortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const asset = await ctx.db.get(id, "assets");
+  if (!asset) return null;
+  await requireSocietyMembership(ctx, String(asset.societyId));
+  await getOwned(ctx, "assets", id, String(asset.societyId));
   // Remove dependent records so deleting an asset never leaves orphaned
   // events, maintenance, verification items, or receipt links behind.
   const [events, maintenanceRows, verificationItems, links] = await Promise.all([

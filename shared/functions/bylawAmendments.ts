@@ -12,6 +12,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 const nowEvent = (actor: string, action: string, note?: string) => ({
   atISO: new Date().toISOString(),
@@ -21,6 +22,7 @@ const nowEvent = (actor: string, action: string, note?: string) => ({
 });
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("bylawAmendments")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -28,7 +30,10 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const row = await ctx.db.get(id, "bylawAmendments");
+  if (!row) return null;
+  await requireSocietyMembership(ctx, String(row.societyId));
+  return getOwned(ctx, "bylawAmendments", id, String(row.societyId));
 }
 
 export async function createDraftPortable(
@@ -42,6 +47,7 @@ export async function createDraftPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const now = new Date().toISOString();
   return ctx.db.insert("bylawAmendments", {
     ...args,
@@ -65,7 +71,10 @@ export async function updateDraftPortable(
     actor?: string;
   },
 ) {
-  const row = await ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "bylawAmendments");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const row = await getOwned(ctx, "bylawAmendments", id, String(candidate.societyId));
   if (!row) return;
   if (row.status !== "Draft") {
     throw new Error("Only drafts can be edited — withdraw or supersede to change a non-draft amendment.");
@@ -82,6 +91,10 @@ export async function sectionsForAmendmentPortable(
   ctx: PortableQueryCtx,
   { amendmentId }: { amendmentId: string },
 ) {
+  const amendment = await ctx.db.get(amendmentId, "bylawAmendments");
+  if (!amendment) throw new Error("bylawAmendments not found.");
+  await requireSocietyMembership(ctx, String(amendment.societyId));
+  await getOwned(ctx, "bylawAmendments", amendmentId, String(amendment.societyId));
   const rows = await ctx.db
     .query("bylawSections")
     .withIndex("by_amendment", (q) => q.eq("amendmentId", amendmentId))
@@ -90,6 +103,10 @@ export async function sectionsForAmendmentPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const amendment = await ctx.db.get(id, "bylawAmendments");
+  if (!amendment) return;
+  await requireSocietyMembership(ctx, String(amendment.societyId));
+  await getOwned(ctx, "bylawAmendments", id, String(amendment.societyId));
   // Clean up materialized section records when the amendment is deleted.
   const sections = await ctx.db
     .query("bylawSections")
@@ -103,7 +120,10 @@ export async function startConsultationPortable(
   ctx: PortableMutationCtx,
   { id, actor }: { id: string; actor?: string },
 ) {
-  const row = await ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "bylawAmendments");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const row = await getOwned(ctx, "bylawAmendments", id, String(candidate.societyId));
   if (!row || row.status !== "Draft") return;
   const now = new Date().toISOString();
   await ctx.db.patch(id, {
@@ -125,7 +145,11 @@ export async function markResolutionPassedPortable(
     actor?: string;
   },
 ) {
-  const row = await ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "bylawAmendments");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const row = await getOwned(ctx, "bylawAmendments", id, String(candidate.societyId));
+  if (meetingId) await getOwned(ctx, "meetings", meetingId, String(row.societyId));
   if (!row) return;
   const now = new Date().toISOString();
   const note = votesFor != null
@@ -148,7 +172,11 @@ export async function markFiledPortable(
   ctx: PortableMutationCtx,
   { id, filingId, actor }: { id: string; filingId?: string; actor?: string },
 ) {
-  const row = await ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "bylawAmendments");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const row = await getOwned(ctx, "bylawAmendments", id, String(candidate.societyId));
+  if (filingId) await getOwned(ctx, "filings", filingId, String(row.societyId));
   if (!row) return;
   const now = new Date().toISOString();
   await ctx.db.patch(id, {
@@ -164,7 +192,10 @@ export async function withdrawPortable(
   ctx: PortableMutationCtx,
   { id, actor, reason }: { id: string; actor?: string; reason?: string },
 ) {
-  const row = await ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "bylawAmendments");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const row = await getOwned(ctx, "bylawAmendments", id, String(candidate.societyId));
   if (!row) return;
   const now = new Date().toISOString();
   await ctx.db.patch(id, {
@@ -187,16 +218,21 @@ export async function supersedePortable(
     reason?: string;
   },
 ) {
-  const row = await ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "bylawAmendments");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const row = await getOwned(ctx, "bylawAmendments", id, String(candidate.societyId));
   if (!row) return;
   if (row.status === "Withdrawn") {
     throw new Error("Withdrawn amendments cannot be superseded.");
   }
   if (supersededByAmendmentId) {
-    const replacement = await ctx.db.get(supersededByAmendmentId);
-    if (!replacement || replacement.societyId !== row.societyId) {
-      throw new Error("Superseding amendment must belong to the same society.");
-    }
+    await getOwned(
+      ctx,
+      "bylawAmendments",
+      supersededByAmendmentId,
+      String(row.societyId),
+    );
   }
   const now = new Date().toISOString();
   await ctx.db.patch(id, {
@@ -218,8 +254,15 @@ export async function materializeSectionsPortable(
     sections: { heading: string; key: string; level: number; body: string }[];
   },
 ) {
-  const amendment = await ctx.db.get(amendmentId);
-  if (!amendment) throw new Error("Amendment not found.");
+  const candidate = await ctx.db.get(amendmentId, "bylawAmendments");
+  if (!candidate) throw new Error("bylawAmendments not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const amendment = await getOwned(
+    ctx,
+    "bylawAmendments",
+    amendmentId,
+    String(candidate.societyId),
+  );
   const existing = await ctx.db
     .query("bylawSections")
     .withIndex("by_amendment", (q) => q.eq("amendmentId", amendmentId))

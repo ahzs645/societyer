@@ -15,7 +15,12 @@
 
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../grantSourceLibrary";
 import { cleanText } from "./text";
-import { requireRolePortable } from "./access";
+import {
+  getOwned,
+  principalUserId,
+  requireRolePortable,
+  requireSocietyMembership,
+} from "./access";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 
 const BUILT_IN_SOURCES = BUILT_IN_GRANT_SOURCES;
@@ -30,6 +35,7 @@ export async function libraryPortable(_ctx: PortableQueryCtx, _args: Record<stri
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const [sources, profiles, candidates] = await Promise.all([
     ctx.db
       .query("grantSources")
@@ -62,6 +68,7 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 }
 
 export async function listWithLibraryPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const installed = await ctx.db
     .query("grantSources")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -79,7 +86,10 @@ export async function listWithLibraryPortable(ctx: PortableQueryCtx, { societyId
 }
 
 export async function getSourcePortable(ctx: PortableQueryCtx, { sourceId }: { sourceId: string }) {
-  const source = await ctx.db.get(sourceId);
+  const candidate = await ctx.db.get(sourceId, "grantSources");
+  if (!candidate) return null;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const source = await getOwned(ctx, "grantSources", sourceId, String(candidate.societyId));
   if (!source) return null;
   const profile = (
     await ctx.db
@@ -94,6 +104,8 @@ export async function candidatesPortable(
   ctx: PortableQueryCtx,
   { societyId, sourceId }: { societyId: string; sourceId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (sourceId) await getOwned(ctx, "grantSources", sourceId, societyId);
   const rows = sourceId
     ? await ctx.db
         .query("grantOpportunityCandidates")
@@ -126,6 +138,8 @@ export async function createCandidatePortable(
     description?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.sourceId) await getOwned(ctx, "grantSources", args.sourceId, args.societyId);
   const now = new Date().toISOString();
   return await ctx.db.insert("grantOpportunityCandidates", {
     societyId: args.societyId,
@@ -150,6 +164,15 @@ export async function setCandidateStatusPortable(
   ctx: PortableMutationCtx,
   { candidateId, status }: { candidateId: string; status: string },
 ) {
+  const candidate = await ctx.db.get(candidateId, "grantOpportunityCandidates");
+  if (!candidate) throw new Error("grantOpportunityCandidates not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(
+    ctx,
+    "grantOpportunityCandidates",
+    candidateId,
+    String(candidate.societyId),
+  );
   await ctx.db.patch(candidateId, { status, updatedAtISO: new Date().toISOString() });
   return candidateId;
 }
@@ -159,6 +182,7 @@ export async function addFromLibraryPortable(
   { societyId, libraryKey, actingUserId }: { societyId: string; libraryKey: string; actingUserId?: string },
 ) {
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
+  const createdByUserId = await principalUserId(ctx, societyId);
   const source = BUILT_IN_SOURCES.find((item) => item.libraryKey === libraryKey);
   if (!source) throw new Error("Grant source is not in the built-in library.");
   const profile = BUILT_IN_PROFILES.find((item) => item.libraryKey === libraryKey);
@@ -182,7 +206,7 @@ export async function addFromLibraryPortable(
     trustLevel: source.trustLevel,
     status: source.status,
     notes: source.notes,
-    createdByUserId: actingUserId,
+    createdByUserId,
     updatedAtISO: now,
   };
   const sourceId = existing

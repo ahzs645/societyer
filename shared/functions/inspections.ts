@@ -6,6 +6,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export interface InspectionCreateArgs {
   societyId: string;
@@ -22,6 +23,7 @@ export interface InspectionCreateArgs {
 }
 
 export async function inspectionsList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("inspections")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -29,6 +31,10 @@ export async function inspectionsList(ctx: PortableQueryCtx, { societyId }: { so
 }
 
 export async function inspectionsForDocument(ctx: PortableQueryCtx, { documentId }: { documentId: string }) {
+  const candidate = await ctx.db.get(documentId, "documents");
+  if (!candidate) throw new Error("documents not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "documents", documentId, String(candidate.societyId));
   return ctx.db
     .query("inspections")
     .withIndex("by_document", (q) => q.eq("documentId", documentId))
@@ -36,9 +42,15 @@ export async function inspectionsForDocument(ctx: PortableQueryCtx, { documentId
 }
 
 export async function inspectionCreate(ctx: PortableMutationCtx, args: InspectionCreateArgs): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.documentId) await getOwned(ctx, "documents", args.documentId, args.societyId);
   return ctx.db.insert("inspections", args);
 }
 
 export async function inspectionRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  const candidate = await ctx.db.get(id, "inspections");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "inspections", id, String(candidate.societyId));
   await ctx.db.delete(id);
 }

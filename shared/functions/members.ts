@@ -10,7 +10,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
 
 // FK columns that point at a member. `merge` rewires each onto the surviving
 // member before deleting the dropped rows.
@@ -69,22 +69,35 @@ export interface MemberPatch {
 }
 
 export async function membersList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db.query("members").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
 }
 
 export async function memberGet(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "members");
+  if (!candidate) return null;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  return getOwned(ctx, "members", id, String(candidate.societyId));
 }
 
 export async function memberCreate(ctx: PortableMutationCtx, args: MemberCreateArgs): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
   return ctx.db.insert("members", args);
 }
 
 export async function memberUpdate(ctx: PortableMutationCtx, { id, patch }: { id: string; patch: MemberPatch }): Promise<void> {
+  const candidate = await ctx.db.get(id, "members");
+  if (!candidate) throw new Error("members not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "members", id, String(candidate.societyId));
   await ctx.db.patch(id, patch);
 }
 
 export async function memberRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  const candidate = await ctx.db.get(id, "members");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "members", id, String(candidate.societyId));
   await ctx.db.delete(id);
 }
 
@@ -97,23 +110,21 @@ export async function memberMerge(
     actingUserId?: string;
   },
 ) {
-  const keep = await ctx.db.get(keepId);
+  const keep = await ctx.db.get(keepId, "members");
   if (!keep) throw new Error("Member to keep not found.");
+  await requireSocietyMembership(ctx, String(keep.societyId));
 
   // Merge permanently deletes records and rewires foreign keys — gate it on
   // Director. (Authorization is still client-asserted until server-side
   // identity lands; this brings members in line with volunteers/grants.)
   await requireRolePortable(ctx, { actingUserId, societyId: String(keep.societyId), required: "Director" });
+  await getOwned(ctx, "members", keepId, String(keep.societyId));
 
   // Scope guard: never merge members across societies.
   const drops: any[] = [];
   for (const id of dropIds) {
     if (id === keepId) continue;
-    const drop = await ctx.db.get(id);
-    if (!drop) continue;
-    if (String(drop.societyId) !== String(keep.societyId)) {
-      throw new Error("Cannot merge members from different societies.");
-    }
+    const drop = await getOwned(ctx, "members", id, String(keep.societyId));
     drops.push(drop);
   }
 

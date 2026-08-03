@@ -15,6 +15,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import { minutesMotionsForDisplay } from "../minutesMotions";
 import { resolveMinutesMotions } from "./minutes";
 
@@ -29,6 +30,7 @@ export async function listPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const [sourceDocs, itemDocs, minutesRows, meetingRows] = await Promise.all([
     docsByCategory(ctx, societyId, SOURCE_CATEGORY),
     docsByCategory(ctx, societyId, ITEM_CATEGORY),
@@ -85,7 +87,10 @@ export async function listPortable(
 }
 
 export async function removeSourcePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const source = await ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "documents");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const source = await getOwned(ctx, "documents", id, String(candidate.societyId));
   if (!isHistorySource(source)) return;
 
   const docs = await docsByCategory(ctx, String(source.societyId), ITEM_CATEGORY);
@@ -124,7 +129,18 @@ export async function bulkSetItemReviewStatusPortable(
       continue;
     }
 
-    const existing = await ctx.db.get(update.id);
+    const candidate = await ctx.db.get(update.id, "documents");
+    if (!candidate) {
+      results.push({ id: String(update.id), updated: false, reason: "not-history-item" });
+      continue;
+    }
+    await requireSocietyMembership(ctx, String(candidate.societyId));
+    const existing = await getOwned(
+      ctx,
+      "documents",
+      update.id,
+      String(candidate.societyId),
+    );
     if (!isHistoryItem(existing)) {
       results.push({ id: String(update.id), updated: false, reason: "not-history-item" });
       continue;
@@ -166,7 +182,10 @@ export async function removeItemPortable(
   { id, kind }: { id: string; kind: string },
 ) {
   if (!isItemKind(kind)) return;
-  const existing = await ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "documents");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  const existing = await getOwned(ctx, "documents", id, String(candidate.societyId));
   if (!isHistoryItem(existing)) return;
   const current = hydrateItem(existing);
   if (current.kind !== kind) return;
@@ -177,11 +196,12 @@ export async function saveSourcePortable(
   ctx: PortableMutationCtx,
   { societyId, id, payload }: { societyId: string; id?: string; payload: any },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const source = normalizeSource(payload);
   if (!source.title) return null;
 
   if (id) {
-    const existing = await ctx.db.get(id);
+    const existing = await getOwned(ctx, "documents", id, societyId);
     if (!isHistorySource(existing)) return null;
     await ctx.db.patch(id, {
       title: source.title,
@@ -208,11 +228,15 @@ export async function saveItemPortable(
   ctx: PortableMutationCtx,
   { societyId, id, kind, payload }: { societyId: string; id?: string; kind: string; payload: any },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   if (!isItemKind(kind)) return null;
   const item = normalizeItem(kind, payload);
+  for (const sourceId of Array.isArray(item.data.sourceIds) ? item.data.sourceIds : []) {
+    await getOwned(ctx, "documents", String(sourceId), societyId);
+  }
 
   if (id) {
-    const existing = await ctx.db.get(id);
+    const existing = await getOwned(ctx, "documents", id, societyId);
     if (!isHistoryItem(existing)) return null;
     const current = hydrateItem(existing);
     if (current.kind !== kind) return null;
@@ -240,14 +264,19 @@ export async function extractBudgetSourceDetailsPortable(
   ctx: PortableMutationCtx,
   { societyId, budgetId }: { societyId: string; budgetId: string },
 ) {
-  const budgetDoc = await ctx.db.get(budgetId);
+  await requireSocietyMembership(ctx, societyId);
+  const budgetDoc = await getOwned(ctx, "documents", budgetId, societyId);
   if (!isHistoryItem(budgetDoc) || budgetDoc.societyId !== societyId) return null;
 
   const budget = hydrateItem(budgetDoc);
   if (budget.kind !== "budget") return null;
 
   const sourceIds = Array.isArray(budget.sourceIds) ? budget.sourceIds : [];
-  const sourceDocs = (await Promise.all(sourceIds.map((id: any) => ctx.db.get(id)))).filter(isHistorySource);
+  const sourceDocs = (
+    await Promise.all(
+      sourceIds.map((id: any) => getOwned(ctx, "documents", String(id), societyId)),
+    )
+  ).filter(isHistorySource);
   const sources = sourceDocs.map((doc: any) => hydrateSource(doc, true));
   const extracted = sources.map(extractBudgetDetailsFromSource);
   const budgetLines = uniqueBy(
@@ -348,6 +377,7 @@ export async function bulkImportPortable(
     budgets?: any[];
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const docs = await docsByCategory(ctx, args.societyId, SOURCE_CATEGORY);
   const existingSources = docs.filter(isHistorySource).map((doc) => hydrateSource(doc));
   const sourceIdByExternalId = new Map<string, any>();

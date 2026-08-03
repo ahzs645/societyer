@@ -9,6 +9,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import {
   activeProvidersAsOf,
   validateServiceProvider,
@@ -18,6 +19,7 @@ import {
 } from "../serviceProviders";
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("serviceProviders")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -32,6 +34,7 @@ export async function activeAsOfPortable(
   ctx: PortableQueryCtx,
   { societyId, asOf }: { societyId: string; asOf: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("serviceProviders")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -67,6 +70,7 @@ export async function upsertPortable(
     nowISO: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const result = validateServiceProvider({
     function: args.function as ServiceProviderFunction,
     firmName: args.firmName,
@@ -77,6 +81,7 @@ export async function upsertPortable(
     throw new Error(result.errors.join(" "));
   }
   if (id) {
+    await getOwned(ctx, "serviceProviders", id, args.societyId);
     await ctx.db.patch(id, {
       societyId: args.societyId,
       function: args.function,

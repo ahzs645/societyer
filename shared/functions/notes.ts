@@ -6,12 +6,14 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import { optionalSubjectId, requireSubjectId, type SubjectIdArgs } from "./subjectId";
 
 export async function notesListForRecordPortable(
   ctx: PortableQueryCtx,
   { societyId, entityType, subjectId, entityId }: { societyId: string; entityType: string } & SubjectIdArgs,
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const resolvedSubjectId = requireSubjectId({ subjectId, entityId });
   // TODO(H0-flip): query by_subject after the hosted backfill is complete.
   const rows = await ctx.db
@@ -28,6 +30,7 @@ export async function noteCreatePortable(
   ctx: PortableMutationCtx,
   args: { societyId: string; entityType: string; author: string; body: string } & SubjectIdArgs,
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   if (!args.body.trim()) throw new Error("Note body is required");
   const subjectId = requireSubjectId(args);
   const { subjectId: _subjectId, entityId: _entityId, ...note } = args;
@@ -45,6 +48,10 @@ export async function noteUpdatePortable(
   { id, body }: { id: string; body: string },
 ) {
   if (!body.trim()) throw new Error("Note body is required");
+  const candidate = await ctx.db.get(id, "notes");
+  if (!candidate) throw new Error("notes not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "notes", id, String(candidate.societyId));
   await ctx.db.patch(id, {
     body,
     updatedAtISO: new Date().toISOString(),
@@ -52,5 +59,9 @@ export async function noteUpdatePortable(
 }
 
 export async function noteRemovePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const candidate = await ctx.db.get(id, "notes");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "notes", id, String(candidate.societyId));
   await ctx.db.delete(id);
 }

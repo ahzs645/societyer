@@ -9,6 +9,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 const SEED_MOTIONS: Array<{
   title: string;
@@ -87,6 +88,7 @@ const SEED_MOTIONS: Array<{
 ];
 
 export async function seedDefaultsPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const existing = await ctx.db
     .query("motionTemplates")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -121,6 +123,7 @@ function normalizeTags(tags?: string[]): string[] {
 }
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("motionTemplates")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -140,6 +143,7 @@ export async function createPortable(
     notes?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const now = new Date().toISOString();
   return await ctx.db.insert("motionTemplates", {
     societyId: args.societyId,
@@ -165,6 +169,10 @@ export async function updatePortable(
     notes?: string;
   },
 ) {
+  const candidate = await ctx.db.get(templateId, "motionTemplates");
+  if (!candidate) throw new Error("motionTemplates not found.");
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "motionTemplates", templateId, String(candidate.societyId));
   const clean: Record<string, unknown> = { updatedAtISO: new Date().toISOString() };
   for (const [k, v] of Object.entries(patch)) if (v !== undefined) clean[k] = v;
   if (tags !== undefined) clean.tags = normalizeTags(tags);
@@ -173,5 +181,9 @@ export async function updatePortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { templateId }: { templateId: string }) {
+  const candidate = await ctx.db.get(templateId, "motionTemplates");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "motionTemplates", templateId, String(candidate.societyId));
   await ctx.db.delete(templateId);
 }

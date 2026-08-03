@@ -11,6 +11,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import {
   constatingTimeline,
   currentRegime as computeCurrentRegime,
@@ -32,6 +33,7 @@ function toConstatingEvent(row: Record<string, any>): ConstatingEvent {
 
 /** Constating events for a society, sorted chronologically. */
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("constatingEvents")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -45,6 +47,7 @@ export async function currentRegimePortable(
   ctx: PortableQueryCtx,
   { societyId, asOf }: { societyId: string; asOf: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("constatingEvents")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -55,6 +58,7 @@ export async function currentRegimePortable(
 
 /** Human-readable narrative of the constating chain. */
 export async function narrativePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("constatingEvents")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -83,6 +87,7 @@ export async function createPortable(
     nowISO: string;
   },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const event: ConstatingEvent = {
     action: action as ConstatingEvent["action"],
     jurisdiction,
@@ -106,5 +111,9 @@ export async function createPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const candidate = await ctx.db.get(id, "constatingEvents");
+  if (!candidate) return;
+  await requireSocietyMembership(ctx, String(candidate.societyId));
+  await getOwned(ctx, "constatingEvents", id, String(candidate.societyId));
   await ctx.db.delete(id);
 }
