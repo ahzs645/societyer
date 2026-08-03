@@ -11,7 +11,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireSocietyMembership } from "./access";
+import { claimStorageId, getOwned, principalUserId, requireSocietyMembership } from "./access";
 
 /* ----------------------------- Helpers ----------------------------- */
 
@@ -330,6 +330,9 @@ export async function createPortable(
   for (const documentId of args.sourceDocumentIds ?? []) {
     await getOwned(ctx, "documents", documentId, args.societyId);
   }
+  if (args.imageStorageId) {
+    await claimStorageId(ctx, args.imageStorageId, args.societyId);
+  }
   const now = new Date().toISOString();
   const tag = args.assetTag.trim();
   if (!tag) throw new Error("Asset tag is required.");
@@ -404,6 +407,9 @@ export async function updatePortable(
   }
   for (const documentId of patch.sourceDocumentIds ?? []) {
     await getOwned(ctx, "documents", documentId, String(candidate.societyId));
+  }
+  if (typeof patch.imageStorageId === "string") {
+    await claimStorageId(ctx, patch.imageStorageId, String(candidate.societyId));
   }
   const { clearImage, clearReceiptDocument, clearPurchaseTransaction, ...rest } = patch as any;
   const next: any = { ...rest, updatedAtISO: new Date().toISOString() };

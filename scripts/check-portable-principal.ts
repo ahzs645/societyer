@@ -11,6 +11,7 @@ import {
   requireSocietyMembership,
 } from "../shared/functions/access";
 import { PORTABLE_FUNCTIONS } from "../shared/functions/registry";
+import { setLogoPortable } from "../shared/functions/society";
 import { DexieWorkspaceClient } from "../src/lib/dexieWorkspaceClient";
 import { StaticConvexClient } from "../src/lib/staticConvexClient";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "../src/lib/staticIds";
@@ -286,6 +287,65 @@ const disabledRuntime = new PortableRuntime({
 }));
 await assert.rejects(() => disabledRuntime.runQuery("principal:disabledMembership"), /^Error: User is disabled\.$/);
 console.log("✓ membership and owned-row helpers enforce status, table, tenant, and parent ownership");
+
+// A claimed native storage id is tenant-bound at every attachment sink. The
+// same society may re-attach its own id, while local inline data URLs remain
+// claim-free.
+const storageDb = new MemoryDb({
+  seed: {
+    societies: [
+      { _id: "storage-society-a", name: "Storage A" },
+      { _id: "storage-society-b", name: "Storage B" },
+    ],
+    users: [
+      { _id: "storage-owner-a", societyId: "storage-society-a", role: "Owner", status: "Active" },
+    ],
+    storageOwnership: [
+      {
+        _id: "storage-claim-b",
+        storageId: "storage-id-b",
+        societyId: "storage-society-b",
+        createdAtISO: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+  },
+});
+const storageRuntime = new PortableRuntime({
+  db: storageDb,
+  capabilities: caps,
+  principalProvider: () => ({
+    kind: "user",
+    runtime: "test",
+    assurance: "verified-jwt",
+    subject: "storage-owner-a",
+    userId: "storage-owner-a",
+    societyId: "storage-society-a",
+  }),
+}).register(definePortableMutation({
+  name: "storage:setLogo",
+  handler: setLogoPortable,
+}));
+await assert.rejects(
+  () => storageRuntime.runMutation("storage:setLogo", {
+    societyId: "storage-society-a",
+    storageId: "storage-id-b",
+  }),
+  /^Error: storageOwnership not found\.$/,
+  "Society A must not attach Society B's claimed storage id",
+);
+for (let attempt = 0; attempt < 2; attempt += 1) {
+  await storageRuntime.runMutation("storage:setLogo", {
+    societyId: "storage-society-a",
+    storageId: "storage-id-a",
+  });
+}
+assert.equal(storageDb.dump("storageOwnership").length, 2, "re-attach must reuse one ownership claim");
+await storageRuntime.runMutation("storage:setLogo", {
+  societyId: "storage-society-a",
+  storageId: "data:image/png;base64,LOCAL",
+});
+assert.equal(storageDb.dump("storageOwnership").length, 2, "inline local logos must not create ownership claims");
+console.log("✓ storage claims reject foreign attachment, allow own re-attach, and skip inline local logos");
 
 const hostedPrincipalRuntime = new PortableRuntime({
   db: new MemoryDb({

@@ -25,6 +25,7 @@
 
 import type {
   PortableDoc,
+  PortableMutationCtx,
   PortablePrincipal,
   PortableQueryCtx,
   TableName,
@@ -129,6 +130,36 @@ export async function requireSocietyMembership(
 
 function ownedRowNotFound(table: TableName): Error {
   return new Error(`${table} not found.`);
+}
+
+type StorageOwnershipRow = OwnedPortableRow & {
+  storageId: string;
+};
+
+/**
+ * Claim a Convex storage id for one society when it is first attached.
+ * Inline local-runtime data URLs are self-contained and have no `_storage`
+ * ownership row to claim.
+ */
+export async function claimStorageId(
+  ctx: PortableMutationCtx,
+  storageId: string,
+  societyId: string,
+): Promise<void> {
+  if (storageId.startsWith("data:")) return;
+  const claims = await ctx.db
+    .query<StorageOwnershipRow>("storageOwnership")
+    .withIndex("by_storage", (q) => q.eq("storageId", storageId))
+    .collect();
+  if (claims.some((claim) => claim.societyId !== societyId)) {
+    throw ownedRowNotFound("storageOwnership");
+  }
+  if (claims.length > 0) return;
+  await ctx.db.insert("storageOwnership", {
+    storageId,
+    societyId,
+    createdAtISO: new Date().toISOString(),
+  });
 }
 
 /** Fetch a same-society row without revealing whether a foreign row exists. */
