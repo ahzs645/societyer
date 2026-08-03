@@ -8,6 +8,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 
 /**
  * Returns every bank transaction with reconciliation status, plus a candidate
@@ -16,6 +17,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
  * within ±7 days for cash records, then string-similarity on counterparty.
  */
 export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const [txns, filings, receipts, employees] = await Promise.all([
     ctx.db
       .query("financialTransactions")
@@ -116,9 +118,23 @@ export async function matchPortable(
     actor?: string;
   },
 ) {
+  const candidate = await ctx.db.get(args.txnId, "financialTransactions");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("financialTransactions not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "financialTransactions", args.txnId, candidate.societyId);
+  const principalId = await principalUserId(ctx, candidate.societyId);
+  const principal = await getOwned(ctx, "users", principalId, candidate.societyId);
+  const matchedTable = args.matchedKind === "filing"
+    ? "filings"
+    : args.matchedKind === "receipt"
+      ? "donationReceipts"
+      : args.matchedKind === "payroll"
+        ? "employees"
+        : null;
+  if (matchedTable) await getOwned(ctx, matchedTable, args.matchedId, candidate.societyId);
   await ctx.db.patch(args.txnId, {
     reconciledAtISO: new Date().toISOString(),
-    reconciledByName: args.actor ?? "You",
+    reconciledByName: String(principal.displayName ?? principal.name ?? "You"),
     matchedKind: args.matchedKind,
     matchedId: args.matchedId,
     reconciliationNote: args.note,
@@ -129,9 +145,15 @@ export async function markManualPortable(
   ctx: PortableMutationCtx,
   { txnId, note, actor }: { txnId: string; note: string; actor?: string },
 ) {
+  const candidate = await ctx.db.get(txnId, "financialTransactions");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("financialTransactions not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "financialTransactions", txnId, candidate.societyId);
+  const principalId = await principalUserId(ctx, candidate.societyId);
+  const principal = await getOwned(ctx, "users", principalId, candidate.societyId);
   await ctx.db.patch(txnId, {
     reconciledAtISO: new Date().toISOString(),
-    reconciledByName: actor ?? "You",
+    reconciledByName: String(principal.displayName ?? principal.name ?? "You"),
     matchedKind: "manual",
     matchedId: "manual",
     reconciliationNote: note,
@@ -153,6 +175,8 @@ export async function addManualTransactionPortable(
     accountId?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (args.accountId) await getOwned(ctx, "financialAccounts", args.accountId, args.societyId);
   const now = new Date().toISOString();
   const connections = await ctx.db
     .query("financialConnections")
@@ -169,7 +193,7 @@ export async function addManualTransactionPortable(
       connectedAtISO: now,
       demo: false,
     });
-    connection = await ctx.db.get(connectionId);
+    connection = await getOwned(ctx, "financialConnections", connectionId, args.societyId);
   }
 
   let accountId = args.accountId;
@@ -208,6 +232,10 @@ export async function addManualTransactionPortable(
 }
 
 export async function unmatchPortable(ctx: PortableMutationCtx, { txnId }: { txnId: string }) {
+  const candidate = await ctx.db.get(txnId, "financialTransactions");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("financialTransactions not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "financialTransactions", txnId, candidate.societyId);
   await ctx.db.patch(txnId, {
     reconciledAtISO: undefined,
     reconciledByName: undefined,

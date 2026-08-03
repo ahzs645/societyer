@@ -11,6 +11,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { requireSocietyMembership } from "./access";
 import { roleHoldersAsOf, activeAsOf, type IntervalRow } from "../registerHistory";
 import {
   deriveSignificanceStatus,
@@ -51,6 +52,7 @@ export async function roleHoldersAsOfDatePortable(
   ctx: PortableQueryCtx,
   { societyId, asOf, roleType }: { societyId: string; asOf: string; roleType: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("roleHolders")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -72,6 +74,7 @@ export async function addressesAsOfPortable(
   ctx: PortableQueryCtx,
   { societyId, asOf, type }: { societyId: string; asOf: string; type?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("organizationAddresses")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -88,6 +91,7 @@ export async function directorsAsOfPortable(
   ctx: PortableQueryCtx,
   { societyId, asOf }: { societyId: string; asOf: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("roleHolders")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -106,6 +110,7 @@ export async function significantIndividualsAsOfPortable(
   ctx: PortableQueryCtx,
   { societyId, asOf }: { societyId: string; asOf: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("roleHolders")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))

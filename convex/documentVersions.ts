@@ -1,7 +1,8 @@
 import { query, mutation, action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-import { canActAs, requireRole } from "./users";
+import type { Id } from "./_generated/dataModel";
+import { requireRole } from "./users";
 import {
   buildStorageKey,
   buildUploadStorageKey,
@@ -16,6 +17,12 @@ import {
   getPortable,
   rollbackPortable,
 } from "../shared/functions/documentVersions";
+import {
+  canActAs,
+  getOwned,
+  requireSocietyMembership,
+  type Role,
+} from "../shared/functions/access";
 
 export const listForDocument = query({
   args: { documentId: v.id("documents") },
@@ -43,15 +50,11 @@ export const beginUpload = action({
   returns: v.any(),
   handler: async (ctx, args) => {
     assertNativeFileStorageEnabled();
-    if (!args.actingUserId) {
-      throw new Error("Role Director required — no authenticated actor.");
-    }
-    const actor = await ctx.runQuery(api.users.get, { id: args.actingUserId });
-    if (!actor) throw new Error("Unknown user.");
-    if (actor.societyId !== args.societyId) throw new Error("User is not part of this society.");
-    if (!canActAs(actor.role as any, "Director")) {
-      throw new Error(`Role Director required — you have ${actor.role}.`);
-    }
+    await ctx.runQuery(api.paperless.sourcePullContext, {
+      societyId: args.societyId,
+      documentId: args.documentId,
+      actingUserId: args.actingUserId,
+    });
 
     const key = buildUploadStorageKey(
       args.societyId,
@@ -80,11 +83,21 @@ export const recordUploadedVersion = mutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     assertNativeFileStorageEnabled();
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const uploader = await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.actingUserId && String(args.actingUserId) !== uploader._id) {
+      throw new Error("Authenticated actor does not match the current principal.");
+    }
+    if (!canActAs(uploader.role as Role, "Director")) {
+      throw new Error(`Role Director required — you have ${uploader.role}.`);
+    }
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
       societyId: args.societyId,
       required: "Director",
     });
+    await getOwned(portableCtx, "documents", args.documentId, args.societyId);
+    const uploaderId = uploader._id;
 
     // Allocate the authoritative version in this mutation. Concurrent recorders
     // conflict on this read and Convex retries one against the committed row.
@@ -106,10 +119,6 @@ export const recordUploadedVersion = mutation({
       if (row.isCurrent) await ctx.db.patch(row._id, { isCurrent: false });
     }
 
-    const uploader = args.actingUserId
-      ? await ctx.db.get(args.actingUserId)
-      : null;
-
     const id = await ctx.db.insert("documentVersions", {
       societyId: args.societyId,
       documentId: args.documentId,
@@ -120,7 +129,7 @@ export const recordUploadedVersion = mutation({
       mimeType: args.mimeType,
       fileSizeBytes: args.fileSizeBytes,
       sha256: args.sha256,
-      uploadedByUserId: args.actingUserId,
+      uploadedByUserId: uploaderId as Id<"users">,
       uploadedByName: uploader?.displayName,
       uploadedAtISO: new Date().toISOString(),
       changeNote: args.changeNote,
@@ -162,7 +171,7 @@ export const recordUploadedVersion = mutation({
         societyId: args.societyId,
         documentId: args.documentId,
         versionId: id,
-        actingUserId: args.actingUserId,
+        actingUserId: uploaderId,
       });
     }
 
@@ -260,6 +269,16 @@ export const createDemoVersion = mutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     assertNativeFileStorageEnabled();
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const uploader = await requireSocietyMembership(portableCtx, args.societyId);
+    if (args.actingUserId && String(args.actingUserId) !== uploader._id) {
+      throw new Error("Authenticated actor does not match the current principal.");
+    }
+    if (!canActAs(uploader.role as Role, "Director")) {
+      throw new Error(`Role Director required — you have ${uploader.role}.`);
+    }
+    await getOwned(portableCtx, "documents", args.documentId, args.societyId);
+    const uploaderId = uploader._id;
     const existing = await ctx.db
       .query("documentVersions")
       .withIndex("by_document", (q) => q.eq("documentId", args.documentId))
@@ -274,9 +293,6 @@ export const createDemoVersion = mutation({
     for (const row of existing) {
       if (row.isCurrent) await ctx.db.patch(row._id, { isCurrent: false });
     }
-    const uploader = args.actingUserId
-      ? await ctx.db.get(args.actingUserId)
-      : null;
     const id = await ctx.db.insert("documentVersions", {
       societyId: args.societyId,
       documentId: args.documentId,
@@ -286,7 +302,7 @@ export const createDemoVersion = mutation({
       fileName: args.fileName,
       mimeType: args.mimeType,
       fileSizeBytes: args.fileSizeBytes,
-      uploadedByUserId: args.actingUserId,
+      uploadedByUserId: uploaderId as Id<"users">,
       uploadedByName: uploader?.displayName ?? "Demo user",
       uploadedAtISO: new Date().toISOString(),
       changeNote: args.changeNote,

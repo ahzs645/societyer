@@ -6,12 +6,14 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { requireSocietyMembership } from "./access";
 import { optionalSubjectId, requireSubjectId, type SubjectIdArgs } from "./subjectId";
 
 export async function listPortable(
   ctx: PortableQueryCtx,
   { societyId, limit }: { societyId: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("activity")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -30,6 +32,7 @@ export async function listForRecordPortable(
     limit,
   }: { societyId: string; entityType: string; limit?: number } & SubjectIdArgs,
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const resolvedSubjectId = requireSubjectId({ subjectId, entityId });
   // TODO(H0-flip): query by_subject after the hosted backfill is complete.
   const rows = await ctx.db
@@ -52,6 +55,7 @@ export async function logPortable(
     summary: string;
   } & SubjectIdArgs,
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const { subjectId: preferredSubjectId, entityId: legacyEntityId, ...activity } = args;
   const subjectId = optionalSubjectId({ subjectId: preferredSubjectId, entityId: legacyEntityId });
   return ctx.db.insert("activity", {

@@ -13,8 +13,10 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export async function listTemplatesPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("communicationTemplates")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -22,13 +24,17 @@ export async function listTemplatesPortable(ctx: PortableQueryCtx, { societyId }
 }
 
 export async function getTemplatePortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "communicationTemplates");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("communicationTemplates not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  return getOwned(ctx, "communicationTemplates", id, candidate.societyId);
 }
 
 export async function listCampaignsPortable(
   ctx: PortableQueryCtx,
   { societyId, limit }: { societyId: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("communicationCampaigns")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -45,6 +51,9 @@ export async function listDeliveriesPortable(
     limit,
   }: { societyId: string; campaignId?: string; meetingId?: string; limit?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
+  if (campaignId) await getOwned(ctx, "communicationCampaigns", campaignId, societyId);
+  if (meetingId) await getOwned(ctx, "meetings", meetingId, societyId);
   let rows = await ctx.db
     .query("communicationDeliveries")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -56,6 +65,7 @@ export async function listDeliveriesPortable(
 }
 
 export async function listMemberPrefsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("memberCommunicationPrefs")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -63,6 +73,7 @@ export async function listMemberPrefsPortable(ctx: PortableQueryCtx, { societyId
 }
 
 export async function listSegmentsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("communicationSegments")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -85,9 +96,11 @@ export async function upsertTemplatePortable(
     system: boolean;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const { id, ...rest } = args;
   const payload = { ...rest, updatedAtISO: new Date().toISOString() };
   if (id) {
+    await getOwned(ctx, "communicationTemplates", id, args.societyId);
     await ctx.db.patch(id, payload);
     return id;
   }
@@ -110,9 +123,11 @@ export async function upsertSegmentPortable(
     volunteerStatus?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
   const { id, ...rest } = args;
   const payload = { ...rest, updatedAtISO: new Date().toISOString() };
   if (id) {
+    await getOwned(ctx, "communicationSegments", id, args.societyId);
     await ctx.db.patch(id, payload);
     return id;
   }
@@ -120,6 +135,10 @@ export async function upsertSegmentPortable(
 }
 
 export async function removeSegmentPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const candidate = await ctx.db.get(id, "communicationSegments");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("communicationSegments not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "communicationSegments", id, candidate.societyId);
   await ctx.db.delete(id);
 }
 
@@ -143,6 +162,8 @@ export async function upsertMemberPrefPortable(
     unsubscribeReason?: string;
   },
 ) {
+  await requireSocietyMembership(ctx, args.societyId);
+  await getOwned(ctx, "members", args.memberId, args.societyId);
   const existing = await ctx.db
     .query("memberCommunicationPrefs")
     .withIndex("by_member", (q) => q.eq("memberId", args.memberId))
@@ -173,6 +194,10 @@ export async function markDeliveryBouncedPortable(
   ctx: PortableMutationCtx,
   { id, errorMessage }: { id: string; errorMessage?: string },
 ) {
+  const candidate = await ctx.db.get(id, "communicationDeliveries");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("communicationDeliveries not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "communicationDeliveries", id, candidate.societyId);
   await ctx.db.patch(id, {
     status: "bounced",
     bouncedAtISO: new Date().toISOString(),
@@ -181,7 +206,10 @@ export async function markDeliveryBouncedPortable(
 }
 
 export async function markDeliveryOpenedPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const delivery = await ctx.db.get(id);
+  const candidate = await ctx.db.get(id, "communicationDeliveries");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("communicationDeliveries not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const delivery = await getOwned(ctx, "communicationDeliveries", id, candidate.societyId);
   const alreadyOpened = delivery?.status === "opened";
   await ctx.db.patch(id, {
     status: "opened",
@@ -190,11 +218,9 @@ export async function markDeliveryOpenedPortable(ctx: PortableMutationCtx, { id 
   // Roll the open up to the parent campaign so the campaign-level open rate is
   // not stuck at 0. Only count the first open of each delivery.
   if (delivery?.campaignId && !alreadyOpened) {
-    const campaign = await ctx.db.get(delivery.campaignId);
-    if (campaign) {
-      await ctx.db.patch(delivery.campaignId, {
-        openedCount: (campaign.openedCount ?? 0) + 1,
-      });
-    }
+    const campaign = await getOwned(ctx, "communicationCampaigns", String(delivery.campaignId), candidate.societyId);
+    await ctx.db.patch(String(delivery.campaignId), {
+      openedCount: (campaign.openedCount ?? 0) + 1,
+    });
   }
 }

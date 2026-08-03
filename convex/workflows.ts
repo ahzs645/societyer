@@ -8,6 +8,7 @@ import {
   internalQuery,
 } from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { requireRole } from "./users";
 import { PDFDocument } from "pdf-lib";
 import {
@@ -35,6 +36,7 @@ import {
   removeNodePortable,
   listNodeTypesPortable,
 } from "../shared/functions/workflows";
+import { getOwned, principalUserId, requireSocietyMembership } from "../shared/functions/access";
 
 import {
   UNBC_AFFILIATE_FIELDS,
@@ -328,11 +330,14 @@ export const create = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
       societyId: args.societyId,
       required: "Director",
     });
+    const createdByUserId = await principalUserId(portableCtx, args.societyId);
     if (!(args.recipe in RECIPE_STEPS)) {
       throw new Error(`Unknown recipe: ${args.recipe}`);
     }
@@ -363,7 +368,7 @@ export const create = mutation({
       trigger,
       config: { ...configForRecipe(recipe), ...(args.config ?? {}) },
       nextRunAtISO: computeNextRunAt(trigger),
-      createdByUserId: args.actingUserId,
+      createdByUserId,
     });
   },
 });
@@ -376,11 +381,14 @@ export const setupGovernanceN8nRecipes = mutation({
   },
   returns: v.any(),
   handler: async (ctx, { societyId, actingUserId }) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, societyId);
     await requireRole(ctx, {
       actingUserId,
       societyId,
       required: "Director",
     });
+    const createdByUserId = await principalUserId(portableCtx, societyId);
     const recipes: RecipeKey[] = [
       "agm_date_deadlines",
       "filing_due_notify_officer",
@@ -431,7 +439,7 @@ export const setupGovernanceN8nRecipes = mutation({
             : { kind: "manual" },
         config,
         nextRunAtISO: undefined,
-        createdByUserId: actingUserId,
+        createdByUserId,
       });
       created.push(RECIPE_LABELS[recipe]);
     }
@@ -504,11 +512,14 @@ export const configure = mutation({
   },
   returns: v.any(),
   handler: async (ctx, { id, patch, actingUserId }) => {
-    const wf = await ctx.db.get(id);
-    if (!wf) throw new Error("Workflow not found");
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("workflows not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    const wf = await getOwned(portableCtx, "workflows", id, candidate.societyId);
     await requireRole(ctx, {
       actingUserId,
-      societyId: wf.societyId,
+      societyId: wf.societyId as Id<"societies">,
       required: "Director",
     });
     const next: any = { ...patch };
@@ -544,11 +555,14 @@ export const updateProviderLink = mutation({
   },
   returns: v.any(),
   handler: async (ctx, { id, provider, providerConfig, actingUserId }) => {
-    const wf = await ctx.db.get(id);
-    if (!wf) throw new Error("Workflow not found");
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(id);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("workflows not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    const wf = await getOwned(portableCtx, "workflows", id, candidate.societyId);
     await requireRole(ctx, {
       actingUserId,
-      societyId: wf.societyId,
+      societyId: wf.societyId as Id<"societies">,
       required: "Director",
     });
     if (providerConfig.externalWebhookUrl) {
@@ -813,6 +827,15 @@ export const _createRun = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await getOwned(portableCtx, "workflows", args.workflowId, args.societyId);
+    let triggeredByUserId: string | undefined;
+    if (args.triggeredByUserId) {
+      triggeredByUserId = await principalUserId(portableCtx, args.societyId);
+      if (triggeredByUserId !== String(args.triggeredByUserId)) {
+        throw new Error("Authenticated actor does not match the current principal.");
+      }
+    }
     const steps = stepsForRun(args.recipe, args.nodePreview);
     return await ctx.db.insert("workflowRuns", {
       societyId: args.societyId,
@@ -824,7 +847,7 @@ export const _createRun = internalMutation({
       provider: args.provider ?? "internal",
       demo: args.demo,
       triggeredBy: args.triggeredBy,
-      triggeredByUserId: args.triggeredByUserId,
+      triggeredByUserId,
     });
   },
 });
@@ -943,6 +966,12 @@ export const recordConnectorRun = mutation({
   },
   returns: v.id("workflowRuns"),
   handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const membership = await requireSocietyMembership(portableCtx, args.societyId);
+    const triggeredByUserId = membership._id;
+    if (args.triggeredByUserId && triggeredByUserId !== String(args.triggeredByUserId)) {
+      throw new Error("Authenticated actor does not match the current principal.");
+    }
     const societyId = String(args.societyId);
     if (args.profileKey && args.profileSocietyId !== societyId) {
       throw new Error("Browser profile reference is missing or belongs to another society.");
@@ -998,7 +1027,7 @@ export const recordConnectorRun = mutation({
         connectorName: connectorLabel,
       },
       lastRunAtISO: now,
-      createdByUserId: args.triggeredByUserId,
+      createdByUserId: triggeredByUserId,
     });
     if (existing) {
       await ctx.db.patch(existing._id, {
@@ -1044,11 +1073,11 @@ export const recordConnectorRun = mutation({
       },
       demo: false,
       triggeredBy: "connector",
-      triggeredByUserId: args.triggeredByUserId,
+      triggeredByUserId,
     });
     await ctx.db.insert("activity", {
       societyId: args.societyId,
-      actor: args.triggeredByUserId ? "User" : "Browser connector",
+      actor: "User",
       entityType: "workflowRun",
       subjectId: String(runId),
       // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
@@ -1215,8 +1244,17 @@ export const _gatherMappingContext = internalQuery({
   },
   returns: v.any(),
   handler: async (ctx, { societyId, actingUserId, personRefs }) => {
+    const portableCtx = await toPortableQueryCtx(ctx);
+    let actor: Record<string, unknown> | null = null;
+    if (actingUserId) {
+      await requireSocietyMembership(portableCtx, societyId);
+      const actorId = await principalUserId(portableCtx, societyId);
+      if (actorId !== String(actingUserId)) {
+        throw new Error("Authenticated actor does not match the current principal.");
+      }
+      actor = await getOwned(portableCtx, "users", actorId, societyId);
+    }
     const society = await ctx.db.get(societyId);
-    const actor = actingUserId ? await ctx.db.get(actingUserId) : null;
 
     const byKey: Record<
       string,

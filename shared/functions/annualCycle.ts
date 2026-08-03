@@ -15,6 +15,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { requireSocietyMembership } from "./access";
 import { minutesMotionsForDisplay } from "../minutesMotions";
 import { resolveMinutesMotions } from "./minutes";
 
@@ -38,6 +39,7 @@ export async function summaryPortable(
   ctx: PortableQueryCtx,
   { societyId, year }: { societyId: string; year?: number },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const cycleYear = year ?? new Date().getFullYear();
   const now = new Date();
   const today = dateOnly(now);
@@ -63,7 +65,7 @@ export async function summaryPortable(
     proxies,
     memberProposals,
   ] = await Promise.all([
-    ctx.db.get(societyId),
+    ctx.db.get(societyId, "societies"),
     ctx.db.query("meetings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("minutes").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("filings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),

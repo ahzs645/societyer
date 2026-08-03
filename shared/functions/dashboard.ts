@@ -15,6 +15,7 @@
  */
 
 import type { PortableDoc, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 /* ----------------------- compliance rules (inlined) ---------------------- */
 
@@ -766,6 +767,7 @@ export async function navCountsPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const nowDate = new Date();
   const nowISO = nowDate.toISOString();
   const year = nowDate.getFullYear();
@@ -811,6 +813,7 @@ export async function summaryPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ): Promise<DashboardSummary> {
+  await requireSocietyMembership(ctx, societyId);
   const nowDate = new Date();
   const nowISO = nowDate.toISOString();
   const year = nowDate.getFullYear();
@@ -834,7 +837,7 @@ export async function summaryPortable(
     complianceRemediations,
     rules,
   ] = await Promise.all([
-    ctx.db.get<SocietyRecord>(societyId),
+    ctx.db.get<SocietyRecord>(societyId, "societies"),
     ctx.db.query("members").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect(),
     ctx.db.query<any>("directors").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect(),
     ctx.db.query<DashboardMeeting & PortableDoc>("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", yearStartISO).lt("scheduledAt", nextYearStartISO)).collect(),
@@ -1016,8 +1019,10 @@ async function buildFilingEvidenceChain(
     ...(filing.sourceDocumentIds ?? []),
   ].filter(Boolean) as DashboardId[];
   const [documents, submitter, indexedAuditEvents] = await Promise.all([
-    Promise.all(documentIds.map((id) => ctx.db.get(id))),
-    filing.submittedByUserId ? ctx.db.get(filing.submittedByUserId) : Promise.resolve(null),
+    Promise.all(documentIds.map((id) => getOwned(ctx, "documents", id, societyId))),
+    filing.submittedByUserId
+      ? getOwned(ctx, "users", filing.submittedByUserId, societyId)
+      : Promise.resolve(null),
     ctx.db
       .query("activity")
       // TODO(H0-flip): query by_subject after the hosted backfill is complete.

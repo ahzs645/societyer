@@ -12,6 +12,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import {
   outstandingYears,
   filingHistory,
@@ -32,6 +33,7 @@ function toFilingRecord(row: Record<string, any>): FilingRecord {
 
 /** All ledger rows for a society. */
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("annualFilingLedger")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -40,6 +42,7 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 
 /** Distinct jurisdictions tracked for a society, in first-seen order. */
 export async function jurisdictionsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("annualFilingLedger")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -52,6 +55,7 @@ export async function historyPortable(
   ctx: PortableQueryCtx,
   { societyId, jurisdiction }: { societyId: string; jurisdiction: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("annualFilingLedger")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -69,6 +73,7 @@ export async function outstandingPortable(
     toYear,
   }: { societyId: string; jurisdiction: string; fromYear: string; toYear: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("annualFilingLedger")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -104,7 +109,9 @@ export async function upsertPortable(
     regnLegislation,
     nowISO,
   } = args;
+  await requireSocietyMembership(ctx, societyId);
   if (id) {
+    await getOwned(ctx, "annualFilingLedger", id, societyId);
     await ctx.db.patch(id, {
       societyId,
       jurisdiction,
@@ -130,5 +137,11 @@ export async function upsertPortable(
 
 /** Delete a ledger row. */
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const candidate = await ctx.db.get(id, "annualFilingLedger");
+  if (!candidate || typeof candidate.societyId !== "string") {
+    throw new Error("annualFilingLedger not found.");
+  }
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "annualFilingLedger", id, candidate.societyId);
   await ctx.db.delete(id);
 }

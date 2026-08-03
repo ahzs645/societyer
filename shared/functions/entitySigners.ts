@@ -11,6 +11,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import { activeAsOf, type IntervalRow } from "../registerHistory";
 import {
   personReferenceConstraint,
@@ -37,13 +38,16 @@ async function enforcePersonReference(
   name: string,
   directoryPersonId: any,
 ): Promise<any> {
-  const society = await ctx.db.get(societyId);
+  const society = await ctx.db.get(String(societyId), "societies");
   const constraint = personReferenceConstraint(society?.restrictPeoplePicker);
   const candidate = directoryPersonId ? String(directoryPersonId) : null;
 
   let exists = false;
   if (candidate) {
-    const person = await ctx.db.get(directoryPersonId);
+    const person = await ctx.db.get(String(directoryPersonId), "peopleDirectory");
+    if (person && typeof person.societyId === "string") {
+      await getOwned(ctx, "peopleDirectory", String(directoryPersonId), String(societyId));
+    }
     exists = person != null;
   }
 
@@ -62,6 +66,7 @@ async function enforcePersonReference(
 
 /** All signers for a society, ordered by signOrder ascending (undefined last). */
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("entitySigners")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -74,6 +79,7 @@ export async function activeAsOfQueryPortable(
   ctx: PortableQueryCtx,
   { societyId, asOf }: { societyId: string; asOf: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("entitySigners")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -111,6 +117,7 @@ export async function upsertPortable(
     corpSign,
     nowISO,
   } = args;
+  await requireSocietyMembership(ctx, societyId);
   // Enforce the society's People Directory constraint (free unless restricted).
   const resolvedDirectoryPersonId = await enforcePersonReference(
     ctx,
@@ -128,6 +135,7 @@ export async function upsertPortable(
     corpSign,
   };
   if (id) {
+    await getOwned(ctx, "entitySigners", id, societyId);
     await ctx.db.patch(id, fields);
     return id;
   }
@@ -136,5 +144,9 @@ export async function upsertPortable(
 
 /** Delete a signer. */
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const candidate = await ctx.db.get(id, "entitySigners");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("entitySigners not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "entitySigners", id, candidate.societyId);
   await ctx.db.delete(id);
 }

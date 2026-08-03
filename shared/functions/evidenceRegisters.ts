@@ -9,6 +9,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 const REGISTER_TABLES = [
   "boardRoleAssignments",
@@ -27,6 +28,7 @@ const REGISTER_TABLES = [
 ] as const;
 
 export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const result: Record<string, any[]> = {};
   for (const table of REGISTER_TABLES) {
     result[table] = await ctx.db
@@ -57,6 +59,10 @@ export async function updateReviewPortable(
   { table, id, status, notes }: { table: string; id: string; status?: string; notes?: string },
 ) {
   if (!REGISTER_TABLES.includes(table as any)) throw new Error(`Unsupported register table: ${table}`);
+  const candidate = await ctx.db.get(id, table);
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error(`${table} not found.`);
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, table, id, candidate.societyId);
   const patch: Record<string, any> = {};
   if (status != null) patch.status = cleanText(status) || "NeedsReview";
   if (notes != null) patch.notes = cleanText(notes);
@@ -76,8 +82,10 @@ export async function promoteBoardRoleToDirectorPortable(
     notes?: string;
   },
 ) {
-  const assignment = await ctx.db.get(args.assignmentId);
-  if (!assignment) throw new Error("Board role assignment not found.");
+  const candidate = await ctx.db.get(args.assignmentId, "boardRoleAssignments");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("boardRoleAssignments not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  const assignment = await getOwned(ctx, "boardRoleAssignments", args.assignmentId, candidate.societyId);
   const name = splitName(assignment.personName);
   const directorId = await ctx.db.insert("directors", {
     societyId: assignment.societyId,
@@ -109,6 +117,7 @@ export async function finishFinancePaperlessReviewPortable(
   ctx: PortableMutationCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const completedAt = todayDate();
   const counts = {
     budgetVerified: 0,
@@ -214,6 +223,7 @@ export async function finishSafePaperlessReviewPortable(
   ctx: PortableMutationCtx,
   { societyId }: { societyId: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const completedAt = todayDate();
   const counts: Record<string, number> = {
     boardRoleAssignmentsRejected: 0,
@@ -421,6 +431,7 @@ export async function createManualPortable(
   ctx: PortableMutationCtx,
   { societyId, kind, payload }: { societyId: string; kind: string; payload: any },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const now = new Date().toISOString();
   const p = payload ?? {};
 
@@ -545,15 +556,17 @@ function appendReviewNote(existing: unknown, note: string) {
 }
 
 async function patchOwned(ctx: PortableMutationCtx, table: string, id: string, societyId: string, patchFor: (row: any) => Record<string, any>) {
-  const row = await ctx.db.get(id as any);
+  const row = await ctx.db.get(id, table);
   if (!row || String(row.societyId) !== String(societyId)) return false;
+  await getOwned(ctx, table, id, societyId);
   await ctx.db.patch(id as any, patchFor(row));
   return true;
 }
 
 async function rejectImportRecord(ctx: PortableMutationCtx, id: string, societyId: string, note: string) {
-  const doc = await ctx.db.get(id as any);
+  const doc = await ctx.db.get(id, "documents");
   if (!doc || String(doc.societyId) !== String(societyId)) return false;
+  await getOwned(ctx, "documents", id, societyId);
   const payload = parseJson(doc.content);
   if (payload.status === "Rejected") return false;
   await ctx.db.patch(id as any, {

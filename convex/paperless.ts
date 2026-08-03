@@ -1,4 +1,5 @@
 import { action, mutation, query } from "./lib/untypedServer";
+import type { ActionCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
@@ -25,6 +26,25 @@ import {
   getSyncPortable,
   recordConnectionTestPortable,
 } from "../shared/functions/paperless";
+import { getOwned, getOwnedChild, requireSocietyMembership } from "../shared/functions/access";
+
+async function authorizePaperlessAction(
+  ctx: ActionCtx,
+  societyId: string,
+  actingUserId?: string,
+) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity?.subject) throw new Error("Authentication required.");
+  const actor = await ctx.runQuery(api.users.getByAuthSubject, { authSubject: identity.subject });
+  if (!actor || String(actor.societyId) !== societyId) throw new Error("Society membership not found.");
+  if (actingUserId && String(actor._id) !== actingUserId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
+  await ctx.runQuery(api.paperless.authorizeMeetingImport, {
+    societyId,
+    actingUserId: actor._id,
+  });
+}
 
 import {
   latestVersion,
@@ -163,6 +183,7 @@ export const connectionStatus = query({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
+    await requireSocietyMembership(await toPortableQueryCtx(ctx), societyId);
     const connection = await ctx.db
       .query("paperlessConnections")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -267,10 +288,9 @@ export const recordPulledSourceDocument = mutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     assertNativeFileStorageEnabled();
-    const document = await ctx.db.get(args.documentId);
-    if (!document || document.societyId !== args.societyId) {
-      throw new Error("Document not found.");
-    }
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    const document = await getOwned(portableCtx, "documents", args.documentId, args.societyId);
     const existingContent = parseJsonObject(document.content);
     await ctx.db.patch(args.documentId, {
       storageId: args.storageId,
@@ -305,12 +325,7 @@ export const createMeetingMinutesImportSession = action({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    if (args.actingUserId) {
-      await ctx.runQuery(api.paperless.authorizeMeetingImport, {
-        societyId: args.societyId,
-        actingUserId: args.actingUserId,
-      });
-    }
+    await authorizePaperlessAction(ctx, args.societyId, args.actingUserId);
     const docs = await listPaperlessDocuments({
       query: args.query,
       maxDocuments: args.maxDocuments ?? 500,
@@ -378,12 +393,7 @@ export const createDiscoveryImportSession = action({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    if (args.actingUserId) {
-      await ctx.runQuery(api.paperless.authorizeMeetingImport, {
-        societyId: args.societyId,
-        actingUserId: args.actingUserId,
-      });
-    }
+    await authorizePaperlessAction(ctx, args.societyId, args.actingUserId);
 
     const docs = await listPaperlessDocuments({
       query: args.query,
@@ -447,12 +457,7 @@ export const createTransposedImportSession = action({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    if (args.actingUserId) {
-      await ctx.runQuery(api.paperless.authorizeMeetingImport, {
-        societyId: args.societyId,
-        actingUserId: args.actingUserId,
-      });
-    }
+    await authorizePaperlessAction(ctx, args.societyId, args.actingUserId);
 
     const docs = await listPaperlessDocuments({
       query: args.query,
@@ -503,12 +508,7 @@ export const createBylawsHistoryImportSession = action({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    if (args.actingUserId) {
-      await ctx.runQuery(api.paperless.authorizeMeetingImport, {
-        societyId: args.societyId,
-        actingUserId: args.actingUserId,
-      });
-    }
+    await authorizePaperlessAction(ctx, args.societyId, args.actingUserId);
 
     const query = args.query?.trim() || "bylaws by-laws constitution special resolution form 10";
     const docs = await listPaperlessDocuments({
@@ -565,13 +565,12 @@ export const upsertConnection = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    if (args.actingUserId) {
-      await requireRole(ctx, {
-        actingUserId: args.actingUserId,
-        societyId: args.societyId,
-        required: "Admin",
-      });
-    }
+    await requireSocietyMembership(await toPortableMutationCtx(ctx), args.societyId);
+    await requireRole(ctx, {
+      actingUserId: args.actingUserId,
+      societyId: args.societyId,
+      required: "Admin",
+    });
 
     const existing = await ctx.db
       .query("paperlessConnections")
@@ -610,13 +609,12 @@ export const disconnect = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    if (args.actingUserId) {
-      await requireRole(ctx, {
-        actingUserId: args.actingUserId,
-        societyId: args.societyId,
-        required: "Admin",
-      });
-    }
+    await requireSocietyMembership(await toPortableMutationCtx(ctx), args.societyId);
+    await requireRole(ctx, {
+      actingUserId: args.actingUserId,
+      societyId: args.societyId,
+      required: "Admin",
+    });
     const rows = await ctx.db
       .query("paperlessConnections")
       .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
@@ -630,6 +628,7 @@ export const testConnection = action({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
+    await ctx.runQuery(api.paperless.listConnection, { societyId });
     const result = await testPaperlessConnection();
     await ctx.runMutation(api.paperless.recordConnectionTest, {
       societyId,
@@ -669,18 +668,14 @@ export const syncContext = query({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    if (args.actingUserId) {
-      await requireRole(ctx, {
-        actingUserId: args.actingUserId,
-        societyId: args.societyId,
-        required: "Director",
-      });
-    }
-
-    const document = await ctx.db.get(args.documentId);
-    if (!document || document.societyId !== args.societyId) {
-      throw new Error("Document not found.");
-    }
+    const portableCtx = await toPortableQueryCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    await requireRole(ctx, {
+      actingUserId: args.actingUserId,
+      societyId: args.societyId,
+      required: "Director",
+    });
+    const document = await getOwned(portableCtx, "documents", args.documentId, args.societyId);
     const connection = await ctx.db
       .query("paperlessConnections")
       .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
@@ -695,7 +690,7 @@ export const syncContext = query({
     }
 
     const version = args.versionId
-      ? await ctx.db.get(args.versionId)
+      ? await getOwnedChild(portableCtx, "documentVersions", args.versionId, "documents", "documentId", args.societyId)
       : await latestVersion(ctx, args.documentId);
     if (version && version.documentId !== args.documentId) {
       throw new Error("Version does not belong to this document.");
@@ -858,6 +853,13 @@ export const recordSyncResult = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    await getOwned(portableCtx, "documents", args.documentId, args.societyId);
+    if (args.versionId) {
+      await getOwnedChild(portableCtx, "documentVersions", args.versionId, "documents", "documentId", args.societyId);
+    }
+    if (args.connectionId) await getOwned(portableCtx, "paperlessConnections", args.connectionId, args.societyId);
     const existingRows = await ctx.db
       .query("paperlessDocumentSyncs")
       .withIndex("by_document", (q) => q.eq("documentId", args.documentId))
@@ -912,6 +914,11 @@ export const recordSyncRefresh = mutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const candidate = await ctx.db.get(args.syncId);
+    if (!candidate || typeof candidate.societyId !== "string") throw new Error("paperlessDocumentSyncs not found.");
+    await requireSocietyMembership(portableCtx, candidate.societyId);
+    await getOwned(portableCtx, "paperlessDocumentSyncs", args.syncId, candidate.societyId);
     const now = new Date().toISOString();
     await ctx.db.patch(args.syncId, {
       status: args.status,
@@ -925,4 +932,3 @@ export const recordSyncRefresh = mutation({
     });
   },
 });
-

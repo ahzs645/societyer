@@ -12,9 +12,13 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireRolePortable } from "./access";
+import { getOwned, getOwnedChild, requireRolePortable, requireSocietyMembership } from "./access";
 
 export async function listForDocumentPortable(ctx: PortableQueryCtx, { documentId }: { documentId: string }) {
+  const document = await ctx.db.get(documentId, "documents");
+  if (!document || typeof document.societyId !== "string") throw new Error("documents not found.");
+  await requireSocietyMembership(ctx, document.societyId);
+  await getOwned(ctx, "documents", documentId, document.societyId);
   const rows = await ctx.db
     .query("documentVersions")
     .withIndex("by_document", (q) => q.eq("documentId", documentId))
@@ -23,6 +27,10 @@ export async function listForDocumentPortable(ctx: PortableQueryCtx, { documentI
 }
 
 export async function latestPortable(ctx: PortableQueryCtx, { documentId }: { documentId: string }) {
+  const document = await ctx.db.get(documentId, "documents");
+  if (!document || typeof document.societyId !== "string") throw new Error("documents not found.");
+  await requireSocietyMembership(ctx, document.societyId);
+  await getOwned(ctx, "documents", documentId, document.societyId);
   const rows = await ctx.db
     .query("documentVersions")
     .withIndex("by_document", (q) => q.eq("documentId", documentId))
@@ -31,20 +39,30 @@ export async function latestPortable(ctx: PortableQueryCtx, { documentId }: { do
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return ctx.db.get(id);
+  const version = await ctx.db.get(id, "documentVersions");
+  if (!version || typeof version.documentId !== "string") throw new Error("documentVersions not found.");
+  const document = await ctx.db.get(version.documentId, "documents");
+  if (!document || typeof document.societyId !== "string") throw new Error("documentVersions not found.");
+  await requireSocietyMembership(ctx, document.societyId);
+  return getOwnedChild(ctx, "documentVersions", id, "documents", "documentId", document.societyId);
 }
 
 export async function rollbackPortable(
   ctx: PortableMutationCtx,
   { versionId, actingUserId }: { versionId: string; actingUserId?: string },
 ) {
-  const v = await ctx.db.get(versionId);
-  if (!v) throw new Error("Version not found.");
+  const version = await ctx.db.get(versionId, "documentVersions");
+  if (!version || typeof version.documentId !== "string") throw new Error("documentVersions not found.");
+  const document = await ctx.db.get(version.documentId, "documents");
+  if (!document || typeof document.societyId !== "string") throw new Error("documentVersions not found.");
+  await requireSocietyMembership(ctx, document.societyId);
+  const v = await getOwnedChild(ctx, "documentVersions", versionId, "documents", "documentId", document.societyId);
   await requireRolePortable(ctx, {
     actingUserId,
-    societyId: String(v.societyId),
+    societyId: document.societyId,
     required: "Admin",
   });
+  await getOwned(ctx, "documents", String(v.documentId), document.societyId);
   const siblings = await ctx.db
     .query("documentVersions")
     .withIndex("by_document", (q) => q.eq("documentId", v.documentId))

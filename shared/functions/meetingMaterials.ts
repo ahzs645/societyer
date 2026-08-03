@@ -15,6 +15,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 
 // ----- portable access helpers (copied from convex/lib/access/*) ------------
 
@@ -167,9 +168,11 @@ async function documentAccessContextForActor(
   societyId: any,
   actingUserId?: any,
 ): Promise<AccessSubjectContext | null> {
-  if (!actingUserId) return null;
-  const user = await ctx.db.get(actingUserId);
-  if (!user || String(user.societyId) !== String(societyId)) return null;
+  const userId = await principalUserId(ctx, String(societyId));
+  if (actingUserId && String(actingUserId) !== userId) {
+    throw new Error("Authenticated actor does not match the current principal.");
+  }
+  const user = await getOwned(ctx, "users", userId, String(societyId));
 
   const committeeRows = await ctx.db
     .query("committeeMembers")
@@ -233,20 +236,21 @@ export async function listForMeetingPortable(
   ctx: PortableQueryCtx,
   { meetingId, actingUserId }: { meetingId: string; actingUserId?: string },
 ) {
-  const meeting = await ctx.db.get(meetingId);
-  if (!meeting) return [];
+  const candidate = await ctx.db.get(meetingId, "meetings");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("meetings not found.");
+  const societyId = candidate.societyId;
+  await requireSocietyMembership(ctx, societyId);
+  const meeting = await getOwned(ctx, "meetings", meetingId, societyId);
   const materials = await ctx.db
     .query("meetingMaterials")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
     .collect();
   const accessContext = await documentAccessContextForActor(ctx, meeting.societyId, actingUserId);
-  const visibleMaterials = accessContext
-    ? materials.filter((material) => canAccessMeetingMaterial(material, accessContext))
-    : materials;
+  const visibleMaterials = materials.filter((material) => canAccessMeetingMaterial(material, accessContext!));
   const rows = await Promise.all(
     visibleMaterials.map(async (material) => ({
       ...material,
-      document: await ctx.db.get(material.documentId),
+      document: await getOwned(ctx, "documents", String(material.documentId), societyId),
     })),
   );
   return rows.sort((a: any, b: any) => a.order - b.order || String(a.createdAtISO).localeCompare(String(b.createdAtISO)));
@@ -256,8 +260,11 @@ export async function packageForMeetingPortable(
   ctx: PortableQueryCtx,
   { meetingId, actingUserId }: { meetingId: string; actingUserId?: string },
 ) {
-  const meeting = await ctx.db.get(meetingId);
-  if (!meeting) return null;
+  const candidate = await ctx.db.get(meetingId, "meetings");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("meetings not found.");
+  const societyId = candidate.societyId;
+  await requireSocietyMembership(ctx, societyId);
+  const meeting = await getOwned(ctx, "meetings", meetingId, societyId);
 
   const [materials, minutes, tasks] = await Promise.all([
     ctx.db
@@ -274,13 +281,11 @@ export async function packageForMeetingPortable(
       .collect(),
   ]);
   const accessContext = await documentAccessContextForActor(ctx, meeting.societyId, actingUserId);
-  const visibleMaterials = accessContext
-    ? materials.filter((material) => canAccessMeetingMaterial(material, accessContext))
-    : materials;
+  const visibleMaterials = materials.filter((material) => canAccessMeetingMaterial(material, accessContext!));
 
   const materialRows = await Promise.all(
     visibleMaterials.map(async (material) => {
-      const document = await ctx.db.get(material.documentId);
+      const document = await getOwned(ctx, "documents", String(material.documentId), societyId);
       const downloadUrl = document?.storageId
         ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(document.storageId) })).url
         : null;
@@ -320,19 +325,18 @@ export async function listForSocietyPortable(
   ctx: PortableQueryCtx,
   { societyId, actingUserId }: { societyId: string; actingUserId?: string },
 ) {
+  await requireSocietyMembership(ctx, societyId);
   const materials = await ctx.db
     .query("meetingMaterials")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
   const accessContext = await documentAccessContextForActor(ctx, societyId, actingUserId);
-  const visibleMaterials = accessContext
-    ? materials.filter((material) => canAccessMeetingMaterial(material, accessContext))
-    : materials;
+  const visibleMaterials = materials.filter((material) => canAccessMeetingMaterial(material, accessContext!));
   const rows = await Promise.all(
     visibleMaterials.map(async (material) => ({
       ...material,
-      document: await ctx.db.get(material.documentId),
-      meeting: await ctx.db.get(material.meetingId),
+      document: await getOwned(ctx, "documents", String(material.documentId), societyId),
+      meeting: await getOwned(ctx, "meetings", String(material.meetingId), societyId),
     })),
   );
   return rows.sort((a, b) => String(b.meeting?.scheduledAt ?? "").localeCompare(String(a.meeting?.scheduledAt ?? "")));
@@ -341,12 +345,26 @@ export async function listForSocietyPortable(
 // ----- mutations ------------------------------------------------------------
 
 export async function attachPortable(ctx: PortableMutationCtx, args: any) {
+  await requireSocietyMembership(ctx, String(args.societyId));
   const [meeting, document] = await Promise.all([
-    ctx.db.get(args.meetingId),
-    ctx.db.get(args.documentId),
+    getOwned(ctx, "meetings", String(args.meetingId), String(args.societyId)),
+    getOwned(ctx, "documents", String(args.documentId), String(args.societyId)),
   ]);
-  if (!meeting || meeting.societyId !== args.societyId) throw new Error("Meeting not found for this society.");
-  if (!document || document.societyId !== args.societyId) throw new Error("Document not found for this society.");
+  if (args.id) await getOwned(ctx, "meetingMaterials", String(args.id), String(args.societyId));
+  for (const grant of normalizeAccessGrants(args.accessGrants)) {
+    const table = grant.subjectType === "user"
+      ? "users"
+      : grant.subjectType === "member"
+        ? "members"
+        : grant.subjectType === "director"
+          ? "directors"
+          : grant.subjectType === "committee"
+            ? "committees"
+            : null;
+    if (table && grant.subjectId) {
+      await getOwned(ctx, table, grant.subjectId, String(args.societyId));
+    }
+  }
 
   const existing = await ctx.db
     .query("meetingMaterials")
@@ -407,6 +425,10 @@ export async function setAvailabilityPortable(
     expiresAtISO?: string;
   },
 ) {
+  const candidate = await ctx.db.get(id, "meetingMaterials");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("meetingMaterials not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "meetingMaterials", id, candidate.societyId);
   await ctx.db.patch(id, {
     availabilityStatus,
     syncStatus: syncStatus ?? undefined,
@@ -415,5 +437,9 @@ export async function setAvailabilityPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
+  const candidate = await ctx.db.get(id, "meetingMaterials");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("meetingMaterials not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "meetingMaterials", id, candidate.societyId);
   await ctx.db.delete(id);
 }

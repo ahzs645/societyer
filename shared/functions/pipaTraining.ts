@@ -6,6 +6,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 
 export interface PipaTrainingCreateArgs {
   societyId: string;
@@ -31,6 +32,7 @@ export interface PipaTrainingPatch {
 }
 
 export async function pipaTrainingList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   return ctx.db
     .query("pipaTrainings")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -38,13 +40,22 @@ export async function pipaTrainingList(ctx: PortableQueryCtx, { societyId }: { s
 }
 
 export async function pipaTrainingCreate(ctx: PortableMutationCtx, args: PipaTrainingCreateArgs): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
   return ctx.db.insert("pipaTrainings", args);
 }
 
 export async function pipaTrainingUpdate(ctx: PortableMutationCtx, { id, patch }: { id: string; patch: PipaTrainingPatch }): Promise<void> {
+  const candidate = await ctx.db.get(id, "pipaTrainings");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("pipaTrainings not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "pipaTrainings", id, candidate.societyId);
   await ctx.db.patch(id, patch);
 }
 
 export async function pipaTrainingRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  const candidate = await ctx.db.get(id, "pipaTrainings");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("pipaTrainings not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "pipaTrainings", id, candidate.societyId);
   await ctx.db.delete(id);
 }

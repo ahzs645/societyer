@@ -10,6 +10,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import {
   nameAsOf,
   currentName,
@@ -29,6 +30,7 @@ function toNameRecord(row: Record<string, any>): NameRecord {
 
 /** Full name timeline (sorted by startISO, tie-broken by regPosn). */
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("societyNameHistory")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -39,6 +41,7 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 
 /** The legal name in effect on a specific ISO date. */
 export async function asOfPortable(ctx: PortableQueryCtx, { societyId, asOf }: { societyId: string; asOf: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("societyNameHistory")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -49,6 +52,7 @@ export async function asOfPortable(ctx: PortableQueryCtx, { societyId, asOf }: {
 
 /** Human-readable summary of the society's name-change history. */
 export async function narrativePortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
+  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("societyNameHistory")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -71,7 +75,9 @@ export async function upsertPortable(
   },
 ) {
   const { id, societyId, name, shortName, startISO, regPosn, nowISO } = args;
+  await requireSocietyMembership(ctx, societyId);
   if (id) {
+    await getOwned(ctx, "societyNameHistory", id, societyId);
     await ctx.db.patch(id, { name, shortName, startISO, regPosn });
     return id;
   }
@@ -87,6 +93,10 @@ export async function upsertPortable(
 
 /** Delete a name record. */
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
+  const candidate = await ctx.db.get(id, "societyNameHistory");
+  if (!candidate || typeof candidate.societyId !== "string") throw new Error("societyNameHistory not found.");
+  await requireSocietyMembership(ctx, candidate.societyId);
+  await getOwned(ctx, "societyNameHistory", id, candidate.societyId);
   await ctx.db.delete(id);
 }
 

@@ -11,6 +11,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { getOwned, requireSocietyMembership } from "./access";
 import {
   normalizeSearchName,
   matchByPrefix,
@@ -78,6 +79,12 @@ export async function upsertPortable(
     searchName,
   };
   if (args.id) {
+    const candidate = await ctx.db.get(args.id, "peopleDirectory");
+    if (!candidate) throw new Error("peopleDirectory not found.");
+    if (typeof candidate.societyId === "string") {
+      await requireSocietyMembership(ctx, candidate.societyId);
+      await getOwned(ctx, "peopleDirectory", args.id, candidate.societyId);
+    }
     // Patch only the fields actually supplied, so an edit from a partial form
     // (e.g. the directory search row, which has no gender/pronouns) never
     // clears stored fields it didn't include.
@@ -108,8 +115,12 @@ export async function addToSocietyPortable(
     nowISO: string;
   },
 ) {
-  const person = await ctx.db.get(args.directoryPersonId);
+  await requireSocietyMembership(ctx, args.societyId);
+  const person = await ctx.db.get(args.directoryPersonId, "peopleDirectory");
   if (!person) throw new Error("Directory person not found");
+  if (typeof person.societyId === "string") {
+    await getOwned(ctx, "peopleDirectory", args.directoryPersonId, args.societyId);
+  }
   return await ctx.db.insert("roleHolders", {
     societyId: args.societyId,
     roleType: args.roleType,
