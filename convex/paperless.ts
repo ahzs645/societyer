@@ -26,7 +26,7 @@ import {
   getSyncPortable,
   recordConnectionTestPortable,
 } from "../shared/functions/paperless";
-import { getOwned, getOwnedChild, requireSocietyMembership } from "../shared/functions/access";
+import { claimStorageId, getOwned, getOwnedChild, requireSocietyMembership } from "../shared/functions/access";
 
 async function authorizePaperlessAction(
   ctx: ActionCtx,
@@ -291,6 +291,7 @@ export const recordPulledSourceDocument = mutation({
     const portableCtx = await toPortableMutationCtx(ctx);
     await requireSocietyMembership(portableCtx, args.societyId);
     const document = await getOwned(portableCtx, "documents", args.documentId, args.societyId);
+    await claimStorageId(portableCtx, args.storageId, args.societyId);
     const existingContent = parseJsonObject(document.content);
     await ctx.db.patch(args.documentId, {
       storageId: args.storageId,

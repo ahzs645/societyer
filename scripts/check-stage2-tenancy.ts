@@ -73,6 +73,7 @@ function portableTableNames(entry: FunctionInventoryEntry): string[] {
   const names = new Set<string>([
     "activity",
     "societies",
+    "storageOwnership",
     "users",
   ]);
   for (const argument of entry.idArguments) {

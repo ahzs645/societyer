@@ -28,6 +28,7 @@ import { subscriptionTables } from "./tables/subscriptions";
 import { meetingTables } from "./tables/meetings";
 import { complianceTables } from "./tables/compliance";
 import { policyTables } from "./tables/policies";
+import { storageTables } from "./tables/storage";
 
 export default defineSchema({
   societies: defineTable({
@@ -443,6 +444,8 @@ export default defineSchema({
 
   // inventory — extracted to convex/tables/inventory.ts
   ...inventoryTables,
+
+  ...storageTables,
 
   // governance — extracted to convex/tables/governance.ts
   ...governanceTables,

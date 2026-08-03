@@ -12,7 +12,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
+import { claimStorageId, getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 
 function movementSign(type: string, direction: "from" | "to") {
   if (type === "reserve" || type === "unreserve") return 0;
@@ -401,6 +401,9 @@ export async function upsertItemPortable(
     await getOwned(ctx, "inventoryConnections", args.connectionId, args.societyId);
   }
   if (args.assetId) await getOwned(ctx, "assets", args.assetId, args.societyId);
+  if (args.imageStorageId) {
+    await claimStorageId(ctx, args.imageStorageId, args.societyId);
+  }
   const now = new Date().toISOString();
   const { id, clearImage, ...payload } = args;
   const row: any = {

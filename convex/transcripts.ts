@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { action, mutation, query } from "./lib/untypedServer";
-import { api } from "./_generated/api";
+import { action, internalMutation, mutation, query } from "./lib/untypedServer";
+import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { transcribeAudio } from "./providers/transcription";
 import { summarizeMinutes } from "./providers/llm";
@@ -15,6 +15,7 @@ import {
   saveTextPortable,
   importVttPortable,
 } from "../shared/functions/transcripts";
+import { claimStorageId, requireSocietyMembership } from "../shared/functions/access";
 
 const transcriptSegment = v.object({
   speaker: v.string(),
@@ -103,6 +104,20 @@ export const importVtt = mutation({
     importVttPortable(await toPortableMutationCtx(ctx), args) as Promise<Id<"transcripts">>,
 });
 
+export const _claimPipelineStorage = internalMutation({
+  args: {
+    societyId: v.id("societies"),
+    storageId: v.id("_storage"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireSocietyMembership(portableCtx, args.societyId);
+    await claimStorageId(portableCtx, args.storageId, args.societyId);
+    return null;
+  },
+});
+
 // End-to-end action: kick off transcription, then summarize into a minute
 // draft that's saved in the `minutes` table.
 export const runPipeline = action({
@@ -128,6 +143,13 @@ export const runPipeline = action({
       id: jobId,
       patch: { status: "running" },
     });
+
+    if (args.storageId) {
+      await ctx.runMutation(internal.transcripts._claimPipelineStorage, {
+        societyId: args.societyId,
+        storageId: args.storageId,
+      });
+    }
 
     try {
       const storageRef = args.storageId ?? args.storageKey;

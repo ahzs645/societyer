@@ -1,16 +1,54 @@
 // @ts-nocheck
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { assertNativeFileStorageEnabled } from "./providers/env";
 import { getUrlPortable } from "../shared/functions/files";
-import { toPortableQueryCtx } from "./lib/portable";
+import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { buildConvexCapabilities } from "./providers/capabilities";
+import {
+  claimStorageId,
+  requireAuthenticated,
+  requireOwnedRow,
+  requireSocietyMembership,
+} from "../shared/functions/access";
+
+async function requireUploadMembership(ctx: MutationCtx) {
+  const portableCtx = await toPortableMutationCtx(ctx);
+  const principal = requireAuthenticated(portableCtx);
+  const directUserId = principal.kind === "user" ? principal.userId : principal.actorUserId;
+  if (principal.societyId) {
+    await requireSocietyMembership(portableCtx, principal.societyId);
+    return;
+  }
+  if (directUserId) {
+    const user = await portableCtx.db.get(directUserId, "users");
+    if (typeof user?.societyId === "string") {
+      await requireSocietyMembership(portableCtx, user.societyId);
+      return;
+    }
+  }
+  if (principal.kind === "user") {
+    const memberships = await portableCtx.db
+      .query("users")
+      .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
+      .collect();
+    const active = memberships.find((membership) =>
+      typeof membership.societyId === "string" &&
+      (!membership.status || membership.status === "Active"));
+    if (active && typeof active.societyId === "string") {
+      await requireSocietyMembership(portableCtx, active.societyId);
+      return;
+    }
+  }
+  throw new Error("Society membership not found.");
+}
 
 export const generateUploadUrl = mutation({
   args: {},
   returns: v.any(),
   handler: async (ctx) => {
     assertNativeFileStorageEnabled();
+    await requireUploadMembership(ctx);
     return ctx.storage.generateUploadUrl();
   },
 });
@@ -23,7 +61,10 @@ export const generateUploadUrl = mutation({
 export const generateLogoUploadUrl = mutation({
   args: {},
   returns: v.any(),
-  handler: async (ctx) => ctx.storage.generateUploadUrl(),
+  handler: async (ctx) => {
+    await requireUploadMembership(ctx);
+    return ctx.storage.generateUploadUrl();
+  },
 });
 
 export const attachUploadedFileToDocument = mutation({
@@ -37,6 +78,9 @@ export const attachUploadedFileToDocument = mutation({
   returns: v.any(),
   handler: async (ctx, { documentId, storageId, fileName, mimeType, fileSizeBytes }) => {
     assertNativeFileStorageEnabled();
+    const portableCtx = await toPortableMutationCtx(ctx);
+    const document = await requireOwnedRow(portableCtx, "documents", documentId);
+    await claimStorageId(portableCtx, storageId, String(document.societyId));
     await ctx.db.patch(documentId, { storageId, fileName, mimeType, fileSizeBytes });
   },
 });

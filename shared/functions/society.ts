@@ -15,7 +15,7 @@ import type {
   PortablePrincipal,
   PortableQueryCtx,
 } from "../portable/ctx";
-import { requireAuthenticated, requireSocietyMembership } from "./access";
+import { claimStorageId, requireAuthenticated, requireSocietyMembership } from "./access";
 
 export type NewSocietyOwnerInput = {
   societyId: string;
@@ -165,6 +165,7 @@ async function setStorageField(ctx: PortableMutationCtx, societyId: string, fiel
   await requireSocietyMembership(ctx, societyId);
   const society = await ctx.db.get(societyId, "societies");
   if (!society) throw new Error("Society not found.");
+  if (storageId) await claimStorageId(ctx, storageId, societyId);
   const previous = society[field];
   if (previous && previous !== storageId) {
     try {
