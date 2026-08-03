@@ -316,7 +316,7 @@ const storageRuntime = new PortableRuntime({
   principalProvider: () => ({
     kind: "user",
     runtime: "test",
-    assurance: "verified-jwt",
+    assurance: "trusted-workspace",
     subject: "storage-owner-a",
     userId: "storage-owner-a",
     societyId: "storage-society-a",

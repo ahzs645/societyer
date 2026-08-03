@@ -14,10 +14,11 @@ import {
   makeCapabilities,
 } from "../shared/portable/index";
 import { syncMotionsForMinutes, resolveMinutesMotions, updatePortable } from "../shared/functions/minutes";
+import { portableTestPrincipal, seedPortableTestMembership } from "./portable-test-fixture";
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
-const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) });
+const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: portableTestPrincipal });
 const query = (name: string, handler: any) => rt().register(definePortableQuery({ name, handler })).runQuery(name, {});
 const mutate = (name: string, handler: any) => rt().register(definePortableMutation({ name, handler })).runMutation(name, {});
 
@@ -25,6 +26,7 @@ const mutate = (name: string, handler: any) => rt().register(definePortableMutat
 // minutes.motions beyond the initial seed value we never touch).
 const setup: any = await mutate("setup", async (ctx: any) => {
   const societyId = await ctx.db.insert("societies", { name: "Snapshot Co" });
+  await seedPortableTestMembership(ctx, societyId);
   const meetingId = await ctx.db.insert("meetings", { societyId, title: "Board Q1", status: "Complete", heldAt: "2026-03-01" });
   const minutesId = await ctx.db.insert("minutes", { societyId, meetingId, status: "Draft", attendees: [], heldAt: "2026-03-01" });
   await syncMotionsForMinutes(ctx, {

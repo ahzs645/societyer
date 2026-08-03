@@ -15,15 +15,17 @@ import {
 } from "../shared/portable/index";
 import { applyTemplatePortable } from "../shared/functions/meetings";
 import { resolveMinutesMotions } from "../shared/functions/minutes";
+import { portableTestPrincipal, seedPortableTestMembership } from "./portable-test-fixture";
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
-const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) });
+const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: portableTestPrincipal });
 const query = (name: string, handler: any) => rt().register(definePortableQuery({ name, handler })).runQuery(name, {});
 const mutate = (name: string, handler: any) => rt().register(definePortableMutation({ name, handler })).runMutation(name, {});
 
 const setup: any = await mutate("setup", async (ctx: any) => {
   const societyId = await ctx.db.insert("societies", { name: "Template Co" });
+  await seedPortableTestMembership(ctx, societyId);
   const meetingId = await ctx.db.insert("meetings", {
     societyId, type: "Board", title: "Board Q1", scheduledAt: "2026-05-01T18:00:00.000Z", status: "Scheduled",
   });

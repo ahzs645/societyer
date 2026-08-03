@@ -17,10 +17,11 @@ import {
 import { runPortable } from "../shared/functions/seed";
 import { syncMotionsForMinutes, resolveMinutesMotions } from "../shared/functions/minutes";
 import { syncForMeetingPortable as agendaSyncForMeeting } from "../shared/functions/agendas";
+import { portableTestPrincipal } from "./portable-test-fixture";
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
-const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) });
+const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: portableTestPrincipal });
 const query = (name: string, handler: any) => rt().register(definePortableQuery({ name, handler })).runQuery(name, {});
 const mutate = (name: string, handler: any) => rt().register(definePortableMutation({ name, handler })).runMutation(name, {});
 

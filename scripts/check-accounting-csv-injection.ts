@@ -15,10 +15,11 @@ import {
   makeCapabilities,
 } from "../shared/portable/index";
 import { exportCsvPortable } from "../shared/functions/accounting";
+import { portableTestPrincipal, seedPortableTestMembership } from "./portable-test-fixture";
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
-const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) });
+const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: portableTestPrincipal });
 const query = (name: string, handler: any) => rt().register(definePortableQuery({ name, handler })).runQuery(name, {});
 const mutate = (name: string, handler: any) => rt().register(definePortableMutation({ name, handler })).runMutation(name, {});
 
@@ -27,6 +28,7 @@ const PAYLOAD = "=SUM(A1:A9)"; // a formula that would execute if opened raw
 
 const setup: any = await mutate("setup", async (ctx: any) => {
   const societyId = await ctx.db.insert("societies", { name: "CSV Co" });
+  await seedPortableTestMembership(ctx, societyId);
   await ctx.db.insert("financialAccounts", {
     societyId,
     code: "1000",

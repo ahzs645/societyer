@@ -20,6 +20,10 @@ const created = await client.mutation("society:createWorkspace", {
   entityType: "society",
 });
 const societyId = created.societyId;
+const owner = (await client.query("users:list", { societyId })).find(
+  (user: { role?: string }) => user.role === "Owner",
+);
+if (!owner?._id) throw new Error("workspace fixture did not seed an Owner membership");
 
 // Create a director.
 const id = await client.mutation("legalOperations:upsertRoleHolder", {
@@ -51,7 +55,7 @@ history = await client.query("roleHolderHistory:revisionHistory", { roleHolderId
 expectEqual("history length after edit", history.length, 2);
 expectEqual("prior version closed", history[0].isCurrent, false);
 expectEqual("current version open", history[1].isCurrent, true);
-expectEqual("current edited by", history[1].enteredByUserId, "bob");
+expectEqual("current edited by authenticated owner", history[1].enteredByUserId, owner._id);
 const editedFields = new Set(history[1].changes.map((c: any) => c.field));
 if (!editedFields.has("officerTitle") || !editedFields.has("gender")) {
   throw new Error(`expected officerTitle + gender changes, got ${[...editedFields].join(", ")}`);

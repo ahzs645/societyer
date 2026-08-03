@@ -34,6 +34,7 @@ import { votingPowerPortable, summarizeVotingPower } from "../shared/functions/v
 import { searchPortable } from "../shared/functions/firm";
 import { getPortable as societyGetPortable, setLogoPortable, clearLogoPortable } from "../shared/functions/society";
 import { buildLocalCapabilities } from "../src/lib/localCapabilities";
+import { portableTestPrincipal, portableTestSeed } from "./portable-test-fixture";
 
 // --- deterministic injection so both engines produce byte-identical writes ----
 const fixedNow = () => 1000;
@@ -43,6 +44,7 @@ const fixedInsertId = () => "rightsHoldings_new";
 const societyId = "soc_riverside";
 function buildFixture(): Record<string, PortableDoc[]> {
   return {
+    ...portableTestSeed(societyId),
     rightsClasses: [
       { _id: "classA", societyId, className: "Class A", votesPerShare: 10 },
       { _id: "classB", societyId, className: "Class B", votingRights: "Non-Voting" },
@@ -76,7 +78,7 @@ function localEngine(): TransactionalDb {
 }
 
 function votingRuntime(db: TransactionalDb): PortableRuntime {
-  return new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) }).register(
+  return new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: portableTestPrincipal }).register(
     definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }),
   );
 }
@@ -127,7 +129,7 @@ const issueHolding = definePortableMutation({
 });
 
 async function holdingsAndClass(db: TransactionalDb) {
-  const ctxQ = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) });
+  const ctxQ = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: portableTestPrincipal });
   ctxQ.register(definePortableQuery({ name: "demo:dump", handler: async (c) => {
     const holdings = (await c.db.query("rightsHoldings").collect()).sort((a, b) => a._id.localeCompare(b._id));
     const classA = await c.db.get("classA");
@@ -140,8 +142,8 @@ async function holdingsAndClass(db: TransactionalDb) {
   // Successful commit: both engines reach the same state.
   const mem = memoryEngine();
   const loc = localEngine();
-  await new PortableRuntime({ db: mem, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) }).register(issueHolding).runMutation("demo:issueHolding", {});
-  await new PortableRuntime({ db: loc, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) }).register(issueHolding).runMutation("demo:issueHolding", {});
+  await new PortableRuntime({ db: mem, capabilities: makeCapabilities({}), principalProvider: portableTestPrincipal }).register(issueHolding).runMutation("demo:issueHolding", {});
+  await new PortableRuntime({ db: loc, capabilities: makeCapabilities({}), principalProvider: portableTestPrincipal }).register(issueHolding).runMutation("demo:issueHolding", {});
 
   const memState: any = await holdingsAndClass(mem);
   const locState: any = await holdingsAndClass(loc);
@@ -156,7 +158,7 @@ async function holdingsAndClass(db: TransactionalDb) {
   for (const [label, db] of [["MemoryDb", memoryEngine()], ["LocalStoreDb", localEngine()]] as const) {
     const before: any = await holdingsAndClass(db);
     await assert.rejects(
-      () => new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) }).register(issueHolding).runMutation("demo:issueHolding", { boom: true }),
+      () => new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: portableTestPrincipal }).register(issueHolding).runMutation("demo:issueHolding", { boom: true }),
       /injected failure/,
       `${label} should propagate the error`,
     );
@@ -229,6 +231,7 @@ async function holdingsAndClass(db: TransactionalDb) {
 // === 5. full-text search (withSearchIndex) parity + semantics =================
 {
   const searchFixture = (): Record<string, PortableDoc[]> => ({
+    ...portableTestSeed("soc_a"),
     societies: [{ _id: "soc_a", legalName: "Riverside Society", _creationTime: 1 }],
     deadlines: [
       { _id: "dl_1", societyId: "soc_a", title: "Annual Report Filing", _creationTime: 2 },
@@ -243,7 +246,12 @@ async function holdingsAndClass(db: TransactionalDb) {
       { _id: "p_2", fullName: "Bob Jones", _creationTime: 7 },
     ],
   });
-  const ctxFor = (db: TransactionalDb) => ({ db, capabilities: makeCapabilities({}), runQuery: async () => undefined });
+  const ctxFor = (db: TransactionalDb) => ({
+    db,
+    capabilities: makeCapabilities({}),
+    principal: portableTestPrincipal(),
+    runQuery: async () => undefined,
+  });
 
   const memCtx = ctxFor(new MemoryDb({ seed: searchFixture() }));
   const localCtx = ctxFor(new LocalStoreDb(new MemoryRowStore(searchFixture())));
@@ -279,9 +287,15 @@ async function holdingsAndClass(db: TransactionalDb) {
   // society:get resolves logo/letterhead through the capability — identical on
   // both local engines (inline logo resolves; an unresolvable id → undefined).
   const seed = (): Record<string, PortableDoc[]> => ({
+    ...portableTestSeed("soc_1"),
     societies: [{ _id: "soc_1", legalName: "Riverbend", logoStorageId: "data:image/png;base64,AAA", letterheadStorageId: "kg9_storage_id", _creationTime: 1 }],
   });
-  const ctxFor = (db: TransactionalDb) => ({ db, capabilities: caps, runQuery: async () => undefined });
+  const ctxFor = (db: TransactionalDb) => ({
+    db,
+    capabilities: caps,
+    principal: portableTestPrincipal(),
+    runQuery: async () => undefined,
+  });
   const fromMem = await societyGetPortable(ctxFor(new MemoryDb({ seed: seed() })) as any, {} as any);
   const fromLocal = await societyGetPortable(ctxFor(new LocalStoreDb(new MemoryRowStore(seed()))) as any, {} as any);
   assert.deepEqual(fromLocal, fromMem, "MemoryDb and LocalStoreDb diverged for society:get");
@@ -290,8 +304,19 @@ async function holdingsAndClass(db: TransactionalDb) {
 
   // Write side: setLogo persists the field (the old-blob delete is a capability
   // no-op locally) and clearLogo removes it — offline logo lifecycle, option A.
-  const wdb = new MemoryDb({ seed: { societies: [{ _id: "soc_w", legalName: "W", _creationTime: 1 }] } });
-  const wctx: any = { db: wdb, capabilities: caps, runQuery: async () => undefined, runMutation: async () => undefined };
+  const wdb = new MemoryDb({
+    seed: {
+      ...portableTestSeed("soc_w"),
+      societies: [{ _id: "soc_w", legalName: "W", _creationTime: 1 }],
+    },
+  });
+  const wctx: any = {
+    db: wdb,
+    capabilities: caps,
+    principal: portableTestPrincipal(),
+    runQuery: async () => undefined,
+    runMutation: async () => undefined,
+  };
   await wdb.transaction(() => setLogoPortable(wctx, { societyId: "soc_w", storageId: "data:image/png;base64,Z" }));
   assert.equal((await societyGetPortable(wctx, {} as any)).logoUrl, "data:image/png;base64,Z", "setLogo persists + read resolves it");
   await wdb.transaction(() => clearLogoPortable(wctx, { societyId: "soc_w" }));
