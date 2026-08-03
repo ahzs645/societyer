@@ -1,6 +1,6 @@
 import { createLocalWorkspaceAdapter } from "./localWorkspaceAdapter";
 
-const localWorkspaceAdapter = createLocalWorkspaceAdapter();
+const localWorkspaceAdapter = await createLocalWorkspaceAdapter();
 
 // Keep app startup pointed at a local adapter boundary. The adapter currently
 // delegates to the static/demo client, but Electron can replace this module

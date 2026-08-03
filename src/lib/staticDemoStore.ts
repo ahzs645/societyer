@@ -69,6 +69,10 @@ export class StaticDemoDexieStore {
     return this.rowsStore.transaction(mutate);
   }
 
+  transactionAsync<T>(mutate: () => T | Promise<T>): Promise<T> {
+    return this.rowsStore.transactionAsync(mutate);
+  }
+
   exportSnapshot() {
     return this.rowsStore.exportSnapshot();
   }

@@ -833,106 +833,109 @@ const MUT_NOT_HANDLED = Symbol("staticConvex.mutationNotHandled");
 
 function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "society:createWorkspace") {
-    const now = new Date().toISOString();
-    const societyId = staticLocalId("society", "workspace");
-    const workflowId = staticLocalId("workflow", "onboarding");
-    const jurisdictionCode = args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE;
-    const homeJurisdictionCode = args?.homeJurisdictionCode ?? jurisdictionCode;
-    const anniversaryDate = args?.anniversaryDate ?? args?.incorporationDate;
-    const homeRegistrationId = staticLocalId("organizationRegistration", "home");
-    const taskSeeds = staticWorkspaceOnboardingTaskSeeds(jurisdictionCode);
-    const taskIds = taskSeeds.map(({ key }) => staticLocalId("task", `onboarding_${key}`));
-    store?.upsertRow("societies", {
-      _id: societyId,
-      _creationTime: Date.now(),
-      name: args?.name,
-      incorporationNumber: args?.incorporationNumber,
-      incorporationDate: args?.incorporationDate,
-      fiscalYearEnd: args?.fiscalYearEnd,
-      jurisdictionCode,
-      homeJurisdictionCode,
-      primaryRegistrationId: homeRegistrationId,
-      anniversaryDate,
-      corporationKeyVaultItemId: args?.corporationKeyVaultItemId,
-      entityType: args?.entityType,
-      actFormedUnder: args?.actFormedUnder,
-      officialEmail: args?.officialEmail,
-      organizationStatus: args?.organizationStatus ?? "active",
-      registeredOfficeAddress: args?.registeredOfficeAddress,
-      mailingAddress: args?.mailingAddress,
-      purposes: args?.purposes,
-      privacyOfficerName: args?.privacyOfficerName,
-      privacyOfficerEmail: args?.privacyOfficerEmail,
-      isCharity: args?.isCharity === true,
-      isMemberFunded: args?.isMemberFunded === true,
-      distributing: args?.distributing === true,
-      disabledModules: [],
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-    // Auto-seed the entity's document packet catalog by kind (mirrors
-    // convex/society.createWorkspace), unless the caller opts out.
-    if (args?.seedDocumentPackets !== false) {
-      const isCorp = String(args?.entityType ?? "").includes("corporation") || String(args?.actFormedUnder ?? "").includes("corporations_act");
-      if (isCorp) staticSeedCorporationDocumentPackets(store, { societyId });
-      else staticSeedSocietyDocumentPackets(store, { societyId });
-    }
-    store?.upsertRow("organizationRegistrations", {
-      _id: homeRegistrationId,
-      _creationTime: Date.now(),
-      societyId,
-      registrationType: "home",
-      jurisdiction: homeJurisdictionCode,
-      homeJurisdiction: homeJurisdictionCode,
-      registrationNumber: args?.incorporationNumber,
-      registrationDate: args?.incorporationDate,
-      officialEmail: args?.officialEmail,
-      representativeIds: [],
-      status: "active",
-      notes: "Created automatically from the workspace home jurisdiction.",
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-    store?.upsertRow("workflows", {
-      _id: workflowId,
-      _creationTime: Date.now(),
-      societyId,
-      title: "Workspace onboarding",
-      status: "Active",
-      kind: "onboarding",
-      createdByUserId: args?.actingUserId,
-      createdAtISO: now,
-      updatedAtISO: now,
-    });
-    taskSeeds.forEach(({ title, description }, index) => {
-      store?.upsertRow("tasks", {
-        _id: taskIds[index],
-        _creationTime: Date.now() + index,
+    const createWorkspace = () => {
+      const now = new Date().toISOString();
+      const societyId = staticLocalId("society", "workspace");
+      const workflowId = staticLocalId("workflow", "onboarding");
+      const jurisdictionCode = args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE;
+      const homeJurisdictionCode = args?.homeJurisdictionCode ?? jurisdictionCode;
+      const anniversaryDate = args?.anniversaryDate ?? args?.incorporationDate;
+      const homeRegistrationId = staticLocalId("organizationRegistration", "home");
+      const taskSeeds = staticWorkspaceOnboardingTaskSeeds(jurisdictionCode);
+      const taskIds = taskSeeds.map(({ key }) => staticLocalId("task", `onboarding_${key}`));
+      store?.upsertRow("societies", {
+        _id: societyId,
+        _creationTime: Date.now(),
+        name: args?.name,
+        incorporationNumber: args?.incorporationNumber,
+        incorporationDate: args?.incorporationDate,
+        fiscalYearEnd: args?.fiscalYearEnd,
+        jurisdictionCode,
+        homeJurisdictionCode,
+        primaryRegistrationId: homeRegistrationId,
+        anniversaryDate,
+        corporationKeyVaultItemId: args?.corporationKeyVaultItemId,
+        entityType: args?.entityType,
+        actFormedUnder: args?.actFormedUnder,
+        officialEmail: args?.officialEmail,
+        organizationStatus: args?.organizationStatus ?? "active",
+        registeredOfficeAddress: args?.registeredOfficeAddress,
+        mailingAddress: args?.mailingAddress,
+        purposes: args?.purposes,
+        privacyOfficerName: args?.privacyOfficerName,
+        privacyOfficerEmail: args?.privacyOfficerEmail,
+        isCharity: args?.isCharity === true,
+        isMemberFunded: args?.isMemberFunded === true,
+        distributing: args?.distributing === true,
+        disabledModules: [],
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      // Auto-seed the entity's document packet catalog by kind (mirrors
+      // convex/society.createWorkspace), unless the caller opts out.
+      if (args?.seedDocumentPackets !== false) {
+        const isCorp = String(args?.entityType ?? "").includes("corporation") || String(args?.actFormedUnder ?? "").includes("corporations_act");
+        if (isCorp) staticSeedCorporationDocumentPackets(store, { societyId });
+        else staticSeedSocietyDocumentPackets(store, { societyId });
+      }
+      store?.upsertRow("organizationRegistrations", {
+        _id: homeRegistrationId,
+        _creationTime: Date.now(),
         societyId,
-        title,
-        description,
-        status: "Todo",
-        priority: index === 0 ? "High" : "Medium",
-        workflowId,
+        registrationType: "home",
+        jurisdiction: homeJurisdictionCode,
+        homeJurisdiction: homeJurisdictionCode,
+        registrationNumber: args?.incorporationNumber,
+        registrationDate: args?.incorporationDate,
+        officialEmail: args?.officialEmail,
+        representativeIds: [],
+        status: "active",
+        notes: "Created automatically from the workspace home jurisdiction.",
+        createdAtISO: now,
+        updatedAtISO: now,
+      });
+      store?.upsertRow("workflows", {
+        _id: workflowId,
+        _creationTime: Date.now(),
+        societyId,
+        title: "Workspace onboarding",
+        status: "Active",
+        kind: "onboarding",
         createdByUserId: args?.actingUserId,
         createdAtISO: now,
         updatedAtISO: now,
       });
-    });
-    store?.upsertRow("activity", {
-      _id: staticLocalId("activity", "workspace"),
-      _creationTime: Date.now(),
-      societyId,
-      actor: "Desktop user",
-      entityType: "society",
-      subjectId: societyId,
-      // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
-      entityId: societyId,
-      action: "workspace-created",
-      summary: `Created ${args?.name ?? "workspace"}`,
-      createdAtISO: now,
-    });
-    return { societyId, workflowId, taskIds };
+      taskSeeds.forEach(({ title, description }, index) => {
+        store?.upsertRow("tasks", {
+          _id: taskIds[index],
+          _creationTime: Date.now() + index,
+          societyId,
+          title,
+          description,
+          status: "Todo",
+          priority: index === 0 ? "High" : "Medium",
+          workflowId,
+          createdByUserId: args?.actingUserId,
+          createdAtISO: now,
+          updatedAtISO: now,
+        });
+      });
+      store?.upsertRow("activity", {
+        _id: staticLocalId("activity", "workspace"),
+        _creationTime: Date.now(),
+        societyId,
+        actor: "Desktop user",
+        entityType: "society",
+        subjectId: societyId,
+        // TODO(H0-flip): drop the legacy semantic mirror once all readers use subjectId indexes.
+        entityId: societyId,
+        action: "workspace-created",
+        summary: `Created ${args?.name ?? "workspace"}`,
+        createdAtISO: now,
+      });
+      return { societyId, workflowId, taskIds };
+    };
+    return store ? store.transactionAsync(createWorkspace) : createWorkspace();
   }
 
   {

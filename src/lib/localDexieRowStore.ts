@@ -106,6 +106,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   private listeners = new Set<() => void>();
   private transactionDepth = 0;
   private pendingNotify = false;
+  private atomicBatchOps: RowStoreOp[] | null = null;
 
   constructor(seed: LocalSeed, options?: { databaseName?: string; logLabel?: string }) {
     this.seed = cloneLocalSeed(seed);
@@ -153,7 +154,8 @@ export class LocalDexieRowStore implements LocalRowStore {
   upsertRow(table: string, row: any) {
     if (!row?._id) return null;
     this.cache[table] = upsertLocalRow(this.rows(table), row);
-    this.persistRow(table, row, "upsert");
+    if (this.atomicBatchOps) this.atomicBatchOps.push({ kind: "upsert", table, row: cloneLocalRow(row) });
+    else this.persistRow(table, row, "upsert");
     this.scheduleNotify();
     return row;
   }
@@ -171,6 +173,11 @@ export class LocalDexieRowStore implements LocalRowStore {
     if (!id) return null;
     const previous = this.getRow(table, id);
     this.cache[table] = this.rows(table).filter((row) => row._id !== id);
+    if (this.atomicBatchOps) {
+      this.atomicBatchOps.push({ kind: "delete", table, id });
+      this.scheduleNotify();
+      return previous;
+    }
     const deletedAtISO = new Date().toISOString();
     void this.db?.records.put(localDeletedRecord(table, {
       _id: id,
@@ -188,6 +195,29 @@ export class LocalDexieRowStore implements LocalRowStore {
     this.transactionDepth += 1;
     try {
       return mutate();
+    } finally {
+      this.transactionDepth -= 1;
+      if (this.transactionDepth === 0 && this.pendingNotify) this.notify();
+    }
+  }
+
+  async transactionAsync<T>(mutate: () => T | Promise<T>): Promise<T> {
+    if (this.atomicBatchOps) return await mutate();
+
+    const cacheBackup = cloneLocalSeed(this.cache);
+    this.atomicBatchOps = [];
+    this.transactionDepth += 1;
+    try {
+      const result = await mutate();
+      const ops = this.atomicBatchOps;
+      this.atomicBatchOps = null;
+      this.cache = cacheBackup;
+      await this.commitBatch(ops);
+      return result;
+    } catch (error) {
+      this.atomicBatchOps = null;
+      this.cache = cacheBackup;
+      throw error;
     } finally {
       this.transactionDepth -= 1;
       if (this.transactionDepth === 0 && this.pendingNotify) this.notify();
@@ -398,7 +428,11 @@ export class LocalDexieRowStore implements LocalRowStore {
     ]);
     const next = cloneLocalSeed(seed);
     for (const record of localRecords) {
-      if (!record?.table || !record?.value?._id || record.deletedAtISO) continue;
+      if (!record?.table || !record?.value?._id) continue;
+      if (record.deletedAtISO) {
+        next[record.table] = (next[record.table] ?? []).filter((row) => row._id !== record.value._id);
+        continue;
+      }
       next[record.table] = upsertLocalRow(next[record.table] ?? [], record.value);
     }
 

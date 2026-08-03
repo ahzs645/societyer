@@ -109,6 +109,7 @@ import { mobileSidebarMediaQuery } from "../lib/breakpoints";
 import { DEFAULT_PINNED_ROUTES } from "../lib/navConfig";
 import { useUIStore, type PinnedView } from "../lib/store";
 import { getDesktopBridge } from "../lib/desktopBridge";
+import { createDesktopBackup } from "../lib/desktopBackup";
 import { useToast } from "./Toast";
 
 import {
@@ -234,8 +235,7 @@ export function Layout() {
     });
     const cleanupMenu = bridge.onMenuAction((action) => {
       if (action === "create-backup") {
-        void bridge
-          .createBackup()
+        void createDesktopBackup()
           .then((result) => {
             toast.success("Backup created", {
               description: result.path,

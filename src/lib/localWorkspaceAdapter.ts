@@ -1,5 +1,6 @@
 import { StaticConvexClient } from "./staticConvex";
 import { DexieWorkspaceClient } from "./dexieWorkspaceClient";
+import { getDesktopBridge } from "./desktopBridge";
 import { getRuntimeDescriptor, type RuntimeDescriptor } from "./runtimeMode";
 import { isStaticDemoRuntime } from "./staticRuntime";
 
@@ -9,9 +10,9 @@ export type LocalWorkspaceAdapter = {
   reseed(): void;
 };
 
-export function createLocalWorkspaceAdapter(): LocalWorkspaceAdapter {
+export async function createLocalWorkspaceAdapter(): Promise<LocalWorkspaceAdapter> {
   const runtime = getRuntimeDescriptor();
-  const client = createLocalClient(runtime);
+  const client = await createLocalClient(runtime);
   return {
     client,
     runtime,
@@ -19,15 +20,41 @@ export function createLocalWorkspaceAdapter(): LocalWorkspaceAdapter {
   };
 }
 
-function createLocalClient(runtime: RuntimeDescriptor) {
+async function createLocalClient(runtime: RuntimeDescriptor) {
   if (runtime.mode === "electron-local" && !isStaticDemoRuntime()) {
-    const workspaceId = localWorkspaceId(runtime, "workspace");
+    const { databaseName, workspaceId } = await desktopWorkspaceDatabaseBinding(runtime);
     return new DexieWorkspaceClient({
-      databaseName: `societyer-local-${workspaceId}`,
+      databaseName,
       workspaceId,
     });
   }
   return new StaticConvexClient({ databaseName: localWorkspaceDatabaseName(runtime, "demo") });
+}
+
+async function desktopWorkspaceDatabaseBinding(runtime: RuntimeDescriptor) {
+  const legacyDatabaseName = localWorkspaceDatabaseName(runtime, "workspace");
+  const workspace = await getDesktopBridge()?.getWorkspaceInfo();
+  if (!workspace?.id) {
+    return {
+      databaseName: legacyDatabaseName,
+      workspaceId: localWorkspaceId(runtime, "workspace"),
+    };
+  }
+
+  const workspaceId = slugifyLocalWorkspaceKey(workspace.id);
+  const bindingKey = `societyer.desktop.legacyDexieWorkspace.${legacyDatabaseName}`;
+  const legacyWorkspaceId = localStorage.getItem(bindingKey);
+  if (!legacyWorkspaceId) {
+    localStorage.setItem(bindingKey, workspace.id);
+    return { databaseName: legacyDatabaseName, workspaceId };
+  }
+
+  return {
+    databaseName: legacyWorkspaceId === workspace.id
+      ? legacyDatabaseName
+      : `societyer-local-${workspaceId}`,
+    workspaceId,
+  };
 }
 
 function localWorkspaceDatabaseName(runtime: RuntimeDescriptor, seedMode: "demo" | "workspace") {
