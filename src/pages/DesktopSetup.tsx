@@ -21,19 +21,19 @@ import {
   type DesktopWorkspaceInfo,
 } from "../lib/desktopBridge";
 import {
-  persistLocalWorkspaceSnapshot,
   readLocalWorkspaceSnapshot,
   type LocalWorkspaceSnapshotReadResult,
 } from "../lib/documentStorage";
+import { createDesktopBackup } from "../lib/desktopBackup";
 import {
   downloadLocalWorkspaceSnapshot,
-  getLocalWorkspaceSnapshot,
   importLocalWorkspaceSnapshotFile,
 } from "../lib/localWorkspaceExport";
 import { getRuntimeDescriptor } from "../lib/runtimeMode";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 
 const CONNECTOR_ENDPOINT_KEY = "societyer.desktop.connectorEndpoint";
+const WORKSPACE_CHANGED_KEY = "societyer.desktop.workspaceChanged";
 const DEFAULT_CONNECTOR_ENDPOINT = "http://127.0.0.1:8890";
 type WorkspaceSnapshotOffer = Extract<LocalWorkspaceSnapshotReadResult, { status: "available" }>;
 
@@ -61,6 +61,23 @@ export function DesktopSetupPage() {
         if (!active) return;
         setWorkspace(info);
         setSetupComplete(setup.complete);
+        if (sessionStorage.getItem(WORKSPACE_CHANGED_KEY) !== "1") return;
+        sessionStorage.removeItem(WORKSPACE_CHANGED_KEY);
+        void readLocalWorkspaceSnapshot()
+          .then((snapshotResult) => {
+            if (!active) return;
+            if (snapshotResult.status === "available") {
+              setWorkspaceSnapshotOffer(snapshotResult);
+              setStatusMessage("Workspace folder updated.");
+            } else if (snapshotResult.status === "invalid") {
+              setStatusMessage(`Workspace folder updated, but ${snapshotResult.error}`);
+            } else {
+              setStatusMessage("Workspace folder updated.");
+            }
+          })
+          .catch((error) => {
+            if (active) setStatusMessage(error instanceof Error ? error.message : "Workspace snapshot could not be read.");
+          });
       })
       .catch((error) => {
         if (active) setStatusMessage(error instanceof Error ? error.message : "Desktop setup could not load.");
@@ -78,16 +95,8 @@ export function DesktopSetupPage() {
     try {
       const selected = await bridge.chooseWorkspaceDirectory();
       if (!selected) return;
-      setWorkspace(await bridge.getWorkspaceInfo());
-      const snapshotResult = await readLocalWorkspaceSnapshot();
-      if (snapshotResult.status === "available") {
-        setWorkspaceSnapshotOffer(snapshotResult);
-        setStatusMessage("Workspace folder updated.");
-      } else if (snapshotResult.status === "invalid") {
-        setStatusMessage(`Workspace folder updated, but ${snapshotResult.error}`);
-      } else {
-        setStatusMessage("Workspace folder updated.");
-      }
+      sessionStorage.setItem(WORKSPACE_CHANGED_KEY, "1");
+      window.location.reload();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Workspace selection failed.");
     } finally {
@@ -100,10 +109,7 @@ export function DesktopSetupPage() {
     if (!bridge) return;
     setBusy("backup");
     try {
-      const snapshot = getLocalWorkspaceSnapshot();
-      if (!snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
-      await persistLocalWorkspaceSnapshot(JSON.stringify(snapshot, null, 2));
-      const result = await bridge.createBackup();
+      const result = await createDesktopBackup();
       setBackupPath(result.path);
       setStatusMessage("Backup created.");
     } catch (error) {

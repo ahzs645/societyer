@@ -28,7 +28,11 @@ export type ReadDocumentVersionInput = {
 };
 
 function sanitizeSegment(value: string) {
-  return value.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160) || "item";
+  const sanitized = value.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160);
+  if (!sanitized || sanitized === "." || sanitized === "..") {
+    throw new Error("Document path contains an invalid segment.");
+  }
+  return sanitized;
 }
 
 function bufferFromBytes(value: WriteDocumentVersionInput["bytes"]) {
@@ -57,7 +61,7 @@ export async function writeDocumentVersion(
 ): Promise<DocumentVersionRef> {
   const { root } = await ensureWorkspace();
   const key = documentRelativePath(input);
-  const absolutePath = resolveWorkspaceKey(root, key);
+  const absolutePath = await resolveWorkspaceKey(root, key);
   const bytes = bufferFromBytes(input.bytes);
   await mkdir(path.dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, bytes);
@@ -73,12 +77,12 @@ export async function writeDocumentVersion(
 
 export async function readDocumentVersion(input: ReadDocumentVersionInput) {
   const { root } = await ensureWorkspace();
-  const filePath = resolveWorkspaceKey(root, input.key);
+  const filePath = await resolveWorkspaceKey(root, input.key);
   const bytes = await readFile(filePath);
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
 
 export async function openDocumentVersion(input: ReadDocumentVersionInput) {
   const { root } = await ensureWorkspace();
-  await openPath(resolveWorkspaceKey(root, input.key));
+  await openPath(await resolveWorkspaceKey(root, input.key));
 }

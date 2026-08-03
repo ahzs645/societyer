@@ -12,6 +12,7 @@ import {
   type DesktopUpdateStatus,
   type DesktopWorkspaceInfo,
 } from "../lib/desktopBridge";
+import { createDesktopBackup } from "../lib/desktopBackup";
 import { getRuntimeDescriptor } from "../lib/runtimeMode";
 import { useToast } from "./Toast";
 import { Badge } from "./ui";
@@ -124,7 +125,7 @@ export function DesktopDiagnosticsPanel() {
     if (!bridge) return;
     setBusy("backup");
     try {
-      const result = await bridge.createBackup();
+      const result = await createDesktopBackup();
       setBackupPath(result.path);
       toast.success("Backup created", { description: result.path });
     } catch (error) {

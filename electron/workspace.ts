@@ -1,6 +1,6 @@
 import { app } from "electron";
 import { randomUUID } from "node:crypto";
-import { cp, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { readDesktopConfig, updateDesktopConfig } from "./config.js";
@@ -83,13 +83,32 @@ export async function readOrCreateWorkspaceInfo(root: string): Promise<Workspace
   }
 }
 
-export function resolveWorkspaceKey(root: string, key: string) {
+export async function resolveWorkspaceKey(root: string, key: string) {
   const resolved = path.resolve(root, key);
   const rootResolved = path.resolve(root);
-  if (resolved !== rootResolved && !resolved.startsWith(`${rootResolved}${path.sep}`)) {
-    throw new Error("Workspace key is outside the workspace.");
+  assertPathContained(rootResolved, resolved);
+
+  const rootRealPath = await realpath(rootResolved);
+  const relativeSegments = path.relative(rootResolved, resolved).split(path.sep).filter(Boolean);
+  let currentPath = rootResolved;
+  for (const segment of relativeSegments) {
+    currentPath = path.join(currentPath, segment);
+    try {
+      const stats = await lstat(currentPath);
+      if (stats.isSymbolicLink()) throw new Error("Workspace key contains a symbolic link.");
+      assertPathContained(rootRealPath, await realpath(currentPath));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") break;
+      throw error;
+    }
   }
   return resolved;
+}
+
+function assertPathContained(root: string, target: string) {
+  if (target !== root && !target.startsWith(`${root}${path.sep}`)) {
+    throw new Error("Workspace key is outside the workspace.");
+  }
 }
 
 export async function persistLocalWorkspaceSnapshot(serializedSnapshot: string) {
@@ -112,8 +131,8 @@ export async function persistLocalWorkspaceSnapshot(serializedSnapshot: string) 
   }
 
   const { root } = await ensureWorkspace();
-  const snapshotPath = resolveWorkspaceKey(root, LOCAL_WORKSPACE_SNAPSHOT_FILE);
-  const temporaryPath = resolveWorkspaceKey(root, `.${LOCAL_WORKSPACE_SNAPSHOT_FILE}.${randomUUID()}.tmp`);
+  const snapshotPath = await resolveWorkspaceKey(root, LOCAL_WORKSPACE_SNAPSHOT_FILE);
+  const temporaryPath = await resolveWorkspaceKey(root, `.${LOCAL_WORKSPACE_SNAPSHOT_FILE}.${randomUUID()}.tmp`);
   try {
     await writeFile(temporaryPath, serializedSnapshot, "utf8");
     await rename(temporaryPath, snapshotPath);
@@ -126,7 +145,7 @@ export async function persistLocalWorkspaceSnapshot(serializedSnapshot: string) 
 
 export async function readLocalWorkspaceSnapshot(): Promise<LocalWorkspaceSnapshotReadResult> {
   const { root } = await ensureWorkspace();
-  const snapshotPath = resolveWorkspaceKey(root, LOCAL_WORKSPACE_SNAPSHOT_FILE);
+  const snapshotPath = await resolveWorkspaceKey(root, LOCAL_WORKSPACE_SNAPSHOT_FILE);
   let serializedSnapshot: string;
   try {
     serializedSnapshot = await readFile(snapshotPath, "utf8");
@@ -195,7 +214,7 @@ export async function openWorkspaceFolder() {
 export async function openBackupFolder(backupPath?: string) {
   const { root } = await ensureWorkspace();
   const backupRoot = path.join(root, "backups");
-  const target = backupPath ? resolveWorkspaceKey(root, backupPath) : backupRoot;
+  const target = backupPath ? await resolveWorkspaceKey(root, backupPath) : backupRoot;
   const targetResolved = path.resolve(target);
   const backupRootResolved = path.resolve(backupRoot);
   if (targetResolved !== backupRootResolved && !targetResolved.startsWith(`${backupRootResolved}${path.sep}`)) {
