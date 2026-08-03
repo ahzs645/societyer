@@ -51,6 +51,7 @@
     "test:smoke": "npx playwright test",
     "test:api-contract": "tsx scripts/check-api-contract.ts",
     "test:static-parity": "tsx scripts/check-static-convex-parity.ts",
+    "test:stage2-tenancy": "tsx scripts/check-stage2-tenancy.ts",
     "test:accounting-core": "tsx scripts/check-accounting-core.ts",
     "test:accounting-csv-injection": "tsx scripts/check-accounting-csv-injection.ts",
     "test:treasury-budget-variance": "tsx scripts/check-treasury-budget-variance.ts",
