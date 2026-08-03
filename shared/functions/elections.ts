@@ -8,7 +8,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireRolePortable, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, principalUserId, requireRolePortable, requireSocietyMembership } from "./access";
 import { getActiveBylawRuleSet } from "./bylawRules";
 
 // Portable, dep-free copy of the role hierarchy from `convex/users.ts`.
@@ -65,9 +65,8 @@ export async function getPortable(
   ctx: PortableQueryCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const election = await getOwned(ctx, "elections", id, societyId);
+  const election = await requireOwnedRow(ctx, "elections", id);
+  const societyId = String(election.societyId);
   const [questions, eligible, ballots, audit] = await Promise.all([
     ctx.db
       .query("electionQuestions")
@@ -110,9 +109,8 @@ export async function listNominationsPortable(
   ctx: PortableQueryCtx,
   { electionId, actingUserId }: { electionId: string; actingUserId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const election = await getOwned(ctx, "elections", electionId, societyId);
+  const election = await requireOwnedRow(ctx, "elections", electionId);
+  const societyId = String(election.societyId);
   const actor = await requireSocietyMembership(ctx, societyId);
   const canManage =
     !!actor &&
@@ -165,9 +163,8 @@ export async function submitNominationPortable(
     actingUserId?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const election = await getOwned(ctx, "elections", args.electionId, societyId);
+  const election = await requireOwnedRow(ctx, "elections", args.electionId);
+  const societyId = String(election.societyId);
   const actor = await requireSocietyMembership(ctx, societyId);
   if (!actor?.memberId) throw new Error("Only confirmed members can submit nominations.");
   await getOwned(ctx, "members", actor.memberId, societyId);
@@ -212,9 +209,8 @@ export async function castBallotPortable(
     actingUserId?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const election = await getOwned(ctx, "elections", electionId, societyId);
+  const election = await requireOwnedRow(ctx, "elections", electionId);
+  const societyId = String(election.societyId);
   if (election.status !== "Open") {
     throw new Error("Election is not open for voting.");
   }
@@ -293,9 +289,8 @@ export async function tallyPortable(
   ctx: PortableQueryCtx,
   { electionId, actingUserId }: { electionId: string; actingUserId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const election = await getOwned(ctx, "elections", electionId, societyId);
+  const election = await requireOwnedRow(ctx, "elections", electionId);
+  const societyId = String(election.societyId);
   const actor = await requireSocietyMembership(ctx, societyId);
   const canSeeLiveResults =
     !!actor &&
@@ -404,9 +399,8 @@ export async function updateSettingsPortable(
     actingUserId?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const election = await getOwned(ctx, "elections", args.electionId, societyId);
+  const election = await requireOwnedRow(ctx, "elections", args.electionId);
+  const societyId = String(election.societyId);
   const { user } = await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId,
@@ -446,9 +440,8 @@ export async function addQuestionPortable(
     actingUserId?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const election = await getOwned(ctx, "elections", args.electionId, societyId);
+  const election = await requireOwnedRow(ctx, "elections", args.electionId);
+  const societyId = String(election.societyId);
   const { user } = await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId,
@@ -484,9 +477,8 @@ export async function reviewNominationPortable(
   ctx: PortableMutationCtx,
   { id, status, actingUserId }: { id: string; status: string; actingUserId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const nomination = await getOwned(ctx, "electionNominations", id, societyId);
+  const nomination = await requireOwnedRow(ctx, "electionNominations", id);
+  const societyId = String(nomination.societyId);
   const { user } = await requireRolePortable(ctx, {
     actingUserId,
     societyId,
@@ -510,9 +502,8 @@ export async function publishNominationToBallotPortable(
   ctx: PortableMutationCtx,
   { id, questionId, actingUserId }: { id: string; questionId: string; actingUserId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const nomination = await getOwned(ctx, "electionNominations", id, societyId);
+  const nomination = await requireOwnedRow(ctx, "electionNominations", id);
+  const societyId = String(nomination.societyId);
   const question = await getOwned(ctx, "electionQuestions", questionId, societyId);
   if (!question || question.electionId !== nomination.electionId) {
     throw new Error("Election question not found.");
@@ -557,9 +548,8 @@ export async function snapshotEligibleVotersPortable(
   ctx: PortableMutationCtx,
   { electionId, actingUserId }: { electionId: string; actingUserId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const election = await getOwned(ctx, "elections", electionId, societyId);
+  const election = await requireOwnedRow(ctx, "elections", electionId);
+  const societyId = String(election.societyId);
   const { user } = await requireRolePortable(ctx, {
     actingUserId,
     societyId,
@@ -626,9 +616,8 @@ export async function closePortable(
   ctx: PortableMutationCtx,
   { electionId, actingUserId }: { electionId: string; actingUserId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const election = await getOwned(ctx, "elections", electionId, societyId);
+  const election = await requireOwnedRow(ctx, "elections", electionId);
+  const societyId = String(election.societyId);
   const { user } = await requireRolePortable(ctx, {
     actingUserId,
     societyId,
@@ -655,9 +644,8 @@ export async function tallyElectionPortable(
     actingUserId?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const election = await getOwned(ctx, "elections", electionId, societyId);
+  const election = await requireOwnedRow(ctx, "elections", electionId);
+  const societyId = String(election.societyId);
   const { user } = await requireRolePortable(ctx, {
     actingUserId,
     societyId,

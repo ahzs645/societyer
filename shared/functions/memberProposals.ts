@@ -11,7 +11,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 interface ResolvedBylawRules {
   status?: string;
@@ -150,9 +150,8 @@ export async function memberProposalUpdate(
   ctx: PortableMutationCtx,
   { id, patch }: { id: string; patch: MemberProposalPatch },
 ): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const before = await getOwned(ctx, "memberProposals", id, societyId);
+  const before = await requireOwnedRow(ctx, "memberProposals", id);
+  const societyId = String(before.societyId);
   if (patch.meetingId) await getOwned(ctx, "meetings", patch.meetingId, societyId);
   await ctx.db.patch(id, patch);
 
@@ -176,8 +175,6 @@ export async function memberProposalUpdate(
 }
 
 export async function memberProposalRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "memberProposals", id, societyId);
+  await requireOwnedRow(ctx, "memberProposals", id);
   await ctx.db.delete(id);
 }

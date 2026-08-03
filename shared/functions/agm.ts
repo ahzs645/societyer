@@ -9,13 +9,10 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 export async function runForMeeting(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "meetings", meetingId, societyId);
+  await requireOwnedRow(ctx, "meetings", meetingId);
   const rows = await ctx.db
     .query("agmRuns")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -58,10 +55,8 @@ export async function agmMarkStep(
     };
   },
 ): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "agmRuns", id, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "agmRuns", id);
+  const societyId = String(authorizedRow.societyId);
   if (patch?.annualReportFilingId) {
     await getOwned(ctx, "filings", patch.annualReportFilingId, societyId);
   }
@@ -104,10 +99,7 @@ export async function logNoticeDelivery(
 }
 
 export async function noticeDeliveries(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "meetings", meetingId, societyId);
+  await requireOwnedRow(ctx, "meetings", meetingId);
   return ctx.db
     .query("noticeDeliveries")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))

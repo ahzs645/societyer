@@ -12,7 +12,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 
 function movementSign(type: string, direction: "from" | "to") {
   if (type === "reserve" || type === "unreserve") return 0;
@@ -353,10 +353,7 @@ export async function upsertConnectionPortable(
 }
 
 export async function deleteConnectionPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "inventoryConnections", id, societyId);
+  await requireOwnedRow(ctx, "inventoryConnections", id);
   // Detach any items/locations/movements that referenced this connection so
   // their imported records remain but stop pointing at a deleted library.
   const items = await ctx.db
@@ -479,10 +476,7 @@ export async function upsertLocationPortable(
 }
 
 export async function deleteLocationPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "inventoryLocations", id, societyId);
+  await requireOwnedRow(ctx, "inventoryLocations", id);
   // Refuse to delete a location that still holds stock — that would orphan
   // the balance and break the "where is this item" answer.
   const balances = await ctx.db
@@ -506,10 +500,7 @@ export async function deleteLocationPortable(ctx: PortableMutationCtx, { id }: {
 }
 
 export async function deleteItemPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "inventoryItems", id, societyId);
+  await requireOwnedRow(ctx, "inventoryItems", id);
   const movements = await ctx.db
     .query("stockMovements")
     .withIndex("by_item_date", (q: any) => q.eq("inventoryItemId", id))
@@ -570,10 +561,7 @@ export async function upsertLotPortable(
 }
 
 export async function deleteLotPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "inventoryLots", id, societyId);
+  await requireOwnedRow(ctx, "inventoryLots", id);
   const movements = await ctx.db
     .query("stockMovements")
     .withIndex("by_lot", (q: any) => q.eq("inventoryLotId", id))
@@ -669,10 +657,8 @@ export async function addCountLinePortable(
     notes?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const count = await getOwned(ctx, "inventoryCounts", args.inventoryCountId, societyId);
+  const count = await requireOwnedRow(ctx, "inventoryCounts", args.inventoryCountId);
+  const societyId = String(count.societyId);
   await getOwned(ctx, "inventoryItems", args.inventoryItemId, societyId);
   await getOwned(ctx, "inventoryLocations", args.locationId, societyId);
   if (args.inventoryLotId) {
@@ -706,10 +692,8 @@ export async function setCountLinePortable(
     notes?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const line = await getOwned(ctx, "inventoryCountLines", args.id, societyId);
+  const line = await requireOwnedRow(ctx, "inventoryCountLines", args.id);
+  const societyId = String(line.societyId);
   await getOwned(ctx, "inventoryCounts", line.inventoryCountId, societyId);
   const now = new Date().toISOString();
   const countedQuantity = args.countedQuantity ?? line.countedQuantity;
@@ -728,10 +712,7 @@ export async function voidCountPortable(
   ctx: PortableMutationCtx,
   { inventoryCountId }: { inventoryCountId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "inventoryCounts", inventoryCountId, societyId);
+  await requireOwnedRow(ctx, "inventoryCounts", inventoryCountId);
   const now = new Date().toISOString();
   await ctx.db.patch(inventoryCountId, { status: "void", completedAtISO: now, updatedAtISO: now });
   return { voided: true };
@@ -802,10 +783,7 @@ export async function setCandidateStatusPortable(
   ctx: PortableMutationCtx,
   { candidateId, status }: { candidateId: string; status: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "inventoryCandidates", candidateId, societyId);
+  await requireOwnedRow(ctx, "inventoryCandidates", candidateId);
   await ctx.db.patch(candidateId, { status, updatedAtISO: new Date().toISOString() });
   return candidateId;
 }
@@ -824,10 +802,8 @@ export async function promoteCandidateToMovementPortable(
     movementType?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const candidate = await getOwned(ctx, "inventoryCandidates", args.candidateId, societyId);
+  const candidate = await requireOwnedRow(ctx, "inventoryCandidates", args.candidateId);
+  const societyId = String(candidate.societyId);
   if (candidate.status === "posted") throw new Error("Candidate has already been posted.");
 
   const itemId = args.inventoryItemId ?? candidate.suggestedInventoryItemId;
@@ -955,10 +931,7 @@ export async function linkReceiptPortable(
 }
 
 export async function unlinkReceiptPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "assetReceiptLinks", id, societyId);
+  await requireOwnedRow(ctx, "assetReceiptLinks", id);
   await ctx.db.delete(id);
   return { deleted: true };
 }
@@ -1052,10 +1025,8 @@ export async function postCountVarianceAdjustmentsPortable(
   ctx: PortableMutationCtx,
   { inventoryCountId, reason }: { inventoryCountId: string; reason?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const count = await getOwned(ctx, "inventoryCounts", inventoryCountId, societyId);
+  const count = await requireOwnedRow(ctx, "inventoryCounts", inventoryCountId);
+  const societyId = String(count.societyId);
   const now = new Date().toISOString();
   const lines = await ctx.db
     .query("inventoryCountLines")
@@ -1262,10 +1233,7 @@ export async function createItemFromAssetPortable(
   ctx: PortableMutationCtx,
   { assetId }: { assetId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const asset = await getOwned(ctx, "assets", assetId, societyId);
+  const asset = await requireOwnedRow(ctx, "assets", assetId);
   const existing = await ctx.db
     .query("inventoryItems")
     .withIndex("by_asset", (q: any) => q.eq("assetId", assetId))
@@ -1303,10 +1271,8 @@ export async function recordAssetStockIntakePortable(
   },
 ) {
   if (args.quantityAdded <= 0) return null;
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const asset = await getOwned(ctx, "assets", args.assetId, societyId);
+  const asset = await requireOwnedRow(ctx, "assets", args.assetId);
+  const societyId = String(asset.societyId);
   await getOwned(ctx, "assetEvents", args.assetEventId, societyId);
   if (asset.purchaseTransactionId) {
     await getOwned(ctx, "financialTransactions", asset.purchaseTransactionId, societyId);

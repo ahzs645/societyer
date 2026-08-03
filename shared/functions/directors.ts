@@ -6,7 +6,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 export interface DirectorCreateArgs {
   societyId: string;
@@ -55,18 +55,13 @@ export async function directorCreate(ctx: PortableMutationCtx, args: DirectorCre
 }
 
 export async function directorUpdate(ctx: PortableMutationCtx, { id, patch }: { id: string; patch: DirectorPatch }): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "directors", id, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "directors", id);
+  const societyId = String(authorizedRow.societyId);
   if (patch.memberId) await getOwned(ctx, "members", patch.memberId, societyId);
   await ctx.db.patch(id, patch);
 }
 
 export async function directorRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "directors", id, societyId);
+  await requireOwnedRow(ctx, "directors", id);
   await ctx.db.delete(id);
 }

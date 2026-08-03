@@ -6,7 +6,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 export interface ConflictCreateArgs {
   societyId: string;
@@ -33,9 +33,7 @@ export async function conflictsListPortable(ctx: PortableQueryCtx, { societyId }
 }
 
 export async function conflictsForMeetingPortable(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "meetings", meetingId, societyId);
+  await requireOwnedRow(ctx, "meetings", meetingId);
   return ctx.db
     .query("conflicts")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -50,15 +48,11 @@ export async function conflictsCreatePortable(ctx: PortableMutationCtx, args: Co
 }
 
 export async function conflictsResolvePortable(ctx: PortableMutationCtx, { id, resolvedAt }: { id: string; resolvedAt: string }): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "conflicts", id, societyId);
+  await requireOwnedRow(ctx, "conflicts", id);
   await ctx.db.patch(id, { resolvedAt });
 }
 
 export async function conflictsRemovePortable(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "conflicts", id, societyId);
+  await requireOwnedRow(ctx, "conflicts", id);
   await ctx.db.delete(id);
 }

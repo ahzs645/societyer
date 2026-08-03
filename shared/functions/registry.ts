@@ -1207,7 +1207,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "legalOperations:seedCorporationDocumentPackets", handler: legalDocumentsFns.seedCorporationDocumentPacketsPortable }),
   definePortableMutation({ name: "legalOperations:seedSocietyDocumentPackets", handler: legalDocumentsFns.seedSocietyDocumentPacketsPortable }),
   definePortableMutation({ name: "legalOperations:generateDocumentFromCatalog", handler: legalDocumentsFns.generateDocumentFromCatalogPortable }),
-  definePortableMutation({ name: "legalOperations:seedDocumentPacketsForEntity", handler: legalDocumentsFns.seedDocumentPacketsForEntityPortable }),
+  definePortableMutation({ name: "legalOperations:seedDocumentPacketsForEntity", handler: legalDocumentsFns.seedDocumentPacketsForEntityRegisteredPortable }),
   definePortableMutation({ name: "legalOperations:stageCorporationDocumentPacket", handler: legalDocumentsFns.stageCorporationDocumentPacketPortable }),
   definePortableMutation({ name: "legalOperations:stageShareIssuancePacket", handler: legalDocumentsFns.stageShareIssuancePacketPortable }),
   definePortableMutation({ name: "legalOperations:stageShareSplitPacket", handler: legalDocumentsFns.stageShareSplitPacketPortable }),

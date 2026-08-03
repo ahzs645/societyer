@@ -13,7 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
 
 /* ----------------------- Inlined bylaw / quorum helpers ----------------------- */
@@ -430,9 +430,7 @@ export async function listPortable(
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  return getOwned(ctx, "meetings", id, societyId);
+  return requireOwnedRow(ctx, "meetings", id);
 }
 
 export async function createPortable(
@@ -699,9 +697,8 @@ export async function applyTemplatePortable(
     replace?: boolean;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const meeting = await getOwned(ctx, "meetings", meetingId, societyId);
+  const meeting = await requireOwnedRow(ctx, "meetings", meetingId);
+  const societyId = String(meeting.societyId);
   const template = await getOwned(ctx, "meetingTemplates", meetingTemplateId, societyId);
   if (template.societyId !== meeting.societyId) {
     throw new Error("Meeting template belongs to a different society.");
@@ -873,9 +870,8 @@ export async function updatePortable(
     };
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "meetings", id, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "meetings", id);
+  const societyId = String(authorizedRow.societyId);
   await Promise.all([
     patch.committeeId ? getOwned(ctx, "committees", patch.committeeId, societyId) : Promise.resolve(),
     patch.bylawRuleSetId ? getOwned(ctx, "bylawRuleSets", patch.bylawRuleSetId, societyId) : Promise.resolve(),
@@ -922,9 +918,8 @@ export async function markSourceReviewPortable(
     actingUserId?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const meeting = await getOwned(ctx, "meetings", id, societyId);
+  const meeting = await requireOwnedRow(ctx, "meetings", id);
+  const societyId = String(meeting.societyId);
   const actor = await requireSocietyMembership(ctx, societyId);
   if (actingUserId && actingUserId !== actor._id) {
     throw new Error("Authenticated actor does not match the current principal.");
@@ -975,9 +970,8 @@ export async function setPackageReviewStatusPortable(
     actingUserId?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const meeting = await getOwned(ctx, "meetings", id, societyId);
+  const meeting = await requireOwnedRow(ctx, "meetings", id);
+  const societyId = String(meeting.societyId);
   const actor = await requireSocietyMembership(ctx, societyId);
   if (actingUserId && actingUserId !== actor._id) {
     throw new Error("Authenticated actor does not match the current principal.");
@@ -1006,9 +1000,7 @@ export async function setPackageReviewStatusPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "meetings", id, societyId);
+  await requireOwnedRow(ctx, "meetings", id);
   // Cascade to the scaffolding created alongside the meeting so deletes don't
   // leave orphan minutes/agendas that render as broken links elsewhere.
   const agendas = await ctx.db
@@ -1032,9 +1024,7 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
 }
 
 export async function backfillQuorumSnapshotPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const meeting = await getOwned(ctx, "meetings", id, societyId);
+  const meeting = await requireOwnedRow(ctx, "meetings", id);
   const snapshot = await buildQuorumSnapshot(ctx, {
     societyId: String(meeting.societyId),
     meetingDateISO: meeting.scheduledAt,

@@ -12,15 +12,13 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 export async function listForObjectPortable(
   ctx: PortableQueryCtx,
   { objectMetadataId }: { objectMetadataId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "objectMetadata", objectMetadataId, societyId);
+  await requireOwnedRow(ctx, "objectMetadata", objectMetadataId);
   const rows = await ctx.db
     .query("fieldMetadata")
     .withIndex("by_object", (q) => q.eq("objectMetadataId", objectMetadataId))
@@ -41,18 +39,14 @@ export async function listForSocietyPortable(
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  return getOwned(ctx, "fieldMetadata", id, societyId);
+  return requireOwnedRow(ctx, "fieldMetadata", id);
 }
 
 export async function getByNamePortable(
   ctx: PortableQueryCtx,
   { objectMetadataId, name }: { objectMetadataId: string; name: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "objectMetadata", objectMetadataId, societyId);
+  await requireOwnedRow(ctx, "objectMetadata", objectMetadataId);
   return ctx.db
     .query("fieldMetadata")
     .withIndex("by_object_name", (q) =>
@@ -133,9 +127,7 @@ export async function updatePortable(
     };
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const existing = await getOwned(ctx, "fieldMetadata", id, societyId);
+  const existing = await requireOwnedRow(ctx, "fieldMetadata", id);
   if (existing.isSystem && patch.fieldType && patch.fieldType !== existing.fieldType) {
     throw new Error("Cannot change the field type of a system field.");
   }
@@ -143,9 +135,7 @@ export async function updatePortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const field = await getOwned(ctx, "fieldMetadata", id, societyId);
+  const field = await requireOwnedRow(ctx, "fieldMetadata", id);
   if (field.isSystem) {
     throw new Error("Cannot delete a system field.");
   }

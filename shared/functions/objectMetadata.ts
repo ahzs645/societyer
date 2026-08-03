@@ -13,7 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 function firstStableMatch<T extends { _id: unknown }>(rows: T[]): T | null {
   return rows.slice().sort((a, b) => String(a._id).localeCompare(String(b._id)))[0] ?? null;
@@ -28,10 +28,7 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  return getOwned(ctx, "objectMetadata", id, societyId);
+  return requireOwnedRow(ctx, "objectMetadata", id);
 }
 
 export async function getByNameSingularPortable(
@@ -70,10 +67,7 @@ export async function getWithFieldsPortable(
   ctx: PortableQueryCtx,
   { objectMetadataId }: { objectMetadataId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const object = await getOwned(ctx, "objectMetadata", objectMetadataId, societyId);
+  const object = await requireOwnedRow(ctx, "objectMetadata", objectMetadataId);
   const fields = await ctx.db
     .query("fieldMetadata")
     .withIndex("by_object", (q) => q.eq("objectMetadataId", objectMetadataId))
@@ -242,18 +236,12 @@ export async function updatePortable(
     };
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "objectMetadata", id, societyId);
+  await requireOwnedRow(ctx, "objectMetadata", id);
   await ctx.db.patch(id, { ...patch, updatedAtISO: new Date().toISOString() });
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const object = await getOwned(ctx, "objectMetadata", id, societyId);
+  const object = await requireOwnedRow(ctx, "objectMetadata", id);
   if (object.isSystem) {
     throw new Error("Cannot delete a system object.");
   }

@@ -9,16 +9,13 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 
 export async function listForObjectPortable(
   ctx: PortableQueryCtx,
   { objectMetadataId }: { objectMetadataId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "objectMetadata", objectMetadataId, societyId);
+  await requireOwnedRow(ctx, "objectMetadata", objectMetadataId);
   const rows = await ctx.db
     .query("views")
     .withIndex("by_object_position", (q) =>
@@ -29,10 +26,7 @@ export async function listForObjectPortable(
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  return getOwned(ctx, "views", id, societyId);
+  return requireOwnedRow(ctx, "views", id);
 }
 
 /**
@@ -40,10 +34,8 @@ export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string })
  * fieldMetadata joined in — the exact shape the RecordTable consumes.
  */
 export async function getHydratedPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const view = await getOwned(ctx, "views", id, societyId);
+  const view = await requireOwnedRow(ctx, "views", id);
+  const societyId = String(view.societyId);
   const viewFields = await ctx.db
     .query("viewFields")
     .withIndex("by_view_position", (q) => q.eq("viewId", id))
@@ -175,10 +167,8 @@ export async function updatePortable(
     };
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "views", id, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "views", id);
+  const societyId = String(authorizedRow.societyId);
   if (patch.kanbanFieldMetadataId) {
     await getOwned(ctx, "fieldMetadata", patch.kanbanFieldMetadataId, societyId);
   }
@@ -408,10 +398,7 @@ export async function seedGovernanceDataTableViewsPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const view = await getOwned(ctx, "views", id, societyId);
+  const view = await requireOwnedRow(ctx, "views", id);
   if (view.isSystem) {
     throw new Error("Cannot delete a system view.");
   }
@@ -430,10 +417,7 @@ export async function listFieldsForViewPortable(
   ctx: PortableQueryCtx,
   { viewId }: { viewId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "views", viewId, societyId);
+  await requireOwnedRow(ctx, "views", viewId);
   const rows = await ctx.db
     .query("viewFields")
     .withIndex("by_view_position", (q) => q.eq("viewId", viewId))
@@ -494,18 +478,12 @@ export async function updateFieldPortable(
     };
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "viewFields", id, societyId);
+  await requireOwnedRow(ctx, "viewFields", id);
   await ctx.db.patch(id, { ...patch, updatedAtISO: new Date().toISOString() });
 }
 
 export async function removeFieldPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "viewFields", id, societyId);
+  await requireOwnedRow(ctx, "viewFields", id);
   await ctx.db.delete(id);
 }
 
@@ -518,10 +496,8 @@ export async function reorderFieldsPortable(
   ctx: PortableMutationCtx,
   { viewId, orderedIds }: { viewId: string; orderedIds: string[] },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "views", viewId, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "views", viewId);
+  const societyId = String(authorizedRow.societyId);
   const now = new Date().toISOString();
   for (let i = 0; i < orderedIds.length; i++) {
     const id = orderedIds[i];

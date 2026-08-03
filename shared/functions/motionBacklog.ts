@@ -21,7 +21,7 @@ import {
   classifyProceduralMotion,
 } from "../proceduralMotions";
 import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 // Lifecycle statuses that make a motion show up in the backlog UI.
 const BACKLOG_STATUSES = new Set(["Backlog", "Tabled", "Deferred", "Agenda"]);
@@ -134,10 +134,7 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 // agendas are excluded so a suggestion never duplicates what's on the agenda.
 const SUGGESTIBLE_STATUSES = new Set(["Backlog", "Tabled", "Deferred"]);
 export async function suggestForMeetingPortable(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const meeting = await getOwned(ctx, "meetings", meetingId, societyId);
+  const meeting = await requireOwnedRow(ctx, "meetings", meetingId);
 
   const agendas = await ctx.db
     .query("agendas")
@@ -210,10 +207,7 @@ export async function updatePortable(
     notes?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "motions", backlogId, societyId);
+  await requireOwnedRow(ctx, "motions", backlogId);
   const patch: Record<string, unknown> = { ...rest };
   if (motionText !== undefined) patch.text = motionText;
   if (priority !== undefined) patch.backlogPriority = priority;
@@ -222,10 +216,7 @@ export async function updatePortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { backlogId }: { backlogId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "motions", backlogId, societyId);
+  await requireOwnedRow(ctx, "motions", backlogId);
   await ctx.db.delete(backlogId);
 }
 
@@ -238,10 +229,8 @@ export async function createFromMinutesMotionPortable(
     notes?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const minutes = await getOwned(ctx, "minutes", args.minutesId, societyId);
+  const minutes = await requireOwnedRow(ctx, "minutes", args.minutesId);
+  const societyId = String(minutes.societyId);
   // Index into the RESOLVED motions (snapshots for approved, table rows for
   // drafts) — the same list the frontend indexed to produce `motionIndex`, so
   // the positional basis matches and this survives the embedded array being
@@ -288,10 +277,8 @@ export async function createFromMinutesSectionPortable(
     notes?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const minutes = await getOwned(ctx, "minutes", args.minutesId, societyId);
+  const minutes = await requireOwnedRow(ctx, "minutes", args.minutesId);
+  const societyId = String(minutes.societyId);
   const section = Array.isArray(minutes.sections) ? minutes.sections[args.sectionIndex] : undefined;
   if (!section?.title) throw new Error("Minutes section not found.");
 
@@ -358,13 +345,9 @@ export async function addToAgendaPortable(
   ctx: PortableMutationCtx,
   { backlogId, agendaId }: { backlogId: string; agendaId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const [backlogItem, agenda] = await Promise.all([
-    getOwned(ctx, "motions", backlogId, societyId),
-    getOwned(ctx, "agendas", agendaId, societyId),
-  ]);
+  const backlogItem = await requireOwnedRow(ctx, "motions", backlogId);
+  const societyId = String(backlogItem.societyId);
+  const agenda = await getOwned(ctx, "agendas", agendaId, societyId);
   await getOwned(ctx, "meetings", agenda.meetingId, societyId);
 
   const existingItems = await ctx.db
@@ -416,13 +399,9 @@ export async function carryForwardToMeetingPortable(
     motionIndexes: number[];
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const [minutes, meeting] = await Promise.all([
-    getOwned(ctx, "minutes", sourceMinutesId, societyId),
-    getOwned(ctx, "meetings", meetingId, societyId),
-  ]);
+  const minutes = await requireOwnedRow(ctx, "minutes", sourceMinutesId);
+  const societyId = String(minutes.societyId);
+  const meeting = await getOwned(ctx, "meetings", meetingId, societyId);
   const sourceMeeting = await getOwned(ctx, "meetings", minutes.meetingId, societyId);
   const now = new Date().toISOString();
 
@@ -526,10 +505,8 @@ export async function carryForwardToMeetingPortable(
 }
 
 export async function seedToMinutesPortable(ctx: PortableMutationCtx, { meetingId }: { meetingId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "meetings", meetingId, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "meetings", meetingId);
+  const societyId = String(authorizedRow.societyId);
   const minutesRows = await ctx.db
     .query("minutes")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))

@@ -20,6 +20,7 @@
 import { computeVotingPower, type VotingPowerResult } from "../votingPower";
 import { materializeRightsHoldings } from "../equityLedger";
 import type { PortableQueryCtx } from "../portable/ctx";
+import { requireSocietyMembership } from "./access";
 
 export interface VotingPowerArgs {
   societyId: string;
@@ -84,6 +85,7 @@ export async function votingPowerPortable(
   ctx: PortableQueryCtx,
   { societyId, asOf }: VotingPowerArgs,
 ): Promise<VotingPowerResult> {
+  await requireSocietyMembership(ctx, societyId);
   const [classes, storedHoldings, roleHolders, directory, transfers] = await Promise.all([
     ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("rightsHoldings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),

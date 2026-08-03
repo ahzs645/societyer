@@ -9,7 +9,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -112,9 +112,8 @@ export async function setStatusPortable(
     bankAccountId?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const report = await getOwned(ctx, "expenseReports", id, societyId);
+  const report = await requireOwnedRow(ctx, "expenseReports", id);
+  const societyId = String(report.societyId);
   const principalId = await principalUserId(ctx, societyId);
   if (actingUserId && actingUserId !== principalId) {
     throw new Error("Authenticated actor does not match the current principal.");
@@ -178,8 +177,6 @@ export async function setStatusPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "expenseReports", id, societyId);
+  await requireOwnedRow(ctx, "expenseReports", id);
   await ctx.db.delete(id);
 }

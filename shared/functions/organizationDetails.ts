@@ -13,7 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { cleanText } from "./text";
 import { assertAllowedOption } from "../orgHubOptions";
 
@@ -89,9 +89,7 @@ export async function upsertAddressPortable(
 }
 
 export async function removeAddressPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "organizationAddresses", id, societyId);
+  await requireOwnedRow(ctx, "organizationAddresses", id);
   await ctx.db.delete(id);
 }
 
@@ -161,9 +159,7 @@ export async function upsertRegistrationPortable(
 }
 
 export async function removeRegistrationPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "organizationRegistrations", id, societyId);
+  await requireOwnedRow(ctx, "organizationRegistrations", id);
   await ctx.db.delete(id);
 }
 
@@ -211,9 +207,7 @@ export async function upsertIdentifierPortable(
 }
 
 export async function removeIdentifierPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "organizationIdentifiers", id, societyId);
+  await requireOwnedRow(ctx, "organizationIdentifiers", id);
   await ctx.db.delete(id);
 }
 

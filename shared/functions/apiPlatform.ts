@@ -14,6 +14,7 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import {
   getOwned,
+  requireOwnedRow,
   principalUserId,
   requireRolePortable,
   requireSocietyMembership,
@@ -101,10 +102,7 @@ export async function updateClientPortable(
   ctx: PortableMutationCtx,
   { id, patch }: { id: string; patch: { name?: string; description?: string; kind?: string; status?: string } },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "apiClients", id, societyId);
+  await requireOwnedRow(ctx, "apiClients", id);
   await ctx.db.patch(id, { ...patch, updatedAtISO: nowISO() });
   return null;
 }
@@ -218,10 +216,7 @@ export async function updateIntegrationHealthPortable(
     status?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const row = await getOwned(ctx, "pluginInstallations", id, societyId);
+  const row = await requireOwnedRow(ctx, "pluginInstallations", id);
   const config = parseConfigJson(row.configJson);
   await ctx.db.patch(id, {
     status: patch.status ?? row.status,

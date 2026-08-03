@@ -12,7 +12,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { requireOwnedRow, requireSocietyMembership } from "./access";
 
 export async function listRunsPortable(
   ctx: PortableQueryCtx,
@@ -27,10 +27,7 @@ export async function listRunsPortable(
 }
 
 export async function runsForFilingPortable(ctx: PortableQueryCtx, { filingId }: { filingId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "filings", filingId, societyId);
+  await requireOwnedRow(ctx, "filings", filingId);
   return ctx.db
     .query("filingBotRuns")
     .withIndex("by_filing", (q) => q.eq("filingId", filingId))
@@ -39,8 +36,5 @@ export async function runsForFilingPortable(ctx: PortableQueryCtx, { filingId }:
 }
 
 export async function getRunPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  return getOwned(ctx, "filingBotRuns", id, societyId);
+  return requireOwnedRow(ctx, "filingBotRuns", id);
 }

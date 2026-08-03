@@ -17,7 +17,7 @@ import {
   applyProceduralTags,
   classifyProceduralMotion,
 } from "../proceduralMotions";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 async function validateMotionForeignKeys(
   ctx: PortableMutationCtx,
@@ -122,10 +122,7 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
 }
 
 export async function listForMinutesPortable(ctx: PortableQueryCtx, { minutesId }: { minutesId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "minutes", minutesId, societyId);
+  await requireOwnedRow(ctx, "minutes", minutesId);
   return ctx.db
     .query("motions")
     .withIndex("by_minutes", (q) => q.eq("minutesId", minutesId))
@@ -133,10 +130,7 @@ export async function listForMinutesPortable(ctx: PortableQueryCtx, { minutesId 
 }
 
 export async function listForMeetingPortable(ctx: PortableQueryCtx, { meetingId }: { meetingId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "meetings", meetingId, societyId);
+  await requireOwnedRow(ctx, "meetings", meetingId);
   return ctx.db
     .query("motions")
     .withIndex("by_meeting", (q) => q.eq("primaryMeetingId", meetingId))
@@ -168,10 +162,8 @@ export async function updatePortable(
   ctx: PortableMutationCtx,
   { motionId, patch }: { motionId: string; patch: Record<string, any> },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "motions", motionId, societyId);
+  const authorizedRow = await requireOwnedRow(ctx, "motions", motionId);
+  const societyId = String(authorizedRow.societyId);
   await validateMotionForeignKeys(ctx, patch, societyId);
   return patchMotion(ctx, motionId, patch);
 }
@@ -190,10 +182,8 @@ export async function setStatusPortable(
     note?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  const row = await getOwned(ctx, "motions", motionId, societyId);
+  const row = await requireOwnedRow(ctx, "motions", motionId);
+  const societyId = String(row.societyId);
   if (meetingId) await getOwned(ctx, "meetings", meetingId, societyId);
   const now = new Date().toISOString();
   const entry = stripUndefined({
@@ -227,10 +217,7 @@ export async function setTagsPortable(
   ctx: PortableMutationCtx,
   { motionId, tags }: { motionId: string; tags: string[] },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "motions", motionId, societyId);
+  await requireOwnedRow(ctx, "motions", motionId);
   const normalized = Array.from(
     new Set(
       (tags ?? [])
@@ -250,18 +237,12 @@ export async function recordVotePortable(
     abstentions?: number;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "motions", motionId, societyId);
+  await requireOwnedRow(ctx, "motions", motionId);
   return patchMotion(ctx, motionId, { votesFor, votesAgainst, abstentions });
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { motionId }: { motionId: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "motions", motionId, societyId);
+  await requireOwnedRow(ctx, "motions", motionId);
   await ctx.db.delete(motionId);
   return null;
 }

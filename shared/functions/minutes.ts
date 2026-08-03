@@ -16,7 +16,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import {
   applyProceduralTags,
   classifyProceduralMotion,
@@ -388,9 +388,7 @@ export async function getByMeetingPortable(
   ctx: PortableQueryCtx,
   { meetingId }: { meetingId: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "meetings", meetingId, societyId);
+  await requireOwnedRow(ctx, "meetings", meetingId);
   const rows = await ctx.db
     .query("minutes")
     .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
@@ -529,9 +527,8 @@ export async function updatePortable(
   ctx: PortableMutationCtx,
   { id, patch: rawPatch }: { id: string; patch: any },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const minutes = await getOwned(ctx, "minutes", id, societyId);
+  const minutes = await requireOwnedRow(ctx, "minutes", id);
+  const societyId = String(minutes.societyId);
   await assertMinutesForeignKeys(ctx, societyId, rawPatch);
   // `undefined` fields are stripped from the wire, so unsetting approval
   // arrives as explicit clear flags (mirrors meetings.clearNoticeSent).
@@ -716,9 +713,8 @@ export async function backfillMotionPersonLinksPortable(
 }
 
 export async function backfillQuorumSnapshotPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const minutes = await getOwned(ctx, "minutes", id, societyId);
+  const minutes = await requireOwnedRow(ctx, "minutes", id);
+  const societyId = String(minutes.societyId);
   const meeting = await getOwned(ctx, "meetings", minutes.meetingId, societyId);
   const snapshot = await quorumSnapshotForMeeting(
     ctx,

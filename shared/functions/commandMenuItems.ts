@@ -8,7 +8,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 export interface CommandMenuItemListArgs {
   societyId: string;
@@ -116,9 +116,7 @@ export async function commandMenuItemUpsert(ctx: PortableMutationCtx, args: Comm
 }
 
 export async function commandMenuItemRemove(ctx: PortableMutationCtx, { id }: { id: string }): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const row = await getOwned(ctx, "commandMenuItems", id, societyId);
+  const row = await requireOwnedRow(ctx, "commandMenuItems", id);
   if (row.isSystem) throw new Error("Cannot delete a system command.");
   await ctx.db.delete(id);
 }

@@ -8,7 +8,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { requireOwnedRow, requireSocietyMembership } from "./access";
 
 /**
  * Build the ≥ $75k remuneration disclosure note (s.36) from employee records
@@ -47,9 +47,6 @@ export async function applyToFinancialsPortable(
   ctx: PortableMutationCtx,
   { financialsId, disclosures }: { financialsId: string; disclosures: { role: string; amountCents: number }[] },
 ): Promise<void> {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
-  await getOwned(ctx, "financials", financialsId, societyId);
+  await requireOwnedRow(ctx, "financials", financialsId);
   await ctx.db.patch(financialsId, { remunerationDisclosures: disclosures });
 }

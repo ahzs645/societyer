@@ -12,7 +12,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, principalUserId, requireRolePortable, requireSocietyMembership } from "./access";
+import { getOwned, requireOwnedRow, principalUserId, requireRolePortable, requireSocietyMembership } from "./access";
 import { transactionBackfillSides, validateBalancedJournalLines } from "../accountingCore";
 
 const ACCOUNT_TYPES = ["Asset", "Liability", "Equity", "Income", "Expense"] as const;
@@ -296,9 +296,7 @@ export async function journalEntriesPortable(
 }
 
 export async function journalEntryPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const entry = await getOwned(ctx, "journalEntries", id, societyId);
+  const entry = await requireOwnedRow(ctx, "journalEntries", id);
   const lines = await ctx.db
     .query("journalLines")
     .withIndex("by_entry", (q) => q.eq("journalEntryId", id))
@@ -534,9 +532,8 @@ export async function closeFiscalPeriodPortable(
   ctx: PortableMutationCtx,
   { id, actingUserId }: { id: string; actingUserId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const period = await getOwned(ctx, "accountingFiscalPeriods", id, societyId);
+  const period = await requireOwnedRow(ctx, "accountingFiscalPeriods", id);
+  const societyId = String(period.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
   await ctx.db.patch(id, {
     status: "closed",
@@ -551,9 +548,8 @@ export async function reopenFiscalPeriodPortable(
   ctx: PortableMutationCtx,
   { id, notes, actingUserId }: { id: string; notes?: string; actingUserId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const period = await getOwned(ctx, "accountingFiscalPeriods", id, societyId);
+  const period = await requireOwnedRow(ctx, "accountingFiscalPeriods", id);
+  const societyId = String(period.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
   await ctx.db.patch(id, {
     status: "open",
@@ -770,9 +766,8 @@ export async function postTransactionCandidatePortable(
     actingUserId?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const candidate = await getOwned(ctx, "transactionCandidates", args.transactionCandidateId, societyId);
+  const candidate = await requireOwnedRow(ctx, "transactionCandidates", args.transactionCandidateId);
+  const societyId = String(candidate.societyId);
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId, required: "Director" });
   await Promise.all([
     getOwned(ctx, "financialAccounts", args.cashAccountId, societyId),
@@ -880,9 +875,8 @@ export async function postTransactionCandidateAllocationPortable(
     actingUserId?: string;
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const candidate = await getOwned(ctx, "transactionCandidates", args.transactionCandidateId, societyId);
+  const candidate = await requireOwnedRow(ctx, "transactionCandidates", args.transactionCandidateId);
+  const societyId = String(candidate.societyId);
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId, required: "Director" });
   await Promise.all([
     getOwned(ctx, "financialAccounts", args.cashAccountId, societyId),
@@ -1229,9 +1223,8 @@ export async function setReconciliationRunStatusPortable(
   { id, status, actingUserId }: { id: string; status: string; actingUserId?: string },
 ) {
   requireOption(status, RECONCILIATION_STATUSES, "Reconciliation status");
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const run = await getOwned(ctx, "reconciliationRuns", id, societyId);
+  const run = await requireOwnedRow(ctx, "reconciliationRuns", id);
+  const societyId = String(run.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
   await ctx.db.patch(id, {
     status,

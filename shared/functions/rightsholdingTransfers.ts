@@ -13,6 +13,7 @@ import { materializeRightsHoldings, validateLedger } from "../equityLedger";
 import { assertAllowedOption } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
 import type { PortableMutationCtx } from "../portable/ctx";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 export function transferChronologicalSort(left: any, right: any): number {
   const leftDate = String(left.transferDate ?? left.createdAtISO ?? left._creationTime ?? "");
@@ -86,6 +87,21 @@ export async function upsertRightsholdingTransferPortable(
   ctx: PortableMutationCtx,
   { id, ...args }: UpsertRightsholdingTransferArgs,
 ): Promise<string> {
+  await requireSocietyMembership(ctx, args.societyId);
+  if (id) await requireOwnedRow(ctx, "rightsholdingTransfers", id);
+  if (args.precedentRunId) {
+    await getOwned(ctx, "legalPrecedentRuns", args.precedentRunId, args.societyId);
+  }
+  if (args.rightsClassId) await getOwned(ctx, "rightsClasses", args.rightsClassId, args.societyId);
+  if (args.sourceRoleHolderId) {
+    await getOwned(ctx, "roleHolders", args.sourceRoleHolderId, args.societyId);
+  }
+  if (args.destinationRoleHolderId) {
+    await getOwned(ctx, "roleHolders", args.destinationRoleHolderId, args.societyId);
+  }
+  for (const documentId of args.sourceDocumentIds ?? []) {
+    await getOwned(ctx, "documents", documentId, args.societyId);
+  }
   assertAllowedOption("rightsholdingTransferTypes", args.transferType, "Rights transfer type", false);
   assertAllowedOption("rightsholdingTransferStatuses", args.status, "Rights transfer status");
   assertAllowedOption("currencies", args.priceToOrganizationCurrency, "Organization consideration currency");
@@ -143,7 +159,7 @@ export async function removeRightsholdingTransferPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
-  const existing = await ctx.db.get(id);
+  const existing = await requireOwnedRow(ctx, "rightsholdingTransfers", id);
   await ctx.db.delete(id);
   if (existing?.societyId) await syncRightsHoldings(ctx, String(existing.societyId));
 }
@@ -152,8 +168,7 @@ export async function removeRightsClassPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
-  const rightsClass = await ctx.db.get(id);
-  if (!rightsClass) throw new Error("Rights class not found.");
+  await requireOwnedRow(ctx, "rightsClasses", id);
   const [holding, transfer] = await Promise.all([
     ctx.db
       .query("rightsHoldings")

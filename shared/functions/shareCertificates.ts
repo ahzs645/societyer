@@ -13,7 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { requireOwnedRow, requireSocietyMembership } from "./access";
 import {
   activeCertificates,
   certificateChain,
@@ -128,16 +128,12 @@ export async function updatePortable(
     };
   },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "shareCertificates", id, societyId);
+  await requireOwnedRow(ctx, "shareCertificates", id);
   await ctx.db.patch(id, patch);
   return null;
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "shareCertificates", id, societyId);
+  await requireOwnedRow(ctx, "shareCertificates", id);
   await ctx.db.delete(id);
 }

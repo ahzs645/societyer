@@ -8,7 +8,7 @@
  */
 
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
+import { requireOwnedRow, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
 
 export type MembershipResolution =
   | { status: "bound"; societyId: string; userId: string }
@@ -57,9 +57,8 @@ export async function setRolePortable(
   ctx: PortableMutationCtx,
   { id, role, actingUserId }: { id: string; role: string; actingUserId?: string },
 ) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const target = await getOwned(ctx, "users", id, societyId);
+  const target = await requireOwnedRow(ctx, "users", id);
+  const societyId = String(target.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
   if (role !== "Owner") await assertNotLastOwnerPortable(ctx, target);
   await ctx.db.patch(id, { role });
@@ -74,31 +73,37 @@ export async function usersList(ctx: PortableQueryCtx, { societyId }: { societyI
 }
 
 export async function userGet(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  return getOwned(ctx, "users", id, societyId);
+  return requireOwnedRow(ctx, "users", id);
 }
 
 export async function userGetByEmail(ctx: PortableQueryCtx, { email }: { email: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("users")
     .withIndex("by_email", (q) => q.eq("email", email))
     .collect();
-  return rows.find((row) => row.societyId === societyId) ?? null;
+  for (const row of rows) {
+    try {
+      return await requireOwnedRow(ctx, "users", row._id);
+    } catch {
+      // The same email may have memberships in societies the caller cannot access.
+    }
+  }
+  return null;
 }
 
 export async function userGetByAuthSubject(ctx: PortableQueryCtx, { authSubject }: { authSubject: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db
     .query("users")
     .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
     .collect();
-  return rows.find((row) => row.societyId === societyId) ?? null;
+  for (const row of rows) {
+    try {
+      return await requireOwnedRow(ctx, "users", row._id);
+    } catch {
+      // One auth subject can have memberships in more than one society.
+    }
+  }
+  return null;
 }
 
 export async function ensureCurrentMembershipPortable(
@@ -195,9 +200,8 @@ export async function bootstrapUserIdentityPortable(
   const authSubject = args.authSubject.trim();
   if (!authSubject) throw new Error("Auth subject is required.");
 
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  const target = await getOwned<UserRow>(ctx, "users", args.userId, societyId);
+  const target = await ctx.db.get<UserRow>(args.userId, "users");
+  if (!target) throw new Error("users not found.");
   if (target.authSubject && target.authSubject !== authSubject) {
     throw new Error("User is already bound to a different auth subject.");
   }
@@ -235,8 +239,6 @@ export async function bootstrapUserIdentityPortable(
 }
 
 export async function recordLoginPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const societyId = ctx.principal.kind === "anonymous" ? undefined : ctx.principal.societyId;
-  if (!societyId) throw new Error("Society membership not found.");
-  await getOwned(ctx, "users", id, societyId);
+  await requireOwnedRow(ctx, "users", id);
   await ctx.db.patch(id, { lastLoginAtISO: new Date().toISOString() });
 }
