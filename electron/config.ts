@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 
 export type DesktopConfig = {
   workspaceRoot?: string;
+  legacyDexieWorkspaceId?: string;
+  legacyDexieMigrationComplete?: boolean;
   setupComplete?: boolean;
   updateChannel?: "stable" | "beta" | "nightly";
   services?: Record<string, { endpoint?: string; enabled?: boolean }>;
@@ -26,6 +28,10 @@ export async function readDesktopConfig(): Promise<DesktopConfig> {
     const parsed = JSON.parse(await readFile(configPath(), "utf8"));
     return {
       workspaceRoot: typeof parsed.workspaceRoot === "string" ? parsed.workspaceRoot : undefined,
+      legacyDexieWorkspaceId: typeof parsed.legacyDexieWorkspaceId === "string"
+        ? parsed.legacyDexieWorkspaceId
+        : undefined,
+      legacyDexieMigrationComplete: parsed.legacyDexieMigrationComplete === true,
       setupComplete: parsed.setupComplete === true,
       updateChannel: parseUpdateChannel(parsed.updateChannel),
       services: parseServices(parsed.services),

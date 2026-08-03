@@ -63,6 +63,7 @@
     "test:compliance-rules": "tsx scripts/validate-compliance-rule-packs.ts && tsx scripts/check-compliance-obligations.ts && tsx scripts/check-static-corporation-obligations.ts",
     "test:create-workspace-onboarding": "tsx scripts/check-create-workspace-onboarding.ts",
     "test:local-snapshots": "tsx scripts/check-local-snapshot-roundtrip.ts",
+    "test:local-workspace-binding": "tsx scripts/check-local-workspace-binding.ts",
     "test:organization-domain": "tsx scripts/check-organization-domain.ts",
     "test:jurisdiction-modules": "tsx scripts/check-jurisdiction-modules.ts",
     "test:post-incorporation-steps": "tsx scripts/check-post-incorporation-steps.ts",

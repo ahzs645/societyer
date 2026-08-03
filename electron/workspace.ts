@@ -10,6 +10,7 @@ export type WorkspaceInfo = {
   id: string;
   name: string;
   rootPath: string;
+  legacyDexieWorkspace?: boolean;
   schemaVersion: number;
   createdAtISO: string;
   updatedAtISO: string;
@@ -42,6 +43,21 @@ export async function ensureWorkspace() {
     path.join(app.getPath("userData"), "workspace");
   workspaceRoot = root;
   workspaceInfo = await readOrCreateWorkspaceInfo(root);
+  if (!config.legacyDexieMigrationComplete) {
+    const existingDesktopWorkspace = Boolean(config.workspaceRoot || config.setupComplete);
+    if (existingDesktopWorkspace && !workspaceInfo.legacyDexieWorkspace) {
+      workspaceInfo = await writeWorkspaceInfo(root, {
+        ...workspaceInfo,
+        legacyDexieWorkspace: true,
+      });
+    }
+    await updateDesktopConfig({
+      legacyDexieMigrationComplete: true,
+      legacyDexieWorkspaceId: workspaceInfo.legacyDexieWorkspace
+        ? workspaceInfo.id
+        : undefined,
+    });
+  }
   return { root, info: workspaceInfo };
 }
 
@@ -62,12 +78,12 @@ export async function readOrCreateWorkspaceInfo(root: string): Promise<Workspace
       id: String(parsed.id || randomUUID()),
       name: String(parsed.name || "Societyer Workspace"),
       rootPath: root,
+      legacyDexieWorkspace: parsed.legacyDexieWorkspace === true || undefined,
       schemaVersion: Number(parsed.schemaVersion || 1),
       createdAtISO: String(parsed.createdAtISO || now),
       updatedAtISO: now,
     };
-    await writeFile(workspacePath, JSON.stringify(info, null, 2));
-    return info;
+    return await writeWorkspaceInfo(root, info);
   } catch {
     const now = new Date().toISOString();
     const info = {
@@ -78,9 +94,13 @@ export async function readOrCreateWorkspaceInfo(root: string): Promise<Workspace
       createdAtISO: now,
       updatedAtISO: now,
     };
-    await writeFile(workspacePath, JSON.stringify(info, null, 2));
-    return info;
+    return await writeWorkspaceInfo(root, info);
   }
+}
+
+async function writeWorkspaceInfo(root: string, info: WorkspaceInfo) {
+  await writeFile(path.join(root, "workspace.json"), JSON.stringify(info, null, 2));
+  return info;
 }
 
 export async function resolveWorkspaceKey(root: string, key: string) {

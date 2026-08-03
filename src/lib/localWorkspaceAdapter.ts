@@ -31,28 +31,45 @@ async function createLocalClient(runtime: RuntimeDescriptor) {
   return new StaticConvexClient({ databaseName: localWorkspaceDatabaseName(runtime, "demo") });
 }
 
-async function desktopWorkspaceDatabaseBinding(runtime: RuntimeDescriptor) {
+type WorkspaceDatabaseBinding = {
+  databaseName: string;
+  workspaceId: string;
+};
+
+type WorkspaceBindingStorage = Pick<Storage, "getItem" | "setItem">;
+
+export async function desktopWorkspaceDatabaseBinding(
+  runtime: RuntimeDescriptor,
+  options: {
+    bridge?: Pick<NonNullable<ReturnType<typeof getDesktopBridge>>, "getWorkspaceInfo">;
+    storage?: WorkspaceBindingStorage;
+  } = {},
+): Promise<WorkspaceDatabaseBinding> {
   const legacyDatabaseName = localWorkspaceDatabaseName(runtime, "workspace");
-  const workspace = await getDesktopBridge()?.getWorkspaceInfo();
+  const bridge = options.bridge ?? getDesktopBridge();
+  if (!bridge) {
+    throw new Error("Desktop workspace database binding requires the Electron bridge.");
+  }
+  const workspace = await bridge.getWorkspaceInfo();
   if (!workspace?.id) {
-    return {
-      databaseName: legacyDatabaseName,
-      workspaceId: localWorkspaceId(runtime, "workspace"),
-    };
+    throw new Error("Desktop workspace database binding requires a workspace ID.");
   }
 
-  const workspaceId = slugifyLocalWorkspaceKey(workspace.id);
+  const workspaceId = workspaceDatabaseKey(workspace.id);
   const bindingKey = `societyer.desktop.legacyDexieWorkspace.${legacyDatabaseName}`;
-  const legacyWorkspaceId = localStorage.getItem(bindingKey);
-  if (!legacyWorkspaceId) {
-    localStorage.setItem(bindingKey, workspace.id);
+  const storage = options.storage ?? localStorage;
+  const legacyWorkspaceId = storage.getItem(bindingKey);
+  if (legacyWorkspaceId && legacyWorkspaceId !== workspace.id) {
+    return { databaseName: `societyer-local-${workspaceId}`, workspaceId };
+  }
+
+  if (workspace.legacyDexieWorkspace || legacyWorkspaceId === workspace.id) {
+    if (!legacyWorkspaceId) storage.setItem(bindingKey, workspace.id);
     return { databaseName: legacyDatabaseName, workspaceId };
   }
 
   return {
-    databaseName: legacyWorkspaceId === workspace.id
-      ? legacyDatabaseName
-      : `societyer-local-${workspaceId}`,
+    databaseName: `societyer-local-${workspaceId}`,
     workspaceId,
   };
 }
@@ -62,11 +79,21 @@ function localWorkspaceDatabaseName(runtime: RuntimeDescriptor, seedMode: "demo"
 }
 
 function localWorkspaceId(runtime: RuntimeDescriptor, seedMode: "demo" | "workspace") {
-  const configured = import.meta.env.VITE_LOCAL_WORKSPACE_ID as string | undefined;
+  const configured = import.meta.env?.VITE_LOCAL_WORKSPACE_ID as string | undefined;
   const rawKey = configured || `${runtime.mode}-${runtime.documentStorage}-${seedMode}`;
   return slugifyLocalWorkspaceKey(rawKey);
 }
 
 function slugifyLocalWorkspaceKey(value: string) {
   return value.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "workspace";
+}
+
+function workspaceDatabaseKey(value: string) {
+  const slug = slugifyLocalWorkspaceKey(value);
+  if (value === slug) return slug;
+  let encoded = "";
+  for (let index = 0; index < value.length; index += 1) {
+    encoded += `%${value.charCodeAt(index).toString(16).padStart(4, "0")}`;
+  }
+  return `${slug}--${encoded}`;
 }
