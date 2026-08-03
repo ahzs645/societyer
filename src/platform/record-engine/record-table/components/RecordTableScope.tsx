@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   RecordTableStoreContext,
   createRecordTableStore,
@@ -40,17 +40,27 @@ export function RecordTableScope({
   onReorder?: RecordTableContextValue["onReorder"];
   children: ReactNode;
 }) {
-  // Store is created once per tableId for the lifetime of this scope.
-  const storeRef = useRef<RecordTableStore | null>(null);
-  if (!storeRef.current) {
-    storeRef.current = createRecordTableStore({
-      tableId,
-      objectMetadataId: objectMetadata._id,
-      labelIdentifierFieldName: objectMetadata.labelIdentifierFieldName,
-    });
-  }
-  const store = storeRef.current;
-  const [sidePanelRecord, setSidePanelRecord] = useState<{ recordId: string; record: any } | null>(null);
+  // Object metadata is society-scoped, so changing it denotes a workspace
+  // switch even when the route's tableId stays the same.
+  const scopeIdentity = `${tableId}:${objectMetadata._id}`;
+  const store = useMemo<RecordTableStore>(
+    () =>
+      createRecordTableStore({
+        tableId,
+        objectMetadataId: objectMetadata._id,
+        labelIdentifierFieldName: objectMetadata.labelIdentifierFieldName,
+      }),
+    [tableId, objectMetadata._id, objectMetadata.labelIdentifierFieldName],
+  );
+  const [sidePanelRecord, setSidePanelRecord] = useState<{
+    scopeIdentity: string;
+    recordId: string;
+    record: any;
+  } | null>(null);
+
+  useEffect(() => {
+    setSidePanelRecord(null);
+  }, [scopeIdentity]);
 
   // Pipe view + records into the store when they change.
   useEffect(() => {
@@ -67,13 +77,13 @@ export function RecordTableScope({
           ? hydratedView?.view.openRecordIn ?? "drawer"
           : options.openRecordIn;
       if (openRecordIn === "drawer") {
-        setSidePanelRecord({ recordId, record });
+        setSidePanelRecord({ scopeIdentity, recordId, record });
         return;
       }
       setSidePanelRecord(null);
       onRecordClick?.(recordId, record, { ...options, openRecordIn });
     },
-    [hydratedView?.view.openRecordIn, onRecordClick],
+    [hydratedView?.view.openRecordIn, onRecordClick, scopeIdentity],
   );
 
   const contextValue = useMemo<RecordTableContextValue>(
@@ -88,15 +98,19 @@ export function RecordTableScope({
     [tableId, objectMetadata, onRecordClick, handleRecordClick, onUpdate, onCreate, onReorder],
   );
 
-  const currentSidePanelRecord = sidePanelRecord
-    ? records.find((record) => String(record._id) === sidePanelRecord.recordId) ?? sidePanelRecord.record
+  const activeSidePanelRecord = sidePanelRecord?.scopeIdentity === scopeIdentity
+    ? sidePanelRecord
+    : null;
+  const currentSidePanelRecord = activeSidePanelRecord
+    ? records.find((record) => String(record._id) === activeSidePanelRecord.recordId) ??
+      activeSidePanelRecord.record
     : null;
 
   return (
     <RecordTableStoreContext.Provider value={store}>
       <RecordTableContext.Provider value={contextValue}>
         {children}
-        {sidePanelRecord && currentSidePanelRecord && (
+        {activeSidePanelRecord && currentSidePanelRecord && (
           <RecordTableSidePanel
             open
             record={currentSidePanelRecord}
@@ -104,7 +118,7 @@ export function RecordTableScope({
             onClose={() => setSidePanelRecord(null)}
             onUpdate={onUpdate}
             onOpenRecord={() =>
-              handleRecordClick(sidePanelRecord.recordId, currentSidePanelRecord, {
+              handleRecordClick(activeSidePanelRecord.recordId, currentSidePanelRecord, {
                 source: "action",
                 openRecordIn: "page",
               })

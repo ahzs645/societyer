@@ -44,7 +44,11 @@ export function RecordTableViewToolbar({
       onChangeView={onChangeView}
       onOpenFilter={onOpenFilter}
       onSaveView={saveCurrentView}
-      onSaveAsView={saveAsNewView}
+      onSaveAsView={async (name) => {
+        const viewId = await saveAsNewView(name);
+        onChangeView?.(String(viewId));
+        return viewId;
+      }}
       actions={actions}
     />
   );

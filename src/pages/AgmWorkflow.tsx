@@ -72,7 +72,23 @@ export function AgmWorkflowPage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-  if (!meeting) return <PageLoading />;
+  if (meeting === undefined) return <PageLoading />;
+  if (meeting === null) {
+    return (
+      <div className="page">
+        <EmptyState
+          icon={<ClipboardCheck size={18} />}
+          title="Meeting not found"
+          description="This meeting may have been deleted, or the link is out of date."
+          action={
+            <Link className="btn btn--accent" to="/app/meetings">
+              Back to meetings
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
   if (meeting.type !== "AGM")
     return (
       <div className="page">

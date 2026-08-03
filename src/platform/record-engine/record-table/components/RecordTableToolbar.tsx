@@ -21,6 +21,7 @@ import {
 } from "../state/recordTableStore";
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { resolveRouteIdentity } from "../../../../lib/routeIdentity";
+import { useToast } from "../../../../components/Toast";
 import { RecordTableSortPopover } from "./RecordTableSortPopover";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
 
@@ -84,6 +85,7 @@ export function RecordTableToolbar({
   const filteredRecords = useFilteredRecords();
   const isDirty = useRecordTableIsDirty();
   const { objectMetadata } = useRecordTableContextOrThrow();
+  const toast = useToast();
 
   // The section icon comes from the route registry so a table's icon always
   // matches its page header and sidebar nav (single source of truth, same as
@@ -226,6 +228,11 @@ export function RecordTableToolbar({
                 try {
                   setIsSaving(true);
                   await onSaveView();
+                } catch (error) {
+                  toast.error(
+                    "Couldn't save view",
+                    error instanceof Error ? error.message : undefined,
+                  );
                 } finally {
                   setIsSaving(false);
                 }
@@ -252,10 +259,21 @@ export function RecordTableToolbar({
           <button
             type="button"
             className="record-table__toolbar-button"
+            disabled={isSaving}
             onClick={async () => {
               const name = window.prompt("Name this view");
               if (!name?.trim()) return;
-              await onSaveAsView(name.trim());
+              try {
+                setIsSaving(true);
+                await onSaveAsView(name.trim());
+              } catch (error) {
+                toast.error(
+                  "Couldn't save new view",
+                  error instanceof Error ? error.message : undefined,
+                );
+              } finally {
+                setIsSaving(false);
+              }
             }}
             title="Save the current table setup as a new personal view"
           >
