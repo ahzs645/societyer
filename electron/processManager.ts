@@ -67,7 +67,9 @@ export async function getManagedServiceStatus(
       state: "not-installed",
       manageable: false,
       composeFile,
-      message: "docker-compose.yml is not available to the desktop process.",
+      message: environment.isPackaged
+        ? "Connector management is unavailable because this packaged build does not include docker-compose.yml. Run connectors outside Societyer."
+        : "Connector management is unavailable because docker-compose.yml could not be found.",
     };
   }
 
@@ -147,6 +149,8 @@ export async function startManagedService(
   serviceId: ManagedServiceId,
 ): Promise<ManagedServiceStatus> {
   if (serviceId !== "browser-connectors") return getManagedServiceStatus(environment, serviceId);
+  const current = await getManagedServiceStatus(environment, serviceId);
+  if (!current.manageable) return current;
   const composeFile = resolveComposeFile(environment);
   await logger.info("starting managed service", { serviceId, composeFile });
   const result = await runDocker([
@@ -178,6 +182,8 @@ export async function stopManagedService(
   serviceId: ManagedServiceId,
 ): Promise<ManagedServiceStatus> {
   if (serviceId !== "browser-connectors") return getManagedServiceStatus(environment, serviceId);
+  const current = await getManagedServiceStatus(environment, serviceId);
+  if (!current.manageable) return current;
   const composeFile = resolveComposeFile(environment);
   await logger.info("stopping managed service", { serviceId, composeFile });
   const result = await runDocker([

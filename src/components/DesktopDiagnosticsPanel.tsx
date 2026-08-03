@@ -61,7 +61,22 @@ export function DesktopDiagnosticsPanel() {
   const [connectorHealth, setConnectorHealth] = useState<DesktopConnectorHealth | null>(null);
   const [serviceStatuses, setServiceStatuses] = useState<DesktopServiceStatus[]>([]);
   const [managedServices, setManagedServices] = useState<DesktopManagedServiceStatus[]>([]);
-  const [busy, setBusy] = useState<"backup" | "connector" | "workspace" | "backup-folder" | "logs" | "log-preview" | "updates" | "services" | "managed-services" | "start-connectors" | "stop-connectors" | null>(null);
+  const [busy, setBusy] = useState<
+    | "backup"
+    | "connector"
+    | "workspace"
+    | "backup-folder"
+    | "logs"
+    | "log-preview"
+    | "check-updates"
+    | "download-update"
+    | "install-update"
+    | "services"
+    | "managed-services"
+    | "start-connectors"
+    | "stop-connectors"
+    | null
+  >(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
   const [logPreview, setLogPreview] = useState("");
   const [secretValues, setSecretValues] = useState<Partial<Record<DesktopSecretKey, string>>>({});
@@ -221,7 +236,10 @@ export function DesktopDiagnosticsPanel() {
   const checkUpdates = async () => {
     const bridge = getDesktopBridge();
     if (!bridge) return;
-    setBusy("updates");
+    setBusy("check-updates");
+    setUpdateStatus((current) =>
+      current?.enabled ? { ...current, status: "checking", error: undefined } : current,
+    );
     try {
       const state = await bridge.checkForUpdate();
       setUpdateStatus(state);
@@ -229,7 +247,57 @@ export function DesktopDiagnosticsPanel() {
       else if (state.status === "error") toast.error("Update check failed", state.error);
       else toast.info("Update status checked", state.reason);
     } catch (error) {
-      toast.error("Update check failed", error instanceof Error ? error.message : undefined);
+      const message = error instanceof Error ? error.message : "Update check failed.";
+      setUpdateStatus((current) =>
+        current ? { ...current, status: "error", error: message } : current,
+      );
+      toast.error("Update check failed", message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const downloadAvailableUpdate = async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge) return;
+    setBusy("download-update");
+    setUpdateStatus((current) =>
+      current?.enabled && current.availableVersion
+        ? { ...current, status: "downloading", downloadPercent: 0, error: undefined }
+        : current,
+    );
+    try {
+      const state = await bridge.downloadUpdate();
+      setUpdateStatus(state);
+      if (state.status === "downloaded") {
+        toast.success("Update ready to install", state.downloadedVersion);
+      } else if (state.error) {
+        toast.error("Update download failed", state.error);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Update download failed.";
+      setUpdateStatus((current) =>
+        current ? { ...current, status: "error", error: message } : current,
+      );
+      toast.error("Update download failed", message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const installDownloadedUpdate = async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge) return;
+    setBusy("install-update");
+    try {
+      toast.info("Restarting to install update");
+      setUpdateStatus(await bridge.installUpdate());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Update installation failed.";
+      setUpdateStatus((current) =>
+        current ? { ...current, status: "error", error: message } : current,
+      );
+      toast.error("Update installation failed", message);
     } finally {
       setBusy(null);
     }
@@ -351,14 +419,38 @@ export function DesktopDiagnosticsPanel() {
                   ["Runtime mode", appInfo?.runtimeMode ?? runtime.mode],
                   ["Document storage", appInfo?.documentStorageProvider ?? runtime.documentStorage],
                   ["Setup complete", setupComplete === null ? "Loading..." : setupComplete ? "Yes" : "No"],
-                  ["Updates", updateStatus ? `${updateStatus.status} (${updateStatus.channel})` : "Loading..."],
-                  ["Update reason", updateStatus?.error ?? updateStatus?.reason ?? "Loading..."],
+                  ["Updates", updateStatus ? `${updateStatusLabel(updateStatus)} (${updateStatus.channel})` : "Loading..."],
+                  ["Update details", updateStatus?.error ?? updateStatus?.reason ?? "Loading..."],
                 ]}
               />
               <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                <button className="btn" disabled={busy === "updates"} onClick={checkUpdates}>
-                  <RefreshCw size={12} /> {busy === "updates" ? "Checking..." : "Check updates"}
+                <button
+                  className="btn"
+                  disabled={!updateStatus?.enabled || busy !== null}
+                  onClick={checkUpdates}
+                >
+                  <RefreshCw size={12} /> {busy === "check-updates" ? "Checking..." : "Check updates"}
                 </button>
+                {updateStatus?.status === "available" && (
+                  <button
+                    className="btn btn--accent"
+                    disabled={busy !== null}
+                    onClick={downloadAvailableUpdate}
+                  >
+                    <Download size={12} />
+                    {busy === "download-update" ? "Downloading..." : "Download update"}
+                  </button>
+                )}
+                {updateStatus?.status === "downloaded" && (
+                  <button
+                    className="btn btn--accent"
+                    disabled={busy !== null}
+                    onClick={installDownloadedUpdate}
+                  >
+                    <RefreshCw size={12} />
+                    {busy === "install-update" ? "Restarting..." : "Install and restart"}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -606,6 +698,27 @@ function DiagnosticRows({ rows }: { rows: [string, string][] }) {
       ))}
     </div>
   );
+}
+
+function updateStatusLabel(state: DesktopUpdateStatus) {
+  if (state.error) return "Error";
+  if (state.status === "disabled") return "Unavailable";
+  if (state.status === "idle") return "Idle";
+  if (state.status === "checking") return "Checking for updates";
+  if (state.status === "available") {
+    return state.availableVersion ? `Version ${state.availableVersion} available` : "Update available";
+  }
+  if (state.status === "downloading") {
+    return state.downloadPercent === undefined
+      ? "Downloading update"
+      : `Downloading update (${state.downloadPercent}%)`;
+  }
+  if (state.status === "downloaded") {
+    return state.downloadedVersion
+      ? `Version ${state.downloadedVersion} ready to install`
+      : "Ready to install";
+  }
+  return "Error";
 }
 
 function upsertManagedService(
