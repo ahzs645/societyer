@@ -115,6 +115,7 @@ export async function upsertRightsholdingTransferPortable(
     notes: cleanText(args.notes),
     updatedAtISO: now,
   };
+  const existingTransfer = id ? await ctx.db.get(id) : null;
   const existingTransfers = await ctx.db
     .query("rightsholdingTransfers")
     .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
@@ -127,6 +128,10 @@ export async function upsertRightsholdingTransferPortable(
   if (id) {
     await ctx.db.patch(id, payload);
     await syncRightsHoldings(ctx, args.societyId);
+    const previousSocietyId = existingTransfer?.societyId ? String(existingTransfer.societyId) : undefined;
+    if (previousSocietyId && previousSocietyId !== args.societyId) {
+      await syncRightsHoldings(ctx, previousSocietyId);
+    }
     return id;
   }
   const transferId = await ctx.db.insert("rightsholdingTransfers", { ...payload, createdAtISO: now });
@@ -147,5 +152,20 @@ export async function removeRightsClassPortable(
   ctx: PortableMutationCtx,
   { id }: { id: string },
 ): Promise<void> {
+  const rightsClass = await ctx.db.get(id);
+  if (!rightsClass) throw new Error("Rights class not found.");
+  const [holding, transfer] = await Promise.all([
+    ctx.db
+      .query("rightsHoldings")
+      .withIndex("by_class", (q) => q.eq("rightsClassId", id))
+      .first(),
+    ctx.db
+      .query("rightsholdingTransfers")
+      .withIndex("by_class", (q) => q.eq("rightsClassId", id))
+      .first(),
+  ]);
+  if (holding || transfer) {
+    throw new Error("Cannot delete a rights class while holdings or transfers reference it.");
+  }
   await ctx.db.delete(id);
 }

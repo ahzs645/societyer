@@ -9,7 +9,6 @@ export async function uploadDocumentVersion({
   societyId,
   documentId,
   file,
-  nextVersion,
   changeNote,
   actingUserId,
   createDemoVersion,
@@ -19,7 +18,6 @@ export async function uploadDocumentVersion({
   societyId: any;
   documentId: any;
   file: File;
-  nextVersion: number;
   changeNote?: string;
   actingUserId?: any;
   createDemoVersion: (args: any) => Promise<any>;
@@ -34,13 +32,11 @@ export async function uploadDocumentVersion({
     const ref = await writeLocalDocumentVersion({
       societyId,
       documentId,
-      version: nextVersion,
       file,
     });
-    const versionId = await recordUploadedVersion({
+    const recorded = await recordUploadedVersion({
       societyId,
       documentId,
-      version: nextVersion,
       storageProvider: ref.provider,
       storageKey: ref.key,
       fileName: ref.fileName,
@@ -50,11 +46,11 @@ export async function uploadDocumentVersion({
       changeNote: changeNote || undefined,
       actingUserId,
     });
-    return { versionId, version: nextVersion, provider: ref.provider };
+    return { versionId: recorded.versionId, version: recorded.version, provider: ref.provider };
   }
 
   if (isDemoMode()) {
-    const versionId = await createDemoVersion({
+    const recorded = await createDemoVersion({
       societyId,
       documentId,
       fileName: file.name,
@@ -63,10 +59,10 @@ export async function uploadDocumentVersion({
       changeNote: changeNote || undefined,
       actingUserId,
     });
-    return { versionId, version: nextVersion, provider: "demo" };
+    return { versionId: recorded.versionId, version: recorded.version, provider: "demo" };
   }
 
-  const { version, presigned } = await beginUpload({
+  const { presigned } = await beginUpload({
     societyId,
     documentId,
     fileName: file.name,
@@ -83,10 +79,9 @@ export async function uploadDocumentVersion({
     if (!res.ok) throw new Error(`RustFS upload failed (${res.status})`);
   }
 
-  const versionId = await recordUploadedVersion({
+  const recorded = await recordUploadedVersion({
     societyId,
     documentId,
-    version,
     storageProvider: presigned.provider,
     storageKey: presigned.key,
     fileName: file.name,
@@ -95,5 +90,5 @@ export async function uploadDocumentVersion({
     changeNote: changeNote || undefined,
     actingUserId,
   });
-  return { versionId, version, provider: presigned.provider };
+  return { versionId: recorded.versionId, version: recorded.version, provider: presigned.provider };
 }

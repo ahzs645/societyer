@@ -728,6 +728,16 @@ export async function postTransactionCandidatePortable(
   const candidate = await ctx.db.get(args.transactionCandidateId);
   if (!candidate) throw new Error("Transaction candidate not found.");
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: String(candidate.societyId), required: "Director" });
+  if (String(candidate.status).toLowerCase() === "posted") {
+    throw new Error("Transaction candidate has already been posted.");
+  }
+  const linkedLine = await ctx.db
+    .query("journalLines")
+    .withIndex("by_transaction_candidate", (q) => q.eq("transactionCandidateId", args.transactionCandidateId))
+    .first();
+  if (linkedLine) {
+    throw new Error("Transaction candidate is already linked to a journal entry.");
+  }
   const amountCents = candidate.amountCents ?? signedAmountFromDebitCredit(candidate.debitCents, candidate.creditCents);
   if (!amountCents) throw new Error("Transaction candidate needs an amount before it can be posted.");
   await assertPeriodOpen(ctx, {
@@ -817,6 +827,16 @@ export async function postTransactionCandidateAllocationPortable(
   const candidate = await ctx.db.get(args.transactionCandidateId);
   if (!candidate) throw new Error("Transaction candidate not found.");
   await requireRolePortable(ctx, { actingUserId: args.actingUserId, societyId: String(candidate.societyId), required: "Director" });
+  if (String(candidate.status).toLowerCase() === "posted") {
+    throw new Error("Transaction candidate has already been posted.");
+  }
+  const linkedLine = await ctx.db
+    .query("journalLines")
+    .withIndex("by_transaction_candidate", (q) => q.eq("transactionCandidateId", args.transactionCandidateId))
+    .first();
+  if (linkedLine) {
+    throw new Error("Transaction candidate is already linked to a journal entry.");
+  }
   const amountCents = candidate.amountCents ?? signedAmountFromDebitCredit(candidate.debitCents, candidate.creditCents);
   if (!amountCents) throw new Error("Transaction candidate needs an amount before it can be posted.");
   const absoluteCents = Math.abs(amountCents);

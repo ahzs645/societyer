@@ -62,7 +62,6 @@ export function DocumentVersionsDrawer({
         societyId,
         documentId,
         file,
-        nextVersion: (versions?.[0]?.version ?? 0) + 1,
         changeNote,
         actingUserId,
         createDemoVersion,

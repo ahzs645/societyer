@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -17,7 +17,6 @@ export type DocumentVersionRef = {
 export type WriteDocumentVersionInput = {
   societyId: string;
   documentId: string;
-  version: number;
   fileName: string;
   mimeType?: string;
   bytes: ArrayBuffer | Uint8Array | number[];
@@ -44,7 +43,6 @@ function bufferFromBytes(value: WriteDocumentVersionInput["bytes"]) {
 function documentRelativePath(input: Omit<WriteDocumentVersionInput, "bytes">) {
   const societyId = sanitizeSegment(input.societyId);
   const documentId = sanitizeSegment(input.documentId);
-  const version = sanitizeSegment(`v${input.version}`);
   const fileName = sanitizeSegment(input.fileName);
   return path.join(
     "documents",
@@ -52,7 +50,7 @@ function documentRelativePath(input: Omit<WriteDocumentVersionInput, "bytes">) {
     societyId,
     "documents",
     documentId,
-    `${version}-${fileName}`,
+    `upload-${randomUUID()}-${fileName}`,
   );
 }
 
@@ -64,7 +62,7 @@ export async function writeDocumentVersion(
   const absolutePath = await resolveWorkspaceKey(root, key);
   const bytes = bufferFromBytes(input.bytes);
   await mkdir(path.dirname(absolutePath), { recursive: true });
-  await writeFile(absolutePath, bytes);
+  await writeFile(absolutePath, bytes, { flag: "wx" });
   return {
     provider: "local-filesystem",
     key,

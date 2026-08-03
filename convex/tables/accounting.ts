@@ -148,7 +148,8 @@ export const accountingTables = {
     .index("by_account", ["accountId"])
     .index("by_counterparty", ["counterpartyId"])
     .index("by_grant", ["grantId"])
-    .index("by_fund_restriction", ["fundRestrictionId"]),
+    .index("by_fund_restriction", ["fundRestrictionId"])
+    .index("by_transaction_candidate", ["transactionCandidateId"]),
 
   financialTransactions: defineTable({
     societyId: v.id("societies"),

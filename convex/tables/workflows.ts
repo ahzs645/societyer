@@ -44,7 +44,8 @@ export const workflowTables = {
     createdByUserId: v.optional(v.id("users")),
   })
     .index("by_society", ["societyId"])
-    .index("by_next_run", ["nextRunAtISO"]),
+    .index("by_next_run", ["nextRunAtISO"])
+    .index("by_status_next_run", ["status", "nextRunAtISO"]),
 
   // Queued manual-send emails (the "outbox"). Used when no live email
   // provider is configured, or when the workflow author explicitly wants a

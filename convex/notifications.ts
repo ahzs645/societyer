@@ -116,9 +116,9 @@ export const DEFAULT_DISMISSED_RETENTION_DAYS = 30;
  * society's configured retention window. A retention of 0 means "keep forever",
  * so those societies are skipped. Driven by the cron in `crons.ts`. */
 export const purgeDismissed = internalMutation({
-  args: {},
+  args: { cursor: v.optional(v.string()) },
   returns: v.any(),
-  handler: async (ctx) => {
+  handler: async (ctx, { cursor }) => {
     const now = Date.now();
     // Per-society cutoff ISO string, computed once. null = keep forever.
     const cutoffBySociety = new Map<string, string | null>();
@@ -132,9 +132,12 @@ export const purgeDismissed = internalMutation({
       return cutoff;
     };
 
-    const rows = await ctx.db.query("notifications").collect();
+    const rows = await ctx.db
+      .query("notifications")
+      .withIndex("by_dismissed_at", (q) => q.gt("dismissedAt", ""))
+      .paginate({ cursor: cursor ?? null, numItems: 200 });
     let purged = 0;
-    for (const r of rows) {
+    for (const r of rows.page) {
       if (!r.dismissedAt) continue;
       const cutoff = await cutoffFor(r.societyId);
       if (cutoff && r.dismissedAt < cutoff) {
@@ -142,7 +145,12 @@ export const purgeDismissed = internalMutation({
         purged++;
       }
     }
-    return { purged };
+    if (!rows.isDone) {
+      await ctx.scheduler.runAfter(0, internal.notifications.purgeDismissed, {
+        cursor: rows.continueCursor,
+      });
+    }
+    return { purged, isDone: rows.isDone };
   },
 });
 

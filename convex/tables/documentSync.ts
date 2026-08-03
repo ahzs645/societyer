@@ -23,7 +23,8 @@ export const documentSyncTables = {
     isCurrent: v.boolean(),
   })
     .index("by_document", ["documentId"])
-    .index("by_society", ["societyId"]),
+    .index("by_society", ["societyId"])
+    .index("by_storage_key", ["storageKey"]),
 
   paperlessConnections: defineTable({
     societyId: v.id("societies"),

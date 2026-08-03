@@ -25,7 +25,8 @@ export const communicationsTables = {
     createdAtISO: v.string(),
   })
     .index("by_society", ["societyId"])
-    .index("by_user", ["userId"]),
+    .index("by_user", ["userId"])
+    .index("by_dismissed_at", ["dismissedAt"]),
 
   notificationPrefs: defineTable({
     userId: v.id("users"),
