@@ -14,8 +14,12 @@ export class RecordTablePage {
     await input.fill(term);
   }
 
+  /**
+   * Column visibility lives in the toolbar's "Options" menu — there is no
+   * standalone Columns button.
+   */
   async openColumnsMenu() {
-    await this.page.getByRole("button", { name: /columns/i }).first().click();
+    await this.page.getByRole("button", { name: /^options$/i }).first().click();
     await expect(this.page.locator(".record-table__menu").last()).toBeVisible();
   }
 

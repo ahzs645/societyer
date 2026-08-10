@@ -113,15 +113,20 @@ export class StaticConvexClient {
     try {
       const societies = this.store.listRows("societies") ?? [];
       for (const society of societies as any[]) {
-        await this.portable.runMutation("seedRecordTableMetadata:ensureForSociety", {
-          societyId: society._id,
-          objects: RECORD_TABLE_OBJECTS,
-        });
+        await this.seedRecordTableMetadataFor(society._id);
       }
       this.portableQueries.emit();
     } catch (error) {
       console.warn("[societyer-local] metadata auto-seed failed", error);
     }
+  }
+
+  private async seedRecordTableMetadataFor(societyId: string) {
+    if (!societyId) return;
+    await this.portable.runMutation("seedRecordTableMetadata:ensureForSociety", {
+      societyId,
+      objects: RECORD_TABLE_OBJECTS,
+    });
   }
 
   get url() {
@@ -181,7 +186,24 @@ export class StaticConvexClient {
       return this.portable.runMutation(name, enriched);
     }
     warnLegacyFallback(name, kind, "mutation");
-    return Promise.resolve(mutationResult(name, args, this.store));
+    const result = Promise.resolve(mutationResult(name, args, this.store));
+    if (name === "society:createWorkspace") {
+      // convex/society.createWorkspace seeds the record-table metadata for the
+      // new society (seedSociety). The offline mirror doesn't, and the one-shot
+      // seed in the constructor only covers societies that already existed — so
+      // without this every record page in a freshly created workspace shows
+      // "Metadata not seeded", which is the first thing setup hands the operator.
+      return result.then(async (value) => {
+        try {
+          await this.seedRecordTableMetadataFor((value as any)?.societyId);
+          this.portableQueries.emit();
+        } catch (error) {
+          console.warn("[societyer-local] record-table metadata seed failed for the new workspace", error);
+        }
+        return value;
+      });
+    }
+    return result;
   }
 
   action(action: any, args?: StaticArgs) {

@@ -100,6 +100,10 @@ test.describe("Demo navigation", () => {
 
 test.describe("Meeting agenda minutes workflow", () => {
   test("meeting agenda edits sync to Agenda Builder and minutes sections", async ({ page }) => {
+    // Edit, save, wait out the IndexedDB write, hard-navigate, then wait for
+    // the builder to re-seed from the hydrated query — more than the suite's
+    // 30s default allows, and it was timing out a second past the line.
+    test.slow();
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
 

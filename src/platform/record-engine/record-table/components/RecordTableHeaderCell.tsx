@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -34,6 +34,11 @@ export function RecordTableHeaderCell({
   const resizing = useRef<{ startX: number; startSize: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // The menu hangs right-aligned off its trigger, which pushes it past the left
+  // edge of the table for the first column — where the app shell clips it and
+  // the sidebar takes the clicks. Flip it to open rightward when there isn't
+  // room, measured after it mounts so it accounts for the real width.
+  const [alignStart, setAlignStart] = useState(false);
   const [filterValue, setFilterValue] = useState("");
 
   const sort = sorts.find((s) => s.fieldMetadataId === recordField.fieldMetadataId);
@@ -60,6 +65,22 @@ export function RecordTableHeaderCell({
 
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [menuOpen]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen) {
+      setAlignStart(false);
+      return;
+    }
+    const wrap = menuRef.current;
+    const menu = wrap?.querySelector(".record-table__header-menu");
+    if (!wrap || !menu) return;
+    // Stay inside the table's own scroll frame; anything left of it is either
+    // clipped by the shell or covered by the sidebar.
+    const frame = wrap.closest(".record-table__scroll-frame, .record-table__interaction-root");
+    const leftLimit = frame ? frame.getBoundingClientRect().left : 0;
+    const overflowsLeft = wrap.getBoundingClientRect().right - menu.getBoundingClientRect().width < leftLimit;
+    setAlignStart(overflowsLeft);
   }, [menuOpen]);
 
   const cycleSort = () => {
@@ -205,7 +226,12 @@ export function RecordTableHeaderCell({
           <ChevronDown size={12} />
         </button>
         {menuOpen && (
-          <div className="record-table__header-menu">
+          <div
+            className={
+              "record-table__header-menu" +
+              (alignStart ? " record-table__header-menu--align-start" : "")
+            }
+          >
             <button type="button" onClick={() => setSort("asc")}>
               <ArrowUp size={13} />
               <span>Sort ascending</span>

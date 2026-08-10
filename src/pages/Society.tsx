@@ -359,8 +359,14 @@ export function SocietyPage() {
   const [lifecycleDateType, setLifecycleDateType] = useState<LifecycleDateKey | "">("");
   const [lifecycleDateValue, setLifecycleDateValue] = useState("");
 
+  // Re-seed whenever the workspace itself changes, not just the first time a
+  // society arrives. A local workspace answers from its seed until IndexedDB is
+  // read back, so the first `society` can be a different organization entirely —
+  // and holding onto it left the form showing (and ready to save) one org's
+  // details under another org's name.
   useEffect(() => {
-    if (society && !form) setForm({ ...society });
+    if (!society) return;
+    setForm((current: any) => (current && current._id === society._id ? current : { ...society }));
   }, [society]);
 
   useEffect(() => {
