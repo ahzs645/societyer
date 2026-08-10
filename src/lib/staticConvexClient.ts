@@ -227,6 +227,11 @@ export class StaticConvexClient {
     return this.store.reseed();
   }
 
+  /** Resolves once the persisted workspace has been read into memory. */
+  whenLocalWorkspaceReady() {
+    return this.store.whenHydrated();
+  }
+
   exportLocalWorkspaceSnapshot() {
     return this.store.exportSnapshot();
   }

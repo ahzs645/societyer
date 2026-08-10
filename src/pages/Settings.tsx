@@ -12,6 +12,7 @@ import { Badge, SettingsShell } from "../components/ui";
 import { Settings as SettingsIcon, AlertTriangle } from "lucide-react";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
 import { DesktopDiagnosticsPanel } from "../components/DesktopDiagnosticsPanel";
+import { WorkspaceStorageCard } from "../components/WorkspaceStorageCard";
 import { getAuthMode } from "../lib/authMode";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
@@ -637,6 +638,8 @@ export function SettingsPage() {
 
       {activeTab === "runtime" && (
       <>
+      <WorkspaceStorageCard />
+
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
           <h2 className="card__title">Notifications</h2>

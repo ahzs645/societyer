@@ -1,12 +1,12 @@
 import { isLocalRuntimeMode } from "./runtimeMode";
+import { isBrowserLocalWorkspace, isDemoPath } from "./appRuntime";
 
 export function isStaticDemoRuntime() {
-  if (typeof window === "undefined") return false;
-  return window.location.pathname === "/demo" || window.location.pathname.startsWith("/demo/");
+  return isDemoPath();
 }
 
 export function isLocalDataRuntime() {
-  return isStaticDemoRuntime() || isLocalRuntimeMode();
+  return isStaticDemoRuntime() || isLocalRuntimeMode() || isBrowserLocalWorkspace();
 }
 
 /**

@@ -107,6 +107,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   private transactionDepth = 0;
   private pendingNotify = false;
   private atomicBatchOps: RowStoreOp[] | null = null;
+  private hydrated: Promise<void> = Promise.resolve();
 
   constructor(seed: LocalSeed, options?: { databaseName?: string; logLabel?: string }) {
     this.seed = cloneLocalSeed(seed);
@@ -122,7 +123,7 @@ export class LocalDexieRowStore implements LocalRowStore {
     if (typeof window === "undefined" || !("indexedDB" in window)) return;
 
     this.db = new LocalDexieDatabase(options?.databaseName ?? "societyer-local-workspace");
-    void this.hydrate(seed).catch((error) => {
+    this.hydrated = this.hydrate(seed).catch((error) => {
       this.db?.close();
       this.db = null;
       console.warn(
@@ -130,6 +131,16 @@ export class LocalDexieRowStore implements LocalRowStore {
         error,
       );
     });
+  }
+
+  /**
+   * Resolves once persisted rows have been read back into the cache. Until then
+   * queries answer from the seed alone, so anything that *branches* on emptiness
+   * — a first-run redirect, an "import your data" prompt — has to wait for this
+   * or it will act on a workspace that only looks empty.
+   */
+  whenHydrated() {
+    return this.hydrated;
   }
 
   onUpdate(listener: () => void) {

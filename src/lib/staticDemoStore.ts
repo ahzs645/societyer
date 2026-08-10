@@ -24,6 +24,10 @@ export class StaticDemoDexieStore {
     return this.rowsStore.onUpdate(listener);
   }
 
+  whenHydrated() {
+    return this.rowsStore.whenHydrated();
+  }
+
   /** The underlying row store — the LocalRowStore the portable ctx.db runs on. */
   get rowStore(): LocalDexieRowStore {
     return this.rowsStore;

@@ -3,9 +3,10 @@
   "short_name": "Societyer",
   "description": "Governance, records, compliance, and workflow operations for societies.",
   "id": "/?source=pwa",
-  "start_url": "/app/society/new?pwa=1",
+  "start_url": "/app?pwa=1",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
   "background_color": "#f8fafc",
   "theme_color": "#111827",
@@ -32,17 +33,24 @@
   ],
   "shortcuts": [
     {
-      "name": "New Workspace",
-      "short_name": "Workspace",
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Open the Societyer dashboard.",
+      "url": "/app?pwa=1",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "New organization",
+      "short_name": "New org",
       "description": "Start a Societyer workspace and onboarding workflow.",
       "url": "/app/society/new?pwa=1",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
-      "name": "Dashboard",
-      "short_name": "Dashboard",
-      "description": "Open the Societyer dashboard.",
-      "url": "/app?pwa=1",
+      "name": "Setup",
+      "short_name": "Setup",
+      "description": "Choose where this device stores records, or restore a backup.",
+      "url": "/setup?pwa=1",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]

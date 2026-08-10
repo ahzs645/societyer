@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { isBetterAuthMode } from "../lib/authMode";
 import { useThemePreference } from "../hooks/useThemePreference";
+import { InstallAppPrompt } from "../components/InstallAppPrompt";
 
 const FEATURE_GROUPS = [
   {
@@ -238,6 +239,9 @@ export function LandingPage() {
             <a href={demoHref} className="landing__btn landing__btn--primary landing__btn--lg">
               {primaryCtaLabel} <ArrowRight size={16} />
             </a>
+            <a href="/setup" className="landing__btn landing__btn--ghost landing__btn--lg">
+              Set up your own workspace
+            </a>
             <a
               href={sourceHref}
               className="landing__btn landing__btn--ghost landing__btn--lg"
@@ -247,6 +251,7 @@ export function LandingPage() {
               <Github size={16} /> Source on GitHub
             </a>
           </div>
+          <InstallAppPrompt compact />
           <div className="landing__hero-meta">
             <span><CheckCircle2 size={12} /> Seeded with Riverside Community Society</span>
             <span><CheckCircle2 size={12} /> No login for the <code>/demo</code> walkthrough</span>

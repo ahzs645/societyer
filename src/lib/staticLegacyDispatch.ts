@@ -39,7 +39,12 @@ import {
   staticGenerateDocumentFromCatalog,
 } from "./staticConvexDocuments";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
-import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../../shared/jurisdictionWorkspace";
+import {
+  DEFAULT_HOME_JURISDICTION_CODE,
+  WORKSPACE_ONBOARDING_WORKFLOW_CONFIG,
+  buildWorkspaceOnboardingNodes,
+  registryOnboardingCopy,
+} from "../../shared/jurisdictionWorkspace";
 import { STATIC_OFFLINE_NOOP_WRITES } from "./staticConvexParity";
 import type { StaticDemoDexieStore } from "./staticDemoStore";
 import {
@@ -558,7 +563,10 @@ function queryCasesTransparency8(name: string, args: StaticArgs, store?: StaticD
     case "workflows:listCatalog":
       return workflowCatalog;
     case "workflows:get":
-      return byId(workflows, args?.id);
+      // Read the live store first: workflows created at runtime (the onboarding
+      // workflow `society:createWorkspace` writes, for one) only exist there.
+      // The fixture list is the fallback for the seeded demo rows.
+      return store?.getRow("workflows", args?.id) ?? byId(workflows, args?.id);
   }
   return QUERY_NOT_HANDLED;
 }
@@ -904,13 +912,20 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
         placeholderDisplayName: args?.privacyOfficerName ?? "Owner",
         createdAtISO: now,
       });
+      // Mirror convex/society.createWorkspace exactly. The UI reads `name`,
+      // `recipe`, and `nodePreview`; writing a `title`/`kind` shape instead left
+      // the onboarding workflow rendering as an unnamed, empty canvas.
       store?.upsertRow("workflows", {
         _id: workflowId,
         _creationTime: Date.now(),
         societyId,
-        title: "Workspace onboarding",
-        status: "Active",
-        kind: "onboarding",
+        recipe: "workspace_onboarding",
+        name: "Workspace onboarding",
+        status: "active",
+        provider: "internal",
+        nodePreview: buildWorkspaceOnboardingNodes(args ?? {}),
+        trigger: { kind: "manual" },
+        config: WORKSPACE_ONBOARDING_WORKFLOW_CONFIG,
         createdByUserId: args?.actingUserId,
         createdAtISO: now,
         updatedAtISO: now,

@@ -5,7 +5,12 @@ import { disabledModulesValidator } from "./lib/moduleSettings";
 import { assertAllowedOption } from "./lib/orgHubOptions";
 import { seedSociety } from "./seedRecordTableMetadata";
 import { seedDocumentPacketsForEntityHelper } from "./legalOperations";
-import { DEFAULT_HOME_JURISDICTION_CODE, registryOnboardingCopy } from "../shared/jurisdictionWorkspace";
+import {
+  DEFAULT_HOME_JURISDICTION_CODE,
+  WORKSPACE_ONBOARDING_WORKFLOW_CONFIG,
+  buildWorkspaceOnboardingNodes,
+  registryOnboardingCopy,
+} from "../shared/jurisdictionWorkspace";
 import {
   setLogoInvertInDarkModePortable,
   updateModulesPortable,
@@ -347,29 +352,7 @@ export const createWorkspace = mutation({
       provider: "internal",
       nodePreview: buildWorkspaceOnboardingNodes(args),
       trigger: { kind: "manual" },
-      config: {
-        source: "createWorkspace",
-        requiredProfileFields: [
-          "name",
-          "incorporationNumber",
-          "incorporationDate",
-          "fiscalYearEnd",
-          "registeredOfficeAddress",
-          "mailingAddress",
-          "privacyOfficerName",
-          "privacyOfficerEmail",
-        ],
-        optionalSections: [
-          "registry_verification",
-          "annual_calendar",
-          "member_register",
-          "finance_controls",
-          "privacy_records_program",
-          "insurance_risk",
-          "integrations",
-          "board_adoption_packet",
-        ],
-      },
+      config: WORKSPACE_ONBOARDING_WORKFLOW_CONFIG,
       createdByUserId: ownerUserId,
     });
 
@@ -478,53 +461,9 @@ function blankToUndefined(value?: string) {
   return trimmed ? trimmed : undefined;
 }
 
-export function buildWorkspaceOnboardingNodes(args: any = {}) {
-  const registry = registryOnboardingCopy(args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE);
-  return [
-    {
-      key: "profile",
-      type: "form",
-      label: "Organization profile",
-      description: "Legal name, incorporation number/date, fiscal year end, jurisdiction, governing act, key status flags, and official email.",
-      status: "ready",
-    },
-    {
-      key: "registry_optional",
-      type: "form",
-      label: registry.label,
-      description: registry.nodeDescription,
-      status: "draft",
-    },
-    {
-      key: "locations",
-      type: "form",
-      label: "Registered locations",
-      description: "Registered office, mailing address, and records location only when records are kept somewhere else.",
-      status: "ready",
-    },
-    {
-      key: "documents",
-      type: "document_create",
-      label: "Governance documents",
-      description: "Start with constitution, bylaws, certificate or registry summary, statement of directors/registered office, and latest annual report if available.",
-      status: "ready",
-    },
-    {
-      key: "people",
-      type: "form",
-      label: "People",
-      description: "Add directors, known officers, privacy officer, workspace users, and signing authorities if known.",
-      status: "ready",
-    },
-    {
-      key: "optional_setup",
-      type: "manual_trigger",
-      label: "Optional setup",
-      description: "Skip or choose later: annual calendar, member register, finance controls, privacy program, insurance/risk, integrations, and board adoption packet.",
-      status: "draft",
-    },
-  ];
-}
+// buildWorkspaceOnboardingNodes now lives in shared/jurisdictionWorkspace so the
+// local runtimes create the same workflow shape. Re-exported for existing callers.
+export { buildWorkspaceOnboardingNodes };
 
 export function buildWorkspaceOnboardingTasks(args: any) {
   const missingIdentity = [
