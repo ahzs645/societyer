@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Link, useNavigate } from "react-router-dom";
-import { Building2, CheckCircle2, FileDown, KeyRound, Landmark, MapPin, Plus, Trash2 } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Building2, CheckCircle2, FileDown, KeyRound, Landmark, MapPin, Plus, Trash2, Upload } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
@@ -22,6 +22,12 @@ import { defaultsForJurisdiction, jurisdictionDisplayCopy } from "../../shared/j
 import { homeJurisdictionCode } from "../../shared/organizationDomain";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { useAuth } from "../auth/AuthProvider";
+import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
+import {
+  localWorkspaceRestoreSupported,
+  restoreLocalWorkspaceBackup,
+  type WorkspaceBackupSummary,
+} from "../lib/localWorkspaceExport";
 
 type DrawerKind = "address" | "registration" | "identifier";
 type LifecycleDateKey = "incorporationDate" | "continuanceDate" | "amalgamationDate" | "archivedAtISO" | "removedAtISO";
@@ -58,6 +64,7 @@ export function SocietyNewPage() {
   const auth = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
+  const [searchParams] = useSearchParams();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -95,6 +102,7 @@ export function SocietyNewPage() {
     try {
       const result = await createWorkspace({ ...form });
       auth.refreshMembership(result.societyId);
+      setStoredSocietyId(result.societyId);
       toast.success("Workspace created", `${result.taskIds.length} onboarding tasks created.`);
       navigate(`/app/workflows/${result.workflowId}`);
     } catch (error: any) {
@@ -103,6 +111,26 @@ export function SocietyNewPage() {
       setSaving(false);
     }
   };
+
+  // Restoring only makes sense against a local workspace: a backup file is a
+  // snapshot of this device's database, and the demo runtime is throwaway.
+  const canRestore = isLocalDataRuntime() && !isStaticDemoRuntime() && localWorkspaceRestoreSupported();
+  const restoreRequested = searchParams.get("restore") === "1";
+
+  const restoreCard = canRestore ? (
+    <RestoreBackupCard
+      onRestored={(summary) => {
+        const restoredSocietyId = summary.societies[0]?._id;
+        if (restoredSocietyId) setStoredSocietyId(restoredSocietyId as any);
+        toast.success(
+          "Backup restored",
+          `${summary.rowCount} record${summary.rowCount === 1 ? "" : "s"} across ${summary.tableCount} table${summary.tableCount === 1 ? "" : "s"}.`,
+        );
+        navigate("/app");
+      }}
+      onError={(message) => toast.error("Could not restore the backup", message)}
+    />
+  ) : null;
 
   return (
     <div className="society-create-shell">
@@ -140,6 +168,8 @@ export function SocietyNewPage() {
               {saving ? "Creating..." : "Create workspace"}
             </button>
           </div>
+
+          {restoreRequested && restoreCard}
 
           <section className="card society-create__card">
             <div className="card__head">
@@ -214,6 +244,8 @@ export function SocietyNewPage() {
         </main>
 
         <aside className="society-create__side">
+          {!restoreRequested && restoreCard}
+
           <section className="card society-create__card">
             <div className="card__head"><h2 className="card__title">After profile</h2></div>
             <div className="card__body">
@@ -234,6 +266,70 @@ export function SocietyNewPage() {
         </aside>
       </div>
     </div>
+  );
+}
+
+/**
+ * Upload path for people who already ran Societyer somewhere else — a previous
+ * browser, another device, or the desktop app — and are carrying their data in
+ * a backup file. Restoring replaces whatever this local workspace holds.
+ */
+function RestoreBackupCard({
+  onRestored,
+  onError,
+}: {
+  onRestored: (summary: WorkspaceBackupSummary) => void;
+  onError: (message: string) => void;
+}) {
+  const [restoring, setRestoring] = useState(false);
+  const confirm = useConfirm();
+
+  const restore = async (file: File | null | undefined, input: HTMLInputElement) => {
+    if (!file) return;
+    const ok = await confirm({
+      title: "Restore this backup?",
+      message: `Everything currently stored in this workspace is replaced by the contents of "${file.name}". This cannot be undone.`,
+      confirmLabel: "Restore",
+      tone: "danger",
+    });
+    // Reset the input either way, so re-picking the same file fires onChange.
+    input.value = "";
+    if (!ok) return;
+    setRestoring(true);
+    try {
+      onRestored(await restoreLocalWorkspaceBackup(file));
+    } catch (error: any) {
+      onError(error?.message ?? "The backup file could not be read.");
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  return (
+    <section className="card society-create__card">
+      <div className="card__head">
+        <div>
+          <h2 className="card__title">Restore from a backup</h2>
+          <span className="card__subtitle">Already used Societyer? Bring your workspace back.</span>
+        </div>
+      </div>
+      <div className="card__body">
+        <p className="muted" style={{ marginTop: 0 }}>
+          Choose the <code className="mono">.json</code> backup exported from Societyer on another device or
+          from the desktop app. Records, attachment references, and change history are restored together.
+        </p>
+        <label className={`btn btn--accent${restoring ? " is-disabled" : ""}`} style={{ justifySelf: "start" }}>
+          <Upload size={14} /> {restoring ? "Restoring…" : "Choose backup file"}
+          <input
+            type="file"
+            accept="application/json,.json"
+            disabled={restoring}
+            style={{ display: "none" }}
+            onChange={(event) => void restore(event.currentTarget.files?.[0], event.currentTarget)}
+          />
+        </label>
+      </div>
+    </section>
   );
 }
 
@@ -263,8 +359,14 @@ export function SocietyPage() {
   const [lifecycleDateType, setLifecycleDateType] = useState<LifecycleDateKey | "">("");
   const [lifecycleDateValue, setLifecycleDateValue] = useState("");
 
+  // Re-seed whenever the workspace itself changes, not just the first time a
+  // society arrives. A local workspace answers from its seed until IndexedDB is
+  // read back, so the first `society` can be a different organization entirely —
+  // and holding onto it left the form showing (and ready to save) one org's
+  // details under another org's name.
   useEffect(() => {
-    if (society && !form) setForm({ ...society });
+    if (!society) return;
+    setForm((current: any) => (current && current._id === society._id ? current : { ...society }));
   }, [society]);
 
   useEffect(() => {

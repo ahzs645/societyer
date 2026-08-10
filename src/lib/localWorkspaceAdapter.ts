@@ -3,6 +3,7 @@ import { DexieWorkspaceClient } from "./dexieWorkspaceClient";
 import { getDesktopBridge } from "./desktopBridge";
 import { getRuntimeDescriptor, type RuntimeDescriptor } from "./runtimeMode";
 import { isStaticDemoRuntime } from "./staticRuntime";
+import { browserLocalWorkspaceId } from "./appRuntime";
 
 export type LocalWorkspaceAdapter = {
   client: StaticConvexClient;
@@ -28,6 +29,26 @@ async function createLocalClient(runtime: RuntimeDescriptor) {
       workspaceId,
     });
   }
+
+  // A browser-local workspace (the installed PWA, or any device that chose
+  // "store on this device" during setup) gets its own empty database. It must
+  // NOT share the demo database or the demo seed: this is the operator's real
+  // data, and the first thing they do is create their own organization or
+  // restore a backup.
+  const browserWorkspaceId = !isStaticDemoRuntime() ? browserLocalWorkspaceId() : null;
+  if (browserWorkspaceId) {
+    const workspaceKey = slugifyLocalWorkspaceKey(browserWorkspaceId);
+    return new StaticConvexClient({
+      databaseName: `societyer-local-${workspaceKey}`,
+      seed: {},
+      url: "local://societyer-workspace",
+      trustedWorkspacePrincipal: {
+        runtime: "browser-local",
+        subject: `local:${browserWorkspaceId}`,
+      },
+    });
+  }
+
   return new StaticConvexClient({ databaseName: localWorkspaceDatabaseName(runtime, "demo") });
 }
 

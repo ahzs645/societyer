@@ -58,11 +58,22 @@ const demoAppRoutes = [
   "app/settings",
 ];
 
+// Entry points people reach directly — a PWA start_url, an installed shortcut,
+// or the landing page's setup link. Pages would otherwise answer these with a
+// 404 status before falling back to 404.html, which some clients (and the
+// service worker's navigation cache) treat as a genuine failure.
+const rootAppRoutes = ["setup", "app", "app/society/new"];
+
 if (!existsSync(indexHtml)) {
   throw new Error(`Expected build output at ${indexHtml}`);
 }
 
 copyFileSync(indexHtml, resolve(distDir, "404.html"));
+for (const route of rootAppRoutes) {
+  const routeDir = resolve(distDir, route);
+  mkdirSync(routeDir, { recursive: true });
+  copyFileSync(indexHtml, resolve(routeDir, "index.html"));
+}
 mkdirSync(resolve(distDir, "demo"), { recursive: true });
 copyFileSync(indexHtml, resolve(distDir, "demo/index.html"));
 for (const route of demoAppRoutes) {

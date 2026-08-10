@@ -429,3 +429,85 @@ export function filingKindDefinition(
 export function findJurisdictionWorkspaceConfig(jurisdictionCode?: string | null) {
   return JURISDICTION_WORKSPACE_CONFIGS.find((config) => config.code === jurisdictionCode);
 }
+
+/**
+ * The node graph shown for the workspace-onboarding workflow that
+ * `society.createWorkspace` creates.
+ *
+ * Lives here — not in `convex/` — because every runtime creates this workflow:
+ * hosted Convex, the browser-local workspace behind the PWA, and Electron. When
+ * the definition was Convex-only, the local mirror wrote a differently shaped
+ * row and the onboarding workflow rendered as an unnamed, empty canvas.
+ */
+export function buildWorkspaceOnboardingNodes(args: any = {}) {
+  const registry = registryOnboardingCopy(args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE);
+  return [
+    {
+      key: "profile",
+      type: "form",
+      label: "Organization profile",
+      description: "Legal name, incorporation number/date, fiscal year end, jurisdiction, governing act, key status flags, and official email.",
+      status: "ready",
+    },
+    {
+      key: "registry_optional",
+      type: "form",
+      label: registry.label,
+      description: registry.nodeDescription,
+      status: "draft",
+    },
+    {
+      key: "locations",
+      type: "form",
+      label: "Registered locations",
+      description: "Registered office, mailing address, and records location only when records are kept somewhere else.",
+      status: "ready",
+    },
+    {
+      key: "documents",
+      type: "document_create",
+      label: "Governance documents",
+      description: "Start with constitution, bylaws, certificate or registry summary, statement of directors/registered office, and latest annual report if available.",
+      status: "ready",
+    },
+    {
+      key: "people",
+      type: "form",
+      label: "People",
+      description: "Add directors, known officers, privacy officer, workspace users, and signing authorities if known.",
+      status: "ready",
+    },
+    {
+      key: "optional_setup",
+      type: "manual_trigger",
+      label: "Optional setup",
+      description: "Skip or choose later: annual calendar, member register, finance controls, privacy program, insurance/risk, integrations, and board adoption packet.",
+      status: "draft",
+    },
+  ];
+}
+
+/** Config block stored on the onboarding workflow, shared by every runtime. */
+export const WORKSPACE_ONBOARDING_WORKFLOW_CONFIG = {
+  source: "createWorkspace",
+  requiredProfileFields: [
+    "name",
+    "incorporationNumber",
+    "incorporationDate",
+    "fiscalYearEnd",
+    "registeredOfficeAddress",
+    "mailingAddress",
+    "privacyOfficerName",
+    "privacyOfficerEmail",
+  ],
+  optionalSections: [
+    "registry_verification",
+    "annual_calendar",
+    "member_register",
+    "finance_controls",
+    "privacy_records_program",
+    "insurance_risk",
+    "integrations",
+    "board_adoption_packet",
+  ],
+} as const;

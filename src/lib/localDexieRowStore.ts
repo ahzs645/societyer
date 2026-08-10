@@ -107,6 +107,15 @@ export class LocalDexieRowStore implements LocalRowStore {
   private transactionDepth = 0;
   private pendingNotify = false;
   private atomicBatchOps: RowStoreOp[] | null = null;
+  private hydrated: Promise<void> = Promise.resolve();
+  /**
+   * Writes that landed while the first read of IndexedDB was still in flight.
+   * `hydrate()` builds its snapshot from rows read BEFORE these were applied, so
+   * assigning that snapshot over the cache would silently drop them — which is
+   * exactly what happens on the app's busiest moment, the first-run flow that
+   * creates a workspace seconds after boot. They are replayed on top instead.
+   */
+  private preHydrationOps: RowStoreOp[] | null = null;
 
   constructor(seed: LocalSeed, options?: { databaseName?: string; logLabel?: string }) {
     this.seed = cloneLocalSeed(seed);
@@ -122,7 +131,8 @@ export class LocalDexieRowStore implements LocalRowStore {
     if (typeof window === "undefined" || !("indexedDB" in window)) return;
 
     this.db = new LocalDexieDatabase(options?.databaseName ?? "societyer-local-workspace");
-    void this.hydrate(seed).catch((error) => {
+    this.preHydrationOps = [];
+    this.hydrated = this.hydrate(seed).catch((error) => {
       this.db?.close();
       this.db = null;
       console.warn(
@@ -130,6 +140,16 @@ export class LocalDexieRowStore implements LocalRowStore {
         error,
       );
     });
+  }
+
+  /**
+   * Resolves once persisted rows have been read back into the cache. Until then
+   * queries answer from the seed alone, so anything that *branches* on emptiness
+   * — a first-run redirect, an "import your data" prompt — has to wait for this
+   * or it will act on a workspace that only looks empty.
+   */
+  whenHydrated() {
+    return this.hydrated;
   }
 
   onUpdate(listener: () => void) {
@@ -154,6 +174,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   upsertRow(table: string, row: any) {
     if (!row?._id) return null;
     this.cache[table] = upsertLocalRow(this.rows(table), row);
+    this.preHydrationOps?.push({ kind: "upsert", table, row: cloneLocalRow(row) });
     if (this.atomicBatchOps) this.atomicBatchOps.push({ kind: "upsert", table, row: cloneLocalRow(row) });
     else this.persistRow(table, row, "upsert");
     this.scheduleNotify();
@@ -173,6 +194,7 @@ export class LocalDexieRowStore implements LocalRowStore {
     if (!id) return null;
     const previous = this.getRow(table, id);
     this.cache[table] = this.rows(table).filter((row) => row._id !== id);
+    this.preHydrationOps?.push({ kind: "delete", table, id });
     if (this.atomicBatchOps) {
       this.atomicBatchOps.push({ kind: "delete", table, id });
       this.scheduleNotify();
@@ -249,6 +271,7 @@ export class LocalDexieRowStore implements LocalRowStore {
       if (op.kind === "delete") this.cache[op.table] = this.rows(op.table).filter((row) => row._id !== op.id);
       else this.cache[op.table] = upsertLocalRow(this.rows(op.table), op.row);
     }
+    if (this.preHydrationOps) this.preHydrationOps.push(...ops.map((op) => (op.kind === "delete" ? op : { ...op, row: cloneLocalRow(op.row) })));
 
     const changes: LocalChangeEnvelope[] = [];
     const now = new Date().toISOString();
@@ -459,6 +482,17 @@ export class LocalDexieRowStore implements LocalRowStore {
         ]);
       });
     }
+
+    // Replay anything written while this read was in flight, so a mutation
+    // issued during startup survives hydration.
+    for (const op of this.preHydrationOps ?? []) {
+      if (op.kind === "delete") {
+        hydratedCache[op.table] = (hydratedCache[op.table] ?? []).filter((row) => row._id !== op.id);
+      } else {
+        hydratedCache[op.table] = upsertLocalRow(hydratedCache[op.table] ?? [], op.row);
+      }
+    }
+    this.preHydrationOps = null;
 
     this.cache = hydratedCache;
     this.attachmentsCache = cloneLocalRows(attachments);

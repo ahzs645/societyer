@@ -43,10 +43,16 @@ test.describe("accounting responsive layout", () => {
       const actions = Array.from(element.querySelectorAll<HTMLElement>(".btn-action"));
       return {
         display: getComputedStyle(element).display,
-        rows: new Set(actions.map((action) => action.getBoundingClientRect().top)).size,
+        // Buttons keep their intrinsic width here rather than being stretched
+        // into equal grid cells, which is what distinguishes the desktop bar
+        // from the phone command grid.
+        equalWidths: new Set(actions.map((action) => Math.round(action.getBoundingClientRect().width))).size === 1,
+        fullWidth: actions.every((action) => Math.round(action.getBoundingClientRect().width) >= 300),
       };
     });
     await expect(page.getByText("Set up, post, and reconcile the ledger.")).toBeHidden();
-    expect(layout).toEqual({ display: "flex", rows: 1 });
+    // The desktop bar is a flex row that may wrap — eight labelled tools do not
+    // fit one 1440px line — but it must never become the mobile two-up grid.
+    expect(layout).toEqual({ display: "flex", equalWidths: false, fullWidth: false });
   });
 });

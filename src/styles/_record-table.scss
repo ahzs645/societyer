@@ -886,6 +886,15 @@ select.record-table__menu-select,
   }
 }
 
+/* Flipped by RecordTableHeaderCell when a right-aligned menu would run past the
+   left edge of the table — as it does on the first column, where the app shell
+   clips it and the sidebar swallows the clicks. Declared after the base rule so
+   it wins the `right` declaration. */
+.record-table__header-menu--align-start {
+  right: auto;
+  left: 0;
+}
+
 .record-table__header-menu-section {
   padding: 6px;
   margin: 4px 0;

@@ -1,9 +1,9 @@
 import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, HashRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { BrowserRouter, HashRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { ConvexProvider, type ConvexReactClient } from "convex/react";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "./lib/staticRuntime";
-import { getRuntimeMode } from "./lib/runtimeMode";
+import { getRuntimeMode, isLocalRuntimeMode } from "./lib/runtimeMode";
 import { AuthProvider } from "./auth/AuthProvider";
 import { AuthGate } from "./components/AuthGate";
 import { Layout } from "./components/Layout";
@@ -12,7 +12,10 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ConfirmProvider, PromptProvider } from "./components/Modal";
 import { ToastProvider } from "./components/Toast";
 import { applyThemePreference, getStoredThemePreference } from "./lib/theme";
-import { isStandalonePwa, registerServiceWorker } from "./lib/pwa";
+import { captureInstallPrompt, isStandalonePwa, registerServiceWorker } from "./lib/pwa";
+import { appRuntimeNeedsSetup, isBrowserLocalWorkspace } from "./lib/appRuntime";
+import { useSocieties } from "./hooks/useSociety";
+import { useLocalWorkspaceReady } from "./hooks/useLocalWorkspaceReady";
 
 const Dashboard = React.lazy(() => import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })));
 const DesktopSetupPage = React.lazy(() => import("./pages/DesktopSetup").then((m) => ({ default: m.DesktopSetupPage })));
@@ -101,6 +104,7 @@ const ReconciliationPage = React.lazy(() => import("./pages/Reconciliation").the
 const LoginPage = React.lazy(() => import("./pages/Login").then((m) => ({ default: m.LoginPage })));
 const InvitationAcceptPage = React.lazy(() => import("./pages/InvitationAccept").then((m) => ({ default: m.InvitationAcceptPage })));
 const LandingPage = React.lazy(() => import("./pages/Landing").then((m) => ({ default: m.LandingPage })));
+const AppSetupPage = React.lazy(() => import("./pages/AppSetup").then((m) => ({ default: m.AppSetupPage })));
 const BylawRulesPage = React.lazy(() => import("./pages/BylawRules").then((m) => ({ default: m.BylawRulesPage })));
 const ElectionsPage = React.lazy(() => import("./pages/Elections").then((m) => ({ default: m.ElectionsPage })));
 const ElectionDetailPage = React.lazy(() => import("./pages/ElectionDetail").then((m) => ({ default: m.ElectionDetailPage })));
@@ -153,6 +157,7 @@ if (import.meta.env.VITE_E2E_TEST_HARNESS === "1") {
 
 applyThemePreference(getStoredThemePreference());
 registerServiceWorker();
+captureInstallPrompt();
 
 function withModule(moduleKey: React.ComponentProps<typeof ModuleGate>["moduleKey"], element: React.ReactNode) {
   return <ModuleGate moduleKey={moduleKey}>{element}</ModuleGate>;
@@ -175,7 +180,15 @@ function AppProviders({ client }: { client: ConvexReactClient }) {
 }
 
 const staticDemoRuntime = isStaticDemoRuntime();
+/** Which data client to build — includes a browser-local workspace chosen at setup. */
 const localDataRuntime = isLocalDataRuntime();
+/**
+ * Whether this *build* is an app-only shell (Electron, the IndexedDB harness,
+ * or `/demo`) and can therefore claim `/` for the dashboard. A browser-local
+ * workspace on the public site must not: `/` there is still the public landing
+ * page, which the same origin serves to everyone else.
+ */
+const appShellOwnsRoot = staticDemoRuntime || isLocalRuntimeMode();
 const electronLocalRuntime = getRuntimeMode() === "electron-local";
 const Router = electronLocalRuntime ? HashRouter : BrowserRouter;
 const routerBasename = electronLocalRuntime ? undefined : staticDemoRuntime ? "/demo" : import.meta.env.BASE_URL;
@@ -247,10 +260,46 @@ function RootErrorFallback() {
 }
 
 function LandingEntry() {
+  // An installed app should open the workspace, not the marketing page. Where
+  // it lands depends on whether this device has been set up yet.
   if (isStandalonePwa()) {
-    return <Navigate to="/app/society/new?pwa=1" replace />;
+    return <Navigate to={appRuntimeNeedsSetup() ? "/setup?pwa=1" : "/app?pwa=1"} replace />;
   }
   return <LandingPage />;
+}
+
+/**
+ * A brand-new local workspace has nothing to show on a dashboard, so send the
+ * operator straight into creating (or restoring) their organization instead of
+ * an empty shell with a prompt buried in it.
+ */
+function DashboardEntry() {
+  const societies = useSocieties();
+  // Only branch on emptiness once IndexedDB has been read back — before that a
+  // returning user's workspace looks empty and they'd be bounced into "create
+  // your organization" on every launch.
+  const localWorkspaceReady = useLocalWorkspaceReady();
+  if (
+    isBrowserLocalWorkspace() &&
+    localWorkspaceReady &&
+    societies !== undefined &&
+    societies.length === 0
+  ) {
+    return <Navigate to="/app/society/new" replace />;
+  }
+  return <Dashboard />;
+}
+
+/**
+ * Keeps the app shell out of reach until the device knows where its data
+ * lives. Without a resolved runtime the app would build a Convex client
+ * pointed at a backend that does not exist and hang on a blank shell.
+ */
+function SetupGate({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  if (!appRuntimeNeedsSetup()) return <>{children}</>;
+  const target = `/setup${location.search}`;
+  return <Navigate to={target} replace />;
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -262,9 +311,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       >
         <Suspense fallback={<PageLoader />}>
         <Routes>
-          {!localDataRuntime && <Route path="/" element={<LandingEntry />} />}
+          {!appShellOwnsRoot && <Route path="/" element={<LandingEntry />} />}
+          {/* Deliberately outside the data providers: setup is what decides
+              which data client the next load builds. */}
+          <Route path="/setup" element={<AppSetupPage />} />
           <Route element={<AsyncAppProviders />}>
-            {localDataRuntime && (
+            {appShellOwnsRoot && (
               <Route
                 path="/"
                 element={
@@ -301,20 +353,24 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="/app/society/new"
               element={
-                <AuthGate>
-                  <SocietyNewPage />
-                </AuthGate>
+                <SetupGate>
+                  <AuthGate>
+                    <SocietyNewPage />
+                  </AuthGate>
+                </SetupGate>
               }
             />
             <Route
               path="/app"
               element={
-                <AuthGate>
-                  <Layout />
-                </AuthGate>
+                <SetupGate>
+                  <AuthGate>
+                    <Layout />
+                  </AuthGate>
+                </SetupGate>
               }
             >
-            <Route index element={<Dashboard />} />
+            <Route index element={<DashboardEntry />} />
             <Route path="setup" element={<DesktopSetupPage />} />
             <Route path="society" element={<SocietyPage />} />
             <Route path="organization-details" element={<OrganizationDetailsPage />} />

@@ -131,6 +131,57 @@
   .settings-pair { gap: token('s-3'); }
 }
 
+/* Label-and-control rows inside a settings card: description on the left,
+   the control that changes it on the right. Used by desktop setup, the
+   diagnostics panel, and workspace storage — all of which shipped with the
+   markup but no styling, so the rows ran together as loose text. */
+.settings-list {
+  display: flex;
+  flex-direction: column;
+}
+.settings-list > .settings-row + .settings-row {
+  border-top: 1px solid token('border');
+}
+.settings-list > .settings-row {
+  padding-block: token('s-3');
+}
+.settings-list > .settings-row:first-child { padding-block-start: 0; }
+.settings-list > .settings-row:last-child { padding-block-end: 0; }
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: token('s-3');
+  min-width: 0;
+
+  /* The descriptive block takes the slack; controls keep their intrinsic size. */
+  > div:first-child {
+    flex: 1 1 260px;
+    min-width: 0;
+  }
+
+  .mono {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 620px) {
+  .settings-row {
+    align-items: flex-start;
+    gap: token('s-2');
+  }
+  /* Controls go full width so a phone tap target isn't a 90px stub floating
+     under a three-line description. */
+  .settings-row > .btn,
+  .settings-row > .btn-action,
+  .settings-row > label.btn {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
 .settings-modules {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

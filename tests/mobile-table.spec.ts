@@ -82,7 +82,13 @@ test.describe("record table mobile view", () => {
     expect(box!.width).toBeGreaterThan(60);
   });
 
-  test("shows an edge-fade affordance so a wide table reads as scrollable, not cut off", async ({ page }) => {
+  // The table used to paint a gradient fade over each edge. That was dropped
+  // deliberately for clean clipping ("the viewport edge has no artificial
+  // gradient overlay" — _record-table.scss), so the affordance is now the
+  // separator that appears beside the frozen first column once the table is
+  // scrolled sideways. That is what this asserts; a gradient would be a
+  // regression back to the removed design.
+  test("marks a sideways-scrolled table so the frozen column reads as pinned, not cut off", async ({ page }) => {
     await page.setViewportSize(PHONE);
 
     const members = new MembersPage(page);
@@ -91,13 +97,9 @@ test.describe("record table mobile view", () => {
     const table = new RecordTablePage(page);
     const frame = table.scrollFrame();
 
-    // At rest there is more content off the right edge — the right fade shows.
-    await expect(frame).toHaveClass(/is-scrolled-right/);
-    await expect(frame).not.toHaveClass(/is-scrolled-left/);
+    await expect(frame).not.toHaveClass(/is-scrolled-x/);
 
-    // Scroll to the far right: the right fade clears and the left one appears.
     await table.scrollTableToEnd();
-    await expect(frame).toHaveClass(/is-scrolled-left/);
-    await expect(frame).not.toHaveClass(/is-scrolled-right/);
+    await expect(frame).toHaveClass(/is-scrolled-x/);
   });
 });

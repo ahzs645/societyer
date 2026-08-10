@@ -657,3 +657,164 @@
 .wave-cache-table {
   table-layout: fixed;
 }
+
+/* Inline status banners. Used by setup, exports, and the agenda builder; the
+   class was in the markup long before it had any styling of its own. */
+.notice {
+  display: block;
+  padding: token('s-3');
+  border: 1px solid token('border');
+  border-left-width: 3px;
+  border-radius: token('r-sm');
+  background: token('bg-panel');
+  color: token('text-primary');
+  font-size: token('fs-sm');
+  line-height: 1.5;
+
+  a {
+    color: inherit;
+  }
+}
+.notice + .notice {
+  margin-top: token('s-2');
+}
+.notice--info {
+  background: token('info-soft');
+  border-color: token('info');
+}
+.notice--success {
+  background: token('success-soft');
+  border-color: token('success');
+}
+.notice--warning,
+.notice--warn {
+  background: token('warn-soft');
+  border-color: token('warn');
+}
+.notice--danger {
+  background: token('danger-soft');
+  border-color: token('danger');
+}
+
+.install-prompt {
+  display: grid;
+  gap: token('s-2');
+  justify-items: start;
+}
+.install-prompt--compact {
+  gap: 0;
+}
+.install-prompt__help {
+  margin: 0;
+  color: token('text-secondary');
+  font-size: token('fs-xs');
+  line-height: 1.5;
+  max-width: 42ch;
+}
+
+/* First-run setup: a narrower two-column variant of the create-workspace
+   shell that collapses to a single column on small screens. */
+.app-setup {
+  width: min(1080px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.3fr);
+  gap: clamp(16px, 3vw, 40px);
+  align-items: start;
+}
+.app-setup__intro {
+  position: sticky;
+  top: clamp(16px, 2vw, 28px);
+  display: grid;
+  gap: token('s-5');
+  min-width: 0;
+}
+.app-setup__steps {
+  display: grid;
+  gap: token('s-2');
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-setup__options {
+  display: grid;
+  gap: token('s-4');
+  min-width: 0;
+}
+.app-setup__card {
+  box-shadow: token('shadow-sm');
+
+  .card__body {
+    display: grid;
+    gap: token('s-3');
+  }
+}
+/* Icon + title/subtitle inside a card head. Plain `.row` wraps the icon onto
+   its own line as soon as the text block runs out of room, which on a phone is
+   immediately. */
+.app-setup__card-head {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: token('s-3');
+  min-width: 0;
+
+  > svg {
+    flex: 0 0 auto;
+    margin-top: 3px;
+    color: token('text-secondary');
+  }
+  > div {
+    min-width: 0;
+  }
+}
+.app-setup__current {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: token('s-3');
+}
+.app-setup__points {
+  margin: 0;
+  padding-inline-start: 18px;
+  display: grid;
+  gap: token('s-1');
+  color: token('text-secondary');
+  font-size: token('fs-sm');
+  line-height: 1.5;
+}
+.app-setup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: token('s-2');
+}
+.app-setup__server-row {
+  display: flex;
+  gap: token('s-2');
+  align-items: center;
+
+  .input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+.app-setup__footnote {
+  margin: 0;
+  font-size: token('fs-sm');
+}
+
+@media (max-width: 900px) {
+  .app-setup {
+    grid-template-columns: 1fr;
+    gap: token('s-4');
+  }
+  .app-setup__intro {
+    position: static;
+    gap: token('s-4');
+  }
+  .app-setup__actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}

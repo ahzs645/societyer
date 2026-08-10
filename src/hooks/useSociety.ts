@@ -7,6 +7,7 @@ import { getAuthMode } from "../lib/authMode";
 import { STATIC_DEMO_SOCIETY_ID } from "../lib/staticIds";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import { setStoredUserId } from "./useCurrentUser";
+import { useLocalWorkspaceReady } from "./useLocalWorkspaceReady";
 
 const KEY = "societyer.currentSocietyId";
 const SOCIETY_CHANGED_EVENT = "societyer:society-changed";
@@ -94,8 +95,14 @@ export function useSocietySelection() {
     };
   }, []);
 
+  // A local workspace answers queries from its seed until IndexedDB has been
+  // read back. Treating that partial list as authoritative rewrites the stored
+  // selection to whatever happens to be first — silently moving the operator to
+  // a different workspace on every reload — so hold off until it is complete.
+  const localWorkspaceReady = useLocalWorkspaceReady();
+
   useEffect(() => {
-    if (!societies) return;
+    if (!societies || !localWorkspaceReady) return;
     if (societies.length === 0) {
       if (societyId !== null) setStoredSocietyId(null);
       return;
@@ -104,7 +111,7 @@ export function useSocietySelection() {
       ? societies.some((society) => society._id === societyId)
       : false;
     if (!valid) setStoredSocietyId(societies[0]._id);
-  }, [societies, societyId]);
+  }, [societies, societyId, localWorkspaceReady]);
 
   const society = useMemo(() => {
     if (!societies) return undefined;

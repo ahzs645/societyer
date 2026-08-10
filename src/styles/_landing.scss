@@ -102,7 +102,10 @@
   margin-left: token('s-4');
   gap: token('s-5');
 
-  @media (min-width: 820px) { display: inline-flex; }
+  // The five section links plus the brand, theme toggle, and demo CTA need
+  // roughly 900px before they stop pushing the sticky nav wider than the
+  // viewport — which scrolled the whole landing page sideways on tablets.
+  @media (min-width: 960px) { display: inline-flex; }
 
   a {
     font-size: token('fs-sm');
@@ -482,10 +485,16 @@ p.landing__pain-closer {
   gap: token('s-4');
   grid-template-columns: 1fr;
 
-  @media (min-width: 700px) { grid-template-columns: repeat(2, 1fr); }
-  @media (min-width: 1040px) { grid-template-columns: repeat(4, 1fr); }
+  // minmax(0, …) rather than a bare 1fr: a grid track's default min-width is
+  // its content's min-content size, so one card with a long unbreakable string
+  // pushed the four-column grid wider than the page and scrolled the whole
+  // landing page sideways at ~1180px.
+  @media (min-width: 700px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (min-width: 1040px) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 .landing__feature {
+  min-width: 0;
+  overflow-wrap: anywhere;
   border: 1px solid token('border');
   border-radius: token('r-md');
   padding: token('s-5');

@@ -33,14 +33,21 @@ test.describe("record table controls", () => {
     await table.expectNoFocusedCell();
   });
 
-  test("members table exposes a hover action that opens the edit drawer", async ({ page }) => {
+  test("members table exposes a hover action that previews a record and opens the edit drawer", async ({ page }) => {
     const members = new MembersPage(page);
     await members.gotoDemo();
 
     const firstRow = page.locator(".record-table__row[data-row-index='0']").first();
     await firstRow.hover();
-    await firstRow.getByRole("button", { name: /open member details/i }).click();
+    // The row action previews the record in the side panel; the panel's Open
+    // button is what escalates to the editable drawer.
+    await firstRow.getByRole("button", { name: /preview member in sidebar/i }).click();
+    const panel = page.locator(".record-side-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole("heading", { name: "Fields" })).toBeVisible();
 
+    // Matched by class, not name: the button label carries its ⌘↵ shortcut.
+    await page.locator(".record-side-panel__open").click();
     await expect(page.getByRole("heading", { name: "Edit member" })).toBeVisible();
   });
 

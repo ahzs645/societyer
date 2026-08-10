@@ -3,7 +3,8 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "tests",
   testMatch: "corporation-mvp-flow.spec.ts",
-  timeout: 45_000,
+  // Every step reloads the app and waits for the local workspace to hydrate.
+  timeout: 180_000,
   retries: 0,
   use: {
     baseURL: "http://localhost:4175",
