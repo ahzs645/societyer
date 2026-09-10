@@ -6,6 +6,18 @@ A React + Convex app for tracking **BC Societies Act** compliance — registers,
 
 ---
 
+## WebMCP challenge demo
+
+Open the credential-free [Societyer demo](https://society.ahmadjalil.com/demo/app) in ChatGPT's in-app browser. When a workspace is active, Societyer registers three imperative [WebMCP](https://webmachinelearning.github.io/webmcp/) tools:
+
+- `get_governance_snapshot` reads a bounded view of deadlines, filings, meetings, tasks, and compliance flags.
+- `create_governance_tasks` creates an approved batch of follow-up work through the same data path as the visible Tasks interface, then opens that view for human review.
+- `open_governance_view` moves the shared browser surface to an allowlisted governance view.
+
+The tools use strict JSON Schemas, execution-time validation, page-lifecycle cleanup, and the active workspace's existing permission boundary. See the [submission draft and demo script](docs/webmcp-challenge-submission.md).
+
+---
+
 ## Stack
 
 - **Vite + React 18 + TypeScript**

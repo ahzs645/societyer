@@ -7,6 +7,7 @@ import { getRuntimeMode, isLocalRuntimeMode } from "./lib/runtimeMode";
 import { AuthProvider } from "./auth/AuthProvider";
 import { AuthGate } from "./components/AuthGate";
 import { Layout } from "./components/Layout";
+import { WebMcpTools } from "./features/webmcp/WebMcpTools";
 import { ModuleGate } from "./components/ModuleGate";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ConfirmProvider, PromptProvider } from "./components/Modal";
@@ -161,6 +162,15 @@ captureInstallPrompt();
 
 function withModule(moduleKey: React.ComponentProps<typeof ModuleGate>["moduleKey"], element: React.ReactNode) {
   return <ModuleGate moduleKey={moduleKey}>{element}</ModuleGate>;
+}
+
+function AppWorkspaceLayout() {
+  return (
+    <>
+      <WebMcpTools />
+      <Layout />
+    </>
+  );
 }
 
 function AppProviders({ client }: { client: ConvexReactClient }) {
@@ -321,7 +331,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
                 path="/"
                 element={
                   <AuthGate>
-                    <Layout />
+                    <AppWorkspaceLayout />
                   </AuthGate>
                 }
               >
@@ -365,7 +375,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               element={
                 <SetupGate>
                   <AuthGate>
-                    <Layout />
+                    <AppWorkspaceLayout />
                   </AuthGate>
                 </SetupGate>
               }

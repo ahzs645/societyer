@@ -84,6 +84,7 @@
     "test:mobile-table-layout": "tsx scripts/check-mobile-table-layout.ts",
     "test:meeting-governance": "tsx scripts/check-meeting-governance.ts",
     "test:ai-agent-contract": "tsx scripts/check-ai-agent-contract.ts",
+    "test:webmcp": "npx playwright test tests/webmcp.spec.ts --config playwright.webmcp.config.ts",
     "test:csv-import-utils": "tsx scripts/check-csv-and-import-utils.ts",
     "test:integration-staging": "tsx scripts/check-integration-staging-bundles.ts",
     "test:nlg-grammar": "tsx scripts/check-nlg-grammar.ts",
