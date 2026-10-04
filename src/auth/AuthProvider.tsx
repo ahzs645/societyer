@@ -1,16 +1,20 @@
 import {
   createContext,
+  lazy,
+  Suspense,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { useConvex, useConvexAuth } from "convex/react";
+import { ConvexProviderWithAuth, useConvex, useConvexAuth } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import type { MembershipResolution } from "../../shared/functions/users";
 import { getAuthMode, type AuthMode } from "../lib/authMode";
+import { registerAuthTokenGetter, type AuthTokenGetter } from "../lib/authToken";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { setPrincipalUsers, setStoredUserId } from "../hooks/useCurrentUser";
 import {
@@ -20,7 +24,11 @@ import {
 } from "../hooks/useSociety";
 
 type AuthClient = typeof import("../lib/authClient").authClient;
-type BetterAuthSession = AuthClient["$Infer"]["Session"];
+export type AuthSession = {
+  user: { id: string; name: string; email: string };
+};
+
+const ClerkAuthProvider = lazy(() => import("./ClerkAuthProvider"));
 
 export type AuthStage = "idle" | "loading" | "ready" | "error";
 export type SessionStatus = "loading" | "authenticated" | "unauthenticated" | "error";
@@ -54,7 +62,7 @@ type MembershipLookup = {
 
 type AuthContextValue = {
   mode: AuthMode;
-  session: BetterAuthSession | null;
+  session: AuthSession | null;
   sessionStatus: SessionStatus;
   convexAuthStatus: ConvexAuthStatus;
   membershipState: AuthStage;
@@ -74,8 +82,16 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const mode = getAuthMode();
 
-  if (mode !== "better-auth" || isLocalDataRuntime()) {
+  if (mode === "none" || isLocalDataRuntime()) {
     return <NoAuthProvider mode="none">{children}</NoAuthProvider>;
+  }
+
+  if (mode === "clerk") {
+    return (
+      <Suspense fallback={<AuthState title="Authorizing" message="Checking your session…" />}>
+        <ClerkAuthProvider>{children}</ClerkAuthProvider>
+      </Suspense>
+    );
   }
 
   return <BetterAuthProvider mode={mode}>{children}</BetterAuthProvider>;
@@ -131,7 +147,7 @@ function BetterAuthProvider({
     setLoadError(null);
     import("../lib/authClient")
       .then((module) => {
-        if (active) setAuthClient(module.authClient);
+        if (active) setAuthClient(() => module.authClient);
       })
       .catch((error: unknown) => {
         console.error("[societyer-auth] failed to load auth client", error);
@@ -173,6 +189,94 @@ function BetterAuthProviderReady({
 }) {
   const sessionResult = authClient.useSession();
   const session = sessionResult.data ?? null;
+  const getToken = useCallback(async () => {
+    const result = await authClient.token();
+    return result.data?.token ?? null;
+  }, [authClient]);
+  const signOut = useCallback(async () => { await authClient.signOut(); }, [authClient]);
+  return (
+    <AuthenticatedProviderReady
+      mode={mode}
+      session={session}
+      sessionPending={sessionResult.isPending}
+      sessionError={"error" in sessionResult ? sessionResult.error : null}
+      getToken={getToken}
+      providerSignOut={signOut}
+    >
+      {children}
+    </AuthenticatedProviderReady>
+  );
+}
+
+type AuthenticatedProviderProps = {
+  children: React.ReactNode;
+  mode: AuthMode;
+  session: AuthSession | null;
+  sessionPending: boolean;
+  sessionError?: unknown;
+  getToken: AuthTokenGetter;
+  providerSignOut: () => Promise<void>;
+};
+
+export function AuthenticatedProviderReady(props: AuthenticatedProviderProps) {
+  const convex = useConvex();
+  const { session, sessionPending, getToken } = props;
+  const [providerTokenFailure, setProviderTokenFailure] = useState<AuthFailure | null>(null);
+  const [tokenRetry, setTokenRetry] = useState(0);
+
+  useEffect(() => {
+    if (!session) return;
+    return registerAuthTokenGetter(getToken);
+  }, [getToken, session]);
+
+  useEffect(() => setProviderTokenFailure(null), [session]);
+
+  const fetchAccessToken = useCallback(async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
+    try {
+      const token = await getToken(forceRefreshToken);
+      if (!token) throw new Error("The authentication server did not issue a Convex token.");
+      setProviderTokenFailure(null);
+      return token;
+    } catch (error: unknown) {
+      const failure = authFailure(error, "The secure workspace token could not be verified.");
+      console.error("[societyer-auth] failed to obtain Convex token", error);
+      setProviderTokenFailure(failure.kind === "network" ? failure : { ...failure, kind: "jwks-token" });
+      return null;
+    }
+  }, [getToken, tokenRetry]);
+  const providerAuth = useMemo(() => ({
+    isLoading: sessionPending,
+    isAuthenticated: Boolean(session),
+    fetchAccessToken,
+  }), [sessionPending, session, fetchAccessToken]);
+
+  function useSessionAuth() {
+    return providerAuth;
+  }
+
+  const retryProviderAuthentication = useCallback(() => {
+    setProviderTokenFailure(null);
+    setTokenRetry((attempt) => attempt + 1);
+  }, []);
+
+  return (
+    <ConvexProviderWithAuth client={convex} useAuth={useSessionAuth}>
+      <MembershipProviderReady
+        {...props}
+        providerTokenFailure={providerTokenFailure}
+        retryProviderAuthentication={retryProviderAuthentication}
+      />
+    </ConvexProviderWithAuth>
+  );
+}
+
+function MembershipProviderReady({
+  children, mode, session, sessionPending, sessionError, providerSignOut,
+  providerTokenFailure, retryProviderAuthentication,
+}: AuthenticatedProviderProps & {
+  providerTokenFailure: AuthFailure | null;
+  retryProviderAuthentication: () => void;
+}) {
   const convex = useConvex();
   const convexAuth = useConvexAuth();
   const [tokenFailure, setTokenFailure] = useState<AuthFailure | null>(null);
@@ -180,13 +284,11 @@ function BetterAuthProviderReady({
   const [membershipStatus, setMembershipStatus] = useState<MembershipStatus | null>(null);
   const [memberships, setMemberships] = useState<PrincipalMembership[] | null>(null);
   const [membershipRefresh, setMembershipRefresh] = useState(0);
-  const [authRetry, setAuthRetry] = useState(0);
   const hadSessionRef = useRef(false);
   const hadMembershipRef = useRef(false);
   const signingOutRef = useRef(false);
   const preferredSocietyIdRef = useRef<Id<"societies"> | null>(null);
 
-  const sessionError = "error" in sessionResult ? sessionResult.error : null;
   const sessionFailure = sessionError
     ? authFailure(sessionError, "Your session could not be checked.")
     : null;
@@ -197,44 +299,21 @@ function BetterAuthProviderReady({
       signingOutRef.current = false;
       return;
     }
-    if (!sessionResult.isPending && hadSessionRef.current && !signingOutRef.current) {
+    // Clerk's account menu also signs out directly through its SDK.
+    if (mode === "clerk" && !sessionPending) {
+      hadSessionRef.current = false;
+      hadMembershipRef.current = false;
+      setTokenFailure(null);
+      return;
+    }
+    if (!sessionPending && hadSessionRef.current && !signingOutRef.current) {
       setTokenFailure({
         kind: "expired-session",
         message: "Your session has expired. Sign in again to continue.",
         retryable: false,
       });
     }
-  }, [session, sessionResult.isPending]);
-
-  useEffect(() => {
-    if (mode !== "better-auth" || !session) {
-      convex.clearAuth();
-      return;
-    }
-
-    let active = true;
-    setTokenFailure(null);
-    convex.setAuth(async () => {
-      if (!active) return null;
-      try {
-        const result = await authClient.token();
-        const token = result.data?.token;
-        if (!token) throw new Error("The authentication server did not issue a Convex token.");
-        if (active) setTokenFailure(null);
-        return token;
-      } catch (error: unknown) {
-        const failure = authFailure(error, "The secure workspace token could not be verified.");
-        console.error("[societyer-auth] failed to obtain Convex token", error);
-        if (active) setTokenFailure(failure.kind === "network" ? failure : { ...failure, kind: "jwks-token" });
-        return null;
-      }
-    });
-
-    return () => {
-      active = false;
-      convex.clearAuth();
-    };
-  }, [authClient, authRetry, convex, mode, session]);
+  }, [mode, session, sessionPending]);
 
   useEffect(() => {
     if (!session || !convexAuth.isAuthenticated) {
@@ -299,7 +378,7 @@ function BetterAuthProviderReady({
     };
   }, [convex, convexAuth.isAuthenticated, membershipRefresh, session]);
 
-  const sessionStatus: SessionStatus = sessionResult.isPending
+  const sessionStatus: SessionStatus = sessionPending
     ? "loading"
     : sessionFailure
       ? "error"
@@ -308,7 +387,7 @@ function BetterAuthProviderReady({
         : "unauthenticated";
   const convexAuthStatus: ConvexAuthStatus = !session
     ? "idle"
-    : tokenFailure
+    : tokenFailure || providerTokenFailure
       ? "error"
       : convexAuth.isLoading
         ? "loading"
@@ -322,7 +401,7 @@ function BetterAuthProviderReady({
       : memberships === null || membershipStatus === null
         ? "loading"
         : "ready";
-  const fatalError = sessionFailure ?? tokenFailure ?? membershipFailure;
+  const fatalError = sessionFailure ?? tokenFailure ?? providerTokenFailure ?? membershipFailure;
   const isAuthenticated =
     sessionStatus === "authenticated" &&
     convexAuthStatus === "authenticated" &&
@@ -352,7 +431,7 @@ function BetterAuthProviderReady({
       retryAuthentication: () => {
         setTokenFailure(null);
         setMembershipFailure(null);
-        setAuthRetry((value) => value + 1);
+        retryProviderAuthentication();
         setMembershipRefresh((value) => value + 1);
       },
       signOut: async () => {
@@ -367,11 +446,12 @@ function BetterAuthProviderReady({
         setMembershipStatus(null);
         setTokenFailure(null);
         setMembershipFailure(null);
-        await authClient.signOut();
+        await providerSignOut();
       },
     }),
     [
-      authClient,
+      providerSignOut,
+      retryProviderAuthentication,
       convexAuthStatus,
       fatalError,
       isAuthenticated,

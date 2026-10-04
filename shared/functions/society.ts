@@ -15,7 +15,8 @@ import type {
   PortablePrincipal,
   PortableQueryCtx,
 } from "../portable/ctx";
-import { claimStorageId, requireAuthenticated, requireSocietyMembership } from "./access";
+import { claimStorageId, requireAuthenticated, requireRolePortable, requireSocietyMembership } from "./access";
+import { matchesAuthBinding } from "./identity";
 
 export type NewSocietyOwnerInput = {
   societyId: string;
@@ -33,6 +34,7 @@ type NewSocietyOwnerFields = {
   createdAtISO: string;
   authProvider?: string;
   authSubject?: string;
+  authIssuer?: string;
   emailVerifiedAtISO?: string;
   lastLoginAtISO?: string;
 };
@@ -73,6 +75,7 @@ export function newSocietyOwnerFields(
     createdAtISO: input.createdAtISO,
     authProvider: principal.authProvider || principal.issuer,
     authSubject: principal.subject,
+    authIssuer: principal.issuer,
     emailVerifiedAtISO: principal.emailVerified ? input.createdAtISO : undefined,
     lastLoginAtISO: input.createdAtISO,
   };
@@ -128,7 +131,7 @@ async function principalMemberships(ctx: PortableQueryCtx): Promise<PortableDoc[
     .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
     .collect();
   const activeMemberships = memberships.filter(
-    (membership) => !membership.status || membership.status === "Active",
+    (membership) => matchesAuthBinding(membership, principal) && (!membership.status || membership.status === "Active"),
   );
   if (!activeMemberships.length) throw new Error("Society membership not found.");
   return activeMemberships;
@@ -210,6 +213,7 @@ export async function updateModulesPortable(
   { societyId, disabledModules }: { societyId: string; disabledModules: any },
 ) {
   await requireSocietyMembership(ctx, societyId);
+  await requireRolePortable(ctx, { societyId, required: "Admin" });
   await ctx.db.patch(societyId, {
     disabledModules,
     updatedAt: Date.now(),

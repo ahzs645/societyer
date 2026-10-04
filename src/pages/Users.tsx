@@ -12,6 +12,7 @@ import { useSearchParams } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../auth/AuthProvider";
 import { useConfirm } from "../components/Modal";
+import { WorkspaceAccessViewer } from "../components/WorkspaceAccessViewer";
 
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];
 
@@ -26,8 +27,10 @@ export function UsersPage() {
   const setRole = useMutation(api.users.setRole);
   const remove = useMutation(api.users.remove);
   const actingUserId = useCurrentUserId() ?? undefined;
-  const { role: myRole, permissions, can } = usePermissions();
-  const canManageUsers = can("users:write");
+  const { role: myRole, permissions, can, loaded: permissionsLoaded } = usePermissions();
+  const canManageUsers = permissionsLoaded && can("users:write");
+  const canRemoveUsers = permissionsLoaded && myRole === "Owner";
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [draft, setDraft] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
@@ -39,13 +42,13 @@ export function UsersPage() {
   return (
     <div className="page">
       <PageHeader
-        title="Users & roles"
+        title="Users & access"
         icon={<UserCog size={16} />}
         iconColor="blue"
         subtitle={
-          auth.mode === "better-auth"
-            ? "Role-based access controls every write in the app. Better Auth resolves a real session into this workspace user table."
-            : "Role-based access controls every write in the app. No-auth mode uses the local acting-user picker."
+          auth.mode !== "none"
+            ? "Manage workspace memberships, roles, and the access policy for each signed-in user."
+            : "Manage workspace memberships and role policies. Use the local acting-user picker to preview a role."
         }
         actions={
           canManageUsers ? (
@@ -98,7 +101,9 @@ export function UsersPage() {
         <div className="card__head">
           <h2 className="card__title">Users</h2>
           <span className="card__subtitle">
-            Pick one from the header to act as them — Convex uses their role to authorize writes.
+            {auth.mode === "none"
+              ? "Pick a local acting user from the header to test workspace roles."
+              : "Workspace roles and invitations control access for signed-in accounts."}
           </span>
         </div>
         <table className="table">
@@ -114,8 +119,8 @@ export function UsersPage() {
           </thead>
           <tbody>
             {(users ?? []).map((u) => {
-              const ownerCount = (users ?? []).filter((x) => x.role === "Owner").length;
-              const isLastOwner = u.role === "Owner" && ownerCount <= 1;
+              const ownerCount = (users ?? []).filter((x) => x.role === "Owner" && (!x.status || x.status === "Active")).length;
+              const isLastOwner = u.role === "Owner" && (!u.status || u.status === "Active") && ownerCount <= 1;
               const lastOwnerHint = "Promote another user to Owner before changing or removing this one.";
               return (
               <tr key={u._id}>
@@ -126,6 +131,7 @@ export function UsersPage() {
                 <td title={isLastOwner ? lastOwnerHint : undefined}>
                   <Select
                     value={u.role}
+                    aria-label={`Role for ${u.displayName}`}
                     disabled={isLastOwner || !canManageUsers}
                     onChange={async (v) => {
                       const ok = await confirm({
@@ -135,8 +141,12 @@ export function UsersPage() {
                         tone: "warn",
                       });
                       if (!ok) return;
-                      await setRole({ id: u._id, role: v });
-                      toast.success("Role updated");
+                      try {
+                        await setRole({ id: u._id, role: v });
+                        toast.success("Role updated");
+                      } catch (error) {
+                        toast.error("Couldn't change role", error instanceof Error ? error.message : String(error));
+                      }
                     }}
                     options={ROLES.map((r) => ({ value: r, label: r }))}
                   />
@@ -148,13 +158,23 @@ export function UsersPage() {
                 </td>
                 <td className="mono">{u.lastLoginAtISO ?? "—"}</td>
                 <td>
+                  {canManageUsers && (
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => setSelectedUserId(u._id)}
+                      aria-label={`View access for ${u.displayName}`}
+                      aria-pressed={selectedUserId === u._id}
+                    >
+                      <ShieldCheck size={12} /> Access
+                    </button>
+                  )}
                   <button
                     className="btn btn--ghost btn--sm"
                     onClick={() => {
                       setStoredUserId(u._id);
                       toast.success(`Now acting as ${u.displayName}`);
                     }}
-                    disabled={auth.mode === "better-auth"}
+                    disabled={auth.mode !== "none"}
                     title="Act as this user"
                   >
                     <KeyRound size={12} /> Act as
@@ -162,8 +182,8 @@ export function UsersPage() {
                   <button
                     className="btn btn--ghost btn--sm btn--icon"
                     aria-label={`Remove user ${u.name ?? u.email}`}
-                    disabled={isLastOwner || !canManageUsers}
-                    title={isLastOwner ? lastOwnerHint : !canManageUsers ? "Your role can't manage users." : undefined}
+                    disabled={isLastOwner || !canRemoveUsers}
+                    title={isLastOwner ? lastOwnerHint : !canRemoveUsers ? "Only an Owner can remove user access." : undefined}
                     onClick={async () => {
                       const ok = await confirm({
                         title: "Remove user access?",
@@ -172,8 +192,12 @@ export function UsersPage() {
                         tone: "danger",
                       });
                       if (!ok) return;
-                      await remove({ id: u._id });
-                      toast.success("User access removed");
+                      try {
+                        await remove({ id: u._id });
+                        toast.success("User access removed");
+                      } catch (error) {
+                        toast.error("Couldn't remove user", error instanceof Error ? error.message : String(error));
+                      }
                     }}
                   >
                     <Trash2 size={12} />
@@ -192,6 +216,15 @@ export function UsersPage() {
           </tbody>
         </table>
       </div>
+
+      {canManageUsers && users && users.length > 0 && (
+        <WorkspaceAccessViewer
+          users={users}
+          selectedUserId={selectedUserId ?? actingUserId ?? users[0]._id}
+          onSelectUser={setSelectedUserId}
+          moduleSource={society}
+        />
+      )}
 
       {canManageUsers && (
         <InvitationsPanel societyId={society._id} />
@@ -282,11 +315,13 @@ function roleSummary(role?: string | null): string {
     case "Owner":
       return "Owner: full access, including inviting/removing users and changing roles.";
     case "Admin":
-      return "Admin: can manage most records and society settings, but not billing or ownership transfer.";
+      return "Admin: can manage workspace records, users, and settings. Owner-only settings remain restricted.";
     case "Director":
-      return "Director: can view and edit governance, meetings, and compliance records.";
+      return "Director: can read workspace records and edit meetings, minutes, agendas, and documents under the role policy.";
     case "Member":
-      return "Member: read-only access to shared society records.";
+      return "Member: read-only access to the shared records included in the role policy.";
+    case "Viewer":
+      return "Viewer: read-only access across the workspace under the role policy.";
     default:
       return role ? `${role}: role-based access.` : "No role assigned.";
   }

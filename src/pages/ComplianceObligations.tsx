@@ -48,8 +48,8 @@ export function ComplianceObligationsPage() {
   if (missingWorkspace || !organization || !society) return <SeedPrompt />;
 
   const jurisdictionCode = homeJurisdictionCode(organization);
-  const jurisdictionCopy = jurisdictionDisplayCopy(jurisdictionCode);
-  const jurisdictionModule = jurisdictionModuleContract(jurisdictionCode);
+  const jurisdictionCopy = jurisdictionDisplayCopy(organization);
+  const jurisdictionModule = jurisdictionModuleContract(organization);
   const missingFacts = requiredFactLabels(facts);
   const overdue = obligations.filter((obligation) => obligation.status === "overdue").length;
   const dueToday = obligations.filter((obligation) => obligation.status === "due_today").length;

@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "@/lib/authToken";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -35,9 +36,9 @@ const TAX_FILING_KINDS = ["T2", "T1044", "T3010", "T4", "GSTHST"] as const;
 
 export function FilingsPage() {
   const society = useSociety();
-  const jurisdictionCopy = jurisdictionDisplayCopy(society?.jurisdictionCode);
-  const jurisdictionModule = jurisdictionModuleContract(society?.jurisdictionCode);
-  const jurisdictionFilingKinds = filingKindDefinitions(society?.jurisdictionCode);
+  const jurisdictionCopy = jurisdictionDisplayCopy(society);
+  const jurisdictionModule = jurisdictionModuleContract(society);
+  const jurisdictionFilingKinds = filingKindDefinitions(society);
   const filingKindOptions = [
     ...jurisdictionFilingKinds.map((definition) => ({
       value: definition.kind,
@@ -165,7 +166,7 @@ export function FilingsPage() {
   const importRegistryHistory = async () => {
     setImportingRegistry(true);
     try {
-      const response = await fetch("/api/v1/browser-connectors/filing-history/import", {
+      const response = await authenticatedFetch("/api/v1/browser-connectors/filing-history/import", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

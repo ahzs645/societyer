@@ -186,6 +186,11 @@ and Flux against divergent definitions.
 
 ## Security boundary
 
+For selectable hosted login, see [Clerk setup](../../docs/clerk-setup.md) and
+[Microsoft SSO with Better Auth](../../docs/microsoft-sso-setup.md). The example
+deployment keeps `AUTH_MODE=none`; authentication requires configured account
+credentials, matching frontend build settings, and deployed Convex auth configuration.
+
 The current home deployment uses `AUTH_MODE=none`, and parts of the application
 still rely on client-asserted workspace identity. Treat it as trusted-network
 software. Authentication and server-enforced tenant authorization are separate

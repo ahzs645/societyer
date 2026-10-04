@@ -6,6 +6,7 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
 import { useToast } from "../components/Toast";
+import { IncorporationPreparation } from "../components/IncorporationPreparation";
 
 const CATEGORY_LABEL: Record<string, string> = {
   organize: "Organize the corporation",
@@ -62,6 +63,7 @@ export function PostIncorporationChecklistPage() {
         iconColor="green"
         subtitle="The ordered next steps after incorporating, each linked to the paperwork it needs and the official source."
       />
+      <IncorporationPreparation organization={society} />
       {steps.length === 0 ? (
         <div className="card" style={{ padding: 16 }}>
           <p className="muted" style={{ margin: 0 }}>

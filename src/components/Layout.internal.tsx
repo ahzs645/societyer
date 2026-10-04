@@ -649,7 +649,7 @@ const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   "Workflow runs": "nav.workflowRuns",
   "Workflow packages": "nav.workflowPackages",
   Notifications: "nav.notifications",
-  "Users & roles": "nav.users",
+  "Users & access": "nav.users",
   "Import sessions": "nav.importSessions",
   Settings: "nav.settings",
   "Audit log": "nav.auditLog",

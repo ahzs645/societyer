@@ -98,8 +98,8 @@ console.log("✓ local runtime injects one principal per invocation chain");
 // produce an explicit anonymous principal when Convex has no identity.
 const identity = {
   subject: "auth0|user-7",
-  issuer: "https://issuer.example/",
-  tokenIdentifier: "https://issuer.example/|auth0|user-7",
+  issuer: process.env.BETTER_AUTH_BASE_URL ?? "http://127.0.0.1:5173",
+  tokenIdentifier: "better-auth|auth0|user-7",
   email: "member@example.org",
   emailVerified: true,
 };
@@ -351,7 +351,7 @@ const hostedPrincipalRuntime = new PortableRuntime({
   db: new MemoryDb({
     seed: {
       users: [
-        { _id: "hosted-owner", societyId: "hosted-society", role: "Owner", status: "Active", authSubject: "hosted:owner" },
+        { _id: "hosted-owner", societyId: "hosted-society", role: "Owner", status: "Active", authSubject: "hosted:owner", authIssuer: "https://hosted.test" },
       ],
       documents: [
         { _id: "hosted-document", societyId: "hosted-society", title: "Hosted" },

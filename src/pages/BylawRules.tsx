@@ -1,3 +1,4 @@
+import { isCorporation } from "../../shared/organizationDomain";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -30,13 +31,14 @@ export function BylawRulesPage() {
   const [form, setForm] = useState<any>(null);
 
   useEffect(() => {
-    if (rules && !form) setForm({ ...rules });
+    if (rules && (!form || form.societyId !== rules.societyId || form._id !== rules._id)) setForm({ ...rules });
   }, [form, rules]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
   if (!form) return <PageLoading />;
 
+  const corporate = isCorporation(society);
   const jurisdictionCode = resolveJurisdictionCode(society);
   const jurisdictionPack = getJurisdictionGuidePack(jurisdictionCode);
   const legalGuideDateISO = form.effectiveFromISO || new Date().toISOString();
@@ -150,12 +152,15 @@ export function BylawRulesPage() {
         title="Bylaw rules"
         icon={<Scale size={16} />}
         iconColor="purple"
-        subtitle="Configure the active rules derived from the society's bylaws. AGM, proxy, proposal, meeting, election, and inspection workflows read from here first."
+        subtitle={corporate ? "Configure corporation meeting rules from approved articles and by-laws. Review each setting before using governance workflows." : "Configure the active rules derived from the society's bylaws. AGM, proxy, proposal, meeting, election, and inspection workflows read from here first."}
         actions={
           <>
             <button
               className="btn-action"
+              disabled={corporate}
+              title={corporate ? "Corporation rules must be configured from approved articles and by-laws; the society baseline cannot be adopted here." : undefined}
               onClick={async () => {
+                if (corporate) return;
                 await reset({ societyId: society._id });
                 setForm(null);
                 toast.info("Reverted to BC Model Bylaw baseline");
@@ -174,9 +179,11 @@ export function BylawRulesPage() {
         <div className="bylaw-rules__notice" role="status">
           <Info size={14} aria-hidden="true" />
           <div>
-            No active custom rule set exists yet. The app is using BC Model
-            Bylaw baseline assumptions until you save a bylaw-specific
-            configuration.
+            {corporate ? (
+              <>No active corporation rule set exists yet. The displayed values are unreviewed operational defaults and may not match your governing Act or company articles and by-laws. Review and adopt an organization-specific configuration before relying on meeting, voting, or filing workflows.</>
+            ) : (
+              <>No active custom rule set exists yet. The app is using BC Model Bylaw baseline assumptions until you save a bylaw-specific configuration.</>
+            )}
           </div>
         </div>
       )}
@@ -185,7 +192,7 @@ export function BylawRulesPage() {
         <div className="card__head">
           <h2 className="card__title">Rule source timeline</h2>
           <span className="card__subtitle">
-            {form.isFallback ? "Default assumptions" : `Editing from v${form.version}`}
+            {form.isFallback ? corporate ? "Unreviewed operational defaults" : "Default assumptions" : `Editing from v${form.version}`}
           </span>
         </div>
         <div className="card__body bylaw-rules__body">

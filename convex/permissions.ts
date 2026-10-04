@@ -1,7 +1,7 @@
 import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
-import { hasPermission, PERMISSIONS, type Permission } from "./lib/permissions";
-import { myPermissionsPortable } from "../shared/functions/permissions";
+import { PERMISSIONS } from "./lib/permissions";
+import { checkPermissionPortable, myPermissionsPortable } from "../shared/functions/permissions";
 import { toPortableQueryCtx } from "./lib/portable";
 
 export const check = query({
@@ -11,11 +11,7 @@ export const check = query({
     permission: v.string(),
   },
   returns: v.any(),
-  handler: async (ctx, { userId, societyId, permission }) => {
-    const user = await ctx.db.get(userId);
-    if (!user || user.societyId !== societyId) return false;
-    return hasPermission(user.role, permission as Permission);
-  },
+  handler: async (ctx, args) => checkPermissionPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const myPermissions = query({

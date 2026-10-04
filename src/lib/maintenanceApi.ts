@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "@/lib/authToken";
 import type { Id } from "../../convex/_generated/dataModel";
 import { STATIC_DEMO_SOCIETY_ID } from "./staticIds";
 import { isLocalDataRuntime } from "./staticRuntime";
@@ -28,7 +29,7 @@ export function maintenanceErrorMessage(error: unknown) {
 }
 
 async function postMaintenance<T>(operation: "seed" | "reset"): Promise<T> {
-  const response = await fetch(`/api/v1/maintenance/${operation}`, {
+  const response = await authenticatedFetch(`/api/v1/maintenance/${operation}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: "{}",

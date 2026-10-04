@@ -31,6 +31,7 @@ import type {
   TableName,
 } from "../portable/ctx";
 import { PORTABLE_ACCESS_ENFORCEMENT } from "../portable/define";
+import { matchesAuthBinding } from "./identity";
 
 export const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"] as const;
 export type Role = (typeof ROLES)[number];
@@ -55,6 +56,8 @@ export type PortableUserRow = PortableDoc & {
   role?: string;
   status?: string;
   authSubject?: string;
+  authIssuer?: string;
+  authProvider?: string;
 };
 
 export type OwnedPortableRow = PortableDoc & { societyId: string };
@@ -91,7 +94,8 @@ export async function resolvePrincipalUser(
     .query<PortableUserRow>("users")
     .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
     .collect();
-  return matches.find((user) => user.societyId === societyId) ?? null;
+  const bound = matches.filter((user) => user.societyId === societyId && matchesAuthBinding(user, principal));
+  return bound.length === 1 ? bound[0] : null;
 }
 
 function assertMembershipStatus(user: PortableUserRow): void {
@@ -250,13 +254,13 @@ async function authorizeUserRole(
 ): Promise<{ user: PortableUserRow }> {
   if (user.societyId !== societyId) throw new Error("User is not part of this society.");
   if (!canActAs(user.role as Role, required)) {
-    // Preserve the existing stranded-society recovery behavior during Stage 1.
+    // Local workspaces retain recovery when their imported data has no admin.
     const peers = await ctx.db
       .query<PortableUserRow>("users")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect();
     const hasQualifiedActor = peers.some((peer) => canActAs(peer.role as Role, required));
-    if (!hasQualifiedActor) return { user };
+    if (!hasQualifiedActor && ctx.principal.assurance === "trusted-workspace") return { user };
     throw new Error(`Role ${required} required — you have ${user.role}.`);
   }
   return { user };

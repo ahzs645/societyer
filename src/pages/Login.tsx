@@ -1,8 +1,10 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { authClient } from "../lib/authClient";
 import { useAuth } from "../auth/AuthProvider";
+import { getSafeAuthRedirect } from "../lib/authRedirect";
 import { ArrowRight, LockKeyhole } from "lucide-react";
+
+const ClerkLogin = lazy(() => import("../auth/ClerkLogin"));
 
 export function LoginPage() {
   const auth = useAuth();
@@ -11,21 +13,46 @@ export function LoginPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"email" | "microsoft" | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    searchParams.get("sso") === "failed"
+      ? "Microsoft sign-in was not completed. Please try again."
+      : null,
+  );
+  const [microsoftEnabled, setMicrosoftEnabled] = useState(false);
+
+  useEffect(() => {
+    if (auth.mode !== "better-auth") return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const { authClient } = await import("../lib/authClient");
+        if (controller.signal.aborted) return;
+        const { data } = await authClient.$fetch<{
+          mode: string;
+          microsoft: { enabled: boolean };
+        }>("/providers", { signal: controller.signal });
+        if (!controller.signal.aborted) {
+          setMicrosoftEnabled(data?.mode === "better-auth" && data.microsoft?.enabled === true);
+        }
+      } catch {
+        // An unavailable provider endpoint leaves email sign-in usable.
+        if (!controller.signal.aborted) setMicrosoftEnabled(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [auth.mode]);
 
   const title = useMemo(
     () => (mode === "sign-in" ? "Sign in" : "Create your account"),
     [mode],
   );
 
-  if (auth.mode !== "better-auth") {
+  if (auth.mode === "none") {
     return <Navigate to="/app" replace />;
   }
   const redirect = searchParams.get("redirect");
-  const safeRedirect = redirect?.startsWith("/") && !redirect.startsWith("//")
-    ? redirect
-    : "/app";
+  const safeRedirect = getSafeAuthRedirect(redirect);
   if (auth.isAuthenticated) {
     return <Navigate to={safeRedirect} replace />;
   }
@@ -59,27 +86,65 @@ export function LoginPage() {
     );
   }
 
+  if (auth.mode === "clerk") {
+    if (auth.sessionStatus === "loading") return <div className="page">Checking your session…</div>;
+    if (auth.session) {
+      return <Navigate to={safeRedirect} replace />;
+    }
+    return (
+      <div className="landing" style={{ minHeight: "100vh" }}>
+        <section className="landing__hero" style={{ minHeight: "100vh" }}>
+          <div className="landing__container" style={{ maxWidth: 520 }}>
+            <h1 className="landing__h1">Sign in to Societyer</h1>
+            <p className="landing__lede">Use your account to access your workspace.</p>
+            <Suspense fallback={<p>Loading sign-in…</p>}>
+              <ClerkLogin redirect={safeRedirect} />
+            </Suspense>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    setBusy(true);
+    if (busy) return;
+    setBusy("email");
     setError(null);
     try {
-      if (mode === "sign-in") {
-        await authClient.signIn.email({
-          email,
-          password,
-        });
-      } else {
-        await authClient.signUp.email({
-          name,
-          email,
-          password,
-        });
-      }
+      const { authClient } = await import("../lib/authClient");
+      const result = mode === "sign-in"
+        ? await authClient.signIn.email({ email, password })
+        : await authClient.signUp.email({ name, email, password });
+      if (result.error) throw new Error(result.error.message || "Authentication failed");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Authentication failed");
     } finally {
-      setBusy(false);
+      setBusy(null);
+    }
+  };
+
+  const signInWithMicrosoft = async () => {
+    if (busy || !microsoftEnabled) return;
+    setBusy("microsoft");
+    setError(null);
+    try {
+      const { authClient } = await import("../lib/authClient");
+      const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const callbackURL = new URL(`${basePath}${safeRedirect}`, window.location.origin).href;
+      const errorCallbackURL = new URL(`${basePath}/login`, window.location.origin);
+      errorCallbackURL.searchParams.set("redirect", safeRedirect);
+      errorCallbackURL.searchParams.set("sso", "failed");
+      const result = await authClient.signIn.social({
+        provider: "microsoft",
+        callbackURL,
+        errorCallbackURL: errorCallbackURL.href,
+      });
+      if (result.error) throw new Error(result.error.message || "Microsoft sign-in failed");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Microsoft sign-in failed. Please try again.");
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -88,7 +153,7 @@ export function LoginPage() {
       <section className="landing__hero" style={{ minHeight: "100vh" }}>
         <div className="landing__container" style={{ maxWidth: 520 }}>
           <div className="landing__eyebrow">
-            <LockKeyhole size={12} /> Better Auth member and staff access
+            <LockKeyhole size={12} /> Member and staff access
           </div>
           <h1 className="landing__h1" style={{ marginBottom: 12 }}>
             {title}
@@ -103,6 +168,16 @@ export function LoginPage() {
             className="card"
             style={{ padding: 20, display: "grid", gap: 14 }}
           >
+            {microsoftEnabled && (
+              <button
+                type="button"
+                className="landing__btn landing__btn--ghost"
+                disabled={busy !== null}
+                onClick={() => void signInWithMicrosoft()}
+              >
+                {busy === "microsoft" ? "Opening Microsoft…" : "Continue with Microsoft"}
+              </button>
+            )}
             {mode === "sign-up" && (
               <label className="field">
                 <span className="field__label">Full name</span>
@@ -157,13 +232,14 @@ export function LoginPage() {
               </div>
             )}
 
-            <button className="landing__btn landing__btn--primary" disabled={busy}>
-              {busy ? "Please wait…" : title} <ArrowRight size={14} />
+            <button className="landing__btn landing__btn--primary" disabled={busy !== null}>
+              {busy === "email" ? "Please wait…" : title} <ArrowRight size={14} />
             </button>
 
             <button
               type="button"
               className="landing__btn landing__btn--ghost"
+              disabled={busy !== null}
               onClick={() => {
                 setError(null);
                 setMode((current) =>

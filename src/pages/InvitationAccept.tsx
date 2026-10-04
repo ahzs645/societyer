@@ -12,6 +12,7 @@ const FAILURE_MESSAGES: Partial<Record<MembershipResolution["status"], string>> 
   "invitation-revoked": "This invitation has been revoked.",
   "invitation-already-accepted": "This invitation has already been used.",
   "invitation-email-mismatch": "Sign in with the email address this invitation was sent to.",
+  "invitation-email-unverified": "Verify your email address, then accept this invitation.",
   "invitation-society-mismatch": "This invitation does not match the requested workspace.",
   "membership-disabled": "Your existing workspace membership is disabled.",
   "ambiguous-binding": "This account has conflicting workspace bindings. Contact an administrator.",
@@ -51,7 +52,7 @@ export function InvitationAcceptPage() {
       });
   }, [accept, auth, token]);
 
-  if (auth.mode !== "better-auth") return <Navigate to="/app" replace />;
+  if (auth.mode === "none") return <Navigate to="/app" replace />;
   if (!token) return <InvitationState message="This invitation link is invalid." />;
   if (!auth.session) {
     const redirect = `/invite/${encodeURIComponent(token)}`;

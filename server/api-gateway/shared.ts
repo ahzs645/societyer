@@ -24,7 +24,6 @@ import {
   buildPdfTableImportBundle,
   normalizePdfTableStructures,
 } from "../../convex/lib/pdfTableNormalization";
-import { auth, getAuthMode } from "../auth-config";
 import {
   importGcosProjectSnapshotViaConvex,
   normalizeGcosExportedSnapshot,
@@ -46,7 +45,7 @@ extendZodWithOpenApi(z);
 type ConvexCall = { kind: "query" | "mutation" | "action"; name: string };
 type Scope = string;
 type Actor = {
-  type: "api-key" | "better-auth" | "local-dev";
+  type: "api-key" | "better-auth" | "clerk" | "local-dev";
   societyId?: string;
   userId?: string;
   clientId?: string;
@@ -264,9 +263,14 @@ function normalizeEventTypes(value: unknown) {
 }
 
 function extractApiToken(req: Request) {
+  const explicitKey = req.get("x-api-key")?.trim();
+  if (explicitKey) return explicitKey;
   const header = req.get("authorization");
-  if (header?.toLowerCase().startsWith("bearer ")) return header.slice(7).trim();
-  return req.get("x-api-key")?.trim() || null;
+  if (header?.toLowerCase().startsWith("bearer ")) {
+    const token = header.slice(7).trim();
+    if (token.startsWith("soc_")) return token;
+  }
+  return null;
 }
 
 function hashApiToken(token: string) {
@@ -462,7 +466,7 @@ function errorResponses() {
 }
 
 function security() {
-  return [{ bearerApiKey: [] }, { xApiKey: [] }] as Record<string, string[]>[];
+  return [{ bearerApiKey: [] }, { xApiKey: [] }, { clerkBearer: [] }] as Record<string, string[]>[];
 }
 
 declare global {

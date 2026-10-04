@@ -5,6 +5,7 @@ import { assertNativeFileStorageEnabled } from "./providers/env";
 import { getUrlPortable } from "../shared/functions/files";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { buildConvexCapabilities } from "./providers/capabilities";
+import { matchesAuthBinding } from "../shared/functions/identity";
 import {
   claimStorageId,
   requireAuthenticated,
@@ -33,6 +34,7 @@ async function requireUploadMembership(ctx: MutationCtx) {
       .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
       .collect();
     const active = memberships.find((membership) =>
+      matchesAuthBinding(membership, principal) &&
       typeof membership.societyId === "string" &&
       (!membership.status || membership.status === "Active"));
     if (active && typeof active.societyId === "string") {

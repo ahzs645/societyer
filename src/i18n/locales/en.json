@@ -84,7 +84,7 @@
     "workflowRuns": "Workflow runs",
     "workflowPackages": "Workflow packages",
     "notifications": "Notifications",
-    "users": "Users & roles",
+    "users": "Users & access",
     "importSessions": "Import sessions",
     "auditLog": "Audit log",
     "dataExport": "Data export"

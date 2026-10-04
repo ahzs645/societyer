@@ -52,6 +52,23 @@ const corpGen = await client.mutation("legalOperations:generateDocumentFromCatal
 });
 assert.ok(corpGen.runId && corpGen.draftDocumentId, "corporation generate produced a draft document");
 
+// Reject cross-mode requests before catalog or document writes, even when an
+// older workspace has both catalogs seeded or the client supplies another key.
+for (const [societyId, packetKey] of [
+  [soc.societyId, "organize-corporation"],
+  [corp.societyId, "society-directors-resolution"],
+]) {
+  const before = await client.query("legalOperations:templateEngine", { societyId });
+  await assert.rejects(
+    client.mutation("legalOperations:generateDocumentFromCatalog", { societyId, packetKey }),
+    /does not apply to this workspace's entity type/,
+  );
+  const after = await client.query("legalOperations:templateEngine", { societyId });
+  assert.equal(after.templates.length, before.templates.length, "rejected request does not seed another catalog");
+  assert.equal(after.runs.length, before.runs.length, "rejected request does not create a run");
+  assert.equal(after.generatedDocuments.length, before.generatedDocuments.length, "rejected request does not create documents");
+}
+
 // --- Unknown key throws ------------------------------------------------------
 let threw = false;
 try {

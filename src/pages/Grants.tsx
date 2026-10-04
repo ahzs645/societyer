@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "@/lib/authToken";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -190,7 +191,7 @@ export function GrantsPage() {
       const text = await readGcosExportFile(file);
       const parsed = JSON.parse(text);
       const snapshot = parsed?.snapshot ?? parsed;
-      const response = await fetch("/api/v1/browser-connectors/connectors/gcos/import-exported-snapshot", {
+      const response = await authenticatedFetch("/api/v1/browser-connectors/connectors/gcos/import-exported-snapshot", {
         method: "POST",
         headers: { "content-type": "application/json" },
         signal: controller.signal,

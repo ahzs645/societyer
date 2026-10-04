@@ -21,7 +21,7 @@ type SocietyView = Doc<"societies"> & {
 };
 
 function requiresMembershipSelection() {
-  return getAuthMode() === "better-auth" && !isLocalDataRuntime();
+  return getAuthMode() !== "none" && !isLocalDataRuntime();
 }
 
 export function setMembershipSocietyIds(
@@ -66,9 +66,9 @@ export function useSocieties() {
   const auth = useAuth();
   const localSocieties = useQuery(
     api.society.list,
-    auth.mode === "better-auth" ? "skip" : {},
+    auth.mode !== "none" ? "skip" : {},
   ) as SocietyView[] | undefined;
-  const societies = (auth.mode === "better-auth" ? auth.societies : localSocieties) as
+  const societies = (auth.mode !== "none" ? auth.societies : localSocieties) as
     | SocietyView[]
     | undefined;
   return useMemo(() => {

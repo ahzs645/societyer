@@ -11,13 +11,13 @@
  * just runs the body.
  */
 
-import { makeFunctionReference, type UserIdentity } from "convex/server";
+import { makeFunctionReference } from "convex/server";
+import { hostedPrincipal } from "./authIdentity";
 import { makeCapabilities, type PortableCapabilities } from "../../shared/portable/capabilities";
 import type {
   IndexRangeBuilder,
   PortableDoc,
   PortableMutationCtx,
-  PortablePrincipal,
   PortableQuery,
   PortableQueryCtx,
   SearchFilterBuilder,
@@ -136,24 +136,6 @@ class ConvexPortableDb implements TransactionalDb {
 }
 
 const NO_CAPABILITIES = makeCapabilities({});
-
-function hostedPrincipal(identity: UserIdentity | null): PortablePrincipal {
-  if (!identity) {
-    return { kind: "anonymous", runtime: "convex-hosted", assurance: "none" };
-  }
-  return {
-    kind: "user",
-    runtime: "convex-hosted",
-    assurance: "verified-jwt",
-    subject: identity.subject,
-    issuer: identity.issuer,
-    authProvider: "better-auth",
-    tokenIdentifier: identity.tokenIdentifier,
-    email: identity.email,
-    emailVerified: identity.emailVerified,
-    ...(identity.name ? { name: identity.name } : {}),
-  };
-}
 
 /** Wrap a real Convex query ctx as a portable query ctx. */
 export async function toPortableQueryCtx(

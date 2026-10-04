@@ -340,7 +340,7 @@ async function downloadUrlForVersion(row: any) {
       (globalThis as any)?.process?.env?.SOCIETYER_API_PUBLIC_URL ??
       (globalThis as any)?.process?.env?.BETTER_AUTH_BASE_URL?.replace(/\/$/, "").replace(/:5173$/, ":8787") ??
       "http://127.0.0.1:8787";
-    return `${base.replace(/\/$/, "")}/api/v1/workflow-generated-documents/${encodeURIComponent(row.storageKey)}`;
+    return `${base.replace(/\/$/, "")}/api/v1/workflow-generated-documents/${encodeURIComponent(row.storageKey)}?societyId=${encodeURIComponent(row.societyId)}`;
   }
   if (row.storageProvider === "rustfs" || row.storageProvider === "demo") {
     return await createDownloadUrl({

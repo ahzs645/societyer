@@ -196,7 +196,15 @@ export const getDownloadTarget = action({
   handler: async (ctx, { versionId }) => {
     const version = await ctx.runQuery(api.documentVersions.get, { id: versionId });
     if (!version) return null;
-    return await downloadTargetForVersion(version);
+    const target = await downloadTargetForVersion(version);
+    if (version.storageProvider === "local" && target.kind === "url") {
+      // Browser downloads use the app's same-origin API proxy, allowing a
+      // bearer header without exposing it to a configured external host.
+      // getDownloadUrl retains the absolute URL for server-side consumers.
+      const url = new URL((target as any).url);
+      return { ...target, url: `${url.pathname}${url.search}` };
+    }
+    return target;
   },
 });
 
@@ -225,7 +233,7 @@ async function downloadTargetForVersion(version: any) {
     return {
       kind: "url",
       ...baseTarget,
-      url: `${base.replace(/\/$/, "")}/api/v1/workflow-generated-documents/${encodeURIComponent(version.storageKey)}`,
+      url: `${base.replace(/\/$/, "")}/api/v1/workflow-generated-documents/${encodeURIComponent(version.storageKey)}?societyId=${encodeURIComponent(version.societyId)}`,
     };
   }
 

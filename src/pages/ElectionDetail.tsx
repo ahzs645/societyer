@@ -11,7 +11,7 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { Vote, ArrowLeft, ShieldCheck, CheckCircle2, Lock } from "lucide-react";
 import { useToast } from "../components/Toast";
-import { isBetterAuthMode } from "../lib/authMode";
+import { isAuthenticatedAuthMode } from "../lib/authMode";
 
 export function ElectionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -102,7 +102,7 @@ export function ElectionDetailPage() {
   if (electionBundle === null || !election) return <SeedPrompt />;
 
   const canVote =
-    isBetterAuthMode() &&
+    isAuthenticatedAuthMode() &&
     election.status === "Open" &&
     !!currentUser?.memberId &&
     myEligibility &&
@@ -117,7 +117,7 @@ export function ElectionDetailPage() {
     (election.scrutineerUserIds ?? []).includes(user._id),
   );
   const canNominate =
-    isBetterAuthMode() &&
+    isAuthenticatedAuthMode() &&
     !!currentUser?.memberId &&
     isWindowOpen(
       election.nominationsOpenAtISO ?? election.createdAtISO,
@@ -226,7 +226,7 @@ export function ElectionDetailPage() {
               <h2 className="card__title">Ballot</h2>
             </div>
             <div className="card__body" style={{ display: "grid", gap: 16 }}>
-              {!isBetterAuthMode() && (
+              {!isAuthenticatedAuthMode() && (
                 <div className="muted">
                   Real anonymous member voting is disabled in no-auth mode.
                 </div>

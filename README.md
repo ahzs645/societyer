@@ -164,16 +164,23 @@ against `http://societyer.k8s.home:3220`.
 
 ## Auth modes
 
-Societyer now supports two identity modes:
+Societyer supports three identity modes:
 
 - **`VITE_AUTH_MODE=none` / `AUTH_MODE=none`** — keep the current local/demo workflow. The user picker remains available and no auth server is required.
-- **`VITE_AUTH_MODE=better-auth` / `AUTH_MODE=better-auth`** — enable Better Auth for real login/session handling. Start the auth sidecar alongside Vite:
+- **`VITE_AUTH_MODE=better-auth` / `AUTH_MODE=better-auth`** — enable Better Auth for real login/session handling.
+- **`VITE_AUTH_MODE=clerk` / `AUTH_MODE=clerk`** — use Clerk for sign-in and account profiles while Societyer retains workspace roles and invitations. See [Clerk setup](docs/clerk-setup.md) for frontend, Convex, gateway, and container configuration.
+
+For either hosted sign-in mode, start the API sidecar alongside Vite:
 
 ```bash
 npm run dev:full
 ```
 
 Running the auth sidecar directly requires Node 22.5+ because Better Auth uses `node:sqlite`. The Docker auth-server service already uses Node 22.
+
+Better Auth can also use company Microsoft Entra sign-in. Configure its optional
+single-tenant Microsoft provider using the [Microsoft SSO setup guide](docs/microsoft-sso-setup.md).
+Microsoft sign-in and SharePoint document access have separate permissions.
 
 ## Configurable modules
 
@@ -184,6 +191,27 @@ Settings → Modules can enable or hide optional surfaces by society. Current mo
 - **Compliance**: filing pre-fill, records retention/inspection, PIPA training, insurance, access custody, and public transparency.
 - **Finance**: reconciliation, donation receipts, membership billing, employee records, and grant finance workflows.
 - **Integrations**: Paperless-ngx, browser connectors, and workflow automation.
+
+Workspace Admins and Owners can select a user in Users to inspect their role policy
+across core areas and optional modules. The viewer separates role grants from workspace
+feature switches and explains actions whose server checks differ from the policy.
+Module settings require Admin or Owner. Individual module overrides are not supported.
+
+## Organization setup and incorporation preparation
+
+New workspaces distinguish BC societies, BC business companies, and federal CBCA
+business corporations. Preparing to incorporate is a separate stage from an active
+organization; creating a workspace does not submit a registry application.
+Preparation panels collect the required information, link to official registry services,
+and offer a downloadable intake worksheet. These are planning aids, not government
+forms, articles, bylaws, or an incorporation agreement. Existing document packets support
+later governance work and cannot be generated for the wrong organization mode.
+Corporation meeting rules must be configured from the company's articles and bylaws;
+the inherited operational fallback is not a reviewed corporation rule set.
+
+Current filing channels, paper or mail availability, and fees must be checked with the
+registry. Government sites were unavailable in this development environment; the
+preparation guidance retains existing source dates without claiming a new legal review.
 
 ## Live integrations
 
@@ -228,11 +256,11 @@ stored in Convex — set `SOCIETYER_DISABLE_NATIVE_FILE_STORAGE=1` on the Convex
 
 Auth mode uses a small SQLite auth database configured by `AUTH_DB_PATH`, and maps signed-in identities into the existing Convex `users` / `members` records.
 
-> **Important — identity is client-asserted today.** The product UI talks directly to Convex,
-> Convex functions do not call `ctx.auth`, and role checks trust an `actingUserId` passed by the
-> client. `better-auth` gates the SPA login, **not** the Convex endpoint. This is intentional for
-> local-first / single-tenant use but is **not** safe for an untrusted multi-tenant deployment.
-> See [docs/security-and-auth-posture.md](/Users/ahmadjalil/github/societyer/docs/security-and-auth-posture.md) for the full model and the multi-tenant hardening checklist.
+> Hosted authentication verifies JWT identity in Convex and resolves Societyer workspace
+> memberships from the verified issuer and subject. Clerk-configured backends require
+> authenticated access; other hosted deployments must explicitly enable
+> `SOCIETYER_PORTABLE_ACCESS_ENFORCEMENT=1` to reject the remaining anonymous compatibility
+> path. See [security and auth posture](docs/security-and-auth-posture.md) for deployment prerequisites.
 
 ## API gateway
 

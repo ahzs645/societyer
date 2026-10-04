@@ -30,6 +30,7 @@ export const ORG_HUB_OPTION_SETS = {
     { value: "CA-ON-OBCA", label: "Ontario - OBCA (Societyer code)" },
   ],
   actsFormedUnder: [
+    { value: "business_corporations_act__british_columbia_", label: "Business Corporations Act (British Columbia)" },
     { value: "canada_business_corporations_act", label: "Canada Business Corporations Act" },
     { value: "canada_not_for_profit_corporations_act", label: "Canada Not-for-profit Corporations Act" },
     { value: "business_corporations_act__ontario_", label: "Business Corporations Act (Ontario)" },
@@ -248,6 +249,7 @@ export const ORG_HUB_OPTION_SETS = {
 
 export const LOCAL_OPTION_SETS = {
   organizationStatuses: [
+    { value: "pre_incorporation", label: "Preparing incorporation" },
     { value: "active", label: "Active" },
     { value: "archived", label: "Archived" },
     { value: "removed", label: "Removed" },

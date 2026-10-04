@@ -25,7 +25,7 @@ spec:
           env:
             - name: NODE_ENV
               value: production
-            # Stage 1 remains the default. Before changing this to better-auth,
+            # Stage 1 remains the default. Before changing this to better-auth or clerk,
             # populate BETTER_AUTH_SECRET in societyer-app-secret; startup fails
             # closed when that key is absent or empty.
             - name: AUTH_MODE
@@ -35,6 +35,24 @@ spec:
                 secretKeyRef:
                   name: societyer-app-secret
                   key: BETTER_AUTH_SECRET
+                  optional: true
+            - name: CLERK_JWT_ISSUER_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: CLERK_JWT_ISSUER_DOMAIN
+                  optional: true
+            - name: CLERK_AUTHORIZED_PARTIES
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: CLERK_AUTHORIZED_PARTIES
+                  optional: true
+            - name: CLERK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: CLERK_SECRET_KEY
                   optional: true
             - name: AUTH_SERVER_PORT
               value: "8787"

@@ -9,8 +9,10 @@ import {
 } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
 import { ChevronDown, LogOut } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
+
+const ClerkAccountButton = lazy(() => import("../auth/ClerkAccountButton"));
 
 export function UserPicker() {
   const auth = useAuth();
@@ -73,7 +75,7 @@ export function UserPicker() {
 
   if (!society) return null;
 
-  if (auth.mode === "better-auth") {
+  if (auth.mode !== "none") {
     return (
       <div
         style={{
@@ -104,10 +106,12 @@ export function UserPicker() {
           )}
         </div>
         <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-          Signed in through Better Auth. Member eligibility and staff permissions
-          resolve into the society workspace from here.
+          Signed in to your account. Your workspace membership determines access.
         </div>
         <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+          {auth.mode === "clerk" && (
+            <Suspense fallback={null}><ClerkAccountButton /></Suspense>
+          )}
           {current?.memberId && (
             <Link to="/portal" className="btn btn--ghost btn--sm">
               Member portal
@@ -202,7 +206,7 @@ export function UserPicker() {
             ))}
             {(users ?? []).length === 0 && (
               <div className="empty-state empty-state--sm empty-state--start">
-                Add users under Users & roles, or click Reseed in the demo banner.
+                Add users under Users & access, or click Reseed in the demo banner.
               </div>
             )}
           </div>,

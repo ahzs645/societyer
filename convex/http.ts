@@ -7,6 +7,8 @@ import { generateText, streamText } from "ai";
 import { buildICalendar } from "../shared/icalendar";
 import { assertApiPlatformServiceToken, serviceTokenValidator } from "./lib/serviceAuth";
 import type { Doc, Id } from "./_generated/dataModel";
+import { hostedPrincipal } from "./lib/authIdentity";
+import { matchesAuthBinding } from "../shared/functions/identity";
 
 const http = httpRouter();
 const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
@@ -14,29 +16,30 @@ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 /**
  * Bootstrap the authenticated workspace picker without trusting a society id
- * from browser storage. The verified JWT subject is the only lookup key.
+ * from browser storage. Memberships match the verified issuer and subject.
  */
 export const currentPrincipalMemberships = query({
   args: {},
   returns: v.any(),
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.subject) {
+    const principal = hostedPrincipal(await ctx.auth.getUserIdentity());
+    if (principal.kind !== "user" || !principal.subject) {
       return { status: "unauthenticated", memberships: [] };
     }
 
     const rows = await ctx.db
       .query("users")
-      .withIndex("by_auth_subject", (q) => q.eq("authSubject", identity.subject))
+      .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
       .collect();
-    const activeRows = rows.filter((row) => !row.status || row.status === "Active");
+    const boundRows = rows.filter((row) => matchesAuthBinding(row, principal));
+    const activeRows = boundRows.filter((row) => !row.status || row.status === "Active");
     const activeSocietyIds = new Set(activeRows.map((row) => String(row.societyId)));
     if (activeSocietyIds.size !== activeRows.length) {
       return { status: "ambiguous-binding", memberships: [] };
     }
     if (activeRows.length === 0) {
       return {
-        status: rows.some((row) => row.status === "Disabled")
+        status: boundRows.some((row) => row.status === "Disabled")
           ? "membership-disabled"
           : "needs-invitation",
         memberships: [],
@@ -75,7 +78,9 @@ export const currentPrincipalMemberships = query({
     }
     return {
       status: memberships.length > 0 ? "bound" : "needs-invitation",
-      authSubject: identity.subject,
+      authSubject: principal.subject,
+      authIssuer: principal.issuer,
+      authProvider: principal.authProvider,
       memberships,
     };
   },
@@ -90,7 +95,7 @@ export const gatewayApiPrincipal = query({
   },
   returns: v.union(
     v.null(),
-    v.object({ authSubject: v.string() }),
+    v.object({ authSubject: v.string(), authIssuer: v.optional(v.string()), authProvider: v.optional(v.string()) }),
   ),
   handler: async (ctx, { societyId, userId, serviceToken }) => {
     await assertApiPlatformServiceToken(serviceToken);
@@ -98,12 +103,13 @@ export const gatewayApiPrincipal = query({
     if (
       !user ||
       user.societyId !== societyId ||
-      user.status === "Disabled" ||
+      user.status !== "Active" ||
       !user.authSubject
     ) {
       return null;
     }
-    return { authSubject: user.authSubject };
+    if (user.authProvider === "clerk" && !user.authIssuer) return null;
+    return { authSubject: user.authSubject, authIssuer: user.authIssuer, authProvider: user.authProvider };
   },
 });
 
@@ -115,7 +121,7 @@ export const gatewayWorkflowBinding = query({
   },
   returns: v.union(
     v.null(),
-    v.object({ societyId: v.id("societies"), authSubject: v.string() }),
+    v.object({ societyId: v.id("societies"), authSubject: v.string(), authIssuer: v.optional(v.string()), authProvider: v.optional(v.string()) }),
   ),
   handler: async (ctx, { workflowId, runId, serviceToken }) => {
     await assertApiPlatformServiceToken(serviceToken);
@@ -137,12 +143,13 @@ export const gatewayWorkflowBinding = query({
     if (
       !user ||
       user.societyId !== run.societyId ||
-      user.status === "Disabled" ||
+      user.status !== "Active" ||
       !user.authSubject
     ) {
       return null;
     }
-    return { societyId: run.societyId, authSubject: user.authSubject };
+    if (user.authProvider === "clerk" && !user.authIssuer) return null;
+    return { societyId: run.societyId, authSubject: user.authSubject, authIssuer: user.authIssuer, authProvider: user.authProvider };
   },
 });
 

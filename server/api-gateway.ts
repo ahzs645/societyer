@@ -20,6 +20,7 @@ import {
   normalizePdfTableStructures,
 } from "../convex/lib/pdfTableNormalization";
 import { auth, getAuthMode } from "./auth-config";
+import { machinePrincipalClaims, verifyClerkConvexToken } from "./clerk-auth";
 import {
   importGcosProjectSnapshotViaConvex,
   normalizeGcosExportedSnapshot,
@@ -1349,7 +1350,7 @@ function mountWorkflowBridgeRoutes(router: Router, client: ConvexHttpClient) {
         throw httpError(404, "workflow_run_not_found", "Workflow run not found.");
       }
       const signed = await auth.api.signJWT({
-        body: { payload: { sub: binding.authSubject } },
+        body: { payload: machinePrincipalClaims(binding) },
       });
       const callbackAuthToken = signed.token;
 
@@ -1508,7 +1509,9 @@ async function assertResourceTenant(
   req: Request,
   resourceName: string,
 ) {
-  await assertTenantId(client, req, req.params.id, `${resourceName} record`);
+  const id = req.params.id;
+  if (typeof id !== "string") throw httpError(400, "invalid_resource_id", "A resource ID is required.");
+  await assertTenantId(client, req, id, `${resourceName} record`);
 }
 
 async function assertTenantId(
@@ -1588,7 +1591,7 @@ async function resolveActor(client: ConvexHttpClient, req: Request, requiredScop
       throw httpError(401, "api_principal_unbound", "API token creator is no longer an active workspace user.");
     }
     const signed = await auth.api.signJWT({
-      body: { payload: { sub: principal.authSubject } },
+      body: { payload: machinePrincipalClaims(principal) },
     });
     return {
       type: "api-key",
@@ -1608,7 +1611,9 @@ async function resolveActor(client: ConvexHttpClient, req: Request, requiredScop
     return localActor;
   }
 
-  const sessionActor = await resolveBetterAuthActor(client, req);
+  const sessionActor = getAuthMode() === "clerk"
+    ? await resolveClerkActor(client, req)
+    : await resolveBetterAuthActor(client, req);
   if (sessionActor) {
     if (!roleAllows(sessionActor.role, requiredScope)) {
       throw httpError(403, "insufficient_scope", `Role ${sessionActor.role} cannot use ${requiredScope}.`);
@@ -1616,7 +1621,7 @@ async function resolveActor(client: ConvexHttpClient, req: Request, requiredScop
     return sessionActor;
   }
 
-  throw httpError(401, "unauthorized", "Provide an API key or an authenticated Better Auth session.");
+  throw httpError(401, "unauthorized", "Provide an API key or an authenticated workspace session.");
 }
 
 async function resolveLocalDevActor(client: ConvexHttpClient, req: Request): Promise<Actor | null> {
@@ -1655,6 +1660,26 @@ async function resolveBetterAuthActor(client: ConvexHttpClient, req: Request): P
     throw httpError(401, "convex_token_missing", "The authenticated session did not provide a workspace token.");
   }
 
+  return resolveSessionMembership(client, req, "better-auth", convexAuthToken, authSubject);
+}
+
+async function resolveClerkActor(client: ConvexHttpClient, req: Request): Promise<Actor | null> {
+  const header = req.get("authorization");
+  if (!header?.toLowerCase().startsWith("bearer ")) return null;
+  const token = header.slice(7).trim();
+  if (!token) return null;
+  const verified = await verifyClerkConvexToken(token);
+  return resolveSessionMembership(client, req, "clerk", token, verified.subject, verified.issuer);
+}
+
+async function resolveSessionMembership(
+  client: ConvexHttpClient,
+  req: Request,
+  type: "better-auth" | "clerk",
+  convexAuthToken: string,
+  authSubject: string,
+  authIssuer?: string,
+): Promise<Actor> {
   const lookup = await convexCallWithAuth(
     client,
     convexAuthToken,
@@ -1663,6 +1688,9 @@ async function resolveBetterAuthActor(client: ConvexHttpClient, req: Request): P
   );
   if (lookup?.authSubject && lookup.authSubject !== authSubject) {
     throw httpError(401, "principal_mismatch", "The session and workspace token identify different users.");
+  }
+  if (authIssuer && lookup?.authIssuer && lookup.authIssuer !== authIssuer) {
+    throw httpError(401, "principal_mismatch", "The session and workspace token identify different issuers.");
   }
   if (lookup?.status === "membership-disabled") {
     throw httpError(403, "membership_disabled", "The workspace user is disabled.");
@@ -1684,7 +1712,7 @@ async function resolveBetterAuthActor(client: ConvexHttpClient, req: Request): P
     throw httpError(403, "membership_required", "The authenticated account is not a member of the requested workspace.");
   }
   return {
-    type: "better-auth",
+    type,
     societyId: membership.society._id,
     userId: membership.userId,
     scopes: [],
@@ -1727,6 +1755,7 @@ function buildOpenApiDocument() {
   doc.components.securitySchemes = {
     bearerApiKey: { type: "http", scheme: "bearer" },
     xApiKey: { type: "apiKey", in: "header", name: "x-api-key" },
+    clerkBearer: { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "Clerk JWT from the Convex token template." },
   };
   return doc;
 }

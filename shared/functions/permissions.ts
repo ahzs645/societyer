@@ -6,7 +6,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
-import type { Role } from "./access";
+import { requireRolePortable, requireSocietyMembership, type Role } from "./access";
 
 export const PERMISSIONS = [
   "society:read",
@@ -104,12 +104,12 @@ export const ROLE_MATRIX: Record<Role, readonly Permission[]> = {
 };
 
 export function hasPermission(role: string, permission: Permission): boolean {
-  if (!(role in ROLE_MATRIX)) return false;
+  if (!Object.hasOwn(ROLE_MATRIX, role)) return false;
   return (ROLE_MATRIX[role as Role] as readonly string[]).includes(permission);
 }
 
 export function listPermissionsForRole(role: string): readonly Permission[] {
-  if (!(role in ROLE_MATRIX)) return [];
+  if (!Object.hasOwn(ROLE_MATRIX, role)) return [];
   return ROLE_MATRIX[role as Role];
 }
 
@@ -117,10 +117,23 @@ export async function myPermissionsPortable(
   ctx: PortableQueryCtx,
   { userId, societyId }: { userId: string; societyId: string },
 ) {
-  const user = await ctx.db.get(userId);
+  const currentUser = await requireSocietyMembership(ctx, societyId);
+  if (String(currentUser._id) !== userId) {
+    await requireRolePortable(ctx, { societyId, required: "Admin" });
+  }
+  const user = await ctx.db.get(userId, "users");
   if (!user || user.societyId !== societyId) return { role: null, permissions: [] };
   return {
     role: user.role,
     permissions: listPermissionsForRole(String(user.role)),
   };
+}
+
+/** Inspect the declared role policy, never grant access to the operation itself. */
+export async function checkPermissionPortable(
+  ctx: PortableQueryCtx,
+  args: { userId: string; societyId: string; permission: string },
+) {
+  const { permissions } = await myPermissionsPortable(ctx, args);
+  return (permissions as readonly string[]).includes(args.permission);
 }

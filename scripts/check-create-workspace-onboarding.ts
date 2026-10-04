@@ -22,4 +22,17 @@ const registryNode = unknownNodes.find((node) => node.key === "registry_optional
 assert.equal(registryNode?.label, "Registry verification");
 assert.equal(registryNode?.description.includes("BC Registry"), false);
 
+const bcCompany = {
+  jurisdictionCode: "CA-BC",
+  entityType: "corporation__business_",
+  actFormedUnder: "business_corporations_act__british_columbia_",
+};
+const companyTasks = buildWorkspaceOnboardingTasks(bcCompany);
+assert.ok(companyTasks.some((task) => task.description.includes("Corporate Online")));
+assert.equal(companyTasks.some((task) => /constitution|member register|Societies Online/.test(task.description)), false);
+assert.ok(companyTasks.some((task) => task.description.includes("signed incorporation agreement")));
+assert.ok(companyTasks.some((task) => task.description.includes("shareholders")));
+const preparingTasks = buildWorkspaceOnboardingTasks({ ...bcCompany, organizationStatus: "pre_incorporation" });
+assert.ok(preparingTasks.some((task) => task.tags.includes("formation")));
+assert.ok(buildWorkspaceOnboardingNodes(bcCompany).some((node) => node.description.includes("securities register")));
 console.log("Create workspace onboarding checks passed.");

@@ -1,9 +1,8 @@
-export type AuthMode = "none" | "better-auth";
+export type AuthMode = "none" | "better-auth" | "clerk";
 
 export function getAuthMode(): AuthMode {
-  return import.meta.env.VITE_AUTH_MODE === "better-auth"
-    ? "better-auth"
-    : "none";
+  const mode = import.meta.env.VITE_AUTH_MODE;
+  return mode === "better-auth" || mode === "clerk" ? mode : "none";
 }
 
 export function isBetterAuthMode() {
@@ -12,4 +11,8 @@ export function isBetterAuthMode() {
 
 export function isNoAuthMode() {
   return getAuthMode() === "none";
+}
+
+export function isAuthenticatedAuthMode() {
+  return getAuthMode() !== "none";
 }

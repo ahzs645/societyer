@@ -70,6 +70,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "CA-ON-OBCA",
   ],
   actsFormedUnder: [
+    "business_corporations_act__british_columbia_",
     "canada_business_corporations_act",
     "canada_not_for_profit_corporations_act",
     "business_corporations_act__ontario_",
@@ -210,7 +211,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "shareholder___entering",
     "transfer_participants",
   ],
-  organizationStatuses: ["active", "archived", "removed", "needs_review"],
+  organizationStatuses: ["pre_incorporation", "active", "archived", "removed", "needs_review"],
   registrationStatuses: ["active", "inactive", "pending", "needs_review"],
   registrationTypes: ["home", "extra_provincial", "business_name", "branch", "licence", "deregistered"],
   identifierStatuses: ["active", "inactive", "needs_review"],

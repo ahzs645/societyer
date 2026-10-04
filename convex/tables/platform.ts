@@ -14,6 +14,7 @@ export const platformTables = {
     role: v.string(), // Owner | Admin | Director | Member | Viewer
     authProvider: v.optional(v.string()),
     authSubject: v.optional(v.string()),
+    authIssuer: v.optional(v.string()),
     memberId: v.optional(v.id("members")),
     directorId: v.optional(v.id("directors")),
     status: v.string(), // Active | Invited | Disabled
@@ -24,7 +25,8 @@ export const platformTables = {
   })
     .index("by_society", ["societyId"])
     .index("by_email", ["email"])
-    .index("by_auth_subject", ["authSubject"]),
+    .index("by_auth_subject", ["authSubject"])
+    .index("by_auth_issuer_subject", ["authIssuer", "authSubject"]),
 
   apiClients: defineTable({
     societyId: v.id("societies"),

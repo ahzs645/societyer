@@ -2280,6 +2280,22 @@
     ]
   },
   {
+    "key": "convex:apiPlatform:migrateUserToClerk",
+    "surface": "convex",
+    "name": "apiPlatform:migrateUserToClerk",
+    "kind": "mutation",
+    "access": "unclassified",
+    "source": "convex/apiPlatform.ts",
+    "idArguments": [
+      {
+        "path": "userId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:apiPlatform:resourceTenantStatus",
     "surface": "convex",
     "name": "apiPlatform:resourceTenantStatus",
@@ -16007,7 +16023,7 @@
     "surface": "convex",
     "name": "society:upsert",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/society.ts",
     "idArguments": [
       {
@@ -33515,6 +33531,28 @@
     ]
   },
   {
+    "key": "portable:users:remove",
+    "surface": "portable",
+    "name": "users:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "users",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:users:setRole",
     "surface": "portable",
     "name": "users:setRole",
@@ -33527,6 +33565,46 @@
         "table": "users",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:users:upsert",
+    "surface": "portable",
+    "name": "users:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "users",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "memberId",
+        "table": "members",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "directorId",
+        "table": "directors",
+        "array": false,
+        "optional": true
       },
       {
         "path": "actingUserId",

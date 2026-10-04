@@ -55,6 +55,9 @@ function environmentValue(name: string): string | boolean | undefined {
 }
 
 function configuredPortableAccessEnforcement(): boolean {
+  // A configured hosted Clerk deployment always rejects anonymous callers.
+  // Browser/demo auth mode by itself does not change local trust semantics.
+  if (String(environmentValue("CLERK_JWT_ISSUER_DOMAIN") ?? "").trim()) return true;
   const configured = environmentValue(PORTABLE_ACCESS_ENFORCEMENT_ENV)
     ?? environmentValue(VITE_PORTABLE_ACCESS_ENFORCEMENT_ENV);
   if (configured === undefined) return DEFAULT_PORTABLE_ACCESS_ENFORCEMENT;

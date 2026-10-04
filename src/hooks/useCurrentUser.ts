@@ -18,7 +18,7 @@ export function getStoredUserId(): Id<"users"> | null {
   if (isStaticDemoRuntime()) return staticUserId;
   const value = localStorage.getItem(KEY) as Id<"users"> | null;
   if (
-    getAuthMode() === "better-auth" &&
+    getAuthMode() !== "none" &&
     !isLocalDataRuntime() &&
     value &&
     !principalUsers?.has(value)
@@ -31,7 +31,7 @@ export function getStoredUserId(): Id<"users"> | null {
 
 export function setStoredUserId(id: Id<"users"> | null) {
   if (
-    getAuthMode() === "better-auth" &&
+    getAuthMode() !== "none" &&
     !isLocalDataRuntime() &&
     id &&
     !principalUsers?.has(id)
@@ -66,7 +66,7 @@ export function useCurrentUserId(): Id<"users"> | null {
 
 export function useCurrentUser() {
   const id = useCurrentUserId();
-  const usePrincipalUser = getAuthMode() === "better-auth" && !isLocalDataRuntime();
+  const usePrincipalUser = getAuthMode() !== "none" && !isLocalDataRuntime();
   const user = useQuery(api.users.get, !usePrincipalUser && id ? { id } : "skip");
   if (usePrincipalUser) return id ? principalUsers?.get(id) ?? null : null;
   return user ?? null;
@@ -86,5 +86,5 @@ export function hasRole(role: string | undefined | null, required: string): bool
 }
 
 export function isRealAuthEnabled() {
-  return getAuthMode() === "better-auth";
+  return getAuthMode() !== "none";
 }

@@ -13,6 +13,7 @@ import { SignaturePanel } from "../components/SignaturePanel";
 import { useToast } from "../components/Toast";
 import { formatDateTime } from "../lib/format";
 import { openDocumentDownloadTarget } from "../lib/documentStorage";
+import { fetchDocumentDownload } from "../lib/documentDownload";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -93,11 +94,11 @@ export function DocumentWorkbenchPage() {
       return;
     }
     if (legacyUrl) {
-      window.open(legacyUrl, "_blank");
+      await openDocumentDownloadTarget({ kind: "url", provider: "external", key: document._id, url: legacyUrl });
       return;
     }
     if (document.url) {
-      window.open(document.url, "_blank");
+      await openDocumentDownloadTarget({ kind: "url", provider: "external", key: document._id, url: document.url });
       return;
     }
     toast.info("No file or URL is attached to this document.");
@@ -386,7 +387,7 @@ function DocumentPreviewPane({
         // 'self' data: blob: instead of needing to allowlist every possible
         // storage host, and works identically for data: URLs (demo) and real
         // remote storage URLs (hosted deployments).
-        const response = await fetch(url);
+        const response = await fetchDocumentDownload(url);
         if (!response.ok) throw new Error("Couldn't load the file");
         const blob = await response.blob();
         if (cancelled) return;

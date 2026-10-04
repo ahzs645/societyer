@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "@/lib/authToken";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAction, useQuery } from "convex/react";
@@ -154,7 +155,7 @@ export function BylawsHistoryPage() {
     if (registryBusy) return;
     setRegistryBusy(true);
     try {
-      const response = await fetch("/api/v1/browser-connectors/bylaws-history/import", {
+      const response = await authenticatedFetch("/api/v1/browser-connectors/bylaws-history/import", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

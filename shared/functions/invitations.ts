@@ -93,6 +93,7 @@ export async function acceptPortable(
   ) {
     return { status: "invitation-email-mismatch" } as const;
   }
+  if (!principal.emailVerified) return { status: "invitation-email-unverified" } as const;
 
   const societyId = String(invitation.societyId);
   const existing = await ensureCurrentMembershipPortable(ctx, { societyId });

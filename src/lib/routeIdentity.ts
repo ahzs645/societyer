@@ -328,7 +328,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
 
   // ---- Administration ----
   "/app/notifications": { icon: Bell, group: "administration", label: "Notifications" },
-  "/app/users": { icon: UserCog, group: "administration", label: "Users & roles" },
+  "/app/users": { icon: UserCog, group: "administration", label: "Users & access" },
   "/app/custom-fields": { icon: Sliders, group: "administration", label: "Custom fields" },
   "/app/imports": { icon: FileJson, group: "administration", label: "Import sessions" },
   "/app/settings": { icon: Settings, group: "administration", label: "Settings" },
