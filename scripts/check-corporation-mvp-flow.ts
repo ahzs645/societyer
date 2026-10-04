@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { verifyFixtureFormation } from "./helpers/verifiedFormation";
 import { StaticConvexClient } from "../src/lib/staticConvex";
 import { complianceFactsForOrganization, computeComplianceObligations } from "../src/lib/compliance";
 import { deriveCurrentHoldings } from "../src/lib/equity";
@@ -28,6 +29,7 @@ const created = await source.mutation("society:createWorkspace", {
   actFormedUnder: "canada_business_corporations_act",
 });
 assert.ok(created.societyId, "Federal CBCA corporation workspace should be created");
+await verifyFixtureFormation(source, created.societyId, "2025-02-10");
 
 const [workspace] = await source.query("society:list", {});
 assert.equal(workspace.jurisdictionCode, "CA-FED-CBCA");
@@ -112,6 +114,8 @@ await assertRejects("over-transfer mutation", () => source.mutation("legalOperat
 const ontarioRegistrationId = await source.mutation("organizationDetails:upsertRegistration", {
   societyId: created.societyId,
   registrationType: "extra_provincial",
+  corporationClass: "federal_corporation",
+  activityCommencementDate: "2026-01-05",
   jurisdiction: "CA-ON-OBCA",
   homeJurisdiction: "CA-FED-CBCA",
   registrationNumber: "ON-MVP-001",

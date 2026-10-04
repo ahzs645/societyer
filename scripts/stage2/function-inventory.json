@@ -14093,6 +14093,200 @@
     ]
   },
   {
+    "key": "convex:pathways:approve",
+    "surface": "convex",
+    "name": "pathways:approve",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/pathways.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:pathways:authorizeSubmission",
+    "surface": "convex",
+    "name": "pathways:authorizeSubmission",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/pathways.ts",
+    "idArguments": [
+      {
+        "path": "submissionId",
+        "table": "pathwaySubmissionOutbox",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:pathways:claimSubmission",
+    "surface": "convex",
+    "name": "pathways:claimSubmission",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/pathways.ts",
+    "idArguments": [
+      {
+        "path": "submissionId",
+        "table": "pathwaySubmissionOutbox",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:pathways:completeStep",
+    "surface": "convex",
+    "name": "pathways:completeStep",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/pathways.ts",
+    "idArguments": [
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:pathways:completeSubmission",
+    "surface": "convex",
+    "name": "pathways:completeSubmission",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/pathways.ts",
+    "idArguments": [
+      {
+        "path": "submissionId",
+        "table": "pathwaySubmissionOutbox",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:pathways:dispatchSubmission",
+    "surface": "convex",
+    "name": "pathways:dispatchSubmission",
+    "kind": "action",
+    "access": "service",
+    "source": "convex/pathways.ts",
+    "idArguments": [
+      {
+        "path": "submissionId",
+        "table": "pathwaySubmissionOutbox",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:pathways:loadSubmission",
+    "surface": "convex",
+    "name": "pathways:loadSubmission",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/pathways.ts",
+    "idArguments": [
+      {
+        "path": "submissionId",
+        "table": "pathwaySubmissionOutbox",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:pathways:recordManualReceipt",
+    "surface": "convex",
+    "name": "pathways:recordManualReceipt",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/pathways.ts",
+    "idArguments": [
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:pathways:reject",
+    "surface": "convex",
+    "name": "pathways:reject",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/pathways.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:pathways:requestSubmission",
+    "surface": "convex",
+    "name": "pathways:requestSubmission",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/pathways.ts",
+    "idArguments": [
+      {
+        "path": "runId",
+        "table": "pathwayRuns",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:pathways:saveInput",
+    "surface": "convex",
+    "name": "pathways:saveInput",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/pathways.ts",
+    "idArguments": [
+      {
+        "path": "runId",
+        "table": "pathwayRuns",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:pathways:start",
+    "surface": "convex",
+    "name": "pathways:start",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/pathways.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:pathways:status",
+    "surface": "convex",
+    "name": "pathways:status",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/pathways.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:pendingEmails:cancel",
     "surface": "convex",
     "name": "pendingEmails:cancel",
@@ -31147,6 +31341,120 @@
       {
         "path": "id",
         "table": "partyPortals",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:pathways:approve",
+    "surface": "portable",
+    "name": "pathways:approve",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:pathways:completeStep",
+    "surface": "portable",
+    "name": "pathways:completeStep",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:pathways:recordManualReceipt",
+    "surface": "portable",
+    "name": "pathways:recordManualReceipt",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:pathways:reject",
+    "surface": "portable",
+    "name": "pathways:reject",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:pathways:requestSubmission",
+    "surface": "portable",
+    "name": "pathways:requestSubmission",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "runId",
+        "table": "pathwayRuns",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:pathways:saveInput",
+    "surface": "portable",
+    "name": "pathways:saveInput",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "runId",
+        "table": "pathwayRuns",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:pathways:start",
+    "surface": "portable",
+    "name": "pathways:start",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:pathways:status",
+    "surface": "portable",
+    "name": "pathways:status",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }

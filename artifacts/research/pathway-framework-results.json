@@ -1,0 +1,60 @@
+{
+  "date_utc": "2026-10-04",
+  "baseline_commit": "030f3c6b41846a4bfc13f3ee688a8fe86e8798be",
+  "reconciled_main_commit": "cc52e24487f42c19f81b2d22385091006bc70b44",
+  "remote_main_rechecked": "cc52e24487f42c19f81b2d22385091006bc70b44",
+  "scope": "Unified pathway registration and reusable versioned preparation pipelines; no remote push or deployment.",
+  "implemented": [
+    "Single validated and frozen registry drives setup, subtype choices, preparation guides, post-incorporation flows and packet eligibility.",
+    "Declarative conditional branches, dependencies, typed inputs, document evidence, independent approvals and submission nodes.",
+    "Saved run and evidence snapshots, frozen inputs, current authority rechecks, audit history and imported-history quarantine.",
+    "Generic pipeline interface integrated into the existing Post-incorporation page.",
+    "Trusted adapter registry, hosted internal dispatch, atomic outbox claims, exact approved payloads, idempotency and bounded receipts."
+  ],
+  "preserved": [
+    "Clerk sign-in and profiles",
+    "Societyer workspace roles and cross-workspace restrictions",
+    "Tenant-restricted Better Auth Microsoft mode",
+    "Last-active-Owner protections"
+  ],
+  "verification": {
+    "pathway_framework": { "command": "npm run test:pathway-framework", "result": "passed", "suites": 3 },
+    "pathway_browser": { "command": "npm run test:pathway-ui", "result": "passed", "passed": 1, "failed": 0 },
+    "production_browser_regressions": { "command": "npx playwright test tests/research-interface.spec.ts tests/research-settings.spec.ts tests/demo-smoke.spec.ts", "result": "passed", "passed": 32, "failed": 0 },
+    "authentication_authorization_roles_owner": { "command": "npm run test:reconciled-security", "result": "passed" },
+    "server_typecheck": { "command": "npm run server:typecheck", "result": "passed" },
+    "combined_build": { "command": "npm run build:pages", "result": "passed", "includes": ["Convex TypeScript", "frontend TypeScript", "Vite production bundle", "Pages preparation"] },
+    "stage2_enforced": { "command": "npm run test:stage2-enforced", "result": "passed", "suites": 21 },
+    "tenancy_probes": {
+      "inventory_entries": 1785,
+      "blocked": 3248,
+      "leaked_read": 0,
+      "leaked_write": 0,
+      "new_leaks": 0,
+      "error": 1,
+      "not_applicable": 1004,
+      "limitation": "One election-voting precondition error and 1004 unsupported/not-applicable probes remain bounded coverage, not proof of those paths. Focused native pathway authorization checks passed separately."
+    },
+    "integration": [
+      "API contract: 114 paths / 193 operations",
+      "Static parity: 456 frontend writes / 435 handled / 21 intentional offline / 0 pending",
+      "Export coverage: 196 schema tables",
+      "Local snapshot roundtrip and read-only pathway restore",
+      "Incorporation preparation, post-incorporation steps and packet generation",
+      "Targeted UI and hosted wrapper lint: no errors or warnings",
+      "Actual diff reviewed; whitespace check passed; reconciled main is an ancestor"
+    ],
+    "fixture_corrections": [
+      "Equity ledger now rejects cross-workspace issuance reassignment and verifies both ledgers remain unchanged before creating a destination-owned issuance.",
+      "Corporation MVP now supplies verified formation evidence and explicit Ontario commencement facts before expecting statutory filing obligations."
+    ]
+  },
+  "limits": [
+    "No live government filing adapter is installed. Built-in routes use manual official-portal filing and uploaded receipt evidence.",
+    "An uncertain automated attempt requires reconciliation rather than automatic resend. Provider-specific configuration and acceptance tests are required before installing an adapter.",
+    "Preparation approval and completed pipeline runs do not establish legal execution, adoption or incorporation; certificate verification remains a separate evidence transition.",
+    "Built-in pipelines require an independent permitted human reviewer. A single-user workspace must add that reviewer.",
+    "Ontario incorporation preparation remains review_required. The wider research backlog is not represented as completely implemented."
+  ],
+  "extension_guide": "docs/pathway-framework.md"
+}

@@ -1,0 +1,54 @@
+import { expect, test } from "@playwright/test";
+
+test("saved pathway branches, freezes inputs, requires independent review and records an honest manual handoff", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/", { waitUntil: "networkidle" });
+  await page.waitForFunction(() => Boolean((window as any).__societyerE2E));
+  const fixture = await page.evaluate(async () => {
+    const harness = (window as any).__societyerE2E;
+    await harness.reset();
+    return harness.setupPathway();
+  });
+  await page.goto("/app/post-incorporation");
+  const panel = page.getByRole("region", { name: "Saved incorporation pathway" });
+  await expect(panel.getByRole("button", { name: "Start pathway", exact: true })).toBeVisible({ timeout: 25_000 });
+  await panel.getByRole("button", { name: "Start pathway", exact: true }).click();
+  await panel.getByRole("textbox", { name: "Proposed legal or working name" }).fill("Pathway Browser Preparation Inc.");
+  await panel.getByRole("textbox", { name: "Registered office address" }).fill("100 Example Street, Ottawa, Ontario");
+  await panel.getByRole("textbox", { name: "Initial directors and consent references" }).fill("Example Director — synthetic consent reference");
+  await panel.getByRole("textbox", { name: "Share structure and subscription review reference" }).fill("Common shares — preparation review only");
+  await panel.getByRole("button", { name: /Use a named company/ }).click();
+  await page.getByRole("option", { name: "No", exact: true }).click();
+  await panel.getByRole("button", { name: "Save pathway inputs" }).click();
+  const collect = panel.getByTestId("pathway-node-collect-information");
+  await collect.getByRole("button", { name: "Complete step" }).click();
+  await expect(panel.getByRole("textbox", { name: "Registered office address" })).toBeDisabled();
+  await expect(panel.getByTestId("pathway-node-name-approval").getByText("Branch skipped", { exact: true })).toBeVisible();
+  await panel.getByTestId("pathway-node-numbered-name").getByRole("button", { name: "Complete step" }).click();
+  const prepare = panel.getByTestId("pathway-node-prepare-documents");
+  await expect(prepare.getByRole("button", { name: "Complete step" })).toBeDisabled();
+  await prepare.getByRole("button", { name: "Evidence for Prepare and review the incorporation document packet" }).click();
+  await page.getByRole("option", { name: "Browser preparation evidence" }).click();
+  await prepare.getByRole("button", { name: "Complete step" }).click();
+  await expect(panel.getByTestId("pathway-node-review").getByRole("button", { name: "Approve review" })).toHaveCount(0);
+  // Refresh proves IndexedDB persistence and frozen branch choice.
+  await page.reload();
+  await expect(panel.getByRole("textbox", { name: "Registered office address" })).toHaveValue("100 Example Street, Ottawa, Ontario", { timeout: 25_000 });
+  await expect(panel.getByTestId("pathway-node-prepare-documents").getByText("Completed", { exact: true })).toBeVisible();
+  await page.goto("/app/users");
+  await page.locator("tr", { hasText: "Independent Pathway Reviewer" }).getByRole("button", { name: "Act as", exact: true }).click();
+  await page.goto("/app/post-incorporation");
+  await panel.getByTestId("pathway-node-review").getByRole("button", { name: "Approve review" }).click();
+  const submission = panel.getByTestId("pathway-node-submit");
+  await expect(submission.getByRole("link", { name: "Open official filing service" })).toHaveAttribute("href", /https:\/\//);
+  await submission.getByRole("button", { name: "Record manual filing handoff" }).click();
+  await expect(submission.getByText(/Outbox status: manual_required/)).toBeVisible();
+  await expect(submission.getByText(/handoff does not establish registry acceptance/)).toBeVisible();
+  await expect(panel.getByTestId("pathway-node-retain-certificate").getByRole("button", { name: "Complete step" })).toHaveCount(0);
+  const state = await page.evaluate(async (societyId) => (window as any).__societyerE2E.inspectPathway(societyId), fixture.societyId);
+  expect(state.runs[0].inputs.namedCompany).toBe(false);
+  expect(state.runs[0].inputsFrozen).toBe(true);
+  expect(state.runs[0].submissions[0].status).toBe("manual_required");
+  expect(errors).toEqual([]);
+});

@@ -1,5 +1,6 @@
 import { localDataClient, reseedLocalData } from "./localDataClient";
 import { getStoredSocietyId, setStoredSocietyId } from "../hooks/useSociety";
+import { setStoredUserId } from "../hooks/useCurrentUser";
 
 type CorporationMvpFixture = {
   societyId: string;
@@ -17,6 +18,8 @@ declare global {
     __societyerE2E?: {
       reset(): Promise<void>;
       setupCorporationMvp(): Promise<CorporationMvpFixture>;
+      setupPathway(): Promise<{ societyId: string; documentId: string; reviewerId: string }>;
+      inspectPathway(societyId: string): Promise<any>;
       inspect(): Promise<{
         selectedSocietyId: string | null;
         societies: Array<{ _id: string; name: string; entityType?: string; jurisdictionCode?: string }>;
@@ -27,8 +30,28 @@ declare global {
 }
 
 async function reset() {
-  reseedLocalData();
+  await reseedLocalData();
 }
+
+async function setupPathway() {
+  // These are normal, permission-checked local mutations, not a graph-state bypass.
+  const created = await localDataClient.mutation("society:createWorkspace", {
+    name: "Pathway Browser Preparation Inc.", fiscalYearEnd: "12-31",
+    jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__business_",
+    actFormedUnder: "canada_business_corporations_act",
+  }) as any;
+  const memberships = await localDataClient.query("users:list", { societyId: created.societyId }) as any[];
+  const owner = memberships.find((membership) => membership.role === "Owner" && membership.status === "Active");
+  if (!owner) throw new Error("Pathway fixture requires its real Active Owner.");
+  setStoredUserId(owner._id);
+  const documentId = await localDataClient.mutation("documents:create", { societyId: created.societyId, title: "Browser preparation evidence", category: "governance", tags: ["test_fixture"] }) as string;
+  const reviewerId = await localDataClient.mutation("users:upsert", { societyId: created.societyId, email: "reviewer@pathway.example", displayName: "Independent Pathway Reviewer", role: "Admin", status: "Active" }) as string;
+  await waitForLocalQueryPropagation(created.societyId);
+  setStoredSocietyId(created.societyId);
+  return { societyId: created.societyId, documentId, reviewerId };
+}
+
+async function inspectPathway(societyId: string) { return localDataClient.query("pathways:status", { societyId }); }
 
 async function setupCorporationMvp(): Promise<CorporationMvpFixture> {
   const created = await localDataClient.mutation("society:createWorkspace", {
@@ -156,4 +179,4 @@ async function inspect() {
   };
 }
 
-window.__societyerE2E = { reset, setupCorporationMvp, inspect };
+window.__societyerE2E = { reset, setupCorporationMvp, setupPathway, inspectPathway, inspect };

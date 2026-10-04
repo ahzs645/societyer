@@ -78,11 +78,28 @@ If you add behaviour, add or extend the matching gate — they're plain `tsx` sc
 
 ## Adding a jurisdiction or entity type
 
+Incorporation preparation uses the shared [pathway registry and pipeline
+framework](./docs/pathway-framework.md). Add a versioned entry in
+`shared/pathways/registry.ts` with eligibility, setup copy, preparation/flow data,
+owned packet keys, collection inputs and graph steps. Existing selectors and
+packet gates derive from that registration; avoid new entity switches in pages.
+Use `review_required` for unresolved routes. Preparation approval does not adopt
+legal instruments or establish government acceptance, and the official-portal
+submission route remains manual unless a trusted server adapter is registered
+and tested.
+
+Run `npx tsx scripts/check-pathway-registry.ts` for selector drift, classification,
+packet ownership, graph dependency and extension checks, plus the applicable
+pipeline authorization and incorporation preparation gates. Preserve versioned
+run and evidence snapshots when changing a pathway. The framework guide documents
+the exported APIs and the separate adapter boundary.
+
 This is the most valuable kind of contribution, and it's deliberately a **data** change more
-than a code change. Societyer treats a federal corporation as the base rule set and layers
-provinces/territories on top as modules. Because an **extra-provincial registration** of a
-federal corporation generally carries the same registry-maintenance obligations as a **direct
-provincial incorporation**, one province module is meant to serve both paths.
+than a code change. Societyer distinguishes the home incorporation context
+from each extra-provincial registration. A jurisdiction module can serve both
+contexts, but its rules must explicitly identify their applicability and correct
+event anchors. Do not infer business commencement from a registration date or
+apply home incorporation duties to a registration without checking the source.
 
 To add a jurisdiction (worked example: a new province "XX"):
 

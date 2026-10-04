@@ -20,6 +20,10 @@ import { createDownloadUrl } from "../storage/signedUrl";
 const EXPORT_VERSION = 2;
 
 export const EXPORTABLE_TABLES = [
+  "pathwayRuns",
+  "pathwaySteps",
+  "pathwaySubmissionOutbox",
+  "pathwayAudit",
   "societies",
   "organizationAddresses",
   "organizationRegistrations",

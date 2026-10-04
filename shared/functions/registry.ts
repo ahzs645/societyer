@@ -37,6 +37,7 @@ import * as dividendsFns from "./dividends";
 import * as receiptsFns from "./receipts";
 import * as constatingFns from "./constating";
 import * as corporationSettingsFns from "./corporationSettings";
+import * as pathwayFns from "./pathways";
 import * as postIncorporationFns from "./postIncorporation";
 import * as recordsLocationFns from "./recordsLocation";
 import * as remunerationFns from "./remuneration";
@@ -295,6 +296,14 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "corporationSettings:complianceDeadlines", handler: corporationSettingsFns.complianceDeadlinesPortable }),
 
   // postIncorporation
+  definePortableQuery({ name: "pathways:status", handler: pathwayFns.statusPortable }),
+  definePortableMutation({ name: "pathways:start", handler: pathwayFns.startPortable }),
+  definePortableMutation({ name: "pathways:saveInput", handler: pathwayFns.saveInputPortable }),
+  definePortableMutation({ name: "pathways:completeStep", handler: pathwayFns.completeStepPortable }),
+  definePortableMutation({ name: "pathways:approve", handler: pathwayFns.approvePortable }),
+  definePortableMutation({ name: "pathways:reject", handler: pathwayFns.rejectPortable }),
+  definePortableMutation({ name: "pathways:requestSubmission", handler: pathwayFns.requestSubmissionPortable }),
+  definePortableMutation({ name: "pathways:recordManualReceipt", handler: pathwayFns.recordManualReceiptPortable }),
   definePortableQuery({ name: "postIncorporation:checklist", handler: postIncorporationFns.checklistPortable }),
   definePortableMutation({ name: "postIncorporation:recordEvidence", handler: postIncorporationFns.recordEvidencePortable }),
 

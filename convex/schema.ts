@@ -30,8 +30,10 @@ import { meetingTables } from "./tables/meetings";
 import { complianceTables } from "./tables/compliance";
 import { policyTables } from "./tables/policies";
 import { storageTables } from "./tables/storage";
+import { pathwayTables } from "./tables/pathways";
 
 export default defineSchema({
+  ...pathwayTables,
   societies: defineTable({
     accessRecoveryRequired: v.optional(v.boolean()),
     name: v.string(),

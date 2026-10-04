@@ -19,6 +19,10 @@ import { buildConvexCapabilities } from "./providers/capabilities";
 // scripts/export-workspace-with-files.ts) continue to find it. The ported
 // handlers in shared/functions/exports.ts carry their own copy.
 export const EXPORTABLE_TABLES = [
+  "pathwayRuns",
+  "pathwaySteps",
+  "pathwaySubmissionOutbox",
+  "pathwayAudit",
   "societies",
   "organizationAddresses",
   "organizationRegistrations",

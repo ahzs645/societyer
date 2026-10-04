@@ -25,10 +25,11 @@ function expectEqual(label: string, actual: unknown, expected: unknown) {
   }
 }
 
-async function expectRejects(label: string, fn: () => Promise<unknown>) {
+async function expectRejects(label: string, fn: () => Promise<unknown>, expectedMessage?: RegExp) {
   try {
     await fn();
-  } catch {
+  } catch (error) {
+    if (expectedMessage && !expectedMessage.test(error instanceof Error ? error.message : String(error))) throw error;
     return;
   }
   throw new Error(`${label} should have rejected.`);
@@ -227,7 +228,9 @@ const destinationClassId = await client.mutation("legalOperations:upsertRightsCl
   classType: "share",
   status: "active",
 });
-await client.mutation("legalOperations:upsertRightsholdingTransfer", {
+// A stored issuance belongs permanently to its workspace. Cross-workspace
+// reassignment is rejected even when this physical-file actor owns both.
+await expectRejects("cross-workspace issuance reassignment", () => client.mutation("legalOperations:upsertRightsholdingTransfer", {
   id: issuanceId,
   societyId: destination.societyId,
   transferType: "issuance",
@@ -236,10 +239,26 @@ await client.mutation("legalOperations:upsertRightsholdingTransfer", {
   rightsClassId: destinationClassId,
   destinationRoleHolderId: destinationHolderId,
   quantity: 100,
-});
+}), /Record not found/);
 const oldLedger = await client.query("legalOperations:rightsLedger", { societyId: created.societyId });
+const emptyDestinationLedger = await client.query("legalOperations:rightsLedger", { societyId: destination.societyId });
+expectEqual("source holdings preserved after rejected reassignment", oldLedger.holdings.length, 1);
+expectEqual("source holding quantity preserved", oldLedger.holdings[0].quantity, 100);
+expectEqual("source holding class preserved", oldLedger.holdings[0].rightsClassId, classId);
+expectEqual("destination unchanged after rejected reassignment", emptyDestinationLedger.holdings.length, 0);
+
+const destinationIssuanceId = await client.mutation("legalOperations:upsertRightsholdingTransfer", {
+  societyId: destination.societyId,
+  transferType: "issuance",
+  status: "posted",
+  transferDate: "2026-01-02",
+  rightsClassId: destinationClassId,
+  destinationRoleHolderId: destinationHolderId,
+  quantity: 100,
+});
 const destinationLedger = await client.query("legalOperations:rightsLedger", { societyId: destination.societyId });
-expectEqual("old society holdings rebuilt after transfer move", oldLedger.holdings.length, 0);
-expectEqual("new society holdings rebuilt after transfer move", destinationLedger.holdings.length, 1);
+expectEqual("new society own issuance materialized", destinationLedger.holdings.length, 1);
+expectEqual("new society own issuance quantity", destinationLedger.holdings[0].quantity, 100);
+expectEqual("new society own issuance transaction", destinationLedger.holdings[0].lastTransactionId, destinationIssuanceId);
 
 console.log("Corporation equity ledger checks passed.");

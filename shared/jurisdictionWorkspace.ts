@@ -1,3 +1,4 @@
+import { PATHWAY_REGISTRY, resolvePathway } from "./pathways/registry";
 import { canonicalizeJurisdictionCode, homeJurisdictionCode, isCorporation, type LegalEntityLike } from "./organizationDomain";
 
 /**
@@ -371,18 +372,11 @@ export const JURISDICTION_WORKSPACE_CONFIGS: JurisdictionWorkspaceConfig[] = [
 ];
 
 /** Setup tracks are entity + statute choices; a federal corporation is not a province. */
-export const WORKSPACE_SETUP_TRACKS = [
-  { id: "bc_society", label: "BC society (nonprofit)", jurisdictionCode: "CA-BC", entityType: "society", actFormedUnder: "societies_act", hint: "British Columbia Societies Act; member governance." },
-  { id: "bc_company", label: "BC business corporation (provincial)", jurisdictionCode: "CA-BC", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__british_columbia_", hint: "British Columbia Business Corporations Act; shareholder governance." },
-  { id: "federal_cbca", label: "Federal business corporation (CBCA)", jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__business_", actFormedUnder: "canada_business_corporations_act", hint: "Corporations Canada; provincial registration may also be needed where you operate." },
-  { id: "ontario_obca", label: "Ontario business corporation (OBCA)", jurisdictionCode: "CA-ON-OBCA", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__ontario_", hint: "Existing Ontario guide track; other provinces need their own reviewed guidance." },
-] as const;
-export type WorkspaceSetupTrackId = (typeof WORKSPACE_SETUP_TRACKS)[number]["id"];
-
+export const WORKSPACE_SETUP_TRACKS = PATHWAY_REGISTRY.map((entry) => ({ id: entry.key, ...entry.setup }));
+export type WorkspaceSetupTrackId = string;
 export function workspaceSetupTrack(organization?: LegalEntityLike | null) {
-  const code = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
-  if (code === "CA-BC") return WORKSPACE_SETUP_TRACKS.find((track) => track.id === (isCorporation(organization) ? "bc_company" : "bc_society"));
-  return WORKSPACE_SETUP_TRACKS.find((track) => track.jurisdictionCode === code);
+  const result = resolvePathway(organization);
+  return result.pathway ? WORKSPACE_SETUP_TRACKS.find((track) => track.id === result.pathway!.key) : undefined;
 }
 
 const BC_COMPANY_CONFIG: JurisdictionWorkspaceConfig = {

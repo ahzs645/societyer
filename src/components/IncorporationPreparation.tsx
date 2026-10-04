@@ -3,6 +3,7 @@ import {
   incorporationPreparationForOrganization,
 } from "../../shared/incorporationPreparation";
 import type { LegalEntityLike } from "../../shared/organizationDomain";
+import { PATHWAY_REGISTRY } from "../../shared/pathways/registry";
 
 export function IncorporationPreparation({ organization }: { organization?: LegalEntityLike | null }) {
   const guide = incorporationPreparationForOrganization(organization);
@@ -11,9 +12,8 @@ export function IncorporationPreparation({ organization }: { organization?: Lega
       <section className="card" style={{ padding: 16, marginBottom: 20 }}>
         <h2 style={{ fontSize: 16, marginTop: 0 }}>Before incorporation</h2>
         <p className="muted" style={{ marginBottom: 0 }}>
-          Preparation guides cover BC societies, BC business companies, and federal CBCA business corporations.
-          This workspace does not match one of those paths. Confirm its entity type, jurisdiction, and governing act;
-          other provinces and federal not-for-profit corporations need their own registry instructions.
+          Available preparation guides: {PATHWAY_REGISTRY.filter((entry) => entry.availability === "preparation" && entry.preparation).map((entry) => entry.title).join(", ")}.
+          Confirm this workspace's entity type, jurisdiction, classification and governing Act to select an available guide.
         </p>
       </section>
     );

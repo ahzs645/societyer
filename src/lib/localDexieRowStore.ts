@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import { stripImportedAuthBindings } from "../../shared/workspaceIdentity";
+import { quarantineImportedPathways } from "../../shared/pathways/imports";
 import { DEFAULT_HOME_JURISDICTION_CODE } from "../../shared/jurisdictionWorkspace";
 import type { LocalRowStore, RowStoreOp } from "../../shared/portable/localRowStore";
 import { createEntityIdFactory } from "../../shared/portable/ids";
@@ -331,7 +332,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   async importSnapshot(snapshot: LocalWorkspaceSnapshot | { tables?: LocalSeed; attachments?: LocalAttachmentEnvelope[]; workspace?: Partial<LocalWorkspaceMeta> }) {
-    const importedTables = stripImportedAuthBindings(validateSnapshotTables(snapshot?.tables));
+    const importedTables = quarantineImportedPathways(stripImportedAuthBindings(validateSnapshotTables(snapshot?.tables)));
     const importedAttachments = validateSnapshotAttachments(snapshot?.attachments);
     const normalizedMeta = normalizeWorkspaceMeta(snapshot?.workspace, this.workspaceMeta);
     const importedCache = migrateLocalWorkspaceSnapshotTables(importedTables);

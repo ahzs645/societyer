@@ -16,7 +16,7 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   financials: ["financials", "accounting", "treasury", "financialHub", "reconciliation", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd"],
   elections: ["elections"], grants: ["grants", "grantSources"],
   documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations"],
-  users: ["users", "invitations"], tasks: ["tasks", "workflows", "workflowPackages", "workflowCatalog", "notifications", "notes", "aiChat", "aiChatActions", "aiAgents"],
+  users: ["users", "invitations"], tasks: ["pathways", "tasks", "workflows", "workflowPackages", "workflowCatalog", "notifications", "notes", "aiChat", "aiChatActions", "aiAgents"],
   exports: ["exports"], audit: ["activity"], volunteers: ["volunteers"], communications: ["communications", "pendingEmails", "partyPortals", "publicPortal"],
   settings: ["apiPlatform", "aiSettings", "aiSettingsActions", "corporationSettings", "serviceProviders", "subscriptions", "programStatements", "secrets", "nameHistory", "recordLayouts", "objectMetadata", "customFields", "fieldMetadata", "views", "commandMenuItems", "importSessions", "waveCache", "permissions", "transparency", "calendarFeed"],
 };
@@ -75,6 +75,8 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (["society:updateModules", "society:updateComplianceSettings", "society:updateInventorySettings", "society:updateNotificationSettings"].includes(name)) return "settings:write";
   if (name === "society:updateIntegrationSettings" || name === "society:reset") return "settings:manage";
   if (resource === "audit") return kind === "query" ? "audit:read" : "settings:write";
+  if (["pathways:approve", "pathways:reject"].includes(name)) return "documents:write";
+  if (["pathways:requestSubmission", "pathways:recordManualReceipt"].includes(name)) return "filings:submit";
   if (name === "postIncorporation:recordEvidence") return "documents:write";
   if (name === "calendarFeed:getFeedToken") return "settings:write";
   if (name === "documents:recordOpen") return "documents:read";
