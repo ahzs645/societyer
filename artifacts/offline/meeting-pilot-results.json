@@ -1,0 +1,558 @@
+{
+  "version": 1,
+  "recordedAtUTC": "2026-10-04T19:52:54.163596+00:00",
+  "baseline": {
+    "main": "4b15fd20f3b82baa6b18cb95be7b2c62404884b3",
+    "interfaceAuditCommit": "bb513c4ddef09638251f6f491b00aa118e74eebc",
+    "requiredAuthCommit": "cc52e24487f42c19f81b2d22385091006bc70b44",
+    "requiredAuthCommitIsAncestor": true,
+    "mainFetchedThisTurn": true
+  },
+  "productionSource": {
+    "algorithm": "SHA-256(sorted relative POSIX path + NUL + raw bytes + NUL)",
+    "fileCount": 993,
+    "sha256": "7514e2eb4ad91739a321054b4bbcf0547b7ef7c2c89b272909c22a54f210249b",
+    "matchesBaselineByteForByte": true,
+    "comparison": "git cat-file --batch for all 993 source files at bb513c4"
+  },
+  "historicalFingerprint": {
+    "reported": "8644bd627854b1795a1c089e7e90ab51f43e2ddffd6542ed467ec727d3445378",
+    "note": "The older aggregate fingerprint was not reproduced by the stated sorted-relative-path algorithm. Current files match baseline Git blobs byte for byte; fresh validation and an explicit current fingerprint supersede the older aggregate."
+  },
+  "pilotSource": {
+    "algorithm": "SHA-256(sorted relative POSIX path + NUL + raw bytes + NUL)",
+    "fileCount": 39,
+    "sha256": "bb4e963361e13878dc5c1d304ee991e8ddc31b2b5952a2c33b4ac12edd7a128b"
+  },
+  "changes": {
+    "productionCodeChanged": false,
+    "rootDependenciesChanged": false,
+    "productionAuthChanged": false,
+    "productionSchemaChanged": false,
+    "productionSynchronizationEnabled": false,
+    "zoerSourceChanged": false,
+    "zoerDeployed": false
+  },
+  "nativeChecks": {
+    "count": 27,
+    "status": "passed",
+    "runner": "convex-test, actual shared portable handlers and identity/permission helpers",
+    "cases": [
+      "Owner draft upload with server-derived audit actor",
+      "Lost acknowledgement retry is idempotent",
+      "Changed replay payload rejected",
+      "Stale offline edit rejected without overwriting server",
+      "Multi-operation batch rolls back on later conflict",
+      "Viewer upload denied and permitted draft read retained",
+      "Foreign workspace read and upload denied",
+      "Anonymous and same-subject foreign issuer denied",
+      "Role changed while offline blocks even an already accepted replay",
+      "Disabled membership denied",
+      "Existing meeting handler atomically creates meeting, agenda item, minutes and attachment metadata",
+      "Lost acknowledgement returns durable mapping with one effect",
+      "Replay payload substitution denied",
+      "Projection matches application readers for Owner, Viewer and foreign workspace",
+      "Sync token adapter derives identity and workspace through current authenticated policy",
+      "Metadata acceptance is separate from file availability",
+      "Attachment hash verified and transfer idempotent",
+      "Restricted grants, withdrawal and expiry preserve material and document ACL parity",
+      "Dependent child command reruns the minutes handler using persistent mapping",
+      "Two-client revision conflict preserves authoritative server version",
+      "Unknown command version and approval fields rejected",
+      "Late validation failure rolls back graph, mapping, receipt and projections",
+      "Viewer, foreign workspace, anonymous and foreign issuer cannot upload",
+      "Adopted minutes require an online action",
+      "Current role revocation blocks receipt replay and file uploads",
+      "Disabled membership removes all projected rows",
+      "Disabled external identity removes projections and denies command"
+    ]
+  },
+  "browser": {
+    "stats": {
+      "startTime": "2026-10-04T19:44:47.172Z",
+      "duration": 132138.311,
+      "expected": 34,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "cases": [
+      {
+        "name": "meeting graph, child edit and attachment bytes survive offline restart",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 5868,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "lost command acknowledgement preserves command and persistent mapping on retry",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 5196,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "rejected parent holds dependent child and attachment with a durable recovery export",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 5237,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "two isolated browser clients retain both conflicting minute drafts",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 5481,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "downloaded view respects workspace, Viewer ACL and membership revocation",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 4848,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "attachment transfers to second browser independently of record download",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 5177,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "phone and desktop keep meeting and recovery controls within the viewport",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 2320,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "unknown persisted command version is retained for upgrade recovery",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3145,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "session change during accepted command does not acknowledge another account's queue",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3575,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "durable SQLite commit failure rolls back local graph and command together",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 2023,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "meeting graph, child edit and attachment bytes survive offline restart",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3977,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "lost command acknowledgement preserves command and persistent mapping on retry",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3745,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "rejected parent holds dependent child and attachment with a durable recovery export",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3661,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "two isolated browser clients retain both conflicting minute drafts",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 5430,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "downloaded view respects workspace, Viewer ACL and membership revocation",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 5850,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "attachment transfers to second browser independently of record download",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 5483,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "phone and desktop keep meeting and recovery controls within the viewport",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 2358,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "unknown persisted command version is retained for upgrade recovery",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 4112,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "session change during accepted command does not acknowledge another account's queue",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3745,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "durable SQLite commit failure rolls back local graph and command together",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 2014,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "offline create and edit survive restart then upload through actual Convex mutation",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3429,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "lost acknowledgement retains queue and retry creates no duplicate",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3374,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "changed role rejects upload and preserves offline work through restart",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3246,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "actor and workspace switches isolate local rows and pending queues",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 4209,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "mobile and desktop controls contain long draft information",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 2135,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "conflicting server edit remains intact and rejected local edit stays recoverable",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3484,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "session switch during upload leaves original acknowledgement available for replay",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3350,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "offline create and edit survive restart then upload through actual Convex mutation",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3423,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "lost acknowledgement retains queue and retry creates no duplicate",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3302,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "changed role rejects upload and preserves offline work through restart",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3189,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "actor and workspace switches isolate local rows and pending queues",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 4210,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "mobile and desktop controls contain long draft information",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 2111,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "conflicting server edit remains intact and rejected local edit stays recoverable",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3513,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "session switch during upload leaves original acknowledgement available for replay",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3428,
+            "retry": 0
+          }
+        ]
+      }
+    ]
+  },
+  "builtPwa": {
+    "stats": {
+      "startTime": "2026-10-04T19:44:56.385Z",
+      "duration": 7124.518,
+      "expected": 2,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "cases": [
+      {
+        "name": "built Workbox PWA starts offline in a new tab with durable meeting and child work",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 2604,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "name": "built Workbox PWA starts offline in a new tab with durable meeting and child work",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 2114,
+            "retry": 0
+          }
+        ]
+      }
+    ]
+  },
+  "checks": {
+    "prototypeTypecheck": "passed",
+    "prototypeLint": "passed (0 errors, 0 warnings)",
+    "prototypeBuild": "passed (Workbox shell/worker/WASM precache)",
+    "yamlTemplates": "syntax passed only; no service/SQL/Kubernetes runtime qualification",
+    "reconciledSecurity": "passed: auth-token, Clerk, gateway, tenant-restricted Microsoft, broker, hosted identity, binding, cross-workspace/module roles and last-active-Owner protections, action policy, portable principal, documents, uploads, generated/public sharing",
+    "combinedBuild": "passed: convex:typecheck, tsc -b, Vite, prepare-pages; existing chunk-size warnings",
+    "desktopTypecheck": "passed",
+    "portableQueryCache": "passed",
+    "localWorkspaceBinding": "passed",
+    "diffCheck": "passed"
+  },
+  "liveTarget": {
+    "url": "https://zoer.k8s.overtheedgepaper.ca/",
+    "requestedLocalCheckout": "/Users/ahmadjalil/github/zoer",
+    "availableCheckout": "/workspace/zoer",
+    "zoerMainInspected": "2fde629743494b9314a996309f2c121d106fd3a3",
+    "httpProbe": "blocked by runtime proxy: Tunnel connection failed: 403 Forbidden",
+    "configuredClusterCredentials": false,
+    "vpnConfigured": false,
+    "deploymentAttempted": false
+  },
+  "boundaries": [
+    "Real PowerSync SQLite/queue; fixture downloads are authorized snapshots, not PowerSync read replication.",
+    "Native checks exercise mutation code in convex-test, not a disposable live deployment.",
+    "Two browser contexts exercise normal downloaded-meeting edits and file transfer through the fixture.",
+    "PWA tests cover built shell and new-tab offline startup after initial online installation; not OS installation, physical devices, full process termination or pending-work upgrade qualification.",
+    "Live connector, credential and configuration adapters compile; real broker signing and live stream authorization are not exercised.",
+    "Permission projection is bounded and rebuilds explicitly after fixture ACL/identity changes. Production invalidation/expiry paths are not integrated.",
+    "Conflict/rejection recovery preserves FIFO queue and supports export; no merge/rebase/discard workflow.",
+    "Cloud scale, browser eviction, encrypted cache/logout policy, packaged Electron and Zoer rollout remain unverified."
+  ]
+}

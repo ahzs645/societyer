@@ -1,0 +1,14 @@
+# Pilot template: validate with the pinned service before live use.
+config:
+  edition: 3
+streams:
+  meeting_preparation:
+    auto_subscribe: true
+    queries:
+      - |
+        SELECT uuid AS id, society_id, actor_key, meeting_uuid, revision, payload
+        FROM "offlineMeetingDownloads"
+        WHERE actor_key = auth.user_id()
+          AND society_id = auth.parameter('society_id')
+# No users, sessions, credentials, raw documents, signed URLs or arbitrary tables.
+# Projection maintenance after all ACL/identity changes is a release prerequisite.

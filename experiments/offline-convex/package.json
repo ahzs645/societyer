@@ -1,0 +1,22 @@
+{
+  "name": "societyer-offline-convex-evaluation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "../../node_modules/.bin/vite --host 127.0.0.1 --port 4192 --strictPort",
+    "preview": "../../node_modules/.bin/vite preview --host 127.0.0.1 --port 4193 --strictPort",
+    "typecheck": "../../node_modules/.bin/tsc --noEmit",
+    "lint": "../../node_modules/.bin/eslint src server convex domain.ts fixture.ts vite.config.ts check-convex.ts check-meetings.ts playwright*.config.ts tests pwa-tests public/service-worker.js",
+    "build": "npm run typecheck && ../../node_modules/.bin/vite build",
+    "test": "npm run test:convex && npm run test:browser",
+    "test:convex": "../../node_modules/.bin/tsx check-convex.ts && ../../node_modules/.bin/tsx check-meetings.ts",
+    "test:browser": "../../node_modules/.bin/playwright test -c playwright.config.ts",
+    "test:pwa": "npm run build && ../../node_modules/.bin/playwright test -c playwright.pwa.config.ts"
+  },
+  "dependencies": {
+    "@powersync/web": "2.4.2"
+  },
+  "devDependencies": {
+    "vite-plugin-pwa": "2.0.0"
+  }
+}

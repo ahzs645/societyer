@@ -1,0 +1,19 @@
+:root { font-family: system-ui, sans-serif; color: #17283b; background: #f4f6f9; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 780px; margin: auto; padding: 24px; }
+h1 { font-size: clamp(1.5rem, 4vw, 2rem); }
+p { line-height: 1.55; overflow-wrap: anywhere; }
+label { display: grid; gap: 8px; margin: 16px 0; }
+input, select, textarea { width: 100%; min-width: 0; border: 1px solid #b7c5d4; border-radius: 6px; padding: 12px; font: inherit; }
+button { min-height: 44px; padding: 10px 16px; border-radius: 6px; border: 1px solid #849ab1; font: inherit; cursor: pointer; background: white; color: inherit; }
+button:disabled { opacity: .55; cursor: default; }
+:focus-visible { outline: 3px solid #3785d1; outline-offset: 3px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+#error { color: #a52e20; }
+ul { padding: 0; list-style: none; }
+li { display: flex; align-items: start; gap: 12px; padding: 16px; margin-bottom: 12px; border-radius: 8px; background: white; }
+li span { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+#meetings li, #server li { display: block; }
+#meetings li p, #server li p { margin-top: 0; }
+#meetings li form { width: 100%; }

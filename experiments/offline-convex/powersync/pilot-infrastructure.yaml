@@ -1,0 +1,116 @@
+# Preparation template, NOT applied or runtime-qualified. Dedicated pilot only.
+# Load reviewed secrets and the two config files before applying workloads.
+# An operator must supply a HTTPS ingress and the disposable Convex deployment.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: societyer-offline-pilot
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: powersync-storage
+  namespace: societyer-offline-pilot
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: powersync-postgres
+  namespace: societyer-offline-pilot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: powersync-postgres}
+  template:
+    metadata:
+      labels: {app: powersync-postgres}
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17.6
+          ports: [{containerPort: 5432}]
+          env:
+            - {name: POSTGRES_USER, value: powersync}
+            - {name: POSTGRES_DB, value: powersync}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: societyer-pilot-secrets, key: POSTGRES_PASSWORD}
+          readinessProbe:
+            exec: {command: [pg_isready, -U, powersync, -d, powersync]}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          volumeMounts: [{name: storage, mountPath: /var/lib/postgresql/data}]
+      volumes:
+        - name: storage
+          persistentVolumeClaim: {claimName: powersync-storage}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: powersync-postgres, namespace: societyer-offline-pilot}
+spec:
+  selector: {app: powersync-postgres}
+  ports: [{port: 5432, targetPort: 5432}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: powersync, namespace: societyer-offline-pilot}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: powersync}
+  template:
+    metadata:
+      labels: {app: powersync}
+    spec:
+      containers:
+        - name: powersync
+          image: journeyapps/powersync-service:1.26.1
+          command: [node, service/lib/entry.js, start, -r, unified]
+          ports: [{containerPort: 8080}]
+          env:
+            - {name: POWERSYNC_CONFIG_PATH, value: /config/service.yaml}
+            - {name: NODE_OPTIONS, value: --max-old-space-size=384}
+            - name: PS_STORAGE_URI
+              valueFrom:
+                secretKeyRef: {name: societyer-pilot-secrets, key: PS_STORAGE_URI}
+            - name: PS_CONVEX_DEPLOYMENT_URL
+              valueFrom:
+                secretKeyRef: {name: societyer-pilot-secrets, key: PS_CONVEX_DEPLOYMENT_URL}
+            - name: PS_CONVEX_DEPLOY_KEY
+              valueFrom:
+                secretKeyRef: {name: societyer-pilot-secrets, key: PS_CONVEX_DEPLOY_KEY}
+            - name: PS_JWKS_URL
+              valueFrom:
+                secretKeyRef: {name: societyer-pilot-secrets, key: PS_JWKS_URL}
+            - name: PS_PUBLIC_ORIGIN
+              valueFrom:
+                secretKeyRef: {name: societyer-pilot-secrets, key: PS_PUBLIC_ORIGIN}
+          readinessProbe:
+            httpGet: {path: /probes/readiness, port: 8080}
+          livenessProbe:
+            httpGet: {path: /probes/liveness, port: 8080}
+            initialDelaySeconds: 30
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: "1", memory: 768Mi}
+          volumeMounts: [{name: config, mountPath: /config, readOnly: true}]
+      volumes:
+        - name: config
+          configMap: {name: societyer-pilot-config}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: powersync, namespace: societyer-offline-pilot}
+spec:
+  selector: {app: powersync}
+  ports: [{port: 8080, targetPort: 8080}]
+# No public ingress or NodePort is enabled by this template.

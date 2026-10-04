@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Societyer meeting offline pilot</title></head>
+<body><main>
+  <h1>Meeting offline pilot</h1>
+  <p>Separate evaluation fixture. Meeting commands run the existing Societyer business handlers. Downloads below are authorized fixture snapshots; live PowerSync replication is not connected.</p>
+  <label>Evaluation account <select id="actor"><option value="owner-a">Owner · Workspace A</option><option value="viewer-a">Viewer · Workspace A</option><option value="owner-b">Owner · Workspace B</option></select></label>
+  <p id="status" role="status">Opening local database…</p>
+  <form id="meeting-form">
+    <label>Meeting title <input id="title" maxlength="200" required></label>
+    <label>Meeting date <input id="date" type="datetime-local" required value="2026-11-15T10:00"></label>
+    <label>Preparation notes <textarea id="notes" rows="3" maxlength="20000"></textarea></label>
+    <label>First agenda item <input id="agenda" maxlength="200" required value="Opening discussion"></label>
+    <label>Meeting attachment <input id="file" type="file"></label>
+    <button id="save" disabled>Save meeting on this device</button>
+  </form>
+  <div class="actions"><button id="upload" disabled>Upload meeting commands</button><button id="files" disabled>Transfer attachment bytes</button><button id="refresh" disabled>Refresh authorized fixture view</button><button id="export" disabled>Export recovery copy</button></div>
+  <p id="queue" aria-live="polite"></p><p id="error" role="alert"></p>
+  <h2>Work saved on this device</h2><ul id="meetings"></ul>
+  <h2>Authorized server view</h2><ul id="server"></ul>
+  <p>Local saves and server acceptance are separate. Approvals, adoption, roles, payments and filings require the connected application. This fixture does not perform them.</p>
+</main><script type="module" src="/src/meetingBootstrap.ts"></script></body>
+</html>

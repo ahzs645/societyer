@@ -1,0 +1,26 @@
+import { test, expect } from "@playwright/test";
+test("built Workbox PWA starts offline in a new tab with durable meeting and child work", async ({ page, context, request }) => {
+  const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+  await request.post("/__fixture/reset"); await page.goto("/meeting.html");
+  await expect(page.locator("#status")).toContainText("Ready");
+  const manifest = await (await request.get("/manifest.webmanifest")).json();
+  expect(manifest.start_url).toBe("/meeting.html"); expect(manifest.display).toBe("standalone");
+  expect(await page.evaluate(() => navigator.serviceWorker.controller!.scriptURL)).toContain("/sw.js");
+  await page.getByLabel("Meeting title", { exact: true }).fill("Built PWA meeting");
+  await page.getByRole("button", { name: "Save meeting on this device", exact: true }).click();
+  await expect(page.locator("#meetings")).toContainText("Built PWA meeting");
+  await page.getByLabel("Minutes discussion").fill("Built shell child draft");
+  await page.getByRole("button", { name: "Save minutes on this device", exact: true }).click();
+  await expect(page.locator("#queue")).toHaveText("2 pending commands");
+  await context.setOffline(true);
+  await page.close();
+  const reopened = await context.newPage(); reopened.on("pageerror", error => errors.push(error.message));
+  await reopened.goto("/meeting.html"); await expect(reopened.locator("#status")).toContainText("Ready · offline");
+  await expect(reopened.locator("#meetings")).toContainText("Built PWA meeting");
+  await expect(reopened.locator("#meetings")).toContainText("Built shell child draft");
+  await expect(reopened.locator("#queue")).toHaveText("2 pending commands");
+  const apiCached = await reopened.evaluate(async () => { try { await fetch("/__fixture/session"); return true; } catch { return false; } });
+  expect(apiCached).toBe(false);
+  expect(await reopened.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  expect(errors).toEqual([]);
+});

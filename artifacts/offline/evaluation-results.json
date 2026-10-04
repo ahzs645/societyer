@@ -1,0 +1,306 @@
+{
+  "evaluatedOn": "2026-10-04",
+  "baseline": {
+    "head": "bb513c4ddef09638251f6f491b00aa118e74eebc",
+    "reconciledMain": "4b15fd20f3b82baa6b18cb95be7b2c62404884b3",
+    "requiredAuthenticationCommit": "cc52e24487f42c19f81b2d22385091006bc70b44",
+    "applicationSourceSha256": "8644bd627854b1795a1c089e7e90ab51f43e2ddffd6542ed467ec727d3445378",
+    "applicationSourceFileCount": 993,
+    "applicationSourcesUnchanged": true
+  },
+  "prototype": {
+    "sdk": "@powersync/web@2.4.2",
+    "sourceSha256": "3f1ec94e5f6130f8553f2d862359b6afdc70517f157aecf0147bf8c2cd43ab59",
+    "sourceFileCount": 19,
+    "storage": "Real worker-based SQLite with IndexedDB-backed VFS",
+    "upload": "Actual Convex mutation execution in convex-test through loopback fixture server",
+    "readReplication": "Not connected",
+    "productionIntegration": "Not enabled"
+  },
+  "researchedRepositories": [
+    {
+      "repo": "Fanzzzd/convex-localfirst",
+      "branch": "main",
+      "commit": "51b9f9ba493db38d2ab21ad8bfed012ef161880d",
+      "committed_at": "2026-07-23T03:01:08Z"
+    },
+    {
+      "repo": "actualbudget/actual",
+      "branch": "master",
+      "commit": "3c60bf675ed455a3aa71f4af9139befd855d3ad4",
+      "committed_at": "2026-10-04T11:47:18Z"
+    },
+    {
+      "repo": "get-convex/michal-convex-offline-client",
+      "branch": "main",
+      "commit": "32a64546d4acc531dcd2dcf2249ab1f30fb5086f",
+      "committed_at": "2023-12-21T08:12:35Z"
+    },
+    {
+      "repo": "ianmacartney/automerge-convex-quickstart",
+      "branch": "hosted",
+      "commit": "18868b810907dccd93ffb5fc6c0f8f83d4706ab8",
+      "committed_at": "2024-11-16T07:35:24Z"
+    },
+    {
+      "repo": "powersync-community/powersync-convex-todolist-demo",
+      "branch": "main",
+      "commit": "d40348a04f2b187b33fd48db79f270ebb4f8712e",
+      "committed_at": "2026-06-04T14:30:36Z"
+    }
+  ],
+  "browser": {
+    "passed": 14,
+    "failed": 0,
+    "skipped": 0,
+    "retried": 0,
+    "viewports": [
+      {
+        "project": "phone",
+        "width": 320,
+        "height": 740,
+        "mobile": true,
+        "touch": true
+      },
+      {
+        "project": "desktop",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "cases": [
+      {
+        "title": "offline create and edit survive restart then upload through actual Convex mutation",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3597,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "lost acknowledgement retains queue and retry creates no duplicate",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3354,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "changed role rejects upload and preserves offline work through restart",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3238,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "actor and workspace switches isolate local rows and pending queues",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 4303,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "mobile and desktop controls contain long draft information",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 2161,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "conflicting server edit remains intact and rejected local edit stays recoverable",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3552,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "session switch during upload leaves original acknowledgement available for replay",
+        "project": "phone",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3333,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "offline create and edit survive restart then upload through actual Convex mutation",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3542,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "lost acknowledgement retains queue and retry creates no duplicate",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3371,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "changed role rejects upload and preserves offline work through restart",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3261,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "actor and workspace switches isolate local rows and pending queues",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 4219,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "mobile and desktop controls contain long draft information",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 2163,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "conflicting server edit remains intact and rejected local edit stays recoverable",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3543,
+            "retry": 0
+          }
+        ]
+      },
+      {
+        "title": "session switch during upload leaves original acknowledgement available for replay",
+        "project": "desktop",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "durationMs": 3338,
+            "retry": 0
+          }
+        ]
+      }
+    ],
+    "uncaughtPageErrors": 0,
+    "shellPreparation": "One online reload after service-worker activation before the disconnected reload"
+  },
+  "checks": {
+    "convexSandbox": {
+      "passed": 10,
+      "failed": 0,
+      "command": "npm --prefix experiments/offline-convex run test:convex"
+    },
+    "prototypeBuild": {
+      "exitCode": 0,
+      "command": "npm --prefix experiments/offline-convex run build",
+      "typecheckScope": [
+        "browser modules",
+        "sandbox schema/mutations",
+        "fixture server",
+        "native tests",
+        "browser tests",
+        "Vite and Playwright configuration"
+      ]
+    },
+    "reconciledSecurity": {
+      "exitCode": 0,
+      "command": "npm run test:reconciled-security",
+      "covers": [
+        "Clerk sign-in/bindings",
+        "tenant-restricted Microsoft Better Auth",
+        "cross-workspace authorization",
+        "workspace roles",
+        "last-active-Owner protections",
+        "document security"
+      ]
+    },
+    "portableQueryCache": {
+      "exitCode": 0
+    },
+    "localWorkspaceBinding": {
+      "exitCode": 0
+    },
+    "desktopTypecheck": {
+      "exitCode": 0
+    },
+    "combinedBuild": {
+      "exitCode": 0,
+      "command": "npm run build:pages",
+      "warnings": [
+        "Large Vite chunks"
+      ]
+    },
+    "prototypeLint": {
+      "exitCode": 0,
+      "command": "npm --prefix experiments/offline-convex run lint",
+      "errors": 0,
+      "warnings": 0
+    }
+  },
+  "limitations": [
+    "No live PowerSync service or disposable live Convex deployment was configured",
+    "Live credential issuance, replicated read ACLs and multi-device convergence not verified",
+    "Existing provider regressions use fixtures; no real Clerk/Microsoft provider login tested here",
+    "Packaged Electron, real mobile devices, storage eviction, file sync and large-workspace performance unverified",
+    "Conflict reason and durable queue retention implemented; resolution UI not implemented",
+    "RxDB and community frameworks researched only; no comparative runtime benchmark",
+    "Development shell warmed online before offline reload; no first-install-offline or production PWA update-policy claim"
+  ]
+}

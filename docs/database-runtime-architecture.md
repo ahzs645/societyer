@@ -157,6 +157,11 @@ That bridge is implemented by `StaticConvexClient.watchQuery` / `watchPortableQu
 
 ### Sync stance (decided)
 
+The [2026-10-04 offline/Convex evaluation](./offline-convex-evaluation.md) explores
+an optional future synced-workspace mode using a standard engine. Its isolated
+prototype does not change the production stance below or connect the current
+local database to Convex.
+
 - Local mode is an island. Snapshot export/import is the supported way to move or restore a local workspace.
 - The planned upgrade path is one-way promotion of a local workspace into Convex. The design will be documented in [`local-to-convex-promotion.md`](./local-to-convex-promotion.md).
 - Two-way synchronization between local mode and Convex is explicitly out of scope.

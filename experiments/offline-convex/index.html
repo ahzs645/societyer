@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Societyer offline evaluation</title></head>
+  <body>
+    <main>
+      <h1>Offline draft evaluation</h1>
+      <p>This separate lab uses real PowerSync SQLite and its durable queue. Server calls run Societyer’s existing authorization in convex-test. Live replication is not connected.</p>
+      <label>Evaluation account <select id="actor"><option value="owner-a">Owner · Workspace A</option><option value="viewer-a">Viewer · Workspace A</option><option value="owner-b">Owner · Workspace B</option></select></label>
+      <p id="status" role="status">Opening local database…</p>
+      <form id="draft-form">
+        <label>Draft title <input id="title" maxlength="200" required></label>
+        <label>Draft information <textarea id="content" rows="5" maxlength="20000"></textarea></label>
+        <button id="save" disabled>Save on this device</button>
+      </form>
+      <div class="actions"><button id="upload" disabled>Upload pending drafts</button><button id="retry" disabled>Retry pending upload</button></div>
+      <p id="queue" aria-live="polite"></p>
+      <p id="error" role="alert"></p>
+      <h2>Local drafts</h2><ul id="drafts"></ul>
+      <p>Offline saves are local drafts. Upload acceptance is separate from receiving a replicated server version. This lab does not file documents or change workspace roles.</p>
+    </main>
+    <script type="module" src="/src/bootstrap.ts"></script>
+  </body>
+</html>
