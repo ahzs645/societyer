@@ -9,6 +9,12 @@ const test = convexTest(schema, {
   "./http.js": () => import("../convex/http"),
 });
 const issuer = "https://generated-doc.test";
+const authKeys = ["AUTH_MODE", "VITE_AUTH_MODE", "BETTER_AUTH_BASE_URL", "CLERK_JWT_ISSUER_DOMAIN"];
+const previousAuth = Object.fromEntries(authKeys.map((key) => [key, process.env[key]]));
+process.env.AUTH_MODE = "clerk";
+process.env.VITE_AUTH_MODE = "clerk";
+process.env.BETTER_AUTH_BASE_URL = "https://signer.generated-doc.test";
+process.env.CLERK_JWT_ISSUER_DOMAIN = issuer;
 const previousToken = process.env.SOCIETYER_API_PLATFORM_TOKEN;
 process.env.SOCIETYER_API_PLATFORM_TOKEN = "test-service-token";
 try {
@@ -36,6 +42,7 @@ try {
   assert.equal(await test.withIdentity({ issuer: "https://foreign-issuer.test", subject: "owner" }).query(api.http.gatewayGeneratedDocumentAccess, access("private.pdf")), false);
   console.log("Generated document access passed: service token requires authenticated actor ACL, issuer binding and correct local provider.");
 } finally {
+  for (const key of authKeys) { if (previousAuth[key] === undefined) delete process.env[key]; else process.env[key] = previousAuth[key]; }
   if (previousToken === undefined) delete process.env.SOCIETYER_API_PLATFORM_TOKEN;
   else process.env.SOCIETYER_API_PLATFORM_TOKEN = previousToken;
 }

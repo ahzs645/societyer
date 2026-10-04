@@ -47,11 +47,10 @@ export const runForSociety = authorizedMutation("seedRecordTableMetadata:runForS
 });
 
 /**
- * Public, no-token version of `runForSociety`. Safe because seeding is
- * idempotent (only inserts missing object/field/view rows) and scoped to
- * the supplied society. Used by the in-app "Seed metadata" empty-state
- * button so users don't have to drop to the CLI when a society is missing
- * its metadata. Also called automatically when a new society is created.
+ * In-app metadata initialization requires the current principal's
+ * settings:write permission in the supplied workspace. Idempotency prevents
+ * duplicate rows; it does not grant authority to seed another workspace.
+ * Society creation uses the separate internal seedSociety helper.
  */
 export const ensureForSociety = authorizedMutation("seedRecordTableMetadata:ensureForSociety", mutation)({
   args: { societyId: v.id("societies") },

@@ -38,10 +38,54 @@ spec:
               value: http://societyer.k8s.home:3220
             - name: CONVEX_SITE_ORIGIN
               value: http://societyer.k8s.home:3221
+            - name: AUTH_MODE
+              value: none
             - name: BETTER_AUTH_BASE_URL
               value: http://societyer.k8s.home
             - name: BETTER_AUTH_JWKS_URL
               value: http://societyer-api:8787/api/auth/jwks
+            - name: CLERK_JWT_ISSUER_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: CLERK_JWT_ISSUER_DOMAIN
+                  optional: true
+            - name: SOCIETYER_STORAGE_PROVIDER
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: SOCIETYER_STORAGE_PROVIDER
+                  optional: true
+            - name: R2_ACCOUNT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: R2_ACCOUNT_ID
+                  optional: true
+            - name: R2_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: R2_ENDPOINT
+                  optional: true
+            - name: R2_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: R2_BUCKET
+                  optional: true
+            - name: R2_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: R2_ACCESS_KEY_ID
+                  optional: true
+            - name: R2_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: societyer-app-secret
+                  key: R2_SECRET_ACCESS_KEY
+                  optional: true
             - name: DISABLE_BEACON
               value: "true"
             - name: REDACT_LOGS_TO_CLIENT

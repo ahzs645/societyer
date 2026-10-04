@@ -9,6 +9,7 @@
 // print action still opens the browser print dialog.
 
 import { escapeHtml } from "./html";
+import { fetchDocumentDownload } from "./documentDownload";
 import { buildWordDocxBlob } from "./docx";
 import { PAGE_WIDTH_PX, renderDocxToPaginatedHtml, PRINT_PAGE_CSS } from "./docxPreview";
 import { getDesktopBridge } from "./desktopBridge";
@@ -382,10 +383,10 @@ async function svgDataUrlToPngBytes(src: string): Promise<ArrayBuffer | null> {
 async function imageBytesFromSrc(src: string): Promise<ArrayBuffer | null> {
   if (/^data:image\/svg\+xml/i.test(src)) return svgDataUrlToPngBytes(src);
   if (src.startsWith("data:")) {
-    return fetch(src).then((response) => response.arrayBuffer());
+    return fetchDocumentDownload(src).then((response) => response.arrayBuffer());
   }
   if (/^https?:|^blob:/i.test(src)) {
-    return fetch(src).then((response) => response.arrayBuffer());
+    return fetchDocumentDownload(src).then((response) => response.arrayBuffer());
   }
   return null;
 }

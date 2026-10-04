@@ -30,7 +30,7 @@ export function PortalPage() {
       : "skip",
   );
 
-  if (auth.mode !== "better-auth") {
+  if (auth.mode === "none") {
     return <Navigate to="/app" replace />;
   }
   if (auth.isPending || society === undefined) {

@@ -9,6 +9,7 @@ import { Select } from "../components/Select";
 import { entityPreparationDecision } from "../../shared/entitySetup";
 import { Badge, Drawer, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
+import { IncorporationPreparation } from "../components/IncorporationPreparation";
 
 const CATEGORY_LABEL: Record<string, string> = {
   organize: "Prepare and organize the entity",
@@ -82,6 +83,7 @@ export function PostIncorporationChecklistPage() {
         iconColor="green"
         subtitle="Prepare, organize and maintain your entity, with separate records for drafts, execution and official registry evidence."
       />
+      <IncorporationPreparation organization={society} />
       <div className="card" style={{ padding: 14, marginBottom: 16 }}>
         <Badge tone={preparation.allowed ? "info" : "warn"}>{preparation.allowed ? "Preparation route" : "Review required"}</Badge>
         <p style={{ margin: "8px 0" }}>{preparation.message}</p>

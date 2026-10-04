@@ -105,6 +105,9 @@ const seeded = await t.run(async (ctx: any) => {
   await hold(classB, rhCarol, "carol", 300);
   return { societyId };
 });
+process.env.AUTH_MODE = "better-auth";
+process.env.VITE_AUTH_MODE = "better-auth";
+process.env.BETTER_AUTH_BASE_URL = PORTABLE_TEST_IDENTITY.issuer;
 const authedT = t.withIdentity(PORTABLE_TEST_IDENTITY);
 
 // --- run the SAME handler via the real Convex stack ---------------------------

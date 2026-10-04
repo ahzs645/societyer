@@ -2,7 +2,8 @@ import { canonicalizeJurisdictionCode, homeJurisdictionCode, isSociety, type Leg
 
 export const FORMATION_STATUS_OPTIONS = [
   { value: "", label: "Unverified legacy record — status not established" },
-  { value: "preparing", label: "Preparing — legal entity not yet verified" },
+  { value: "preparing", label: "Preparing incorporation" },
+  { value: "unverified_existing", label: "Existing incorporated entity — certificate evidence pending" },
   { value: "submitted", label: "Submitted — awaiting registry acceptance" },
   { value: "incorporated", label: "Incorporated — certificate evidence verified" },
 ];
@@ -91,4 +92,12 @@ export function validateFormationEvidence(source: Record<string, any>, societyId
   if (provenance?.documentState === "draft") throw new Error("A generated draft cannot establish verified incorporation. Upload the official certificate.");
   const uploadedVersion = versions.some((version) => String(version.documentId) === String(document._id) && String(version.societyId) === String(societyId) && version.storageKey && version.fileName && !["generated-inline", "demo"].includes(version.storageProvider) && version.storageProvider && !String(version.storageKey).startsWith("demo://"));
   if (!document.storageId && !uploadedVersion) throw new Error("Certificate verification requires an uploaded file. A note, planned date or URL-only document is insufficient.");
+}
+
+
+/** Replace an implicitly copied planned anniversary when certificate evidence establishes the actual date. */
+export function certificateAnniversaryDate(previous: Record<string, any>, formation: Record<string, any>): string | undefined {
+  if (formation.formationStatus !== "incorporated") return formation.anniversaryDate ?? formation.incorporationDate;
+  if (!formation.continuanceDate && !formation.amalgamationDate && (!formation.anniversaryDate || (previous.formationStatus !== "incorporated" && formation.anniversaryDate === previous.incorporationDate))) return formation.certificateDate;
+  return formation.anniversaryDate ?? formation.certificateDate;
 }

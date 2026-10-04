@@ -131,7 +131,7 @@ export function RoleHoldersPage() {
   if (society === null) return <SeedPrompt />;
 
   const corporationWorkspace = isCorporation(society);
-  const jurisdictionCopy = jurisdictionDisplayCopy(homeJurisdictionCode(society));
+  const jurisdictionCopy = jurisdictionDisplayCopy(society);
   const roleSummary = summarizeCorporationRoles(rows ?? []);
   const openNew = (roleType = corporationWorkspace ? "director" : "authorized_representative") =>
     setDraft(defaultRoleHolderDraft(roleType, corporationWorkspace));

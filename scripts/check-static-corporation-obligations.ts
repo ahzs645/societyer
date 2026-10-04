@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { verifyFixtureFormation } from "./helpers/verifiedFormation";
 import { StaticConvexClient } from "../src/lib/staticConvex";
 import { complianceFactsForOrganization, computeComplianceObligations } from "../src/lib/compliance";
 
@@ -17,6 +18,8 @@ const created = await client.mutation("society:createWorkspace", {
   entityType: "corporation__business_",
   actFormedUnder: "canada_business_corporations_act",
 });
+
+await verifyFixtureFormation(client, created.societyId, "2025-02-10");
 
 assert.equal(created.taskIds.length, 5);
 

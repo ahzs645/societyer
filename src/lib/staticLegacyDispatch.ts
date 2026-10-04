@@ -1,4 +1,5 @@
-import { entitySetupFields, validateEntitySetup, entityPreparationDecision, validateFormationEvidence } from "../../shared/entitySetup";
+import { entitySetupFields, validateEntitySetup, entityPreparationDecision, validateFormationEvidence, certificateAnniversaryDate } from "../../shared/entitySetup";
+import { validateWorkspaceLegalIdentity, validateWorkspaceLegalIdentityUpdate } from "../../shared/organizationDomain";
 // Legacy static query/mutation mirror. Scheduled for deletion once the local
 // portable migration backlog is complete.
 import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
@@ -42,9 +43,9 @@ import {
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import {
   DEFAULT_HOME_JURISDICTION_CODE,
-  WORKSPACE_ONBOARDING_WORKFLOW_CONFIG,
+  workspaceOnboardingWorkflowConfig,
   buildWorkspaceOnboardingNodes,
-  registryOnboardingCopy,
+  buildWorkspaceOnboardingTasks,
 } from "../../shared/jurisdictionWorkspace";
 import { STATIC_OFFLINE_NOOP_WRITES } from "./staticConvexParity";
 import type { StaticDemoDexieStore } from "./staticDemoStore";
@@ -846,15 +847,16 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
     const createWorkspace = () => {
       validateEntitySetup(args ?? {});
       validateFormationEvidence(args ?? {});
+      validateWorkspaceLegalIdentity({ ...args, jurisdictionCode: args?.jurisdictionCode ?? args?.homeJurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE });
       const now = new Date().toISOString();
       const societyId = staticLocalId("society", "workspace");
       const workflowId = staticLocalId("workflow", "onboarding");
-      const jurisdictionCode = args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE;
+      const jurisdictionCode = args?.jurisdictionCode ?? args?.homeJurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE;
       const homeJurisdictionCode = args?.homeJurisdictionCode ?? jurisdictionCode;
       const anniversaryDate = args?.anniversaryDate ?? args?.incorporationDate;
       const homeRegistrationId = staticLocalId("organizationRegistration", "home");
-      const taskSeeds = staticWorkspaceOnboardingTaskSeeds(jurisdictionCode);
-      const taskIds = taskSeeds.map(({ key }) => staticLocalId("task", `onboarding_${key}`));
+      const taskSeeds = buildWorkspaceOnboardingTasks(args ?? {});
+      const taskIds = taskSeeds.map((_, index) => staticLocalId("task", `onboarding_${index}`));
       store?.upsertRow("societies", {
         _id: societyId,
         _creationTime: Date.now(),
@@ -905,8 +907,8 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
         registrationDate: args?.incorporationDate,
         officialEmail: args?.officialEmail,
         representativeIds: [],
-        status: "active",
-        notes: "Created automatically from the workspace home jurisdiction.",
+        status: args?.organizationStatus === "pre_incorporation" ? "pending" : "active",
+        notes: args?.organizationStatus === "pre_incorporation" ? "Planned home jurisdiction; incorporation has not been confirmed." : "Created automatically from the workspace home jurisdiction.",
         createdAtISO: now,
         updatedAtISO: now,
       });
@@ -932,12 +934,12 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
         provider: "internal",
         nodePreview: buildWorkspaceOnboardingNodes(args ?? {}),
         trigger: { kind: "manual" },
-        config: WORKSPACE_ONBOARDING_WORKFLOW_CONFIG,
+        config: workspaceOnboardingWorkflowConfig(args ?? {}),
         createdByUserId: args?.actingUserId,
         createdAtISO: now,
         updatedAtISO: now,
       });
-      taskSeeds.forEach(({ title, description }, index) => {
+      taskSeeds.forEach(({ title, description, priority, tags }, index) => {
         store?.upsertRow("tasks", {
           _id: taskIds[index],
           _creationTime: Date.now() + index,
@@ -945,7 +947,8 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
           title,
           description,
           status: "Todo",
-          priority: index === 0 ? "High" : "Medium",
+          priority,
+          tags: ["workspace-onboarding", ...tags],
           workflowId,
           createdByUserId: args?.actingUserId,
           createdAtISO: now,
@@ -1474,9 +1477,15 @@ export function mutationResult(name: string, args: StaticArgs, store?: StaticDem
       validateLedger(proposedTransfers);
     }
     if (name === "society:upsert") {
+      delete row.societyId; // A society is the tenant root, not a child of the default demo society.
       validateEntitySetup(row);
       validateFormationEvidence(row, args?.id, store?.getRow("documents", row.certificateEvidenceDocumentId), store?.listRows("documentVersions", { documentId: row.certificateEvidenceDocumentId }) ?? []);
-      if (row.formationStatus === "incorporated") row.incorporationDate = row.certificateDate;
+      if (row.formationStatus === "incorporated") {
+        row.anniversaryDate = certificateAnniversaryDate(existing, row);
+        row.incorporationDate = row.certificateDate;
+      }
+      if (args?.jurisdictionCode) row.homeJurisdictionCode = args?.homeJurisdictionCode ?? args.jurisdictionCode;
+      validateWorkspaceLegalIdentityUpdate(existing, { ...args, ...(args?.jurisdictionCode ? { homeJurisdictionCode: row.homeJurisdictionCode } : {}) });
     }
     store?.upsertRow(tableName, row);
     if (name === "society:upsert" && !args?.id) {
@@ -1628,37 +1637,6 @@ function staticRightsholdingTransferChronologicalSort(left: any, right: any) {
   const dateSort = leftDate.localeCompare(rightDate);
   if (dateSort !== 0) return dateSort;
   return Number(left._creationTime ?? 0) - Number(right._creationTime ?? 0);
-}
-
-function staticWorkspaceOnboardingTaskSeeds(jurisdictionCode?: string | null) {
-  const registry = registryOnboardingCopy(jurisdictionCode);
-  return [
-    {
-      key: "profile",
-      title: "Review organization profile",
-      description: "Confirm legal name, incorporation number, incorporation date, fiscal year end, jurisdiction, and entity type.",
-    },
-    {
-      key: "registry",
-      title: registry.taskTitle,
-      description: registry.taskDescription,
-    },
-    {
-      key: "locations",
-      title: "Add registered and mailing locations",
-      description: "Record registered office, records office, mailing address, and any jurisdiction-specific location evidence.",
-    },
-    {
-      key: "documents",
-      title: "Upload governing documents",
-      description: "Attach articles, bylaws, constitution, registers, resolutions, or equivalent governing records for this entity.",
-    },
-    {
-      key: "people",
-      title: "Add directors, members, shareholders, and access",
-      description: "Invite operators and record the people/registers relevant to this workspace type.",
-    },
-  ];
 }
 
 function staticAgentOutput(agent: any, input: string) {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { verifyFixtureFormation } from "./helpers/verifiedFormation";
 import { StaticConvexClient } from "../src/lib/staticConvex";
 import { complianceFactsForOrganization, computeComplianceObligations } from "../src/lib/compliance";
 import { deriveCurrentHoldings } from "../src/lib/equity";
@@ -28,6 +29,9 @@ const federalWorkspace = await source.mutation("society:createWorkspace", {
   entityType: "corporation__business_",
   actFormedUnder: "canada_business_corporations_act",
 });
+
+await verifyFixtureFormation(source, bcWorkspace.societyId, "2020-04-15");
+await verifyFixtureFormation(source, federalWorkspace.societyId, "2025-02-10");
 
 const directorId = await source.mutation("legalOperations:upsertRoleHolder", {
   societyId: federalWorkspace.societyId,
@@ -115,6 +119,16 @@ const issuancePacket = await source.mutation("legalOperations:stageShareIssuance
   transferId: issuanceId,
 });
 assert.ok(issuancePacket.draftDocumentVersionId);
+
+// Rule ids name legal rules; they are not database rows. Actual evidence/target
+// references still require ownership after the action policy classifies them.
+const foreignCertificate = (await source.query("documents:list", { societyId: bcWorkspace.societyId })).find((document: any) => document.tags.includes("test_fixture"));
+assert.ok(foreignCertificate);
+for (const [targetTable, targetId] of [["rightsholdingTransfers", "missing-target"], ["documents", foreignCertificate._id]]) {
+  await assert.rejects(source.mutation("complianceObligations:markReviewed", {
+    societyId: federalWorkspace.societyId, ruleId: "ca-fed-cbca.annual-return", flagLevel: "info", flagText: "Federal annual return", evidenceRequired: [], targetTable, targetId,
+  }), /not found/);
+}
 
 await source.mutation("complianceObligations:markReviewed", {
   societyId: federalWorkspace.societyId,

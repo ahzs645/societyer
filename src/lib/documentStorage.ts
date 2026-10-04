@@ -1,6 +1,8 @@
 import type { DocumentStorageProvider } from "./runtimeMode";
 import { getDocumentStorageProvider } from "./runtimeMode";
 import { requireDesktopBridge } from "./desktopBridge";
+import { fetchDocumentDownload, isAuthenticatedDocumentUrl } from "./documentDownload";
+import { triggerBlobDownload } from "./zip";
 
 export type DocumentVersionRef = {
   provider: DocumentStorageProvider;
@@ -135,6 +137,12 @@ export async function openDocumentDownloadTarget(target: DocumentDownloadTarget)
   }
   if (!target.url) return;
   if (target.url.startsWith("demo://")) return;
+  if (isAuthenticatedDocumentUrl(target.url)) {
+    const response = await fetchDocumentDownload(target.url);
+    if (!response.ok) throw new Error(`Couldn't download the file (HTTP ${response.status}).`);
+    triggerBlobDownload(await response.blob(), target.fileName ?? "document");
+    return;
+  }
   window.open(target.url, "_blank");
 }
 

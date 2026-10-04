@@ -29,6 +29,8 @@ export function complianceFactsForOrganization(
     registrations?: RegistrationComplianceSource[];
   } = {},
 ): ComplianceFacts[] {
+  // A preparation workspace has no confirmed legal entity or registry obligations yet.
+  if (organization.organizationStatus === "pre_incorporation" && organization.formationStatus !== "incorporated") return [];
   const asOfDate = options.asOfDate ?? new Date().toISOString().slice(0, 10);
   const entityType = organizationEntityType(organization);
   const homeJurisdiction = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
-import { entitySetupFields, validateEntitySetup, validateFormationEvidence } from "../shared/entitySetup";
+import { entitySetupFields, validateEntitySetup, validateFormationEvidence, certificateAnniversaryDate } from "../shared/entitySetup";
+import { validateWorkspaceLegalIdentity, validateWorkspaceLegalIdentityUpdate } from "../shared/organizationDomain";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { integrationSettingsValidator } from "./lib/integrationSettings";
@@ -10,9 +11,9 @@ import { seedSociety } from "./seedRecordTableMetadata";
 import { seedDocumentPacketsForEntityHelper } from "./legalOperations";
 import {
   DEFAULT_HOME_JURISDICTION_CODE,
-  WORKSPACE_ONBOARDING_WORKFLOW_CONFIG,
+  workspaceOnboardingWorkflowConfig,
   buildWorkspaceOnboardingNodes,
-  registryOnboardingCopy,
+  buildWorkspaceOnboardingTasks,
 } from "../shared/jurisdictionWorkspace";
 import {
   setLogoInvertInDarkModePortable,
@@ -35,7 +36,8 @@ import {
 } from "../shared/functions/society";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { buildConvexCapabilities } from "./providers/capabilities";
-import { getOwned, requireSocietyMembership } from "../shared/functions/access";
+import { getOwned, requireAuthenticated, requireSocietyMembership } from "../shared/functions/access";
+import { PORTABLE_ACCESS_ENFORCEMENT } from "../shared/portable/define";
 
 export const get = authorizedQuery("society:get", query)({
   args: {},
@@ -181,6 +183,7 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
   handler: async (ctx, args) => {
     const { id, ...rest } = args;
     const portable = await toPortableMutationCtx(ctx);
+    if (!id && PORTABLE_ACCESS_ENFORCEMENT) requireAuthenticated(portable);
     if (id) {
       await requireSocietyMembership(portable, id);
       if (rest.primaryRegistrationId) {
@@ -200,11 +203,13 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
         );
       }
     }
-    const formation = { ...(id ? await ctx.db.get(id) : {}), ...rest };
+    const previous = id ? await ctx.db.get(id) : {};
+    const formation = { ...previous, ...rest };
     validateEntitySetup(formation);
     const certificate = formation.certificateEvidenceDocumentId ? await getOwned(portable, "documents", formation.certificateEvidenceDocumentId, id ?? "") : undefined;
     const certificateVersions = certificate ? await ctx.db.query("documentVersions").withIndex("by_document", (q) => q.eq("documentId", certificate._id)).collect() : [];
     validateFormationEvidence(formation, id, certificate, certificateVersions);
+    validateWorkspaceLegalIdentityUpdate(id ? await ctx.db.get(id) : null, { ...rest, ...(rest.jurisdictionCode ? { homeJurisdictionCode: rest.homeJurisdictionCode ?? rest.jurisdictionCode } : {}) });
     assertAllowedOption("entityTypes", rest.entityType, "Entity type");
     assertAllowedOption("actsFormedUnder", rest.actFormedUnder, "Act formed under");
     assertAllowedOption("organizationStatuses", rest.organizationStatus, "Organization status");
@@ -221,7 +226,7 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
       ...rest,
       incorporationDate: formation.formationStatus === "incorporated" ? formation.certificateDate : rest.incorporationDate,
       homeJurisdictionCode: rest.homeJurisdictionCode ?? rest.jurisdictionCode,
-      anniversaryDate: rest.anniversaryDate ?? rest.incorporationDate,
+      anniversaryDate: certificateAnniversaryDate(previous ?? {}, formation),
       updatedAt: Date.now(),
     };
     if (id) {
@@ -326,12 +331,13 @@ export const createWorkspace = authorizedMutation("society:createWorkspace", mut
     }
     validateEntitySetup(args);
     validateFormationEvidence(args);
+    validateWorkspaceLegalIdentity({ ...args, jurisdictionCode: args.jurisdictionCode ?? args.homeJurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE });
     assertAllowedOption("entityTypes", args.entityType, "Entity type");
     assertAllowedOption("actsFormedUnder", args.actFormedUnder, "Act formed under");
     assertAllowedOption("organizationStatuses", args.organizationStatus, "Organization status");
 
     const now = new Date().toISOString();
-    const jurisdictionCode = args.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE;
+    const jurisdictionCode = args.jurisdictionCode ?? args.homeJurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE;
     const homeJurisdictionCode = args.homeJurisdictionCode ?? jurisdictionCode;
     const anniversaryDate = blankToUndefined(args.anniversaryDate) ?? blankToUndefined(args.incorporationDate);
 
@@ -381,8 +387,8 @@ export const createWorkspace = authorizedMutation("society:createWorkspace", mut
       registrationDate: blankToUndefined(args.incorporationDate),
       officialEmail: blankToUndefined(args.officialEmail),
       representativeIds: [],
-      status: "active",
-      notes: "Created automatically from the workspace home jurisdiction.",
+      status: args.organizationStatus === "pre_incorporation" ? "pending" : "active",
+      notes: args.organizationStatus === "pre_incorporation" ? "Planned home jurisdiction; incorporation has not been confirmed." : "Created automatically from the workspace home jurisdiction.",
       createdAtISO: now,
       updatedAtISO: now,
     });
@@ -412,7 +418,7 @@ export const createWorkspace = authorizedMutation("society:createWorkspace", mut
       provider: "internal",
       nodePreview: buildWorkspaceOnboardingNodes(args),
       trigger: { kind: "manual" },
-      config: WORKSPACE_ONBOARDING_WORKFLOW_CONFIG,
+      config: workspaceOnboardingWorkflowConfig(args ?? {}),
       createdByUserId: ownerUserId,
     });
 
@@ -525,47 +531,7 @@ function blankToUndefined(value?: string) {
 // local runtimes create the same workflow shape. Re-exported for existing callers.
 export { buildWorkspaceOnboardingNodes };
 
-export function buildWorkspaceOnboardingTasks(args: any) {
-  const missingIdentity = [
-    !args.incorporationNumber ? "incorporation number" : null,
-    !args.incorporationDate ? "incorporation date" : null,
-    !args.fiscalYearEnd ? "fiscal year end" : null,
-  ].filter(Boolean);
-  const registry = registryOnboardingCopy(args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE);
-  return [
-    {
-      title: registry.taskTitle,
-      description: `${registry.taskDescription}${missingIdentity.length ? ` Missing profile fields now: ${missingIdentity.join(", ")}.` : ""}`,
-      priority: missingIdentity.length ? "High" : "Medium",
-      tags: ["optional", "registry"],
-    },
-    {
-      title: "Set registered locations",
-      description: "Record registered office delivery and mailing addresses. Add a records location only if records are kept somewhere other than the registered office.",
-      priority: args.registeredOfficeAddress ? "Medium" : "High",
-      tags: ["addresses", "records"],
-    },
-    {
-      title: "Add governance documents",
-      description: "Start with constitution, bylaws, certificate or registry summary, statement of directors/registered office, and latest annual report if available. Other documents can come later.",
-      priority: "High",
-      tags: ["documents", "governance"],
-    },
-    {
-      title: "Add people and workspace access",
-      description: "Add directors, known officers, the privacy officer, and workspace users. Signing authorities and members can be added now if known.",
-      priority: "High",
-      tags: ["people", "access"],
-    },
-    {
-      title: "Optional: finish advanced setup later",
-      description: "Choose only what matters: annual calendar, member register, finance controls, privacy and records program, insurance/risk, integrations, or a board adoption packet.",
-      priority: "Low",
-      tags: ["optional", "advanced-setup"],
-    },
-  ];
-}
-
+export { buildWorkspaceOnboardingTasks };
 export const updateIntegrationSettings = authorizedMutation("society:updateIntegrationSettings", mutation)({
   args: { societyId: v.id("societies"), integrationSettings: integrationSettingsValidator },
   returns: v.id("societies"),

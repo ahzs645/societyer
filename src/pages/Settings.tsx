@@ -1,5 +1,5 @@
 import { useMutation } from "convex/react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { isDemoMode, setDemoMode } from "../lib/demoMode";
@@ -22,6 +22,7 @@ import { useThemePreference } from "../hooks/useThemePreference";
 import { useOperationsDeskVisibility } from "../hooks/useOperationsDeskVisibility";
 import { useAiChatVisibility } from "../hooks/useAiChatVisibility";
 import { useTranslation } from "react-i18next";
+import { usePermissions } from "../hooks/usePermissions";
 import type { ThemePreference } from "../lib/theme";
 import {
   MODULE_CATEGORIES,
@@ -37,7 +38,11 @@ type SettingsTab = "workspace" | "modules" | "runtime";
 export function SettingsPage() {
   const { t } = useTranslation();
   const society = useSociety();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("workspace");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const activeTab: SettingsTab = requestedTab === "modules" || requestedTab === "runtime" ? requestedTab : "workspace";
+  const { loaded: permissionsLoaded, can } = usePermissions();
+  const canManageModules = permissionsLoaded && can("society:write");
   const [demo, setDemo] = useState(isDemoMode());
   const appRuntime = resolveAppRuntime();
   const updateModules = useMutation(api.society.updateModules);
@@ -119,6 +124,7 @@ export function SettingsPage() {
   if (society === null) return <SeedPrompt />;
 
   const toggleModule = async (key: ModuleKey, checked: boolean) => {
+    if (!canManageModules || savingModule) return;
     const next = { ...moduleSettings, [key]: checked };
     setModuleSettings(next);
     setSavingModule(key);
@@ -292,7 +298,11 @@ export function SettingsPage() {
           { id: "runtime", label: "Runtime" },
         ]}
         activeTab={activeTab}
-        onTabChange={(id) => setActiveTab(id as SettingsTab)}
+        onTabChange={(id) => setSearchParams((current) => {
+          const next = new URLSearchParams(current);
+          next.set("tab", id);
+          return next;
+        }, { replace: true })}
       >
 
       {activeTab === "workspace" && (
@@ -581,7 +591,12 @@ export function SettingsPage() {
         <div className="card__body col" style={{ gap: 16 }}>
           <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
             {t("settings.modulesHint")}
+            {" "}Modules are workspace-wide feature switches. User access follows workspace roles.
+            {!canManageModules && " Only an Owner or Admin can change these settings."}
           </div>
+          <Link to="/app/users" className="btn btn--ghost btn--sm" style={{ alignSelf: "flex-start" }}>
+            View users & access
+          </Link>
 
           <div className="settings-modules">
             {modulesByCategory.map(({ category, items }) => (
@@ -604,7 +619,7 @@ export function SettingsPage() {
                       <Toggle
                         checked={moduleSettings[module.key]}
                         onChange={(checked) => toggleModule(module.key, checked)}
-                        disabled={savingModule === module.key}
+                        disabled={!canManageModules || savingModule !== null}
                         label={module.label}
                         hint={module.description}
                       />

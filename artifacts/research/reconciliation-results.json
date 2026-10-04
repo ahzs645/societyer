@@ -1,0 +1,142 @@
+{
+  "research_baseline_commit": "375ef99fc6d9112879158959edf451142f7e450e",
+  "reconciled_main_commit": "cc52e24487f42c19f81b2d22385091006bc70b44",
+  "implementation_checkpoint_commit": "883f4a9f7c87e3d988efae54794455bfa23ba625",
+  "reconciliation_method": "Three-way merge of research checkpoint with current main. Examined the actual 110-file main delta from 375ef99 to cc52e244 and resolved conflicts by area. No remote merge, push or deployment.",
+  "preserved": [
+    "Clerk sign-in, account profiles and Convex/gateway token flow",
+    "Alternative Better Auth mode with tenant-restricted Microsoft sign-in",
+    "Societyer Owner/Admin/Director/Member/Viewer role matrix and Workspace Access Viewer",
+    "Active-Owner ordinary transition protections, including concurrent demotions",
+    "Existing setup tracks and incorporation preparation worksheet"
+  ],
+  "material_behavior_changes": [
+    "Hosted identities require exact issuer/subject bindings; issuer-less legacy rows require operator backfill. Clerk migration requires reviewed identity mapping and account-linking policy evidence references.",
+    "Convex deployment must explicitly select AUTH_MODE consistently with gateway/frontend. Better Auth remains an internal machine signer in Clerk mode.",
+    "Admin cannot grant/manage Owner or Admin memberships; user removal remains Owner-only. Ordinary upsert, role/status changes and removal preserve an active Owner. Separate audited security disabling denies compromised access and flags controlled recovery.",
+    "Shared action guards distinguish legal/provider identifiers from actual database references, preserving target ownership validation. Native downloads use read permission plus document ACL.",
+    "Public metadata seeding now requires settings:write in the selected workspace.",
+    "Local acting-user picker uses a physical-file field whitelist, with no hosted/portable bypass; hosted profile menus do not query privileged roster.",
+    "Formation evidence, independent tax/registration dates, decision preview, storage policy/cost and research reference options use existing interface patterns.",
+    "Local queries and mutations await IndexedDB hydration before resolving actor authority; selected-actor changes invalidate prior authorized cache results.",
+    "Local Convex snapshot reads and paginated results are stable; listener notification uses a snapshot to prevent render feedback during role switches."
+  ],
+  "verification": {
+    "security": {
+      "command": "npm run test:reconciled-security",
+      "result": "passed after final cache changes",
+      "includes": [
+        "Clerk authentication and gateway",
+        "Microsoft tenant/issuer/audience/signature/time/scope checks",
+        "Better Auth broker and hosted identity",
+        "Browser bearer-token handling",
+        "Cross-workspace authorization and disabled memberships",
+        "Role grants and active Owner transitions/concurrency",
+        "Current API-key and workflow actor authority",
+        "Portable principal and local actor selection",
+        "Document ACL and verified RustFS/R2 uploads under both brokers",
+        "Generated/public document delivery and revocation",
+        "Stable denied local query snapshot reads and selected-principal cache invalidation"
+      ],
+      "log": "tmp/reconciled-final-security.log"
+    },
+    "server_typecheck": {
+      "command": "npm run server:typecheck",
+      "result": "passed"
+    },
+    "combined_build": {
+      "command": "npm run build:pages",
+      "result": "passed",
+      "includes": [
+        "Convex TypeScript",
+        "Frontend TypeScript",
+        "Vite production bundle",
+        "Pages preparation"
+      ]
+    },
+    "browser": {
+      "result": "passed",
+      "focused_role_regression": {
+        "result": "passed",
+        "count": 1,
+        "assertions": [
+          "Owner storage controls editable",
+          "Member controls disabled",
+          "Member selection and restrictions preserved after reload",
+          "Return to Owner restores edit authority"
+        ]
+      },
+      "repeated_storage_persistence": {
+        "result": "passed",
+        "count": 5,
+        "assertions": [
+          "Actual IndexedDB society policy persisted",
+          "Reload retains tenant, library and offboarding values",
+          "Separate identity and storage-consent status",
+          "R2 residency and cost disclosure"
+        ]
+      },
+      "passed": 32,
+      "failed": 0,
+      "duration_seconds": 58.0,
+      "command": "npx playwright test tests/research-interface.spec.ts tests/research-settings.spec.ts tests/demo-smoke.spec.ts",
+      "log": "tmp/reconciled-browser.log"
+    },
+    "integration": [
+      "API contract: 114 paths / 193 operations",
+      "Static parity: 456 frontend writes",
+      "Onboarding and local workspace binding",
+      "Local snapshot roundtrip including missing/foreign targets",
+      "Export coverage: 192 schema tables",
+      "Post-incorporation flow/evidence checks",
+      "Compliance: 5 packs / 98 fixtures",
+      "Jurisdiction-aware bylaw/notice, meeting/motion and organization-domain checks",
+      "Storage settings/cost and SharePoint adapter boundary checks",
+      "Delayed hydration protects storage-policy reads/writes and current actor resolution",
+      "Portable live-runtime reactive queries and CRUD",
+      "Local storage policy persistence: five repeated browser passes, including actual IndexedDB state and reload",
+      "Portable principal and live-runtime checks: stable snapshot reads, paginated snapshots, current actor invalidation and Owner restoration"
+    ],
+    "lint": {
+      "result": "0 errors; 15 size/complexity warnings in targeted interface files"
+    },
+    "tenancy_inventory": {
+      "entries": 1764,
+      "blocked": 3230,
+      "leaked_read": 0,
+      "leaked_write": 0,
+      "new_leaks": 0,
+      "error": 1,
+      "not_applicable": 989,
+      "limitation": "The remaining synthetic foreign-acting-user election case stops because election voting is closed; skipped/error outcomes do not prove those paths. Focused native authorization tests are separate."
+    },
+    "combined_verification": {
+      "command": "npm run verify:reconciled",
+      "result": "passed",
+      "log": "tmp/reconciled-verification.log"
+    },
+    "diff_review": {
+      "result": "passed",
+      "unresolved_merge_conflicts": 0,
+      "whitespace_errors": 0,
+      "remote_main_rechecked": "cc52e24487f42c19f81b2d22385091006bc70b44"
+    }
+  },
+  "research_backlog": {
+    "total": 73,
+    "dispositions": {
+      "external_review": 6,
+      "partial": 58,
+      "implemented": 8,
+      "deferred": 1
+    },
+    "detail": "src/lib/research/implementationStatus.json",
+    "complete_acceptance_claimed": false
+  },
+  "limits": [
+    "No real Clerk/Entra tenant or live storage deployment was accessed; provider credentials and administrator configuration remain unverified.",
+    "Directory lifecycle/SCIM, sensitive reauthentication, scoped scheduler and exact workflow callback capabilities remain incomplete.",
+    "SharePoint adapter primitives are tested; deployment integration and authorized selected-resource proof of concept remain gated.",
+    "Operative legal instruments/electorates, legal signoff and Ontario governance remain review gates; immutable historical rule-version ledger remains incomplete."
+  ]
+}

@@ -20,7 +20,7 @@ const seeded = await test.run(async (ctx) => {
 });
 const owner = test.withIdentity({ issuer, subject: "owner" });
 const other = test.withIdentity({ issuer, subject: "other" });
-const envKeys = ["RUSTFS_ENDPOINT", "RUSTFS_ACCESS_KEY", "RUSTFS_SECRET_KEY", "SOCIETYER_DISABLE_NATIVE_FILE_STORAGE", "SOCIETYER_STORAGE_PROVIDER", "R2_ENDPOINT", "R2_ACCOUNT_ID", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"];
+const envKeys = ["RUSTFS_ENDPOINT", "RUSTFS_ACCESS_KEY", "RUSTFS_SECRET_KEY", "SOCIETYER_DISABLE_NATIVE_FILE_STORAGE", "SOCIETYER_STORAGE_PROVIDER", "R2_ENDPOINT", "R2_ACCOUNT_ID", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "AUTH_MODE", "VITE_AUTH_MODE", "BETTER_AUTH_BASE_URL", "CLERK_JWT_ISSUER_DOMAIN"];
 const previous = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
 const originalFetch = globalThis.fetch;
 const bytes = new TextEncoder().encode("abc");
@@ -39,6 +39,11 @@ globalThis.fetch = async (input, init) => {
   return new Response(bytes, { status: 200, headers: { "content-length": "3" } });
 };
 try {
+  for (const broker of ["better-auth", "clerk"] as const) {
+    process.env.AUTH_MODE = broker;
+    process.env.VITE_AUTH_MODE = broker;
+    process.env.BETTER_AUTH_BASE_URL = broker === "clerk" ? "https://signer.upload.test" : issuer;
+    process.env.CLERK_JWT_ISSUER_DOMAIN = issuer;
   for (const provider of ["rustfs", "r2"] as const) {
     process.env.SOCIETYER_STORAGE_PROVIDER = provider;
     process.env.R2_ACCOUNT_ID = "test-account";
@@ -77,7 +82,8 @@ try {
   const handle = await test.run((ctx) => ctx.db.get(mismatch.uploadHandleId));
   assert.equal(handle?.status, "verifying", "failed verification must not authorize recording");
   }
-  console.log("RustFS and R2 upload binding checks passed: authenticated handle, server byte verification, isolated committed key, ignored forged metadata, single-use registration and size mismatch rejection.");
+  }
+  console.log("RustFS and R2 upload binding under Better Auth and Clerk passed: authenticated handle, server byte verification, isolated committed key, ignored forged metadata, single-use registration and size mismatch rejection.");
 } finally {
   globalThis.fetch = originalFetch;
   for (const key of envKeys) { if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key]; }

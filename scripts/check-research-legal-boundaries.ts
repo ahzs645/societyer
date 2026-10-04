@@ -25,6 +25,7 @@ assert.equal(addComplianceDateOffset("2026-01-31", { months: 2 }), "2026-03-31")
 const company = { jurisdictionCode: "CA-BC", entityType: "corporation__business_", incorporationDate: "2022-03-01", anniversaryDate: "2022-03-01", asOfDate: "2026-07-01" };
 assert.deepEqual(computeComplianceObligations({ ...company, formationStatus: "preparing" }), []);
 assert.deepEqual(computeComplianceObligations({ ...company, formationStatus: "submitted" }), []);
+assert.deepEqual(computeComplianceObligations({ ...company, formationStatus: "unverified_existing" }), []);
 const annuals = computeComplianceObligations(company).filter(o => o.ruleId === "compliance-ca-bc-company-annual-report");
 assert.deepEqual(annuals.map(o => o.dueDate), ["2023-05-01", "2024-05-01", "2025-05-01", "2026-05-01"]);
 assert.equal(new Set(annuals.map(o => o.occurrenceKey)).size, 4);

@@ -11,7 +11,7 @@ import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../port
 import { getOwned, isActiveMembership, requireOwnedRow, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import { findInvitation, invitationAvailability, invitationIssuerAuthorized } from "./invitationTokens";
-import { matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive } from "./identity";
+import { matchesAuthBinding, normalizeAuthIssuer, matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive } from "./identity";
 
 export type MembershipResolution =
   | { status: "bound"; societyId: string; userId: string }
@@ -90,20 +90,31 @@ export async function upsertUserPortable(ctx: PortableMutationCtx, args: {
   const actor = await requireMembershipManager(ctx, args.societyId, target?.role, args.role, args.actingUserId);
   if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
   if (args.directorId) await getOwned(ctx, "directors", args.directorId, args.societyId);
-  const { id, actingUserId: _actingUserId, ...fields } = args;
+  const fields = {
+    societyId: args.societyId, email: args.email, displayName: args.displayName,
+    role: args.role, status: args.status,
+    ...(Object.hasOwn(args, "memberId") ? { memberId: args.memberId } : {}),
+    ...(Object.hasOwn(args, "directorId") ? { directorId: args.directorId } : {}),
+    ...(Object.hasOwn(args, "avatarColor") ? { avatarColor: args.avatarColor } : {}),
+  };
   if (target) {
     await assertActiveOwnerRemains(ctx, target, args.role, args.status);
     await ctx.db.patch(target._id, fields);
     await recordMembershipChange(ctx, args.societyId, actor._id, target._id, "updated");
     return target._id;
   }
-  const userId = await ctx.db.insert("users", { ...fields, createdAtISO: new Date().toISOString() });
+  const peers = await ctx.db.query("users").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).first();
+  const localBootstrap = !peers && ctx.principal.assurance === "trusted-workspace";
+  const userId = await ctx.db.insert("users", { ...fields,
+    role: localBootstrap ? "Owner" : fields.role, status: localBootstrap ? "Active" : fields.status,
+    createdAtISO: new Date().toISOString() });
   await recordMembershipChange(ctx, args.societyId, actor._id, userId, "created");
   return userId;
 }
 
 export async function removeUserPortable(ctx: PortableMutationCtx, { id, actingUserId }: { id: string; actingUserId?: string }) {
   const target = await requireOwnedRow(ctx, "users", id);
+  await requireRolePortable(ctx, { societyId: target.societyId, required: "Owner", actingUserId });
   const actor = await requireMembershipManager(ctx, target.societyId, target.role, undefined, actingUserId);
   await assertActiveOwnerRemains(ctx, target);
   await ctx.db.delete(id);
@@ -221,6 +232,7 @@ export async function ensureCurrentMembershipPortable(
   if (invitation.revokedAtISO) return { status: "invitation-revoked" };
   if (invitation.acceptedAtISO) return { status: "invitation-already-accepted" };
   if (!ROLES.includes(invitation.role as Role)) return { status: "invalid-invitation" };
+  if (!principal.emailVerified) return { status: "invitation-email-unverified" };
   if (
     !principal.email ||
     principal.email.toLowerCase() !== invitation.email.toLowerCase()
@@ -277,6 +289,10 @@ export async function bootstrapUserIdentityPortable(
   if (target.authProvider && target.authProvider !== args.authProvider) {
     throw new Error("User is already bound to a different auth provider.");
   }
+  if (target.authIssuer && (!args.authIssuer || normalizeAuthIssuer(target.authIssuer) !== normalizeAuthIssuer(args.authIssuer))) {
+    throw new Error("User is already bound to a different auth issuer.");
+  }
+  if (args.authProvider === "clerk" && !args.authIssuer) throw new Error("Clerk auth issuer is required.");
 
   const subjectBindings = await ctx.db
     .query<UserRow>("users")
@@ -316,3 +332,54 @@ export async function recordLoginPortable(ctx: PortableMutationCtx, { id }: { id
   if (actor._id !== id) throw new Error("Authenticated actor does not match the current principal.");
   await ctx.db.patch(id, { lastLoginAtISO: new Date().toISOString() });
 }
+
+/** Operator-only migration with explicit mapping and provider-policy evidence. */
+export async function migrateUserToClerkPortable(
+  ctx: PortableMutationCtx,
+  args: {
+    userId: string;
+    expectedAuthSubject: string;
+    expectedAuthProvider?: string;
+    expectedAuthIssuer?: string;
+    authSubject: string;
+    authIssuer: string;
+    mappingEvidenceRef: string;
+    identityPolicyEvidenceRef: string;
+  },
+): Promise<string> {
+  const target = await ctx.db.get<UserRow>(args.userId, "users");
+  if (!target) throw new Error("users not found.");
+  if (target.authSubject !== args.expectedAuthSubject || target.authProvider !== args.expectedAuthProvider || target.authIssuer !== args.expectedAuthIssuer) {
+    throw new Error("User identity changed; expected binding does not match.");
+  }
+  if (!args.authSubject.trim() || !args.authIssuer.trim()) throw new Error("Destination identity is required.");
+  const identity = {
+    kind: "user", runtime: "test", assurance: "verified-jwt",
+    issuer: args.authIssuer, subject: args.authSubject, authProvider: "clerk",
+  } as const;
+  const peers = await ctx.db.query<UserRow>("users")
+    .withIndex("by_auth_subject", (q) => q.eq("authSubject", identity.subject)).collect();
+  if (peers.some((row) => row._id !== target._id && row.societyId === target.societyId && matchesAuthBinding(row, identity))) {
+    throw new Error("Clerk identity is already bound within this society.");
+  }
+  if (!args.mappingEvidenceRef?.trim() || !args.identityPolicyEvidenceRef?.trim()
+      || args.mappingEvidenceRef.length > 500 || args.identityPolicyEvidenceRef.length > 500) {
+    throw new Error("Reviewed immutable identity mapping and Clerk account-linking policy evidence references are required.");
+  }
+  const externalIdentityId = await ensureExternalIdentityPortable(ctx, identity.issuer, identity.subject);
+  await ctx.db.patch(target._id, {
+    authProvider: "clerk", authIssuer: identity.issuer, authSubject: identity.subject, externalIdentityId,
+    emailVerifiedAtISO: undefined,
+  });
+  await ctx.db.insert("activity", {
+    societyId: target.societyId, actor: "API platform operator", entityType: "user",
+    subjectId: target._id, entityId: target._id, action: "identity-migrated",
+    summary: `Migrated ${target.displayName} from issuer ${target.authIssuer || "operator-reviewed legacy"} subject ${target.authSubject} to Clerk issuer ${identity.issuer} subject ${identity.subject}; mapping ${args.mappingEvidenceRef}; identity policy ${args.identityPolicyEvidenceRef}`,
+    createdAtISO: new Date().toISOString(),
+  });
+  return target._id;
+}
+
+// Compatibility names used by the main workspace-access workflow.
+export const userUpsertPortable = upsertUserPortable;
+export const userRemovePortable = removeUserPortable;

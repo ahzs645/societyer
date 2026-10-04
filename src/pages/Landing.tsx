@@ -29,7 +29,7 @@ import {
   Server,
   Clock,
 } from "lucide-react";
-import { isBetterAuthMode } from "../lib/authMode";
+import { isAuthenticatedAuthMode } from "../lib/authMode";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { InstallAppPrompt } from "../components/InstallAppPrompt";
 
@@ -169,7 +169,7 @@ export function LandingPage() {
       ? `Using system ${resolvedTheme} mode. Switch to ${nextTheme} mode.`
       : `Switch to ${nextTheme} mode`;
 
-  const authEnabled = isBetterAuthMode();
+  const authEnabled = isAuthenticatedAuthMode();
   const demoHref = "/demo";
   const navCtaLabel = "Open demo";
   const primaryCtaLabel = "Open the live demo";

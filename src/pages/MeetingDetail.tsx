@@ -20,6 +20,7 @@ import { escapeHtml } from "../lib/html";
 import { exportWordDocx } from "../lib/docx";
 import { exportPdfDownload, printPdfDocument } from "../lib/pdf";
 import { downloadStoredZip } from "../lib/zip";
+import { fetchDocumentDownload } from "../lib/documentDownload";
 import {
   MINUTES_EXPORT_STYLES,
   MinutesExportStyleId,
@@ -1876,7 +1877,7 @@ export function MeetingDetailPage() {
         });
       } else if (material.downloadUrl) {
         try {
-          const response = await fetch(material.downloadUrl);
+          const response = await fetchDocumentDownload(material.downloadUrl);
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const bytes = new Uint8Array(await response.arrayBuffer());
           files[`attachments/files/${slug}-${fileName}`] = bytes;

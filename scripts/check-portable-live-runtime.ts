@@ -54,12 +54,12 @@ const client = new StaticConvexClient({ seed: buildSeed(), databaseName: "portab
   console.log("✓ client.query() executes the async portable handler live (totalVotes=1600)");
 }
 
-// === 2. watchQuery(): sync fallback now, async portable result + notify next ===
+// === 2. watchQuery(): loading now, authorized async result + notify next ===
 const watch = client.watchQuery("legalOperations:votingPower", { societyId });
 {
-  // Synchronous first read: the mirror fallback gives an instant value (no flash).
+  // Synchronous first read cannot expose fixture data before authorization.
   const initial: any = watch.localQueryResult();
-  assert.equal(initial?.totalVotes, 1600, "synchronous fallback should be immediate");
+  assert.equal(initial, undefined, "first read waits for authorized execution");
 
   const seen: any[] = [];
   const unsub = watch.onUpdate(() => seen.push(watch.localQueryResult()));

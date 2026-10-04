@@ -1,3 +1,4 @@
+import { canonicalizeJurisdictionCode, homeJurisdictionCode, isCorporation, type LegalEntityLike } from "../../shared/organizationDomain";
 import { JURISDICTION_GUIDE_PACK_JSON } from "./jurisdictionGuidePackRegistry";
 import {
   jurisdictionGuidePackSchema,
@@ -78,23 +79,23 @@ export type JurisdictionGuidePack = {
 export const JURISDICTION_GUIDE_PACKS: JurisdictionGuidePack[] =
   JURISDICTION_GUIDE_PACK_JSON.map(normalizeGuidePack);
 
-export const JURISDICTION_OPTIONS = JURISDICTION_GUIDE_PACKS.map((pack) => ({
+export const JURISDICTION_OPTIONS = JURISDICTION_GUIDE_PACKS.filter((pack, index, packs) => index === packs.findIndex((item) => item.code === pack.code)).map((pack) => ({
   value: pack.code,
   label: pack.name,
-  hint: pack.description,
+  hint: pack.code === "CA-BC" ? "BC society and company guidance use separate governing Acts; select the matching entity setup." : pack.description,
 }));
 
-export function resolveJurisdictionCode(society?: {
-  jurisdictionCode?: string | null;
-} | null): JurisdictionCode {
-  return society?.jurisdictionCode || "unknown";
+/** Resolve an internal legal-guide track; stored home jurisdiction remains CA-BC. */
+export function resolveJurisdictionCode(organization?: LegalEntityLike | null): JurisdictionCode {
+  const code = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
+  return code === "CA-BC" && isCorporation(organization) ? "CA-BC-BCA" : code;
 }
 
 export function getJurisdictionGuidePack(
   jurisdictionCode: JurisdictionCode,
 ): JurisdictionGuidePack {
   return (
-    JURISDICTION_GUIDE_PACKS.find((pack) => pack.code === jurisdictionCode) ??
+    JURISDICTION_GUIDE_PACKS.find((pack) => jurisdictionCode === "CA-BC-BCA" ? pack.metadata?.packId === "ca-bc-bca" : pack.code === jurisdictionCode) ??
     unsupportedJurisdictionGuidePack(jurisdictionCode)
   );
 }

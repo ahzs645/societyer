@@ -11,6 +11,11 @@ import { FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
+import { IncorporationPreparation } from "../components/IncorporationPreparation";
+import { incorporationPreparationForOrganization } from "../../shared/incorporationPreparation";
+import { incorporationWorksheetText, incorporationWorksheetFileName } from "../../shared/incorporationWorksheet";
+import { isCorporation } from "../../shared/organizationDomain";
+import { triggerBlobDownload } from "../lib/zip";
 
 /** Recover the packet key from a seeded template's marker (societyer:<kind>-packet-template:<key>). */
 function packetKeyOf(t: { sourceExternalIds?: string[]; notes?: string }): string | null {
@@ -87,6 +92,7 @@ export function DocumentCatalogPage() {
   const toast = useToast();
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [doneKey, setDoneKey] = useState<string | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -97,12 +103,14 @@ export function DocumentCatalogPage() {
     const key = packetKeyOf(t);
     if (!key || !society) return;
     setBusyKey(t._id);
+    setGenerationError(null);
     try {
       await generate({ societyId: society._id, packetKey: key, effectiveDate: new Date().toISOString().slice(0, 10) });
       setDoneKey(t._id);
       setTimeout(() => setDoneKey(null), 4000);
     } catch (error: any) {
       toast.error("Could not prepare draft", error?.message ?? String(error));
+      setGenerationError(error instanceof Error ? error.message : "The draft could not be generated.");
     } finally {
       setBusyKey(null);
     }
@@ -110,6 +118,11 @@ export function DocumentCatalogPage() {
 
   const templates = data?.templates;
   const precedents = data?.precedents ?? [];
+  const preparationGuide = incorporationPreparationForOrganization(society);
+  const packetApplies = (template: CatalogTemplate) => {
+    const key = packetKeyOf(template);
+    return Boolean(key) && isCorporation(society) !== Boolean(key?.startsWith("society-"));
+  };
 
   // Group templates by documentTag, preserving the query's alphabetical order
   // within each group.
@@ -140,6 +153,24 @@ export function DocumentCatalogPage() {
         <p className="muted" style={{ margin: 0 }}>These are application-authored working drafts. A signature, filing receipt and certified registry document are separate evidence stages. Official government forms and model layouts remain linked originals unless their reuse rights are confirmed.</p>
         <Link to="/app/post-incorporation">Track preparation and evidence</Link>{" · "}<Link to="/app/research-library">Research and source review</Link>
       </div>
+
+      <IncorporationPreparation organization={society} />
+      {preparationGuide && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3>Incorporation preparation worksheet</h3>
+          <p>Download an editable text worksheet for the selected legal track, with information to gather and links to official sources. Complete the incorporation application in the official registry service.</p>
+          <button className="btn" onClick={() => triggerBlobDownload(
+            new Blob([incorporationWorksheetText(preparationGuide, society)], { type: "text/plain;charset=utf-8" }),
+            incorporationWorksheetFileName(preparationGuide, society),
+          )}>Download preparation worksheet</button>
+        </div>
+      )}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3>Internal document drafts</h3>
+        <p>These templates prepare governance records and working drafts. They do not file an incorporation application or supply a complete set of incorporation articles, bylaws, or an incorporation agreement.</p>
+        {preparationGuide?.id === "bc_company" && <p>Corporate packets are generic drafts. Review them against your BC company's articles and the Business Corporations Act before use.</p>}
+      </div>
+      {generationError && <p role="alert">{generationError}</p>}
 
       {templates === undefined ? (
         <div className="card">
@@ -207,7 +238,7 @@ export function DocumentCatalogPage() {
                           ) : (
                             <button
                               className="btn btn--accent"
-                              disabled={busyKey === t._id || !packetKeyOf(t) || !canPrepare}
+                              disabled={busyKey === t._id || !packetKeyOf(t) || !canPrepare || !packetApplies(t)}
                               onClick={() => onGenerate(t)}
                               title={!preparation.allowed ? preparation.message : !compatibleJurisdiction || !compatibleEntity ? "Choose a template for this entity and home jurisdiction" : packetKeyOf(t) ? "Prepare an editable draft" : "No packet key on this template"}
                             >
@@ -231,6 +262,7 @@ export function DocumentCatalogPage() {
                           {desc}
                         </p>
                       )}
+                      {t.terms && <p style={{ marginTop: 8, fontSize: 12, color: "var(--text-tertiary)" }}>Before use: {t.terms}</p>}
                       {t.requiredDataFields.length > 0 && (
                         <div style={{ marginTop: 8 }}>
                           <div

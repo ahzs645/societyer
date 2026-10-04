@@ -176,6 +176,11 @@ export async function generatePacketForSocietyPortable(
     if (!packet) throw new Error(`No document packet matches key: ${args.packetKey}`);
     assertPacketCompatible(await ctx.db.get(args.societyId), packet);
     const markerKind = corpPacket ? "corporation" : "society";
+    const organization = await ctx.db.get(args.societyId);
+    if (!organization) throw new Error("Workspace not found.");
+    if (isCorporation(organization) !== Boolean(corpPacket)) {
+      throw new Error(`The ${markerKind} document packet does not apply to this workspace's entity type.`);
+    }
     if (markerKind === "corporation") await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
     else await seedSocietyDocumentPacketsForSociety(ctx, args.societyId);
 

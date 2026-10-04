@@ -17,7 +17,7 @@ export const DEFAULT_BYLAW_RULES = {
   updatedAtISO: new Date(0).toISOString(),
 };
 
-export function bylawBaselineForOrganization(organization: any, societyId: string) {
+export function bylawBaselineForOrganization<SocietyId extends string>(organization: any, societyId: SocietyId) {
   const rawJurisdiction = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
   const entityType = organizationEntityType(organization);
   const legacyBcSociety = Boolean(organization && entityType === "organization" && !organization.entityType && !organization.kind && !organization.organizationKind &&
@@ -42,20 +42,20 @@ export function bylawBaselineForOrganization(organization: any, societyId: strin
     } : {}),
     updatedAtISO: new Date().toISOString(),
     isFallback: true, requiresLegalReview: true, jurisdictionCode,
-    baselineLabel, authorityCitation: company ? bcCompany ? "BCA ss.169,172; Regulation; applicable articles" : jurisdictionCode === "CA-FED-CBCA" ? "CBCA ss.135,139; CBCR; applicable by-laws" : "OBCA; unverified governance configuration" : "Societies Act ss.67,77; applicable bylaws",
+    baselineLabel, authorityCitation: !supported ? "No reviewed legal authority for this entity and jurisdiction" : company ? bcCompany ? "BCA ss.169,172; Regulation; applicable articles" : jurisdictionCode === "CA-FED-CBCA" ? "CBCA ss.135,139; CBCR; applicable by-laws" : "OBCA; unverified governance configuration" : "Societies Act ss.67,77; applicable bylaws",
     quorumDenominator: !supported ? "review_required" : company ? bcCompany ? "legal_shareholders" : "issued_voting_shares" : "legal_voting_members",
     quorumRequiresLegalRegister: company || !supported,
-    governanceAutomationBlocked: !supported || organization?.formationStatus === "preparing" || organization?.formationStatus === "submitted",
+    governanceAutomationBlocked: !supported || organization?.formationStatus === "preparing" || organization?.formationStatus === "submitted" || organization?.formationStatus === "unverified_existing",
     noticeUsesCalendarMonthsMaximum: bcCompany,
     noticeRequiresClearDays: jurisdictionCode === "CA-BC",
   };
 }
 
-export function contextualBylawRules(organization: any, societyId: string, stored?: Record<string, any>) {
+export function contextualBylawRules<SocietyId extends string>(organization: any, societyId: SocietyId, stored?: Record<string, any>) {
   const baseline = bylawBaselineForOrganization(organization, societyId);
   if (!stored || stored.status === "Baseline") return baseline;
   const { baselineLabel, authorityCitation, jurisdictionCode, quorumDenominator, quorumRequiresLegalRegister, governanceAutomationBlocked, noticeUsesCalendarMonthsMaximum, noticeRequiresClearDays } = baseline;
-  return { ...stored, isFallback: false, baselineLabel, authorityCitation, jurisdictionCode, quorumDenominator, quorumRequiresLegalRegister, governanceAutomationBlocked, noticeUsesCalendarMonthsMaximum, noticeRequiresClearDays };
+  return { ...baseline, ...stored, societyId, isFallback: false, baselineLabel, authorityCitation, jurisdictionCode, quorumDenominator, quorumRequiresLegalRegister, governanceAutomationBlocked, noticeUsesCalendarMonthsMaximum, noticeRequiresClearDays };
 }
 
 /** Dates are date-only local-calendar values, excluding sending and meeting

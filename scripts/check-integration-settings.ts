@@ -6,6 +6,7 @@ import { makeCapabilities } from "../shared/portable/capabilities";
 import type { PortableMutationCtx, PortablePrincipal } from "../shared/portable/ctx";
 import { forecastR2Cost } from "../shared/storage/costForecast";
 import { StaticConvexClient } from "../src/lib/staticConvex";
+import { StaticDemoDexieStore } from "../src/lib/staticDemoStore";
 
 const settings = { ...defaultIntegrationSettings(), preferredProvider: "sharepoint" as const, authorizationMode: "application" as const,
   tenantId: "tenant-canada", siteId: "selected-site", libraryId: "selected-library", consentStatus: "recorded" as const,
@@ -54,6 +55,45 @@ assert.equal(version?.storageProvider, "rustfs");
 assert.equal(version?.storageKey, "old-object");
 assert.equal(version?.contentHash, "original-hash");
 console.log("OK integration settings: administrator policy, tenant boundaries, secret rejection, blocked readiness and offline persistence");
+
+// A deliberately delayed local hydration must hold both startup writes and
+// explicit reads/mutations until persisted rows replace the temporary seed.
+const originalHydration = StaticDemoDexieStore.prototype.whenHydrated;
+let releaseHydration!: () => void;
+const delayedHydration = new Promise<void>((resolve) => { releaseHydration = resolve; });
+let hydratedStore: StaticDemoDexieStore | undefined;
+let principalCalls = 0;
+StaticDemoDexieStore.prototype.whenHydrated = function () {
+  hydratedStore = this;
+  return delayedHydration;
+};
+try {
+  const delayedClient = new StaticConvexClient({
+    databaseName: `integration-hydration-${Date.now()}`,
+    seed: { societies: [{ _id: "society-a", name: "Temporary seed" }], users: [] },
+    principalProvider: () => { principalCalls += 1; return principal("owner-a"); },
+  });
+  let querySettled = false;
+  let mutationSettled = false;
+  const delayedQuery = delayedClient.query("society:getById", { id: "society-a" }).then((value: any) => { querySettled = true; return value; });
+  const delayedSave = delayedClient.mutation("society:updateIntegrationSettings", { societyId: "society-a", integrationSettings: settings }).then(() => { mutationSettled = true; });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(principalCalls, 0, "principal and startup metadata must wait for persisted workspace");
+  assert.equal(querySettled, false);
+  assert.equal(mutationSettled, false);
+  assert.ok(hydratedStore);
+  hydratedStore.upsertRow("societies", { _id: "society-a", name: "Hydrated workspace", integrationSettings: defaultIntegrationSettings() });
+  hydratedStore.upsertRow("users", { _id: "owner-a", societyId: "society-a", role: "Owner", status: "Active", authSubject: "owner-a", authIssuer: "https://issuer.test" });
+  releaseHydration();
+  assert.equal((await delayedQuery).name, "Hydrated workspace");
+  await delayedSave;
+  assert.deepEqual((await delayedClient.query("society:getById", { id: "society-a" })).integrationSettings, settings);
+  await delayedClient.close();
+} finally {
+  releaseHydration();
+  StaticDemoDexieStore.prototype.whenHydrated = originalHydration;
+}
+console.log("OK local hydration: reads, authority and saves wait for persisted rows; startup cannot write seed state early");
 
 const forecast = { storageClass: "standard" as const, gbMonths: 10, classAOperations: 1_000_000, classBOperations: 10_000_000, retrievalGb: 0,
   remainingFreeGbMonths: 10, remainingFreeClassAOperations: 1_000_000, remainingFreeClassBOperations: 10_000_000, additionalMonthlyUsd: 0 };

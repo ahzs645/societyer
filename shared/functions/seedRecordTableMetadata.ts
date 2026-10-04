@@ -15,6 +15,7 @@
  */
 
 import type { PortableMutationCtx } from "../portable/ctx";
+import { requirePermissionPortable } from "./permissions";
 
 export async function seedSocietyPortable(ctx: PortableMutationCtx, societyId: string, objects: any[]) {
   const now = new Date().toISOString();
@@ -317,6 +318,7 @@ export async function ensureForSocietyPortable(
   ctx: PortableMutationCtx,
   { societyId, objects }: { societyId: string; objects: any[] },
 ) {
+  await requirePermissionPortable(ctx, societyId, "settings:write");
   const society = await ctx.db.get(societyId);
   if (!society) throw new Error("Society not found.");
   await seedSocietyPortable(ctx, societyId, objects);

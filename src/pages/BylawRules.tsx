@@ -1,4 +1,5 @@
 import { DecisionAssessmentCard } from "../components/DecisionAssessmentCard";
+import { isCorporation } from "../../shared/organizationDomain";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -31,13 +32,14 @@ export function BylawRulesPage() {
   const [form, setForm] = useState<any>(null);
 
   useEffect(() => {
-    if (rules && !form) setForm({ ...rules });
+    if (rules && (!form || form.societyId !== rules.societyId || form._id !== rules._id)) setForm({ ...rules });
   }, [form, rules]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
   if (!form) return <PageLoading />;
 
+  const corporate = isCorporation(society);
   const jurisdictionCode = resolveJurisdictionCode(society);
   const jurisdictionPack = getJurisdictionGuidePack(jurisdictionCode);
   const legalGuideDateISO = form.effectiveFromISO || new Date().toISOString();
@@ -156,7 +158,10 @@ export function BylawRulesPage() {
           <>
             <button
               className="btn-action"
+              disabled={corporate}
+              title={corporate ? "Corporation rules must be configured from approved articles and by-laws; the society baseline cannot be adopted here." : undefined}
               onClick={async () => {
+                if (corporate) return;
                 await reset({ societyId: society._id });
                 setForm(null);
                 toast.info("Using the jurisdiction draft baseline; governing instruments still require review");
@@ -186,7 +191,7 @@ export function BylawRulesPage() {
         <div className="card__head">
           <h2 className="card__title">Rule source timeline</h2>
           <span className="card__subtitle">
-            {form.isFallback ? "Default assumptions" : `Editing from v${form.version}`}
+            {form.isFallback ? corporate ? "Unreviewed operational defaults" : "Default assumptions" : `Editing from v${form.version}`}
           </span>
         </div>
         <div className="card__body bylaw-rules__body">

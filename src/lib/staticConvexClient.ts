@@ -22,6 +22,14 @@ import type { StaticArgs } from "./staticConvexFixtures";
 const FUNCTION_NAME = Symbol.for("functionName");
 const warnedLegacyFallbacks = new Set<string>();
 
+export type LocalActorChoice = {
+  _id: string;
+  displayName: string;
+  email: string;
+  role: string;
+  status?: string;
+};
+
 function functionName(ref: any) {
   if (typeof ref === "string") return ref;
   const name = ref?.[FUNCTION_NAME];
@@ -53,6 +61,7 @@ export class StaticConvexClient {
   // instead of the hand-written mirror case. See docs/portable-functions-architecture.md.
   private portable: PortableRuntime;
   private portableQueries: PortableQueryCache;
+  private releasePrincipalListeners?: () => void;
 
   constructor(options?: {
     databaseName?: string;
@@ -69,17 +78,36 @@ export class StaticConvexClient {
       // one throws a structured CAPABILITY_UNAVAILABLE rather than silently no-op.
       // buildLocalCapabilities is the seam where native Electron capabilities wire in.
       capabilities: buildLocalCapabilities(),
-      principalProvider: options?.principalProvider ?? (() =>
-        this.resolveTrustedWorkspacePrincipal(options?.trustedWorkspacePrincipal ?? {
-          runtime: "browser-local",
-          subject: "demo:static-workspace",
-        })),
+      principalProvider: async () => {
+        // Seed backfill and persisted rows must settle before any handler can
+        // resolve authority or write. Otherwise an early save can race startup
+        // backfill, and authority may be taken from the temporary seed rows.
+        await this.store.whenHydrated();
+        return options?.principalProvider
+          ? await options.principalProvider()
+          : this.resolveTrustedWorkspacePrincipal(options?.trustedWorkspacePrincipal ?? {
+            runtime: "browser-local",
+            subject: "demo:static-workspace",
+          });
+      },
     }).registerAll(PORTABLE_FUNCTIONS);
     this.portableQueries = new PortableQueryCache(
       this.portable,
       this.store,
       (name, args) => portableSyncStub(name, args, this.store),
     );
+    if (typeof window !== "undefined") {
+      const refresh = () => this.portableQueries.invalidatePrincipal();
+      const refreshStorage = (event: StorageEvent) => {
+        if (event.key === null || event.key === "societyer.currentUserId") refresh();
+      };
+      window.addEventListener("societyer:user-changed", refresh);
+      window.addEventListener("storage", refreshStorage);
+      this.releasePrincipalListeners = () => {
+        window.removeEventListener("societyer:user-changed", refresh);
+        window.removeEventListener("storage", refreshStorage);
+      };
+    }
     // Seed the Twenty-style record-table metadata for the demo society up front,
     // so RecordTable pages (members, assets, …) render immediately instead of
     // showing the "Metadata not seeded" empty state on first visit. Idempotent.
@@ -233,6 +261,7 @@ export class StaticConvexClient {
   }
 
   close() {
+    this.releasePrincipalListeners?.();
     return Promise.resolve();
   }
 
@@ -252,6 +281,30 @@ export class StaticConvexClient {
   /** Resolves once the persisted workspace has been read into memory. */
   whenLocalWorkspaceReady() {
     return this.store.whenHydrated();
+  }
+
+  /** Physical local-file operator controls, never a hosted/portable endpoint. */
+  getLocalActorChoices(societyId: string): LocalActorChoice[] {
+    return (this.store.listRows("users") ?? [])
+      .filter((row: any) => row.societyId === societyId)
+      .map((row: any) => ({
+        _id: row._id,
+        displayName: row.displayName,
+        email: row.email,
+        role: row.role,
+        status: row.status,
+      }));
+  }
+
+  subscribeLocalActorChoices(societyId: string, listener: (choices: LocalActorChoice[]) => void) {
+    let subscribed = true;
+    let hydrated = false;
+    const publish = () => {
+      if (subscribed && hydrated) listener(this.getLocalActorChoices(societyId));
+    };
+    const unsubscribe = this.store.onUpdate(publish);
+    void this.store.whenHydrated().then(() => { hydrated = true; publish(); });
+    return () => { subscribed = false; unsubscribe(); };
   }
 
   exportLocalWorkspaceSnapshot() {

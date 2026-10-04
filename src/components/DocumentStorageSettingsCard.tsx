@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { useCurrentUser } from "../hooks/useCurrentUser";
+import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { getDocumentStorageProvider } from "../lib/runtimeMode";
 import { Badge, Field } from "./ui";
@@ -22,13 +22,14 @@ const evidenceOptions = [
 export function DocumentStorageSettingsCard() {
   const society = useSociety();
   const user = useCurrentUser();
+  const userId = useCurrentUserId();
   const toast = useToast();
   const update = useMutation(api.society.updateIntegrationSettings);
   const [settings, setSettings] = useState<IntegrationSettings>(defaultIntegrationSettings);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const local = isLocalDataRuntime();
-  const canManage = local || user?.role === "Owner";
+  const canManage = user?.role === "Owner" || (local && !userId);
   const deployment = useQuery(api.documentVersions.storageCapabilities, !local && society ? { societyId: society._id } : "skip");
   const activeProvider = local ? getDocumentStorageProvider() : deployment?.activeProvider ?? "Not checked";
   const capability = DOCUMENT_STORAGE_CAPABILITIES.find((item) => item.provider === settings.preferredProvider);

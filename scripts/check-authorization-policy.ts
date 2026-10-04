@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { convexTest } from "convex-test";
+import { betterAuthIssuer } from "../convex/lib/authIdentity";
 import schema from "../convex/schema";
 import { api, internal } from "../convex/_generated/api";
 import { actionPermission } from "../shared/functions/actionPolicy";
@@ -23,6 +24,10 @@ for (const definition of PORTABLE_FUNCTIONS) actionPermission(definition.name, d
 assert.equal(hasPermission("toString", "society:read"), false);
 assert.equal(hasPermission("Viewer", "members:write"), false);
 assert.equal(hasPermission("Member", "financials:read"), false);
+for (const name of ["documentVersions:getDownloadTarget", "documentVersions:getDownloadUrl", "workflows:inspectPdfTemplate"]) {
+  assert.equal(actionPermission(name, "action"), "documents:read", `${name} reads existing document content`);
+}
+assert.equal(actionPermission("documentVersions:completeUpload", "action"), "documents:write");
 
 const portableDb = new MemoryDb({ seed: { societies: [{ _id: "local-society", name: "Local" }], users: [
   { _id: "local-member", societyId: "local-society", role: "Member", status: "Active" },
@@ -41,9 +46,14 @@ const modules = {
   "./permissions.js": () => import("../convex/permissions"),
   "./workflows.js": () => import("../convex/workflows"),
   "./apiPlatform.js": () => import("../convex/apiPlatform"),
+  "./complianceObligations.js": () => import("../convex/complianceObligations"),
+  "./dashboardRemediation.js": () => import("../convex/dashboardRemediation"),
+  "./seedRecordTableMetadata.js": () => import("../convex/seedRecordTableMetadata"),
+  "./aiSettings.js": () => import("../convex/aiSettings"),
+  "./calendarSync.js": () => import("../convex/calendarSync"),
 };
 const test = convexTest(schema, modules);
-const issuer = "https://authorization.test";
+const issuer = betterAuthIssuer();
 const seeded = await test.run(async (ctx) => {
   const societyId = await ctx.db.insert("societies", { name: "Authorization test", isCharity: false, isMemberFunded: false, updatedAt: 0 });
   const ids: Record<string, any> = {};
@@ -57,11 +67,32 @@ const seeded = await test.run(async (ctx) => {
 });
 const actor = (subject: string) => test.withIdentity({ issuer, subject });
 const owner = actor("Owner"), admin = actor("Admin");
+const metadataArgs = { societyId: seeded.societyId };
+assert.equal((await admin.mutation(api.seedRecordTableMetadata.ensureForSociety, metadataArgs)).ok, true);
+await assert.rejects(() => test.mutation(api.seedRecordTableMetadata.ensureForSociety, metadataArgs), /Authentication/);
+await assert.rejects(() => actor("Member").mutation(api.seedRecordTableMetadata.ensureForSociety, metadataArgs), /Permission settings:write/);
+const foreignMetadataSociety = await test.run((ctx) => ctx.db.insert("societies", { name: "Foreign metadata", isCharity: false, isMemberFunded: false, updatedAt: 0 }));
+await assert.rejects(() => admin.mutation(api.seedRecordTableMetadata.ensureForSociety, { societyId: foreignMetadataSociety }), /membership/);
+assert.equal((await test.run((ctx) => ctx.db.query("objectMetadata").withIndex("by_society", q => q.eq("societyId", foreignMetadataSociety)).collect())).length, 0);
+assert.ok(await admin.mutation(api.aiSettings.upsert, { societyId: seeded.societyId, scope: "workspace", provider: "openrouter", label: "Provider", modelId: "provider/model-v1" }));
+await assert.rejects(() => admin.mutation(api.aiSettings.upsert, { societyId: seeded.societyId, actingUserId: seeded.ids.Owner, scope: "workspace", provider: "openrouter", label: "Forged", modelId: "provider/model-v1" }), /Authenticated actor does not match/);
+assert.ok(await admin.mutation(api.calendarSync.recordCalendarWebhook, { societyId: seeded.societyId, provider: "google", channelId: "provider-channel", subscriptionId: "provider-subscription", resourceId: "provider-resource" }));
 const writeArgs = { societyId: seeded.societyId, firstName: "Test", lastName: "Member", status: "Active", membershipClass: "Voting", joinedAt: "2026-01-01", votingRights: true };
 assert.equal((await actor("Member").query(api.users.get, { id: seeded.ids.Member })).role, "Member");
 await assert.rejects(() => actor("Member").query(api.users.get, { id: seeded.ids.Owner }), /Permission users:read/);
 const allowedMemberId = await admin.mutation(api.members.create, writeArgs);
 assert.ok(allowedMemberId);
+const decisionArgs = { societyId: seeded.societyId, ruleId: "home:compliance.annual-return:due", flagLevel: "warning", flagText: "Annual return review", evidenceRequired: [] };
+await admin.mutation(api.complianceObligations.markReviewed, { ...decisionArgs, targetTable: "members", targetId: allowedMemberId });
+await admin.mutation(api.complianceObligations.dismissDecision, decisionArgs);
+await admin.mutation(api.complianceObligations.reopenDecision, decisionArgs);
+await admin.mutation(api.dashboardRemediation.createComplianceReviewTask, decisionArgs);
+const foreignTarget = await test.run(async (ctx) => {
+  const societyId = await ctx.db.insert("societies", { name: "Foreign review target", isCharity: false, isMemberFunded: false, updatedAt: 0 });
+  return ctx.db.insert("members", { ...writeArgs, societyId });
+});
+await assert.rejects(() => admin.mutation(api.complianceObligations.markReviewed, { ...decisionArgs, targetTable: "members", targetId: foreignTarget }), /Record not found/);
+await assert.rejects(() => actor("Member").mutation(api.complianceObligations.markReviewed, decisionArgs), /Permission deadlines:write/);
 for (const subject of ["Member", "Viewer", "disabled", "unbound"]) {
   await assert.rejects(() => actor(subject).mutation(api.members.create, writeArgs), /Permission|membership|disabled|Authentication/);
 }
@@ -80,7 +111,7 @@ const unverified = test.withIdentity({ issuer, subject: "new", email: "new@autho
 assert.equal((await unverified.mutation(api.invitations.accept, { token: invitation.token })).status, "invitation-email-unverified");
 await test.run((ctx) => ctx.db.patch(invitation.id, { expiresAtISO: "2020-01-01T00:00:00.000Z" }));
 assert.equal((await unverified.mutation(api.invitations.accept, { token: invitation.token })).status, "invitation-expired");
-await assert.rejects(() => actor("Member").query(api.permissions.myPermissions, { societyId: seeded.societyId, userId: seeded.ids.Owner }), /Actor|actor/);
+await assert.rejects(() => actor("Member").query(api.permissions.myPermissions, { societyId: seeded.societyId, userId: seeded.ids.Owner }), /Role Admin required/);
 const runId = await test.run(async (ctx) => {
   const workflowId = await ctx.db.insert("workflows", { societyId: seeded.societyId, name: "Queued workflow", recipe: "test", status: "active", trigger: { kind: "manual" }, createdByUserId: seeded.ids.Admin });
   return ctx.db.insert("workflowRuns", { societyId: seeded.societyId, workflowId, recipe: "test", status: "queued", startedAtISO: new Date().toISOString(), steps: [], demo: true, triggeredBy: "manual", triggeredByUserId: seeded.ids.Admin });
@@ -105,4 +136,4 @@ assert.equal(remaining.filter((user) => user.role === "Owner" && user.status ===
 await owner.mutation(api.users.securityDisable, { id: seeded.ids.Owner, reason: "Synthetic incident" });
 await assert.rejects(() => owner.query(api.members.list, { societyId: seeded.societyId }), /disabled/);
 assert.equal((await test.run((ctx) => ctx.db.get(seeded.societyId)))?.accessRecoveryRequired, true);
-console.log(`Authorization checks passed: ${classified} hosted and ${PORTABLE_FUNCTIONS.length} portable classifications; real wrappers reject anonymous/unbound/disabled/low-role access, elevation, invalid roles, last-owner removal/upsert, unverified/expired invitations, forged permission actors and stale API authority; sole-owner security disabling enters recovery.`);
+console.log(`Authorization checks passed: ${classified} hosted and ${PORTABLE_FUNCTIONS.length} portable classifications; native wrappers enforce metadata initialization, opaque citation/provider keys with real target ownership, actor identity, role/status, last-owner preservation, invitations and current API/workflow authority; sole-owner security disabling enters recovery.`);

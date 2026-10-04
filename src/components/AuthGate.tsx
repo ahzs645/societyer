@@ -4,7 +4,7 @@ import { useAuth } from "../auth/AuthProvider";
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
 
-  if (auth.mode !== "better-auth") return <>{children}</>;
+  if (auth.mode === "none") return <>{children}</>;
 
   if (auth.fatalError) {
     const expired = auth.fatalError.kind === "expired-session";

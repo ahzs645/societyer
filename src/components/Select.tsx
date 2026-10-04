@@ -179,18 +179,25 @@ export function Select<T extends string>({
       if (menuRef.current?.contains(t)) return;
       setOpen(false);
     };
-    // Close the menu when the page scrolls (so it doesn't drift away from
-    // its trigger), but NOT when the user scrolls inside the menu list —
-    // capture-phase scroll fires for every scroll container including this
-    // one, which previously made the dropdown close as soon as you tried to
-    // scroll its items.
+    // Keep an anchored menu attached during page scrolling. A trigger click
+    // can follow a browser scroll in the same frame; dismissing that delayed
+    // scroll event makes a newly opened menu disappear before it is usable.
+    // Menu-list scrolling must not move or dismiss the portal.
     const onScroll = (e: Event) => {
       // A bottom sheet is viewport-pinned — it can't drift from its anchor,
       // and the keyboard opening pans/resizes the page, which must not
       // dismiss it.
       if (isBottomSheet) return;
       if (e.target instanceof Node && menuRef.current?.contains(e.target)) return;
-      setOpen(false);
+      if (triggerless) { setOpen(false); return; }
+      const anchor = triggerRef.current?.getBoundingClientRect();
+      if (!anchor || anchor.bottom <= 0 || anchor.top >= window.innerHeight) { setOpen(false); return; }
+      const menu = menuRef.current?.getBoundingClientRect();
+      const height = menu?.height ?? 0;
+      const below = anchor.bottom + 4;
+      const top = below + height <= window.innerHeight - 8 ? below : Math.max(8, anchor.top - height - 4);
+      const left = Math.min(Math.max(8, anchor.left), Math.max(8, window.innerWidth - (menu?.width ?? anchor.width) - 8));
+      setPos({ top, left, width: anchor.width });
     };
     const onResize = () => {
       if (isBottomSheet) return;
@@ -200,7 +207,7 @@ export function Select<T extends string>({
       if (e.key === "Escape") {
         e.preventDefault();
         setOpen(false);
-        triggerRef.current?.focus();
+        triggerRef.current?.focus({ preventScroll: true });
       }
     };
     document.addEventListener("mousedown", onDoc);
@@ -213,7 +220,7 @@ export function Select<T extends string>({
       window.removeEventListener("resize", onResize);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, isBottomSheet]);
+  }, [open, isBottomSheet, triggerless]);
 
   useEffect(() => {
     if (!open) {
@@ -222,7 +229,7 @@ export function Select<T extends string>({
     }
     const currentIdx = visibleItems.findIndex((o) => o.value === value);
     setActiveIdx(currentIdx >= 0 ? currentIdx : 0);
-    if (!renderedSearchable) setTimeout(() => menuRef.current?.focus(), 0);
+    if (!renderedSearchable) setTimeout(() => menuRef.current?.focus({ preventScroll: true }), 0);
   }, [open, value, visibleItems, renderedSearchable]);
 
   // Keep the keyboard-focused option visible as the user moves through the menu.
@@ -245,7 +252,7 @@ export function Select<T extends string>({
     if (!item || (!("_clear" in item) && item.disabled)) return;
     onChange(item.value as T);
     setOpen(false);
-    triggerRef.current?.focus();
+    triggerRef.current?.focus({ preventScroll: true });
   };
 
   const onTriggerKey = (e: React.KeyboardEvent) => {

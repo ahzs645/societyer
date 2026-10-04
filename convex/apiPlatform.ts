@@ -17,11 +17,12 @@ import {
   upsertPluginInstallationPortable,
   listIntegrationSyncStatesPortable,
 } from "../shared/functions/apiPlatform";
-import { resolveAuthIssuer } from "../shared/authConfiguration";
 import { hasPermission, listPermissionsForRole } from "../shared/functions/permissions";
 import { isActiveMembership } from "../shared/functions/access";
-import { bootstrapUserIdentityPortable } from "../shared/functions/users";
+import { bootstrapUserIdentityPortable, migrateUserToClerkPortable } from "../shared/functions/users";
 import { assertConvexOutboundUrl } from "./lib/outboundUrlPolicy";
+import { betterAuthIssuer } from "./lib/authIdentity";
+import { matchesAuthBinding, normalizeAuthIssuer } from "../shared/functions/identity";
 import {
   getOwned,
   requireSocietyMembership,
@@ -788,7 +789,8 @@ export const actorForBetterAuthSubject = authorizedQuery("apiPlatform:actorForBe
       .query("users")
       .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
       .collect();
-    const user = rows.find((row) => row.societyId === societyId && row.authIssuer === resolveAuthIssuer(process.env) && row.status === "Active");
+    const principal = (await toPortableQueryCtx(ctx)).principal;
+    const user = rows.find((row) => row.societyId === societyId && row.status === "Active" && matchesAuthBinding(row, principal));
     return user ? { userId: user._id, role: user.role, societyId: user.societyId } : null;
   },
 });
@@ -798,18 +800,45 @@ export const bootstrapUserIdentity = authorizedMutation("apiPlatform:bootstrapUs
   args: {
     userId: v.id("users"),
     authSubject: v.string(),
+    authIssuer: v.optional(v.string()),
+    authProvider: v.optional(v.union(v.literal("better-auth"), v.literal("clerk"))),
     serviceToken: serviceTokenValidator,
   },
   returns: v.id("users"),
-  handler: async (ctx, { userId, authSubject, serviceToken }) => {
+  handler: async (ctx, { userId, authSubject, authIssuer, authProvider, serviceToken }) => {
     await assertApiPlatformServiceToken(serviceToken);
+    if (authProvider === "clerk" && (!process.env.CLERK_JWT_ISSUER_DOMAIN ||
+      (authIssuer && normalizeAuthIssuer(authIssuer) !== normalizeAuthIssuer(process.env.CLERK_JWT_ISSUER_DOMAIN)))) {
+      throw new Error("Clerk binding requires the configured CLERK_JWT_ISSUER_DOMAIN.");
+    }
     const boundUserId = await bootstrapUserIdentityPortable(await toPortableMutationCtx(ctx), {
       userId,
       authSubject,
-      authProvider: "better-auth",
-      authIssuer: resolveAuthIssuer(process.env),
+      authProvider: authProvider ?? "better-auth",
+      authIssuer: authIssuer ?? (authProvider === "clerk" ? process.env.CLERK_JWT_ISSUER_DOMAIN! : betterAuthIssuer()),
     });
     return boundUserId as Id<"users">;
+  },
+});
+
+/** Explicit operator migration, preserving society roles and historical IDs. */
+export const migrateUserToClerk = authorizedMutation("apiPlatform:migrateUserToClerk", mutation)({
+  args: {
+    userId: v.id("users"),
+    expectedAuthSubject: v.string(),
+    expectedAuthProvider: v.optional(v.string()),
+    expectedAuthIssuer: v.optional(v.string()),
+    authSubject: v.string(),
+    mappingEvidenceRef: v.string(),
+    identityPolicyEvidenceRef: v.string(),
+    serviceToken: serviceTokenValidator,
+  },
+  returns: v.id("users"),
+  handler: async (ctx, { serviceToken, ...args }) => {
+    await assertApiPlatformServiceToken(serviceToken);
+    const authIssuer = process.env.CLERK_JWT_ISSUER_DOMAIN?.trim();
+    if (!authIssuer) throw new Error("CLERK_JWT_ISSUER_DOMAIN is required for migration.");
+    return await migrateUserToClerkPortable(await toPortableMutationCtx(ctx), { ...args, authIssuer }) as Id<"users">;
   },
 });
 
@@ -824,6 +853,7 @@ export const devActorForSociety = authorizedQuery("apiPlatform:devActorForSociet
     }),
   ),
   handler: async (ctx, { societyId }) => {
+    if (process.env.CLERK_JWT_ISSUER_DOMAIN?.trim()) return null;
     const society = societyId
       ? await ctx.db.get(societyId)
       : await ctx.db.query("societies").first();

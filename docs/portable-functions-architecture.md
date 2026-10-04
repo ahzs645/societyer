@@ -109,13 +109,14 @@ feeds 435 `useQuery` sites; a portable handler on the contract is **async**.
 Phase 1 bridges this in `StaticConvexClient`: a registered portable query runs
 the **real async handler** against the Dexie-backed `ctx.db` on mount and on every
 store change (`watchPortableQuery`), caching its result synchronously so
-`useQuery`'s synchronous `localQueryResult()` sees it. Until the first async
-result resolves, the existing synchronous mirror path supplies an instant value,
-so there is **no loading flash** for ported queries. `query()` and `mutation()`
+`useQuery`'s synchronous `localQueryResult()` sees it. Until the authorized async
+result resolves, watches return `undefined` and the UI uses its loading state.
+Fixture mirrors cannot establish current access. Failed background reads retain
+a stable unavailable value; changing the local actor clears prior results and
+pending responses before reauthorizing watches. `query()` and `mutation()`
 route registered portable functions through the runtime directly (mutations run
-inside `db.transaction` → atomic). The static-mirror case for a ported query is
-now just an instant-paint fallback; it is deletable once a loading state is
-acceptable for that query.
+inside `db.transaction` → atomic). Static-mirror cases remain only for guarded
+legacy dispatch; they are not used as pre-authorization watch results.
 
 ## Atomic local writes (correctness fix)
 

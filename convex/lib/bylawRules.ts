@@ -48,7 +48,7 @@ export async function getBylawRuleSetForDate(
     .filter((row) => effectiveTimestamp(row) <= targetTs);
   const selected = eligible.sort(compareRuleSetsDesc)[0];
   const organization = await ctx.db.get(societyId);
-  return contextualBylawRules(organization, societyId, selected) as ResolvedBylawRuleSet;
+  return contextualBylawRules(organization, societyId, selected);
 }
 
 export async function buildQuorumSnapshot(

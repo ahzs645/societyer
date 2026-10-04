@@ -123,6 +123,7 @@ async function checkBindingBehavior() {
   const db = new MemoryDb({
     seed: {
       users: [
+        { _id: "society-b-inviter", societyId: "society-b", email: "owner@b.test", displayName: "B Owner", role: "Owner", status: "Active" },
         {
           _id: "legacy-victim",
           societyId: "society-a",
@@ -195,12 +196,13 @@ async function checkBindingBehavior() {
       ],
     },
   });
+  await db.insert("users", { _id: "society-b-owner", societyId: "society-b", role: "Owner", status: "Active", email: "owner-b@example.org", displayName: "Society B owner" });
   for (const invitation of db.dump("invitations")) {
     await db.patch(invitation._id, {
       token: undefined,
       tokenHash: await hashInvitationToken(String(invitation.token)),
       expiresAtISO: new Date(Date.now() + 86400000).toISOString(),
-      invitedByUserId: invitation.societyId === "society-a" ? "admin-user" : "bound-user",
+      invitedByUserId: invitation.societyId === "society-a" ? "admin-user" : "society-b-owner",
     });
   }
   let principal: PortablePrincipal = {

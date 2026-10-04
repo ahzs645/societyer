@@ -42,10 +42,12 @@ const meetingId = await client.mutation("meetings:create", { societyId: created.
 const meeting = await client.query("meetings:get", { id: meetingId });
 assert.equal(meeting.quorumRequired, undefined, "corporation quorum remains unknown without legal share electorate, regardless of app member count");
 assert.match(meeting.quorumSourceLabel, /CBCA/);
-await client.mutation("bylawRules:resetToDefault", { societyId: created.societyId });
-active = await client.query("bylawRules:getActive", { societyId: created.societyId });
+await assert.rejects(client.mutation("bylawRules:resetToDefault", { societyId: created.societyId }), /corporation|articles/i, "main corporation reset guard is preserved");
+const societyWorkspace = await client.mutation("society:createWorkspace", { name: "BC statutory baseline evidence test", incorporationDate: "2026-01-01", incorporationNumber: "S123", fiscalYearEnd: "12-31", entityType: "society", jurisdictionCode: "CA-BC", actFormedUnder: "societies_act" });
+await client.mutation("bylawRules:resetToDefault", { societyId: societyWorkspace.societyId });
+active = await client.query("bylawRules:getActive", { societyId: societyWorkspace.societyId });
 assert.equal(active.isFallback, true);
 assert.equal(active._id, undefined, "reset does not manufacture adopted operative bylaws");
-const history = await client.query("bylawRules:list", { societyId: created.societyId });
+const history = await client.query("bylawRules:list", { societyId: societyWorkspace.societyId });
 assert.equal(history.at(-1).status, "Baseline", "reset has an audit marker");
 console.log("Jurisdiction-aware bylaw baselines, share-quorum gates, reset provenance and clear/calendar-month notice boundary checks passed.");

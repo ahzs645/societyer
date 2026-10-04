@@ -262,7 +262,7 @@ function sourcesForRule(rule: ComplianceRule, pack: ComplianceRulePack): Complia
 }
 
 export function computeComplianceObligations(facts: ComplianceFacts, packs: ComplianceRulePack[] = loadComplianceRulePacks()): ComplianceObligation[] {
-  if (facts.formationStatus === "preparing" || facts.formationStatus === "submitted") return [];
+  if (facts.formationStatus === "preparing" || facts.formationStatus === "submitted" || facts.formationStatus === "unverified_existing") return [];
   const asOfDate = facts.asOfDate ?? formatDate(new Date());
   const contextKind = facts.contextKind ?? "home";
   const applicablePacks = filterApplicableCompliancePacks(facts, packs);

@@ -838,7 +838,7 @@ export const _createRun = internalMutation({
     const portableCtx = await toPortableMutationCtx(ctx);
     await getOwned(portableCtx, "workflows", args.workflowId, args.societyId);
     const triggeredByUserId = await principalUserId(portableCtx, args.societyId);
-    if (args.triggeredByUserId && triggeredByUserId !== String(args.triggeredByUserId)) {
+    if (args.triggeredByUserId && String(triggeredByUserId) !== String(args.triggeredByUserId)) {
       throw new Error("Authenticated actor does not match the current principal.");
     }
     const steps = stepsForRun(args.recipe, args.nodePreview);

@@ -261,6 +261,7 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
           </label>
           <button className="btn btn--accent btn--sm" disabled={busy} onClick={onCreate}><Plus size={12} /> Create portal</button>
         </div>
+        <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>Document access shares released records only. Public document tags or public meeting-material access are required; restricted or expired materials stay private. Publications must also be approved.</p>
 
         <div className="table-wrap">
           <table className="table">

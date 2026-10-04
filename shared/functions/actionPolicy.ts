@@ -23,7 +23,7 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
 
 const RESOURCES = Object.fromEntries(Object.entries(RESOURCE_GROUPS).flatMap(([resource, domains]) => domains.map((domain) => [domain, resource])));
 const HANDLER_POLICIES = new Set([
-  "apiPlatform:createToken", "apiPlatform:verifyToken", "apiPlatform:resourceTenantStatus", "apiPlatform:listWebhookSubscriptionsForEvent", "apiPlatform:upsertWebhookSubscription", "apiPlatform:setWebhookSubscriptionStatus", "apiPlatform:createWebhookDelivery", "apiPlatform:updateWebhookDelivery", "apiPlatform:upsertIntegrationSyncState", "apiPlatform:bootstrapUserIdentity",
+  "apiPlatform:createToken", "apiPlatform:verifyToken", "apiPlatform:resourceTenantStatus", "apiPlatform:listWebhookSubscriptionsForEvent", "apiPlatform:upsertWebhookSubscription", "apiPlatform:setWebhookSubscriptionStatus", "apiPlatform:createWebhookDelivery", "apiPlatform:updateWebhookDelivery", "apiPlatform:upsertIntegrationSyncState", "apiPlatform:bootstrapUserIdentity", "apiPlatform:migrateUserToClerk",
   "elections:castBallot", "elections:submitNomination",
   "files:getUrl", "users:ensureCurrentMembership", "users:recordLogin", "users:get", "users:getByAuthSubject", "users:getByEmail",
   "invitations:accept", "invitations:getByToken", "permissions:myPermissions", "permissions:check", "permissions:listAll",
@@ -33,29 +33,64 @@ const HANDLER_POLICIES = new Set([
 // Public intake/token routes retain their existing narrow, handler-level policy.
 const PUBLIC_HANDLERS = new Set(["publicPortal:getSocietyBySlug", "publicPortal:volunteerIntakeContext", "publicPortal:grantIntakeContext", "transparency:publicCenter", "partyPortals:center", "volunteers:submitApplication","grants:submitApplication", "publicPortal:getByToken", "publicPortal:submit", "partyPortals:getByToken", "partyPortals:respond"]);
 
+// These identifiers are citation keys or provider identifiers, never local row
+// references. Keep the exceptions endpoint-specific: targetId and other row
+// references in the same request still require workspace ownership.
+const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
+  "complianceObligations:markReviewed": ["ruleId"],
+  "complianceObligations:dismissDecision": ["ruleId"],
+  "complianceObligations:reopenDecision": ["ruleId"],
+  "dashboardRemediation:createComplianceReviewTask": ["ruleId"],
+  "dashboardRemediation:createPrivacyReviewTask": ["ruleId"],
+  "dashboardRemediation:markPrivacyProgramReviewed": ["ruleId"],
+  "dashboardRemediation:markMemberDataAccessReviewed": ["ruleId"],
+  "legalOperations:stageCorporationDocumentPacket": ["obligationRuleId"],
+  "waveCache:sync": ["businessId"],
+  "waveCache:healthCheck": ["businessId"],
+  "waveCache:invoicePaymentProbe": ["businessId"],
+  "aiSettings:upsert": ["modelId"],
+  "aiChat:createThread": ["modelId"],
+  "aiChatActions:sendChatMessage": ["modelId"],
+  "calendarSync:stageCalendarEvents": ["calendarId"],
+  "calendarSync:upsertExternalCalendarEventMapping": ["calendarId"],
+  "calendarSync:recordCalendarIncrementalCursor": ["calendarId"],
+  "calendarSync:recordCalendarWebhook": ["channelId", "subscriptionId", "resourceId"],
+  "workflowPackages:upsert": ["transactionId", "stripeCheckoutSessionId"],
+  "workflowPackages:markFiled": ["transactionId"],
+  "workflows:recordConnectorRun": ["connectorId", "actionId", "sessionId"],
+  "agm:logNoticeDelivery": ["providerMessageId"],
+  "subscriptions:upsertPlan": ["stripePriceId"],
+  "paperless:recordSyncResult": ["paperlessTaskId"],
+  "legalOperations:upsertGeneratedLegalDocument": ["syngrafiiFileId", "syngrafiiDocumentId", "syngrafiiPackageId"],
+  "legalOperations:upsertJurisdictionMetadata": ["nuansReservationReportTypeId", "sourceOptionId"],
+};
+
 export function actionPermission(name: string, kind: "query" | "mutation" | "action"): Permission | null {
   if (HANDLER_POLICIES.has(name) || PUBLIC_HANDLERS.has(name)) return null;
+  if (name === "seedRecordTableMetadata:ensureForSociety") return "settings:write";
   const [domain, action] = name.split(":");
   if (domain === "seed" || domain.endsWith("Backfill") || domain === "seedRecordTableMetadata") return null;
   const resource = RESOURCES[domain];
   if (!resource) throw new Error(`Unclassified application action: ${name}.`);
+  if (["society:updateModules", "society:updateComplianceSettings", "society:updateInventorySettings", "society:updateNotificationSettings"].includes(name)) return "settings:write";
   if (name === "society:updateIntegrationSettings" || name === "society:reset") return "settings:manage";
   if (resource === "audit") return kind === "query" ? "audit:read" : "settings:write";
   if (name === "postIncorporation:recordEvidence") return "documents:write";
   if (name === "calendarFeed:getFeedToken") return "settings:write";
   if (name === "documents:recordOpen") return "documents:read";
+  if (["documentVersions:getDownloadTarget", "documentVersions:getDownloadUrl", "workflows:inspectPdfTemplate"].includes(name)) return "documents:read";
   if (name === "minutes:approve") return "minutes:approve";
   if (resource === "exports") return kind === "query" && action === "list" ? "exports:read" : "exports:download";
   return `${resource}:${kind === "query" ? "read" : "write"}` as Permission;
 }
 
-async function societyForArgs(ctx: PortableQueryCtx, args: Record<string, any>): Promise<string | undefined> {
+async function societyForArgs(ctx: PortableQueryCtx, name: string, args: Record<string, any>): Promise<string | undefined> {
   let expectedSocietyId = typeof args.societyId === "string" ? args.societyId : undefined;
   if (typeof args.patch?.societyId === "string") throw new Error("Workspace reassignment is not permitted.");
   // Resolve every referenced row recursively, including child rows whose
   // workspace is stored only on a parent. A missing record never falls back
   // to another workspace's authority.
-  const referenceFields = Object.keys(args).filter((field) => (field === "id" || field.endsWith("Id")) && !field.endsWith("ExternalId") && !field.startsWith("external") && !["actingUserId", "actorUserId", "createdByUserId", "invitedByUserId", "storageId"].includes(field));
+  const referenceFields = Object.keys(args).filter((field) => (field === "id" || field.endsWith("Id")) && !field.endsWith("ExternalId") && !field.startsWith("external") && !OPAQUE_IDENTIFIERS[name]?.includes(field) && !["actingUserId", "actorUserId", "createdByUserId", "invitedByUserId", "storageId"].includes(field));
   const seen = new Set<string>();
   async function resolve(id: string, depth = 0): Promise<string | undefined> {
     if (seen.has(id) || depth > 5) return undefined;
@@ -87,7 +122,7 @@ export async function requireFunctionAction(ctx: PortableQueryCtx, name: string,
   const permission = actionPermission(name, kind);
   if (!permission) return; // Explicit handlers perform their specialized policy.
   requireAuthenticated(ctx);
-  const societyId = await societyForArgs(ctx, args);
+  const societyId = await societyForArgs(ctx, name, args);
   if (societyId) {
     const actor = await requirePermissionPortable(ctx, societyId, permission);
     if (args.actingUserId && args.actingUserId !== actor._id) throw new Error("Authenticated actor does not match the current principal.");

@@ -2280,6 +2280,22 @@
     ]
   },
   {
+    "key": "convex:apiPlatform:migrateUserToClerk",
+    "surface": "convex",
+    "name": "apiPlatform:migrateUserToClerk",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/apiPlatform.ts",
+    "idArguments": [
+      {
+        "path": "userId",
+        "table": "users",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:apiPlatform:resourceTenantStatus",
     "surface": "convex",
     "name": "apiPlatform:resourceTenantStatus",
@@ -15950,6 +15966,12 @@
         "optional": true
       },
       {
+        "path": "certificateEvidenceDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
         "path": "actingUserId",
         "table": "users",
         "array": false,
@@ -16176,6 +16198,12 @@
       {
         "path": "corporationKeyVaultItemId",
         "table": "secretVaultItems",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "certificateEvidenceDocumentId",
+        "table": "documents",
         "array": false,
         "optional": true
       }

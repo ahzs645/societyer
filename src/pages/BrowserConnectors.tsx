@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "@/lib/authToken";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, ClipboardPaste, ExternalLink, MonitorPlay, Play, RefreshCw, ShieldCheck, Square, Upload, XCircle } from "lucide-react";
@@ -296,7 +297,7 @@ export function BrowserConnectorsPage() {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 10_000);
     try {
-      const response = await fetch(`/api/v1/browser-connectors${path}`, {
+      const response = await authenticatedFetch(`/api/v1/browser-connectors${path}`, {
         ...init,
         signal: init?.signal ?? controller.signal,
         headers: {

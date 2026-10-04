@@ -7,12 +7,13 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, streamText } from "ai";
 import { buildICalendar } from "../shared/icalendar";
 import { assertApiPlatformServiceToken, serviceTokenValidator } from "./lib/serviceAuth";
-import { resolveAuthIssuer } from "../shared/authConfiguration";
 import { hasPermission } from "../shared/functions/permissions";
 import { requireDocumentAccess } from "../shared/functions/documents";
 import { requireSocietyMembership } from "../shared/functions/access";
 import { toPortableQueryCtx } from "./lib/portable";
 import type { Doc, Id } from "./_generated/dataModel";
+import { hostedPrincipal } from "./lib/authIdentity";
+import { assertExternalIdentityActive, matchesAuthBinding } from "../shared/functions/identity";
 
 const http = httpRouter();
 const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
@@ -20,30 +21,30 @@ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 /**
  * Bootstrap the authenticated workspace picker without trusting a society id
- * from browser storage. The exact verified issuer/subject pair is the lookup key.
+ * from browser storage. Memberships match the verified issuer and subject.
  */
 export const currentPrincipalMemberships = authorizedQuery("http:currentPrincipalMemberships", query)({
   args: {},
   returns: v.any(),
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.subject || identity.issuer !== resolveAuthIssuer(process.env)) {
+    const principal = hostedPrincipal(await ctx.auth.getUserIdentity());
+    if (principal.kind !== "user" || !principal.subject) {
       return { status: "unauthenticated", memberships: [] };
     }
 
     const rows = await ctx.db
       .query("users")
-      .withIndex("by_auth_subject", (q) => q.eq("authSubject", identity.subject))
+      .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
       .collect();
-    const issuerRows = rows.filter((row) => row.authIssuer === identity.issuer);
-    const activeRows = issuerRows.filter((row) => !row.status || row.status === "Active");
+    const boundRows = rows.filter((row) => matchesAuthBinding(row, principal));
+    const activeRows = boundRows.filter((row) => !row.status || row.status === "Active");
     const activeSocietyIds = new Set(activeRows.map((row) => String(row.societyId)));
     if (activeSocietyIds.size !== activeRows.length) {
       return { status: "ambiguous-binding", memberships: [] };
     }
     if (activeRows.length === 0) {
       return {
-        status: issuerRows.some((row) => row.status === "Disabled")
+        status: boundRows.some((row) => row.status === "Disabled")
           ? "membership-disabled"
           : "needs-invitation",
         memberships: [],
@@ -85,8 +86,9 @@ export const currentPrincipalMemberships = authorizedQuery("http:currentPrincipa
     }
     return {
       status: memberships.length > 0 ? "bound" : "needs-invitation",
-      authSubject: identity.subject,
-      authIssuer: identity.issuer,
+      authSubject: principal.subject,
+      authIssuer: principal.issuer,
+      authProvider: principal.authProvider,
       memberships,
     };
   },
@@ -101,7 +103,7 @@ export const gatewayApiPrincipal = authorizedQuery("http:gatewayApiPrincipal", q
   },
   returns: v.union(
     v.null(),
-    v.object({ authSubject: v.string(), authIssuer: v.string() }),
+    v.object({ authSubject: v.string(), authIssuer: v.optional(v.string()), authProvider: v.optional(v.string()) }),
   ),
   handler: async (ctx, { societyId, userId, serviceToken }) => {
     await assertApiPlatformServiceToken(serviceToken);
@@ -110,16 +112,13 @@ export const gatewayApiPrincipal = authorizedQuery("http:gatewayApiPrincipal", q
       !user ||
       user.societyId !== societyId ||
       user.status !== "Active" ||
-      user.authIssuer !== resolveAuthIssuer(process.env) ||
       !user.authSubject
     ) {
       return null;
     }
-    if (user.externalIdentityId) {
-      const external = await ctx.db.get(user.externalIdentityId);
-      if (!external || external.status !== "Active" || external.issuer !== user.authIssuer || external.subject !== user.authSubject) return null;
-    }
-    return { authSubject: user.authSubject, authIssuer: user.authIssuer! };
+    if (!user.authIssuer) return null;
+    try { await assertExternalIdentityActive((await toPortableQueryCtx(ctx)).db, user); } catch { return null; }
+    return { authSubject: user.authSubject, authIssuer: user.authIssuer, authProvider: user.authProvider };
   },
 });
 
@@ -131,7 +130,7 @@ export const gatewayWorkflowBinding = authorizedQuery("http:gatewayWorkflowBindi
   },
   returns: v.union(
     v.null(),
-    v.object({ societyId: v.id("societies"), authSubject: v.string(), authIssuer: v.string() }),
+    v.object({ societyId: v.id("societies"), authSubject: v.string(), authIssuer: v.optional(v.string()), authProvider: v.optional(v.string()) }),
   ),
   handler: async (ctx, { workflowId, runId, serviceToken }) => {
     await assertApiPlatformServiceToken(serviceToken);
@@ -155,16 +154,13 @@ export const gatewayWorkflowBinding = authorizedQuery("http:gatewayWorkflowBindi
       user.societyId !== run.societyId ||
       !hasPermission(user.role, "tasks:write") ||
       user.status !== "Active" ||
-      user.authIssuer !== resolveAuthIssuer(process.env) ||
       !user.authSubject
     ) {
       return null;
     }
-    if (user.externalIdentityId) {
-      const external = await ctx.db.get(user.externalIdentityId);
-      if (!external || external.status !== "Active" || external.issuer !== user.authIssuer || external.subject !== user.authSubject) return null;
-    }
-    return { societyId: run.societyId, authSubject: user.authSubject, authIssuer: user.authIssuer! };
+    if (!user.authIssuer) return null;
+    try { await assertExternalIdentityActive((await toPortableQueryCtx(ctx)).db, user); } catch { return null; }
+    return { societyId: run.societyId, authSubject: user.authSubject, authIssuer: user.authIssuer, authProvider: user.authProvider };
   },
 });
 

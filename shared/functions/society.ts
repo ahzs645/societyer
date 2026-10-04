@@ -18,7 +18,7 @@ import type {
 import { validateIntegrationSettings, type IntegrationSettings } from "../integrationSettings";
 import { requirePermissionPortable } from "./permissions";
 import { matchesVerifiedIdentity, ensureExternalIdentityPortable } from "./identity";
-import { claimStorageId, requireAuthenticated, requireSocietyMembership } from "./access";
+import { claimStorageId, requireAuthenticated, requireRolePortable, requireSocietyMembership } from "./access";
 
 export type NewSocietyOwnerInput = {
   societyId: string;
@@ -218,6 +218,7 @@ export async function updateModulesPortable(
   { societyId, disabledModules }: { societyId: string; disabledModules: any },
 ) {
   await requireSocietyMembership(ctx, societyId);
+  await requireRolePortable(ctx, { societyId, required: "Admin" });
   await ctx.db.patch(societyId, {
     disabledModules,
     updatedAt: Date.now(),

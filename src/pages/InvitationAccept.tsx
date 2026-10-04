@@ -54,7 +54,7 @@ export function InvitationAcceptPage() {
       });
   }, [accept, auth, token]);
 
-  if (auth.mode !== "better-auth") return <Navigate to="/app" replace />;
+  if (auth.mode === "none") return <Navigate to="/app" replace />;
   if (!token) return <InvitationState message="This invitation link is invalid." />;
   if (!auth.session) {
     const redirect = `/invite/${encodeURIComponent(token)}`;

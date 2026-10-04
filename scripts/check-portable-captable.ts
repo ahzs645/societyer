@@ -113,6 +113,9 @@ const modules = {
   "./_generated/server.js": () => import("../convex/_generated/server.js"),
   "./legalOperations.js": () => import("../convex/legalOperations"),
 };
+process.env.AUTH_MODE = "better-auth";
+process.env.VITE_AUTH_MODE = "better-auth";
+process.env.BETTER_AUTH_BASE_URL = PORTABLE_TEST_IDENTITY.issuer;
 const t = convexTest(schema, modules as any);
 const cids: Ids = await t.run(async (ctx: any) => {
   const iso = "2026-01-01T00:00:00.000Z";

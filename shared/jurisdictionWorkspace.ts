@@ -1,3 +1,5 @@
+import { canonicalizeJurisdictionCode, homeJurisdictionCode, isCorporation, type LegalEntityLike } from "./organizationDomain";
+
 /**
  * The jurisdiction assumed when a workspace or legacy snapshot does not specify one.
  * Societyer began as a BC Societies Act tool, so historical/demo data defaults here.
@@ -368,17 +370,90 @@ export const JURISDICTION_WORKSPACE_CONFIGS: JurisdictionWorkspaceConfig[] = [
   },
 ];
 
+/** Setup tracks are entity + statute choices; a federal corporation is not a province. */
+export const WORKSPACE_SETUP_TRACKS = [
+  { id: "bc_society", label: "BC society (nonprofit)", jurisdictionCode: "CA-BC", entityType: "society", actFormedUnder: "societies_act", hint: "British Columbia Societies Act; member governance." },
+  { id: "bc_company", label: "BC business corporation (provincial)", jurisdictionCode: "CA-BC", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__british_columbia_", hint: "British Columbia Business Corporations Act; shareholder governance." },
+  { id: "federal_cbca", label: "Federal business corporation (CBCA)", jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__business_", actFormedUnder: "canada_business_corporations_act", hint: "Corporations Canada; provincial registration may also be needed where you operate." },
+  { id: "ontario_obca", label: "Ontario business corporation (OBCA)", jurisdictionCode: "CA-ON-OBCA", entityType: "corporation__business_", actFormedUnder: "business_corporations_act__ontario_", hint: "Existing Ontario guide track; other provinces need their own reviewed guidance." },
+] as const;
+export type WorkspaceSetupTrackId = (typeof WORKSPACE_SETUP_TRACKS)[number]["id"];
+
+export function workspaceSetupTrack(organization?: LegalEntityLike | null) {
+  const code = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
+  if (code === "CA-BC") return WORKSPACE_SETUP_TRACKS.find((track) => track.id === (isCorporation(organization) ? "bc_company" : "bc_society"));
+  return WORKSPACE_SETUP_TRACKS.find((track) => track.jurisdictionCode === code);
+}
+
+const BC_COMPANY_CONFIG: JurisdictionWorkspaceConfig = {
+  code: "CA-BC",
+  defaults: { entityType: "corporation__business_", actFormedUnder: "business_corporations_act__british_columbia_", isMemberFunded: false },
+  registry: {
+    label: "BC company registry verification",
+    nodeDescription: "Review the BC company profile, anniversary date, annual reports, authorized filers, and Corporate Online source documents.",
+    taskTitle: "Optional: verify BC company registry access",
+    taskDescription: "Confirm BC company status, anniversary date, annual-report history, authorized filers, and Corporate Online access. Archive company source documents.",
+  },
+  module: {
+    registryPortalKey: "bc_registry_companies",
+    registryPortalLabel: "BC Corporate Online",
+    registryImportSupported: false,
+    compliancePackIds: ["compliance-ca-bc-company", "compliance-ca-bc-extra-provincial-company"],
+    filingKinds: BC_FILING_KINDS.filter((definition) => ["BCCompanyAnnualReport", "BCExtraProvincialAnnualReport", "RegistryRecord"].includes(definition.kind)).map((definition) => ({ ...definition, registryUrl: "https://www.corporateonline.gov.bc.ca/", botSupported: false })),
+    bylawBaselineLabel: "BC company articles baseline",
+    enabledModuleHints: ["filingPrefill", "secrets", "attestations"],
+    supportsExtraProvincialRegistration: true,
+  },
+  display: {
+    entityLabel: "corporation",
+    goodStandingTitle: "Keep your BC corporation in good standing.",
+    filingsSubtitle: "BC company registry filings, CRA returns, payroll & GST/HST.",
+    directorResidencyLabel: "Director qualifications",
+    directorResidencySubtext: "Review the Business Corporations Act and company articles.",
+    directorChangeSubtext: "Track company director changes and BC registry notices.",
+    registeredOfficeHint: "Record the BC registered office and records office under the company articles.",
+    privacyOfficerLabel: "Privacy officer (PIPA)",
+    privacyPolicyLabel: "PIPA policy",
+  },
+};
+
+type WorkspaceJurisdiction = string | LegalEntityLike | null | undefined;
+function workspaceConfig(value: WorkspaceJurisdiction) {
+  if (typeof value === "object" && value) {
+    const code = canonicalizeJurisdictionCode(homeJurisdictionCode(value));
+    if (code === "CA-BC" && isCorporation(value)) return BC_COMPANY_CONFIG;
+    return findJurisdictionWorkspaceConfig(code);
+  }
+  return findJurisdictionWorkspaceConfig(value as string | null | undefined);
+}
+
+export function workspaceGovernanceCopy(organization?: LegalEntityLike | null) {
+  const corporation = isCorporation(organization);
+  const bcCompany = corporation && canonicalizeJurisdictionCode(homeJurisdictionCode(organization)) === "CA-BC";
+  return {
+    formationDocumentLabel: corporation ? "Articles" : "Constitution",
+    purposesLabel: corporation ? "Business activities / article restrictions" : "Purposes (from constitution)",
+    documentsDescription: corporation
+      ? `Start with ${bcCompany ? "articles, notice of articles, signed incorporation agreement" : "articles of incorporation, by-laws"}, certificate of incorporation, director consents, registered-office evidence, and securities register.`
+      : "Start with constitution, bylaws, certificate or registry summary, statement of directors/registered office, and latest annual report if available.",
+    registerLabel: corporation ? "Shareholders and securities register" : "Member register",
+    peopleDescription: corporation
+      ? "Add directors, officers, shareholders, signing authorities, and workspace users. Record share issuances and the applicable ownership/control register."
+      : "Add directors, known officers, the privacy officer, and workspace users. Signing authorities and members can be added now if known.",
+  };
+}
+
 export function defaultsForJurisdiction(jurisdictionCode?: string | null): JurisdictionWorkspaceDefaults {
   return findJurisdictionWorkspaceConfig(jurisdictionCode)?.defaults ?? {};
 }
 
-export function registryOnboardingCopy(jurisdictionCode?: string | null): RegistryOnboardingCopy {
-  return findJurisdictionWorkspaceConfig(jurisdictionCode)?.registry ?? GENERIC_REGISTRY_COPY;
+export function registryOnboardingCopy(jurisdictionCode?: WorkspaceJurisdiction): RegistryOnboardingCopy {
+  return workspaceConfig(jurisdictionCode)?.registry ?? GENERIC_REGISTRY_COPY;
 }
 
-export function jurisdictionDisplayCopy(jurisdictionCode?: string | null) {
+export function jurisdictionDisplayCopy(jurisdictionCode?: WorkspaceJurisdiction) {
   return (
-    findJurisdictionWorkspaceConfig(jurisdictionCode)?.display ?? {
+    workspaceConfig(jurisdictionCode)?.display ?? {
       entityLabel: "organization",
       goodStandingTitle: "Keep your organization in good standing.",
       filingsSubtitle: "Registry filings, tax returns, payroll & GST/HST.",
@@ -392,9 +467,9 @@ export function jurisdictionDisplayCopy(jurisdictionCode?: string | null) {
   );
 }
 
-export function jurisdictionModuleContract(jurisdictionCode?: string | null): JurisdictionModuleContract {
+export function jurisdictionModuleContract(jurisdictionCode?: WorkspaceJurisdiction): JurisdictionModuleContract {
   return (
-    findJurisdictionWorkspaceConfig(jurisdictionCode)?.module ?? {
+    workspaceConfig(jurisdictionCode)?.module ?? {
       registryPortalKey: "generic_registry",
       registryPortalLabel: "Registry",
       registryImportSupported: false,
@@ -407,16 +482,18 @@ export function jurisdictionModuleContract(jurisdictionCode?: string | null): Ju
   );
 }
 
-export function filingKindDefinitions(jurisdictionCode?: string | null): FilingKindDefinition[] {
+export function filingKindDefinitions(jurisdictionCode?: WorkspaceJurisdiction): FilingKindDefinition[] {
   return jurisdictionModuleContract(jurisdictionCode).filingKinds;
 }
 
 export function filingKindDefinition(
   kind: string,
-  jurisdictionCode?: string | null,
+  jurisdictionCode?: WorkspaceJurisdiction,
 ): FilingKindDefinition {
+  const code = typeof jurisdictionCode === "object" && jurisdictionCode ? canonicalizeJurisdictionCode(homeJurisdictionCode(jurisdictionCode)) : jurisdictionCode;
+  const definitions = code === "CA-BC" && ["BCCompanyAnnualReport", "BCExtraProvincialAnnualReport"].includes(kind) ? BC_COMPANY_CONFIG.module.filingKinds : filingKindDefinitions(jurisdictionCode);
   return (
-    filingKindDefinitions(jurisdictionCode).find((definition) => definition.kind === kind) ?? {
+    definitions.find((definition) => definition.kind === kind) ?? {
       kind,
       label: kind,
       registryUrl: GENERIC_FILING_PORTAL,
@@ -440,7 +517,9 @@ export function findJurisdictionWorkspaceConfig(jurisdictionCode?: string | null
  * row and the onboarding workflow rendered as an unnamed, empty canvas.
  */
 export function buildWorkspaceOnboardingNodes(args: any = {}) {
-  const registry = registryOnboardingCopy(args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE);
+  const organization = { ...args, jurisdictionCode: args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE };
+  const registry = registryOnboardingCopy(organization);
+  const governance = workspaceGovernanceCopy(organization);
   return [
     {
       key: "profile",
@@ -467,21 +546,21 @@ export function buildWorkspaceOnboardingNodes(args: any = {}) {
       key: "documents",
       type: "document_create",
       label: "Governance documents",
-      description: "Start with constitution, bylaws, certificate or registry summary, statement of directors/registered office, and latest annual report if available.",
+      description: governance.documentsDescription,
       status: "ready",
     },
     {
       key: "people",
       type: "form",
       label: "People",
-      description: "Add directors, known officers, privacy officer, workspace users, and signing authorities if known.",
+      description: governance.peopleDescription,
       status: "ready",
     },
     {
       key: "optional_setup",
       type: "manual_trigger",
       label: "Optional setup",
-      description: "Skip or choose later: annual calendar, member register, finance controls, privacy program, insurance/risk, integrations, and board adoption packet.",
+      description: `Skip or choose later: annual calendar, ${governance.registerLabel.toLowerCase()}, finance controls, privacy program, insurance/risk, integrations, and board adoption packet.`,
       status: "draft",
     },
   ];
@@ -511,3 +590,61 @@ export const WORKSPACE_ONBOARDING_WORKFLOW_CONFIG = {
     "board_adoption_packet",
   ],
 } as const;
+
+export function buildWorkspaceOnboardingTasks(args: any) {
+  const missingIdentity = [
+    !args.incorporationNumber ? "incorporation number" : null,
+    !args.incorporationDate ? "incorporation date" : null,
+    !args.fiscalYearEnd ? "fiscal year end" : null,
+  ].filter(Boolean);
+  const organization = { ...args, jurisdictionCode: args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE };
+  const registry = registryOnboardingCopy(organization);
+  const governance = workspaceGovernanceCopy(organization);
+  return [
+    ...(args?.organizationStatus === "pre_incorporation" ? [{
+      title: "Prepare incorporation before recording an active registration",
+      description: "Complete the formation preparation worksheet, review the correct official incorporation process, submit externally, and retain the certificate, registry number, and effective date before marking this organization active.",
+      priority: "High",
+      tags: ["formation", "incorporation"],
+    }] : []),
+    {
+      title: registry.taskTitle,
+      description: `${registry.taskDescription}${missingIdentity.length ? ` Missing profile fields now: ${missingIdentity.join(", ")}.` : ""}`,
+      priority: missingIdentity.length ? "High" : "Medium",
+      tags: ["optional", "registry"],
+    },
+    {
+      title: "Set registered locations",
+      description: "Record registered office delivery and mailing addresses. Add a records location only if records are kept somewhere other than the registered office.",
+      priority: args.registeredOfficeAddress ? "Medium" : "High",
+      tags: ["addresses", "records"],
+    },
+    {
+      title: "Add governance documents",
+      description: governance.documentsDescription,
+      priority: "High",
+      tags: ["documents", "governance"],
+    },
+    {
+      title: "Add people and workspace access",
+      description: governance.peopleDescription,
+      priority: "High",
+      tags: ["people", "access"],
+    },
+    {
+      title: "Optional: finish advanced setup later",
+      description: `Choose only what matters: annual calendar, ${governance.registerLabel.toLowerCase()}, finance controls, privacy and records program, insurance/risk, integrations, or a board adoption packet.`,
+      priority: "Low",
+      tags: ["optional", "advanced-setup"],
+    },
+  ];
+}
+
+export function workspaceOnboardingWorkflowConfig(organization: LegalEntityLike & { organizationStatus?: string } = {}) {
+  return {
+    ...WORKSPACE_ONBOARDING_WORKFLOW_CONFIG,
+    requiredProfileFields: WORKSPACE_ONBOARDING_WORKFLOW_CONFIG.requiredProfileFields.filter((field) => organization.organizationStatus !== "pre_incorporation" || !["incorporationNumber", "incorporationDate"].includes(field)),
+    optionalSections: WORKSPACE_ONBOARDING_WORKFLOW_CONFIG.optionalSections.map((section) => section === "member_register" && isCorporation(organization) ? "shareholder_securities_register" : section),
+    formationStage: organization.organizationStatus === "pre_incorporation" ? "preparing" : "incorporated",
+  };
+}

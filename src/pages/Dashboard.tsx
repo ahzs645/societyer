@@ -49,7 +49,7 @@ function writeHiddenOnboardingFlowSocietyIds(ids: string[]) {
 
 export function Dashboard() {
   const society = useSociety();
-  const jurisdictionCopy = jurisdictionDisplayCopy(society?.jurisdictionCode);
+  const jurisdictionCopy = jurisdictionDisplayCopy(society);
   const navigate = useNavigate();
   const toast = useToast();
   const data = useQuery(api.dashboard.summary, society ? { societyId: society._id } : "skip");

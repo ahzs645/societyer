@@ -1,7 +1,9 @@
-import { useQuery } from "convex/react";
+import { useConvex } from "convex/react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { api } from "@/lib/convexApi";
+import type { StaticConvexClient, LocalActorChoice } from "../lib/staticConvexClient";
+import { isLocalDataRuntime } from "../lib/staticRuntime";
+import type { Id } from "../../convex/_generated/dataModel";
 import {
   useCurrentUserId,
   useCurrentUser,
@@ -9,16 +11,26 @@ import {
 } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
 import { ChevronDown, LogOut } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
+
+const ClerkAccountButton = lazy(() => import("../auth/ClerkAccountButton"));
 
 export function UserPicker() {
   const auth = useAuth();
   const society = useSociety();
-  const users = useQuery(
-    api.users.list,
-    society ? { societyId: society._id } : "skip",
-  );
+  const societyId = society?._id;
+  const convex = useConvex();
+  const [users, setUsers] = useState<LocalActorChoice[] | undefined>();
+  useEffect(() => {
+    setUsers(undefined);
+    if (auth.mode !== "none" || !societyId || !isLocalDataRuntime()) return;
+    const localClient = convex as unknown as Pick<StaticConvexClient, "subscribeLocalActorChoices">;
+    if (typeof localClient.subscribeLocalActorChoices !== "function") return;
+    return localClient.subscribeLocalActorChoices(societyId, (choices) => {
+      setUsers(choices.filter((choice) => !choice.status || choice.status === "Active"));
+    });
+  }, [auth.mode, convex, societyId]);
   const current = useCurrentUser();
   const currentId = useCurrentUserId();
   const [open, setOpen] = useState(false);
@@ -68,12 +80,12 @@ export function UserPicker() {
     if (!users || users.length === 0) return;
     if (currentId && users.some((u: any) => u._id === currentId)) return;
     const owner = users.find((u: any) => u.role === "Owner") ?? users[0];
-    if (owner) setStoredUserId(owner._id);
+    if (owner) setStoredUserId(owner._id as Id<"users">);
   }, [currentId, users]);
 
   if (!society) return null;
 
-  if (auth.mode === "better-auth") {
+  if (auth.mode !== "none") {
     return (
       <div
         style={{
@@ -104,10 +116,12 @@ export function UserPicker() {
           )}
         </div>
         <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-          Signed in through Better Auth. Member eligibility and staff permissions
-          resolve into the society workspace from here.
+          Signed in to your account. Your workspace membership determines access.
         </div>
         <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+          {auth.mode === "clerk" && (
+            <Suspense fallback={null}><ClerkAccountButton /></Suspense>
+          )}
           {current?.memberId && (
             <Link to="/portal" className="btn btn--ghost btn--sm">
               Member portal
@@ -171,11 +185,11 @@ export function UserPicker() {
               color: "var(--text-primary)",
             }}
           >
-            {(users ?? []).map((u: any) => (
+            {(users ?? []).map((u) => (
               <div
                 key={u._id}
                 onClick={() => {
-                  setStoredUserId(u._id);
+                  setStoredUserId(u._id as Id<"users">);
                   setOpen(false);
                 }}
                 style={{
@@ -202,7 +216,7 @@ export function UserPicker() {
             ))}
             {(users ?? []).length === 0 && (
               <div className="empty-state empty-state--sm empty-state--start">
-                Add users under Users & roles, or click Reseed in the demo banner.
+                Add users under Users & access, or click Reseed in the demo banner.
               </div>
             )}
           </div>,

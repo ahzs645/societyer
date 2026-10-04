@@ -32,6 +32,7 @@ import type {
 } from "../portable/ctx";
 import { matchesVerifiedIdentity, assertExternalIdentityActive } from "./identity";
 import { PORTABLE_ACCESS_ENFORCEMENT } from "../portable/define";
+import { matchesAuthBinding } from "./identity";
 
 export const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"] as const;
 export type Role = (typeof ROLES)[number];
@@ -57,6 +58,7 @@ export type PortableUserRow = PortableDoc & {
   status?: string;
   authSubject?: string;
   authIssuer?: string;
+  authProvider?: string;
   externalIdentityId?: string;
 };
 

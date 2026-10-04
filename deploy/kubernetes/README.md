@@ -186,7 +186,27 @@ and Flux against divergent definitions.
 
 ## Security boundary
 
+For selectable hosted login, see [Clerk setup](../../docs/clerk-setup.md) and
+[Microsoft SSO with Better Auth](../../docs/microsoft-sso-setup.md). The example
+deployment keeps `AUTH_MODE=none`; authentication requires configured account
+credentials, matching frontend build settings, and deployed Convex auth configuration.
+
 The current home deployment uses `AUTH_MODE=none`, and parts of the application
 still rely on client-asserted workspace identity. Treat it as trusted-network
 software. Authentication and server-enforced tenant authorization are separate
 prerequisites before any public or untrusted multi-tenant exposure.
+
+
+### Keep the selected broker consistent
+
+Set the same `AUTH_MODE` (`none`, `better-auth`, or `clerk`) in the API and Convex
+manifests and **on the Convex function deployment**. Container environment alone
+is not proof that a function isolate receives the setting: run the appropriate
+`npx convex env set AUTH_MODE clerk` (or `better-auth`) against that deployment.
+Build the frontend with the matching `VITE_AUTH_MODE`. In Better Auth mode,
+`VITE_AUTH_BASE_URL` must match `BETTER_AUTH_BASE_URL` exactly. Configure the
+reviewed Clerk issuer on the gateway and Convex in Clerk mode; Better Auth's
+JWKS still signs machine calls and does not establish a second user session.
+The bundled trusted home-network examples keep `none`. Do not use that mode for
+public hosted resources. Existing issuerless users require verified operator
+backfill before authenticated access; see [identity launch gates](../../docs/hosted-identity-and-provider-gates.md).

@@ -2,7 +2,7 @@ import { validateHostedAuth } from "../../shared/authConfiguration";
 import { isLocalDataRuntime } from "./staticRuntime";
 import { resolvedConvexUrl } from "./appRuntime";
 
-export type AuthMode = "none" | "better-auth";
+export type AuthMode = "none" | "better-auth" | "clerk";
 
 export function getAuthMode(): AuthMode {
   if (isLocalDataRuntime()) return "none";
@@ -15,4 +15,8 @@ export function isBetterAuthMode() {
 
 export function isNoAuthMode() {
   return getAuthMode() === "none";
+}
+
+export function isAuthenticatedAuthMode() {
+  return getAuthMode() !== "none";
 }

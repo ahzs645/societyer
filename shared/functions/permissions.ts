@@ -6,7 +6,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
-import { requireSocietyMembership, type Role } from "./access";
+import { requireRolePortable, requireSocietyMembership, type Role } from "./access";
 
 export const PERMISSIONS = [
   "society:read",
@@ -117,9 +117,11 @@ export async function myPermissionsPortable(
   ctx: PortableQueryCtx,
   { userId, societyId }: { userId: string; societyId: string },
 ) {
-  const user = await requireSocietyMembership(ctx, societyId);
-  if (user._id !== userId) throw new Error("Authenticated actor does not match the current principal.");
-  return { role: user.role, permissions: listPermissionsForRole(String(user.role)) };
+  const currentUser = await requireSocietyMembership(ctx, societyId);
+  if (currentUser._id !== userId) await requireRolePortable(ctx, { societyId, required: "Admin" });
+  const user = currentUser._id === userId ? currentUser : await ctx.db.get(userId, "users");
+  if (!user || user.societyId !== societyId) return { role: null, permissions: [] };
+  return { role: user.role, permissions: !user.status || user.status === "Active" ? listPermissionsForRole(String(user.role)) : [] };
 }
 
 /** The current membership, never an actor or role supplied by the caller. */
@@ -140,4 +142,13 @@ export async function requirePermissionPortable(
     }
   }
   return user;
+}
+
+/** Inspect the declared role policy, never grant access to the operation itself. */
+export async function checkPermissionPortable(
+  ctx: PortableQueryCtx,
+  args: { userId: string; societyId: string; permission: string },
+) {
+  const { permissions } = await myPermissionsPortable(ctx, args);
+  return (permissions as readonly string[]).includes(args.permission);
 }

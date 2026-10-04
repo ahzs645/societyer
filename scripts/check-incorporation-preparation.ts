@@ -1,3 +1,5 @@
+import { verifyFixtureFormation } from "./helpers/verifiedFormation";
+import { complianceFactsForOrganization, computeComplianceObligations } from "../src/lib/compliance";
 import assert from "node:assert/strict";
 import { StaticConvexClient } from "../src/lib/staticConvex";
 import { SOCIETY_DOCUMENT_PACKETS } from "../shared/societyDocumentPackets";
@@ -46,3 +48,77 @@ assert.throws(() => validateEntitySetup({ annualMeetingDate: "2026-02-30" }), /v
 assert.equal(entitySetupFields({ craRcStatus: "pending" }).craRcStatus, "pending");
 assert.equal(CORPORATION_DOCUMENT_PACKETS.find((packet) => packet.key === "federal-articles-preparation")?.preparationOnly, true);
 console.log("Incorporation preparation, evidence provenance and separate entity anchors passed.");
+import { incorporationPreparationForOrganization } from "../shared/incorporationPreparation";
+import { incorporationWorksheetFileName, incorporationWorksheetText } from "../shared/incorporationWorksheet";
+
+// The same provincial code must never leak society instructions into a company.
+assert.equal(incorporationPreparationForOrganization({
+  jurisdictionCode: "CA-BC", entityType: "society", actFormedUnder: "societies_act",
+})?.id, "bc_society");
+assert.equal(incorporationPreparationForOrganization({
+  jurisdictionCode: "british_columbia", entityType: "corporation__business_",
+  actFormedUnder: "business_corporations_act__british_columbia_",
+})?.id, "bc_company");
+assert.equal(incorporationPreparationForOrganization({
+  jurisdiction: "federal__canada_", entityType: "corporation__business_",
+  actFormedUnder: "canada_business_corporations_act",
+})?.id, "federal_cbca");
+
+// Unsupported provincial / nonprofit paths and inconsistent profiles do not fall back.
+for (const organization of [
+  undefined,
+  { jurisdictionCode: "CA-BC", entityType: "corporation__business_", actFormedUnder: "societies_act" },
+  { jurisdictionCode: "CA-BC", entityType: "society", actFormedUnder: "business_corporations_act__british_columbia_" },
+  { jurisdictionCode: "CA-FED-CBCA", entityType: "society" },
+  { jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__not_for_profit_" },
+  { jurisdictionCode: "CA-ON-OBCA", entityType: "corporation__business_" },
+  { entityType: "corporation__business_" },
+]) assert.equal(incorporationPreparationForOrganization(organization), undefined);
+
+// Downloaded preparation retains the selected track, provenance, and limits even
+// when the worksheet is shared outside the app.
+for (const [entityType, jurisdictionCode, expectedId, expectedRequirement] of [
+  ["society", "CA-BC", "bc_society", "Prepare the constitution"],
+  ["corporation__business_", "CA-BC", "bc_company", "Prepare and sign the incorporation agreement"],
+  ["corporation__business_", "CA-FED-CBCA", "federal_cbca", "Prepare the articles of incorporation"],
+]) {
+  const organization = { name: "Example / Planning Company", entityType, jurisdictionCode };
+  const guide = incorporationPreparationForOrganization(organization);
+  assert.ok(guide);
+  assert.equal(guide.id, expectedId);
+  const worksheet = incorporationWorksheetText(guide, organization);
+  assert.ok(worksheet.includes(expectedRequirement));
+  assert.ok(worksheet.includes("does not incorporate an entity"));
+  assert.ok(worksheet.includes("Verify current registry channels, fees, forms, and mail availability"));
+  assert.ok(worksheet.includes("repository evidence dated"));
+  assert.ok(worksheet.includes(guide.filingChannel.onlineUrl));
+  const filename = incorporationWorksheetFileName(guide, organization);
+  assert.ok(filename.endsWith(`${expectedId}-incorporation-preparation.txt`));
+  assert.ok(!filename.includes("/"), "workspace names cannot add directories to a worksheet filename");
+}
+
+console.log("Incorporation preparation: entity/act discrimination, jurisdiction aliases, and unsupported paths passed.");
+
+
+// Workspace lifecycle and legal formation are independent; planned dates do not activate duties.
+assert.equal(profile.formationStatus, "preparing");
+const dutyProfile = await client.query("society:getById", { id: bc.societyId });
+assert.equal(complianceFactsForOrganization(dutyProfile, { asOfDate: "2026-10-03" }).flatMap(computeComplianceObligations).length, 0);
+const baseVerification = { id: society.societyId, name: profile.name, isCharity: false, isMemberFunded: false, formationStatus: "incorporated", certificateReference: "OFFICIAL-CERT-1", certificateDate: "2026-02-01" };
+await assert.rejects(client.mutation("society:upsert", baseVerification), /uploaded certificate/);
+await assert.rejects(client.mutation("society:upsert", { ...baseVerification, certificateEvidenceDocumentId: generation.draftDocumentId }), /generated draft/);
+const urlOnly = await client.mutation("documents:create", { societyId: society.societyId, title: "Certificate reference only", category: "governance", url: "https://example.org/certificate.pdf", tags: [] });
+await assert.rejects(client.mutation("society:upsert", { ...baseVerification, certificateEvidenceDocumentId: urlOnly }), /uploaded file/);
+const foreignCertificate = await verifyFixtureFormation(client, bc.societyId, "2026-02-01");
+assert.equal((await client.query("society:getById", { id: bc.societyId })).anniversaryDate, "2026-02-01", "Actual certificate date replaces the copied planned anniversary");
+await assert.rejects(client.mutation("society:upsert", { ...baseVerification, certificateEvidenceDocumentId: foreignCertificate }), /not found/);
+const uploadedCertificate = await verifyFixtureFormation(client, society.societyId, "2026-02-01");
+const verifiedProfile = await client.query("society:getById", { id: society.societyId });
+assert.equal(verifiedProfile.formationStatus, "incorporated");
+assert.equal(verifiedProfile.incorporationDate, "2026-02-01");
+assert.equal(verifiedProfile.certificateEvidenceDocumentId, uploadedCertificate);
+assert.equal(verifiedProfile.organizationStatus, "active");
+await client.mutation("society:upsert", { id: federated.societyId, name: "Cedar Federal Inc.", isCharity: false, isMemberFunded: false, formationStatus: "submitted", incorporationDate: "2026-01-01" });
+const submittedProfile = await client.query("society:getById", { id: federated.societyId });
+assert.equal(complianceFactsForOrganization(submittedProfile, { asOfDate: "2026-10-03" }).flatMap(computeComplianceObligations).length, 0);
+console.log("Formation certificate ownership, uploaded-file evidence and pending-duty gates passed.");

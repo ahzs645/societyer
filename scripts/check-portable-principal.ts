@@ -14,6 +14,7 @@ import { PORTABLE_FUNCTIONS } from "../shared/functions/registry";
 import { setLogoPortable } from "../shared/functions/society";
 import { DexieWorkspaceClient } from "../src/lib/dexieWorkspaceClient";
 import { StaticConvexClient } from "../src/lib/staticConvexClient";
+import { PortableQueryCache } from "../src/lib/portableQueryCache";
 import { STATIC_DEMO_SOCIETY_ID, STATIC_DEMO_USER_ID } from "../src/lib/staticIds";
 import {
   MemoryDb,
@@ -98,8 +99,8 @@ console.log("✓ local runtime injects one principal per invocation chain");
 // produce an explicit anonymous principal when Convex has no identity.
 const identity = {
   subject: "auth0|user-7",
-  issuer: "https://issuer.example/",
-  tokenIdentifier: "https://issuer.example/|auth0|user-7",
+  issuer: process.env.BETTER_AUTH_BASE_URL ?? "http://127.0.0.1:5173",
+  tokenIdentifier: "better-auth|auth0|user-7",
   email: "member@example.org",
   emailVerified: true,
 };
@@ -549,6 +550,78 @@ for (const client of localClients) {
   await client.close();
 }
 console.log("✓ static-demo and desktop Dexie resolve concrete trusted-workspace principals");
+
+{
+  let selectedUser = "cache-owner";
+  let cacheInvocations = 0;
+  const runtime = new PortableRuntime({ db: new MemoryDb({ seed: {
+    societies: [{ _id: "cache-society", name: "Cache authorization" }],
+    users: [
+      { _id: "cache-owner", societyId: "cache-society", role: "Owner", status: "Active" },
+      { _id: "cache-member", societyId: "cache-society", role: "Member", status: "Active" },
+    ],
+  } }), capabilities: caps, principalProvider: () => { cacheInvocations++; return { kind: "user", runtime: "browser-local", assurance: "trusted-workspace", subject: "local:cache-test", userId: selectedUser, societyId: "cache-society" }; } }).registerAll(PORTABLE_FUNCTIONS);
+  const cache = new PortableQueryCache(runtime, { onUpdate: () => () => undefined } as any, () => [{ secret: "fixture-must-never-leak" }]);
+  const watch = cache.watchQuery("users:list", { societyId: "cache-society" });
+  assert.equal(watch.localQueryResult(), undefined, "protected fixture fallback must not bypass authorization while loading");
+  let notifications = 0;
+  const unsubscribe = watch.onUpdate(() => { notifications++; });
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal((watch.localQueryResult() as any[]).length, 2);
+  selectedUser = "cache-member";
+  cache.invalidatePrincipal();
+  assert.equal(watch.localQueryResult(), undefined, "actor change immediately clears prior Owner results");
+  await new Promise<void>(resolve => setImmediate(resolve));
+  const afterDenial = notifications;
+  const afterDenialInvocations = cacheInvocations;
+  for (let index = 0; index < 5; index++) {
+    const fresh = cache.watchQuery("users:list", { societyId: "cache-society" });
+    assert.equal(fresh.localQueryResult(), undefined);
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
+  assert.equal(notifications, afterDenial, "stable denial must not trigger a render/recompute loop");
+  assert.equal(cacheInvocations, afterDenialInvocations, "synchronous snapshot reads must not execute more queries");
+  selectedUser = "cache-owner";
+  cache.invalidatePrincipal();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal((watch.localQueryResult() as any[]).length, 2, "returning to Owner reauthorizes the watch");
+  unsubscribe();
+  console.log("✓ watched queries clear stale authority, deny fixture fallback and keep failed reads stable through actor switching");
+}
+
+// Physical-file actor switching is an operator UI control. It must keep working
+// when the selected actor cannot read the protected application roster, without
+// returning hosted identity bindings or adding a public API exemption.
+{
+  let actorId = "picker-member";
+  const client = new StaticConvexClient({
+    databaseName: `principal-actor-picker-${Date.now()}`,
+    seed: {
+      societies: [{ _id: "picker-society", name: "Physical file" }, { _id: "foreign-picker", name: "Other" }],
+      users: [
+        { _id: "picker-owner", societyId: "picker-society", displayName: "Owner", email: "owner@local.test", role: "Owner", status: "Active", authSubject: "secret-subject", authIssuer: "secret-issuer", externalIdentityId: "secret-person" },
+        { _id: actorId, societyId: "picker-society", displayName: "Member", email: "member@local.test", role: "Member", status: "Active" },
+        { _id: "foreign-owner", societyId: "foreign-picker", displayName: "Foreign", email: "foreign@local.test", role: "Owner", status: "Active" },
+      ],
+    },
+    principalProvider: () => ({ kind: "user", runtime: "browser-local", assurance: "trusted-workspace", subject: "local:actor-picker", userId: actorId, societyId: "picker-society" }),
+  });
+  await client.whenLocalWorkspaceReady();
+  await assert.rejects(() => client.query("users:list", { societyId: "picker-society" }), /Permission users:read/);
+  let choices = client.getLocalActorChoices("picker-society");
+  assert.deepEqual(choices.map(row => row._id).sort(), ["picker-member", "picker-owner"]);
+  assert.deepEqual(Object.keys(choices[0]).sort(), ["_id", "displayName", "email", "role", "status"]);
+  const stop = client.subscribeLocalActorChoices("picker-society", updated => { choices = updated; });
+  actorId = "picker-owner";
+  await client.mutation("users:upsert", { id: "picker-member", societyId: "picker-society", displayName: "Updated Member", email: "member@local.test", role: "Member", status: "Active" });
+  assert.equal(choices.find(row => row._id === "picker-member")?.displayName, "Updated Member");
+  stop();
+  actorId = "picker-member";
+  assert.ok(client.getLocalActorChoices("picker-society").some(row => row._id === "picker-owner"));
+  await assert.rejects(() => client.query("users:list", { societyId: "picker-society" }), /Permission users:read/);
+  await client.close();
+  console.log("✓ local actor choices survive restricted actor roles, update subscriptions and expose no hosted identity fields");
+}
 
 // A local database holding several workspaces must stay fully reachable by its
 // owner, including societies that have no `users` row yet (legacy/imported

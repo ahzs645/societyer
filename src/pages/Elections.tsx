@@ -11,7 +11,7 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { AlertTriangle, Info, Vote, Plus, Users, CheckCircle2, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
-import { isBetterAuthMode } from "../lib/authMode";
+import { isAuthenticatedAuthMode } from "../lib/authMode";
 
 type ElectionCreateForm = {
   title: string;
@@ -158,7 +158,7 @@ export function ElectionsPage() {
         }
       />
 
-      {!isBetterAuthMode() && (
+      {!isAuthenticatedAuthMode() && (
         <div className="callout callout--info">
           <Info size={16} />
           <div>

@@ -48,10 +48,11 @@ export function ComplianceObligationsPage() {
   if (missingWorkspace || !organization || !society) return <SeedPrompt />;
 
   const jurisdictionCode = homeJurisdictionCode(organization);
-  const jurisdictionCopy = jurisdictionDisplayCopy(jurisdictionCode);
-  const jurisdictionModule = jurisdictionModuleContract(jurisdictionCode);
+  const jurisdictionCopy = jurisdictionDisplayCopy(organization);
+  const jurisdictionModule = jurisdictionModuleContract(organization);
   const missingFacts = [
     ...requiredFactLabels(facts),
+    ...(["preparing", "submitted", "unverified_existing"].includes(organization.formationStatus ?? "") || organization.organizationStatus === "pre_incorporation" ? ["verified certificate evidence before legal duties activate"] : []),
     ...factsList.filter(item => item.contextKind === "extra_provincial").flatMap(item => item.jurisdictionCode === "CA-ON-OBCA" && !item.commencedBusinessDate
       ? [`Ontario business commencement date (${item.contextLabel ?? "registration"})`]
       : item.jurisdictionCode === "CA-BC" && !item.registrationDate ? [`BC registration date (${item.contextLabel ?? "registration"})`] : []),

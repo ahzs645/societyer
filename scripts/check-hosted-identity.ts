@@ -13,8 +13,9 @@ assert.throws(() => validateHostedAuth({}, "https://example.convex.cloud"), /Hos
 for (const host of ["10.evil.test", "192.168.evil.test", "172.16.evil.test"]) assert.throws(() => validateHostedAuth({}, `https://${host}`));
 assert.throws(() => resolveSessionBroker({ AUTH_MODE: "none", VITE_AUTH_MODE: "better-auth" }), /same session broker/);
 assert.throws(() => validateHostedAuth({ AUTH_MODE: "better-auth" }, "https://example.convex.cloud"), /explicitly configured issuer/);
-assert.throws(() => resolveSessionBroker({ AUTH_MODE: "clerk" }), /Unsupported session broker/);
-assert.throws(() => resolveSessionBroker({ AUTH_MODE: "better-auth", CLERK_SECRET_KEY: "fixture" }), /Clerk is not implemented/);
+assert.equal(resolveSessionBroker({ AUTH_MODE: "clerk" }), "clerk");
+assert.throws(() => resolveSessionBroker({ AUTH_MODE: "unknown" }), /Unsupported session broker/);
+assert.equal(resolveSessionBroker({ AUTH_MODE: "better-auth", CLERK_SECRET_KEY: "dormant-fixture" }), "better-auth");
 assert.throws(() => validateHostedAuth({ AUTH_MODE: "better-auth", BETTER_AUTH_BASE_URL: "https://a.test", VITE_AUTH_BASE_URL: "https://b.test" }), /match exactly/);
 for (const url of ["https://auth.test/", "https://user:pass@auth.test", "http://public.test", "https://auth.test?x=1", "https://auth.test#x"]) {
   assert.throws(() => resolveAuthIssuer({ BETTER_AUTH_BASE_URL: url }));

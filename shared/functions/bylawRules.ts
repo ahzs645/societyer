@@ -14,6 +14,7 @@ import { DEFAULT_BYLAW_RULES, bylawBaselineForOrganization, contextualBylawRules
  * reaching into the Convex-typed lib module.
  */
 
+import { isCorporation } from "../organizationDomain";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
 
@@ -150,6 +151,9 @@ export async function upsertActivePortable(ctx: PortableMutationCtx, args: Recor
 
 export async function resetToDefaultPortable(ctx: PortableMutationCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
+  if (isCorporation(await ctx.db.get(societyId, "societies"))) {
+    throw new Error("The BC society baseline cannot be adopted for a corporation. Configure rules from approved company articles and by-laws.");
+  }
   const now = new Date().toISOString();
   const defaults = {
     ...DEFAULT_BYLAW_RULES,

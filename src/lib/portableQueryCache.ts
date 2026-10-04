@@ -45,8 +45,8 @@ type PortableWatchSpec = {
  * The real async portable handler runs against the Dexie-backed ctx.db on
  * mount and on every store change; its result is cached synchronously so
  * React's useQuery (which reads `localQueryResult()` synchronously) sees it.
- * Until the first async result resolves, the existing synchronous mirror path
- * supplies an instant value, so there is no loading flash for ported queries.
+ * Until the authorized async result resolves, watches return undefined. Fixture
+ * mirrors cannot establish the current actor's authority to read a record.
  */
 export class PortableQueryCache {
   // Client-level cache for async portable query results. convex/react re-creates
@@ -56,6 +56,8 @@ export class PortableQueryCache {
   // Caching by query+args here lets any freshly-created watch read the resolved
   // value synchronously, and `portableListeners` re-renders subscribers on resolve.
   private portableCache = new Map<string, unknown>();
+  private portableErrors = new Map<string, string>();
+  private paginatedSnapshots = new Map<string, { source: unknown; value: unknown }>();
   private portableListeners = new Set<() => void>();
   private portableRunId = 0;
   private portableRunTokens = new Map<string, number>();
@@ -69,7 +71,7 @@ export class PortableQueryCache {
   constructor(
     private readonly portable: PortableRuntime,
     private readonly store: StaticDemoDexieStore,
-    private readonly syncFallback: (name: string, args?: StaticArgs) => unknown,
+    _syncFallback: (name: string, args?: StaticArgs) => unknown,
   ) {
     // Client-level refresh: whenever the underlying store changes (a mutation
     // committed, or the async Dexie hydration finished), re-run every watched
@@ -85,7 +87,37 @@ export class PortableQueryCache {
   }
 
   emit() {
-    for (const listener of this.portableListeners) listener();
+    // A callback can commit a React subscription change. Iterating the live
+    // Set would visit newly inserted listeners again during the same emission.
+    for (const listener of [...this.portableListeners]) listener();
+  }
+
+  /** Drop results authorized for the previous selected local actor. */
+  invalidatePrincipal() {
+    this.portableRunTokens.clear();
+    this.portablePaginatedRunTokens.clear();
+    this.portableErrors.clear();
+    this.paginatedSnapshots.clear();
+    for (const key of this.portableCache.keys()) this.portableCache.set(key, undefined);
+    for (const [cacheKey, spec] of this.portableWatchSpecs) {
+      if (spec.pagination) this.recomputePortablePaginated(cacheKey, spec);
+      else this.recomputePortable(cacheKey, spec.name, spec.args);
+    }
+    this.emit();
+  }
+
+  private rejectResult(cacheKey: string, runId: number, error: unknown, paginated = false) {
+    const tokens = paginated ? this.portablePaginatedRunTokens : this.portableRunTokens;
+    if (tokens.get(cacheKey) !== runId) return;
+    const message = String(error);
+    if (this.portableErrors.get(cacheKey) !== message) console.warn(`[societyer-local] portable query ${cacheKey} failed`, error);
+    this.portableErrors.set(cacheKey, message);
+    const hadResult = this.portableCache.get(cacheKey) !== undefined;
+    // Failed authorization never supplies fixture data or retains another
+    // actor's result. Undefined is a stable loading/unavailable value for the
+    // existing optional background queries, without a render feedback loop.
+    this.portableCache.set(cacheKey, undefined);
+    if (hadResult) this.emit();
   }
 
   private recomputePortable(cacheKey: string, name: string, args?: StaticArgs) {
@@ -95,6 +127,7 @@ export class PortableQueryCache {
       .runQuery(name, args ?? {})
       .then((next) => {
         if (this.portableRunTokens.get(cacheKey) !== runId) return;
+        this.portableErrors.delete(cacheKey);
         const prev = this.portableCache.get(cacheKey);
         if (!this.portableCache.has(cacheKey) || JSON.stringify(next) !== JSON.stringify(prev)) {
           this.portableCache.set(cacheKey, next);
@@ -102,7 +135,7 @@ export class PortableQueryCache {
         }
       })
       .catch((error) => {
-        console.warn(`[societyer-local] portable query ${name} failed`, error);
+        this.rejectResult(cacheKey, runId, error);
       });
   }
 
@@ -114,13 +147,17 @@ export class PortableQueryCache {
     // this, a query that first resolved against the pre-hydration fixture
     // cache could stay stale until the next unrelated re-render.
     let watchSpec = this.portableWatchSpecs.get(cacheKey);
+    const needsRefresh = !watchSpec || Boolean(watchSpec.pagination);
     if (!watchSpec || watchSpec.pagination) {
       watchSpec = { name, args, subscribers: 0 };
       this.portableWatchSpecs.set(cacheKey, watchSpec);
     }
 
     const recompute = () => this.recomputePortable(cacheKey, name, args);
-    recompute();
+    // Convex also constructs watches merely to read the synchronous snapshot.
+    // Executing a fresh query on each such read creates microtask feedback when
+    // its notification causes another snapshot read.
+    if (needsRefresh) recompute();
 
     return {
       onUpdate: (callback: () => void) => {
@@ -157,7 +194,7 @@ export class PortableQueryCache {
       localQueryResult: () =>
         this.portableCache.has(cacheKey)
           ? this.portableCache.get(cacheKey)
-          : this.syncFallback(name, args),
+          : undefined,
       journal: () => undefined,
     };
   }
@@ -195,6 +232,7 @@ export class PortableQueryCache {
     void run()
       .then((next) => {
         if (this.portablePaginatedRunTokens.get(cacheKey) !== runId) return;
+        this.portableErrors.delete(cacheKey);
         const prev = this.portableCache.get(cacheKey);
         if (!this.portableCache.has(cacheKey) || JSON.stringify(next) !== JSON.stringify(prev)) {
           this.portableCache.set(cacheKey, next);
@@ -202,7 +240,7 @@ export class PortableQueryCache {
         }
       })
       .catch((error) => {
-        console.warn(`[societyer-local] portable paginated query ${spec.name} failed`, error);
+        this.rejectResult(cacheKey, runId, error, true);
       })
       .finally(() => {
         if (loadMoreRun && spec.pagination) spec.pagination.loadMoreInFlight = false;
@@ -217,6 +255,7 @@ export class PortableQueryCache {
     const initialNumItems = options?.initialNumItems ?? 10;
     const cacheKey = `paginated|${name}|${JSON.stringify(args ?? {})}|${options?.id ?? "default"}|${initialNumItems}`;
     let watchSpec = this.portableWatchSpecs.get(cacheKey);
+    const needsRefresh = !watchSpec?.pagination;
     if (!watchSpec?.pagination) {
       watchSpec = {
         name,
@@ -241,7 +280,7 @@ export class PortableQueryCache {
       spec.pagination.pageSizes.push(numItems);
       this.recomputePortablePaginated(cacheKey, spec, true);
     };
-    recompute();
+    if (needsRefresh) recompute();
 
     return {
       onUpdate: (callback: () => void) => {
@@ -274,7 +313,11 @@ export class PortableQueryCache {
       localQueryResult: () => {
         const cached = this.portableCache.get(cacheKey);
         if (!isPortablePaginatedCache(cached)) return undefined;
-        return { ...cached, loadMore };
+        const snapshot = this.paginatedSnapshots.get(cacheKey);
+        if (snapshot?.source === cached) return snapshot.value;
+        const value = { ...cached, loadMore };
+        this.paginatedSnapshots.set(cacheKey, { source: cached, value });
+        return value;
       },
     };
   }

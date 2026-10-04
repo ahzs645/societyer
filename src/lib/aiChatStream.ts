@@ -1,5 +1,5 @@
 import { convexSiteUrl } from "./convexSite";
-import { getAuthMode } from "./authMode";
+import { authenticatedFetch } from "./authToken";
 
 export async function streamChatMessage({
   societyId,
@@ -16,14 +16,10 @@ export async function streamChatMessage({
   modelId?: string;
   onToken: (token: string) => void;
 }) {
-  const token = getAuthMode() === "better-auth"
-    ? (await import("./authClient")).authClient.token().then((result) => result.data?.token)
-    : undefined;
-  const response = await fetch(`${convexSiteUrl()}/ai-chat/stream`, {
+  const response = await authenticatedFetch(`${convexSiteUrl()}/ai-chat/stream`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({ societyId, threadId, content, browsingContext, modelId }),
   });

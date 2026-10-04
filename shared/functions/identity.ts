@@ -36,3 +36,11 @@ export async function assertExternalIdentityActive(
     throw new Error("External identity is disabled or its binding is invalid.");
   }
 }
+
+/** Compatibility name for existing Clerk callers; hosted comparison remains exact. */
+export type AuthBinding = IdentityBinding & { authProvider?: string };
+export function normalizeAuthIssuer(issuer: string): string { return issuer.trim(); }
+export function matchesAuthBinding(binding: AuthBinding, principal: PortablePrincipal): boolean {
+  if (principal.kind === "user" && principal.assurance === "trusted-workspace") return binding.authSubject === principal.subject;
+  return matchesVerifiedIdentity(binding, principal);
+}

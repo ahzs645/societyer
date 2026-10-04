@@ -89,6 +89,7 @@ export function PartyPortalPage() {
       {portal.scopes.includes("documents") && (
         <section style={sectionStyle}>
           <h2 style={headingStyle}><FileText size={18} /> Documents</h2>
+          <p className="muted">Only released documents are shared here. Restricted and expired materials remain private.</p>
           {documents.length === 0 ? (
             <p className="muted">No documents shared.</p>
           ) : (

@@ -1,5 +1,7 @@
 import { EntitySetupFields } from "../components/EntitySetupFields";
 import { entitySetupFields, validateEntitySetup } from "../../shared/entitySetup";
+import { IncorporationPreparation } from "../components/IncorporationPreparation";
+import { authenticatedFetch } from "@/lib/authToken";
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -20,8 +22,8 @@ import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 import { optionChoices, optionLabel } from "../lib/orgHubOptions";
-import { defaultsForJurisdiction, jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
-import { homeJurisdictionCode, isSociety } from "../../shared/organizationDomain";
+import { jurisdictionDisplayCopy, jurisdictionModuleContract, WORKSPACE_SETUP_TRACKS, workspaceSetupTrack, workspaceGovernanceCopy } from "../../shared/jurisdictionWorkspace";
+import { homeJurisdictionCode, isCorporation, isSociety } from "../../shared/organizationDomain";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { useAuth } from "../auth/AuthProvider";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
@@ -68,6 +70,7 @@ export function SocietyNewPage() {
   const toast = useToast();
   const [searchParams] = useSearchParams();
   const [saving, setSaving] = useState(false);
+  const [setupMode, setSetupMode] = useState<string>("bc_society");
   const [form, setForm] = useState({
     name: "",
     incorporationNumber: "",
@@ -92,12 +95,25 @@ export function SocietyNewPage() {
   });
 
   const set = (k: string, v: any) => setForm((current) => ({ ...current, [k]: v, ...(k === "isCharity" ? { charityStatus: v ? "registered" : "not_applied" } : k === "isMemberFunded" ? { legalSubtype: v ? "member_funded_society" : "ordinary_society" } : k === "legalSubtype" ? { isMemberFunded: v === "member_funded_society" } : {}) }));
-  const setJurisdiction = (jurisdictionCode: string) => {
+  const setupTrack = workspaceSetupTrack(form) ?? WORKSPACE_SETUP_TRACKS[0];
+  const corporate = isCorporation(form);
+  const governance = workspaceGovernanceCopy(form);
+  const optionalSteps = OPTIONAL_ONBOARDING_STEPS.map((step) => step === "Member register" ? governance.registerLabel : step);
+  const setSetupTrack = (id: string) => {
+    setSetupMode(id);
+    if (id === "custom_existing") return;
+    const track = WORKSPACE_SETUP_TRACKS.find((item) => item.id === id);
+    if (!track) return;
     setForm((current) => ({
       ...current,
-      jurisdictionCode,
-      ...defaultsForJurisdiction(jurisdictionCode),
-      legalSubtype: jurisdictionCode === "CA-BC" ? "ordinary_society" : jurisdictionCode === "CA-FED-CBCA" ? "federal_private_corporation" : "other",
+      jurisdictionCode: track.jurisdictionCode,
+      entityType: track.entityType,
+      actFormedUnder: track.actFormedUnder,
+      isMemberFunded: false,
+      isCharity: false,
+      distributing: false,
+      charityStatus: "unknown",
+      legalSubtype: track.id === "bc_society" ? "ordinary_society" : track.id === "bc_company" ? "ordinary_private_company" : track.id === "federal_cbca" ? "federal_private_corporation" : "other",
     }));
   };
   const canSave = form.name.trim().length > 0 && !saving;
@@ -182,19 +198,22 @@ export function SocietyNewPage() {
             <div className="card__head">
               <div>
                 <h2 className="card__title">Organization profile</h2>
-                <span className="card__subtitle">The only required field right now is the legal name.</span>
+                <span className="card__subtitle">Choose the legal setup, then enter a legal or proposed name.</span>
               </div>
             </div>
             <div className="card__body">
-              <Field label="Legal name">
+              <Field label="Organization setup" hint={setupMode === "custom_existing" ? "Record existing legal details. Other entity types and provinces do not gain reviewed formation guidance by selecting them." : setupTrack.hint}>
+                <Select value={setupMode} onChange={setSetupTrack} options={[...WORKSPACE_SETUP_TRACKS.map((track) => ({ value: track.id, label: track.label, hint: track.hint })), { value: "custom_existing", label: "Other existing organization (manual setup)", hint: "Keep existing entity details; statutory and formation guidance may be unavailable." }]} />
+              </Field>
+              <Field label={form.formationStatus === "preparing" ? "Proposed name / working name" : "Recorded legal name"}>
                 <input className="input" value={form.name} onChange={(e) => set("name", e.target.value)} />
               </Field>
               <div className="society-field-grid society-field-grid--three">
-                <Field label="Incorporation #">
-                  <input className="input" value={form.incorporationNumber} onChange={(e) => set("incorporationNumber", e.target.value)} />
+                <Field label="Incorporation #" hint={form.organizationStatus === "pre_incorporation" ? "Assigned after incorporation." : undefined}>
+                  <input className="input" disabled={form.organizationStatus === "pre_incorporation"} value={form.incorporationNumber} onChange={(e) => set("incorporationNumber", e.target.value)} />
                 </Field>
                 <Field label="Incorporation date">
-                  <DatePicker value={form.incorporationDate} onChange={(v) => set("incorporationDate", v)} />
+                  <DatePicker disabled={form.organizationStatus === "pre_incorporation"} value={form.incorporationDate} onChange={(v) => set("incorporationDate", v)} />
                 </Field>
                 <Field label="Fiscal year end" hint="MM-DD">
                   <input className="input" value={form.fiscalYearEnd} onChange={(e) => set("fiscalYearEnd", e.target.value)} placeholder="03-31" />
@@ -202,31 +221,33 @@ export function SocietyNewPage() {
               </div>
               <div className="society-field-grid">
                 <Field label="Legal jurisdiction">
-                  <Select value={form.jurisdictionCode} onChange={setJurisdiction} options={JURISDICTION_OPTIONS} />
+                  {setupMode === "custom_existing" ? <Select value={form.jurisdictionCode} onChange={(value) => set("jurisdictionCode", value)} options={optionChoices("entityJurisdictions")} /> : <input className="input" readOnly value={form.jurisdictionCode === "CA-FED-CBCA" ? "Canada — federal" : form.jurisdictionCode === "CA-BC" ? "British Columbia — provincial" : "Ontario — provincial"} />}
                 </Field>
                 <Field label="Entity type">
-                  <Select value={form.entityType} onChange={(v) => { set("entityType", v); set("actFormedUnder", v === "corporation__nfp_" ? form.jurisdictionCode === "CA-FED-CBCA" ? "canada_not_for_profit_corporations_act" : "" : v.includes("corporation") ? form.jurisdictionCode === "CA-BC" ? "business_corporations_act" : form.jurisdictionCode === "CA-FED-CBCA" ? "canada_business_corporations_act" : "business_corporations_act__ontario_" : "societies_act"); set("legalSubtype", v === "corporation__nfp_" ? "other" : v.includes("corporation") ? form.jurisdictionCode === "CA-BC" ? "ordinary_private_company" : form.jurisdictionCode === "CA-FED-CBCA" ? "federal_private_corporation" : "other" : "ordinary_society"); }} options={optionChoices("entityTypes")} />
+                  {setupMode === "custom_existing" ? <Select value={form.entityType} onChange={(value) => set("entityType", value)} options={optionChoices("entityTypes")} /> : <input className="input" readOnly value={optionLabel("entityTypes", form.entityType)} />}
                 </Field>
               </div>
               <div className="society-field-grid">
                 <Field label="Act formed under">
-                  <Select value={form.actFormedUnder} onChange={(v) => set("actFormedUnder", v)} options={optionChoices("actsFormedUnder")} />
+                  {setupMode === "custom_existing" ? <Select value={form.actFormedUnder} onChange={(value) => set("actFormedUnder", value)} options={optionChoices("actsFormedUnder")} /> : <input className="input" readOnly value={optionLabel("actsFormedUnder", form.actFormedUnder)} />}
                 </Field>
                 <Field label="Official email">
                   <input className="input" type="email" value={form.officialEmail} onChange={(e) => set("officialEmail", e.target.value)} />
                 </Field>
               </div>
-              <Field label="Purposes (from constitution)">
+              <Field label={governance.purposesLabel}>
                 <MarkdownEditor rows={4} value={form.purposes} onChange={(markdown) => set("purposes", markdown)} />
               </Field>
               <EntitySetupFields form={form} set={set} />
               <div className="society-toggle-stack">
-                <Toggle checked={form.isCharity} onChange={(v) => set("isCharity", v)} label="Registered CRA charity" />
-                {isSociety(form) && <Toggle checked={form.isMemberFunded} onChange={(v) => set("isMemberFunded", v)} label="Member-funded society" />}
-                {!isSociety(form) && <Toggle checked={form.distributing} onChange={(v) => set("distributing", v)} label="Distributing corporation" />}
+                {(!corporate || setupMode === "custom_existing") && <Toggle checked={form.isCharity} onChange={(v) => set("isCharity", v)} label="Registered CRA charity" />}
+                {!corporate && <Toggle checked={form.isMemberFunded} onChange={(v) => set("isMemberFunded", v)} label="Member-funded society" />}
+                {corporate && <Toggle checked={form.distributing} onChange={(v) => set("distributing", v)} label="Distributing corporation" />}
               </div>
             </div>
           </section>
+
+          {["preparing", "submitted"].includes(form.formationStatus ?? "") && <IncorporationPreparation organization={form} />}
 
           <section className="card society-create__card">
             <div className="card__head"><h2 className="card__title">Onboarding flow</h2></div>
@@ -242,7 +263,7 @@ export function SocietyNewPage() {
               <div>
                 <span className="society-onboarding-flow__eyebrow">Optional later</span>
                 <div className="society-onboarding-flow__list">
-                  {OPTIONAL_ONBOARDING_STEPS.map((step) => (
+                  {optionalSteps.map((step) => (
                     <span key={step} className="pill pill--sm pill--gray">{step}</span>
                   ))}
                 </div>
@@ -404,7 +425,10 @@ export function SocietyPage() {
   if (society === null) return <SeedPrompt />;
   if (!form) return null;
 
-  const jurisdictionCopy = jurisdictionDisplayCopy(form.jurisdictionCode ?? society.jurisdictionCode);
+  const jurisdictionCopy = jurisdictionDisplayCopy(form);
+  const jurisdictionModule = jurisdictionModuleContract(form);
+  const governance = workspaceGovernanceCopy(form);
+  const corporate = isCorporation(form);
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v, ...(k === "isCharity" ? { charityStatus: v ? "registered" : "not_applied" } : k === "isMemberFunded" ? { legalSubtype: v ? "member_funded_society" : "ordinary_society" } : k === "legalSubtype" ? { isMemberFunded: v === "member_funded_society" } : {}) }));
   const missingGovernanceCount = [
     society.constitutionDocId,
@@ -628,7 +652,7 @@ export function SocietyPage() {
   const importGovernanceDocuments = async () => {
     setImportingGovernance(true);
     try {
-      const response = await fetch("/api/v1/browser-connectors/governance-documents/import", {
+      const response = await authenticatedFetch("/api/v1/browser-connectors/governance-documents/import", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -668,7 +692,7 @@ export function SocietyPage() {
       <PageHeader
         routeKey="/app/society"
         title="Organization profile"
-        subtitle="Governing details, registered office, and key flags."
+        subtitle={form.organizationStatus === "pre_incorporation" ? "Preparing incorporation. Add the assigned registry number and effective date after confirmation." : "Governing details, registered office, and key flags."}
         actions={
           <>
             <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
@@ -680,6 +704,8 @@ export function SocietyPage() {
           </>
         }
       />
+
+      {["preparing", "submitted"].includes(form.formationStatus ?? "") && <IncorporationPreparation organization={form} />}
 
       <div className="society-layout">
         <main className="society-layout__main">
@@ -743,7 +769,7 @@ export function SocietyPage() {
               </div>
 
               <LockedField
-                label="Purposes (from constitution)"
+                label={governance.purposesLabel}
                 reason="Purposes or articles can require member/shareholder approval and a registry filing to change. Charities may also need CRA review."
               >
                 {(locked) => (
@@ -777,7 +803,7 @@ export function SocietyPage() {
                         disabled={locked}
                         label="Registered CRA charity"
                       />
-                      {isSociety(form) && <Toggle
+                      {!corporate && <Toggle
                         checked={!!form.isMemberFunded}
                         onChange={(v) => set("isMemberFunded", v)}
                         disabled={locked}
@@ -830,16 +856,18 @@ export function SocietyPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Governance documents</h2>
-              <button
-                className="btn btn--sm"
-                onClick={importGovernanceDocuments}
-                disabled={importingGovernance || missingGovernanceCount === 0}
-                style={{ marginLeft: "auto" }}
-                type="button"
-              >
-                <FileDown size={12} />
-                {importingGovernance ? "Checking…" : "Auto-fill missing"}
-              </button>
+              {jurisdictionModule.registryImportSupported && (
+                <button
+                  className="btn btn--sm"
+                  onClick={importGovernanceDocuments}
+                  disabled={importingGovernance || missingGovernanceCount === 0}
+                  style={{ marginLeft: "auto" }}
+                  type="button"
+                >
+                  <FileDown size={12} />
+                  {importingGovernance ? "Checking…" : "Auto-fill missing"}
+                </button>
+              )}
             </div>
             <div className="card__body">
               <div className="table-wrap society-doc-table-wrap">
@@ -852,7 +880,7 @@ export function SocietyPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    <DocTableRow label="Constitution" present={!!society.constitutionDocId} />
+                    <DocTableRow label={governance.formationDocumentLabel} present={!!society.constitutionDocId} />
                     <DocTableRow label="Bylaws" present={!!society.bylawsDocId} />
                     <DocTableRow label={jurisdictionCopy.privacyPolicyLabel} present={!!society.privacyPolicyDocId} />
                     <DocTableRow label="Hyperpolicy" present={false} />

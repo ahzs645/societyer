@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "baseline_commit": "375ef99fc6d9112879158959edf451142f7e450e",
+    "baseline_commit": "cc52e24487f42c19f81b2d22385091006bc70b44",
     "review_date_vancouver": "2026-10-03",
     "scope": "Implementation accounting of all 73 supplied backlog items. Partial means acceptance remains incomplete; source-backed draft rules are not legal approval. Live providers/deployment not inspected.",
     "state_definitions": {
@@ -8,7 +8,8 @@
       "partial": "Concrete code changes exist; remaining acceptance or integration work is stated.",
       "external_review": "Requires current legal/vendor/administrator evidence that is not available; product route stays gated.",
       "deferred": "Explicitly deferred by the supplied implementation order."
-    }
+    },
+    "research_baseline_commit": "375ef99fc6d9112879158959edf451142f7e450e"
   },
   "items": [
     {
@@ -17,8 +18,8 @@
       "area": "Authentication / provider fit",
       "item": "Resolve Clerk's provider-level same-email linking before migration or strict enterprise rollout.",
       "state": "external_review",
-      "implemented": "Preserved Better Auth and disabled implicit linking using its pinned supported control.",
-      "remaining": "Clerk is not installed; no vendor-supported cross-provider linking proof or migration performed.",
+      "implemented": "Preserved current-main Clerk sign-in/profiles and tenant-restricted Better Auth Microsoft mode. Societyer uses issuer/subject bindings; Better Auth implicit linking is disabled.",
+      "remaining": "Clerk provider-level same-email linking still requires vendor-supported configuration proof before strict enterprise rollout; no live cross-provider migration performed.",
       "files": [
         "shared/authConfiguration.ts",
         "shared/functions/identity.ts",
@@ -63,7 +64,7 @@
       "area": "Identity / hosted deployment",
       "item": "Require exactly one hosted session broker and issuer-aware principal lookup.",
       "state": "partial",
-      "implemented": "Single-broker validation and immutable exact issuer/subject bindings, audience and signed-token checks.",
+      "implemented": "Preserved Clerk and Better Auth as alternative human session brokers, plus the internal machine signer; exact issuer/subject membership lookup, audience and signed-token checks.",
       "remaining": "Configured hosted deployment and all live endpoint proofs remain unverified.",
       "files": [
         "shared/authConfiguration.ts",
@@ -75,7 +76,10 @@
       "checks": [
         "test:hosted-identity",
         "test:auth-broker",
-        "test:identity-binding"
+        "test:identity-binding",
+        "test:clerk-auth",
+        "test:clerk-gateway",
+        "test:auth-token"
       ],
       "acceptance": "Hosted startup rejects missing/contradictory providers; all user requests map an allowlisted issuer plus exact subject to one immutable local user ID. Auth-disabled/local mode cannot reach hosted resources.",
       "research_area": "authentication"
@@ -108,20 +112,23 @@
       "priority": "P0",
       "area": "Microsoft tenant access",
       "item": "Specify and test enterprise SSO policy without inferring organization from email.",
-      "state": "external_review",
-      "implemented": "Enterprise/tenant/session requirements remain explicit gates; no email-domain inference.",
-      "remaining": "An approved enterprise connection and session-level tenant evidence are not available in this workspace.",
+      "state": "partial",
+      "implemented": "Preserved tenant-restricted Better Auth Microsoft sign-in with tenant, issuer, audience, signature, expiry and identity-scope checks. Enterprise/session restrictions remain explicit gates; no email-domain inference.",
+      "remaining": "Enterprise-required workspace/session gates, approved tenant configuration, guest/offboarding tests and live MFA/Conditional Access evidence remain unverified.",
       "files": [
         "shared/authConfiguration.ts",
         "shared/functions/identity.ts",
         "shared/functions/access.ts",
         "server/auth-config.ts",
-        "docs/hosted-identity-and-provider-gates.md"
+        "docs/hosted-identity-and-provider-gates.md",
+        "server/microsoft-sso.ts",
+        "docs/microsoft-sso-setup.md"
       ],
       "checks": [
         "test:hosted-identity",
         "test:auth-broker",
-        "test:identity-binding"
+        "test:identity-binding",
+        "test:microsoft-sso"
       ],
       "acceptance": "Approved member and approved guest can complete intended flows; personal/foreign-tenant/unassigned or locally uninvited identities gain no workspace rights. Existing non-SSO sessions cannot bypass an SSO-required workspace.",
       "research_area": "authentication"
@@ -477,7 +484,7 @@
       "area": "Baseline reconciliation",
       "item": "Pin the exact working tree that implements the supplied brief",
       "state": "implemented",
-      "implemented": "Confirmed clean starting workspace commit exactly matches research commit 375ef99fc6d9112879158959edf451142f7e450e.",
+      "implemented": "Research baseline 375ef99fc6d9112879158959edf451142f7e450e reconciled by three-way merge with current main cc52e24487f42c19f81b2d22385091006bc70b44, including hosted authentication, workspace access viewer and incorporation preparation.",
       "remaining": "Runtime has no configured provider credentials; no deployed production instance was inspected.",
       "files": [
         "shared/functions/actionPolicy.ts",
@@ -833,7 +840,7 @@
       "area": "Provider migration / dependencies",
       "item": "Audit exact Better Auth dependency graph and build an immutable mapping migration plan.",
       "state": "partial",
-      "implemented": "Audited Better Auth 1.6.23, immutable mappings, safe import stripping and operator backfill/migration runbook.",
+      "implemented": "Audited Better Auth 1.6.23, immutable bindings, safe import stripping, operator backfill and Clerk migration requiring reviewed identity mapping and account-linking policy evidence; preserves membership IDs/roles and audits references.",
       "remaining": "Authorized old/new identity exports and a live cutover/rollback rehearsal are still needed.",
       "files": [
         "shared/authConfiguration.ts",
@@ -845,7 +852,8 @@
       "checks": [
         "test:hosted-identity",
         "test:auth-broker",
-        "test:identity-binding"
+        "test:identity-binding",
+        "test:clerk-auth"
       ],
       "acceptance": "Every retained local user ID has a validated old-issuer/subject to new-issuer/subject mapping; missing/ambiguous mappings stop migration; old sessions are revoked at cutover; no email-only join; rollback preserves roles and audit history.",
       "research_area": "authentication"
@@ -939,7 +947,7 @@
         "test:research-legal-boundaries",
         "test:corporation-settings"
       ],
-      "acceptance": "CAD350/1000, name30, optional priority100 and futuredate100 separated; checkout receipt final; no guaranteed1–2-day promise.",
+      "acceptance": "CAD350/1000, name30, optional priority100 and futuredate100 separated; checkout receipt final; no guaranteed1\u20132-day promise.",
       "research_area": "bc_company"
     },
     {
@@ -1123,7 +1131,7 @@
         "test:post-incorporation-checklist-flow",
         "test:research-legal-boundaries"
       ],
-      "acceptance": "observed_at/source/effective dates separate; unresolved items shown; canonical current links; no1–2-day priority promise.",
+      "acceptance": "observed_at/source/effective dates separate; unresolved items shown; canonical current links; no1\u20132-day priority promise.",
       "research_area": "bc_society"
     },
     {

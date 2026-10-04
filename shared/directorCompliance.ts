@@ -14,7 +14,7 @@ export type DirectorComplianceProfile = {
 };
 
 export function directorComplianceProfile(organization?: LegalEntityLike | null): DirectorComplianceProfile {
-  const display = jurisdictionDisplayCopy(organization?.jurisdictionCode);
+  const display = jurisdictionDisplayCopy(organization);
   const rule = directorGovernanceRule(homeJurisdictionCode(organization), organizationKind(organization));
   return {
     subtitle: rule.subtitle,
