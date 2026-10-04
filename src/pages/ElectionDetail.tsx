@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
@@ -16,6 +18,9 @@ import { isAuthenticatedAuthMode } from "../lib/authMode";
 export function ElectionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const currentUser = useCurrentUser();
+  const { loaded, can } = usePermissions();
+  const canManage = loaded && can("elections:write");
+  const canPublishResults = canManage && can("elections:tally");
   const actingUserId = useCurrentUserId() ?? undefined;
   const electionBundle = useQuery(
     api.elections.get,
@@ -41,7 +46,7 @@ export function ElectionDetailPage() {
   );
   const users = useQuery(
     api.users.list,
-    electionBundle?.election
+    electionBundle?.election && loaded && can("users:read")
       ? { societyId: electionBundle.election.societyId }
       : "skip",
   );
@@ -52,12 +57,12 @@ export function ElectionDetailPage() {
       : "skip",
   );
   const castBallot = useMutation(api.elections.castBallot);
-  const closeElection = useMutation(api.elections.close);
-  const tallyElection = useMutation(api.elections.tallyElection);
+  const closeElection = usePermissionedMutation(api.elections.close, canManage);
+  const tallyElection = usePermissionedMutation(api.elections.tallyElection, canPublishResults);
   const submitNomination = useMutation(api.elections.submitNomination);
-  const reviewNomination = useMutation(api.elections.reviewNomination);
-  const publishNominationToBallot = useMutation(api.elections.publishNominationToBallot);
-  const updateSettings = useMutation(api.elections.updateSettings);
+  const reviewNomination = usePermissionedMutation(api.elections.reviewNomination, canManage);
+  const publishNominationToBallot = usePermissionedMutation(api.elections.publishNominationToBallot, canManage);
+  const updateSettings = usePermissionedMutation(api.elections.updateSettings, canManage);
   const toast = useToast();
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [nominationDraft, setNominationDraft] = useState({
@@ -107,10 +112,6 @@ export function ElectionDetailPage() {
     !!currentUser?.memberId &&
     myEligibility &&
     myEligibility.status !== "Voted";
-  const canManage =
-    currentUser?.role === "Owner" ||
-    currentUser?.role === "Admin" ||
-    currentUser?.role === "Director";
   const tallyRows = tally ?? [];
   const nominationRows = nominations ?? [];
   const scrutineers = (users ?? []).filter((user) =>
@@ -125,6 +126,7 @@ export function ElectionDetailPage() {
     );
 
   const saveBallot = async () => {
+    if (!canVote) return;
     await castBallot({
       electionId: election._id,
       choices: electionBundle.questions.map((question: any) => ({
@@ -136,6 +138,7 @@ export function ElectionDetailPage() {
   };
 
   const saveNomination = async () => {
+    if (!canNominate) return;
     await submitNomination({
       electionId: election._id,
       questionId: nominationDraft.questionId
@@ -155,7 +158,7 @@ export function ElectionDetailPage() {
   };
 
   const saveAdminSettings = async () => {
-    if (!adminDraft) return;
+    if (!canManage || !adminDraft) return;
     await updateSettings({
       electionId: election._id,
       nominationsOpenAtISO: adminDraft.nominationsOpenAtISO
@@ -199,7 +202,7 @@ export function ElectionDetailPage() {
                   <Lock size={12} /> Close election
                 </button>
               )}
-              {election.status === "Closed" && (
+              {canPublishResults && election.status === "Closed" && (
                 <button
                   className="btn-action btn-action--primary"
                   onClick={async () => {

@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
-import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -54,14 +56,15 @@ const REVEAL_POLICIES = [
  */
 export function SecretsPage() {
   const society = useSociety();
+  const { loaded, can, role } = usePermissions();
+  const canWrite = loaded && can("settings:write") && (role === "Owner" || role === "Admin");
   const actingUserId = useCurrentUserId() ?? undefined;
   const currentUser = useCurrentUser();
   const items = useQuery(api.secrets.list, society ? { societyId: society._id } : "skip");
-  const users = useQuery(api.users.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.secrets.create);
-  const update = useMutation(api.secrets.update);
-  const revealSecret = useMutation(api.secrets.revealSecret);
-  const remove = useMutation(api.secrets.remove);
+  const users = useQuery(api.users.list, society && loaded && can("users:read") ? { societyId: society._id } : "skip");
+  const create = usePermissionedMutation(api.secrets.create, canWrite);
+  const update = usePermissionedMutation(api.secrets.update, canWrite);
+  const remove = usePermissionedMutation(api.secrets.remove, canWrite);
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>(null);
@@ -71,6 +74,20 @@ export function SecretsPage() {
   const [error, setError] = useState("");
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  const selectedRecord = items?.find((item: any) => item._id === editingId);
+  const policy = selectedRecord?.revealPolicy ?? "owner_admin_custodian";
+  const canWriteSensitive = canWrite && (!editingId || policy !== "owner_only" || role === "Owner");
+  const canReveal = loaded && can("settings:write") && !!actingUserId && !!selectedRecord && (
+    role === "Owner" || (policy !== "owner_only" && (role === "Admin" ||
+      (policy === "owner_admin_custodian" && (selectedRecord.custodianUserId === actingUserId || selectedRecord.authorizedUserIds?.includes(actingUserId)))))
+  );
+  const revealSecret = usePermissionedMutation(api.secrets.revealSecret, canReveal);
+  useEffect(() => {
+    if (!canReveal) {
+      setRevealedSecret("");
+      setShowRevealedSecret(false);
+    }
+  }, [canReveal]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -95,6 +112,7 @@ export function SecretsPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite) return;
     setEditingId(null);
     setRevealedSecret("");
     setShowDraftSecret(false);
@@ -160,6 +178,7 @@ export function SecretsPage() {
   };
 
   const save = async () => {
+    if (!canWrite || !form) return;
     try {
       setError("");
       const payload = normalizeDraft(form);
@@ -175,10 +194,10 @@ export function SecretsPage() {
   };
 
   const revealStoredSecret = async () => {
-    if (!editingId || !actingUserId) return;
+    if (!canReveal || !editingId || !actingUserId) return;
     try {
       setError("");
-      const result = await revealSecret({ id: editingId as any });
+      const result = await revealSecret({ id: editingId as any, actingUserId });
       setRevealedSecret(result.value);
       setShowRevealedSecret(true);
     } catch (err: any) {
@@ -187,6 +206,7 @@ export function SecretsPage() {
   };
 
   const selectCustodian = (id: string) => {
+    if (!canWriteSensitive) return;
     const person = people.find((option) => option.id === id);
     setForm({
       ...form,
@@ -210,7 +230,7 @@ export function SecretsPage() {
           <div className="row" style={{ gap: 8 }}>
             <Link className="btn-action" to="/app/users"><UsersRound size={12} /> People</Link>
             <Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>
-            <button className="btn-action btn-action--primary" onClick={openNew}><Plus size={12} /> New access record</button>
+            <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}><Plus size={12} /> New access record</button>
           </div>
         }
       />
@@ -239,7 +259,8 @@ export function SecretsPage() {
           hydratedView={tableData.hydratedView}
           records={rows}
           onRecordClick={(_, record) => openEdit(record)}
-          onUpdate={async ({ recordId, fieldName, value }) => {
+          onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
+            if (!canWrite) return;
             // Only allow inline edits for columns exposed in the
             // default view. `lastVerifiedAtISO` is read-only (updates
             // whenever the detail drawer marks a review complete).
@@ -257,7 +278,7 @@ export function SecretsPage() {
               id: recordId as Id<"secretVaultItems">,
               patch: { [fieldName]: value } as any,
             });
-          }}
+          } : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -277,6 +298,7 @@ export function SecretsPage() {
               <>
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
+                  disabled={!canWrite}
                   aria-label={`Edit access custody record ${r.name}`}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -287,10 +309,11 @@ export function SecretsPage() {
                 </button>
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
+                  disabled={!canWrite}
                   aria-label={`Delete access custody record ${r.name}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    remove({ id: r._id });
+                    if (canWrite) void remove({ id: r._id });
                   }}
                 >
                   <Trash2 size={12} />
@@ -310,8 +333,8 @@ export function SecretsPage() {
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
-        title={editingId ? "Edit access record" : "New access record"}
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}
+        title={editingId ? (canWrite ? "Edit access record" : "Access record") : "New access record"}
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={save}>Save</button></>}
       >
         {form && (
           <div>
@@ -321,18 +344,18 @@ export function SecretsPage() {
               <div>Stored values stay hidden until an authorized user explicitly reveals them.</div>
             </div>
 
-            <Field label="Record name"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-            <Field label="Service"><input className="input" value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} /></Field>
+            <Field label="Record name"><input disabled={!canWrite} className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+            <Field label="Service"><input disabled={!canWrite} className="input" value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Credential type">
-                <Select
+                <Select disabled={!canWrite}
                   value={form.credentialType}
                   onChange={(value) => setForm({ ...form, credentialType: value })}
                   options={CREDENTIAL_TYPES.map((type) => ({ value: type, label: typeLabel(type) }))}
                 />
               </Field>
               <Field label="Status">
-                <Select
+                <Select disabled={!canWrite}
                   value={form.status}
                   onChange={(value) => setForm({ ...form, status: value })}
                   options={STATUSES.map((status) => ({ value: statusLabel(status), label: statusLabel(status) }))}
@@ -347,7 +370,7 @@ export function SecretsPage() {
               </div>
               <div className="card__body">
                 <Field label="Linked user">
-                  <Select
+                  <Select disabled={!canWriteSensitive}
                     value={form.custodianUserId ?? ""}
                     onChange={(value) => selectCustodian(value)}
                     options={[
@@ -356,23 +379,23 @@ export function SecretsPage() {
                     ]}
                   />
                 </Field>
-                <Field label="Primary custodian"><input className="input" value={form.custodianPersonName ?? ""} onChange={(e) => setForm({ ...form, custodianUserId: "", custodianPersonName: e.target.value })} /></Field>
-                <Field label="Custodian email"><input className="input" type="email" value={form.custodianEmail ?? ""} onChange={(e) => setForm({ ...form, custodianEmail: e.target.value })} /></Field>
-                <Field label="Role"><input className="input" value={form.ownerRole ?? ""} onChange={(e) => setForm({ ...form, ownerRole: e.target.value })} /></Field>
-                <Field label="Backup custodian"><input className="input" value={form.backupCustodianName ?? ""} onChange={(e) => setForm({ ...form, backupCustodianName: e.target.value })} /></Field>
-                <Field label="Backup email"><input className="input" type="email" value={form.backupCustodianEmail ?? ""} onChange={(e) => setForm({ ...form, backupCustodianEmail: e.target.value })} /></Field>
+                <Field label="Primary custodian"><input disabled={!canWriteSensitive} className="input" value={form.custodianPersonName ?? ""} onChange={(e) => setForm({ ...form, custodianUserId: "", custodianPersonName: e.target.value })} /></Field>
+                <Field label="Custodian email"><input disabled={!canWrite} className="input" type="email" value={form.custodianEmail ?? ""} onChange={(e) => setForm({ ...form, custodianEmail: e.target.value })} /></Field>
+                <Field label="Role"><input disabled={!canWrite} className="input" value={form.ownerRole ?? ""} onChange={(e) => setForm({ ...form, ownerRole: e.target.value })} /></Field>
+                <Field label="Backup custodian"><input disabled={!canWrite} className="input" value={form.backupCustodianName ?? ""} onChange={(e) => setForm({ ...form, backupCustodianName: e.target.value })} /></Field>
+                <Field label="Backup email"><input disabled={!canWrite} className="input" type="email" value={form.backupCustodianEmail ?? ""} onChange={(e) => setForm({ ...form, backupCustodianEmail: e.target.value })} /></Field>
               </div>
             </div>
 
             <div className="row" style={{ gap: 12 }}>
               <Field label="Storage">
-                <Select
+                <Select disabled={!canWrite}
                   value={form.storageMode}
                   onChange={(value) => setForm({ ...form, storageMode: value })}
                   options={STORAGE_MODES.map((mode) => ({ value: mode, label: storageLabel(mode) }))}
                 />
               </Field>
-              <Field label="Vault record / location"><input className="input" value={form.externalLocation ?? ""} onChange={(e) => setForm({ ...form, externalLocation: e.target.value })} /></Field>
+              <Field label="Vault record / location"><input disabled={!canWrite} className="input" value={form.externalLocation ?? ""} onChange={(e) => setForm({ ...form, externalLocation: e.target.value })} /></Field>
             </div>
             <div className="card" style={{ margin: "12px 0" }}>
               <div className="card__head">
@@ -382,7 +405,7 @@ export function SecretsPage() {
               </div>
               <div className="card__body">
                 <Field id="secret-value" label={editingId ? "Replace value" : "Value"} hint="Hidden by default">
-                  <input
+                  <input disabled={!canWriteSensitive}
                     className="input"
                     type={showDraftSecret ? "text" : "password"}
                     autoComplete="new-password"
@@ -390,17 +413,17 @@ export function SecretsPage() {
                     onChange={(e) => setForm({ ...form, secretValue: e.target.value, storageMode: e.target.value ? "stored_encrypted" : form.storageMode })}
                   />
                 </Field>
-                <button className="btn btn--ghost btn--sm" type="button" onClick={() => setShowDraftSecret((value) => !value)}>
+                <button className="btn btn--ghost btn--sm" type="button" disabled={!canWriteSensitive} onClick={() => setShowDraftSecret((value) => !value)}>
                   {showDraftSecret ? <EyeOff size={12} /> : <Eye size={12} />} {showDraftSecret ? "Hide typed value" : "Show typed value"}
                 </button>
                 {editingId && form.hasSecretValue && !revealedSecret && (
                   <Field id="revealed-secret-value" label="Reveal stored value" hint={form.secretLastRevealedAtISO ? `Last revealed ${formatDate(form.secretLastRevealedAtISO)}` : undefined}>
-                    <button className="btn btn--ghost btn--sm" type="button" onClick={revealStoredSecret} disabled={!actingUserId}>
+                    <button className="btn btn--ghost btn--sm" type="button" onClick={revealStoredSecret} disabled={!canReveal}>
                       <Eye size={12} /> Reveal
                     </button>
                   </Field>
                 )}
-                {editingId && form.hasSecretValue && revealedSecret && (
+                {editingId && form.hasSecretValue && canReveal && revealedSecret && (
                   <>
                     <Field id="revealed-secret-value" label="Reveal stored value" hint={form.secretLastRevealedAtISO ? `Last revealed ${formatDate(form.secretLastRevealedAtISO)}` : undefined}>
                       <input className="input mono" readOnly type={showRevealedSecret ? "text" : "password"} value={revealedSecret} />
@@ -416,7 +439,7 @@ export function SecretsPage() {
                   </>
                 )}
                 <Field label="Reveal access">
-                  <Select
+                  <Select disabled={!canWriteSensitive}
                     value={form.revealPolicy ?? "owner_admin_custodian"}
                     onChange={(value) => setForm({ ...form, revealPolicy: value })}
                     options={REVEAL_POLICIES.map((policy) => ({ value: policy.value, label: policy.label }))}
@@ -427,13 +450,13 @@ export function SecretsPage() {
                 </div>
               </div>
             </div>
-            <Field label="Account username"><input className="input" value={form.username ?? ""} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
-            <Field label="Access URL"><input className="input" value={form.accessUrl ?? ""} onChange={(e) => setForm({ ...form, accessUrl: e.target.value })} /></Field>
+            <Field label="Account username"><input disabled={!canWrite} className="input" value={form.username ?? ""} onChange={(e) => setForm({ ...form, username: e.target.value })} /></Field>
+            <Field label="Access URL"><input disabled={!canWrite} className="input" value={form.accessUrl ?? ""} onChange={(e) => setForm({ ...form, accessUrl: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
-              <Field label="Last reviewed"><DatePicker value={form.lastVerifiedAtISO ?? ""} onChange={(value) => setForm({ ...form, lastVerifiedAtISO: value })} /></Field>
-              <Field label="Next review"><DatePicker value={form.rotationDueAtISO ?? ""} onChange={(value) => setForm({ ...form, rotationDueAtISO: value })} /></Field>
+              <Field label="Last reviewed"><DatePicker disabled={!canWrite} value={form.lastVerifiedAtISO ?? ""} onChange={(value) => setForm({ ...form, lastVerifiedAtISO: value })} /></Field>
+              <Field label="Next review"><DatePicker disabled={!canWrite} value={form.rotationDueAtISO ?? ""} onChange={(value) => setForm({ ...form, rotationDueAtISO: value })} /></Field>
             </div>
-            <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
+            <Field label="Notes"><MarkdownEditor readOnly={!canWrite} rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
           </div>
         )}
       </Drawer>

@@ -193,7 +193,7 @@ async function main() {
     const nowISO = new Date().toISOString();
     let upserted = 0;
     for (const person of bundle.directoryPeople) {
-      await client.mutation(anyApi.peopleDirectory.upsert, { ...person, nowISO });
+      await client.mutation(anyApi.peopleDirectory.upsert, { ...person, societyId: args.society, nowISO });
       upserted += 1;
     }
     console.log(`Upserted ${upserted} People Directory record(s).`);

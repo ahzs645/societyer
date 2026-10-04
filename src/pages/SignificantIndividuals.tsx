@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
@@ -15,6 +17,8 @@ import { DatePicker } from "../components/DatePicker";
  */
 export function SignificantIndividualsPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("deadlines:write");
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
@@ -51,13 +55,14 @@ export function SignificantIndividualsPage() {
     society ? { societyId: society._id, asOf } : "skip",
   ) as Array<{ _id: string }> | undefined;
 
-  const createStep = useMutation(api.significantIndividualSteps.create);
-  const removeStep = useMutation(api.significantIndividualSteps.remove);
+  const createStep = usePermissionedMutation(api.significantIndividualSteps.create, canWrite);
+  const removeStep = usePermissionedMutation(api.significantIndividualSteps.remove, canWrite);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite) return;
     setForm({
       individualName: "",
       stepDate: new Date().toISOString().slice(0, 10),
@@ -68,6 +73,7 @@ export function SignificantIndividualsPage() {
   };
 
   const save = async () => {
+    if (!canWrite || !form) return;
     await createStep({
       societyId: society._id,
       individualName: form.individualName,
@@ -89,7 +95,7 @@ export function SignificantIndividualsPage() {
         iconColor="green"
         subtitle="Transparency Register of significant individuals (controllers) shown as of a chosen date, with the reasonable-diligence steps taken to identify them. This register is required for BC private corporations under the Business Corporations Act — not for societies."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> Record step
           </button>
         }
@@ -166,7 +172,8 @@ export function SignificantIndividualsPage() {
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Remove step for ${s.individualName}`}
-                  onClick={() => removeStep({ id: s._id })}
+                  disabled={!canWrite}
+                  onClick={() => { if (canWrite) void removeStep({ id: s._id }); }}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -183,7 +190,7 @@ export function SignificantIndividualsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Save</button>
+            <button className="btn btn--accent" disabled={!canWrite} onClick={save}>Save</button>
           </>
         }
       >
@@ -191,6 +198,7 @@ export function SignificantIndividualsPage() {
           <div>
             <Field label="Individual name">
               <input
+                disabled={!canWrite}
                 className="input"
                 value={form.individualName}
                 onChange={(e) => setForm({ ...form, individualName: e.target.value })}
@@ -198,12 +206,14 @@ export function SignificantIndividualsPage() {
             </Field>
             <Field label="Step date">
               <DatePicker
+                disabled={!canWrite}
                 value={form.stepDate}
                 onChange={(value) => setForm({ ...form, stepDate: value })}
               />
             </Field>
             <Field label="Steps narrative">
               <textarea
+                disabled={!canWrite}
                 className="input"
                 value={form.stepsNarrative}
                 onChange={(e) => setForm({ ...form, stepsNarrative: e.target.value })}
@@ -211,6 +221,7 @@ export function SignificantIndividualsPage() {
             </Field>
             <Field label="Next review date">
               <DatePicker
+                disabled={!canWrite}
                 value={form.nextReviewDate}
                 onChange={(value) => setForm({ ...form, nextReviewDate: value })}
               />

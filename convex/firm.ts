@@ -29,9 +29,9 @@ export const overview = authorizedQuery("firm:overview", query)({
 });
 
 /**
- * Cross-entity full-text search over deadlines, documents, and people. Fans out
- * the per-table search indexes globally (no society filter) so one query spans
- * every entity, then resolves each hit's entity name. Powers the command
+ * Cross-entity full-text search over deadlines, documents, and people. Searches
+ * only the caller's authorized workspaces, applying each resource permission
+ * and document ACL before returning a hit. Powers the command
  * palette's "Across entities" group.
  */
 export const search = authorizedQuery("firm:search", query)({

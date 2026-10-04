@@ -1,0 +1,39 @@
+{
+  "timestamp": "2026-10-04T21:22:11.440Z",
+  "passed": 7,
+  "runtime": "convex-test native transaction oracle using production validators and authorized handlers",
+  "results": [
+    {
+      "name": "Pilot registrations preserve every production argument/return validator and public mutation flag",
+      "passed": true
+    },
+    {
+      "name": "Role promotion and demotion atomically change projected write capability without rebuild calls",
+      "passed": true
+    },
+    {
+      "name": "Unauthorized role changes, forged actors, cross-workspace targets and last-Owner changes remain denied",
+      "passed": true
+    },
+    {
+      "name": "Upsert suspension and reactivation atomically remove and restore projections",
+      "passed": true
+    },
+    {
+      "name": "Any required read-module denial clears only the affected actor while Owner commands still commit",
+      "passed": true
+    },
+    {
+      "name": "Unexpected projection failures roll back the membership change and its activity atomically",
+      "passed": true
+    },
+    {
+      "name": "Security disable and remove clear projections without an explicit rebuild",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Native oracle injects identity; live protocol tests separately verify JWT authentication and replicated effects",
+    "Only the pilot exported user mutation paths have automatic invalidation; other ACL/identity/expiry paths remain release prerequisites"
+  ]
+}

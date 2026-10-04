@@ -4,7 +4,7 @@ self.addEventListener('install', event => event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
-  if (event.request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/__fixture/')) return;
+  if (event.request.method !== 'GET' || url.origin !== self.location.origin || /^\/__(fixture|live)\//.test(url.pathname)) return;
   event.respondWith((async () => {
     const cache = await caches.open(cacheName);
     try {

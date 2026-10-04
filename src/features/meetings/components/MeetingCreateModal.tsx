@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useMutation } from "convex/react";
+import { usePermissions } from "@/hooks/usePermissions";
+import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -21,7 +22,13 @@ import {
  * presented as a centered dialog so the command-palette / quick action can pop
  * it from anywhere. Navigates to the new meeting on success.
  */
-export function MeetingCreateModal({
+export function MeetingCreateModal(props: Parameters<typeof MeetingCreateModalForm>[0]) {
+  const { can } = usePermissions();
+  if (!props.open || !can("meetings:write")) return null;
+  return <MeetingCreateModalForm {...props} />;
+}
+
+function MeetingCreateModalForm({
   open,
   onClose,
   societyId,
@@ -32,7 +39,9 @@ export function MeetingCreateModal({
   societyId: Id<"societies">;
   onCreated?: (meetingId: Id<"meetings">) => void;
 }) {
-  const create = useMutation(api.meetings.create);
+  const { can } = usePermissions();
+  const canCreate = can("meetings:write");
+  const create = usePermissionedMutation(api.meetings.create, canCreate);
   const toast = useToast();
   const navigate = useNavigate();
   // Seed the draft synchronously (non-null) so the resizable dialog measures the
@@ -55,6 +64,7 @@ export function MeetingCreateModal({
   }, [open, data.defaultTemplate?._id, data.noticeMinDays, data.rules?.allowElectronicMeetings]);
 
   const save = async () => {
+    if (!open || !canCreate) return;
     const title = normalizedMeetingTitle(form.title);
     if (!title) {
       toast.error("Enter a meeting title.");
@@ -111,7 +121,7 @@ export function MeetingCreateModal({
           <button className="btn" type="button" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button className="btn btn--accent" type="button" onClick={save} disabled={saving || hasUnacknowledgedConflict}>
+          <button className="btn btn--accent" type="button" onClick={save} disabled={!canCreate || saving || hasUnacknowledgedConflict}>
             {saving ? "Scheduling…" : "Schedule"}
           </button>
         </>

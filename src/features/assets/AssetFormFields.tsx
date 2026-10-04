@@ -13,6 +13,7 @@
  */
 import { useState } from "react";
 import { FileText, Link2, Plus, X } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -132,13 +133,14 @@ export type AssetFormData = {
  * to derive the next sequential tag). Accepts a nullable societyId so callers
  * can call this above an early-return for still-loading workspaces. */
 export function useAssetFormData(societyId: Id<"societies"> | null | undefined): AssetFormData {
-  const args = societyId ? { societyId } : "skip";
-  const documents = useQuery(api.documents.list, args);
+  const { can } = usePermissions();
+  const args = (permission: string) => societyId && can(permission) ? { societyId } : "skip";
+  const documents = useQuery(api.documents.list, args("documents:read"));
   const transactions = useQuery(
     api.financialHub.transactions,
-    societyId ? { societyId, limit: 200 } : "skip",
+    societyId && can("financials:read") ? { societyId, limit: 200 } : "skip",
   );
-  const assets = useQuery(api.assets.list, args);
+  const assets = useQuery(api.assets.list, args("financials:read"));
   return { documents, transactions, assets };
 }
 
@@ -240,6 +242,7 @@ export function AssetFormFields({
       </Field>
       <div style={{ gridColumn: "1 / -1" }}>
         <ImageUploadField
+          purpose="asset"
           label="Photo"
           hint="Optional. Upload a picture of the asset, or paste an image URL."
           value={value.image}

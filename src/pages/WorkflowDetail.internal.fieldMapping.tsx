@@ -1,3 +1,4 @@
+import { usePermissions } from "../hooks/usePermissions";
 // WorkflowDetail: PDF field-mapping types, sources, heuristics, and mapping editors.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -559,14 +560,15 @@ export function PersonRefPicker({
   onChange: (patch: Partial<FieldMapping>) => void;
 }) {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
   const societyArg = society ? { societyId: society._id } : "skip";
-  const members = useQuery(api.members.list, category === "members" ? societyArg : "skip");
-  const directors = useQuery(api.directors.list, category === "directors" ? societyArg : "skip");
-  const volunteers = useQuery(api.volunteers.list, category === "volunteers" ? societyArg : "skip");
-  const employees = useQuery(api.employees.list, category === "employees" ? societyArg : "skip");
+  const members = useQuery(api.members.list, loaded && can("members:read") && category === "members" ? societyArg : "skip");
+  const directors = useQuery(api.directors.list, loaded && can("directors:read") && category === "directors" ? societyArg : "skip");
+  const volunteers = useQuery(api.volunteers.list, loaded && can("volunteers:read") && category === "volunteers" ? societyArg : "skip");
+  const employees = useQuery(api.employees.list, loaded && can("employees:read") && category === "employees" ? societyArg : "skip");
   const definitions = useQuery(
     api.customFields.listDefinitions,
-    society && category ? { societyId: society._id, entityType: category } : "skip",
+    society && category && loaded && can("settings:read") ? { societyId: society._id, entityType: category } : "skip",
   );
 
   const peopleRaw: any[] =

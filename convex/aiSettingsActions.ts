@@ -19,6 +19,7 @@ const RECOMMENDED_OPENROUTER_MODELS = [
 
 export const validateProviderKey = authorizedAction("aiSettingsActions:validateProviderKey", action)({
   args: {
+    societyId: v.id("societies"),
     provider: v.string(),
     apiKey: v.string(),
     baseUrl: v.optional(v.string()),

@@ -1,3 +1,4 @@
+import { configureLiveSession } from "./server/liveSession";
 import { defineConfig, type ViteDevServer } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 import type { GenericId } from "convex/values";
@@ -13,10 +14,10 @@ export default defineConfig({
   worker: { format: "es" },
   server: { headers: { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "require-corp" } },
   preview: { headers: { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "require-corp" } },
-  plugins: [VitePWA({
+  plugins: [{ name: "local-live-pilot-session", configureServer: configureLiveSession, configurePreviewServer: configureLiveSession }, VitePWA({
     registerType: "prompt", injectRegister: false,
     manifest: { name: "Societyer meeting pilot", short_name: "Meeting pilot", start_url: "/meeting.html", display: "standalone", theme_color: "#16324f", background_color: "#ffffff", icons: [{ src: "/pilot-icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }] },
-    workbox: { clientsClaim: true, globPatterns: ["**/*.{js,css,html,wasm,svg}"], maximumFileSizeToCacheInBytes: 10_000_000, navigateFallbackDenylist: [/^\/__fixture\//] },
+    workbox: { clientsClaim: true, ignoreURLParametersMatching: [/^(live|run)$/, /^utm_/], globPatterns: ["**/*.{js,css,html,wasm,svg}"], maximumFileSizeToCacheInBytes: 10_000_000, navigateFallbackDenylist: [/^\/__(fixture|live)\//] },
   }), {
     name: "offline-evaluation-fixture",
     configureServer: configureFixture,

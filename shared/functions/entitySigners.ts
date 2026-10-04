@@ -13,6 +13,7 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
 import { activeAsOf, type IntervalRow } from "../registerHistory";
+import { directoryPersonForSociety } from "./peopleDirectory";
 import {
   personReferenceConstraint,
   validatePersonReference,
@@ -44,7 +45,7 @@ async function enforcePersonReference(
 
   let exists = false;
   if (candidate) {
-    const person = await ctx.db.get(String(directoryPersonId), "peopleDirectory");
+    const person = await directoryPersonForSociety(ctx, String(directoryPersonId), String(societyId));
     if (person && typeof person.societyId === "string") {
       await getOwned(ctx, "peopleDirectory", String(directoryPersonId), String(societyId));
     }

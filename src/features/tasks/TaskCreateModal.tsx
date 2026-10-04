@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useMutation } from "convex/react";
+import { usePermissions } from "@/hooks/usePermissions";
+import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Modal } from "../../components/Modal";
@@ -29,7 +30,13 @@ export type TaskCreateInitialValues = {
   eventId?: string;
 };
 
-export function TaskCreateModal({
+export function TaskCreateModal(props: Parameters<typeof TaskCreateModalForm>[0]) {
+  const { can } = usePermissions();
+  if (!props.open || !can("tasks:write")) return null;
+  return <TaskCreateModalForm {...props} />;
+}
+
+function TaskCreateModalForm({
   open,
   onClose,
   societyId,
@@ -42,11 +49,12 @@ export function TaskCreateModal({
   initialValues?: TaskCreateInitialValues;
   onCreated?: (taskId: Id<"tasks">) => void;
 }) {
-  const create = useMutation(api.tasks.create);
+  const { can } = usePermissions();
+  const canCreate = can("tasks:write");
+  const create = usePermissionedMutation(api.tasks.create, canCreate);
   const toast = useToast();
 
-  // Always load dropdown sources — small lists, and avoids "no options"
-  // flicker the first time the modal opens.
+  // Dropdown subscriptions exist only while an authorized dialog is open.
   const data = useTaskFormData(societyId);
 
   const [form, setForm] = useState<TaskFormValue>(() => makeTaskFormDefaults(initialValues));
@@ -64,6 +72,7 @@ export function TaskCreateModal({
   }, [open]);
 
   const save = async () => {
+    if (!open || !canCreate) return;
     const title = form.title.trim();
     if (!title) {
       toast.error("Title is required");
@@ -113,7 +122,7 @@ export function TaskCreateModal({
           <button className="btn" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button className="btn btn--accent" onClick={save} disabled={saving}>
+          <button className="btn btn--accent" onClick={save} disabled={!canCreate || saving}>
             {saving ? "Creating…" : "Create"}
           </button>
         </>

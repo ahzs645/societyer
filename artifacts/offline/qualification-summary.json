@@ -1,0 +1,136 @@
+{
+  "completedAt": "2026-10-04T23:18:18.448549+00:00",
+  "branch": "work",
+  "startingCommit": "bac427b9bdd85402471641ba80128e7383702973",
+  "reconciledMain": "4b15fd20f3b82baa6b18cb95be7b2c62404884b3",
+  "requiredAuthenticationCommit": "cc52e24487f42c19f81b2d22385091006bc70b44",
+  "baselineResult": "Main and required authentication commit are ancestors of the starting working commit; no divergence or merge conflict.",
+  "sourceFingerprint": {
+    "sha256": "9a1a22724bdb2d9114df18cbded557fa4095ff474144eb1d4759b4ad9a2c6cc5",
+    "files": 1394,
+    "method": "Sorted tracked/unignored source and configuration paths, excluding docs/artifacts; hash path NUL bytes NUL. Private ignored environments, credentials, traces and generated runtime wrappers are excluded."
+  },
+  "fullAppBrowser": {
+    "planned": 420,
+    "executed": 420,
+    "passed": 420,
+    "unresolved": 0,
+    "byViewport": {
+      "desktop": {
+        "passed": 105,
+        "failed": 0
+      },
+      "narrow-phone": {
+        "passed": 105,
+        "failed": 0
+      },
+      "phone": {
+        "passed": 105,
+        "failed": 0
+      },
+      "tablet": {
+        "passed": 105,
+        "failed": 0
+      }
+    },
+    "coverage": {
+      "plannedRoutePatterns": 136,
+      "plannedRouteRenderChecksAtFourWidths": 544,
+      "completedRouteRenderChecks": 544,
+      "completedMemberPermittedRouteChecks": 268,
+      "completedHostedMemberRestrictedEntryChecks": 228,
+      "completedMemberDemoFallbackChecks": 4,
+      "authorizedWorkspaceReload": {
+        "completedRoleReloadChecks": 8,
+        "roles": [
+          "Owner",
+          "Viewer"
+        ],
+        "behavior": "Actual workspace picker selects an authorized non-first workspace; a hard reload retains it only after real authentication and membership validation."
+      },
+      "minuteBookDocumentACL": {
+        "priorCoverage": "The initial 416-case suite did not qualify a private core document inside a fresh bounded binder preview. Follow-up review identified a false completeness/missing-core-document diagnosis when ACLs hide supporting evidence.",
+        "configuredCases": 4,
+        "roles": [
+          "Owner",
+          "Viewer"
+        ],
+        "behavior": "A private core document remains visible to Owner. Viewer receives generic access-limited coverage and an unknown core-completeness check, without private titles or a false missing-core-document diagnosis.",
+        "setup": "Fresh disposable synthetic workspace; production document creation uses a real Owner session, then temporary memberships and fixture rows are removed."
+      },
+      "privatePortal": {
+        "priorCoverage": "Invalid-token unavailable state only.",
+        "configuredPositiveCases": 4,
+        "setup": "Actual workspace/director/portal APIs create a separate synthetic workspace; board-only scope, no downloads and no email operations.",
+        "credentialHandling": "The portal token is retained only in the ignored private fixture and private browser evidence."
+      },
+      "widths": [
+        320,
+        390,
+        768,
+        1440
+      ],
+      "roles": [
+        "Owner",
+        "Admin",
+        "Director",
+        "Member",
+        "Viewer"
+      ],
+      "exclusions": [
+        {
+          "route": "/app/table-field-lab",
+          "reason": "Static-demo-only developer lab; hosted safely redirects to landing. Local suite qualifies the actual lab."
+        }
+      ],
+      "states": [
+        "Native seeded records",
+        "Positive separate public intake forms",
+        "Positive scoped private portal in a separate synthetic workspace",
+        "Missing-record and invalid-token states",
+        "Configured read-only and restricted routes",
+        "Native storage bytes and persistent bound images"
+      ]
+    },
+    "evidence": "live-interface-results.json"
+  },
+  "powerSync": {
+    "liveBrowserCasesPassed": 36,
+    "protocolGroupsPassed": 11,
+    "nativeServerGroupsPassed": 16,
+    "scope": "Meeting preparation pilot with actual SDK SQLite/outbox, native commands/files and experimental Convex connector."
+  },
+  "liveSecurityAndUploads": {
+    "roleGroupsPassed": 84,
+    "roleAPIAttempts": 722,
+    "nativeUploadGroupsPassed": 8,
+    "vaultGroupsPassed": 9,
+    "publicIntakeGroupsPassed": 6,
+    "eligibleMemberElectionGroupsPassed": 6,
+    "dashboardGroupsPassed": 3,
+    "structuredRegisterGroupsPassed": 4,
+    "evidenceRegisterProjectionGroupsPassed": 6,
+    "documentCoverageGroupsPassed": 2
+  },
+  "finalCommands": {
+    "npm run verify:reconciled": {
+      "exitCode": 0,
+      "scope": "Authentication, Clerk gateway, Microsoft tenant restrictions, identity/workspace/module/role/Owner protection, uploads, public intake, participant authority, protected projections, server typecheck and combined build"
+    },
+    "npm run test:interface-checks": {
+      "exitCode": 0
+    },
+    "focused lint": {
+      "exitCode": 0,
+      "notes": "No errors; existing structural/hook warnings. Repository lint configuration excludes some test/config files; their executed browser checks and applicable typechecks are separate."
+    }
+  },
+  "limitations": [
+    "PowerSync is the qualified meeting pilot; production credential delivery and remaining ACL/identity/expiry invalidation hooks are pending. Other modules have not been converted to offline replicas.",
+    "Actual full-app login uses isolated Better Auth email sessions/native Convex storage; external Clerk/Microsoft login and external RustFS/R2/provider connections require their own live qualification.",
+    "Chromium viewport/touch emulation, not physical devices, Safari or a packaged Electron release.",
+    "All planned cases passed through documented full/focused manual reruns; this is not one uninterrupted green run. Initial failures and excluded interrupted/unstarted cases remain recorded.",
+    "Large build chunks remain a performance follow-up; no load or Lighthouse benchmark is claimed."
+  ],
+  "publication": "Working-branch commit only; no main push, public deployment or production tenant changes."
+}

@@ -1,0 +1,16 @@
+{
+  "recordedAt": "2026-10-04T21:47:07.563440+00:00",
+  "endpoint": "http://127.0.0.1:43230",
+  "auth": "Actual Better Auth email session and Convex-verified JWT",
+  "initialDirectChecks": {
+    "passed": 7,
+    "failed": 0
+  },
+  "finding": {
+    "adminPolicyChangeBlocked": false,
+    "adminRevealedOwnerOnlyByChangingPolicy": true,
+    "description": "Before the owner-only policy fix, Admin could change owner_only to owner_admin and reveal an Owner-created synthetic value."
+  },
+  "probeCleanup": "The unique synthetic probe row was removed immediately. No browser fixtures were changed.",
+  "dataBoundary": "No credential, encryption key, ciphertext or synthetic secret value recorded."
+}

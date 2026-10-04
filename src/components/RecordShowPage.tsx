@@ -1,9 +1,11 @@
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { ArrowDown, ArrowUp, Eye, EyeOff, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { api } from "../lib/convexApi";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { PageHeader as TitleHeader } from "../pages/_helpers";
 import {
   clearRecordLayout,
@@ -82,8 +84,13 @@ export function RecordShowPage({
   const [customizing, setCustomizing] = useState(false);
   const layoutEnabled = layout !== false;
   const layoutOptions = typeof layout === "object" && layout ? layout : {};
-  const layoutControlsEnabled = layoutEnabled && layoutOptions.enableControls !== false;
+  const layoutControlsAvailable = layoutEnabled && layoutOptions.enableControls !== false;
   const actingUserId = useCurrentUserId() ?? undefined;
+  const { loaded: permissionsLoaded, can } = usePermissions();
+  const sharedLayoutRequested = layoutEnabled && Boolean(layoutOptions.societyId);
+  const canReadSharedLayout = permissionsLoaded && can("settings:read");
+  const canWriteSharedLayout = canReadSharedLayout && can("settings:write");
+  const layoutControlsEnabled = layoutControlsAvailable && (!sharedLayoutRequested || canWriteSharedLayout);
   const sharedLayoutScopeKey =
     layoutEnabled && layoutOptions.societyId && actingUserId
       ? makeRecordLayoutStorageKey({
@@ -94,15 +101,15 @@ export function RecordShowPage({
       : null;
   const sharedLayout = useQuery(
     api.recordLayouts.get,
-    sharedLayoutScopeKey && layoutOptions.societyId && actingUserId
+    canReadSharedLayout && sharedLayoutScopeKey && layoutOptions.societyId && actingUserId
       ? {
           societyId: layoutOptions.societyId as any,
           scopeKey: sharedLayoutScopeKey,
         }
       : "skip",
   );
-  const upsertSharedLayout = useMutation(api.recordLayouts.upsert);
-  const removeSharedLayout = useMutation(api.recordLayouts.remove);
+  const upsertSharedLayout = usePermissionedMutation(api.recordLayouts.upsert, canWriteSharedLayout);
+  const removeSharedLayout = usePermissionedMutation(api.recordLayouts.remove, canWriteSharedLayout);
   const storageKey = useMemo(
     () =>
       makeRecordLayoutStorageKey({
@@ -113,17 +120,19 @@ export function RecordShowPage({
     [layoutOptions.objectId, layoutOptions.pageId, layoutOptions.storageKey, location.pathname],
   );
   const [recordLayout, setRecordLayout] = useState<RecordLayoutState | null>(() =>
-    layoutEnabled && !sharedLayoutScopeKey ? loadRecordLayout(storageKey) : null,
+    layoutEnabled && !sharedLayoutRequested ? loadRecordLayout(storageKey) : null,
   );
 
   useEffect(() => {
-    setRecordLayout(layoutEnabled && !sharedLayoutScopeKey ? loadRecordLayout(storageKey) : null);
-  }, [layoutEnabled, sharedLayoutScopeKey, storageKey]);
+    setRecordLayout(layoutEnabled && !sharedLayoutRequested ? loadRecordLayout(storageKey) : null);
+  }, [layoutEnabled, sharedLayoutRequested, sharedLayoutScopeKey, storageKey]);
 
   useEffect(() => {
-    if (!layoutEnabled || !sharedLayoutScopeKey || sharedLayout === undefined) return;
+    if (!layoutEnabled || !sharedLayoutScopeKey) return;
+    if (!canReadSharedLayout) { setRecordLayout(null); return; }
+    if (sharedLayout === undefined) return;
     setRecordLayout(normalizeRecordLayout((sharedLayout as any)?.layout));
-  }, [layoutEnabled, sharedLayout, sharedLayoutScopeKey]);
+  }, [canReadSharedLayout, layoutEnabled, sharedLayout, sharedLayoutScopeKey]);
 
   const summaryWidgets = useMemo(
     () =>
@@ -184,6 +193,8 @@ export function RecordShowPage({
 
   const commitLayout = useCallback(
     (next: RecordLayoutState | null) => {
+      if (!layoutControlsEnabled) return;
+      if (sharedLayoutRequested && (!canWriteSharedLayout || !sharedLayoutScopeKey || !actingUserId)) return;
       setRecordLayout(next);
       if (layoutOptions.societyId && sharedLayoutScopeKey && actingUserId) {
         if (next) {
@@ -203,7 +214,7 @@ export function RecordShowPage({
       if (next) saveRecordLayout(storageKey, next);
       else clearRecordLayout(storageKey);
     },
-    [actingUserId, layoutOptions.societyId, removeSharedLayout, sharedLayoutScopeKey, storageKey, upsertSharedLayout],
+    [actingUserId, canWriteSharedLayout, layoutControlsEnabled, layoutOptions.societyId, removeSharedLayout, sharedLayoutRequested, sharedLayoutScopeKey, storageKey, upsertSharedLayout],
   );
 
   const moveWidget = useCallback(
@@ -239,14 +250,16 @@ export function RecordShowPage({
     setCustomizing(false);
   }, [commitLayout]);
 
-  const headerActions = layoutControlsEnabled ? (
+  const headerActions = layoutControlsAvailable ? (
     <div className="record-show__actions">
       {actions}
       <button
         type="button"
         className={`btn-action${customizing ? " btn-action--primary" : ""}`}
-        onClick={() => setCustomizing((value) => !value)}
-        aria-expanded={customizing}
+        disabled={!layoutControlsEnabled}
+        onClick={() => { if (layoutControlsEnabled) setCustomizing((value) => !value); }}
+        aria-expanded={customizing && layoutControlsEnabled}
+        title={!layoutControlsEnabled ? "Your role cannot change the shared layout." : undefined}
       >
         <SlidersHorizontal size={12} /> Layout
       </button>

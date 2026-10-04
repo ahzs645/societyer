@@ -1,5 +1,8 @@
 import { useEffect, useRef } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { usePermissions } from "@/hooks/usePermissions";
+import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
+import { interfaceRouteReadPermission } from "../../../shared/interfaceRouteAccess";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "@/hooks/useSociety";
@@ -33,6 +36,8 @@ type LiveWorkspaceData = {
   filings: any[] | undefined;
   meetings: any[] | undefined;
   tasks: any[] | undefined;
+  restrictedResources: string[];
+  canCreateTasks: boolean;
 };
 
 function asRecord(input: unknown, label: string): Record<string, unknown> {
@@ -173,6 +178,7 @@ function buildSnapshot(data: LiveWorkspaceData, input: unknown) {
       entityKind: data.society?.entityKind,
     },
     generatedAt: now.toISOString(),
+    restrictedResources: data.restrictedResources,
     horizonDays,
     summaryCounts: data.dashboard?.counts ?? {
       openDeadlines: deadlines.filter(isOpenDeadline).length,
@@ -194,8 +200,8 @@ function buildSnapshot(data: LiveWorkspaceData, input: unknown) {
       })),
     },
     collaboration: {
-      nextStep: "Review the risks with the user, then call create_governance_tasks for the actions they approve.",
-      reviewViews: ["deadlines", "filings", "tasks", "meetings"],
+      nextStep: data.canCreateTasks ? "Review the risks with the user, then call create_governance_tasks for the actions they approve." : "Review the accessible records with the user. Your role cannot create governance tasks.",
+      reviewViews: ["deadlines", "filings", "tasks", "meetings"].filter((view) => !data.restrictedResources.includes(view)),
     },
   };
 }
@@ -208,25 +214,34 @@ export function WebMcpTools() {
   const society = useSociety();
   const navigate = useNavigate();
   const toast = useToast();
-  const args = society ? { societyId: society._id } : "skip";
-  const dashboard = useQuery(api.dashboard.summary, args);
-  const deadlines = useQuery(api.deadlines.list, args) as any[] | undefined;
-  const filings = useQuery(api.filings.list, args) as any[] | undefined;
-  const meetings = useQuery(api.meetings.list, args) as any[] | undefined;
-  const tasks = useQuery(api.tasks.list, args) as any[] | undefined;
-  const createTask = useMutation(api.tasks.create);
-  const liveData = useRef<LiveWorkspaceData>({ society, dashboard, deadlines, filings, meetings, tasks });
-  const actions = useRef({ createTask, navigate, toast });
+  const { loaded, can } = usePermissions();
+  const supported = typeof document.modelContext?.registerTool === "function";
+  const canRead = (permission: string) => supported && loaded && can(permission);
+  const scopedArgs = (permission: string) => society && canRead(permission) ? { societyId: society._id } : "skip";
+  const dashboard = useQuery(api.dashboard.summary, scopedArgs("society:read"));
+  const deadlineRows = useQuery(api.deadlines.list, scopedArgs("deadlines:read")) as any[] | undefined;
+  const filingRows = useQuery(api.filings.list, scopedArgs("filings:read")) as any[] | undefined;
+  const meetingRows = useQuery(api.meetings.list, scopedArgs("meetings:read")) as any[] | undefined;
+  const taskRows = useQuery(api.tasks.list, scopedArgs("tasks:read")) as any[] | undefined;
+  const deadlines = canRead("deadlines:read") ? deadlineRows : [];
+  const filings = canRead("filings:read") ? filingRows : [];
+  const meetings = canRead("meetings:read") ? meetingRows : [];
+  const tasks = canRead("tasks:read") ? taskRows : [];
+  const restrictedResources = ["deadlines", "filings", "meetings", "tasks"].filter((resource) => !loaded || !can(`${resource}:read`));
+  const canCreateTask = loaded && can("tasks:write");
+  const createTask = usePermissionedMutation(api.tasks.create, canCreateTask);
+  const liveData = useRef<LiveWorkspaceData>({ society, dashboard, deadlines, filings, meetings, tasks, restrictedResources, canCreateTasks: canCreateTask });
+  const actions = useRef({ createTask, navigate, toast, loaded, can });
   const societyId = society?._id;
-  liveData.current = { society, dashboard, deadlines, filings, meetings, tasks };
-  actions.current = { createTask, navigate, toast };
+  liveData.current = { society, dashboard, deadlines, filings, meetings, tasks, restrictedResources, canCreateTasks: canCreateTask };
+  actions.current = { createTask, navigate, toast, loaded, can };
 
   useEffect(() => {
     const context = document.modelContext;
-    if (!societyId || !context?.registerTool) return;
+    if (!societyId || !loaded || !context?.registerTool) return;
 
     const lifecycle = new AbortController();
-    const toolNames = ["get_governance_snapshot", "create_governance_tasks", "open_governance_view"];
+    const toolNames = ["get_governance_snapshot", ...(canCreateTask ? ["create_governance_tasks"] : []), "open_governance_view"];
     const registrations = [
       context.registerTool(
         {
@@ -245,6 +260,7 @@ export function WebMcpTools() {
           annotations: { readOnlyHint: true, untrustedContentHint: true },
           execute(input) {
             const current = liveData.current;
+            if (!actions.current.loaded) throw new Error("Workspace permissions are still loading.");
             if (!current.society) throw new Error("No Societyer workspace is selected.");
             if ([current.deadlines, current.filings, current.meetings, current.tasks].some((value) => value === undefined)) {
               throw new Error("The governance workspace is still loading. Try again in a moment.");
@@ -254,7 +270,7 @@ export function WebMcpTools() {
         },
         { signal: lifecycle.signal },
       ),
-      context.registerTool(
+      canCreateTask ? context.registerTool(
         {
           name: "create_governance_tasks",
           title: "Create governance tasks",
@@ -289,6 +305,7 @@ export function WebMcpTools() {
           async execute(input) {
             const currentSociety = liveData.current.society;
             if (!currentSociety) throw new Error("No Societyer workspace is selected.");
+            if (!actions.current.loaded || !actions.current.can("tasks:write")) throw new Error("Permission tasks:write required.");
             const validatedTasks = validateTaskInputs(input);
             const created: Array<{ id: string; title: string; dueDate?: string; priority: GovernanceTaskInput["priority"] }> = [];
             for (const task of validatedTasks) {
@@ -310,7 +327,7 @@ export function WebMcpTools() {
           },
         },
         { signal: lifecycle.signal },
-      ),
+      ) : undefined,
       context.registerTool(
         {
           name: "open_governance_view",
@@ -330,6 +347,8 @@ export function WebMcpTools() {
               throw new TypeError(`view must be one of: ${Object.keys(VIEW_ROUTES).join(", ")}.`);
             }
             const view = args.view as keyof typeof VIEW_ROUTES;
+            const permission = interfaceRouteReadPermission(VIEW_ROUTES[view]);
+            if (!actions.current.loaded || (permission && !actions.current.can(permission))) throw new Error("This workspace view is restricted by your role.");
             actions.current.navigate(VIEW_ROUTES[view]);
             return { openedView: view, route: VIEW_ROUTES[view] };
           },
@@ -350,7 +369,7 @@ export function WebMcpTools() {
         delete document.documentElement.dataset.webmcpTools;
       }
     };
-  }, [societyId]);
+  }, [societyId, loaded, canCreateTask]);
 
   return null;
 }

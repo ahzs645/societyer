@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
@@ -216,6 +218,8 @@ function newDraft(): TemplateDraft {
 
 export function MeetingTemplatesPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("meetings:write");
   const toast = useToast();
   const navigate = useNavigate();
   const confirm = useConfirm();
@@ -224,10 +228,10 @@ export function MeetingTemplatesPage() {
     api.meetingTemplates.list,
     society ? { societyId: society._id } : "skip",
   ) as MeetingTemplate[] | undefined;
-  const remove = useMutation(api.meetingTemplates.remove);
-  const duplicate = useMutation(api.meetingTemplates.duplicate);
-  const seed = useMutation(api.meetingTemplates.seedDefaults);
-  const createMeeting = useMutation(api.meetings.create);
+  const remove = usePermissionedMutation(api.meetingTemplates.remove, canWrite);
+  const duplicate = usePermissionedMutation(api.meetingTemplates.duplicate, canWrite);
+  const seed = usePermissionedMutation(api.meetingTemplates.seedDefaults, canWrite);
+  const createMeeting = usePermissionedMutation(api.meetings.create, canWrite);
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -246,6 +250,7 @@ export function MeetingTemplatesPage() {
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   const handleDeleteTemplate = async (template: MeetingTemplateRecord) => {
+    if (!canWrite) return;
     const ok = await confirm({
       title: `Delete "${template.name}"?`,
       message: "Meetings already created from this template keep their agendas; new meetings will no longer be able to use it. This action cannot be undone.",
@@ -269,6 +274,7 @@ export function MeetingTemplatesPage() {
   const [scheduling, setScheduling] = useState(false);
 
   const openSchedule = (template: MeetingTemplateRecord) => {
+    if (!canWrite) return;
     setScheduleDraft({
       templateId: template._id,
       title: template.name ?? "Meeting",
@@ -279,6 +285,7 @@ export function MeetingTemplatesPage() {
   };
 
   const confirmSchedule = async () => {
+    if (!canWrite) return;
     if (!society || !scheduleDraft || !scheduleDraft.title.trim()) return;
     // Same guard as the Meetings page: creating a general meeting with less
     // than the minimum notice is a compliance failure, so block it here too.
@@ -335,13 +342,14 @@ export function MeetingTemplatesPage() {
                     toast.info("Starter templates already exist.");
                   }
                 }}
-              >
+              disabled={!canWrite}
+             >
                 <Sparkles size={12} /> Seed starter
               </button>
             )}
-            <Link className="btn-action btn-action--primary" to="/app/meeting-templates/new">
+            {canWrite && <Link className="btn-action btn-action--primary" to="/app/meeting-templates/new">
               <Plus size={12} /> New template
-            </Link>
+            </Link>}
           </div>
         }
       />
@@ -355,7 +363,7 @@ export function MeetingTemplatesPage() {
           hydratedView={tableData.hydratedView}
           records={records}
           onRecordClick={(recordId) => navigate(`/app/meeting-templates/${recordId}`)}
-          onCreate={() => navigate("/app/meeting-templates/new")}
+          onCreate={canWrite ? () => navigate("/app/meeting-templates/new") : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -376,10 +384,10 @@ export function MeetingTemplatesPage() {
               <RecordTableEmpty
                 title="No meeting templates yet"
                 description="Create a reusable agenda pattern for future meetings."
-                action={
+                action={canWrite ?
                   <Link className="btn btn--accent" to="/app/meeting-templates/new">
                     <Plus size={14} /> Create template
-                  </Link>
+                  </Link> : undefined
                 }
               />
             }
@@ -400,7 +408,8 @@ export function MeetingTemplatesPage() {
                     type="button"
                     onClick={() => openSchedule(template)}
                     title="Schedule a meeting from this template"
-                  >
+                  disabled={!canWrite}
+                 >
                     <CalendarPlus size={12} /> Schedule meeting
                   </button>
                   <button
@@ -409,7 +418,8 @@ export function MeetingTemplatesPage() {
                     onClick={() => navigate(`/app/meeting-templates/${template._id}`)}
                     title="Edit template"
                     aria-label={`Edit ${template.name}`}
-                  >
+                  disabled={!canWrite}
+                 >
                     <Pencil size={12} />
                   </button>
                   <button
@@ -422,7 +432,8 @@ export function MeetingTemplatesPage() {
                     }}
                     title="Duplicate template"
                     aria-label={`Duplicate ${template.name}`}
-                  >
+                  disabled={!canWrite}
+                 >
                     <Copy size={12} />
                   </button>
                   <button
@@ -431,7 +442,8 @@ export function MeetingTemplatesPage() {
                     onClick={() => { void handleDeleteTemplate(template); }}
                     title="Delete template"
                     aria-label={`Delete ${template.name}`}
-                  >
+                  disabled={!canWrite}
+                 >
                     <Trash2 size={12} />
                   </button>
                 </>
@@ -458,7 +470,7 @@ export function MeetingTemplatesPage() {
             <button
               className="btn btn--accent"
               onClick={confirmSchedule}
-              disabled={scheduling || !scheduleDraft?.title.trim()}
+              disabled={!canWrite || (scheduling || !scheduleDraft?.title.trim())}
             >
               <CalendarPlus size={14} /> Schedule meeting
             </button>
@@ -475,16 +487,14 @@ export function MeetingTemplatesPage() {
               <input
                 className="input"
                 value={scheduleDraft.title}
-                onChange={(event) => setScheduleDraft({ ...scheduleDraft, title: event.target.value })}
-              />
+                onChange={(event) => setScheduleDraft({ ...scheduleDraft, title: event.target.value })} disabled={!canWrite} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Type">
                 <Select
                   value={scheduleDraft.type}
                   onChange={(value) => setScheduleDraft({ ...scheduleDraft, type: value })}
-                  options={MEETING_TYPES.map((meetingType) => ({ value: meetingType, label: meetingType }))}
-                />
+                  options={MEETING_TYPES.map((meetingType) => ({ value: meetingType, label: meetingType }))} disabled={!canWrite} />
               </Field>
               <Field label="Date & time">
                 <DateTimeInput
@@ -502,6 +512,8 @@ export function MeetingTemplatesPage() {
 
 export function MeetingTemplateBuilderPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("meetings:write");
   const toast = useToast();
   const navigate = useNavigate();
   const { templateId } = useParams<{ templateId: string }>();
@@ -512,8 +524,8 @@ export function MeetingTemplateBuilderPage() {
 
   const templates = useQuery(api.meetingTemplates.list, society ? { societyId: society._id } : "skip");
   const motions = useQuery(api.motionTemplates.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.meetingTemplates.create);
-  const update = useMutation(api.meetingTemplates.update);
+  const create = usePermissionedMutation(api.meetingTemplates.create, canWrite);
+  const update = usePermissionedMutation(api.meetingTemplates.update, canWrite);
 
   const template = useMemo(
     () => (templates ?? []).find((row: any) => String(row._id) === templateId),
@@ -548,6 +560,7 @@ export function MeetingTemplateBuilderPage() {
   if (!isNew && !template) return <div className="page">Template not found.</div>;
 
   const save = async () => {
+    if (!canWrite) return;
     const name = draft.name.trim();
     const items = cleanItems(draft.items);
     if (!name) {
@@ -577,6 +590,7 @@ export function MeetingTemplateBuilderPage() {
   };
 
   const updateItem = (index: number, patch: Partial<TemplateItemDraft>) => {
+    if (!canWrite) return;
     setDraft((current) => ({
       ...current,
       items: current.items.map((item, i) => i === index ? { ...item, ...patch } : item),
@@ -584,6 +598,7 @@ export function MeetingTemplateBuilderPage() {
   };
 
   const removeItem = (index: number) => {
+    if (!canWrite) return;
     setDraft((current) => ({
       ...current,
       items: current.items.filter((_, i) => i !== index),
@@ -592,6 +607,7 @@ export function MeetingTemplateBuilderPage() {
   };
 
   const addItem = (depth: 0 | 1 = 0) => {
+    if (!canWrite) return;
     setDraft((current) => {
       const hasRoot = current.items.some((item) => item.depth === 0);
       const nextDepth: 0 | 1 = depth === 1 && hasRoot ? 1 : 0;
@@ -603,6 +619,7 @@ export function MeetingTemplateBuilderPage() {
   };
 
   const addLibraryEntry = (entry: AgendaLibraryEntry) => {
+    if (!canWrite) return;
     setDraft((current) => {
       const hasRoot = current.items.some((item) => item.depth === 0);
       const nextItems = [
@@ -633,7 +650,7 @@ export function MeetingTemplateBuilderPage() {
             <Link className="btn-action" to="/app/meeting-templates">
               <X size={12} /> Cancel
             </Link>
-            <button className="btn-action btn-action--primary" type="button" onClick={save}>
+            <button className="btn-action btn-action--primary" type="button" onClick={save} disabled={!canWrite}>
               <Save size={12} /> Save template
             </button>
           </div>
@@ -651,7 +668,8 @@ export function MeetingTemplateBuilderPage() {
               className="btn-action"
               type="button"
               onClick={() => addItem(0)}
-            >
+            disabled={!canWrite}
+           >
               <Plus size={12} /> Add item
             </button>
           </div>
@@ -688,15 +706,13 @@ export function MeetingTemplateBuilderPage() {
                             value={item.title}
                             onChange={(event) => updateItem(index, { title: event.target.value })}
                             placeholder="Agenda item title"
-                            aria-label="Agenda item title"
-                          />
+                            aria-label="Agenda item title" disabled={!canWrite} />
                           <span className="meeting-template-section-item__type">
                             <Select
                               value={item.sectionType}
                               onChange={(value) => updateItem(index, { sectionType: value })}
                               aria-label="Section type"
-                              options={SECTION_TYPES.map((type) => ({ value: type, label: formatLabel(type) }))}
-                            />
+                              options={SECTION_TYPES.map((type) => ({ value: type, label: formatLabel(type) }))} disabled={!canWrite} />
                           </span>
                           <span className="meeting-minutes-section-item__title-presenter">
                             <input
@@ -704,8 +720,7 @@ export function MeetingTemplateBuilderPage() {
                               value={item.presenter}
                               onChange={(event) => updateItem(index, { presenter: event.target.value })}
                               placeholder="Presenter..."
-                              aria-label="Presenter"
-                            />
+                              aria-label="Presenter" disabled={!canWrite} />
                           </span>
                         </span>
                       </span>
@@ -723,7 +738,8 @@ export function MeetingTemplateBuilderPage() {
                             event.stopPropagation();
                             removeItem(index);
                           }}
-                        >
+                        disabled={!canWrite}
+                       >
                           <MinusCircle size={12} />
                         </button>
                       </span>
@@ -748,15 +764,14 @@ export function MeetingTemplateBuilderPage() {
                                 options={[
                                   { value: "0", label: "Root item" },
                                   { value: "1", label: "Sub-item" },
-                                ]}
-                              />
+                                ]} disabled={!canWrite} />
                             </Field>
                             <Field label="Section type">
                               <Select value={item.sectionType} onChange={(value) => updateItem(index, { sectionType: value })}
-                                options={SECTION_TYPES.map((type) => ({ value: type, label: formatLabel(type) }))} />
+                                options={SECTION_TYPES.map((type) => ({ value: type, label: formatLabel(type) }))} disabled={!canWrite} />
                             </Field>
                             <Field label="Presenter or role">
-                              <input className="input" value={item.presenter} onChange={(event) => updateItem(index, { presenter: event.target.value })} placeholder="Chair, secretary, treasurer..." />
+                              <input className="input" value={item.presenter} onChange={(event) => updateItem(index, { presenter: event.target.value })} placeholder="Chair, secretary, treasurer..." disabled={!canWrite} />
                             </Field>
                             <Field label="Default notes">
                               <MarkdownEditor
@@ -764,7 +779,7 @@ export function MeetingTemplateBuilderPage() {
                                 value={item.details}
                                 onChange={(markdown) => updateItem(index, { details: markdown })}
                                 placeholder="Optional notes or speaking points for this agenda item."
-                              />
+                              readOnly={!canWrite} />
                             </Field>
                           </div>
                         )}
@@ -784,8 +799,7 @@ export function MeetingTemplateBuilderPage() {
                                 options={[
                                   { value: "", label: "No library motion" },
                                   ...(motions ?? []).map((motion: any) => ({ value: String(motion._id), label: motion.title })),
-                                ]}
-                              />
+                                ]} disabled={!canWrite} />
                             </Field>
                             <Field label="Motion text">
                               <textarea
@@ -793,16 +807,14 @@ export function MeetingTemplateBuilderPage() {
                                 rows={4}
                                 value={item.motionText}
                                 onChange={(event) => updateItem(index, { motionText: event.target.value, sectionType: event.target.value.trim() ? "motion" : item.sectionType })}
-                                placeholder={selectedMotion ? "Using library wording" : "Optional recurring motion text"}
-                              />
+                                placeholder={selectedMotion ? "Using library wording" : "Optional recurring motion text"} disabled={!canWrite} />
                             </Field>
                             <label className="row" style={{ gap: 8, alignItems: "flex-start" }}>
                               <input
                                 type="checkbox"
                                 checked={item.adoptsPreviousMinutes}
                                 onChange={(event) => updateItem(index, { adoptsPreviousMinutes: event.target.checked })}
-                                style={{ marginTop: 3 }}
-                              />
+                                style={{ marginTop: 3 }} disabled={!canWrite} />
                               <span>
                                 Adopts the previous meeting's minutes
                                 <span className="muted" style={{ display: "block", fontSize: "var(--fs-xs)" }}>
@@ -816,10 +828,10 @@ export function MeetingTemplateBuilderPage() {
                           </div>
                         )}
                         <div className="meeting-template-section-editor__actions">
-                          <button className="btn-action" type="button" onClick={() => addItem(0)}>
+                          <button className="btn-action" type="button" onClick={() => addItem(0)} disabled={!canWrite}>
                             <Plus size={12} /> Add root item
                           </button>
-                          <button className="btn-action" type="button" onClick={() => addItem(1)}>
+                          <button className="btn-action" type="button" onClick={() => addItem(1)} disabled={!canWrite}>
                             <Plus size={12} /> Add sub-item
                           </button>
                         </div>
@@ -832,7 +844,7 @@ export function MeetingTemplateBuilderPage() {
                 <div className="meeting-templates__empty">
                   <BookOpen size={18} aria-hidden="true" />
                   <strong>No agenda items yet.</strong>
-                  <button className="btn btn--accent" type="button" onClick={() => addItem(0)}>
+                  <button className="btn btn--accent" type="button" onClick={() => addItem(0)} disabled={!canWrite}>
                     <Plus size={14} /> Add item
                   </button>
                 </div>
@@ -848,17 +860,17 @@ export function MeetingTemplateBuilderPage() {
             </div>
             <div className="card__body meeting-templates__form">
               <Field label="Name">
-                <input className="input" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Regular monthly board meeting" />
+                <input className="input" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Regular monthly board meeting" disabled={!canWrite} />
               </Field>
               <Field label="Meeting type">
                 <Select value={draft.meetingType} onChange={(value) => setDraft({ ...draft, meetingType: value })}
-                  options={MEETING_TYPES.map((type) => ({ value: type, label: type }))} />
+                  options={MEETING_TYPES.map((type) => ({ value: type, label: type }))} disabled={!canWrite} />
               </Field>
               <Field label="Description">
-                <MarkdownEditor rows={4} value={draft.description} onChange={(markdown) => setDraft({ ...draft, description: markdown })} placeholder="Used for recurring board meetings" />
+                <MarkdownEditor rows={4} value={draft.description} onChange={(markdown) => setDraft({ ...draft, description: markdown })} placeholder="Used for recurring board meetings" readOnly={!canWrite} />
               </Field>
               <label className="meeting-templates__default-toggle">
-                <input type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft({ ...draft, isDefault: event.target.checked })} />
+                <input type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft({ ...draft, isDefault: event.target.checked })} disabled={!canWrite} />
                 Default template
               </label>
             </div>
@@ -875,7 +887,8 @@ export function MeetingTemplateBuilderPage() {
                   type="button"
                   className="meeting-template-library__item"
                   onClick={() => addLibraryEntry(entry)}
-                >
+                disabled={!canWrite}
+               >
                   <strong>{entry.label}</strong>
                   <span>{entry.summary}</span>
                 </button>

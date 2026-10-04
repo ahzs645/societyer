@@ -967,6 +967,7 @@ export function InventoryPage() {
         footer={<button className="btn-action btn-action--primary" onClick={saveItem} disabled={!canWrite}>{editingItemId ? "Save item" : "Create item"}</button>}
       >
         <ImageUploadField
+          purpose="inventory"
           label="Item photo"
           hint="Upload a picture of the item, or paste an image URL."
           value={itemForm.image}

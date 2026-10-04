@@ -1,7 +1,9 @@
 import { DecisionAssessmentCard } from "../components/DecisionAssessmentCard";
 import { isCorporation } from "../../shared/organizationDomain";
 import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -22,12 +24,14 @@ import {
 
 export function BylawRulesPage() {
   const { society, rules } = useBylawRules();
+  const permissions = usePermissions();
+  const canWrite = permissions.loaded && permissions.can("documents:write");
   const history = useQuery(
     api.bylawRules.list,
     society ? { societyId: society._id } : "skip",
   );
-  const upsert = useMutation(api.bylawRules.upsertActive);
-  const reset = useMutation(api.bylawRules.resetToDefault);
+  const upsert = usePermissionedMutation(api.bylawRules.upsertActive, canWrite);
+  const reset = usePermissionedMutation(api.bylawRules.resetToDefault, canWrite);
   const toast = useToast();
   const [form, setForm] = useState<any>(null);
 
@@ -66,6 +70,7 @@ export function BylawRulesPage() {
   });
 
   const save = async () => {
+    if (!canWrite) return;
     await upsert({
       id: form._id,
       societyId: society._id,
@@ -132,16 +137,19 @@ export function BylawRulesPage() {
   };
 
   const updateCustomType = (index: number, patch: Record<string, unknown>) => {
+    if (!canWrite) return;
     const next = [...(form.resolutionTypes ?? [])];
     next[index] = { ...next[index], ...patch };
     setForm({ ...form, resolutionTypes: next });
   };
   const removeCustomType = (index: number) => {
+    if (!canWrite) return;
     const next = [...(form.resolutionTypes ?? [])];
     next.splice(index, 1);
     setForm({ ...form, resolutionTypes: next });
   };
   const addCustomType = () => {
+    if (!canWrite) return;
     const next = [...(form.resolutionTypes ?? [])];
     next.push({ label: "", base: "votesCast", thresholdPct: 66.67, order: next.length });
     setForm({ ...form, resolutionTypes: next });
@@ -158,10 +166,10 @@ export function BylawRulesPage() {
           <>
             <button
               className="btn-action"
-              disabled={corporate}
+              disabled={!canWrite || corporate}
               title={corporate ? "Corporation rules must be configured from approved articles and by-laws; the society baseline cannot be adopted here." : undefined}
               onClick={async () => {
-                if (corporate) return;
+                if (!canWrite || corporate) return;
                 await reset({ societyId: society._id });
                 setForm(null);
                 toast.info("Using the jurisdiction draft baseline; governing instruments still require review");
@@ -169,7 +177,7 @@ export function BylawRulesPage() {
             >
               <RefreshCw size={12} /> Reset to defaults
             </button>
-            <button className="btn-action btn-action--primary" onClick={save}>
+            <button className="btn-action btn-action--primary" onClick={save} disabled={!canWrite}>
               <Save size={12} /> Save new version
             </button>
           </>
@@ -198,6 +206,7 @@ export function BylawRulesPage() {
           <div className="bylaw-rules__field-grid">
             <Field label="Effective from">
               <DatePicker
+                disabled={!canWrite}
                 value={toDateInputValue(form.effectiveFromISO)}
                 onChange={(value) =>
                   setForm({
@@ -262,6 +271,7 @@ export function BylawRulesPage() {
               <div className="bylaw-rules__field-grid">
                 <Field label="Notice minimum (days)">
                   <input
+                    disabled={!canWrite}
                     className="input"
                     type="number"
                     value={form.generalNoticeMinDays}
@@ -275,6 +285,7 @@ export function BylawRulesPage() {
                 </Field>
                 <Field label="Notice maximum (days)">
                   <input
+                    disabled={!canWrite}
                     className="input"
                     type="number"
                     value={form.generalNoticeMaxDays}
@@ -288,6 +299,7 @@ export function BylawRulesPage() {
                 </Field>
                 <Field label="Quorum model">
                   <Select
+                    disabled={!canWrite}
                     value={form.quorumType}
                     onChange={(value) =>
                       setForm({ ...form, quorumType: value })
@@ -306,6 +318,7 @@ export function BylawRulesPage() {
                   }
                 >
                   <input
+                    disabled={!canWrite}
                     className="input"
                     type="number"
                     value={form.quorumValue}
@@ -317,6 +330,7 @@ export function BylawRulesPage() {
                 {form.quorumType === "percentage" && (
                   <Field label="Minimum quorum count">
                     <input
+                      disabled={!canWrite}
                       className="input"
                       type="number"
                       value={form.quorumMinimumCount ?? ""}
@@ -333,6 +347,7 @@ export function BylawRulesPage() {
               </div>
               <div className="bylaw-rules__switches">
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.allowElectronicMeetings}
                   onChange={(value) =>
                     setForm({ ...form, allowElectronicMeetings: value })
@@ -340,6 +355,7 @@ export function BylawRulesPage() {
                   label="Allow fully electronic meetings"
                 />
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.allowHybridMeetings}
                   onChange={(value) =>
                     setForm({ ...form, allowHybridMeetings: value })
@@ -357,6 +373,7 @@ export function BylawRulesPage() {
             <div className="card__body bylaw-rules__body">
               <div className="bylaw-rules__switches">
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.allowProxyVoting}
                   onChange={(value) =>
                     setForm({ ...form, allowProxyVoting: value })
@@ -364,6 +381,7 @@ export function BylawRulesPage() {
                   label="Allow proxy voting"
                 />
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.proxyHolderMustBeMember}
                   onChange={(value) =>
                     setForm({ ...form, proxyHolderMustBeMember: value })
@@ -371,6 +389,7 @@ export function BylawRulesPage() {
                   label="Require proxy holder to be a member"
                 />
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.allowElectronicVoting}
                   onChange={(value) =>
                     setForm({ ...form, allowElectronicVoting: value })
@@ -378,6 +397,7 @@ export function BylawRulesPage() {
                   label="Allow electronic voting"
                 />
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.ballotIsAnonymous}
                   onChange={(value) =>
                     setForm({ ...form, ballotIsAnonymous: value })
@@ -385,6 +405,7 @@ export function BylawRulesPage() {
                   label="Anonymous ballots"
                 />
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.voterMustBeMemberAtRecordDate}
                   onChange={(value) =>
                     setForm({ ...form, voterMustBeMemberAtRecordDate: value })
@@ -395,6 +416,7 @@ export function BylawRulesPage() {
               <div className="bylaw-rules__field-grid bylaw-rules__field-grid--single">
                 <Field label="Proxy limit per grantor per meeting">
                   <input
+                    disabled={!canWrite}
                     className="input"
                     type="number"
                     value={form.proxyLimitPerGrantorPerMeeting}
@@ -420,6 +442,7 @@ export function BylawRulesPage() {
               <div className="bylaw-rules__field-grid">
                 <Field label="Annual report due after AGM (days)">
                   <input
+                    disabled={!canWrite}
                     className="input"
                     type="number"
                     value={form.annualReportDueDaysAfterMeeting}
@@ -433,6 +456,7 @@ export function BylawRulesPage() {
                 </Field>
                 <Field label="Proposal lead time before notice (days)">
                   <input
+                    disabled={!canWrite}
                     className="input"
                     type="number"
                     value={form.memberProposalLeadDays}
@@ -446,6 +470,7 @@ export function BylawRulesPage() {
                 </Field>
                 <Field label="Proposal threshold (%)">
                   <input
+                    disabled={!canWrite}
                     className="input"
                     type="number"
                     value={form.memberProposalThresholdPct}
@@ -459,6 +484,7 @@ export function BylawRulesPage() {
                 </Field>
                 <Field label="Minimum proposal signatures">
                   <input
+                    disabled={!canWrite}
                     className="input"
                     type="number"
                     value={form.memberProposalMinSignatures}
@@ -474,6 +500,7 @@ export function BylawRulesPage() {
               <div className="bylaw-rules__field-grid bylaw-rules__field-grid--single">
                 <Field label="Meeting requisition threshold (%)">
                   <input
+                    disabled={!canWrite}
                     className="input"
                     type="number"
                     value={form.requisitionMeetingThresholdPct}
@@ -488,6 +515,7 @@ export function BylawRulesPage() {
               </div>
               <div className="bylaw-rules__switches">
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.requireAgmFinancialStatements}
                   onChange={(value) =>
                     setForm({ ...form, requireAgmFinancialStatements: value })
@@ -495,6 +523,7 @@ export function BylawRulesPage() {
                   label="Require financial statements to be presented at the AGM"
                 />
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.requireAgmElections}
                   onChange={(value) =>
                     setForm({ ...form, requireAgmElections: value })
@@ -513,6 +542,7 @@ export function BylawRulesPage() {
               <div className="bylaw-rules__field-grid">
                 <Field label="Ordinary resolution threshold (%)">
                   <input
+                    disabled={!canWrite}
                     className="input"
                     type="number"
                     value={form.ordinaryResolutionThresholdPct}
@@ -526,6 +556,7 @@ export function BylawRulesPage() {
                 </Field>
                 <Field label="Special resolution threshold (%)">
                   <input
+                    disabled={!canWrite}
                     className="input"
                     type="number"
                     value={form.specialResolutionThresholdPct}
@@ -540,6 +571,7 @@ export function BylawRulesPage() {
               </div>
               <div className="bylaw-rules__switches">
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.unanimousWrittenSpecialResolution}
                   onChange={(value) =>
                     setForm({
@@ -550,6 +582,7 @@ export function BylawRulesPage() {
                   label="Require unanimous written consent for special resolutions outside a meeting"
                 />
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.inspectionMemberRegisterByMembers}
                   onChange={(value) =>
                     setForm({
@@ -560,6 +593,7 @@ export function BylawRulesPage() {
                   label="Members may inspect the member register"
                 />
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.inspectionMemberRegisterByPublic}
                   onChange={(value) =>
                     setForm({
@@ -570,6 +604,7 @@ export function BylawRulesPage() {
                   label="Public may inspect the member register"
                 />
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.inspectionDirectorRegisterByMembers}
                   onChange={(value) =>
                     setForm({
@@ -580,6 +615,7 @@ export function BylawRulesPage() {
                   label="Members may inspect the director register"
                 />
                 <Toggle
+                  disabled={!canWrite}
                   checked={!!form.inspectionCopiesAllowed}
                   onChange={(value) =>
                     setForm({ ...form, inspectionCopiesAllowed: value })
@@ -629,6 +665,7 @@ export function BylawRulesPage() {
             <CustomTypeRow
               key={i}
               type={t}
+              canWrite={canWrite}
               defaultExpanded={i >= (rules?.resolutionTypes ?? []).length}
               onChange={(patch) => updateCustomType(i, patch)}
               onRemove={() => removeCustomType(i)}
@@ -643,11 +680,11 @@ export function BylawRulesPage() {
           <div className="row" style={{ marginTop: 12, gap: 8 }}>
             {(form.resolutionTypes ?? []).length <=
               (rules?.resolutionTypes ?? []).length && (
-              <button className="btn-action" onClick={addCustomType}>
+              <button className="btn-action" onClick={addCustomType} disabled={!canWrite}>
                 <Plus size={12} /> Add resolution type
               </button>
             )}
-            <button className="btn-action btn-action--primary" onClick={save}>
+            <button className="btn-action btn-action--primary" onClick={save} disabled={!canWrite}>
               <Save size={12} /> Save new version
             </button>
           </div>
@@ -685,11 +722,13 @@ function slugifyResolutionType(label: string, index: number): string {
  *  built-ins) and expands to the edit fields on click. New (unsaved) types start
  *  expanded so they can be filled in. */
 function CustomTypeRow({
+  canWrite,
   type,
   defaultExpanded,
   onChange,
   onRemove,
 }: {
+  canWrite: boolean;
   type: any;
   defaultExpanded: boolean;
   onChange: (patch: Record<string, unknown>) => void;
@@ -735,6 +774,7 @@ function CustomTypeRow({
         <div className="bylaw-rules__field-grid" style={{ marginTop: 10 }}>
           <Field label="Name">
             <input
+              disabled={!canWrite}
               className="input"
               value={type.label ?? ""}
               placeholder="e.g. Founder consent"
@@ -743,6 +783,7 @@ function CustomTypeRow({
           </Field>
           <Field label="Requirement base">
             <Select
+              disabled={!canWrite}
               value={type.base ?? "votesCast"}
               onChange={(value) => onChange({ base: value })}
               options={RESOLUTION_BASES}
@@ -750,6 +791,7 @@ function CustomTypeRow({
           </Field>
           <Field label="Threshold (%)">
             <input
+              disabled={!canWrite}
               className="input"
               type="number"
               value={type.thresholdPct ?? 50}
@@ -758,6 +800,7 @@ function CustomTypeRow({
           </Field>
           <Field label="On a tie">
             <Select
+              disabled={!canWrite}
               value={type.tieBreak ?? "fails"}
               onChange={(value) => onChange({ tieBreak: value })}
               options={[
@@ -767,7 +810,7 @@ function CustomTypeRow({
             />
           </Field>
           <div className="row" style={{ alignItems: "flex-end" }}>
-            <button className="btn-action btn-action--danger" onClick={onRemove}>
+            <button className="btn-action btn-action--danger" onClick={onRemove} disabled={!canWrite}>
               <Trash2 size={12} /> Remove
             </button>
           </div>

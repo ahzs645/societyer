@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { ListChecks, ExternalLink } from "lucide-react";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Link } from "react-router-dom";
@@ -32,12 +34,14 @@ const CADENCE_LABEL: Record<string, string> = {
  */
 export function PostIncorporationChecklistPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("documents:write");
   const data = useQuery(
     api.postIncorporation.checklist,
     society ? { societyId: society._id } : "skip",
   ) as { steps: any[]; generatedPacketKeys: string[]; evidence?: any[]; preparation?: { allowed: boolean; message: string } } | undefined;
-  const generate = useMutation(api.legalOperations.generateDocumentFromCatalog);
-  const recordEvidence = useMutation(api.postIncorporation.recordEvidence);
+  const generate = usePermissionedMutation(api.legalOperations.generateDocumentFromCatalog, canWrite);
+  const recordEvidence = usePermissionedMutation(api.postIncorporation.recordEvidence, canWrite);
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip") as any[] | undefined;
   const toast = useToast();
   const [evidenceDraft, setEvidenceDraft] = useState<any>(null);
@@ -54,6 +58,7 @@ export function PostIncorporationChecklistPage() {
   const categories = ["organize", "registration", "good_standing"] as const;
 
   const onGenerate = async (packetKey: string) => {
+    if (!canWrite) return;
     setBusy(packetKey);
     try {
       await generate({ societyId: society._id, packetKey, effectiveDate: new Date().toISOString().slice(0, 10) });
@@ -66,7 +71,7 @@ export function PostIncorporationChecklistPage() {
   };
 
   const saveEvidence = async () => {
-    if (!evidenceDraft) return;
+    if (!canWrite || !evidenceDraft) return;
     setSavingEvidence(true);
     try {
       await recordEvidence({ societyId: society._id, stepKey: evidenceDraft.stepKey, stage: evidenceDraft.stage, documentId: evidenceDraft.documentId || undefined, confirmationNumber: evidenceDraft.confirmationNumber || undefined, notes: evidenceDraft.notes || undefined });
@@ -121,9 +126,9 @@ export function PostIncorporationChecklistPage() {
                             {recorded && <Badge tone={recorded.stage === "preparing" ? "info" : "success"}>{({ preparing: "Preparing", executed: "Executed evidence", filed: "Filing receipt recorded", certified: "Certified registry evidence" } as Record<string, string>)[recorded.stage]}</Badge>}
                           </div>
                         </div>
-                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}><button className="btn btn--sm" onClick={() => setEvidenceDraft({ stepKey: step.key, title: step.title, stage: "preparing", documentId: "", confirmationNumber: "", notes: "", ...recorded })}>Record evidence</button>
+                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}><button className="btn btn--sm" disabled={!canWrite} onClick={() => { if (canWrite) setEvidenceDraft({ stepKey: step.key, title: step.title, stage: "preparing", documentId: "", confirmationNumber: "", notes: "", ...recorded }); }}>Record evidence</button>
                         {step.packetKey && (
-                          <button className="btn btn--sm" disabled={busy === step.packetKey} onClick={() => onGenerate(step.packetKey)}>
+                          <button className="btn btn--sm" disabled={!canWrite || busy === step.packetKey} onClick={() => onGenerate(step.packetKey)}>
                             {busy === step.packetKey ? "Generating…" : started ? "Regenerate" : "Generate packet"}
                           </button>
                         )}</div>
@@ -149,12 +154,12 @@ export function PostIncorporationChecklistPage() {
           );
         })
       )}
-      <Drawer open={!!evidenceDraft} onClose={() => setEvidenceDraft(null)} title={evidenceDraft?.title ?? "Checklist evidence"} footer={<><button className="btn" onClick={() => setEvidenceDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={savingEvidence} onClick={saveEvidence}>{savingEvidence ? "Saving…" : "Save evidence"}</button></>}>
+      <Drawer open={!!evidenceDraft} onClose={() => setEvidenceDraft(null)} title={evidenceDraft?.title ?? "Checklist evidence"} footer={<><button className="btn" onClick={() => setEvidenceDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || savingEvidence} onClick={saveEvidence}>{savingEvidence ? "Saving…" : "Save evidence"}</button></>}>
         {evidenceDraft && <>
-          <Field label="Evidence stage"><Select value={evidenceDraft.stage} onChange={(value) => setEvidenceDraft({ ...evidenceDraft, stage: value })} options={[{ value: "preparing", label: "Preparing — draft only" }, { value: "executed", label: "Executed — signed internal document" }, { value: "filed", label: "Filed — official submission receipt" }, { value: "certified", label: "Certified — official registry document" }]} /></Field>
-          <Field label="Evidence document" hint="Required for executed, filed and certified stages."><Select value={evidenceDraft.documentId ?? ""} onChange={(value) => setEvidenceDraft({ ...evidenceDraft, documentId: value })} options={[{ value: "", label: "Select an uploaded document" }, ...(documents ?? []).map((document) => ({ value: document._id, label: document.title }))]} /></Field>
-          <Field label="Confirmation / certificate reference" hint="Required for filed and certified evidence."><input className="input" value={evidenceDraft.confirmationNumber ?? ""} onChange={(event) => setEvidenceDraft({ ...evidenceDraft, confirmationNumber: event.target.value })} /></Field>
-          <Field label="Evidence notes"><textarea className="input" value={evidenceDraft.notes ?? ""} onChange={(event) => setEvidenceDraft({ ...evidenceDraft, notes: event.target.value })} /></Field>
+          <Field label="Evidence stage"><Select disabled={!canWrite} value={evidenceDraft.stage} onChange={(value) => setEvidenceDraft({ ...evidenceDraft, stage: value })} options={[{ value: "preparing", label: "Preparing — draft only" }, { value: "executed", label: "Executed — signed internal document" }, { value: "filed", label: "Filed — official submission receipt" }, { value: "certified", label: "Certified — official registry document" }]} /></Field>
+          <Field label="Evidence document" hint="Required for executed, filed and certified stages."><Select disabled={!canWrite} value={evidenceDraft.documentId ?? ""} onChange={(value) => setEvidenceDraft({ ...evidenceDraft, documentId: value })} options={[{ value: "", label: "Select an uploaded document" }, ...(documents ?? []).map((document) => ({ value: document._id, label: document.title }))]} /></Field>
+          <Field label="Confirmation / certificate reference" hint="Required for filed and certified evidence."><input disabled={!canWrite} className="input" value={evidenceDraft.confirmationNumber ?? ""} onChange={(event) => setEvidenceDraft({ ...evidenceDraft, confirmationNumber: event.target.value })} /></Field>
+          <Field label="Evidence notes"><textarea disabled={!canWrite} className="input" value={evidenceDraft.notes ?? ""} onChange={(event) => setEvidenceDraft({ ...evidenceDraft, notes: event.target.value })} /></Field>
           <p className="muted">Choose the stage supported by the attached evidence. Recording an internal signed document does not confirm registry filing or incorporation.</p>
         </>}
       </Drawer>

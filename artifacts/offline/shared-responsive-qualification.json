@@ -1,0 +1,195 @@
+{
+  "qualification": "Shared responsive UI and upload persistence",
+  "updatedAt": "2026-10-04T22:00:07.560933+00:00",
+  "finalVerificationPendingFrontendFreeze": false,
+  "viewports": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "fixes": [
+    {
+      "surface": "Resizable modal",
+      "trigger": "Shrink an open 1440x900 desktop window to 1024x500",
+      "before": "Explicit height remains 852px and clips the dialog",
+      "change": "Refit explicit frame on resize without overwriting preferred saved size"
+    },
+    {
+      "surface": "Confirmation title",
+      "trigger": "Delete a meeting with a long unbroken title",
+      "before": "Heading intrinsic width pushes close button outside viewport",
+      "change": "Allow heading to wrap and preserve close button width"
+    },
+    {
+      "surface": "Record action menu",
+      "trigger": "Browser/table scroll finishes just after opening menu",
+      "before": "Menu disappears before an action can be selected",
+      "change": "Keep sheets open and re-anchor visible desktop triggers"
+    },
+    {
+      "surface": "Toast",
+      "trigger": "Save a record with a long unbroken title at 320px",
+      "before": {
+        "x": -52,
+        "width": 360,
+        "scrollWidth": 1078
+      },
+      "change": "Constrain stack to viewport and wrap message/title"
+    },
+    {
+      "surface": "Date and time picker",
+      "trigger": "Escape inside an unsaved meeting calendar",
+      "before": "Calendar and parent meeting drawer both close",
+      "change": "Use shared focus ownership, accessible dialog/controls and restore trigger"
+    },
+    {
+      "surface": "Date and time picker",
+      "trigger": "Browser scroll finishes after opening anchored calendar",
+      "before": "Calendar disappears before month/date selection",
+      "change": "Re-anchor visible triggers and preserve mobile sheets"
+    }
+  ],
+  "initialVerification": {
+    "localShared": {
+      "startTime": "2026-10-04T20:48:12.041Z",
+      "duration": 197573.43,
+      "expected": 40,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "localDateTimeRegression": {
+      "startTime": "2026-10-04T21:00:17.244Z",
+      "duration": 38251.17600000001,
+      "expected": 4,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "liveInitial": {
+      "startTime": "2026-10-04T21:00:19.180Z",
+      "duration": 381195.26399999997,
+      "expected": 21,
+      "skipped": 0,
+      "unexpected": 3,
+      "flaky": 0
+    },
+    "localUploadInitial": {
+      "startTime": "2026-10-04T21:00:20.749Z",
+      "duration": 173829.373,
+      "expected": 11,
+      "skipped": 0,
+      "unexpected": 1,
+      "flaky": 0
+    }
+  },
+  "checks": {
+    "rootTypeScript": "passed after final vault sensitive-input guards",
+    "mobileTableLayout": "passed",
+    "recordTableAcceptance": "passed: 54 RecordTable, 13 legacy DataTable, 23 field types",
+    "eslint": "no errors; existing large-function warnings"
+  },
+  "limitations": [
+    "Browser local upload tests use a fresh /app workspace and IndexedDB, not the hosted backend",
+    "Actual live shared/vault suite uses native isolated Convex43230 + actual Better Auth43487 and root app43477; no mocked query transport or demo runtime",
+    "Chromium viewport and touch emulation; physical devices and native Electron shell are not covered by these suites",
+    "Screenshots and success measurements do not constitute production performance benchmarks"
+  ],
+  "reports": {
+    "localShared": "tmp/shared-verified-results.json",
+    "localDateTimeRegression": "tmp/shared-date-focused-results.json",
+    "liveInitial": "tmp/live-shared-verified-results.json",
+    "localUploadInitial": "tmp/local-upload-final-results.json",
+    "final": {
+      "localShared": "tmp/shared-stable-final-results.json",
+      "liveShared": "tmp/live-shared-stable-final-results.json",
+      "localImagePersistence": "tmp/local-upload-verified-results.json"
+    }
+  },
+  "screenshots": {
+    "directory": "tmp/shared-responsive-screenshots",
+    "finalExtractedCount": 44,
+    "examples": [
+      "localShared-narrow-phone-long-title-confirmation.png",
+      "liveShared-narrow-phone-live-long-title-confirmation.png",
+      "liveShared-tablet-live-member-drawer.png",
+      "localImagePersistence-desktop-local-inventory-photo-after-reload.png"
+    ]
+  },
+  "readonlySurfaces": {
+    "committees": "committees:write; creation controls, drawer and guarded transport",
+    "committeeDetail": "committees:write for roster/deletion; tasks:write independently for task creation/status",
+    "serviceProviders": "settings:write; preserve readonly record viewing and active filter",
+    "significantIndividuals": "deadlines:write for diligence create/remove; preserve date filter",
+    "postIncorporationChecklist": "documents:write for packet generation and evidence",
+    "organizationHistory": "society:write for facts/source/events/terms/motions/budgets/import/extract and editable widgets",
+    "accessCustody": "settings:write plus Admin/Owner for writes; per-record reveal ACL and authenticated actor; existing owner_only access fields/value remain Owner protected"
+  },
+  "completedVerification": {
+    "localShared": {
+      "startTime": "2026-10-04T21:50:23.425Z",
+      "duration": 428086.723,
+      "expected": 44,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "liveShared": {
+      "startTime": "2026-10-04T21:50:23.238Z",
+      "duration": 370381.867,
+      "expected": 28,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "localImagePersistence": {
+      "startTime": "2026-10-04T21:28:47.474Z",
+      "duration": 487229.004,
+      "expected": 12,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    }
+  },
+  "testTimingCorrections": [
+    {
+      "report": "tmp/shared-final-results.json",
+      "result": "41/44 passed",
+      "cause": "35s and60s full-scenario budgets exhausted during multiple cold development page loads",
+      "change": "90s scenario lifecycle budget; assertion deadlines retained"
+    },
+    {
+      "report": "tmp/shared-qualified-results.json",
+      "result": "43/44 passed",
+      "cause": "temporary toast expired between separate successful viewport assertion and later overflow read",
+      "change": "capture all toast geometry atomically while visible; retained viewport and content overflow assertions",
+      "classification": "Test timing defect, not an application defect"
+    }
+  ],
+  "liveBackendDefectsDetected": [
+    {
+      "surface": "Secret vault reveal",
+      "finding": "Verified browser principal has no preselected workspace claim; handler rejected authorized Owner after encrypted create",
+      "resolution": "Root derives target workspace from authorized owned row; actor equality and per-record ACL retained"
+    },
+    {
+      "surface": "Owner-only stored values",
+      "finding": "Native agent independently found Admin reveal-policy downgrade bypass",
+      "resolution": "Root protects owner_only ACL/value changes; this agent mirrors protected inputs in frontend"
+    }
+  ],
+  "reconciledBaseline": "bac427b9bdd85402471641ba80128e7383702973",
+  "liveQualificationEnvironment": {
+    "frontend": "43477 no-HMR/watch-disabled final frozen snapshot",
+    "backend": "isolated self-hosted Convex43230, owner-only protections deployed",
+    "identity": "actual Better Auth cookies and verified native Convex identity",
+    "privateKeyHandling": "synthetic vault values only; per-lab encryption key remains in ignored private environment"
+  },
+  "cleanup": {
+    "deletedOldSyntheticVaultRows": 6,
+    "scope": "Only Live vault authority {viewport} {timestamp} rows in the disposable fixture workspace; final four vault tests each deleted their own row",
+    "actor": "Actual verified Owner session"
+  },
+  "finalFreeze": "No further frontend/source changes required by this qualification"
+}

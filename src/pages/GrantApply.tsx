@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 import { PageLoading } from "./_helpers";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -7,7 +7,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { ErrorSummary, Field, InspectorNote, type ErrorSummaryItem } from "../components/ui";
 import { Select } from "../components/Select";
-import { MarkdownEditor } from "../components/MarkdownEditor";
+import { MarkdownEditor, type MarkdownEditorHandle } from "../components/MarkdownEditor";
 import { PIPA_INTAKE_NOTICE } from "../lib/legalCopy";
 import { ArrowLeft, BadgeDollarSign } from "lucide-react";
 
@@ -28,6 +28,9 @@ export function GrantApplyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const summaryEditor = useRef<MarkdownEditorHandle>(null);
+  const useOfFundsEditor = useRef<MarkdownEditorHandle>(null);
+  const outcomesEditor = useRef<MarkdownEditorHandle>(null);
   const [form, setForm] = useState({
     grantId: "",
     applicantName: currentUser?.displayName ?? "",
@@ -83,8 +86,14 @@ export function GrantApplyPage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    // The editor's serialized change callback may follow the final keystroke.
+    // Capture its current document before validating and sending the form.
+    const projectSummary = summaryEditor.current?.getMarkdown() ?? form.projectSummary;
+    const proposedUseOfFunds = useOfFundsEditor.current?.getMarkdown() ?? form.proposedUseOfFunds;
+    const expectedOutcomes = outcomesEditor.current?.getMarkdown() ?? form.expectedOutcomes;
+    setForm((current) => ({ ...current, projectSummary, proposedUseOfFunds, expectedOutcomes }));
     setAttemptedSubmit(true);
-    if (errors.length > 0) return;
+    if (errors.some((error) => error.fieldId !== FIELD_IDS.projectSummary) || !projectSummary.trim()) return;
     setSubmitting(true);
     try {
       await submitApplication({
@@ -97,9 +106,9 @@ export function GrantApplyPage() {
       phone: form.phone || undefined,
       amountRequestedCents: Math.round(Number(form.amountRequestedDollars) * 100),
       projectTitle: form.projectTitle.trim(),
-      projectSummary: form.projectSummary.trim(),
-      proposedUseOfFunds: form.proposedUseOfFunds || undefined,
-      expectedOutcomes: form.expectedOutcomes || undefined,
+      projectSummary: projectSummary.trim(),
+      proposedUseOfFunds: proposedUseOfFunds || undefined,
+      expectedOutcomes: expectedOutcomes || undefined,
       source: currentUser?.memberId ? "portal" : "public",
       });
       toast.success("Grant application submitted");
@@ -200,13 +209,13 @@ export function GrantApplyPage() {
                 <input className="input" value={form.projectTitle} onChange={(e) => setForm({ ...form, projectTitle: e.target.value })} />
               </Field>
               <Field label="Project summary" id={FIELD_IDS.projectSummary} required error={fieldError(visibleErrors, "Project summary")}>
-                <MarkdownEditor rows={5} value={form.projectSummary} onChange={(markdown) => setForm({ ...form, projectSummary: markdown })} />
+                <MarkdownEditor ref={summaryEditor} rows={5} value={form.projectSummary} onChange={(markdown) => setForm((current) => ({ ...current, projectSummary: markdown }))} />
               </Field>
               <Field label="Proposed use of funds">
-                <MarkdownEditor rows={4} value={form.proposedUseOfFunds} onChange={(markdown) => setForm({ ...form, proposedUseOfFunds: markdown })} />
+                <MarkdownEditor ref={useOfFundsEditor} rows={4} value={form.proposedUseOfFunds} onChange={(markdown) => setForm((current) => ({ ...current, proposedUseOfFunds: markdown }))} />
               </Field>
               <Field label="Expected outcomes">
-                <MarkdownEditor rows={4} value={form.expectedOutcomes} onChange={(markdown) => setForm({ ...form, expectedOutcomes: markdown })} />
+                <MarkdownEditor ref={outcomesEditor} rows={4} value={form.expectedOutcomes} onChange={(markdown) => setForm((current) => ({ ...current, expectedOutcomes: markdown }))} />
               </Field>
               <button className="btn btn--accent" type="submit" disabled={submitting}>
                 {submitting ? "Submitting…" : "Submit funding request"}

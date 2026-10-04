@@ -1,5 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+// Multi-route and role-switch scenarios include several cold development loads.
+// Keep assertion deadlines strict while allowing the whole lifecycle to finish.
+test.setTimeout(90_000);
+
 async function expectInViewport(page: Page, locator: Locator) {
   await expect(locator).toBeVisible();
   // Drawers animate into place; assess their settled interactive bounds.
@@ -34,6 +38,91 @@ async function expectPaintedControlOnTop(control: Locator) {
     }
   })).toBe(true);
 }
+
+test("an open resizable dialog keeps its controls reachable when the viewport shrinks", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/demo/app/members");
+  await expect(page.getByRole("heading", { name: "Members", exact: true })).toBeVisible();
+  await page.keyboard.press("?");
+  const modal = page.getByRole("dialog", { name: "Keyboard shortcuts", exact: true });
+  await expectInViewport(page, modal);
+  await page.setViewportSize({ width: 1024, height: 500 });
+  await expectInViewport(page, modal);
+  await expectPaintedControlOnTop(modal.getByRole("button", { name: "Close", exact: true }));
+  await testInfo.attach("short-viewport-dialog", { body: await page.screenshot(), contentType: "image/png" });
+  await page.keyboard.press("Escape");
+  await expect(modal).toBeHidden();
+});
+
+test("long record titles leave confirmation actions reachable without page overflow", async ({ page }, testInfo) => {
+  const title = `Shared responsive audit ${"VeryLongMeetingName".repeat(8)}`;
+  await page.goto("/demo/app/meetings");
+  await page.getByRole("button", { name: "New meeting", exact: true }).click();
+  const form = page.getByRole("dialog", { name: "Schedule meeting", exact: true });
+  await form.getByRole("textbox", { name: "Title", exact: true }).fill(title);
+  await form.getByRole("button", { name: "Schedule", exact: true }).click();
+  await expect(form).toBeHidden();
+  await page.waitForURL(/\/meetings\/[^/?]+$/);
+  const toast = page.getByRole("status").filter({ hasText: "Meeting scheduled" });
+  // Toasts expire. Capture all feedback geometry atomically while visible,
+  // before later navigation/screenshot work can consume their display time.
+  await expect(toast).toBeVisible();
+  const toastGeometry = await toast.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, fitsContent: element.scrollWidth <= element.clientWidth + 1, width: innerWidth, height: innerHeight };
+  });
+  expect(toastGeometry.left).toBeGreaterThanOrEqual(-1);
+  expect(toastGeometry.top).toBeGreaterThanOrEqual(-1);
+  expect(toastGeometry.right).toBeLessThanOrEqual(toastGeometry.width + 1);
+  expect(toastGeometry.bottom).toBeLessThanOrEqual(toastGeometry.height + 1);
+  expect(toastGeometry.fitsContent).toBe(true);
+  await testInfo.attach("long-title-toast", { body: await page.screenshot(), contentType: "image/png" });
+  await page.goto("/demo/app/meetings");
+  const row = page.locator(".record-table__row").filter({ hasText: title });
+  await row.getByRole("button", { name: "Actions for this meeting", exact: true }).click();
+  const actions = page.getByRole("menu");
+  await expect(actions).toBeVisible();
+  const scroller = page.locator(".record-table__scroll");
+  const canScroll = await scroller.evaluate((element) => element.scrollWidth > element.clientWidth + 30);
+  if (canScroll) {
+    await scroller.evaluate((element) => { element.scrollLeft = 30; });
+    await expect.poll(() => scroller.evaluate((element) => element.scrollLeft)).toBe(30);
+    await expect(actions).toBeVisible();
+  }
+  await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: `Delete "${title}"?`, exact: true });
+  await expectInViewport(page, confirmation);
+  await expectInViewport(page, confirmation.getByRole("button", { name: "Close", exact: true }));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
+  await testInfo.attach("long-title-confirmation", { body: await page.screenshot(), contentType: "image/png" });
+  await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(confirmation).toBeHidden();
+  await expect(row).toBeVisible();
+});
+
+test("date and time picker closes without losing an unsaved meeting drawer", async ({ page }) => {
+  await page.goto("/demo/app/meetings");
+  await page.getByRole("button", { name: "New meeting", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Schedule meeting", exact: true });
+  await drawer.getByRole("textbox", { name: "Title", exact: true }).fill("Unsaved date and time audit");
+  const scheduled = drawer.getByRole("button", { name: "Scheduled", exact: true });
+  await scheduled.click();
+  const picker = page.getByRole("dialog", { name: "Date and time picker", exact: true });
+  await expectInViewport(page, picker);
+  await drawer.locator(".drawer__body").evaluate((element) => { element.scrollTop = 30; });
+  await expectInViewport(page, picker);
+  await expect(picker.getByRole("button", { name: "Previous month", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(picker.getByRole("button", { name: "Done", exact: true })).toBeFocused();
+  await picker.getByLabel("Hour", { exact: true }).selectOption("10");
+  await picker.getByLabel("Minute", { exact: true }).selectOption("35");
+  await page.keyboard.press("Escape");
+  await expect(picker).toBeHidden();
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Unsaved date and time audit");
+  await expect(scheduled).toBeFocused();
+  await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
+});
 
 test("drawer and modal headers paint above mobile chrome and close by touch", async ({ page }) => {
   await page.goto("/demo/app/society");
@@ -205,7 +294,6 @@ test("record table menus fit the viewport and alternate views retain usable cont
 });
 
 test("saved view writes stay disabled for Member and Viewer while local sorting remains available", async ({ page }) => {
-  test.setTimeout(60_000);
   await page.goto("/demo/app/users");
   for (const role of ["Member", "Viewer"]) {
     await page.getByRole("button", { name: "Add user", exact: true }).click();
@@ -305,7 +393,6 @@ test("phone touch selection reaches bulk actions without changing the default fr
 });
 
 test("workflow preparation is readable for Viewer while workflow and package writes stay disabled", async ({ page }) => {
-  test.setTimeout(60_000);
   await page.goto("/demo/app/workflow-packages");
   await page.getByRole("button", { name: "New package", exact: true }).click();
   const packageForm = page.getByRole("dialog");
@@ -354,7 +441,6 @@ test("workflow preparation is readable for Viewer while workflow and package wri
 });
 
 test("row actions stay reachable by touch for receipt, workflow, insurance and asset callbacks", async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
   const touch = Boolean(testInfo.project.use.hasTouch);
   const activate = async (control: Locator) => {
     await control.scrollIntoViewIfNeeded();

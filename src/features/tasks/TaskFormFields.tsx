@@ -10,6 +10,7 @@
  * callback — this component is presentational. Status/priority constants and
  * the dropdown-data hook live here too so callers never re-declare them.
  */
+import { usePermissions } from "@/hooks/usePermissions";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -79,14 +80,15 @@ export type TaskFormData = {
  * nullable societyId so callers can call this above an early-return for
  * still-loading workspaces without violating hook ordering. */
 export function useTaskFormData(societyId: Id<"societies"> | null | undefined): TaskFormData {
-  const args = societyId ? { societyId } : "skip";
-  const committees = useQuery(api.committees.list, args);
-  const goals = useQuery(api.goals.list, args);
-  const users = useQuery(api.users.list, args);
-  const filings = useQuery(api.filings.list, args);
-  const workflows = useQuery(api.workflows.list, args);
-  const documents = useQuery(api.documents.list, args);
-  const commitments = useQuery(api.commitments.list, args);
+  const { can } = usePermissions();
+  const args = (permission: string) => societyId && can(permission) ? { societyId } : "skip";
+  const committees = useQuery(api.committees.list, args("committees:read"));
+  const goals = useQuery(api.goals.list, args("commitments:read"));
+  const users = useQuery(api.users.list, args("users:read"));
+  const filings = useQuery(api.filings.list, args("filings:read"));
+  const workflows = useQuery(api.workflows.list, args("tasks:read"));
+  const documents = useQuery(api.documents.list, args("documents:read"));
+  const commitments = useQuery(api.commitments.list, args("commitments:read"));
   return { committees, goals, users, filings, workflows, documents, commitments };
 }
 

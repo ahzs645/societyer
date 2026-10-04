@@ -1,3 +1,4 @@
+import { usePermissions } from "../hooks/usePermissions";
 // WorkflowDetail: person dropdown picker for intake form fields.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -62,10 +63,11 @@ export function AccessPersonPicker({
     : ["directors", "volunteers", "employees"]
   ).filter((category) => ["directors", "volunteers", "employees"].includes(category));
   const selectedCategory = typeof value?.category === "string" ? value.category : categoryOptions[0];
+  const { loaded, can } = usePermissions();
   const societyArg = { societyId: societyId as any };
-  const directors = useQuery(api.directors.list, selectedCategory === "directors" ? societyArg : "skip");
-  const volunteers = useQuery(api.volunteers.list, selectedCategory === "volunteers" ? societyArg : "skip");
-  const employees = useQuery(api.employees.list, selectedCategory === "employees" ? societyArg : "skip");
+  const directors = useQuery(api.directors.list, loaded && can("directors:read") && selectedCategory === "directors" ? societyArg : "skip");
+  const volunteers = useQuery(api.volunteers.list, loaded && can("volunteers:read") && selectedCategory === "volunteers" ? societyArg : "skip");
+  const employees = useQuery(api.employees.list, loaded && can("employees:read") && selectedCategory === "employees" ? societyArg : "skip");
   const people =
     selectedCategory === "directors"
       ? directors ?? []

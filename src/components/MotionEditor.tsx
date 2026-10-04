@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Check, X, Plus, Trash2, MinusCircle, PlusCircle, Pencil, Clock, Unlink, CalendarClock } from "lucide-react";
 import {
   MOTION_OUTCOMES,
@@ -15,6 +15,7 @@ import {
   DECIDED_BY_LABELS,
   type DecidedBy,
 } from "../lib/motionGovernance";
+import { usePermissions } from "../hooks/usePermissions";
 import { useBylawRules } from "../hooks/useBylawRules";
 // Re-export the pure governance helpers so existing importers can keep pulling
 // them from MotionEditor; the implementations now live in lib/motionGovernance.
@@ -151,6 +152,7 @@ function OutcomePicker({
   onChange,
   compact = false,
   stretch = false,
+  canCarry = true,
 }: {
   value: string;
   onChange: (v: Motion["outcome"]) => void;
@@ -158,6 +160,7 @@ function OutcomePicker({
   /** Buttons grow to fill the available row width and only collapse to
    *  icon-only when the labels can't stay on a single line. */
   stretch?: boolean;
+  canCarry?: boolean;
 }) {
   const outcomeIcons: Record<string, () => React.ReactNode> = {
     Pending: () => <Clock size={12} aria-hidden="true" />,
@@ -181,7 +184,8 @@ function OutcomePicker({
               role="radio"
               aria-checked={isSelected}
               className={`btn-action ${toneClass}${isSelected ? " is-active" : ""}`.trim()}
-              onClick={() => onChange(id)}
+              disabled={id === "Carried" && !canCarry}
+              onClick={() => { if (id !== "Carried" || canCarry) onChange(id); }}
               aria-label={label}
             >
               {renderIcon()}
@@ -287,6 +291,8 @@ export type MotionEditorHandle = {
 
 export const MotionEditor = forwardRef<MotionEditorHandle, {
   motions: Motion[];
+  /** Read access preserves motion details while disabling all writes and imperative add/commit. */
+  readOnly?: boolean;
   onChange: (next: Motion[]) => void;
   /** Director full names used to autofill movedBy/secondedBy. */
   directorNames: string[];
@@ -309,16 +315,33 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   adoptionTargets?: MotionAdoptionTarget[];
 }>(function MotionEditor({
   motions,
-  onChange,
+  readOnly = false,
+  onChange: onChangeProp,
   directorNames,
   people = [],
   agendaSections = [],
-  onAddToBacklog,
+  onAddToBacklog: onAddToBacklogProp,
   hideInlineAdd = false,
   sectionScope,
   onPendingDraftChange,
   adoptionTargets = [],
 }, ref) {
+  const { can } = usePermissions();
+  const authority = useRef({ readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") });
+  authority.current = { readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") };
+  const onChange = (next: Motion[]) => {
+    if (authority.current.readOnly) return false;
+    const previouslyCarried = new Set(motions.filter(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried").map(motion => motion.adoptsMinutesId));
+    if (!authority.current.canApprove && next.some(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried" && !previouslyCarried.has(motion.adoptsMinutesId))) return false;
+    onChangeProp(next);
+    return true;
+  };
+  const onAddToBacklog = !readOnly && can("motions:write") && onAddToBacklogProp
+    ? (motion: Motion, index: number) => {
+      if (authority.current.readOnly || !authority.current.canAddToBacklog) return;
+      return onAddToBacklogProp(motion, index);
+    }
+    : undefined;
   const scopedSectionTitle = sectionScope == null ? "" : agendaSectionTitle(agendaSections[sectionScope]);
   const isAdjournmentScope = sectionScope != null && isAdjournmentSectionTitle(scopedSectionTitle);
   const sectionPatchForScope = (): Partial<Motion> =>
@@ -332,6 +355,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   // "Add motion" button can swap to "Done" while an edit is open.
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const beginAdding = () => {
+    if (authority.current.readOnly) return;
     // When scoped to a section, force the draft's sectionIndex/sectionTitle to
     // that section every time the user opens the add form — otherwise stale
     // values from a previous cancelled draft could leak in.
@@ -380,6 +404,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   const adjournmentRows = motionRows.filter(({ motion }) => isAdjournmentMotion(motion));
 
   const saveDraft = async () => {
+    if (authority.current.readOnly) return;
     if (!draft.text.trim()) return;
     const gaps = motionCompletionGaps(draft);
     if (gaps.length) {
@@ -391,7 +416,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
       });
       if (!ok) return;
     }
-    onChange([...motions, { ...draft, text: draft.text.trim() }]);
+    if (!onChange([...motions, { ...draft, text: draft.text.trim() }])) return;
     resetDraft();
     setAdding(false);
   };
@@ -399,7 +424,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   // Notify the parent whenever the in-progress draft has typed text. Used by
   // outer save buttons (e.g. "Save section") to flip their label and to know
   // when to call commitDraft() before persisting their own state.
-  const hasPendingDraft = adding && draft.text.trim().length > 0;
+  const hasPendingDraft = !readOnly && adding && draft.text.trim().length > 0;
   useEffect(() => {
     onPendingDraftChange?.(hasPendingDraft);
   }, [hasPendingDraft, onPendingDraftChange]);
@@ -414,8 +439,8 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     startAdding: beginAdding,
     commitDraft: () => {
       const text = draft.text.trim();
-      if (!adding || !text) return false;
-      onChange([...motions, { ...draft, text }]);
+      if (authority.current.readOnly || !adding || !text) return false;
+      if (!onChange([...motions, { ...draft, text }])) return false;
       resetDraft();
       setAdding(false);
       return true;
@@ -424,6 +449,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   }), [adding, draft, motions, onChange, sectionScope, agendaSections]);
 
   const patch = (idx: number, diff: Partial<Motion>) => {
+    if (authority.current.readOnly) return;
     const next = motions.map((m, i) => (i === idx ? { ...m, ...diff } : m));
     onChange(next);
   };
@@ -438,11 +464,13 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   // and silently edits the wrong motion. Clearing only on `i === editingIndex`
   // left editingIndex stale for any earlier deletion.
   const deleteMotionAt = (i: number) => {
+    if (authority.current.readOnly) return;
     setEditingIndex((cur) => (cur == null ? cur : cur === i ? null : i < cur ? cur - 1 : cur));
     onChange(motions.filter((_, j) => j !== i));
   };
 
   const addAdjournmentRecord = () => {
+    if (authority.current.readOnly) return;
     onChange([
       ...motions,
       {
@@ -482,6 +510,8 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           key={i}
           anchorId={`motion-${i}`}
           motion={m}
+          readOnly={readOnly}
+          canApproveAdoption={can("minutes:approve")}
           nameOptions={nameOptions}
           directorNames={directorNames}
           people={people}
@@ -496,7 +526,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
         />
       ))}
 
-      {!adding && !hideInlineAdd && editingIndex == null && (
+      {!readOnly && !adding && !hideInlineAdd && editingIndex == null && (
         <div className="motion-add-before-adjournment">
           <button className="btn-action" onClick={beginAdding}>
             <Plus size={12} /> Add motion
@@ -504,7 +534,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
         </div>
       )}
 
-      {adding && (
+      {!readOnly && adding && (
         <div className="motion motion-draft" style={{ borderColor: "var(--accent)" }}>
           <div className="motion-draft__header">
             <div>
@@ -515,7 +545,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
               <button className="btn-action" onClick={() => { setAdding(false); resetDraft(); }}>
                 <X size={12} /> Cancel
               </button>
-              <button className="btn-action btn-action--primary" onClick={saveDraft} disabled={!draft.text.trim()}>
+              <button className="btn-action btn-action--primary" onClick={saveDraft} disabled={!draft.text.trim() || (!!draft.adoptsMinutesId && draft.outcome === "Carried" && !can("minutes:approve"))}>
                 <Check size={12} /> Add
               </button>
             </div>
@@ -595,7 +625,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
               </Field>
             )}
 
-            <OutcomePicker stretch value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
+            <OutcomePicker stretch canCarry={!draft.adoptsMinutesId || can("minutes:approve")} value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
 
             <div className="motion-draft__votes">
               <div className="motion-draft__vote-row">
@@ -634,7 +664,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
             <strong>Adjournment</strong>
             <div className="muted">Procedural close of the meeting.</div>
           </div>
-          {!adjournmentRows.length && (
+          {!readOnly && !adjournmentRows.length && (
             <button className="btn-action" type="button" onClick={addAdjournmentRecord}>
               <Plus size={12} /> Add adjournment record
             </button>
@@ -644,6 +674,8 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           <MotionRow
             key={`adjournment-${i}`}
             motion={m}
+            readOnly={readOnly}
+            canApproveAdoption={can("minutes:approve")}
             nameOptions={nameOptions}
             directorNames={directorNames}
             people={people}
@@ -664,6 +696,8 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
 
 function MotionRow({
   motion,
+  readOnly = false,
+  canApproveAdoption = false,
   nameOptions,
   directorNames,
   people,
@@ -679,6 +713,8 @@ function MotionRow({
   anchorId,
 }: {
   motion: Motion;
+  readOnly?: boolean;
+  canApproveAdoption?: boolean;
   nameOptions: string[];
   directorNames: string[];
   people: MotionPerson[];
@@ -765,6 +801,30 @@ function MotionRow({
     onPatch({ outcome });
   };
 
+  if (readOnly) {
+    return (
+      <div id={anchorId} className="motion">
+        <details open={expanded}>
+          <summary className="motion__head">
+            <strong>{titleText || "Untitled motion"}</strong>
+            <Badge tone={tone as any}>{motion.outcome}</Badge>
+          </summary>
+          <div style={{ marginTop: 10 }}>
+            <MarkdownEditor rows={4} value={motion.text} onChange={() => {}} readOnly />
+            {motion.movedBy && <p>Moved by {motionPersonDisplayName(motion.movedBy, people, { memberId: motion.movedByMemberId, directorId: motion.movedByDirectorId })}</p>}
+            {motion.secondedBy && <p>Seconded by {motionPersonDisplayName(motion.secondedBy, people, { memberId: motion.secondedByMemberId, directorId: motion.secondedByDirectorId })}</p>}
+            <p>{motion.resolutionType || "Ordinary"} · For {motion.votesFor ?? 0} · Against {motion.votesAgainst ?? 0} · Abstain {motion.abstentions ?? 0}</p>
+            {motion.decidedBy && <p>Decided by {DECIDED_BY_LABELS[motion.decidedBy]}</p>}
+            {assignedAgendaLabel && <p>Agenda item: {assignedAgendaLabel}</p>}
+            {motion.adoptsMinutesId && <p>Adopts minutes of: {adoptionTargets.find(target => target.id === motion.adoptsMinutesId)?.label || motion.adoptsMinutesId}</p>}
+            {(motion.tags ?? []).length > 0 && <p>Tags: {motion.tags!.join(", ")}</p>}
+          </div>
+        </details>
+        <VoteProgress motion={motion} />
+      </div>
+    );
+  }
+
   return (
     <div
       id={anchorId}
@@ -809,6 +869,7 @@ function MotionRow({
                 <button
                   className="btn-action btn-action--success"
                   onClick={() => { void setOutcomeWithReview("Carried"); }}
+                  disabled={!!motion.adoptsMinutesId && !canApproveAdoption}
                   title="Record as Carried"
                 >
                   <Check size={12} />
@@ -936,7 +997,7 @@ function MotionRow({
               />
             </Field>
           )}
-          <OutcomePicker stretch value={motion.outcome} onChange={(v) => { void setOutcomeWithReview(v); }} />
+          <OutcomePicker stretch canCarry={!motion.adoptsMinutesId || canApproveAdoption} value={motion.outcome} onChange={(v) => { void setOutcomeWithReview(v); }} />
           <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
             <VoteStepper label="For" value={motion.votesFor ?? 0} onChange={(n) => onSetVote("votesFor", n)} tone="success" />
             <VoteStepper label="Against" value={motion.votesAgainst ?? 0} onChange={(n) => onSetVote("votesAgainst", n)} tone="danger" />

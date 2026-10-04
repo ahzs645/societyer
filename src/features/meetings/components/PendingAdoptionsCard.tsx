@@ -28,9 +28,11 @@ export type PendingAdoption = {
  */
 export function PendingAdoptionsCard({
   pending,
+  canAdd = true,
   onAddAdoptionMotion,
 }: {
   pending: PendingAdoption[];
+  canAdd?: boolean;
   onAddAdoptionMotion: (entry: PendingAdoption) => Promise<void> | void;
 }) {
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -89,8 +91,9 @@ export function PendingAdoptionsCard({
                   <button
                     className="btn-action"
                     type="button"
-                    disabled={busyId === entry.minutesId}
+                    disabled={!canAdd || busyId === entry.minutesId}
                     onClick={async () => {
+                      if (!canAdd) return;
                       setBusyId(entry.minutesId);
                       try {
                         await onAddAdoptionMotion(entry);

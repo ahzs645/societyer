@@ -1,0 +1,129 @@
+{
+  "completedAt": "2026-10-04T21:44:12.125Z",
+  "endpoint": "http://127.0.0.1:43230",
+  "auth": "Actual Better Auth eligible Member; verified broker JWT",
+  "societyId": "qh7n2jm5yw5nktzcnxqqm1xw2d8fm5e2",
+  "passed": 6,
+  "failed": 0,
+  "nativePublicAttemptCount": 46,
+  "nativeAttempts": {
+    "queries": 12,
+    "mutations": 34,
+    "completed": 30,
+    "rejected": 16,
+    "brokerRequests": 7,
+    "operatorFixtureCalls": 2,
+    "byEndpoint": {
+      "elections:create": {
+        "kind": "mutation",
+        "attempted": 6,
+        "completed": 5,
+        "rejected": 1
+      },
+      "elections:addQuestion": {
+        "kind": "mutation",
+        "attempted": 6,
+        "completed": 5,
+        "rejected": 1
+      },
+      "elections:snapshotEligibleVoters": {
+        "kind": "mutation",
+        "attempted": 6,
+        "completed": 5,
+        "rejected": 1
+      },
+      "elections:get": {
+        "kind": "query",
+        "attempted": 6,
+        "completed": 5,
+        "rejected": 1
+      },
+      "elections:listMine": {
+        "kind": "query",
+        "attempted": 1,
+        "completed": 1,
+        "rejected": 0
+      },
+      "elections:submitNomination": {
+        "kind": "mutation",
+        "attempted": 5,
+        "completed": 1,
+        "rejected": 4
+      },
+      "elections:listNominations": {
+        "kind": "query",
+        "attempted": 2,
+        "completed": 2,
+        "rejected": 0
+      },
+      "elections:castBallot": {
+        "kind": "mutation",
+        "attempted": 7,
+        "completed": 1,
+        "rejected": 6
+      },
+      "elections:close": {
+        "kind": "mutation",
+        "attempted": 2,
+        "completed": 1,
+        "rejected": 1
+      },
+      "elections:tallyElection": {
+        "kind": "mutation",
+        "attempted": 2,
+        "completed": 1,
+        "rejected": 1
+      },
+      "elections:tally": {
+        "kind": "query",
+        "attempted": 3,
+        "completed": 3,
+        "rejected": 0
+      }
+    }
+  },
+  "results": [
+    {
+      "name": "Actual Owner creates and snapshots one eligible member for native and four browser elections",
+      "passed": true
+    },
+    {
+      "name": "Eligible Member sees own eligibility and successfully submits a nomination without administration grants",
+      "passed": true
+    },
+    {
+      "name": "Actor substitution and foreign election/question access fail before nomination or ballot writes",
+      "passed": true
+    },
+    {
+      "name": "Eligible Member participation cannot create, configure, snapshot, close or publish elections",
+      "passed": true
+    },
+    {
+      "name": "Invalid question/options are rejected, real ballot succeeds once and duplicate ballot is rejected",
+      "passed": true
+    },
+    {
+      "name": "Owner tallies exactly one anonymous ballot; Member sees published totals and no voter/ballot linkage",
+      "passed": true
+    }
+  ],
+  "browserElectionIds": {
+    "narrow-phone": {
+      "electionId": "t97bxk60x7h99c7h88txzt5ygd8fmcy8",
+      "questionId": "t57fcqsdg74ybq7vpwyn3dna1s8fn965"
+    },
+    "phone": {
+      "electionId": "t97dawqdj6wy8trv1g6czzggy98fme8g",
+      "questionId": "t572n39hvhbg6afjmc7bgy0das8fnsq0"
+    },
+    "tablet": {
+      "electionId": "t977s6705azqks4xza0wtnf8zs8fnh4j",
+      "questionId": "t575xpqnc7nefjpp2ffxjqmqg98fnaj1"
+    },
+    "desktop": {
+      "electionId": "t976rrjeekfkq07dqvax5rsa9n8fmg1h",
+      "questionId": "t57a0brzpp94w3g0yrtbn260ds8fn526"
+    }
+  }
+}

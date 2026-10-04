@@ -190,7 +190,7 @@ async function ensureDocument(absPath, relPath) {
     });
   }
 
-  const uploadUrl = await client.mutation(api.files.generateUploadUrl, {});
+  const uploadUrl = await client.mutation(api.files.generateUploadUrl, { societyId: society._id });
   const response = await fetch(uploadUrl, {
     method: "POST",
     headers: { "Content-Type": mimeType },

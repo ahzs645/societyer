@@ -26,7 +26,7 @@ export function PeopleDirectoryPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
 
-  const people = useQuery(api.peopleDirectory.list, {}) as
+  const people = useQuery(api.peopleDirectory.list, society ? { societyId: society._id } : "skip") as
     | Array<{
         _id: string;
         fullName: string;
@@ -34,17 +34,18 @@ export function PeopleDirectoryPage() {
         lastName?: string;
         dob?: string;
         isIndividual?: boolean;
+        editable?: boolean;
       }>
     | undefined;
 
   const matches = useQuery(
     api.peopleDirectory.searchByPrefix,
-    prefix ? { prefix } : "skip",
+    prefix && society ? { prefix, societyId: society._id } : "skip",
   ) as
-    | Array<{ id: string; fullName: string; firstName?: string; lastName?: string; dob?: string }>
+    | Array<{ id: string; fullName: string; firstName?: string; lastName?: string; dob?: string; editable?: boolean }>
     | undefined;
 
-  const duplicateGroups = useQuery(api.peopleDirectory.duplicates, {}) as
+  const duplicateGroups = useQuery(api.peopleDirectory.duplicates, society ? { societyId: society._id } : "skip") as
     | Array<Array<{ id: string; fullName: string; dob?: string }>>
     | undefined;
 
@@ -82,7 +83,8 @@ export function PeopleDirectoryPage() {
     setOpen(true);
   };
 
-  const openEdit = (person: { id: string; fullName: string; firstName?: string; lastName?: string; dob?: string; isIndividual?: boolean }) => {
+  const openEdit = (person: { id: string; fullName: string; firstName?: string; lastName?: string; dob?: string; isIndividual?: boolean; editable?: boolean }) => {
+    if (!canManage || person.editable === false) return;
     setEditingId(person.id);
     setForm({
       fullName: person.fullName ?? "",
@@ -104,6 +106,7 @@ export function PeopleDirectoryPage() {
     setSaving(true);
     try {
       await upsert({
+      societyId: society._id,
       id: (editingId ?? undefined) as any,
       fullName: form.fullName.trim(),
       firstName: form.firstName || undefined,
@@ -128,7 +131,7 @@ export function PeopleDirectoryPage() {
         title="People directory"
         icon={<Contact size={16} />}
         iconColor="blue"
-        subtitle="A global, cross-tenant directory of people. Search by name to find an existing person before creating a new one, and review possible duplicates."
+        subtitle="People in this workspace and existing linked records. Search before creating a new person, and review possible duplicates."
         actions={
           <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
             <Plus size={12} /> New person
@@ -137,7 +140,7 @@ export function PeopleDirectoryPage() {
       />
 
       <p className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
-        A cross-organization contact lookup to avoid duplicate person records. To manage this organization's directors or other governance roles, see{" "}
+        Create and maintain people for this workspace. Shared legacy records remain available through this organization's existing role links. To manage governance roles, see{" "}
         <Link to="/app/directors">Directors</Link> or <Link to="/app/role-holders">Role holders</Link>.
       </p>
 
@@ -167,7 +170,7 @@ export function PeopleDirectoryPage() {
                     <span>{m.fullName}</span>
                     <span className="row" style={{ gap: 8, alignItems: "center" }}>
                       {m.dob && <span style={{ opacity: 0.6 }}>{m.dob}</span>}
-                      <button className="btn btn--ghost" onClick={() => openEdit(m)} disabled={!canManage}>
+                      <button className="btn btn--ghost" onClick={() => openEdit(m)} disabled={!canManage || m.editable === false}>
                         Edit
                       </button>
                     </span>

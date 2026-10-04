@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { LockKeyhole } from "lucide-react";
 import { Badge, Drawer, Field } from "../../../components/ui";
@@ -39,11 +40,13 @@ export function MeetingMaterialDrawer({
   onSave: () => void | Promise<void>;
   onAddAccessGrant: () => void;
 }) {
+  const { can } = usePermissions();
+  const canWrite = can("meetings:write");
   // Guard against double-clicks: with no id, each save inserts a new material
   // row, so a slow network + double-click would attach the document twice.
   const [saving, setSaving] = useState(false);
   const handleSave = async () => {
-    if (saving) return;
+    if (!canWrite || saving) return;
     setSaving(true);
     try {
       await onSave();
@@ -53,13 +56,13 @@ export function MeetingMaterialDrawer({
   };
   return (
     <Drawer
-      open={!!materialDraft}
+      open={canWrite && !!materialDraft}
       onClose={onClose}
       title={materialDraft?.id ? "Edit meeting material" : "Attach meeting material"}
       footer={
         <>
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn--accent" onClick={handleSave} disabled={saving}>
+          <button className="btn btn--accent" onClick={handleSave} disabled={!canWrite || (saving)}>
             {saving ? "Saving…" : materialDraft?.id ? "Save" : "Attach"}
           </button>
         </>
@@ -154,7 +157,7 @@ export function MeetingMaterialDrawer({
                   ]} />
               </Field>
             )}
-            <button className="btn btn--ghost btn--sm" type="button" onClick={onAddAccessGrant}>
+            <button className="btn btn--ghost btn--sm" type="button" onClick={onAddAccessGrant} disabled={!canWrite}>
               Add grant
             </button>
             <div className="col" style={{ gap: 6, marginTop: 10 }}>
@@ -171,7 +174,7 @@ export function MeetingMaterialDrawer({
                       ...materialDraft,
                       accessGrants: (materialDraft.accessGrants ?? []).filter((row: any) => grantKey(row) !== grantKey(grant)),
                     })}
-                  >
+                   disabled={!canWrite}>
                     Remove
                   </button>
                 </div>
@@ -189,7 +192,7 @@ export function MeetingMaterialDrawer({
             label="Required review for this meeting"
           />
           <Field label="Notes">
-            <MarkdownEditor rows={3} value={materialDraft.notes} onChange={(markdown) => setMaterialDraft({ ...materialDraft, notes: markdown })} />
+            <MarkdownEditor rows={3} value={materialDraft.notes} onChange={(markdown) => setMaterialDraft({ ...materialDraft, notes: markdown })} readOnly={!canWrite} />
           </Field>
         </div>
       )}

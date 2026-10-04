@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useMutation } from "convex/react";
+import { usePermissions } from "@/hooks/usePermissions";
+import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Modal } from "../../components/Modal";
@@ -13,7 +14,13 @@ import {
   type AssetFormValue,
 } from "./AssetFormFields";
 
-export function AssetCreateModal({
+export function AssetCreateModal(props: Parameters<typeof AssetCreateModalForm>[0]) {
+  const { can } = usePermissions();
+  if (!props.open || !can("financials:write")) return null;
+  return <AssetCreateModalForm {...props} />;
+}
+
+function AssetCreateModalForm({
   open,
   onClose,
   societyId,
@@ -26,7 +33,9 @@ export function AssetCreateModal({
   initialValues?: AssetFormInitialValues;
   onCreated?: (assetId: Id<"assets">) => void;
 }) {
-  const create = useMutation(api.assets.create);
+  const { can } = usePermissions();
+  const canCreate = can("financials:write");
+  const create = usePermissionedMutation(api.assets.create, canCreate);
   const toast = useToast();
   const data = useAssetFormData(societyId);
 
@@ -48,6 +57,7 @@ export function AssetCreateModal({
   }, [open, data.assets]);
 
   const save = async () => {
+    if (!open || !canCreate) return;
     const payload = normalizeAssetForm(form);
     if (!payload.assetTag || !payload.name) {
       toast.error("Asset tag and name are required");
@@ -77,7 +87,7 @@ export function AssetCreateModal({
           <button className="btn" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button className="btn btn--accent" onClick={save} disabled={saving}>
+          <button className="btn btn--accent" onClick={save} disabled={!canCreate || saving}>
             {saving ? "Creating…" : "Create"}
           </button>
         </>

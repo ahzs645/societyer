@@ -3,20 +3,14 @@ import { useMutation } from "convex/react";
 import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Field } from "./ui";
+import { useSociety } from "../hooks/useSociety";
 import { useToast } from "./Toast";
 import { isDemoMode } from "../lib/demoMode";
+import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { readFileDataUrl } from "../lib/readFileDataUrl";
 import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 
 export type ImageValue = { imageStorageId?: string; imageUrl?: string };
-
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
 
 /**
  * Image picker that works in both runtimes:
@@ -24,17 +18,20 @@ function readAsDataUrl(file: File): Promise<string> {
  * - backend runtime uploads to Convex storage and keeps the storageId
  */
 export function ImageUploadField({
+  purpose,
   label = "Photo",
   hint,
   value,
   onChange,
 }: {
+  purpose: "asset" | "inventory";
   label?: string;
   hint?: string;
   value: ImageValue;
   onChange: (value: ImageValue) => void;
 }) {
   const toast = useToast();
+  const society = useSociety();
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -51,11 +48,12 @@ export function ImageUploadField({
     }
     setBusy(true);
     try {
-      if (isDemoMode()) {
-        const dataUrl = await readAsDataUrl(file);
+      if (isDemoMode() || isLocalDataRuntime()) {
+        const dataUrl = await readFileDataUrl(file);
         onChange({ imageStorageId: undefined, imageUrl: dataUrl });
       } else {
-        const uploadUrl = await generateUploadUrl({});
+        if (!society) throw new Error("Select a workspace before uploading.");
+        const uploadUrl = await generateUploadUrl({ societyId: society._id, purpose });
         const res = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": file.type }, body: file });
         if (!res.ok) throw new Error("Upload failed");
         const { storageId } = await res.json();
@@ -96,18 +94,19 @@ export function ImageUploadField({
         <div className="stack stack--xs" style={{ flex: "1 1 200px", minWidth: 180 }}>
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             {canUpload && (
-              <button type="button" className="btn btn--sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+              <button type="button" aria-label={`${preview ? "Replace" : "Upload"} ${label.toLowerCase()}`} className="btn btn--sm" disabled={busy} onClick={() => fileRef.current?.click()}>
                 {busy ? <Loader2 size={12} className="spin" /> : <ImagePlus size={12} />} {preview ? "Replace" : "Upload"}
               </button>
             )}
             {preview && (
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => onChange({ imageStorageId: undefined, imageUrl: undefined })}>
+              <button type="button" aria-label={`Remove ${label.toLowerCase()}`} className="btn btn--ghost btn--sm" onClick={() => onChange({ imageStorageId: undefined, imageUrl: undefined })}>
                 <Trash2 size={12} /> Remove
               </button>
             )}
           </div>
           <input
             className="input"
+            aria-label={`${label} URL`}
             placeholder="…or paste an image URL"
             value={value.imageStorageId ? "" : value.imageUrl ?? ""}
             onChange={(e) => onChange({ imageStorageId: undefined, imageUrl: e.target.value || undefined })}

@@ -1,5 +1,7 @@
+import { usePermissions } from "@/hooks/usePermissions";
+import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Badge, Field } from "../../../components/ui";
@@ -31,10 +33,13 @@ export function MeetingConflictsCard({
   directors: any[];
   motions: MotionOption[];
 }) {
-  const conflicts = useQuery(api.conflicts.forMeeting, { meetingId });
-  const createConflict = useMutation(api.conflicts.create);
-  const resolveConflict = useMutation(api.conflicts.resolve);
-  const removeConflict = useMutation(api.conflicts.remove);
+  const { can } = usePermissions();
+  const canRead = can("conflicts:read");
+  const canWrite = can("conflicts:write");
+  const conflicts = useQuery(api.conflicts.forMeeting, canRead ? { meetingId } : "skip");
+  const createConflict = usePermissionedMutation(api.conflicts.create, canWrite);
+  const resolveConflict = usePermissionedMutation(api.conflicts.resolve, canWrite);
+  const removeConflict = usePermissionedMutation(api.conflicts.remove, canWrite);
   const toast = useToast();
 
   const activeDirectors = useMemo(
@@ -82,6 +87,7 @@ export function MeetingConflictsCard({
   };
 
   const save = async () => {
+    if (!canWrite) return;
     if (saving) return;
     if (!draft.directorId || !draft.contractOrMatter.trim()) {
       toast.error("Pick a director and describe the matter.");
@@ -123,7 +129,7 @@ export function MeetingConflictsCard({
           Conflicts of interest &amp; recusals
         </h3>
         {!adding && (
-          <button className="btn-action" style={{ marginLeft: "auto" }} onClick={() => setAdding(true)}>
+          <button className="btn-action" style={{ marginLeft: "auto" }} disabled={!canWrite} onClick={() => { if (canWrite) setAdding(true); }}>
             Declare conflict
           </button>
         )}
@@ -163,7 +169,7 @@ export function MeetingConflictsCard({
               </div>
               <div className="meeting-conflict-row__actions">
                 {conflict.resolvedAt ? (
-                  <button
+                  <button disabled={!canWrite}
                     className="btn-action"
                     title="Reopen"
                     onClick={() => resolveConflict({ id: conflict._id, resolvedAt: "" })}
@@ -171,7 +177,7 @@ export function MeetingConflictsCard({
                     <RotateCcw size={12} />
                   </button>
                 ) : (
-                  <button
+                  <button disabled={!canWrite}
                     className="btn-action"
                     title="Mark resolved"
                     onClick={() => resolveConflict({ id: conflict._id, resolvedAt: new Date().toISOString() })}
@@ -182,7 +188,7 @@ export function MeetingConflictsCard({
                 <button
                   className="btn-action"
                   title="Remove"
-                  aria-label="Remove conflict"
+                  aria-label="Remove conflict" disabled={!canWrite}
                   onClick={() => removeConflict({ id: conflict._id })}
                 >
                   <Trash2 size={12} />
@@ -254,7 +260,7 @@ export function MeetingConflictsCard({
             </div>
             <div className="row" style={{ gap: 6, justifyContent: "flex-end", marginTop: 8 }}>
               <button className="btn" onClick={() => { setAdding(false); setDraft(blankDraft); }}>Cancel</button>
-              <button className="btn btn--accent" onClick={save} disabled={saving}>
+              <button className="btn btn--accent" onClick={save} disabled={!canWrite || saving}>
                 {saving ? "Saving…" : "Save declaration"}
               </button>
             </div>

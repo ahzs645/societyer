@@ -2,6 +2,7 @@
 import type { PortableQueryCtx } from "../portable/ctx";
 import { requireAuthenticated } from "./access";
 import { requirePermissionPortable, type Permission } from "./permissions";
+import { uploadPermission } from "./uploadPolicy";
 import { isAllowedOption } from "../orgHubOptions";
 
 const RESOURCE_GROUPS: Record<string, readonly string[]> = {
@@ -101,6 +102,7 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (["pathways:approve", "pathways:reject"].includes(name)) return "documents:write";
   if (["pathways:requestSubmission", "pathways:recordManualReceipt"].includes(name)) return "filings:submit";
   if (name === "postIncorporation:recordEvidence") return "documents:write";
+  if (name === "files:generateLogoUploadUrl") return "society:write";
   if (name === "calendarFeed:getFeedToken") return "settings:write";
   if (name === "documents:recordOpen") return "documents:read";
   if (["documentVersions:getDownloadTarget", "documentVersions:getDownloadUrl", "workflows:inspectPdfTemplate"].includes(name)) return "documents:read";
@@ -115,13 +117,23 @@ async function societyForArgs(ctx: PortableQueryCtx, name: string, args: Record<
   // Resolve every referenced row recursively, including child rows whose
   // workspace is stored only on a parent. A missing record never falls back
   // to another workspace's authority.
-  const referenceFields = Object.keys(args).filter((field) => (field === "id" || field.endsWith("Id")) && !field.endsWith("ExternalId") && !field.startsWith("external") && !OPAQUE_IDENTIFIERS[name]?.includes(field) && !["actingUserId", "actorUserId", "createdByUserId", "invitedByUserId", "storageId"].includes(field));
+  // Native blob IDs are system references, not portable rows. Attachment
+  // handlers enforce their workspace claim after this workspace permission gate.
+  const referenceFields = Object.keys(args).filter((field) => (field === "id" || field.endsWith("Id")) && !field.endsWith("ExternalId") && !field.startsWith("external") && !OPAQUE_IDENTIFIERS[name]?.includes(field) && !["actingUserId", "actorUserId", "createdByUserId", "invitedByUserId", "storageId", "imageStorageId"].includes(field));
   const seen = new Set<string>();
   async function resolve(id: string, depth = 0): Promise<string | undefined> {
     if (seen.has(id) || depth > 5) return undefined;
     seen.add(id);
     const row = await ctx.db.get(id);
-    if (!row) throw new Error("Record not found.");
+    if (!row) {
+      if (name === "roleHolderHistory:revisionHistory" && id === args.roleHolderId) {
+        // Deleted register entries retain an independently owned audit trail.
+        const revisions = await ctx.db.query("roleHolderRevisions").withIndex("by_role_holder", q => q.eq("roleHolderId", id)).collect();
+        const owners = new Set(revisions.map(revision => revision.societyId).filter(value => typeof value === "string"));
+        if (owners.size === 1 && revisions.every(revision => revision.societyId === [...owners][0])) return [...owners][0];
+      }
+      throw new Error("Record not found.");
+    }
     if (typeof row.societyId === "string") return row.societyId;
     const society = await ctx.db.get(id, "societies");
     if (society) return society._id;
@@ -144,9 +156,22 @@ async function societyForArgs(ctx: PortableQueryCtx, name: string, args: Record<
 }
 
 export async function requireFunctionAction(ctx: PortableQueryCtx, name: string, kind: "query" | "mutation" | "action", args: Record<string, any>) {
+  if (["files:generateUploadUrl", "files:generateLogoUploadUrl"].includes(name) && typeof args.societyId !== "string") throw new Error("An authorized workspace is required.");
   let permission = actionPermission(name, kind);
+  if (name === "files:generateUploadUrl") permission = uploadPermission(args.purpose);
   if (!permission) return; // Explicit handlers perform their specialized policy.
   requireAuthenticated(ctx);
+  if (name === "firm:batchGeneratePacket") {
+    if (!Array.isArray(args.societyIds) || !args.societyIds.length) throw new Error("Select at least one authorized workspace.");
+    // This operation intentionally spans workspaces. Authorize the complete
+    // selection before the handler can inspect or generate any packet.
+    for (const id of new Set(args.societyIds)) {
+      if (typeof id !== "string") throw new Error("Invalid workspace selection.");
+      await requirePermissionPortable(ctx, id, "society:write");
+      await requirePermissionPortable(ctx, id, "documents:write");
+    }
+    return;
+  }
   if (kind === "query" && name === "registerHistory:roleHoldersAsOfDate") {
     // This query can select registers with different read authority. Controller
     // rows must not bypass the significant-individual endpoint's privacy gate.

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
@@ -37,9 +39,11 @@ function statusOf(record: any): DeadlineStatus {
 
 export function DeadlinesPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("deadlines:write");
   const items = useQuery(api.deadlines.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.deadlines.create);
-  const setStatus = useMutation(api.deadlines.setStatus).withOptimisticUpdate(
+  const create = usePermissionedMutation(api.deadlines.create, canWrite);
+  const setStatus = usePermissionedMutation(api.deadlines.setStatus, canWrite).withOptimisticUpdate(
     (store, args) => {
       patchInList(store, api.deadlines.list, String(args.id), {
         status: args.status,
@@ -47,8 +51,8 @@ export function DeadlinesPage() {
       });
     },
   );
-  const update = useMutation(api.deadlines.update);
-  const remove = useMutation(api.deadlines.remove);
+  const update = usePermissionedMutation(api.deadlines.update, canWrite);
+  const remove = usePermissionedMutation(api.deadlines.remove, canWrite);
   const confirm = useConfirm();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -74,10 +78,12 @@ export function DeadlinesPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite) return;
     setForm({ title: "", dueDate: new Date().toISOString().slice(0, 10), category: "Governance", recurrence: "None" });
     setOpen(true);
   };
   const save = async () => {
+    if (!canWrite) return;
     const { recurrenceEndDate, ...rest } = form;
     await create({
       societyId: society._id,
@@ -91,6 +97,7 @@ export function DeadlinesPage() {
   };
 
   const handleDelete = async (record: any) => {
+    if (!canWrite) return;
     const ok = await confirm({
       title: "Delete deadline?",
       message: `"${record.title}" will be permanently removed.`,
@@ -103,6 +110,7 @@ export function DeadlinesPage() {
 
   // Reopen the completed deadline and drop the occurrence its completion spawned.
   const undoComplete = async (id: Id<"deadlines">, spawnedId: string | null) => {
+    if (!canWrite) return;
     await setStatus({ id, status: "open" });
     if (spawnedId) {
       try {
@@ -117,6 +125,7 @@ export function DeadlinesPage() {
   // rolls forward, so surface the next date (with an Undo) instead of it looking
   // like nothing changed.
   const completeAndNotify = async (record: any) => {
+    if (!canWrite) return;
     const id = record._id as Id<"deadlines">;
     const res: any = await setStatus({ id, status: "complete" });
     const spawnedDue: string | null = res?.spawnedDue ?? null;
@@ -160,7 +169,7 @@ export function DeadlinesPage() {
                 { id: "calendar", label: "Calendar" },
               ]}
             />
-            <button className="btn-action btn-action--primary" onClick={openNew}>
+            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
               <Plus size={12} /> New deadline
             </button>
           </>
@@ -207,7 +216,7 @@ export function DeadlinesPage() {
             objectMetadata={tableData.objectMetadata}
             hydratedView={tableData.hydratedView}
             records={records}
-            onUpdate={async ({ recordId, fieldName, value }) => {
+            onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
               if (fieldName === "status") {
                 const nextStatus = value as DeadlineStatus;
                 const rec = allRecords.find((r) => r._id === recordId);
@@ -222,7 +231,7 @@ export function DeadlinesPage() {
                 id: recordId as Id<"deadlines">,
                 patch: { [fieldName]: value } as any,
               });
-            }}
+            } : undefined}
           >
             <RecordTableViewToolbar
               societyId={society._id}
@@ -247,6 +256,7 @@ export function DeadlinesPage() {
                   return (
                     <span onClick={(e) => e.stopPropagation()}>
                       <Checkbox
+                        disabled={!canWrite}
                         checked={s === "complete"}
                         onChange={() => {
                           if (s === "complete") {
@@ -302,14 +312,16 @@ export function DeadlinesPage() {
                       aria-label={isClosed ? `Reopen deadline ${r.title}` : `Mark deadline ${r.title} as closed`}
                       title={isClosed ? "Reopen" : "Mark as closed"}
                       onClick={() => setStatus({ id: r._id, status: isClosed ? "open" : "closed" })}
-                    >
+                    disabled={!canWrite}
+                   >
                       {isClosed ? <RotateCcw size={12} /> : <Archive size={12} />}
                     </button>
                     <button
                       className="btn btn--ghost btn--sm btn--icon"
                       aria-label={`Delete deadline ${r.title}`}
                       onClick={() => handleDelete(r)}
-                    >
+                    disabled={!canWrite}
+                   >
                       <Trash2 size={12} />
                     </button>
                   </>
@@ -328,7 +340,7 @@ export function DeadlinesPage() {
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title="Add deadline"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite}>Save</button></>}
       >
         {form && (
           <div>

@@ -166,6 +166,7 @@ export async function submitNominationPortable(
   const election = await requireOwnedRow(ctx, "elections", args.electionId);
   const societyId = String(election.societyId);
   const actor = await requireSocietyMembership(ctx, societyId);
+  if (args.actingUserId && args.actingUserId !== actor?._id) throw new Error("Authenticated actor does not match the current principal.");
   if (!actor?.memberId) throw new Error("Only confirmed members can submit nominations.");
   await getOwned(ctx, "members", actor.memberId, societyId);
   if (args.questionId) {
@@ -215,6 +216,7 @@ export async function castBallotPortable(
     throw new Error("Election is not open for voting.");
   }
   const user = await requireSocietyMembership(ctx, societyId);
+  if (actingUserId && actingUserId !== user?._id) throw new Error("Authenticated actor does not match the current principal.");
   if (!user?.memberId) {
     throw new Error("Only confirmed members can cast a ballot.");
   }

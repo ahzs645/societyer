@@ -1233,6 +1233,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
 
   // files
   definePortableQuery({ name: "files:getUrl", handler: filesFns.getUrlPortable }),
+  definePortableMutation({ name: "files:generateUploadUrl", handler: filesFns.generateUploadUrlPortable }),
+  definePortableMutation({ name: "files:generateLogoUploadUrl", handler: filesFns.generateLogoUploadUrlPortable }),
 
   // assets
   definePortableQuery({ name: "assets:list", handler: assetsFns.listPortable }),

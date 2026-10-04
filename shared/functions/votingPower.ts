@@ -21,6 +21,7 @@ import { computeVotingPower, type VotingPowerResult } from "../votingPower";
 import { materializeRightsHoldings } from "../equityLedger";
 import type { PortableQueryCtx } from "../portable/ctx";
 import { requireSocietyMembership } from "./access";
+import { visibleDirectoryRows } from "./peopleDirectory";
 
 export interface VotingPowerArgs {
   societyId: string;
@@ -90,7 +91,7 @@ export async function votingPowerPortable(
     ctx.db.query("rightsClasses").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("rightsHoldings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ctx.db.query("peopleDirectory").collect(),
+    visibleDirectoryRows(ctx, societyId),
     asOf
       ? ctx.db.query("rightsholdingTransfers").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()
       : Promise.resolve([] as Record<string, any>[]),

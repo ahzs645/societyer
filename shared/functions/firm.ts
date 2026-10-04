@@ -12,9 +12,21 @@
  */
 
 import { documentAccessPredicate } from "./documents";
+import { listAuthorizedSocietyRows } from "./society";
+import { requirePermissionPortable, type Permission } from "./permissions";
+import { visibleDirectoryRows } from "./peopleDirectory";
 import type { PortableQueryCtx } from "../portable/ctx";
 import { organizationKind, organizationLabel } from "../organizationDomain";
 import { postIncorporationStepsForOrganization } from "../postIncorporationSteps";
+
+async function permits(ctx: PortableQueryCtx, societyId: string, permission: Permission) {
+  try { await requirePermissionPortable(ctx, societyId, permission); return true; }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === `Permission ${permission} required.` || message === `Service scope ${permission} required.`) return false;
+    throw error;
+  }
+}
 
 function deadlineOpen(d: any): boolean {
   const status = d.status ?? (d.done ? "complete" : "open");
@@ -35,10 +47,12 @@ function generatedPacketKeysFromRuns(runs: any[]): Set<string> {
 
 export async function overviewPortable(ctx: PortableQueryCtx, { todayISO }: { todayISO?: string }) {
   const today = (todayISO ?? new Date().toISOString()).slice(0, 10);
-  const societies = await ctx.db.query("societies").collect();
+  const societies = await listAuthorizedSocietyRows(ctx);
 
   const entities: any[] = [];
   for (const society of societies) {
+    // Portfolio counts expose compliance and legal-operation records.
+    if (!await permits(ctx, society._id, "deadlines:read") || !await permits(ctx, society._id, "documents:read")) continue;
     const [deadlines, runs] = await Promise.all([
       ctx.db.query("deadlines").withIndex("by_society", (q) => q.eq("societyId", society._id)).collect(),
       ctx.db.query("legalPrecedentRuns").withIndex("by_society", (q) => q.eq("societyId", society._id)).collect(),
@@ -82,38 +96,28 @@ export async function overviewPortable(ctx: PortableQueryCtx, { todayISO }: { to
 export async function searchPortable(ctx: PortableQueryCtx, { query: term }: { query: string }) {
   const q = String(term ?? "").trim();
   if (q.length < 2) return [];
-  const [deadlines, documents, people] = await Promise.all([
-    ctx.db.query("deadlines").withSearchIndex("search_title", (s) => s.search("title", q)).take(12),
-    ctx.db.query("documents").withSearchIndex("search_title", (s) => s.search("title", q)).take(12),
-    ctx.db.query("peopleDirectory").withSearchIndex("search_full_name", (s) => s.search("fullName", q)).take(12),
-  ]);
-
-  const societyById = new Map<string, any>();
-  for (const id of new Set<string>([...deadlines, ...documents].map((r: any) => String(r.societyId)))) {
-    const s = await ctx.db.get(id);
-    if (s) societyById.set(id, s);
-  }
-  const nameOf = (id: string) => {
-    const s = societyById.get(id);
-    return s ? organizationLabel(s as any) : "Unknown entity";
-  };
-
+  const societies = await listAuthorizedSocietyRows(ctx);
   const results: any[] = [];
-  for (const d of deadlines) {
-    results.push({ kind: "deadline", id: String(d._id), title: d.title, societyId: String(d.societyId), societyName: nameOf(String(d.societyId)), to: "/app/deadlines" });
-  }
-  const allowedDocuments = new Set<string>();
-  for (const societyId of new Set(documents.map((document) => String(document.societyId)))) {
-    try {
+  const directory = new Map<string, any>();
+  for (const society of societies) {
+    const societyId = String(society._id);
+    const societyName = organizationLabel(society as any);
+    if (await permits(ctx, societyId, "deadlines:read")) {
+      const deadlines = await ctx.db.query("deadlines").withSearchIndex("search_title", s => s.search("title", q).eq("societyId", societyId)).take(12);
+      for (const row of deadlines) results.push({ kind: "deadline", id: String(row._id), title: row.title, societyId, societyName, to: "/app/deadlines" });
+    }
+    if (await permits(ctx, societyId, "documents:read")) {
       const allows = await documentAccessPredicate(ctx, societyId);
-      for (const document of documents) if (allows(document)) allowedDocuments.add(String(document._id));
-    } catch { /* Foreign societies produce no document search results. */ }
+      const documents = await ctx.db.query("documents").withSearchIndex("search_title", s => s.search("title", q).eq("societyId", societyId)).filter(allows).take(12);
+      for (const row of documents) results.push({ kind: "document", id: String(row._id), title: row.title, societyId, societyName, to: "/app/documents" });
+    }
+    if (await permits(ctx, societyId, "members:read")) {
+      for (const row of await visibleDirectoryRows(ctx, societyId)) directory.set(String(row._id), row);
+    }
   }
-  for (const d of documents.filter((document) => allowedDocuments.has(String(document._id)))) {
-    results.push({ kind: "document", id: String(d._id), title: d.title, societyId: String(d.societyId), societyName: nameOf(String(d.societyId)), to: "/app/documents" });
-  }
-  for (const p of people) {
-    results.push({ kind: "person", id: String(p._id), title: p.fullName, societyId: null, societyName: null, to: "/app/people-directory" });
-  }
+  // Preserve the full-text match behavior while filtering the complete result
+  // set before limiting; foreign hits must neither leak nor hide owned hits.
+  const people = await ctx.db.query("peopleDirectory").withSearchIndex("search_full_name", s => s.search("fullName", q)).filter(row => directory.has(String(row._id))).take(12);
+  for (const person of people) results.push({ kind: "person", id: String(person._id), title: person.fullName, societyId: null, societyName: null, to: "/app/people-directory" });
   return results;
 }

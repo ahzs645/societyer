@@ -1,8 +1,10 @@
 import { authenticatedFetch } from "@/lib/authToken";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -36,6 +38,9 @@ const TAX_FILING_KINDS = ["T2", "T1044", "T3010", "T4", "GSTHST"] as const;
 
 export function FilingsPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("filings:write");
+  const canImportRegistry = can("settings:manage");
   const jurisdictionCopy = jurisdictionDisplayCopy(society);
   const jurisdictionModule = jurisdictionModuleContract(society);
   const jurisdictionFilingKinds = filingKindDefinitions(society);
@@ -66,10 +71,10 @@ export function FilingsPage() {
         }
       : "skip",
   );
-  const create = useMutation(api.filings.create);
-  const update = useMutation(api.filings.update);
-  const markFiled = useMutation(api.filings.markFiled);
-  const removeFiling = useMutation(api.filings.remove);
+  const create = usePermissionedMutation(api.filings.create, canWrite);
+  const update = usePermissionedMutation(api.filings.update, canWrite);
+  const markFiled = usePermissionedMutation(api.filings.markFiled, canWrite);
+  const removeFiling = usePermissionedMutation(api.filings.remove, canWrite);
   const confirm = useConfirm();
   const toast = useToast();
 
@@ -80,6 +85,7 @@ export function FilingsPage() {
   });
 
   const openMarkFiled = useCallback((filing: Doc<"filings">) => {
+    if (!canWrite) return;
     setCompleteDraft({
       id: filing._id,
       kind: filing.kind,
@@ -96,7 +102,7 @@ export function FilingsPage() {
       submissionChecklist: filing.submissionChecklist ?? [],
       registryUrl: filing.registryUrl ?? "",
     });
-  }, []);
+  }, [canWrite]);
 
   const markFiledIntentHandled = useRef(false);
   useEffect(() => {
@@ -105,7 +111,7 @@ export function FilingsPage() {
       return;
     }
     if (markFiledIntentHandled.current) return;
-    if (!society || filings === undefined) return;
+    if (!canWrite || !society || filings === undefined) return;
     markFiledIntentHandled.current = true;
     const target = (filings ?? []).find((filing) => filing.status !== "Filed");
     setParams((prev) => {
@@ -118,7 +124,7 @@ export function FilingsPage() {
       return;
     }
     openMarkFiled(target);
-  }, [filings, openMarkFiled, params, setParams, society, toast]);
+  }, [canWrite, filings, openMarkFiled, params, setParams, society, toast]);
 
   // ?intent=add (from the "Add filing" command palette action) opens the
   // new-filing form. Mirrors the mark-filed handler above.
@@ -129,7 +135,7 @@ export function FilingsPage() {
       return;
     }
     if (addIntentHandled.current) return;
-    if (!society) return;
+    if (!canWrite || !society) return;
     addIntentHandled.current = true;
     setParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -145,12 +151,13 @@ export function FilingsPage() {
       contextKind: "home",
     });
     setOpen(true);
-  }, [params, setParams, society, jurisdictionFilingKinds]);
+  }, [canWrite, params, setParams, society, jurisdictionFilingKinds]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite) return;
     setForm({
       kind: jurisdictionFilingKinds[0]?.kind ?? "AnnualReport",
       periodLabel: "",
@@ -161,9 +168,14 @@ export function FilingsPage() {
     });
     setOpen(true);
   };
-  const save = async () => { await create({ societyId: society._id, ...form, submittedByUserId: actingUserId }); setOpen(false); };
+  const save = async () => {
+    if (!canWrite) return;
+    await create({ societyId: society._id, ...form, submittedByUserId: actingUserId });
+    setOpen(false);
+  };
 
   const importRegistryHistory = async () => {
+    if (!canImportRegistry) return;
     setImportingRegistry(true);
     try {
       const response = await authenticatedFetch("/api/v1/browser-connectors/filing-history/import", {
@@ -207,11 +219,11 @@ export function FilingsPage() {
         actions={
           <>
             {jurisdictionModule.registryImportSupported && (
-              <button className="btn-action" onClick={importRegistryHistory} disabled={importingRegistry}>
+              <button className="btn-action" onClick={importRegistryHistory} disabled={!canImportRegistry || (importingRegistry)}>
                 <FileDown size={12} /> {importingRegistry ? "Importing…" : "Import registry"}
               </button>
             )}
-            <button className="btn-action btn-action--primary" onClick={openNew}>
+            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
               <Plus size={12} /> New filing
             </button>
           </>
@@ -232,11 +244,11 @@ export function FilingsPage() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={tableData.hydratedView}
           records={records}
-          onRecordClick={(_recordId, r) => {
+          onRecordClick={canWrite ? (_recordId, r) => {
             if (r.status === "Filed") return;
             openMarkFiled(r as Doc<"filings">);
-          }}
-          onUpdate={async ({ recordId, fieldName, value }) => {
+          } : undefined}
+          onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
             if (fieldName === "status" && value === "Filed") {
               const filing = filings?.find((candidate) => String(candidate._id) === recordId);
               if (!filing || filing.status === "Filed") return;
@@ -247,7 +259,7 @@ export function FilingsPage() {
               id: recordId as Id<"filings">,
               patch: { [fieldName]: value } as any,
             });
-          }}
+          } : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -271,14 +283,16 @@ export function FilingsPage() {
                       className="btn btn--sm"
                       onClick={() => setBotFor({ id: r._id, label: `${r.kind}: ${r.periodLabel ?? r.dueDate}` })}
                       title="Run the Societies Online filing bot"
-                    >
+                    disabled={!canWrite}
+                   >
                       <Bot size={12} /> Bot
                     </button>
                   )}
                   <button
                     className="btn btn--sm"
                     onClick={() => openMarkFiled(r as Doc<"filings">)}
-                  >
+                  disabled={!canWrite}
+                 >
                     <Check size={12} /> Mark filed
                   </button>
                   <button
@@ -296,7 +310,8 @@ export function FilingsPage() {
                       await removeFiling({ id: r._id });
                       toast.success("Filing deleted");
                     }}
-                  >
+                  disabled={!canWrite}
+                 >
                     <Trash2 size={12} />
                   </button>
                 </>
@@ -314,7 +329,7 @@ export function FilingsPage() {
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title="Add filing"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite}>Save</button></>}
       >
         {form && (
           <div>
@@ -368,7 +383,7 @@ export function FilingsPage() {
       </Drawer>
 
       <FilingBotRunner
-        open={!!botFor}
+        open={canWrite && !!botFor}
         onClose={() => setBotFor(null)}
         filingId={botFor?.id ?? null}
         societyId={society._id}
@@ -376,7 +391,7 @@ export function FilingsPage() {
       />
 
       <Modal
-        open={!!completeDraft}
+        open={canWrite && !!completeDraft}
         onClose={() => setCompleteDraft(null)}
         title="Mark filing as filed"
         size="md"
@@ -386,6 +401,7 @@ export function FilingsPage() {
             <button
               className="btn btn--accent"
               onClick={async () => {
+                if (!canWrite) return;
                 const hasEvidence =
                   !!completeDraft.confirmationNumber?.trim() ||
                   !!completeDraft.receiptDocumentId ||
@@ -411,7 +427,8 @@ export function FilingsPage() {
                 toast.success("Filing marked as filed");
                 setCompleteDraft(null);
               }}
-            >
+            disabled={!canWrite}
+           >
               Save
             </button>
           </>

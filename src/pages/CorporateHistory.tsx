@@ -1,6 +1,8 @@
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
@@ -17,10 +19,15 @@ import { History, Plus, Trash2 } from "lucide-react";
  */
 export function CorporateHistoryPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canReadNames = loaded && can("settings:read");
+  const canWriteNames = loaded && can("settings:write");
+  const canReadEvents = loaded && can("documents:read");
+  const canWriteEvents = loaded && can("documents:write");
 
   const names = useQuery(
     api.nameHistory.list,
-    society ? { societyId: society._id } : "skip",
+    society && canReadNames ? { societyId: society._id } : "skip",
   ) as
     | Array<{
         _id?: string;
@@ -32,12 +39,12 @@ export function CorporateHistoryPage() {
     | undefined;
   const nameNarrative = useQuery(
     api.nameHistory.narrative,
-    society ? { societyId: society._id } : "skip",
+    society && canReadNames ? { societyId: society._id } : "skip",
   ) as string | undefined;
 
   const constating = useQuery(
     api.constating.list,
-    society ? { societyId: society._id } : "skip",
+    society && canReadEvents ? { societyId: society._id } : "skip",
   ) as
     | Array<{
         _id?: string;
@@ -50,13 +57,13 @@ export function CorporateHistoryPage() {
     | undefined;
   const constatingNarrative = useQuery(
     api.constating.narrative,
-    society ? { societyId: society._id } : "skip",
+    society && canReadEvents ? { societyId: society._id } : "skip",
   ) as string | undefined;
 
-  const nameUpsert = useMutation(api.nameHistory.upsert);
-  const nameRemove = useMutation(api.nameHistory.remove);
-  const constatingCreate = useMutation(api.constating.create);
-  const constatingRemove = useMutation(api.constating.remove);
+  const nameUpsert = usePermissionedMutation(api.nameHistory.upsert, canWriteNames);
+  const nameRemove = usePermissionedMutation(api.nameHistory.remove, canWriteNames);
+  const constatingCreate = usePermissionedMutation(api.constating.create, canWriteEvents);
+  const constatingRemove = usePermissionedMutation(api.constating.remove, canWriteEvents);
 
   const [nameOpen, setNameOpen] = useState(false);
   const [nameForm, setNameForm] = useState<any>(null);
@@ -67,6 +74,7 @@ export function CorporateHistoryPage() {
   if (society === null) return <SeedPrompt />;
 
   const openName = () => {
+    if (!canWriteNames) return;
     setNameForm({
       name: "",
       shortName: "",
@@ -77,6 +85,7 @@ export function CorporateHistoryPage() {
   };
 
   const saveName = async () => {
+    if (!canWriteNames) return;
     await nameUpsert({
       societyId: society._id,
       name: nameForm.name,
@@ -89,6 +98,7 @@ export function CorporateHistoryPage() {
   };
 
   const openEvent = () => {
+    if (!canWriteEvents) return;
     setEventForm({
       action: "incorporated",
       jurisdiction: "",
@@ -100,6 +110,7 @@ export function CorporateHistoryPage() {
   };
 
   const saveEvent = async () => {
+    if (!canWriteEvents) return;
     await constatingCreate({
       societyId: society._id,
       action: eventForm.action,
@@ -121,10 +132,10 @@ export function CorporateHistoryPage() {
         subtitle="Effective-dated corporate name history and the constating-document timeline — incorporation, transitions, continuances, amalgamations and restatements."
         actions={
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn-action btn-action--primary" onClick={openName}>
+            <button className="btn-action btn-action--primary" disabled={!canWriteNames} onClick={openName}>
               <Plus size={12} /> Add name
             </button>
-            <button className="btn-action btn-action--primary" onClick={openEvent}>
+            <button className="btn-action btn-action--primary" disabled={!canWriteEvents} onClick={openEvent}>
               <Plus size={12} /> Add event
             </button>
           </div>
@@ -136,7 +147,9 @@ export function CorporateHistoryPage() {
         {nameNarrative && (
           <p style={{ color: "var(--text-secondary)" }}>{nameNarrative}</p>
         )}
-        {names === undefined ? (
+        {loaded && !canReadNames ? (
+          <p className="muted">Name history requires settings access.</p>
+        ) : names === undefined ? (
           <p style={{ color: "var(--text-tertiary)" }}>Loading…</p>
         ) : names.length === 0 ? (
           <p style={{ color: "var(--text-tertiary)" }}>No name history yet.</p>
@@ -155,7 +168,8 @@ export function CorporateHistoryPage() {
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Remove name ${n.name}`}
-                  onClick={() => n._id && nameRemove({ id: n._id })}
+                  disabled={!canWriteNames}
+                  onClick={() => canWriteNames && n._id && nameRemove({ id: n._id })}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -170,7 +184,9 @@ export function CorporateHistoryPage() {
         {constatingNarrative && (
           <p style={{ color: "var(--text-secondary)" }}>{constatingNarrative}</p>
         )}
-        {constating === undefined ? (
+        {loaded && !canReadEvents ? (
+          <p className="muted">Constating documents require document access.</p>
+        ) : constating === undefined ? (
           <p style={{ color: "var(--text-tertiary)" }}>Loading…</p>
         ) : constating.length === 0 ? (
           <p style={{ color: "var(--text-tertiary)" }}>No constating events yet.</p>
@@ -188,7 +204,8 @@ export function CorporateHistoryPage() {
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Remove ${c.action} event`}
-                  onClick={() => c._id && constatingRemove({ id: c._id })}
+                  disabled={!canWriteEvents}
+                  onClick={() => canWriteEvents && c._id && constatingRemove({ id: c._id })}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -197,14 +214,14 @@ export function CorporateHistoryPage() {
           </ul>
         )}
         <div style={{ marginTop: 12 }}>
-          <button className="btn" onClick={openEvent}>
+          <button className="btn" disabled={!canWriteEvents} onClick={openEvent}>
             <Plus size={12} /> Add event
           </button>
         </div>
       </div>
 
       <Drawer
-        open={nameOpen}
+        open={nameOpen && canWriteNames}
         onClose={() => setNameOpen(false)}
         title="Add corporate name"
         footer={
@@ -212,7 +229,7 @@ export function CorporateHistoryPage() {
             <button className="btn" onClick={() => setNameOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" onClick={saveName}>
+            <button className="btn btn--accent" disabled={!canWriteNames} onClick={saveName}>
               Save
             </button>
           </>
@@ -255,7 +272,7 @@ export function CorporateHistoryPage() {
       </Drawer>
 
       <Drawer
-        open={eventOpen}
+        open={eventOpen && canWriteEvents}
         onClose={() => setEventOpen(false)}
         title="Add constating event"
         footer={
@@ -263,7 +280,7 @@ export function CorporateHistoryPage() {
             <button className="btn" onClick={() => setEventOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" onClick={saveEvent}>
+            <button className="btn btn--accent" disabled={!canWriteEvents} onClick={saveEvent}>
               Save
             </button>
           </>

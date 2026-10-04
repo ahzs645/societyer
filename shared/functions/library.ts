@@ -9,10 +9,13 @@
 
 import { documentAccessPredicate } from "./documents";
 import type { PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned } from "./access";
+import { readableProjectionPermissions } from "./projectionPermissions";
+import { requirePermissionPortable } from "./permissions";
 
 export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
-  await requireSocietyMembership(ctx, societyId);
+  await requirePermissionPortable(ctx, societyId, "documents:read");
+  const readable = await readableProjectionPermissions(ctx, societyId, ["documents:read", "meetings:read"]);
   const [allDocuments, allMaterials] = await Promise.all([
     ctx.db
       .query("documents")
@@ -27,7 +30,8 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
   const allows = await documentAccessPredicate(ctx, societyId);
   const documents = allDocuments.filter((document) => allows(document));
   const visibleIds = new Set(documents.map((document) => String(document._id)));
-  const materials = allMaterials.filter((material) => visibleIds.has(String(material.documentId)));
+  const documentMaterials = allMaterials.filter((material) => visibleIds.has(String(material.documentId)));
+  const materials = readable.has("meetings:read") ? documentMaterials : [];
 
   const meetingIds = Array.from(new Set<string>((materials as any[]).map((row) => String(row.meetingId))));
   const meetings = await Promise.all(meetingIds.map((id) => getOwned(ctx, "meetings", String(id), societyId)));
@@ -35,7 +39,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
   const documentById = new Map<string, any>((documents as any[]).map((document) => [String(document._id), document]));
 
   const referenceDocuments = documents
-    .filter((document) => isLibraryDocument(document, materials))
+    .filter((document) => isLibraryDocument(document, documentMaterials))
     .filter((document) => !isInternalDocumentRecord(document))
     .sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO)));
 

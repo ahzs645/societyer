@@ -15,13 +15,14 @@
  * runtime, and the convex-test oracle.
  */
 
-import { filterControllerRegisters } from "./roleHolderReadAccess";
+import { filterRoleHolderRegisters, roleHolderHistoryAccess } from "./roleHolderReadAccess";
 import { assertAllowedOption } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
 import { normalizeGender } from "../nlg";
 import { planRoleHolderRevision } from "../roleHolderHistory";
 import { personReferenceConstraint, validatePersonReference } from "../personReference";
 import { materializeRightsHoldings } from "../equityLedger";
+import { directoryPersonForSociety } from "./peopleDirectory";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import {
   getOwned,
@@ -53,7 +54,7 @@ async function enforcePersonReference(
 
   let exists = false;
   if (candidate) {
-    await getOwned(ctx, "peopleDirectory", candidate, societyId);
+    await directoryPersonForSociety(ctx, candidate, societyId);
     exists = true;
   }
 
@@ -77,7 +78,8 @@ export async function listRoleHoldersPortable(
 ) {
   await requireSocietyMembership(ctx, societyId);
   const rows = await ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-  return (await filterControllerRegisters(ctx, societyId, rows)).sort((a, b) => String(a.fullName).localeCompare(String(b.fullName)));
+  const historyReadable = await roleHolderHistoryAccess(ctx, societyId);
+  return (await filterRoleHolderRegisters(ctx, societyId, rows)).sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))).map(row => ({ ...row, historyReadable: historyReadable(row) }));
 }
 
 export interface UpsertRoleHolderArgs {
@@ -286,6 +288,6 @@ export async function rightsLedgerPortable(
     classes: classes.sort((a, b) => String(a.className).localeCompare(String(b.className))),
     holdings,
     transfers: scopedTransfers.sort((a, b) => String(b.transferDate ?? b.createdAtISO).localeCompare(String(a.transferDate ?? a.createdAtISO))),
-    roleHolders: (await filterControllerRegisters(ctx, societyId, roleHolders)).sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))),
+    roleHolders: (await filterRoleHolderRegisters(ctx, societyId, roleHolders)).sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))),
   };
 }

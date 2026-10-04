@@ -147,12 +147,17 @@ export async function getPortable(ctx: PortableQueryCtx, _args: Record<string, n
   return withLogoUrl(ctx, await ctx.db.get(String(membership.societyId), "societies"));
 }
 
-export async function listPortable(ctx: PortableQueryCtx) {
+/** Current authorized organization rows, without invoking branding storage. */
+export async function listAuthorizedSocietyRows(ctx: PortableQueryCtx) {
   const memberships = await principalMemberships(ctx);
   const societies = await Promise.all(
     memberships.map((membership) => ctx.db.get(String(membership.societyId), "societies")),
   );
-  return Promise.all(societies.filter(Boolean).map((society) => withLogoUrl(ctx, society)));
+  return societies.filter((society): society is PortableDoc => society !== null);
+}
+
+export async function listPortable(ctx: PortableQueryCtx) {
+  return Promise.all((await listAuthorizedSocietyRows(ctx)).map((society) => withLogoUrl(ctx, society)));
 }
 
 export async function getByIdPortable(ctx: PortableQueryCtx, { id }: { id: string }) {

@@ -13,6 +13,7 @@ import { useQuery } from "convex/react";
 import { useNavigate } from "react-router-dom";
 import { Calendar } from "lucide-react";
 import { api } from "../lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { Modal } from "./Modal";
 import { Tooltip } from "./Tooltip";
@@ -48,15 +49,17 @@ function PickerItemTitle({ text }: { text: string }) {
 export function DraftMinutesPicker() {
   const [open, setOpen] = useState(false);
   const society = useSociety();
-  const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
-  const minutes = useQuery(api.minutes.list, society ? { societyId: society._id } : "skip");
+  const { can } = usePermissions();
+  const canDraft = can("minutes:write");
+  const meetings = useQuery(api.meetings.list, open && canDraft && can("meetings:read") && society ? { societyId: society._id } : "skip");
+  const minutes = useQuery(api.minutes.list, open && canDraft && can("minutes:read") && society ? { societyId: society._id } : "skip");
   const navigate = useNavigate();
 
   useEffect(() => {
-    const handler = () => setOpen(true);
+    const handler = () => { if (canDraft) setOpen(true); };
     window.addEventListener("quickaction:draft-minutes", handler);
     return () => window.removeEventListener("quickaction:draft-minutes", handler);
-  }, []);
+  }, [canDraft]);
 
   // All meetings, with their minutes status surfaced as a badge so the user
   // can decide whether they're starting fresh, continuing a draft, or just
@@ -92,13 +95,14 @@ export function DraftMinutesPicker() {
   const isLoading = open && (meetings === undefined || minutes === undefined);
 
   const handlePick = (meetingId: string) => {
+    if (!canDraft) return;
     setOpen(false);
     navigate(`/app/meetings/${meetingId}?tab=minutes&intent=draft-minutes`);
   };
 
   return (
     <Modal
-      open={open}
+      open={open && canDraft}
       onClose={() => setOpen(false)}
       title="Draft minutes for…"
       size="sm"

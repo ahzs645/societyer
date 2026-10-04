@@ -1,0 +1,609 @@
+{
+  "completedAt": "2026-10-04T21:54:12.618588+00:00",
+  "scope": "Selected meeting pilot; real Convex native commands/storage and PowerSync SDK SQLite/outbox/replication, built Workbox PWA",
+  "convexEndpoint": "http://127.0.0.1:43210",
+  "powersyncEndpoint": "http://127.0.0.1:43220",
+  "browserPreview": "http://127.0.0.1:4195",
+  "auth": "Isolated server-only ES256 fixture signer, real Convex JWT verification and authoritative Societyer identity/membership policies",
+  "browser": "Playwright Chromium",
+  "viewports": [
+    {
+      "project": "phone320",
+      "width": 320,
+      "height": 740
+    },
+    {
+      "project": "phone390",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "project": "desktop",
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "passed": 36,
+  "failed": 0,
+  "skipped": 0,
+  "flaky": 0,
+  "retries": 0,
+  "durationMs": 851130.262,
+  "evidenceMethod": "Merged unique scenarios from a full 36-case run and focused race rerun; this is not a single all-green full run",
+  "originalFullRun": {
+    "passed": 35,
+    "failed": 1,
+    "skipped": 0,
+    "retries": 0,
+    "durationMs": 778021.15,
+    "failure": {
+      "project": "phone390",
+      "scenario": "a delayed native attachment download cannot undo replicated revocation",
+      "reason": "Exact error-text assertion expected authorization changed before caching but concurrent native authorization callback displayed User is disabled; runtime download/export security assertion was rerun after allowing specific authorization-denial outcomes"
+    }
+  },
+  "focusedCorrectedAssertionRun": {
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "retries": 0,
+    "durationMs": 73109.11200000001,
+    "assumption": "Concurrent native membership query and delayed download can report either specific authorization-denial message. All three reruns still wait for transfer completion and require recovery export files=[]."
+  },
+  "intermediateHarnessRun": {
+    "passed": 0,
+    "failed": 3,
+    "reason": "Test-only matcher typo toMatch on a Locator; corrected to Playwright toContainText(regex). No runtime changes."
+  },
+  "cases": [
+    {
+      "scenario": "real PowerSync replica receives meeting graph, child edits and native attachment",
+      "project": "phone320",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 26668
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "offline parent and child survive restart, reconnect through real command upload and download",
+      "project": "phone320",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 37585
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "offline queues remain isolated across account and workspace switches",
+      "project": "phone320",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 37748
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "Viewer replica contains permitted preparation but no attachment or write controls",
+      "project": "phone320",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 24686
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "concurrent offline child edits preserve rejected stale work for review and recovery",
+      "project": "phone320",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 25642
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "revoked Viewer rows disappear from real replica and downloaded local preparation",
+      "project": "phone320",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 23272
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "all five workspace roles expose matching meeting read and write controls",
+      "project": "phone320",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 52895
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "built live PWA reopens in a new tab offline and preserves pending graph and attachment",
+      "project": "phone320",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 24054
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "online revocation disables writes and removes downloaded attachment bytes",
+      "project": "phone320",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 16138
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "revocation purges downloaded bytes despite pending child and unsaved form edits",
+      "project": "phone320",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 15276
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "a delayed native attachment download cannot undo replicated revocation",
+      "project": "phone320",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 22573
+        }
+      ],
+      "evidenceRun": "focusedCorrectedAssertionRun"
+    },
+    {
+      "scenario": "rapid account changes during native authentication settle only the current workspace",
+      "project": "phone320",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 13489
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "real PowerSync replica receives meeting graph, child edits and native attachment",
+      "project": "phone390",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 20072
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "offline parent and child survive restart, reconnect through real command upload and download",
+      "project": "phone390",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 23138
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "offline queues remain isolated across account and workspace switches",
+      "project": "phone390",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 21591
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "Viewer replica contains permitted preparation but no attachment or write controls",
+      "project": "phone390",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 13664
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "concurrent offline child edits preserve rejected stale work for review and recovery",
+      "project": "phone390",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 17701
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "revoked Viewer rows disappear from real replica and downloaded local preparation",
+      "project": "phone390",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 21716
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "all five workspace roles expose matching meeting read and write controls",
+      "project": "phone390",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 36343
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "built live PWA reopens in a new tab offline and preserves pending graph and attachment",
+      "project": "phone390",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 25351
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "online revocation disables writes and removes downloaded attachment bytes",
+      "project": "phone390",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 31343
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "revocation purges downloaded bytes despite pending child and unsaved form edits",
+      "project": "phone390",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 31502
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "a delayed native attachment download cannot undo replicated revocation",
+      "project": "phone390",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 18801
+        }
+      ],
+      "evidenceRun": "focusedCorrectedAssertionRun"
+    },
+    {
+      "scenario": "rapid account changes during native authentication settle only the current workspace",
+      "project": "phone390",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 9121
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "real PowerSync replica receives meeting graph, child edits and native attachment",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 14404
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "offline parent and child survive restart, reconnect through real command upload and download",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 16046
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "offline queues remain isolated across account and workspace switches",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 15115
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "Viewer replica contains permitted preparation but no attachment or write controls",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 13212
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "concurrent offline child edits preserve rejected stale work for review and recovery",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 12873
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "revoked Viewer rows disappear from real replica and downloaded local preparation",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 8168
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "all five workspace roles expose matching meeting read and write controls",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 15655
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "built live PWA reopens in a new tab offline and preserves pending graph and attachment",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 14260
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "online revocation disables writes and removes downloaded attachment bytes",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 7388
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "revocation purges downloaded bytes despite pending child and unsaved form edits",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 7679
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    },
+    {
+      "scenario": "a delayed native attachment download cannot undo replicated revocation",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 16691
+        }
+      ],
+      "evidenceRun": "focusedCorrectedAssertionRun"
+    },
+    {
+      "scenario": "rapid account changes during native authentication settle only the current workspace",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": 1,
+      "retryCount": 0,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3280
+        }
+      ],
+      "evidenceRun": "originalFullRun"
+    }
+  ],
+  "fixes": [
+    "SDK snapshot hydration is serialized and observes current authorization",
+    "Upload receipt acceptance cannot be downgraded by a concurrent late error",
+    "Known server authorization denial clears all downloaded bytes and mirrored read views even with pending or unsaved drafts",
+    "Native download cache writes recheck scope, current authorization generation and replicated file permission in the same SQLite transaction",
+    "Offline-start uses the SDK retry loop; native auth callback network failures are handled without persisting tokens",
+    "Session abort cancels stale native requests; account switching never waits for an offline native WebSocket close handshake",
+    "Session initialization completion is guarded by generation and resources are disposed before reuse",
+    "Local test signer enforces loopback socket/Host and same-origin browser requests; tokens and credential APIs are not cached"
+  ],
+  "designLimits": [
+    "Pending local CRUD can prevent PowerSync checkpoint application. Native authorization signals provide the fail-closed cache guard while preserving the SDK queue and authored recovery work. Tombstones alone cannot immediately revoke that pending cache.",
+    "The local signer is test-only; live Clerk and Microsoft interactive sign-in are outside these pilot browser cases.",
+    "Meeting-pilot sync is isolated. Production credential delivery and complete document/material ACL, external identity and expiry invalidation are still required before full production replication.",
+    "Chromium browser emulation, not physical mobile devices or Electron packaging.",
+    "Loopback endpoints are on this cloud workspace, not the user Mac or Zoer host."
+  ],
+  "additionalVerification": {
+    "pilotStrictTypecheckAndBuiltWorkboxPWA": "passed; source frozen before original full run and focused rerun",
+    "pilotLint": "passed; tmp/offline-pilot-lint-final.log",
+    "nativePilotChecks": {
+      "passed": 39,
+      "failed": 0,
+      "scope": "10 draft commands, 17 meeting policy/command checks, 7 atomic role projection checks, 5 local broker Host/Origin/socket guards",
+      "log": "tmp/offline-native-final.log"
+    },
+    "fixtureBrowserRegressions": {
+      "passed": 34,
+      "failed": 0,
+      "skipped": 0,
+      "retries": 0,
+      "scope": "Deterministic fixture compatibility regressions; separate from actual live replication qualification",
+      "durationMs": 155965.41,
+      "log": "tmp/offline-fixture-regression-final.log"
+    },
+    "builtFixturePWA": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "retries": 0,
+      "scope": "320px phone and 1440px desktop offline new-tab shell/durable meeting-child preparation on same final built bundle",
+      "durationMs": 33826.81,
+      "log": "tmp/offline-built-pwa-final.log"
+    }
+  }
+}

@@ -30,7 +30,7 @@
   gap: 8px;
   z-index: token('z-toast');
   pointer-events: none;
-  max-width: 360px;
+  max-width: min(360px, calc(100vw - 32px));
 }
 .toast {
   pointer-events: auto;
@@ -59,6 +59,8 @@
 .toast--warn .toast__icon { color: token('warn'); }
 .toast--info .toast__icon { color: token('info'); }
 .toast__body { flex: 1; min-width: 0; }
+.toast__title,
+.toast__desc { overflow-wrap: anywhere; }
 .toast__title { font-size: token('fs-md'); font-weight: 500; color: token('text-primary'); }
 .toast__desc { font-size: token('fs-sm'); color: token('text-secondary'); margin-top: 2px; }
 .toast__close {

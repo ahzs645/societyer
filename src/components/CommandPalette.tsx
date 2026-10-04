@@ -1,3 +1,4 @@
+import { usePermissions } from "../hooks/usePermissions";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useConvex, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -439,6 +440,7 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const location = useLocation();
   const society = useSociety();
+  const { can } = usePermissions();
   const societies = useSocieties();
   const staticCommands = useStaticCommands();
   const searchTerm = q.trim();
@@ -446,7 +448,7 @@ export function CommandPalette() {
   // entity). Reactive: streams in as the user types; skipped under 2 chars.
   const crossEntityResults = useQuery(
     api.firm.search,
-    searchTerm.length >= 2 ? { query: searchTerm } : "skip",
+    open && can("society:read") && searchTerm.length >= 2 ? { query: searchTerm } : "skip",
   ) as Array<{ kind: string; id: string; title: string; societyId: string | null; societyName: string | null; to: string }> | undefined;
 
   const actions = useMemo<CommandItem[]>(
@@ -675,7 +677,7 @@ export function CommandPalette() {
 
   return (
     <div className="kbar-backdrop" onClick={() => setOpen(false)}>
-      {ENABLE_METADATA_COMMANDS && society && (
+      {ENABLE_METADATA_COMMANDS && can("settings:read") && society && (
         <MetadataCommandsLoader
           societyId={society._id}
           pagePath={location.pathname}

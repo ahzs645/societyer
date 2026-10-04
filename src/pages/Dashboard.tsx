@@ -1,3 +1,4 @@
+import { interfaceRouteReadPermission } from "../../shared/interfaceRouteAccess";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useState } from "react";
@@ -55,7 +56,7 @@ export function Dashboard() {
   const navigate = useNavigate();
   const toast = useToast();
   const data = useQuery(api.dashboard.summary, society ? { societyId: society._id } : "skip");
-  const activity = useQuery(api.activity.list, society ? { societyId: society._id, limit: 10 } : "skip");
+  const activity = useQuery(api.activity.list, society && can("audit:read") ? { societyId: society._id, limit: 10 } : "skip");
   const createPipaPolicyDraft = useMutation(api.documents.createPipaPolicyDraft);
   const createMemberDataGapMemoDraft = useMutation(api.documents.createMemberDataGapMemoDraft);
   const createPrivacyReviewTask = useMutation(api.dashboardRemediation.createPrivacyReviewTask);
@@ -73,10 +74,16 @@ export function Dashboard() {
   if (!data) return <PageLoading />;
 
   const { counts, board, upcomingMeetings, upcomingFilings, overdueFilings, goals, complianceFlags, openTasks } = data;
-  const onboardingSteps = getOnboardingSteps({ society, counts, upcomingMeetings, upcomingFilings, overdueFilings });
+  const canRead = (permission: string) => data.readAccess?.includes(permission) ?? can(permission);
+  const actionableComplianceFlags = complianceFlags.filter((flag: any) => flag.level !== "ok");
+  const completeComplianceAccess = ["directors:read", "members:read", "documents:read"].every(canRead);
+  const onboardingSteps = getOnboardingSteps({ society, counts, upcomingMeetings, upcomingFilings, overdueFilings }).filter(step => {
+    const permission = interfaceRouteReadPermission(step.to);
+    return !permission || canRead(permission);
+  });
   const completedOnboardingSteps = onboardingSteps.filter((step) => step.complete).length;
   const nextOnboardingStep = onboardingSteps.find((step) => !step.complete) ?? onboardingSteps[onboardingSteps.length - 1];
-  const onboardingProgress = Math.round((completedOnboardingSteps / onboardingSteps.length) * 100);
+  const onboardingProgress = onboardingSteps.length ? Math.round((completedOnboardingSteps / onboardingSteps.length) * 100) : 0;
   const onboardingFlowHidden = hiddenOnboardingFlowSocietyIds.includes(society._id);
   const allOnboardingComplete = completedOnboardingSteps === onboardingSteps.length;
   // Once past halfway, the full 8-tile grid is mostly green checks — collapse to a
@@ -289,33 +296,10 @@ export function Dashboard() {
       )}
 
       <div className="stat-grid">
-        <Stat
-          label="Active members"
-          value={counts.members}
-          icon={<Users size={14} />}
-          tooltip="with voting rights counted separately in members list"
-        />
-        <Stat
-          label="Active directors"
-          value={counts.directors}
-          icon={<UserCog size={14} />}
-          tooltip={
-            society.isMemberFunded
-              ? `${counts.bcResidents} BC resident${counts.bcResidents === 1 ? "" : "s"} (s.197 exception)`
-              : `${counts.bcResidents} BC resident${counts.bcResidents === 1 ? "" : "s"} (s.40 requires >= 1)`
-          }
-        />
-        <Stat
-          label="Meetings this year"
-          value={counts.meetingsThisYear}
-          icon={<Calendar size={14} />}
-        />
-        <Stat
-          label="Overdue filings"
-          value={counts.overdueFilings}
-          tone={counts.overdueFilings ? "danger" : "ok"}
-          icon={<AlertTriangle size={14} />}
-        />
+        {canRead("members:read") && <Stat label="Active members" value={counts.members} icon={<Users size={14} />} tooltip="with voting rights counted separately in members list" />}
+        {canRead("directors:read") && <Stat label="Active directors" value={counts.directors} icon={<UserCog size={14} />} tooltip={society.isMemberFunded ? `${counts.bcResidents} BC residents (s.197 exception)` : `${counts.bcResidents} BC residents (s.40 requires >= 1)`} />}
+        {canRead("meetings:read") && <Stat label="Meetings this year" value={counts.meetingsThisYear} icon={<Calendar size={14} />} />}
+        {canRead("filings:read") && <Stat label="Overdue filings" value={counts.overdueFilings} tone={counts.overdueFilings ? "danger" : "ok"} icon={<AlertTriangle size={14} />} />}
       </div>
 
       <div className="two-col">
@@ -329,10 +313,10 @@ export function Dashboard() {
               <div className="dashboard-compliance__summary">
                 <div>
                   <div className="dashboard-compliance__count">
-                    {complianceFlags.length} item{complianceFlags.length === 1 ? "" : "s"} to resolve
+                    {actionableComplianceFlags.length ? `${actionableComplianceFlags.length} visible item${actionableComplianceFlags.length === 1 ? "" : "s"} to resolve` : completeComplianceAccess ? "All accessible checks satisfied" : "No issues in accessible checks"}
                   </div>
                   <div className="muted">
-                    Start with the operational gaps below. Citations and full detail are available when needed.
+                    {completeComplianceAccess ? "Start with the operational gaps below. Citations and full detail are available when needed." : "Some checks need an administrator. The items below use records available to your role."}
                   </div>
                 </div>
                 <button
@@ -384,7 +368,10 @@ export function Dashboard() {
                     </div>
                     {f.remediationActions?.length > 0 && (
                       <div className="dashboard-remediation__actions">
-                        {f.remediationActions.map((action: any) => {
+                        {f.remediationActions.filter((action: any) => {
+                          const permission = action.intent === "navigate" ? interfaceRouteReadPermission(action.to) : null;
+                          return !permission || canRead(permission);
+                        }).map((action: any) => {
                           const disabled = busyRemediationAction === `${f.ruleId}:${action.id}`
                             || (action.intent !== "navigate" && !can(action.intent === "createPipaPolicyDraft" || action.intent === "createMemberDataGapMemoDraft" ? "documents:write" : "deadlines:write"));
                           return action.intent === "navigate" ? (
@@ -411,6 +398,7 @@ export function Dashboard() {
             </div>
           </div>
 
+          {canRead("filings:read") && (
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Filings requiring attention</h2>
@@ -454,9 +442,11 @@ export function Dashboard() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
 
         <div className="col" style={{ gap: 16 }}>
+          {canRead("meetings:read") && (
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Upcoming meetings</h2>
@@ -485,6 +475,7 @@ export function Dashboard() {
               ))}
             </div>
           </div>
+          )}
 
           <div className="card">
             <div className="card__head">
@@ -503,6 +494,7 @@ export function Dashboard() {
             </div>
           </div>
 
+          {canRead("directors:read") && (
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Board of directors</h2>
@@ -537,7 +529,9 @@ export function Dashboard() {
               )}
             </div>
           </div>
+          )}
 
+          {canRead("audit:read") && (
           <div className="card">
             <div className="card__head">
               <h2 className="card__title"><Activity size={14} style={{ display: "inline-block", marginRight: 4, verticalAlign: -2 }} />Activity</h2>
@@ -557,13 +551,15 @@ export function Dashboard() {
               {(!activity || activity.length === 0) && <div className="muted">No activity yet.</div>}
             </div>
           </div>
+          )}
         </div>
       </div>
 
       <div className="spacer-6" />
 
       <div className="two-col">
-        <div className="card">
+        {canRead("commitments:read") && (
+          <div className="card">
           <div className="card__head">
             <h2 className="card__title">Goals at a glance</h2>
             <Link to="/app/goals" className="card__subtitle row" style={{ marginLeft: "auto" }}>
@@ -590,8 +586,10 @@ export function Dashboard() {
             {goals.length === 0 && <div className="muted">No goals yet.</div>}
           </div>
         </div>
+        )}
 
-        <div className="card">
+        {canRead("tasks:read") && (
+          <div className="card">
           <div className="card__head">
             <h2 className="card__title">Open tasks</h2>
             <Link to="/app/tasks" className="card__subtitle row" style={{ marginLeft: "auto" }}>
@@ -630,6 +628,7 @@ export function Dashboard() {
             </tbody>
           </table>
         </div>
+          )}
       </div>
     </div>
   );

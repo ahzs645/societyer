@@ -31,8 +31,9 @@ npm run test:live
 `local:deploy` refuses any URL or instance key other than this isolated pilot.
 It deploys only `experiments/offline-convex/convex`, using the existing root
 schema and shared domain handlers. It does not deploy all production functions.
-The experimental `users` functions re-export the actual production authorization
-wrappers and membership handlers; `files:getUrl` reuses the actual file ACL path.
+The experimental `users` functions retain the actual production validators,
+authorization wrappers and membership handlers, then rebuild meeting download
+projections in the same transaction after the four supported role/status/removal mutations; `files:getUrl` reuses the actual file ACL path.
 The pilot upload endpoint explicitly takes a workspace and checks current
 meeting/document write permissions and the native-storage switch.
 
@@ -57,9 +58,10 @@ npm run local:stop
 Stop `local:jwks` with Ctrl+C. Keep the private environment files with the data
 volume when restarting. The existing Vite meeting lab on port 4192 still uses
 its synthetic fixture; running local Convex does not automatically connect that
-UI or PowerSync to this backend.
+UI or PowerSync to this backend. The explicit live mode and optional PowerSync
+service are described in [the runtime instructions](../experiments/offline-convex/local/README.md).
 
-## Verified results and baseline
+## Initial backend qualification and baseline
 
 Baseline: branch `work`, commit `ef5f8d9`, following interface baseline
 `bb513c4` and reconciled main `4b15fd2`. Commit
@@ -91,15 +93,56 @@ cases, 2 built-PWA offline-start cases, pilot typecheck/lint/build and desktop
 typecheck. The browser/PWA checks continue to use the native fixture transport;
 the 16 live checks are a separate HTTP/WebSocket suite.
 
-The existing production `files:generateUploadUrl` endpoint takes no workspace
-argument. The live pilot found that its shared action wrapper rejects a hosted
-principal without workspace context before reaching the membership helper.
-The pilot uses its explicitly scoped upload endpoint; the production endpoint
-and its callers still need that integration fix. This run does not qualify the
-production upload UI.
+The production upload integration has now been corrected and separately tested
+against the isolated full application backend at `http://127.0.0.1:43230`.
+`files:generateUploadUrl` requires an explicit workspace and checks the permission
+for its declared document, meeting, asset or inventory purpose. Branding uploads
+require the same Owner/Admin permission as their society branding sinks. Browser
+callers and import scripts now send that workspace scope. Native blob identifiers
+are excluded from ordinary row lookups; attachment handlers still enforce their
+workspace claim and document ACL. New asset/item image bindings also enforce the
+native-storage switch, while existing-image metadata edits remain available.
 
-PowerSync service authentication and download replication still need a live
-service test. These two clients test Convex subscriptions, not PowerSync
-replication. ACL/membership changes still require an explicit projection rebuild
-in this experimental backend. The local test verifies that rebuild, rather than
-claiming automatic production invalidation. Packaged Electron remains unqualified.
+All eight live upload groups passed with actual Better Auth email sessions,
+broker-issued JWTs verified by Convex, native HTTP byte uploads, authoritative
+file metadata, byte-for-byte downloads, role and inactive-membership denial,
+foreign-workspace rejection, duplicate attachment handling and asset/inventory
+photo persistence. Run `node experiments/live-qualification/check-uploads.mjs`
+after preparing that isolated fixture; its credential files remain local. Results
+are recorded in [live-upload-results.json](../artifacts/offline/live-upload-results.json).
+The native oracle additionally covers Clerk identity binding, the disabled-storage
+branding exception, local capability behavior and RustFS/R2 hash verification.
+Phone/desktop UI coverage is recorded by the separate interface browser suites.
+
+Encrypted vault qualification also passed nine live groups using the same real
+Better Auth sessions. Update and reveal now derive their workspace from the
+authorized vault row, rather than expecting a default workspace in the JWT.
+The review found an Admin could change an Owner-only record's reveal policy and
+then reveal its value. Existing Owner-only access-policy or stored-value changes
+now require the authenticated Owner; ordinary Admin metadata edits remain
+available. The final checks cover encrypted create/rotation/reveal, public
+metadata redaction, default Admin grants, Owner-only restrictions, unchanged
+value/access policy after denied changes, forged actors, foreign workspaces and
+lower or inactive principals. Run `npm run test:live-vault` against the prepared
+isolated lab. [Initial findings](../artifacts/offline/live-vault-initial-findings.json)
+and [final results](../artifacts/offline/live-vault-results.json) remain separate.
+Only synthetic values were used; keys, ciphertext and plaintext values are not
+exported to these artifacts. Browser viewport qualification is a separate suite.
+
+## Live PowerSync follow-up
+
+The optional digest-pinned PowerSync service now runs on loopback port 43220 with
+private PostgreSQL sync storage. Eleven actual protocol scenarios pass against
+that service: signed credentials, exact Owner/Viewer read projections, replicated
+child updates, workspace and token isolation, and automatic updates/deletion after
+all four exported user lifecycle mutations. No manual rebuild is required for
+those supported pilot paths. The real SDK browser suite separately tests SQLite,
+durable offline commands, native attachment transfers, conflicts and reconnects;
+see the consolidated qualification report for its final results.
+
+This remains a meeting-preparation pilot. Document/material ACL changes, external
+identity changes and grant expiry still need comprehensive projection invalidation
+before production rollout. Offline clients cannot receive revocation while
+unreachable. Pending SDK CRUD can hold a replication checkpoint, so native
+authorization denial must also clear downloaded cache while retaining authored
+recovery work. Packaged Electron and external provider sign-ins remain unqualified.

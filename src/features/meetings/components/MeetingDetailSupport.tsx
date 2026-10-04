@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { isLocalDataRuntime } from "../../../lib/staticRuntime";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -260,12 +261,14 @@ export function SourceDocumentRow({
     api.files.getUrl,
     document.storageId ? { storageId: document.storageId } : "skip",
   );
+  const { can } = usePermissions();
+  const canPullSource = can("documents:write");
   const pullSourceDocument = useAction(api.paperless.pullSourceDocument);
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   // Pulling copies the Paperless file into Convex, which the no-native-storage
   // mode forbids — keep "Open Paperless" but hide the pull/refresh action.
-  const canPull = !isLocalDataRuntime() && !!externalId?.match(/^paperless:\d+$/i) && isNativeFileStorageEnabled();
+  const canPull = canPullSource && !isLocalDataRuntime() && !!externalId?.match(/^paperless:\d+$/i) && isNativeFileStorageEnabled();
   const hasActions = !!downloadUrl || (!!document.url && !downloadUrl) || canPull;
 
   const pull = async () => {
@@ -316,7 +319,7 @@ export function SourceDocumentRow({
             </a>
           ) : null}
           {canPull && (
-            <button className="btn btn--ghost btn--sm" disabled={busy} onClick={pull}>
+            <button className="btn btn--ghost btn--sm" disabled={!canPull || busy} onClick={pull}>
               {busy ? <RefreshCw size={12} /> : <Download size={12} />}
               {busy ? "Pulling" : document.storageId ? "Refresh" : "Pull"}
             </button>

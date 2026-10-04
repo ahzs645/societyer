@@ -1,0 +1,81 @@
+{
+  "completedAt": "2026-10-04T22:26:50.983078Z",
+  "elapsedMs": 44011.077999999994,
+  "appUrl": "http://127.0.0.1:43477",
+  "runtime": "Actual native Convex app with actual Better Auth eligible Member login",
+  "passed": 4,
+  "failed": 0,
+  "widths": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "results": [
+    {
+      "project": "narrow-phone",
+      "title": "Confirmed Member submits a nomination and a single anonymous ballot",
+      "passed": true,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 7121
+        }
+      ]
+    },
+    {
+      "project": "phone",
+      "title": "Confirmed Member submits a nomination and a single anonymous ballot",
+      "passed": true,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 9410
+        }
+      ]
+    },
+    {
+      "project": "tablet",
+      "title": "Confirmed Member submits a nomination and a single anonymous ballot",
+      "passed": true,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 10168
+        }
+      ]
+    },
+    {
+      "project": "desktop",
+      "title": "Confirmed Member submits a nomination and a single anonymous ballot",
+      "passed": true,
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 12118
+        }
+      ]
+    }
+  ],
+  "behavior": [
+    "Actual login form",
+    "Member creates nomination",
+    "Member casts one anonymous ballot",
+    "Administrative controls absent",
+    "Duplicate-vote controls disabled",
+    "Reload persists nomination and voted state",
+    "No page errors or horizontal overflow"
+  ],
+  "screenshots": [
+    "artifacts/offline/live-eligible-member-narrow-phone.png",
+    "artifacts/offline/live-eligible-member-phone.png",
+    "artifacts/offline/live-eligible-member-tablet.png",
+    "artifacts/offline/live-eligible-member-desktop.png"
+  ],
+  "qualification": "Browser scenario counts; API requests were not instrumented in this UI run. Fresh fixture preparation is recorded separately in live-election-browser-preparation.json. Existing native eligible-participant qualification6/6 was not repeated.",
+  "initialFindings": [
+    "Member AI settings subscription denied; fixed exact settings/task read gates",
+    "Member Dashboard audit activity subscription denied; fixed audit read gate and server composite resource projections"
+  ],
+  "startedAt": "2026-10-04T22:26:06.972Z"
+}

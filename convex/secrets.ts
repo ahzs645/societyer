@@ -4,7 +4,7 @@ import { v, ConvexError } from "convex/values";
 import { requireRole, canActAs } from "./users";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import { listPortable, removePortable } from "../shared/functions/secrets";
-import { getOwned, requireSocietyMembership } from "../shared/functions/access";
+import { getOwned, requireOwnedRow, requireSocietyMembership } from "../shared/functions/access";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -228,12 +228,19 @@ export const update = authorizedMutation("secrets:update", mutation)({
   returns: v.any(),
   handler: async (ctx, { id, actingUserId, patch }) => {
     const portableCtx = await toPortableMutationCtx(ctx);
-    const societyId = portableCtx.principal.kind === "anonymous"
-      ? undefined
-      : portableCtx.principal.societyId;
-    if (!societyId) throw new Error("Society membership not found.");
-    const existing = await getOwned(portableCtx, "secretVaultItems", id, societyId);
+    const existing = await requireOwnedRow(portableCtx, "secretVaultItems", id);
+    const societyId = existing.societyId;
     const { user } = await assertVaultWrite(ctx, societyId, actingUserId);
+    // Administrative custody edits must not turn an Owner-only value into
+    // one the administrator can decrypt, or replace its protected value.
+    const changesProtectedAccess =
+      (patch.revealPolicy !== undefined && patch.revealPolicy !== existing.revealPolicy) ||
+      (patch.custodianUserId !== undefined && patch.custodianUserId !== existing.custodianUserId) ||
+      (patch.authorizedUserIds !== undefined && JSON.stringify(patch.authorizedUserIds) !== JSON.stringify(existing.authorizedUserIds ?? [])) ||
+      Boolean(patch.secretValue);
+    if (existing.revealPolicy === "owner_only" && changesProtectedAccess && !canActAs(user.role, "Owner")) {
+      throw new ConvexError({ code: "FORBIDDEN", message: "Owner role required to change access or the value of an Owner-only record." });
+    }
     await Promise.all([
       patch.custodianUserId
         ? getOwned(portableCtx, "users", patch.custodianUserId, societyId)
@@ -267,12 +274,8 @@ export const revealSecret = authorizedMutation("secrets:revealSecret", mutation)
   returns: v.any(),
   handler: async (ctx, { id, actingUserId }) => {
     const portableCtx = await toPortableMutationCtx(ctx);
-    const societyId = portableCtx.principal.kind === "anonymous"
-      ? undefined
-      : portableCtx.principal.societyId;
-    if (!societyId) throw new Error("Society membership not found.");
-    const row = await getOwned(portableCtx, "secretVaultItems", id, societyId);
-    const principalUser = await requireSocietyMembership(portableCtx, societyId);
+    const row = await requireOwnedRow(portableCtx, "secretVaultItems", id);
+    const principalUser = await requireSocietyMembership(portableCtx, row.societyId);
     if (actingUserId !== principalUser._id) {
       throw new ConvexError({ code: "FORBIDDEN", message: "Authenticated actor does not match the current principal." });
     }

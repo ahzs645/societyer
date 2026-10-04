@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { BookOpen, CalendarPlus, Gavel, Layers, Pencil, Plus, Tag as TagIcon, X } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
@@ -102,6 +104,8 @@ export function MotionsPage() {
 // are free-form and editable inline.
 function MotionsTableTab() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("motions:write");
   const toast = useToast();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -111,8 +115,8 @@ function MotionsTableTab() {
 
   const motions = useQuery(api.motions.list, society ? { societyId: society._id } : "skip");
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
-  const setTags = useMutation(api.motions.setTags);
-  const update = useMutation(api.motions.update);
+  const setTags = usePermissionedMutation(api.motions.setTags, canWrite);
+  const update = usePermissionedMutation(api.motions.update, canWrite);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -152,6 +156,7 @@ function MotionsTableTab() {
   if (society === null) return <SeedPrompt />;
 
   const addTag = async (row: any) => {
+    if (!canWrite) return;
     const value = (tagDraft[String(row._id)] ?? "").trim().toLowerCase();
     if (!value) return;
     const next = Array.from(new Set([...(row.tags ?? []).map((t: string) => String(t)), value]));
@@ -163,6 +168,7 @@ function MotionsTableTab() {
     }
   };
   const removeTag = async (row: any, tag: string) => {
+    if (!canWrite) return;
     const next = (row.tags ?? []).map((t: string) => String(t)).filter((t: string) => t !== tag);
     try {
       await setTags({ motionId: row._id, tags: next });
@@ -172,6 +178,7 @@ function MotionsTableTab() {
   };
 
   const openEdit = (row: any) => {
+    if (!canWrite) return;
     setEditing(row);
     setForm({
       title: row.title ?? "",
@@ -190,6 +197,7 @@ function MotionsTableTab() {
     setForm(null);
   };
   const saveEdit = async () => {
+    if (!canWrite) return;
     if (!editing || !form) return;
     const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
     try {
@@ -272,7 +280,8 @@ function MotionsTableTab() {
                             style={{ padding: 0, height: 14 }}
                             aria-label={`Remove label ${tag}`}
                             onClick={() => removeTag(row, tag)}
-                          >
+                          disabled={!canWrite}
+                         >
                             <X size={10} />
                           </button>
                         </span>
@@ -286,8 +295,9 @@ function MotionsTableTab() {
                       onKeyDown={(e) => { if (e.key === "Enter") addTag(row); }}
                       placeholder="+ label"
                       aria-label="Add label"
+                      disabled={!canWrite}
                     />
-                    <button className="btn btn--ghost btn--icon" aria-label="Add label" onClick={() => addTag(row)}>
+                    <button className="btn btn--ghost btn--icon" aria-label="Add label" onClick={() => addTag(row)} disabled={!canWrite}>
                       <Plus size={12} />
                     </button>
                   </div>
@@ -296,11 +306,12 @@ function MotionsTableTab() {
               return undefined;
             }}
             renderRowActions={(row) =>
-              canEditMotion(row) ? (
+              canWrite && canEditMotion(row) ? (
                 <button
                   className="btn btn--ghost btn--sm"
                   onClick={(e) => { e.stopPropagation(); openEdit(row); }}
-                >
+                disabled={!canWrite}
+               >
                   <Pencil size={12} /> Edit
                 </button>
               ) : row.primaryMeetingId ? (
@@ -326,7 +337,7 @@ function MotionsTableTab() {
         footer={
           <>
             <button className="btn" onClick={closeEdit}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveEdit} disabled={!form?.text.trim()}>
+            <button className="btn btn--accent" onClick={saveEdit} disabled={!canWrite || (!form?.text.trim())}>
               Save
             </button>
           </>

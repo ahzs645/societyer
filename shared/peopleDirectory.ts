@@ -14,6 +14,7 @@ export interface DirectoryPerson {
   firstName?: string;
   lastName?: string;
   dob?: string;
+  editable?: boolean;
   isIndividual?: boolean;
 }
 

@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useEffect, useState } from "react";
+import { useQuery } from "convex/react";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -31,13 +33,19 @@ const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
 
 export function EmployeesPage() {
   const society = useSociety();
+  const permissions = usePermissions();
+  const canWrite = permissions.loaded && permissions.can("employees:write");
   const items = useQuery(api.employees.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.employees.create);
-  const remove = useMutation(api.employees.remove);
+  const create = usePermissionedMutation(api.employees.create, canWrite);
+  const remove = usePermissionedMutation(api.employees.remove, canWrite);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+
+  useEffect(() => {
+    if (!canWrite) setOpen(false);
+  }, [canWrite]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -56,6 +64,7 @@ export function EmployeesPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite) return;
     setForm({
       firstName: "",
       lastName: "",
@@ -68,6 +77,7 @@ export function EmployeesPage() {
     setOpen(true);
   };
   const save = async () => {
+    if (!canWrite) return;
     const { annualSalaryDollars, hourlyWageDollars, ...rest } = form;
     await create({
       societyId: society._id,
@@ -86,7 +96,7 @@ export function EmployeesPage() {
         iconColor="blue"
         subtitle="Payroll source of truth for T4/T4A generation, remuneration disclosure (s.36, ≥ $75k) and ESA 4-year record retention."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> New employee
           </button>
         }
@@ -129,7 +139,7 @@ export function EmployeesPage() {
               return undefined;
             }}
             renderRowActions={(r) => (
-              <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete employee ${r.name}`} onClick={() => remove({ id: r._id })}>
+              <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete employee ${r.name}`} disabled={!canWrite} onClick={() => remove({ id: r._id })}>
                 <Trash2 size={12} />
               </button>
             )}
@@ -138,10 +148,10 @@ export function EmployeesPage() {
       ) : null}
 
       <Drawer
-        open={open}
+        open={open && canWrite}
         onClose={() => setOpen(false)}
         title="New employee"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite}>Save</button></>}
       >
         {form && (
           <div>

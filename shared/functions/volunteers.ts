@@ -14,21 +14,12 @@ import {
   requireRolePortable,
   requireSocietyMembership,
 } from "./access";
-import { MODULES_BY_KEY, normalizeModuleSettings, type ModuleKey } from "../../src/lib/modules";
+import { authorizeApplicationIntake } from "./publicIntake";
 
 function isoNow() {
   return new Date().toISOString();
 }
 
-async function requireEnabledModulePortable(ctx: PortableMutationCtx, societyId: string, key: ModuleKey) {
-  await requireSocietyMembership(ctx, societyId);
-  const society = await ctx.db.get(societyId, "societies");
-  if (!society) throw new Error("Society not found.");
-  if (!normalizeModuleSettings(society as any)[key]) {
-    throw new Error(`${MODULES_BY_KEY[key].label} is disabled for this workspace.`);
-  }
-  return society;
-}
 
 function fullName(row: { firstName?: string; lastName?: string }) {
   return `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim();
@@ -134,11 +125,12 @@ export async function submitApplicationPortable(
     source?: string;
   },
 ) {
-  await requireEnabledModulePortable(ctx, args.societyId, "volunteers");
+  const { publicSubmission } = await authorizeApplicationIntake(ctx, args.societyId, "volunteers");
+  if (publicSubmission && args.memberId) throw new Error("Public applicants cannot assign a workspace member identity.");
   if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
   return await ctx.db.insert("volunteerApplications", {
     ...args,
-    source: args.source ?? "public",
+    source: publicSubmission ? "public" : args.source ?? "public",
     status: "Submitted",
     submittedAtISO: isoNow(),
   });

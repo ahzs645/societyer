@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
@@ -59,17 +61,20 @@ type EventForm = {
 
 export function CommitmentsPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("commitments:write");
+  const canCreateTask = can("tasks:write");
   const commitments = useQuery(api.commitments.list, society ? { societyId: society._id } : "skip");
   const events = useQuery(api.commitments.eventsForSociety, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.commitments.create);
-  const update = useMutation(api.commitments.update);
-  const remove = useMutation(api.commitments.remove);
-  const recordEvent = useMutation(api.commitments.recordEvent);
-  const removeEvent = useMutation(api.commitments.removeEvent);
-  const createTask = useMutation(api.tasks.create);
+  const create = usePermissionedMutation(api.commitments.create, canWrite);
+  const update = usePermissionedMutation(api.commitments.update, canWrite);
+  const remove = usePermissionedMutation(api.commitments.remove, canWrite);
+  const recordEvent = usePermissionedMutation(api.commitments.recordEvent, canWrite);
+  const removeEvent = usePermissionedMutation(api.commitments.removeEvent, canWrite);
+  const createTask = usePermissionedMutation(api.tasks.create, canCreateTask);
   const confirm = useConfirm();
   const toast = useToast();
   const [form, setForm] = useState<CommitmentFormValue | null>(null);
@@ -137,11 +142,13 @@ export function CommitmentsPage() {
   }) ?? rows[0];
 
   const openNew = () => {
+    if (!canWrite) return;
     setEditingId(null);
     setForm(makeCommitmentFormDefaults());
   };
 
   const openEdit = (row: any) => {
+    if (!canWrite) return;
     setEditingId(row._id);
     setForm(commitmentFormFromRow(row));
   };
@@ -152,6 +159,7 @@ export function CommitmentsPage() {
   };
 
   const openRecord = (row: any) => {
+    if (!canWrite) return;
     const today = new Date().toISOString().slice(0, 10);
     setEventForm({
       commitment: row,
@@ -164,6 +172,7 @@ export function CommitmentsPage() {
   };
 
   const saveCommitment = async () => {
+    if (!canWrite) return;
     if (!form) return;
     const payload = commitmentPayload(form);
     if (editingId) {
@@ -177,6 +186,7 @@ export function CommitmentsPage() {
   };
 
   const saveEvent = async () => {
+    if (!canWrite) return;
     if (!eventForm) return;
     await recordEvent({
       commitmentId: eventForm.commitment._id,
@@ -194,6 +204,7 @@ export function CommitmentsPage() {
   };
 
   const createPreparationTask = async (row: any) => {
+    if (!canCreateTask) return;
     const existing = openTasksByCommitment.get(String(row._id)) ?? [];
     if (existing.length > 0) {
       toast.info("Open task already exists", existing[0].title);
@@ -230,7 +241,7 @@ export function CommitmentsPage() {
         iconColor="green"
         subtitle="Promises made to external parties, like grant conditions, MOUs, and vendor or landlord obligations. For internal work items, use Tasks; for dates set by law or regulation, use Deadlines."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> New commitment
           </button>
         }
@@ -266,6 +277,8 @@ export function CommitmentsPage() {
 
       {featuredCommitment && (
         <FeaturedCommitmentCard
+          canWrite={canWrite}
+          canCreateTask={canCreateTask}
           commitment={featuredCommitment}
           isOverdue={isOverdue(featuredCommitment)}
           sourceDocument={documentsById.get(String(featuredCommitment.sourceDocumentId))}
@@ -286,7 +299,7 @@ export function CommitmentsPage() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={tableData.hydratedView}
           records={records}
-          onRecordClick={(_recordId, record) => openEdit(record)}
+          onRecordClick={canWrite ? (_recordId, record) => openEdit(record) : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -380,12 +393,12 @@ export function CommitmentsPage() {
               if (field.name === "status") return <Badge tone={statusTone(row.status)}>{row.status}</Badge>;
               return undefined;
             }}
-            rowMenuSections={(row) => [
+            rowMenuSections={(row) => canWrite ? [
               {
                 id: "actions",
                 items: [
                   { id: "record", label: "Record completion", icon: <CheckCircle2 size={14} />, onSelect: () => openRecord(row) },
-                  { id: "task", label: "Create preparation task", icon: <ListTodo size={14} />, onSelect: () => createPreparationTask(row) },
+                  { id: "task", disabled: !canCreateTask, label: "Create preparation task", icon: <ListTodo size={14} />, onSelect: () => createPreparationTask(row) },
                   { id: "edit", label: "Edit", icon: <Pencil size={14} />, onSelect: () => openEdit(row) },
                 ],
               },
@@ -411,7 +424,7 @@ export function CommitmentsPage() {
                   },
                 ],
               },
-            ]}
+            ] : []}
           />
         </RecordTableScope>
       ) : null}
@@ -449,7 +462,8 @@ export function CommitmentsPage() {
                         await removeEvent({ id: event._id });
                         toast.success("Completion removed");
                       }}
-                    >
+                    disabled={!canWrite}
+                   >
                       <Trash2 size={12} />
                     </button>
                   </div>
@@ -486,7 +500,7 @@ export function CommitmentsPage() {
         footer={
           <>
             <button className="btn" onClick={closeForm}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveCommitment} disabled={!form?.title.trim() || !form?.requirement.trim()}>
+            <button className="btn btn--accent" onClick={saveCommitment} disabled={!canWrite || (!form?.title.trim() || !form?.requirement.trim())}>
               Save
             </button>
           </>
@@ -508,7 +522,7 @@ export function CommitmentsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setEventForm(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveEvent} disabled={!eventForm?.happenedAtISO}>
+            <button className="btn btn--accent" onClick={saveEvent} disabled={!canWrite || (!eventForm?.happenedAtISO)}>
               Record
             </button>
           </>
@@ -625,6 +639,8 @@ function FeaturedCommitmentCard({
   meetingsById,
   onRecord,
   onPlanTask,
+  canWrite,
+  canCreateTask,
 }: {
   commitment: any;
   isOverdue: boolean;
@@ -635,6 +651,8 @@ function FeaturedCommitmentCard({
   meetingsById: Map<string, any>;
   onRecord: () => void;
   onPlanTask: () => void;
+  canWrite: boolean;
+  canCreateTask: boolean;
 }) {
   const latest = events[0];
   const meeting = latest?.meetingId ? meetingsById.get(String(latest.meetingId)) : null;
@@ -651,10 +669,10 @@ function FeaturedCommitmentCard({
           <p className="card__subtitle">{commitment.requirement}</p>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          <button className="btn-action" onClick={onPlanTask}>
+          <button className="btn-action" onClick={onPlanTask} disabled={!canCreateTask}>
             <ListTodo size={12} /> Plan task
           </button>
-          <button className="btn-action btn-action--primary" onClick={onRecord}>
+          <button className="btn-action btn-action--primary" onClick={onRecord} disabled={!canWrite}>
             <CheckCircle2 size={12} /> Record evidence
           </button>
         </div>

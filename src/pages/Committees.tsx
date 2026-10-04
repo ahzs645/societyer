@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { Plus, Users, UsersRound as UsersIcon } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import {
@@ -12,6 +12,8 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Doc } from "../../convex/_generated/dataModel";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, EmptyState, Field } from "../components/ui";
@@ -45,6 +47,8 @@ type CommitteeListRecord = Doc<"committees"> & {
 
 export function CommitteesPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("committees:write");
   const navigate = useNavigate();
   const committees = useQuery(
     api.committees.list,
@@ -58,7 +62,7 @@ export function CommitteesPage() {
     api.goals.list,
     society ? { societyId: society._id } : "skip",
   ) as Doc<"goals">[] | undefined;
-  const create = useMutation(api.committees.create);
+  const create = usePermissionedMutation(api.committees.create, canWrite);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<CommitteeForm | null>(null);
   const [currentViewId, setCurrentViewId] = useState<Doc<"views">["_id"] | undefined>();
@@ -85,12 +89,13 @@ export function CommitteesPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite) return;
     setForm({ name: "", description: "", cadence: "Monthly", color: COLORS[0] });
     setOpen(true);
   };
 
   const save = async () => {
-    if (!form) return;
+    if (!canWrite || !form) return;
     await create({ societyId: society._id, ...form });
     setOpen(false);
   };
@@ -103,7 +108,7 @@ export function CommitteesPage() {
         iconColor="pink"
         subtitle="Standing and ad-hoc committees — each with its own cadence, roster, tasks, and goals."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New committee
           </button>
         }
@@ -118,7 +123,7 @@ export function CommitteesPage() {
           hydratedView={tableData.hydratedView}
           records={records}
           onRecordClick={(recordId) => navigate(`/app/committees/${recordId}`)}
-          onCreate={openNew}
+          onCreate={canWrite ? openNew : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -145,7 +150,7 @@ export function CommitteesPage() {
                 title="No committees yet"
                 description="Create a committee to start tracking its mission, roster, meetings, tasks, and goals."
                 action={
-                  <button className="btn btn--accent" type="button" onClick={openNew}>
+                  <button className="btn btn--accent" type="button" disabled={!canWrite} onClick={openNew}>
                     <Plus size={12} /> New committee
                   </button>
                 }
@@ -191,7 +196,7 @@ export function CommitteesPage() {
         footer={
           <>
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Create</button>
+            <button className="btn btn--accent" disabled={!canWrite} onClick={save}>Create</button>
           </>
         }
       >
@@ -199,6 +204,7 @@ export function CommitteesPage() {
           <div>
             <Field label="Name">
               <input
+                disabled={!canWrite}
                 className="input"
                 value={form.name}
                 onChange={(event) => setForm({ ...form, name: event.target.value })}
@@ -206,6 +212,7 @@ export function CommitteesPage() {
             </Field>
             <Field label="Mission">
               <input
+                disabled={!canWrite}
                 className="input"
                 value={form.mission ?? ""}
                 onChange={(event) => setForm({ ...form, mission: event.target.value })}
@@ -213,6 +220,7 @@ export function CommitteesPage() {
             </Field>
             <Field label="Description">
               <MarkdownEditor
+                readOnly={!canWrite}
                 rows={4}
                 value={form.description}
                 onChange={(markdown) => setForm({ ...form, description: markdown })}
@@ -220,6 +228,7 @@ export function CommitteesPage() {
             </Field>
             <Field label="Cadence">
               <Select
+                disabled={!canWrite}
                 value={form.cadence}
                 onChange={(value) => setForm({ ...form, cadence: value })}
                 options={CADENCES.map((cadence) => ({ value: cadence, label: cadence }))}
@@ -227,6 +236,7 @@ export function CommitteesPage() {
             </Field>
             <Field label="Cadence notes">
               <input
+                disabled={!canWrite}
                 className="input"
                 placeholder="e.g. 2nd Tuesday of each month at 6:30pm"
                 value={form.cadenceNotes ?? ""}
@@ -235,6 +245,7 @@ export function CommitteesPage() {
             </Field>
             <Field label="Color">
               <ColorPicker
+                disabled={!canWrite}
                 value={form.color}
                 onChange={(color) => setForm({ ...form, color })}
                 palette={COLORS}

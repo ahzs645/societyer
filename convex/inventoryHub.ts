@@ -1,5 +1,6 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
+import { assertNativeFileStorageEnabled } from "./providers/env";
 import { mutation, query } from "./lib/untypedServer";
 import {
   connectionsPortable,
@@ -135,7 +136,13 @@ export const upsertItem = authorizedMutation("inventoryHub:upsertItem", mutation
     rawJson: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (ctx, args) => upsertItemPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    if (args.imageStorageId) {
+      const current = args.id ? await ctx.db.get(args.id) : null;
+      if (current?.imageStorageId !== args.imageStorageId) assertNativeFileStorageEnabled();
+    }
+    return upsertItemPortable(await toPortableMutationCtx(ctx), args);
+  },
 });
 
 export const upsertLocation = authorizedMutation("inventoryHub:upsertLocation", mutation)({

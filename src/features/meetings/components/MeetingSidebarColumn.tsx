@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -140,11 +141,13 @@ export function MeetingSidebarColumn({
   draftFromTranscript?: () => Promise<void> | void;
   draftingFromTranscript?: boolean;
 }) {
+  const { can } = usePermissions();
+  const canDownload = can("exports:download");
   const show = (panel: NonNullable<typeof visiblePanels>[number]) => visiblePanels.includes(panel);
   const minutesExportBlocked = formalExportBlockers.length > 0;
   const agmRun = useQuery(
     api.agm.runForMeeting,
-    meeting?.type === "AGM" && show("agm") ? { meetingId: meeting._id } : "skip",
+    can("meetings:read") && meeting?.type === "AGM" && show("agm") ? { meetingId: meeting._id } : "skip",
   );
   return (
         <div className="col" style={{ gap: 16 }}>
@@ -255,13 +258,13 @@ export function MeetingSidebarColumn({
                       </span>
                     </button>
                     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                      <button className="btn-action btn-action--primary" onClick={exportToWord} disabled={!minutes || minutesExportBlocked}>
+                      <button className="btn-action btn-action--primary" onClick={exportToWord} disabled={!canDownload || (!minutes || minutesExportBlocked)}>
                         <FileDown size={12} /> Export Word
                       </button>
-                      <button className="btn-action" onClick={exportToPdf} disabled={!minutes || minutesExportBlocked}>
+                      <button className="btn-action" onClick={exportToPdf} disabled={!canDownload || (!minutes || minutesExportBlocked)}>
                         <FileDown size={12} /> Download PDF
                       </button>
-                      <button className="btn-action" onClick={printMinutes} disabled={!minutes || minutesExportBlocked}>
+                      <button className="btn-action" onClick={printMinutes} disabled={!canDownload || (!minutes || minutesExportBlocked)}>
                         <Printer size={12} /> Print
                       </button>
                     </div>

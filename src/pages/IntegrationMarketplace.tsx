@@ -1,9 +1,11 @@
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field, SettingsShell } from "../components/ui";
@@ -64,14 +66,18 @@ function kindLabel(kind: string) {
 
 export function IntegrationMarketplacePage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWriteSettings = loaded && can("settings:write");
+  const canCreateBoardPack = loaded && can("tasks:write");
+  const canUseBoardPackFallback = canCreateBoardPack && can("meetings:write");
   const actingUserId = useCurrentUserId() ?? undefined;
   const installations = useQuery(api.apiPlatform.listPluginInstallations, society ? { societyId: society._id } : "skip") as Installation[] | undefined;
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip") as any[] | undefined;
-  const upsertPluginInstallation = useMutation(api.apiPlatform.upsertPluginInstallation);
-  const createBoardPack = useMutation(api.workflowPackages.createBoardPack);
-  const upsertWorkflowPackage = useMutation(api.workflowPackages.upsert);
-  const createTask = useMutation(api.tasks.create);
-  const setPackageReviewStatus = useMutation(api.meetings.setPackageReviewStatus);
+  const upsertPluginInstallation = usePermissionedMutation(api.apiPlatform.upsertPluginInstallation, canWriteSettings);
+  const createBoardPack = usePermissionedMutation(api.workflowPackages.createBoardPack, canCreateBoardPack);
+  const upsertWorkflowPackage = usePermissionedMutation(api.workflowPackages.upsert, canUseBoardPackFallback);
+  const createTask = usePermissionedMutation(api.tasks.create, canUseBoardPackFallback);
+  const setPackageReviewStatus = usePermissionedMutation(api.meetings.setPackageReviewStatus, canUseBoardPackFallback);
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") === "setup" ? "setup" : "catalog";
@@ -95,6 +101,7 @@ export function IntegrationMarketplacePage() {
   if (society === null) return <SeedPrompt />;
 
   const install = async (item: CatalogItem) => {
+    if (!canWriteSettings) return;
     setBusySlug(item.slug);
     try {
       await upsertPluginInstallation({
@@ -116,6 +123,7 @@ export function IntegrationMarketplacePage() {
   };
 
   const saveHealth = async (item: CatalogItem) => {
+    if (!canWriteSettings) return;
     if (!item.installation) return;
     setBusySlug(item.slug);
     try {
@@ -144,6 +152,7 @@ export function IntegrationMarketplacePage() {
   };
 
   const startBoardPack = async () => {
+    if (!canCreateBoardPack) return;
     if (!meetingId) return;
     setBusySlug("board-pack-workflow");
     try {
@@ -153,7 +162,8 @@ export function IntegrationMarketplacePage() {
           societyId: society._id,
           meetingId: meetingId as any,
         });
-      } catch {
+      } catch (error) {
+        if (!canUseBoardPackFallback) throw error;
         result = await createBoardPackFallback();
       }
       toast.success("Board pack created", `${result.taskIds.length} follow-up tasks opened`);
@@ -165,6 +175,7 @@ export function IntegrationMarketplacePage() {
   };
 
   const createBoardPackFallback = async () => {
+    if (!canUseBoardPackFallback) throw new Error("Board-pack changes are not permitted.");
     const meeting = meetingOptions.find((item) => item._id === meetingId);
     if (!meeting) throw new Error("Meeting not found.");
     const packageId = await upsertWorkflowPackage({
@@ -287,7 +298,7 @@ export function IntegrationMarketplacePage() {
               <Button onClick={() => setDetailOpen(false)}>Close</Button>
               <Button
                 variant={selected.installed ? "secondary" : "accent"}
-                disabled={busySlug === selected.slug || selected.status === "planned"}
+                disabled={!canWriteSettings || busySlug === selected.slug || selected.status === "planned"}
                 onClick={() => install(selected)}
               >
                 {selected.installed ? <RefreshCw size={12} /> : <Plug size={12} />}
@@ -336,7 +347,7 @@ export function IntegrationMarketplacePage() {
                       ]}
                     />
                   </Field>
-                  <Button variant="accent" disabled={!meetingId || busySlug === selected.slug} onClick={startBoardPack}>
+                  <Button variant="accent" disabled={!canCreateBoardPack || !meetingId || busySlug === selected.slug} onClick={startBoardPack}>
                     <PackageCheck size={12} /> Create board pack
                   </Button>
                 </div>
@@ -378,6 +389,7 @@ export function IntegrationMarketplacePage() {
                     <label key={secret} className="row" style={{ gap: 8 }}>
                       <input
                         type="checkbox"
+                        disabled={!canWriteSettings}
                         checked={Boolean(healthDraft[secret])}
                         onChange={(event) => setHealthDraft({ ...healthDraft, [secret]: event.target.checked })}
                       />
@@ -391,7 +403,7 @@ export function IntegrationMarketplacePage() {
                   ))}
                 </div>
                 {selected.installation && selected.requiredSecrets.length > 0 && (
-                  <Button disabled={busySlug === selected.slug} onClick={() => saveHealth(selected)}>
+                  <Button disabled={!canWriteSettings || busySlug === selected.slug} onClick={() => saveHealth(selected)}>
                     <CheckCircle2 size={12} /> Save setup checklist
                   </Button>
                 )}

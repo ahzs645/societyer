@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { Bot, BrainCircuit, CheckCircle2, History, KeyRound, ListTree, MessageSquare, Play, RefreshCw, Save, Search, ShieldCheck, SlidersHorizontal, Trash2, Wrench, XCircle } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field, SettingsShell } from "../components/ui";
@@ -70,6 +72,9 @@ type AiAgentSection = "chat" | "tools" | "skills" | "catalog" | "runs";
 
 export function AiAgentsPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWriteTasks = loaded && can("tasks:write");
+  const canWriteSettings = loaded && can("settings:write");
   const actingUserId = useCurrentUserId() ?? undefined;
   const agents = useQuery(api.aiAgents.listDefinitions, {}) as AgentDefinition[] | undefined;
   const skills = useQuery(api.aiAgents.listSkills, society ? { societyId: society._id } : "skip") as SkillDefinition[] | undefined;
@@ -84,18 +89,18 @@ export function AiAgentsPage() {
   ) as any[] | undefined;
   const threads = useQuery(api.aiChat.listThreads, society ? { societyId: society._id, limit: 12 } : "skip") as any[] | undefined;
   const toolDrafts = useQuery(api.aiAgents.listToolDrafts, society ? { societyId: society._id, limit: 20 } : "skip") as any[] | undefined;
-  const aiSettings = useQuery(api.aiSettings.getEffective, society ? { societyId: society._id } : "skip") as any | undefined;
+  const aiSettings = useQuery(api.aiSettings.getEffective, society && loaded && can("settings:read") ? { societyId: society._id } : "skip") as any | undefined;
   const runAgent = useAction(api.aiChatActions.runAgentLive);
   const sendChatMessage = useAction(api.aiChatActions.sendChatMessage);
   const validateProviderKey = useAction(api.aiSettingsActions.validateProviderKey);
   const listProviderModels = useAction(api.aiSettingsActions.listProviderModels);
-  const createSecret = useMutation(api.secrets.create);
-  const upsertAiSetting = useMutation(api.aiSettings.upsert);
-  const upsertSkill = useMutation(api.aiAgents.upsertSkill);
-  const setSkillActive = useMutation(api.aiAgents.setSkillActive);
-  const removeSkill = useMutation(api.aiAgents.removeSkill);
-  const approveToolDraft = useMutation(api.aiAgents.approveToolDraft);
-  const rejectToolDraft = useMutation(api.aiAgents.rejectToolDraft);
+  const createSecret = usePermissionedMutation(api.secrets.create, canWriteSettings);
+  const upsertAiSetting = usePermissionedMutation(api.aiSettings.upsert, canWriteSettings);
+  const upsertSkill = usePermissionedMutation(api.aiAgents.upsertSkill, canWriteTasks);
+  const setSkillActive = usePermissionedMutation(api.aiAgents.setSkillActive, canWriteTasks);
+  const removeSkill = usePermissionedMutation(api.aiAgents.removeSkill, canWriteTasks);
+  const approveToolDraft = usePermissionedMutation(api.aiAgents.approveToolDraft, canWriteTasks);
+  const rejectToolDraft = usePermissionedMutation(api.aiAgents.rejectToolDraft, canWriteTasks);
   const toast = useToast();
 
   const [selectedKey, setSelectedKey] = useState("compliance_analyst");
@@ -158,7 +163,7 @@ export function AiAgentsPage() {
       effectiveProvider.provider === aiSetup.provider &&
       !aiSetup.apiKey.trim(),
   );
-  const setupEditable = setupValidated || savedProviderReady;
+  const setupEditable = canWriteSettings && (setupValidated || savedProviderReady);
 
   useEffect(() => {
     if (!effectiveProvider || aiSetup.apiKey.trim() || validation) return;
@@ -178,6 +183,7 @@ export function AiAgentsPage() {
   if (society === null) return <SeedPrompt />;
 
   const startRun = async () => {
+    if (!canWriteTasks) return;
     if (!selectedAgent || !input.trim()) return;
     setBusy(true);
     try {
@@ -198,6 +204,7 @@ export function AiAgentsPage() {
   };
 
   const submitChat = async () => {
+    if (!canWriteTasks) return;
     if (!society || !chatInput.trim()) return;
     setChatBusy(true);
     setStreamingText("");
@@ -228,6 +235,7 @@ export function AiAgentsPage() {
   };
 
   const saveSkill = async () => {
+    if (!canWriteTasks) return;
     if (!society || !skillDraft.name.trim() || !skillDraft.content.trim()) return;
     try {
       await upsertSkill({
@@ -247,10 +255,12 @@ export function AiAgentsPage() {
   };
 
   const validateProviderAndLoadModels = async () => {
+    if (!canWriteSettings) return;
     if (!society || !aiSetup.apiKey.trim()) return;
     setSetupBusy(true);
     try {
       const result = await validateProviderKey({
+        societyId: society._id,
         provider: aiSetup.provider,
         apiKey: aiSetup.apiKey.trim(),
         baseUrl: aiSetup.provider === "openai-compatible" ? aiSetup.baseUrl.trim() : undefined,
@@ -274,6 +284,7 @@ export function AiAgentsPage() {
   };
 
   const saveValidatedProvider = async () => {
+    if (!canWriteSettings) return;
     if (!society || !setupEditable) return;
     setSetupBusy(true);
     try {
@@ -319,6 +330,7 @@ export function AiAgentsPage() {
   };
 
   const loadModelCatalog = async (forceRefresh = false) => {
+    if (!canWriteSettings) return;
     setModelBusy(true);
     try {
       const result = await listProviderModels({
@@ -382,7 +394,7 @@ export function AiAgentsPage() {
             <div className="settings-pair">
               <Field label="Scope">
                 <Select
-                  value={aiSetup.scope}
+                  disabled={!canWriteSettings} value={aiSetup.scope}
                   onChange={(value) => setAiSetup((draft) => ({ ...draft, scope: value }))}
                   options={[
                     { value: "personal", label: "Personal" },
@@ -392,7 +404,7 @@ export function AiAgentsPage() {
               </Field>
               <Field label="Provider">
                 <Select
-                  value={aiSetup.provider}
+                  disabled={!canWriteSettings} value={aiSetup.provider}
                   onChange={(value) => {
                     const provider = value;
                     setAiSetup((draft) => ({
@@ -418,7 +430,7 @@ export function AiAgentsPage() {
               <Field label="Base URL">
                 <input
                   className="input"
-                  value={aiSetup.baseUrl}
+                  disabled={!canWriteSettings} value={aiSetup.baseUrl}
                   onChange={(event) => {
                     setAiSetup((draft) => ({ ...draft, baseUrl: event.target.value }));
                     setValidation(null);
@@ -432,7 +444,7 @@ export function AiAgentsPage() {
               <input
                 className="input"
                 type="password"
-                value={aiSetup.apiKey}
+                disabled={!canWriteSettings} value={aiSetup.apiKey}
                 onChange={(event) => {
                   setAiSetup((draft) => ({ ...draft, apiKey: event.target.value }));
                   setValidation(null);
@@ -447,7 +459,7 @@ export function AiAgentsPage() {
                 <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{validation.message}</span>
               </div>
             )}
-            <button className="btn btn--accent" disabled={setupBusy || !aiSetup.apiKey.trim()} onClick={validateProviderAndLoadModels}>
+            <button className="btn btn--accent" disabled={!canWriteSettings || setupBusy || !aiSetup.apiKey.trim()} onClick={validateProviderAndLoadModels}>
               <ShieldCheck size={12} /> {setupBusy ? "Validating..." : "Validate key and load models"}
             </button>
             <div style={{ height: 1, background: "var(--border)" }} />
@@ -519,12 +531,12 @@ export function AiAgentsPage() {
                 <textarea
                   className="textarea"
                   rows={4}
-                  value={chatInput}
+                  disabled={!canWriteTasks} value={chatInput}
                   placeholder="Ask the assistant to find records, draft tasks, inspect workflow context, or prepare a filing packet."
                   onChange={(event) => setChatInput(event.target.value)}
                 />
               </Field>
-              <button className="btn btn--accent" disabled={chatBusy || !chatInput.trim()} onClick={submitChat}>
+              <button className="btn btn--accent" disabled={!canWriteTasks || chatBusy || !chatInput.trim()} onClick={submitChat}>
                 <MessageSquare size={12} /> {chatBusy ? "Sending..." : "Send chat message"}
               </button>
             </div>
@@ -578,7 +590,9 @@ export function AiAgentsPage() {
                     <div className="row" style={{ gap: 6, flexShrink: 0 }}>
                       <button
                         className="btn btn--accent btn--sm"
+                        disabled={!canWriteTasks}
                         onClick={async () => {
+                          if (!canWriteTasks) return;
                           await approveToolDraft({ societyId: society._id, id: draft._id });
                           toast.success("AI draft approved");
                         }}
@@ -587,7 +601,9 @@ export function AiAgentsPage() {
                       </button>
                       <button
                         className="btn btn--ghost btn--sm"
+                        disabled={!canWriteTasks}
                         onClick={async () => {
+                          if (!canWriteTasks) return;
                           await rejectToolDraft({ societyId: society._id, id: draft._id });
                           toast.success("AI draft rejected");
                         }}
@@ -712,7 +728,7 @@ export function AiAgentsPage() {
                   <textarea
                     className="textarea"
                     rows={6}
-                    value={input}
+                    disabled={!canWriteTasks} value={input}
                     placeholder={selectedAgent.requiredInputHints.join("; ")}
                     onChange={(event) => setInput(event.target.value)}
                   />
@@ -720,7 +736,7 @@ export function AiAgentsPage() {
                 <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                   Include: {selectedAgent.requiredInputHints.join(", ")}
                 </div>
-                <button className="btn btn--accent" disabled={busy || !input.trim()} onClick={startRun}>
+                <button className="btn btn--accent" disabled={!canWriteTasks || busy || !input.trim()} onClick={startRun}>
                   <Play size={12} /> {busy ? "Running..." : "Run this agent"}
                 </button>
               </div>
@@ -779,7 +795,8 @@ export function AiAgentsPage() {
                     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                       <button
                         className="btn btn--ghost btn--sm"
-                        onClick={() => setSkillDraft({
+                        disabled={!canWriteTasks}
+                        onClick={() => canWriteTasks && setSkillDraft({
                           id: skill._id ?? "",
                           name: skill.name,
                           label: skill.label,
@@ -792,7 +809,8 @@ export function AiAgentsPage() {
                       </button>
                       <button
                         className="btn btn--ghost btn--sm"
-                        onClick={() => skill._id && setSkillActive({
+                        disabled={!canWriteTasks}
+                        onClick={() => canWriteTasks && skill._id && setSkillActive({
                           societyId: society._id,
                           id: skill._id as any,
                           isActive: skill.isActive === false,
@@ -802,7 +820,8 @@ export function AiAgentsPage() {
                       </button>
                       <button
                         className="btn btn--ghost btn--sm"
-                        onClick={() => skill._id && removeSkill({ societyId: society._id, id: skill._id as any })}
+                        disabled={!canWriteTasks}
+                        onClick={() => canWriteTasks && skill._id && removeSkill({ societyId: society._id, id: skill._id as any })}
                       >
                         <Trash2 size={12} /> Delete
                       </button>
@@ -814,23 +833,23 @@ export function AiAgentsPage() {
                 <strong>{skillDraft.id ? "Edit custom skill" : "New custom skill"}</strong>
                 <div className="settings-pair">
                   <Field label="Name">
-                    <input className="input" value={skillDraft.name} onChange={(event) => setSkillDraft((draft) => ({ ...draft, name: event.target.value }))} placeholder="grant-reporting-review" />
+                    <input className="input" disabled={!canWriteTasks} value={skillDraft.name} onChange={(event) => setSkillDraft((draft) => ({ ...draft, name: event.target.value }))} placeholder="grant-reporting-review" />
                   </Field>
                   <Field label="Label">
-                    <input className="input" value={skillDraft.label} onChange={(event) => setSkillDraft((draft) => ({ ...draft, label: event.target.value }))} placeholder="Grant reporting review" />
+                    <input className="input" disabled={!canWriteTasks} value={skillDraft.label} onChange={(event) => setSkillDraft((draft) => ({ ...draft, label: event.target.value }))} placeholder="Grant reporting review" />
                   </Field>
                 </div>
                 <Field label="Description">
-                  <input className="input" value={skillDraft.description} onChange={(event) => setSkillDraft((draft) => ({ ...draft, description: event.target.value }))} />
+                  <input className="input" disabled={!canWriteTasks} value={skillDraft.description} onChange={(event) => setSkillDraft((draft) => ({ ...draft, description: event.target.value }))} />
                 </Field>
                 <Field label="Content">
-                  <textarea className="textarea" rows={5} value={skillDraft.content} onChange={(event) => setSkillDraft((draft) => ({ ...draft, content: event.target.value }))} />
+                  <textarea className="textarea" rows={5} disabled={!canWriteTasks} value={skillDraft.content} onChange={(event) => setSkillDraft((draft) => ({ ...draft, content: event.target.value }))} />
                 </Field>
                 <label className="row" style={{ gap: 8, fontSize: "var(--fs-sm)" }}>
-                  <input type="checkbox" checked={skillDraft.isActive} onChange={(event) => setSkillDraft((draft) => ({ ...draft, isActive: event.target.checked }))} />
+                  <input type="checkbox" disabled={!canWriteTasks} checked={skillDraft.isActive} onChange={(event) => setSkillDraft((draft) => ({ ...draft, isActive: event.target.checked }))} />
                   Active in AI agents and chat prompt
                 </label>
-                <button className="btn btn--accent" onClick={saveSkill} disabled={!skillDraft.name.trim() || !skillDraft.content.trim()}>
+                <button className="btn btn--accent" onClick={saveSkill} disabled={!canWriteTasks || !skillDraft.name.trim() || !skillDraft.content.trim()}>
                   <Save size={12} /> Save skill
                 </button>
               </div>

@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
@@ -16,6 +18,8 @@ import { Select } from "../components/Select";
  */
 export function ServiceProvidersPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("settings:write");
   const items = useQuery(
     api.serviceProviders.list,
     society ? { societyId: society._id } : "skip",
@@ -33,7 +37,7 @@ export function ServiceProvidersPage() {
   const catalog = useQuery(api.serviceProviders.functionsCatalog, {}) as
     | Array<{ value: string; label: string }>
     | undefined;
-  const upsert = useMutation(api.serviceProviders.upsert);
+  const upsert = usePermissionedMutation(api.serviceProviders.upsert, canWrite);
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
@@ -45,6 +49,7 @@ export function ServiceProvidersPage() {
   const today = new Date().toISOString().slice(0, 10);
 
   const openNew = () => {
+    if (!canWrite) return;
     setForm({
       function: catalog?.[0]?.value ?? "",
       firmName: "",
@@ -70,6 +75,7 @@ export function ServiceProvidersPage() {
   };
 
   const save = async () => {
+    if (!canWrite || !form) return;
     await upsert({
       id: form.id,
       societyId: society._id,
@@ -101,7 +107,7 @@ export function ServiceProvidersPage() {
         iconColor="purple"
         subtitle="External professionals engaged by the society — lawyers, accountants, bankers and other advisers — with their appointment and removal dates."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New provider
           </button>
         }
@@ -175,13 +181,13 @@ export function ServiceProvidersPage() {
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
-        title={form?.id ? "Edit service provider" : "New service provider"}
+        title={form?.id ? (canWrite ? "Edit service provider" : "Service provider") : "New service provider"}
         footer={
           <>
             <button className="btn" onClick={() => setOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" onClick={save}>
+            <button className="btn btn--accent" disabled={!canWrite} onClick={save}>
               Save
             </button>
           </>
@@ -191,6 +197,7 @@ export function ServiceProvidersPage() {
           <div>
             <Field label="Function">
               <Select
+                disabled={!canWrite}
                 value={form.function}
                 onChange={(value) => setForm({ ...form, function: value })}
                 options={(catalog ?? []).map((c) => ({ value: c.value, label: c.label }))}
@@ -198,6 +205,7 @@ export function ServiceProvidersPage() {
             </Field>
             <Field label="Firm name">
               <input
+                disabled={!canWrite}
                 className="input"
                 value={form.firmName}
                 onChange={(e) => setForm({ ...form, firmName: e.target.value })}
@@ -205,6 +213,7 @@ export function ServiceProvidersPage() {
             </Field>
             <Field label="Contact name">
               <input
+                disabled={!canWrite}
                 className="input"
                 value={form.contactName}
                 onChange={(e) => setForm({ ...form, contactName: e.target.value })}
@@ -212,6 +221,7 @@ export function ServiceProvidersPage() {
             </Field>
             <Field label="Firm location">
               <input
+                disabled={!canWrite}
                 className="input"
                 value={form.firmLocation}
                 onChange={(e) => setForm({ ...form, firmLocation: e.target.value })}
@@ -220,12 +230,14 @@ export function ServiceProvidersPage() {
             <div className="row" style={{ display: "flex", gap: 12 }}>
               <Field label="Appointed on">
                 <DatePicker
+                disabled={!canWrite}
                   value={form.appointedOn}
                   onChange={(value) => setForm({ ...form, appointedOn: value })}
                 />
               </Field>
               <Field label="Removed on">
                 <DatePicker
+                disabled={!canWrite}
                   value={form.removedOn}
                   onChange={(value) => setForm({ ...form, removedOn: value })}
                 />

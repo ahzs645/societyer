@@ -1,6 +1,8 @@
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
@@ -27,11 +29,13 @@ import type { Id } from "../../convex/_generated/dataModel";
  */
 export function AuditorsPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("auditors:write");
   const items = useQuery(api.auditors.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.auditors.create);
-  const update = useMutation(api.auditors.update);
-  const remove = useMutation(api.auditors.remove);
+  const create = usePermissionedMutation(api.auditors.create, canWrite);
+  const update = usePermissionedMutation(api.auditors.update, canWrite);
+  const remove = usePermissionedMutation(api.auditors.remove, canWrite);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
@@ -47,6 +51,7 @@ export function AuditorsPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite) return;
     setForm({
       firmName: "",
       engagementType: "ReviewEngagement",
@@ -59,6 +64,7 @@ export function AuditorsPage() {
     setOpen(true);
   };
   const save = async () => {
+    if (!canWrite) return;
     await create({ societyId: society._id, ...form });
     setOpen(false);
   };
@@ -74,7 +80,7 @@ export function AuditorsPage() {
         iconColor="green"
         subtitle="First auditor appointed by directors; subsequent appointments made by members at the AGM. Only independent CPAs or CPA firms may serve as auditors."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New appointment
           </button>
         }
@@ -88,12 +94,13 @@ export function AuditorsPage() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={tableData.hydratedView}
           records={records}
-          onUpdate={async ({ recordId, fieldName, value }) => {
+          onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
+            if (!canWrite) return;
             await update({
               id: recordId as Id<"auditorAppointments">,
               patch: { [fieldName]: value } as any,
             });
-          }}
+          } : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -113,7 +120,8 @@ export function AuditorsPage() {
               <button
                 className="btn btn--ghost btn--sm btn--icon"
                 aria-label={`Delete auditor ${r.firmName}`}
-                onClick={() => remove({ id: r._id })}
+                disabled={!canWrite}
+                onClick={() => canWrite && remove({ id: r._id })}
               >
                 <Trash2 size={12} />
               </button>
@@ -137,10 +145,10 @@ export function AuditorsPage() {
       <StakeholderPortalSection societyId={society._id} />
 
       <Drawer
-        open={open}
+        open={open && canWrite}
         onClose={() => setOpen(false)}
         title="New auditor appointment"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={save}>Save</button></>}
       >
         {form && (
           <div>
@@ -191,9 +199,12 @@ const PORTAL_SCOPES: Array<{ key: string; label: string }> = [
  */
 function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societies"> }) {
   const toast = useToast();
-  const portals = useQuery(api.partyPortals.list, { societyId });
-  const create = useMutation(api.partyPortals.create);
-  const revoke = useMutation(api.partyPortals.revoke);
+  const { loaded, can } = usePermissions();
+  const canRead = loaded && can("communications:read");
+  const canWrite = loaded && can("communications:write");
+  const portals = useQuery(api.partyPortals.list, canRead ? { societyId } : "skip");
+  const create = usePermissionedMutation(api.partyPortals.create, canWrite);
+  const revoke = usePermissionedMutation(api.partyPortals.revoke, canWrite);
   const [label, setLabel] = useState("");
   const [email, setEmail] = useState("");
   const [scopes, setScopes] = useState<string[]>(["board", "publications"]);
@@ -207,6 +218,7 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
     setScopes((prev) => (prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]));
 
   const onCreate = async () => {
+    if (!canWrite) return;
     if (!label.trim() || scopes.length === 0) {
       toast.warn("Add a party name and at least one section to share.");
       return;
@@ -246,20 +258,20 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
       </div>
       <div className="card__body col" style={{ gap: 14 }}>
         <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <Field label="Party name"><input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Smith & Co. (auditor)" /></Field>
-          <Field label="Email (optional)"><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="auditor@firm.com" /></Field>
+          <Field label="Party name"><input className="input" disabled={!canWrite} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Smith & Co. (auditor)" /></Field>
+          <Field label="Email (optional)"><input className="input" disabled={!canWrite} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="auditor@firm.com" /></Field>
         </div>
         <div className="row" style={{ gap: 16, flexWrap: "wrap", alignItems: "center" }}>
           <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Can read:</span>
           {PORTAL_SCOPES.map((s) => (
             <label key={s.key} className="checkbox" style={{ margin: 0 }}>
-              <input type="checkbox" checked={scopes.includes(s.key)} onChange={() => toggleScope(s.key)} /> {s.label}
+              <input type="checkbox" disabled={!canWrite} checked={scopes.includes(s.key)} onChange={() => toggleScope(s.key)} /> {s.label}
             </label>
           ))}
           <label className="checkbox" style={{ margin: 0 }}>
-            <input type="checkbox" checked={allowDownload} onChange={(e) => setAllowDownload(e.target.checked)} /> Allow downloads
+            <input type="checkbox" disabled={!canWrite} checked={allowDownload} onChange={(e) => setAllowDownload(e.target.checked)} /> Allow downloads
           </label>
-          <button className="btn btn--accent btn--sm" disabled={busy} onClick={onCreate}><Plus size={12} /> Create portal</button>
+          <button className="btn btn--accent btn--sm" disabled={!canWrite || busy} onClick={onCreate}><Plus size={12} /> Create portal</button>
         </div>
         <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>Document access shares released records only. Public document tags or public meeting-material access are required; restricted or expired materials stay private. Publications must also be approved.</p>
 
@@ -278,7 +290,7 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
                       {statusOf(p) === "Active" && (
                         <>
                           <button className="btn btn--ghost btn--sm" onClick={() => copyLink(p.token)}><Copy size={12} /> Link</button>
-                          <button className="btn btn--ghost btn--sm" onClick={() => revoke({ id: p._id })}><Trash2 size={12} /> Revoke</button>
+                          <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => canWrite && revoke({ id: p._id })}><Trash2 size={12} /> Revoke</button>
                         </>
                       )}
                     </div>
@@ -286,7 +298,7 @@ function StakeholderPortalSection({ societyId }: { societyId: ConvexId<"societie
                 </tr>
               ))}
               {(portals ?? []).length === 0 && (
-                <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 20 }}>No portals yet. Create one to share a read-only room.</td></tr>
+                <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 20 }}>{canWrite ? "No portals yet. Create one to share a read-only room." : "No portals yet."}</td></tr>
               )}
             </tbody>
           </table>

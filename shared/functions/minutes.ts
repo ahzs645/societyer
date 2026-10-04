@@ -18,6 +18,7 @@ import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBase
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
+import { requirePermissionPortable } from "./permissions";
 import {
   applyProceduralTags,
   classifyProceduralMotion,
@@ -435,7 +436,7 @@ function isCarriedOutcome(outcome: unknown) {
  *  an approval: flipping the motion back off Carried is ambiguous (was the
  *  approval also recorded manually?), so undoing is left to the explicit
  *  "Clear approval" action. */
-async function applyAdoptionApprovals(
+async function adoptionApprovalTargets(
   ctx: PortableMutationCtx,
   minutes: any,
   nextMotions: any[],
@@ -447,6 +448,7 @@ async function applyAdoptionApprovals(
       .map((motion) => String(motion.adoptsMinutesId)),
   );
   const stamped = new Set<string>();
+  const targets: any[] = [];
   for (const motion of nextMotions) {
     const targetId = motion?.adoptsMinutesId;
     if (!targetId || !isCarriedOutcome(motion.outcome)) continue;
@@ -455,6 +457,18 @@ async function applyAdoptionApprovals(
     if (key === String(minutes._id)) continue;
     const target = await getOwned(ctx, "minutes", targetId, String(minutes.societyId));
     if (target.approvedAt) continue;
+    targets.push(target);
+    stamped.add(key);
+  }
+  return targets;
+}
+
+async function applyAdoptionApprovals(
+  ctx: PortableMutationCtx,
+  minutes: any,
+  targets: any[],
+) {
+  for (const target of targets) {
     const now = new Date().toISOString();
     const targetPatch: Record<string, unknown> = {
       approvedAt: minutes.heldAt || now,
@@ -467,7 +481,6 @@ async function applyAdoptionApprovals(
       targetPatch.motionSnapshotAtISO = now;
     }
     await ctx.db.patch(target._id, targetPatch);
-    stamped.add(key);
     const targetMeeting = target.meetingId
       ? await getOwned(ctx, "meetings", target.meetingId, String(minutes.societyId))
       : null;
@@ -492,6 +505,14 @@ export async function updatePortable(
   const minutes = await requireOwnedRow(ctx, "minutes", id);
   const societyId = String(minutes.societyId);
   await assertMinutesForeignKeys(ctx, societyId, rawPatch);
+  const adoptionTargets = Array.isArray(rawPatch.motions)
+    ? await adoptionApprovalTargets(ctx, minutes, rawPatch.motions) : [];
+  // Approval authority is separate from drafting. Check every approval change
+  // before writing either this record or a carried adoption target. Unchanged
+  // carried motions remain editable by a drafter without a fresh approval.
+  if (["approvedAt", "approvedInMeetingId", "clearApproval", "clearApprovedInMeeting"].some(field => Object.prototype.hasOwnProperty.call(rawPatch, field)) || adoptionTargets.length) {
+    await requirePermissionPortable(ctx, societyId, "minutes:approve");
+  }
   // `undefined` fields are stripped from the wire, so unsetting approval
   // arrives as explicit clear flags (mirrors meetings.clearNoticeSent).
   const { clearApproval, clearApprovedInMeeting, motions: submittedMotions, ...patch } = rawPatch;
@@ -537,7 +558,7 @@ export async function updatePortable(
   // (adoptsMinutesId) newly records as Carried, stamp the referenced minutes
   // approved — the step people forget after the vote in the room.
   if (Array.isArray(submittedMotions)) {
-    await applyAdoptionApprovals(ctx, minutes, submittedMotions);
+    await applyAdoptionApprovals(ctx, minutes, adoptionTargets);
   }
 
   // Materialize the table + motionIds when motions were part of this save.

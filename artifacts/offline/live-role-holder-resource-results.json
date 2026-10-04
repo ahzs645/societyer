@@ -1,0 +1,55 @@
+{
+  "completedAt": "2026-10-04T22:28:40.364Z",
+  "endpoint": "http://127.0.0.1:43230",
+  "passed": 4,
+  "results": [
+    {
+      "name": "Real Owner and Viewer retain structured legal registers and deleted/transitioned history",
+      "passed": true
+    },
+    {
+      "name": "Member current and historical projections omit director/officer/controller structured records",
+      "passed": true
+    },
+    {
+      "name": "Member cannot bypass restricted prior snapshots through direct, transitioned or deleted history IDs",
+      "passed": true
+    },
+    {
+      "name": "Foreign real Owner cannot read any structured register or history projection",
+      "passed": true
+    }
+  ],
+  "nativePublicAttemptCount": 17,
+  "nativeAttempts": {
+    "queries": 17,
+    "mutations": 0,
+    "completed": 8,
+    "rejected": 9,
+    "brokerRequests": 8,
+    "operatorFixtureCalls": 2,
+    "byEndpoint": {
+      "legalOperations:listRoleHolders": {
+        "attempted": 4,
+        "completed": 3,
+        "rejected": 1
+      },
+      "roleHolderHistory:revisionHistory": {
+        "attempted": 9,
+        "completed": 3,
+        "rejected": 6
+      },
+      "roleHolderHistory:registerAsOf": {
+        "attempted": 2,
+        "completed": 1,
+        "rejected": 1
+      },
+      "roleHolderHistory:changesBetween": {
+        "attempted": 2,
+        "completed": 1,
+        "rejected": 1
+      }
+    }
+  },
+  "qualification": "Actual Better Auth broker JWTs and production native Convex exports; separate guarded disposable register fixture with all extra account memberships removed afterward; A unchanged"
+}

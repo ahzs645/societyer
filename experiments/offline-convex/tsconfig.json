@@ -1,15 +1,42 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "baseUrl": ".",
-    "paths": { "convex/*": ["../../node_modules/convex/*"] },
+    "paths": {
+      "convex/*": [
+        "../../node_modules/convex/*"
+      ]
+    },
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["vite/client", "vite-plugin-pwa/client", "node"]
+    "types": [
+      "vite/client",
+      "vite-plugin-pwa/client",
+      "node"
+    ]
   },
-  "include": ["src", "server", "convex", "domain.ts", "fixture.ts", "check-convex.ts", "check-meetings.ts", "vite.config.ts", "playwright*.config.ts", "tests", "pwa-tests"]
+  "include": [
+    "src",
+    "server",
+    "convex",
+    "domain.ts",
+    "fixture.ts",
+    "check-convex.ts",
+    "check-meetings.ts",
+    "check-role-invalidation.ts",
+    "vite.config.ts",
+    "playwright*.config.ts",
+    "tests",
+    "pwa-tests",
+    "live-tests",
+    "check-live-broker.ts"
+  ]
 }

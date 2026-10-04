@@ -17,7 +17,8 @@ import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBase
  */
 
 import type { PortableDoc, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, requireSocietyMembership } from "./access";
+import { getOwned } from "./access";
+import { requirePermissionPortable, type Permission } from "./permissions";
 
 /* ----------------------- compliance rules (inlined) ---------------------- */
 
@@ -528,13 +529,14 @@ const bcSocietiesDashboardComplianceRulePack: DashboardComplianceRulePack = {
 function evaluateDashboardComplianceRules(
   context: DashboardComplianceContext,
   rulePack: DashboardComplianceRulePack = bcSocietiesDashboardComplianceRulePack,
+  complete = true,
 ): DashboardComplianceFlag[] {
   const flags = rulePack.rules.flatMap((rule) => {
     const result = rule.passFail(context);
     return result ? [result] : [];
   });
 
-  if (flags.length === 0 && context.society) {
+  if (complete && flags.length === 0 && context.society) {
     return [
       {
         ruleId: "DASHBOARD-COMPLIANCE-OK",
@@ -667,6 +669,7 @@ type DashboardGoal = {
 };
 
 type DashboardSummary = {
+  readAccess: Permission[];
   society: DashboardSociety | null;
   counts: {
     members: number;
@@ -723,13 +726,27 @@ const OPEN_GOAL_STATUSES = ["AtRisk", "OffTrack", "OnTrack", "NotStarted"];
 const OPEN_TASK_STATUSES = ["Todo", "InProgress", "Blocked"];
 const PREVIEW_SCAN_LIMIT = 100;
 
+const DASHBOARD_READ_PERMISSIONS: readonly Permission[] = ["members:read", "directors:read", "meetings:read", "filings:read", "deadlines:read", "conflicts:read", "committees:read", "commitments:read", "tasks:read", "documents:read", "users:read", "audit:read", "settings:read"];
+
+async function dashboardReadAccess(ctx: PortableQueryCtx, societyId: string) {
+  await requirePermissionPortable(ctx, societyId, "society:read");
+  const readable = await Promise.all(DASHBOARD_READ_PERMISSIONS.map(async permission => {
+    try { await requirePermissionPortable(ctx, societyId, permission); return permission; }
+    catch (error) {
+      if (error instanceof Error && /^(?:Permission|Service scope) [a-zA-Z]+:read required\.$/.test(error.message)) return null;
+      throw error;
+    }
+  }));
+  return new Set(readable.filter((permission): permission is Permission => permission !== null));
+}
+
 /* ------------------------------- handlers -------------------------------- */
 
 export async function navCountsPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ) {
-  await requireSocietyMembership(ctx, societyId);
+  const readAccess = await dashboardReadAccess(ctx, societyId);
   const nowDate = new Date();
   const nowISO = nowDate.toISOString();
   const year = nowDate.getFullYear();
@@ -747,15 +764,15 @@ export async function navCountsPortable(
     goals,
     tasks,
   ] = await Promise.all([
-    ctx.db.query("members").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect(),
-    ctx.db.query("directors").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect(),
-    ctx.db.query("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", yearStartISO).lt("scheduledAt", nextYearStartISO)).collect(),
-    ctx.db.query("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).lt("dueDate", nowISO)).collect(),
-    ctx.db.query("deadlines").withIndex("by_society_done", (q) => q.eq("societyId", societyId).eq("done", false)).collect(),
-    ctx.db.query("conflicts").withIndex("by_society_resolved", (q) => q.eq("societyId", societyId).eq("resolvedAt", undefined)).collect(),
-    ctx.db.query("committees").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect(),
-    collectStatuses(ctx, "goals", societyId, OPEN_GOAL_STATUSES),
-    collectStatuses(ctx, "tasks", societyId, OPEN_TASK_STATUSES),
+    readAccess.has("members:read") ? ctx.db.query("members").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
+    readAccess.has("directors:read") ? ctx.db.query("directors").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
+    readAccess.has("meetings:read") ? ctx.db.query("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", yearStartISO).lt("scheduledAt", nextYearStartISO)).collect() : Promise.resolve([]),
+    readAccess.has("filings:read") ? ctx.db.query("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).lt("dueDate", nowISO)).collect() : Promise.resolve([]),
+    readAccess.has("deadlines:read") ? ctx.db.query("deadlines").withIndex("by_society_done", (q) => q.eq("societyId", societyId).eq("done", false)).collect() : Promise.resolve([]),
+    readAccess.has("conflicts:read") ? ctx.db.query("conflicts").withIndex("by_society_resolved", (q) => q.eq("societyId", societyId).eq("resolvedAt", undefined)).collect() : Promise.resolve([]),
+    readAccess.has("committees:read") ? ctx.db.query("committees").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
+    readAccess.has("commitments:read") ? collectStatuses(ctx, "goals", societyId, OPEN_GOAL_STATUSES) : Promise.resolve([]),
+    readAccess.has("tasks:read") ? collectStatuses(ctx, "tasks", societyId, OPEN_TASK_STATUSES) : Promise.resolve([]),
   ]);
 
   return {
@@ -775,7 +792,7 @@ export async function summaryPortable(
   ctx: PortableQueryCtx,
   { societyId }: { societyId: string },
 ): Promise<DashboardSummary> {
-  await requireSocietyMembership(ctx, societyId);
+  const readAccess = await dashboardReadAccess(ctx, societyId);
   const nowDate = new Date();
   const nowISO = nowDate.toISOString();
   const year = nowDate.getFullYear();
@@ -800,20 +817,20 @@ export async function summaryPortable(
     rules,
   ] = await Promise.all([
     ctx.db.get<SocietyRecord>(societyId, "societies"),
-    ctx.db.query("members").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect(),
-    ctx.db.query<any>("directors").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect(),
-    ctx.db.query<DashboardMeeting & PortableDoc>("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", yearStartISO).lt("scheduledAt", nextYearStartISO)).collect(),
-    ctx.db.query<DashboardMeeting & PortableDoc>("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", nowISO)).take(PREVIEW_SCAN_LIMIT),
-    ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).lt("dueDate", nowISO)).collect(),
-    ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).gte("dueDate", nowISO)).take(PREVIEW_SCAN_LIMIT),
-    ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ctx.db.query("deadlines").withIndex("by_society_done", (q) => q.eq("societyId", societyId).eq("done", false)).collect(),
-    ctx.db.query("conflicts").withIndex("by_society_resolved", (q) => q.eq("societyId", societyId).eq("resolvedAt", undefined)).collect(),
-    ctx.db.query("committees").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect(),
-    collectStatuses(ctx, "goals", societyId, OPEN_GOAL_STATUSES),
-    collectStatuses(ctx, "tasks", societyId, OPEN_TASK_STATUSES),
-    ctx.db.query("complianceRemediations").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    getActiveBylawRuleSet(ctx, societyId),
+    readAccess.has("members:read") ? ctx.db.query("members").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
+    readAccess.has("directors:read") ? ctx.db.query<any>("directors").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
+    readAccess.has("meetings:read") ? ctx.db.query<DashboardMeeting & PortableDoc>("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", yearStartISO).lt("scheduledAt", nextYearStartISO)).collect() : Promise.resolve([]),
+    readAccess.has("meetings:read") ? ctx.db.query<DashboardMeeting & PortableDoc>("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId).gte("scheduledAt", nowISO)).take(PREVIEW_SCAN_LIMIT) : Promise.resolve([]),
+    readAccess.has("filings:read") ? ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).lt("dueDate", nowISO)).collect() : Promise.resolve([]),
+    readAccess.has("filings:read") ? ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society_due", (q) => q.eq("societyId", societyId).gte("dueDate", nowISO)).take(PREVIEW_SCAN_LIMIT) : Promise.resolve([]),
+    readAccess.has("filings:read") ? ctx.db.query<DashboardFiling & PortableDoc>("filings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect() : Promise.resolve([]),
+    readAccess.has("deadlines:read") ? ctx.db.query("deadlines").withIndex("by_society_done", (q) => q.eq("societyId", societyId).eq("done", false)).collect() : Promise.resolve([]),
+    readAccess.has("conflicts:read") ? ctx.db.query("conflicts").withIndex("by_society_resolved", (q) => q.eq("societyId", societyId).eq("resolvedAt", undefined)).collect() : Promise.resolve([]),
+    readAccess.has("committees:read") ? ctx.db.query("committees").withIndex("by_society_status", (q) => q.eq("societyId", societyId).eq("status", "Active")).collect() : Promise.resolve([]),
+    readAccess.has("commitments:read") ? collectStatuses(ctx, "goals", societyId, OPEN_GOAL_STATUSES) : Promise.resolve([]),
+    readAccess.has("tasks:read") ? collectStatuses(ctx, "tasks", societyId, OPEN_TASK_STATUSES) : Promise.resolve([]),
+    readAccess.has("deadlines:read") ? ctx.db.query("complianceRemediations").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect() : Promise.resolve([]),
+    readAccess.has("documents:read") ? getActiveBylawRuleSet(ctx, societyId) : Promise.resolve(null),
   ]);
 
   const bcResidents = activeDirectors.filter((d) => d.isBCResident).length;
@@ -850,12 +867,18 @@ export async function summaryPortable(
   const openTaskPreview = tasks
     .sort((a, b) => compareOptionalDates(a.dueDate, b.dueDate))
     .slice(0, 6);
-  const evidenceChains = await buildEvidenceChains(ctx, societyId, filingRows);
+  const canReadEvidence = ["filings:read", "documents:read", "users:read", "audit:read"].every(permission => readAccess.has(permission as Permission));
+  const evidenceChains = canReadEvidence ? await buildEvidenceChains(ctx, societyId, filingRows) : [];
   const remediationByRuleId = new Map(
     complianceRemediations
       .sort((a, b) => String(b.updatedAtISO ?? "").localeCompare(String(a.updatedAtISO ?? "")))
       .map((row: Record<string, any>) => [row.ruleId, row]),
   );
+  const visibleRules = bcSocietiesDashboardComplianceRulePack.rules.filter(rule => {
+    if (rule.id.startsWith("BC-SOC-DIRECTOR")) return readAccess.has("directors:read");
+    if (rule.id.startsWith("MEMBER-DATA")) return readAccess.has("members:read") && readAccess.has("documents:read");
+    return readAccess.has("documents:read");
+  });
   const complianceFlags = evaluateDashboardComplianceRules({
     society: society
       ? {
@@ -872,8 +895,8 @@ export async function summaryPortable(
       consentOnFile: director.consentOnFile,
       isBCResident: director.isBCResident,
     })),
-    rulesConfigured: Boolean(rules._id),
-  }).map((flag) => {
+    rulesConfigured: Boolean(rules?._id),
+  }, { ...bcSocietiesDashboardComplianceRulePack, rules: visibleRules }, visibleRules.length === bcSocietiesDashboardComplianceRulePack.rules.length).map((flag) => {
     const remediation = remediationByRuleId.get(flag.ruleId);
     return remediation
       ? {
@@ -886,6 +909,7 @@ export async function summaryPortable(
   });
 
   return {
+    readAccess: [...readAccess],
     society: toDashboardSociety(society),
     counts: {
       members: activeMembers.length,

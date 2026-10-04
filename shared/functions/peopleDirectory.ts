@@ -2,8 +2,9 @@
  * PORTABLE FUNCTIONS: the people-directory domain
  * (list / searchByPrefix / upsert / addToSociety / duplicates).
  *
- * Cross-tenant people directory (YCN DB_GLOB_PEOPLE_DIRECTORY): store a person
- * once and reuse across societies. Reads/writes the `peopleDirectory` and
+ * Hosted contacts belong to one workspace. Existing unowned YCN contacts are
+ * visible through authorized legacy references; trusted local workspaces retain
+ * their existing contact reuse. Reads/writes the `peopleDirectory` and
  * `roleHolders` tables over the portable `ctx.db` contract; delegates name
  * normalization, typeahead, and dedupe to the pure shared module
  * (shared/peopleDirectory.ts). Each handler runs unchanged on hosted Convex, the
@@ -12,6 +13,8 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
+import { requirePermissionPortable } from "./permissions";
+import type { PortableDoc } from "../portable/ctx";
 import {
   normalizeSearchName,
   matchByPrefix,
@@ -19,8 +22,63 @@ import {
   type DirectoryPerson,
 } from "../peopleDirectory";
 
-export async function listPortable(ctx: PortableQueryCtx) {
-  const rows = await ctx.db.query("peopleDirectory").collect();
+function trustedLocalDirectory(ctx: PortableQueryCtx) {
+  return ctx.principal.kind === "user" && ctx.principal.assurance === "trusted-workspace" && ctx.principal.runtime !== "convex-hosted";
+}
+
+async function directoryScope(ctx: PortableQueryCtx, societyId?: string, write = false) {
+  const scope = societyId ?? (trustedLocalDirectory(ctx) && ctx.principal.kind === "user" ? ctx.principal.societyId : undefined);
+  if (!scope) throw new Error("An authorized workspace is required for the people directory.");
+  await requirePermissionPortable(ctx, scope, write ? "members:write" : "members:read");
+  return scope;
+}
+
+async function linkedRoleIsReadable(ctx: PortableQueryCtx, societyId: string, roleType: string) {
+  const permission = roleType === "signer" ? "documents:read" : roleType === "controller" ? "settings:read" : ["director", "officer"].includes(roleType) ? "directors:read" : "members:read";
+  try { await requirePermissionPortable(ctx, societyId, permission); return true; }
+  catch (error) {
+    if (error instanceof Error && /^(Permission|Service scope) .* required\.$/.test(error.message)) return false;
+    throw error;
+  }
+}
+
+async function legacyEditable(ctx: PortableQueryCtx, id: string, societyId: string) {
+  const [roles, signers] = await Promise.all([
+    ctx.db.query("roleHolders").withIndex("by_directory_person", (q) => q.eq("directoryPersonId", id)).collect(),
+    ctx.db.query("entitySigners").withIndex("by_directory_person", (q) => q.eq("directoryPersonId", id)).collect(),
+  ]);
+  return [...roles, ...signers].some((row) => row.societyId === societyId) && [...roles, ...signers].every((row) => row.societyId === societyId);
+}
+
+/** Hosted rows are visible only in their owner workspace. Legacy records need
+ * an existing readable role-holder or signer link; knowing a global ID grants no access.
+ * The browser/Electron trusted workspace keeps its established local reuse. */
+export async function visibleDirectoryRows(ctx: PortableQueryCtx, societyId: string): Promise<PortableDoc[]> {
+  await directoryScope(ctx, societyId);
+  if (trustedLocalDirectory(ctx)) return (await ctx.db.query("peopleDirectory").collect()).map((row) => ({ ...row, editable: true }));
+  const roles = await ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  const legacyIds = new Set<string>();
+  for (const role of roles) {
+    if (role.directoryPersonId && await linkedRoleIsReadable(ctx, societyId, role.roleType)) legacyIds.add(String(role.directoryPersonId));
+  }
+  if (await linkedRoleIsReadable(ctx, societyId, "signer")) {
+    const signers = await ctx.db.query("entitySigners").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+    for (const signer of signers) if (signer.directoryPersonId) legacyIds.add(String(signer.directoryPersonId));
+  }
+  const owned = await ctx.db.query("peopleDirectory").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  const legacy = (await Promise.all(Array.from(legacyIds, (id) => ctx.db.get(id, "peopleDirectory"))))
+    .filter((row): row is PortableDoc => !!row && !row.societyId);
+  return [...owned.map((row) => ({ ...row, editable: true })), ...await Promise.all(legacy.map(async (row) => ({ ...row, editable: await legacyEditable(ctx, row._id, societyId) })))];
+}
+
+export async function directoryPersonForSociety(ctx: PortableQueryCtx, id: string, societyId: string) {
+  const row = (await visibleDirectoryRows(ctx, societyId)).find((person) => person._id === id);
+  if (!row) throw new Error("Directory person not found.");
+  return row;
+}
+
+export async function listPortable(ctx: PortableQueryCtx, args: { societyId?: string } = {}) {
+  const rows = await visibleDirectoryRows(ctx, await directoryScope(ctx, args.societyId));
   rows.sort((a, b) => {
     if (a.searchName < b.searchName) return -1;
     if (a.searchName > b.searchName) return 1;
@@ -31,9 +89,9 @@ export async function listPortable(ctx: PortableQueryCtx) {
 
 export async function searchByPrefixPortable(
   ctx: PortableQueryCtx,
-  args: { prefix: string; limit?: number },
+  args: { societyId?: string; prefix: string; limit?: number },
 ) {
-  const rows = await ctx.db.query("peopleDirectory").collect();
+  const rows = await visibleDirectoryRows(ctx, await directoryScope(ctx, args.societyId));
   const people: DirectoryPerson[] = rows.map((row) => ({
     id: String(row._id),
     fullName: row.fullName,
@@ -41,6 +99,7 @@ export async function searchByPrefixPortable(
     lastName: row.lastName,
     dob: row.dob,
     isIndividual: row.isIndividual,
+    editable: row.editable,
   }));
   return matchByPrefix(people, args.prefix, args.limit ?? 10);
 }
@@ -48,6 +107,7 @@ export async function searchByPrefixPortable(
 export async function upsertPortable(
   ctx: PortableMutationCtx,
   args: {
+    societyId?: string;
     id?: string;
     fullName: string;
     firstName?: string;
@@ -63,6 +123,7 @@ export async function upsertPortable(
     nowISO: string;
   },
 ) {
+  const societyId = await directoryScope(ctx, args.societyId, true);
   const searchName = normalizeSearchName(args.fullName);
   const fields = {
     fullName: args.fullName,
@@ -79,8 +140,7 @@ export async function upsertPortable(
     searchName,
   };
   if (args.id) {
-    const candidate = await ctx.db.get(args.id, "peopleDirectory");
-    if (!candidate) throw new Error("peopleDirectory not found.");
+    const candidate = await directoryPersonForSociety(ctx, args.id, societyId);
     if (typeof candidate.societyId === "string") {
       await requireSocietyMembership(ctx, candidate.societyId);
       await getOwned(ctx, "peopleDirectory", args.id, candidate.societyId);
@@ -88,7 +148,11 @@ export async function upsertPortable(
     // Patch only the fields actually supplied, so an edit from a partial form
     // (e.g. the directory search row, which has no gender/pronouns) never
     // clears stored fields it didn't include.
-    const patch: Record<string, any> = { searchName, updatedAtISO: args.nowISO };
+    if (!trustedLocalDirectory(ctx) && !candidate.societyId && !await legacyEditable(ctx, args.id, societyId)) {
+      throw new Error("Shared legacy directory records cannot be overwritten. Create a workspace-owned person instead.");
+    }
+    const patch: Record<string, any> = { searchName, updatedAtISO: args.nowISO,
+      ...(!trustedLocalDirectory(ctx) ? { societyId } : {}) };
     for (const [key, value] of Object.entries(fields)) {
       if (value !== undefined) patch[key] = value;
     }
@@ -96,6 +160,7 @@ export async function upsertPortable(
     return args.id;
   }
   return await ctx.db.insert("peopleDirectory", {
+    ...(!trustedLocalDirectory(ctx) ? { societyId } : {}),
     ...fields,
     createdAtISO: args.nowISO,
     updatedAtISO: args.nowISO,
@@ -115,9 +180,8 @@ export async function addToSocietyPortable(
     nowISO: string;
   },
 ) {
-  await requireSocietyMembership(ctx, args.societyId);
-  const person = await ctx.db.get(args.directoryPersonId, "peopleDirectory");
-  if (!person) throw new Error("Directory person not found");
+  await directoryScope(ctx, args.societyId, true);
+  const person = await directoryPersonForSociety(ctx, args.directoryPersonId, args.societyId);
   if (typeof person.societyId === "string") {
     await getOwned(ctx, "peopleDirectory", args.directoryPersonId, args.societyId);
   }
@@ -126,6 +190,12 @@ export async function addToSocietyPortable(
     roleType: args.roleType,
     status: "current",
     fullName: person.fullName,
+    citizenshipCountries: [],
+    taxResidenceCountries: [],
+    relatedShareholderIds: [],
+    controllingIndividualIds: [],
+    sourceDocumentIds: [],
+    sourceExternalIds: [],
     firstName: person.firstName,
     lastName: person.lastName,
     dateOfBirth: person.dob,
@@ -141,8 +211,8 @@ export async function addToSocietyPortable(
   });
 }
 
-export async function duplicatesPortable(ctx: PortableQueryCtx) {
-  const rows = await ctx.db.query("peopleDirectory").collect();
+export async function duplicatesPortable(ctx: PortableQueryCtx, args: { societyId?: string } = {}) {
+  const rows = await visibleDirectoryRows(ctx, await directoryScope(ctx, args.societyId));
   const people: DirectoryPerson[] = rows.map((row) => ({
     id: String(row._id),
     fullName: row.fullName,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useMutation } from "convex/react";
+import { usePermissions } from "@/hooks/usePermissions";
+import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Modal } from "../../components/Modal";
@@ -13,7 +14,13 @@ import {
   type CommitmentFormValue,
 } from "./CommitmentFormFields";
 
-export function CommitmentCreateModal({
+export function CommitmentCreateModal(props: Parameters<typeof CommitmentCreateModalForm>[0]) {
+  const { can } = usePermissions();
+  if (!props.open || !can("commitments:write")) return null;
+  return <CommitmentCreateModalForm {...props} />;
+}
+
+function CommitmentCreateModalForm({
   open,
   onClose,
   societyId,
@@ -26,11 +33,12 @@ export function CommitmentCreateModal({
   initialValues?: CommitmentFormInitialValues;
   onCreated?: (commitmentId: Id<"commitments">) => void;
 }) {
-  const create = useMutation(api.commitments.create);
+  const { can } = usePermissions();
+  const canCreate = can("commitments:write");
+  const create = usePermissionedMutation(api.commitments.create, canCreate);
   const toast = useToast();
 
-  // Always load dropdown sources — small lists, avoids "no options" flicker the
-  // first time the modal opens.
+  // Dropdown subscriptions exist only while an authorized dialog is open.
   const data = useCommitmentFormData(societyId);
 
   const [form, setForm] = useState<CommitmentFormValue>(() => makeCommitmentFormDefaults(initialValues));
@@ -48,6 +56,7 @@ export function CommitmentCreateModal({
   }, [open]);
 
   const save = async () => {
+    if (!open || !canCreate) return;
     const title = form.title.trim();
     if (!title) {
       toast.error("Title is required");
@@ -84,7 +93,7 @@ export function CommitmentCreateModal({
           <button
             className="btn btn--accent"
             onClick={save}
-            disabled={saving || !form.title.trim() || !form.requirement.trim()}
+            disabled={!canCreate || saving || !form.title.trim() || !form.requirement.trim()}
           >
             {saving ? "Creating…" : "Create"}
           </button>

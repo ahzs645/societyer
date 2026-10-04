@@ -1,8 +1,9 @@
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -168,11 +169,11 @@ export function OrganizationHistoryPage() {
   const canWrite = loaded && can("society:write");
   const society = useSociety();
   const data = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
-  const saveSourceRecord = useMutation(api.organizationHistory.saveSource);
-  const removeSource = useMutation(api.organizationHistory.removeSource);
-  const saveItem = useMutation(api.organizationHistory.saveItem);
-  const removeItem = useMutation(api.organizationHistory.removeItem);
-  const bulkImport = useMutation(api.organizationHistory.bulkImport);
+  const saveSourceRecord = usePermissionedMutation(api.organizationHistory.saveSource, canWrite);
+  const removeSource = usePermissionedMutation(api.organizationHistory.removeSource, canWrite);
+  const saveItem = usePermissionedMutation(api.organizationHistory.saveItem, canWrite);
+  const removeItem = usePermissionedMutation(api.organizationHistory.removeItem, canWrite);
+  const bulkImport = usePermissionedMutation(api.organizationHistory.bulkImport, canWrite);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [sourceForm, setSourceForm] = useState<any | null>(null);
@@ -269,6 +270,7 @@ export function OrganizationHistoryPage() {
   if (data === undefined) return <PageLoading />;
 
   const saveSource = async () => {
+    if (!canWrite) return;
     const payload = normalizeSource(sourceForm);
     if (!payload.title) return;
     await saveSourceRecord({ societyId: society._id, id: sourceForm._id, payload });
@@ -276,6 +278,7 @@ export function OrganizationHistoryPage() {
   };
 
   const saveFact = async () => {
+    if (!canWrite) return;
     const payload = normalizeFact(factForm);
     if (!payload.label || !payload.value) return;
     await saveItem({ societyId: society._id, id: factForm._id, kind: "fact", payload });
@@ -283,6 +286,7 @@ export function OrganizationHistoryPage() {
   };
 
   const saveEvent = async () => {
+    if (!canWrite) return;
     const payload = normalizeEvent(eventForm);
     if (!payload.eventDate || !payload.title || !payload.summary) return;
     await saveItem({ societyId: society._id, id: eventForm._id, kind: "event", payload });
@@ -290,6 +294,7 @@ export function OrganizationHistoryPage() {
   };
 
   const saveBoardTerm = async () => {
+    if (!canWrite) return;
     const payload = normalizeBoardTerm(boardTermForm);
     if (!payload.personName || !payload.position) return;
     await saveItem({ societyId: society._id, id: boardTermForm._id, kind: "boardTerm", payload });
@@ -297,6 +302,7 @@ export function OrganizationHistoryPage() {
   };
 
   const saveMotion = async () => {
+    if (!canWrite) return;
     const payload = normalizeMotion(motionForm);
     if (!payload.meetingDate || !payload.motionText || !payload.outcome) return;
     await saveItem({ societyId: society._id, id: motionForm._id, kind: "motion", payload });
@@ -304,6 +310,7 @@ export function OrganizationHistoryPage() {
   };
 
   const saveBudget = async () => {
+    if (!canWrite) return;
     const payload = normalizeBudget(budgetForm);
     if (!payload.fiscalYear || !payload.title) return;
     await saveItem({ societyId: society._id, id: budgetForm._id, kind: "budget", payload });
@@ -311,6 +318,7 @@ export function OrganizationHistoryPage() {
   };
 
   const runBulkImport = async () => {
+    if (!canWrite) return;
     try {
       const parsed = JSON.parse(importText);
       await bulkImport({
@@ -403,7 +411,8 @@ export function OrganizationHistoryPage() {
               objectMetadata={factsTableData.objectMetadata}
               hydratedView={factsTableData.hydratedView}
               records={factRecords}
-              onUpdate={async ({ recordId, fieldName, value }) => {
+              onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
+                if (!canWrite) return;
                 const existing = facts.find((f: any) => f._id === recordId);
                 if (!existing) return;
                 if (fieldName === "sourceIds") return;
@@ -416,7 +425,7 @@ export function OrganizationHistoryPage() {
                   kind: "fact",
                   payload,
                 });
-              }}
+              } : undefined}
             >
               <RecordTableViewToolbar
                 societyId={society._id}
@@ -872,34 +881,34 @@ export function OrganizationHistoryPage() {
         {sourceForm && (
           <div>
             <Field label="Title" required>
-              <input className="input" value={sourceForm.title} onChange={(e) => setSourceForm({ ...sourceForm, title: e.target.value })} />
+              <input disabled={!canWrite} className="input" value={sourceForm.title} onChange={(e) => setSourceForm({ ...sourceForm, title: e.target.value })} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="System">
-                <input className="input" value={sourceForm.externalSystem ?? ""} onChange={(e) => setSourceForm({ ...sourceForm, externalSystem: e.target.value })} />
+                <input disabled={!canWrite} className="input" value={sourceForm.externalSystem ?? ""} onChange={(e) => setSourceForm({ ...sourceForm, externalSystem: e.target.value })} />
               </Field>
               <Field label="External ID">
-                <input className="input" value={sourceForm.externalId ?? ""} onChange={(e) => setSourceForm({ ...sourceForm, externalId: e.target.value })} />
+                <input disabled={!canWrite} className="input" value={sourceForm.externalId ?? ""} onChange={(e) => setSourceForm({ ...sourceForm, externalId: e.target.value })} />
               </Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Source date">
-                <input className="input" value={sourceForm.sourceDate ?? ""} onChange={(e) => setSourceForm({ ...sourceForm, sourceDate: e.target.value })} placeholder="YYYY-MM-DD or YYYY" />
+                <input disabled={!canWrite} className="input" value={sourceForm.sourceDate ?? ""} onChange={(e) => setSourceForm({ ...sourceForm, sourceDate: e.target.value })} placeholder="YYYY-MM-DD or YYYY" />
               </Field>
               <Field label="Category">
-                <Select value={sourceForm.category} onChange={(value) => setSourceForm({ ...sourceForm, category: value })}
+                <Select disabled={!canWrite} value={sourceForm.category} onChange={(value) => setSourceForm({ ...sourceForm, category: value })}
                   options={CATEGORY_OPTIONS.map((option) => ({ value: option, label: option }))} />
               </Field>
               <Field label="Confidence">
-                <Select value={sourceForm.confidence} onChange={(value) => setSourceForm({ ...sourceForm, confidence: value as Confidence })}
+                <Select disabled={!canWrite} value={sourceForm.confidence} onChange={(value) => setSourceForm({ ...sourceForm, confidence: value as Confidence })}
                   options={CONFIDENCE_OPTIONS.map((option) => ({ value: option, label: option }))} />
               </Field>
             </div>
             <Field label="URL">
-              <input className="input" value={sourceForm.url ?? ""} onChange={(e) => setSourceForm({ ...sourceForm, url: e.target.value })} />
+              <input disabled={!canWrite} className="input" value={sourceForm.url ?? ""} onChange={(e) => setSourceForm({ ...sourceForm, url: e.target.value })} />
             </Field>
             <Field label="Notes">
-              <MarkdownEditor rows={4} value={sourceForm.notes ?? ""} onChange={(markdown) => setSourceForm({ ...sourceForm, notes: markdown })} />
+              <MarkdownEditor readOnly={!canWrite} rows={4} value={sourceForm.notes ?? ""} onChange={(markdown) => setSourceForm({ ...sourceForm, notes: markdown })} />
             </Field>
           </div>
         )}
@@ -914,10 +923,10 @@ export function OrganizationHistoryPage() {
         {factForm && (
           <div>
             <Field label="Label" required>
-              <input className="input" value={factForm.label} onChange={(e) => setFactForm({ ...factForm, label: e.target.value })} />
+              <input disabled={!canWrite} className="input" value={factForm.label} onChange={(e) => setFactForm({ ...factForm, label: e.target.value })} />
             </Field>
             <Field label="Value" required>
-              <MarkdownEditor rows={4} value={factForm.value} onChange={(markdown) => setFactForm({ ...factForm, value: markdown })} />
+              <MarkdownEditor readOnly={!canWrite} rows={4} value={factForm.value} onChange={(markdown) => setFactForm({ ...factForm, value: markdown })} />
             </Field>
             <StatusFields form={factForm} setForm={setFactForm} />
             <Field label="Sources">
@@ -936,17 +945,17 @@ export function OrganizationHistoryPage() {
         {eventForm && (
           <div>
             <Field label="Date" required>
-              <input className="input" value={eventForm.eventDate} onChange={(e) => setEventForm({ ...eventForm, eventDate: e.target.value })} placeholder="YYYY-MM-DD or YYYY" />
+              <input disabled={!canWrite} className="input" value={eventForm.eventDate} onChange={(e) => setEventForm({ ...eventForm, eventDate: e.target.value })} placeholder="YYYY-MM-DD or YYYY" />
             </Field>
             <Field label="Title" required>
-              <input className="input" value={eventForm.title} onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })} />
+              <input disabled={!canWrite} className="input" value={eventForm.title} onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })} />
             </Field>
             <Field label="Summary" required>
-              <MarkdownEditor rows={4} value={eventForm.summary} onChange={(markdown) => setEventForm({ ...eventForm, summary: markdown })} />
+              <MarkdownEditor readOnly={!canWrite} rows={4} value={eventForm.summary} onChange={(markdown) => setEventForm({ ...eventForm, summary: markdown })} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Category">
-                <Select value={eventForm.category} onChange={(value) => setEventForm({ ...eventForm, category: value })}
+                <Select disabled={!canWrite} value={eventForm.category} onChange={(value) => setEventForm({ ...eventForm, category: value })}
                   options={CATEGORY_OPTIONS.map((option) => ({ value: option, label: option }))} />
               </Field>
               <StatusFields form={eventForm} setForm={setEventForm} />
@@ -969,7 +978,7 @@ export function OrganizationHistoryPage() {
           hint='Shape: {"sources":[...],"facts":[...],"events":[...],"boardTerms":[...],"motions":[...],"budgets":[...]}. Converted records can reference sourceExternalIds.'
           error={importError}
         >
-          <textarea
+          <textarea disabled={!canWrite}
             className="textarea"
             value={importText}
             onChange={(e) => {
@@ -991,29 +1000,29 @@ export function OrganizationHistoryPage() {
         {boardTermForm && (
           <div>
             <Field label="Person" required>
-              <input className="input" value={boardTermForm.personName} onChange={(e) => setBoardTermForm({ ...boardTermForm, personName: e.target.value })} />
+              <input disabled={!canWrite} className="input" value={boardTermForm.personName} onChange={(e) => setBoardTermForm({ ...boardTermForm, personName: e.target.value })} />
             </Field>
             <Field label="Position" required>
-              <input className="input" value={boardTermForm.position} onChange={(e) => setBoardTermForm({ ...boardTermForm, position: e.target.value })} />
+              <input disabled={!canWrite} className="input" value={boardTermForm.position} onChange={(e) => setBoardTermForm({ ...boardTermForm, position: e.target.value })} />
             </Field>
             <Field label="Board / committee">
-              <input className="input" value={boardTermForm.committeeName ?? ""} onChange={(e) => setBoardTermForm({ ...boardTermForm, committeeName: e.target.value })} />
+              <input disabled={!canWrite} className="input" value={boardTermForm.committeeName ?? ""} onChange={(e) => setBoardTermForm({ ...boardTermForm, committeeName: e.target.value })} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Start date">
-                <input className="input" value={boardTermForm.startDate ?? ""} onChange={(e) => setBoardTermForm({ ...boardTermForm, startDate: e.target.value })} />
+                <input disabled={!canWrite} className="input" value={boardTermForm.startDate ?? ""} onChange={(e) => setBoardTermForm({ ...boardTermForm, startDate: e.target.value })} />
               </Field>
               <Field label="End date">
-                <input className="input" value={boardTermForm.endDate ?? ""} onChange={(e) => setBoardTermForm({ ...boardTermForm, endDate: e.target.value })} />
+                <input disabled={!canWrite} className="input" value={boardTermForm.endDate ?? ""} onChange={(e) => setBoardTermForm({ ...boardTermForm, endDate: e.target.value })} />
               </Field>
               <Field label="Change">
-                <Select value={boardTermForm.changeType} onChange={(value) => setBoardTermForm({ ...boardTermForm, changeType: value })}
+                <Select disabled={!canWrite} value={boardTermForm.changeType} onChange={(value) => setBoardTermForm({ ...boardTermForm, changeType: value })}
                   options={CHANGE_TYPE_OPTIONS.map((option) => ({ value: option, label: option }))} />
               </Field>
             </div>
             <StatusFields form={boardTermForm} setForm={setBoardTermForm} />
             <Field label="Notes">
-              <MarkdownEditor rows={4} value={boardTermForm.notes ?? ""} onChange={(markdown) => setBoardTermForm({ ...boardTermForm, notes: markdown })} />
+              <MarkdownEditor readOnly={!canWrite} rows={4} value={boardTermForm.notes ?? ""} onChange={(markdown) => setBoardTermForm({ ...boardTermForm, notes: markdown })} />
             </Field>
             <Field label="Sources">
               <SourcePicker sources={sources} selectedIds={boardTermForm.sourceIds ?? []} onChange={(sourceIds) => setBoardTermForm({ ...boardTermForm, sourceIds })} />
@@ -1031,28 +1040,28 @@ export function OrganizationHistoryPage() {
         {motionForm && (
           <div>
             <Field label="Meeting date" required>
-              <input className="input" value={motionForm.meetingDate} onChange={(e) => setMotionForm({ ...motionForm, meetingDate: e.target.value })} />
+              <input disabled={!canWrite} className="input" value={motionForm.meetingDate} onChange={(e) => setMotionForm({ ...motionForm, meetingDate: e.target.value })} />
             </Field>
             <Field label="Meeting title">
-              <input className="input" value={motionForm.meetingTitle ?? ""} onChange={(e) => setMotionForm({ ...motionForm, meetingTitle: e.target.value })} />
+              <input disabled={!canWrite} className="input" value={motionForm.meetingTitle ?? ""} onChange={(e) => setMotionForm({ ...motionForm, meetingTitle: e.target.value })} />
             </Field>
             <Field label="Motion text" required>
-              <MarkdownEditor rows={4} value={motionForm.motionText} onChange={(markdown) => setMotionForm({ ...motionForm, motionText: markdown })} />
+              <MarkdownEditor readOnly={!canWrite} rows={4} value={motionForm.motionText} onChange={(markdown) => setMotionForm({ ...motionForm, motionText: markdown })} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Outcome" required>
-                <input className="input" value={motionForm.outcome} onChange={(e) => setMotionForm({ ...motionForm, outcome: e.target.value })} />
+                <input disabled={!canWrite} className="input" value={motionForm.outcome} onChange={(e) => setMotionForm({ ...motionForm, outcome: e.target.value })} />
               </Field>
               <Field label="Category">
-                <input className="input" value={motionForm.category} onChange={(e) => setMotionForm({ ...motionForm, category: e.target.value })} />
+                <input disabled={!canWrite} className="input" value={motionForm.category} onChange={(e) => setMotionForm({ ...motionForm, category: e.target.value })} />
               </Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Moved by">
-                <input className="input" value={motionForm.movedByName ?? ""} onChange={(e) => setMotionForm({ ...motionForm, movedByName: e.target.value })} />
+                <input disabled={!canWrite} className="input" value={motionForm.movedByName ?? ""} onChange={(e) => setMotionForm({ ...motionForm, movedByName: e.target.value })} />
               </Field>
               <Field label="Seconded by">
-                <input className="input" value={motionForm.secondedByName ?? ""} onChange={(e) => setMotionForm({ ...motionForm, secondedByName: e.target.value })} />
+                <input disabled={!canWrite} className="input" value={motionForm.secondedByName ?? ""} onChange={(e) => setMotionForm({ ...motionForm, secondedByName: e.target.value })} />
               </Field>
             </div>
             <div className="row" style={{ gap: 12 }}>
@@ -1061,7 +1070,7 @@ export function OrganizationHistoryPage() {
               <NumberField label="Abstain" value={motionForm.abstentions} onChange={(abstentions) => setMotionForm({ ...motionForm, abstentions })} />
             </div>
             <Field label="Notes">
-              <MarkdownEditor rows={4} value={motionForm.notes ?? ""} onChange={(markdown) => setMotionForm({ ...motionForm, notes: markdown })} />
+              <MarkdownEditor readOnly={!canWrite} rows={4} value={motionForm.notes ?? ""} onChange={(markdown) => setMotionForm({ ...motionForm, notes: markdown })} />
             </Field>
             <Field label="Sources">
               <SourcePicker sources={sources} selectedIds={motionForm.sourceIds ?? []} onChange={(sourceIds) => setMotionForm({ ...motionForm, sourceIds })} />
@@ -1079,17 +1088,17 @@ export function OrganizationHistoryPage() {
         {budgetForm && (
           <div>
             <Field label="Fiscal year" required>
-              <input className="input" value={budgetForm.fiscalYear ?? ""} onChange={(e) => setBudgetForm({ ...budgetForm, fiscalYear: e.target.value })} />
+              <input disabled={!canWrite} className="input" value={budgetForm.fiscalYear ?? ""} onChange={(e) => setBudgetForm({ ...budgetForm, fiscalYear: e.target.value })} />
             </Field>
             <Field label="Title" required>
-              <input className="input" value={budgetForm.title} onChange={(e) => setBudgetForm({ ...budgetForm, title: e.target.value })} />
+              <input disabled={!canWrite} className="input" value={budgetForm.title} onChange={(e) => setBudgetForm({ ...budgetForm, title: e.target.value })} />
             </Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Source date">
-                <input className="input" value={budgetForm.sourceDate ?? ""} onChange={(e) => setBudgetForm({ ...budgetForm, sourceDate: e.target.value })} />
+                <input disabled={!canWrite} className="input" value={budgetForm.sourceDate ?? ""} onChange={(e) => setBudgetForm({ ...budgetForm, sourceDate: e.target.value })} />
               </Field>
               <Field label="Currency">
-                <input className="input" value={budgetForm.currency} onChange={(e) => setBudgetForm({ ...budgetForm, currency: e.target.value.toUpperCase() })} />
+                <input disabled={!canWrite} className="input" value={budgetForm.currency} onChange={(e) => setBudgetForm({ ...budgetForm, currency: e.target.value.toUpperCase() })} />
               </Field>
             </div>
             <StatusFields form={budgetForm} setForm={setBudgetForm} />
@@ -1105,7 +1114,7 @@ export function OrganizationHistoryPage() {
               <BudgetLinesEditor lines={budgetForm.lines ?? []} onChange={(lines) => setBudgetForm({ ...budgetForm, lines })} />
             </Field>
             <Field label="Notes">
-              <MarkdownEditor rows={4} value={budgetForm.notes ?? ""} onChange={(markdown) => setBudgetForm({ ...budgetForm, notes: markdown })} />
+              <MarkdownEditor readOnly={!canWrite} rows={4} value={budgetForm.notes ?? ""} onChange={(markdown) => setBudgetForm({ ...budgetForm, notes: markdown })} />
             </Field>
             <Field label="Sources">
               <SourcePicker sources={sources} selectedIds={budgetForm.sourceIds ?? []} onChange={(sourceIds) => setBudgetForm({ ...budgetForm, sourceIds })} />
@@ -1123,7 +1132,7 @@ export function OrganizationHistoryBudgetPage() {
   const { budgetId } = useParams();
   const society = useSociety();
   const data = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
-  const extractBudgetSourceDetails = useMutation(api.organizationHistory.extractBudgetSourceDetails);
+  const extractBudgetSourceDetails = usePermissionedMutation(api.organizationHistory.extractBudgetSourceDetails, canWrite);
   const toast = useToast();
   const [extracting, setExtracting] = useState(false);
   const [collapsedBudgetGroups, setCollapsedBudgetGroups] = useState<Record<string, boolean>>({});
@@ -1149,7 +1158,7 @@ export function OrganizationHistoryBudgetPage() {
   };
 
   const runSourceExtraction = async () => {
-    if (!society || !budget?._id) return;
+    if (!canWrite || !society || !budget?._id) return;
     setExtracting(true);
     try {
       const result = await extractBudgetSourceDetails({ societyId: society._id, budgetId: budget._id });
@@ -2019,6 +2028,8 @@ function SourcePicker({
   selectedIds: string[];
   onChange: (sourceIds: string[]) => void;
 }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("society:write");
   if (sources.length === 0) return <div className="muted">Add source records before linking them here.</div>;
   return (
     <div style={{ display: "grid", gap: 8 }}>
@@ -2026,7 +2037,7 @@ function SourcePicker({
         const checked = selectedIds.includes(source._id);
         return (
           <label key={source._id} className="row" style={{ gap: 8, alignItems: "flex-start" }}>
-            <input
+            <input disabled={!canWrite}
               type="checkbox"
               checked={checked}
               onChange={(event) => {
@@ -2049,14 +2060,16 @@ function SourcePicker({
 }
 
 function StatusFields({ form, setForm }: { form: any; setForm: (form: any) => void }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("society:write");
   return (
     <>
       <Field label="Confidence">
-        <Select value={form.confidence} onChange={(value) => setForm({ ...form, confidence: value as Confidence })}
+        <Select disabled={!canWrite} value={form.confidence} onChange={(value) => setForm({ ...form, confidence: value as Confidence })}
           options={CONFIDENCE_OPTIONS.map((option) => ({ value: option, label: option }))} />
       </Field>
       <Field label="Status">
-        <Select value={form.status} onChange={(value) => setForm({ ...form, status: value as Status })}
+        <Select disabled={!canWrite} value={form.status} onChange={(value) => setForm({ ...form, status: value as Status })}
           options={STATUS_OPTIONS.map((option) => ({ value: option, label: option }))} />
       </Field>
     </>
@@ -2064,9 +2077,11 @@ function StatusFields({ form, setForm }: { form: any; setForm: (form: any) => vo
 }
 
 function NumberField({ label, value, onChange }: { label: string; value: string | number | undefined; onChange: (value: number | undefined) => void }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("society:write");
   return (
     <Field label={label}>
-      <input
+      <input disabled={!canWrite}
         className="input"
         type="number"
         value={value ?? ""}
@@ -2077,9 +2092,11 @@ function NumberField({ label, value, onChange }: { label: string; value: string 
 }
 
 function MoneyField({ label, value, onChange }: { label: string; value: number | undefined; onChange: (value: number | undefined) => void }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("society:write");
   return (
     <Field label={label}>
-      <input
+      <input disabled={!canWrite}
         className="input"
         type="number"
         step="0.01"
@@ -2097,6 +2114,7 @@ function BudgetLinesEditor({ lines, onChange }: { lines: any[]; onChange: (lines
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("society:write");
   const updateLine = (index: number, patch: any) => {
+    if (!canWrite) return;
     onChange(lines.map((line, i) => i === index ? { ...line, ...patch } : line));
   };
 
@@ -2113,10 +2131,10 @@ function BudgetLinesEditor({ lines, onChange }: { lines: any[]; onChange: (lines
             alignItems: "center",
           }}
         >
-          <Select value={line.section ?? "note"} onChange={(value) => updateLine(index, { section: value })}
+          <Select disabled={!canWrite} value={line.section ?? "note"} onChange={(value) => updateLine(index, { section: value })}
             options={LINE_SECTION_OPTIONS.map((option) => ({ value: option, label: option }))} />
-          <input className="input" value={line.label ?? ""} onChange={(e) => updateLine(index, { label: e.target.value })} placeholder="Line label" />
-          <input
+          <input disabled={!canWrite} className="input" value={line.label ?? ""} onChange={(e) => updateLine(index, { label: e.target.value })} placeholder="Line label" />
+          <input disabled={!canWrite}
             className="input"
             type="number"
             step="0.01"

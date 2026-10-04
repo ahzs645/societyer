@@ -4,6 +4,7 @@ import path from "path";
 
 const base = process.env.VITE_BASE_PATH ?? "/";
 const stableAssetNames = process.env.VITE_STABLE_ASSET_NAMES === "1";
+const frozenQualification = process.env.SOCIETYER_FROZEN_QUALIFICATION === "1";
 const apiServerTarget = `http://127.0.0.1:${process.env.AUTH_SERVER_PORT ?? "8787"}`;
 const output = {
   manualChunks(id: string) {
@@ -37,6 +38,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Qualification observes one source snapshot; backend/codegen or traces
+    // must not invalidate an authenticated browser in the middle of a test.
+    hmr: frozenQualification ? false : undefined,
+    watch: frozenQualification ? null : { ignored: ["**/tmp/**", "**/artifacts/**"] },
     proxy: {
       "/api": {
         target: apiServerTarget,

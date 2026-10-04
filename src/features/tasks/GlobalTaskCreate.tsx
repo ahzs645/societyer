@@ -8,6 +8,7 @@
  * any other caller) can pop this from anywhere in the app.
  */
 import { useEffect, useState } from "react";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useSociety } from "../../hooks/useSociety";
 import { TaskCreateModal } from "./TaskCreateModal";
 
@@ -19,18 +20,21 @@ export function openGlobalTaskCreate() {
 
 export function GlobalTaskCreate() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canCreate = can("tasks:write");
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const handler = () => setOpen(true);
+    const handler = () => { if (canCreate) setOpen(true); };
     window.addEventListener(OPEN_TASK_CREATE_EVENT, handler);
     return () => window.removeEventListener(OPEN_TASK_CREATE_EVENT, handler);
-  }, []);
+  }, [canCreate]);
 
-  if (!society) return null;
+  if (!society || !open || !canCreate) return null;
 
   return (
     <TaskCreateModal
+      key={society._id}
       open={open}
       onClose={() => setOpen(false)}
       societyId={society._id}

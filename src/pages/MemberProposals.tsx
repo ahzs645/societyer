@@ -1,6 +1,8 @@
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
@@ -22,12 +24,14 @@ import type { Id } from "../../convex/_generated/dataModel";
 
 export function MemberProposalsPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("motions:write");
   const { rules } = useBylawRules();
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const items = useQuery(api.memberProposals.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.memberProposals.create);
-  const update = useMutation(api.memberProposals.update);
-  const remove = useMutation(api.memberProposals.remove);
+  const create = usePermissionedMutation(api.memberProposals.create, canWrite);
+  const update = usePermissionedMutation(api.memberProposals.update, canWrite);
+  const remove = usePermissionedMutation(api.memberProposals.remove, canWrite);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
@@ -46,6 +50,7 @@ export function MemberProposalsPage() {
   const eligibleVoters = (members ?? []).filter((m: any) => m.status === "Active" && m.votingRights).length;
 
   const openNew = () => {
+    if (!canWrite) return;
     setForm({
       title: "",
       text: "",
@@ -58,6 +63,7 @@ export function MemberProposalsPage() {
     setOpen(true);
   };
   const save = async () => {
+    if (!canWrite) return;
     await create({ societyId: society._id, ...form });
     setOpen(false);
   };
@@ -70,7 +76,7 @@ export function MemberProposalsPage() {
         iconColor="purple"
         subtitle={`Proposals from members — active rule set requires at least ${rules?.memberProposalThresholdPct ?? 5}% of voting members, subject to a floor of ${rules?.memberProposalMinSignatures ?? 1}, and receipt at least ${rules?.memberProposalLeadDays ?? 7} days before AGM notice. Current voting members: ${eligibleVoters}.`}
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New proposal
           </button>
         }
@@ -116,12 +122,12 @@ export function MemberProposalsPage() {
             renderRowActions={(r) => (
               <>
                 {!r.includedInAgenda && r.status === "MeetsThreshold" && (
-                  <button className="btn btn--ghost btn--sm" onClick={() => update({ id: r._id, patch: { includedInAgenda: true, status: "Included" } })}>Include</button>
+                  <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => canWrite && update({ id: r._id, patch: { includedInAgenda: true, status: "Included" } })}>Include</button>
                 )}
                 {r.status !== "Rejected" && (
-                  <button className="btn btn--ghost btn--sm" onClick={() => update({ id: r._id, patch: { status: "Rejected" } })}>Reject</button>
+                  <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => canWrite && update({ id: r._id, patch: { status: "Rejected" } })}>Reject</button>
                 )}
-                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete proposal ${r.title}`} onClick={() => remove({ id: r._id })}><Trash2 size={12} /></button>
+                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete proposal ${r.title}`} disabled={!canWrite} onClick={() => canWrite && remove({ id: r._id })}><Trash2 size={12} /></button>
               </>
             )}
           />
@@ -129,10 +135,10 @@ export function MemberProposalsPage() {
       ) : null}
 
       <Drawer
-        open={open}
+        open={open && canWrite}
         onClose={() => setOpen(false)}
         title="New member proposal"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={save}>Save</button></>}
       >
         {form && (
           <div>

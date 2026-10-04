@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-10-04T22:27:53.947Z",
+  "backend": "isolated production Convex exports",
+  "identity": "real Better Auth broker sessions",
+  "results": [
+    {
+      "name": "Owner/Admin retain all native resource sections and inherited source access",
+      "passed": true
+    },
+    {
+      "name": "Member minute-book/docs remain readable with forbidden resources and restricted source redacted",
+      "passed": true
+    },
+    {
+      "name": "Viewer/Director retain finance reads while restricted document ledger and child lines remain hidden",
+      "passed": true
+    },
+    {
+      "name": "Director/Viewer/Member cannot promote operational directors or write financial imports",
+      "passed": true
+    },
+    {
+      "name": "Owner/Admin operational writes and Director document-evidence review remain available",
+      "passed": true
+    },
+    {
+      "name": "Foreign/disabled/invited/anonymous reads and record writes denied",
+      "passed": true
+    }
+  ],
+  "scope": "Fresh disposable workspace, temporary memberships removed. Role-resource projection and inherited source ACL. Batch finance success is native-oracle-only; live batch execution intentionally excludes unrelated demo rows. Service-scope projections are native-oracle-only."
+}

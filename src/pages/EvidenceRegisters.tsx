@@ -1,6 +1,7 @@
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
@@ -17,8 +18,9 @@ export function GovernanceRegistersPage() {
   const { society, data, people } = useRegisters();
   const permissions = usePermissions();
   const canEdit = permissions.loaded && permissions.can("documents:write");
-  const promoteBoardRole = useMutation(api.evidenceRegisters.promoteBoardRoleToDirector);
-  const createManual = useMutation(api.evidenceRegisters.createManual);
+  const canPromote = canEdit && permissions.can("directors:write");
+  const promoteBoardRole = usePermissionedMutation(api.evidenceRegisters.promoteBoardRoleToDirector, canPromote);
+  const createManual = usePermissionedMutation(api.evidenceRegisters.createManual, canEdit);
   const confirm = useConfirm();
   const toast = useToast();
   const [addForm, setAddForm] = useState<any>(null);
@@ -42,7 +44,7 @@ export function GovernanceRegistersPage() {
   const signing = data?.signingAuthorities ?? [];
 
   const promoteRole = async (row: any) => {
-    if (!canEdit) return;
+    if (!canPromote) return;
     const ok = await confirm({
       title: "Promote to director register?",
       message: `${row.personName} will be added to the current directors register using this source-backed role assignment.`,
@@ -60,6 +62,7 @@ export function GovernanceRegistersPage() {
 
   return (
     <div className="page">
+      <RegisterAccessNotice resources={data?.restrictedResources} />
       <PageHeader
         title="Governance registers"
         icon={<GitBranch size={16} />}
@@ -122,13 +125,14 @@ export function GovernanceRegistersPage() {
         )}
       </Drawer>
       <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <Stat label="Role assignments" value={roles.length} />
-        <Stat label="Role changes" value={changes.length} />
+        <Stat label="Role assignments" value={data?.restrictedResources?.includes("directors") ? "Restricted" : roles.length} />
+        <Stat label="Role changes" value={data?.restrictedResources?.includes("directors") ? "Restricted" : changes.length} />
         <Stat label="Signing authorities" value={signing.length} />
         <Stat label="Restricted sources" value={countRestricted([...roles, ...changes, ...signing])} tone="warn" />
       </div>
       <RegisterTable
         title="People and director timeline"
+        restricted={data?.restrictedResources?.includes("directors")}
         rows={roles}
         empty={
           <>
@@ -146,11 +150,12 @@ export function GovernanceRegistersPage() {
           row.roleGroup ?? "-",
           formatDate(row.startDate),
           <Status key="s" value={row.status} />,
-          <PromoteAction key="a" row={row} disabled={!canEdit} onPromote={() => promoteRole(row)} />,
+          <PromoteAction key="a" row={row} disabled={!canPromote} onPromote={() => promoteRole(row)} />,
         ]}
       />
       <RegisterTable
         title="Board role changes"
+        restricted={data?.restrictedResources?.includes("directors")}
         rows={changes}
         empty={
           <>
@@ -166,6 +171,7 @@ export function GovernanceRegistersPage() {
       />
       <RegisterTable
         title="Signing authorities"
+        restricted={data?.restrictedResources?.includes("documents")}
         rows={signing}
         empty={
           <>
@@ -193,6 +199,7 @@ export function MeetingEvidencePage() {
 
   return (
     <div className="page">
+      <RegisterAccessNotice resources={data?.restrictedResources} />
       <PageHeader
         title="Meeting evidence"
         icon={<ClipboardCheck size={16} />}
@@ -201,13 +208,14 @@ export function MeetingEvidencePage() {
         actions={<Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>}
       />
       <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <Stat label="Attendance rows" value={attendance.length} />
-        <Stat label="Motion evidence" value={motions.length} />
+        <Stat label="Attendance rows" value={data?.restrictedResources?.includes("meetings") ? "Restricted" : attendance.length} />
+        <Stat label="Motion evidence" value={data?.restrictedResources?.includes("motions") ? "Restricted" : motions.length} />
         <Stat label="Needs review" value={[...attendance, ...motions].filter((row: any) => row.status !== "Verified").length} tone="warn" />
         <Stat label="Sources" value={uniqueSources([...attendance, ...motions]).length} />
       </div>
       <RegisterTable
         title="Attendance"
+        restricted={data?.restrictedResources?.includes("meetings")}
         rows={attendance}
         empty={
           <>
@@ -223,6 +231,7 @@ export function MeetingEvidencePage() {
       />
       <RegisterTable
         title="Motion evidence"
+        restricted={data?.restrictedResources?.includes("motions")}
         rows={motions}
         empty={
           <>
@@ -251,6 +260,7 @@ export function FinanceImportsPage() {
 
   return (
     <div className="page">
+      <RegisterAccessNotice resources={data?.restrictedResources} />
       <PageHeader
         title="Finance imports"
         icon={<Banknote size={16} />}
@@ -259,13 +269,14 @@ export function FinanceImportsPage() {
         actions={<Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>}
       />
       <div className="stat-grid" style={{ marginBottom: 16 }}>
-        <Stat label="Budgets" value={budgets.length} />
-        <Stat label="Statements" value={statements.length} />
-        <Stat label="Treasurer reports" value={reports.length} />
-        <Stat label="Transactions" value={transactions.length} tone={transactions.length ? "warn" : undefined} />
+        <Stat label="Budgets" value={data?.restrictedResources?.includes("financials") ? "Restricted" : budgets.length} />
+        <Stat label="Statements" value={data?.restrictedResources?.includes("financials") ? "Restricted" : statements.length} />
+        <Stat label="Treasurer reports" value={data?.restrictedResources?.includes("financials") ? "Restricted" : reports.length} />
+        <Stat label="Transactions" value={data?.restrictedResources?.includes("financials") ? "Restricted" : transactions.length} tone={transactions.length ? "warn" : undefined} />
       </div>
       <RegisterTable
         title="Budget snapshots"
+        restricted={data?.restrictedResources?.includes("financials")}
         rows={budgets}
         empty={
           <>
@@ -281,6 +292,7 @@ export function FinanceImportsPage() {
       />
       <RegisterTable
         title="Financial statement imports"
+        restricted={data?.restrictedResources?.includes("financials")}
         rows={statements}
         empty={
           <>
@@ -296,6 +308,7 @@ export function FinanceImportsPage() {
       />
       <RegisterTable
         title="Treasurer reports"
+        restricted={data?.restrictedResources?.includes("financials")}
         rows={reports}
         empty={
           <>
@@ -311,6 +324,7 @@ export function FinanceImportsPage() {
       />
       <RegisterTable
         title="Transaction candidates"
+        restricted={data?.restrictedResources?.includes("financials")}
         rows={transactions}
         empty={
           <>
@@ -346,6 +360,7 @@ export function RecordsArchivePage() {
 
   return (
     <div className="page">
+      <RegisterAccessNotice resources={data?.restrictedResources} />
       <PageHeader
         title="Records archive"
         icon={<Archive size={16} />}
@@ -362,6 +377,7 @@ export function RecordsArchivePage() {
       </div>
       <RegisterTable
         title="Archive custody and accessions"
+        restricted={data?.restrictedResources?.includes("documents")}
         rows={accessions}
         empty="Approve archive accession imports for boxes, binders, drives, and external archive transfers."
         columns={["Received", "Title", "Container", "Location", "Status"]}
@@ -369,6 +385,7 @@ export function RecordsArchivePage() {
       />
       <RegisterTable
         title="Source evidence and provenance"
+        restricted={data?.restrictedResources?.includes("documents")}
         rows={evidence}
         empty="Approved section imports automatically create source evidence links here."
         columns={["Source", "Kind", "Target", "Access", "Status"]}
@@ -380,9 +397,10 @@ export function RecordsArchivePage() {
 
 function useRegisters() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
   const data = useQuery(api.evidenceRegisters.overview, society ? { societyId: society._id } : "skip");
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
-  const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
+  const directors = useQuery(api.directors.list, society && loaded && can("directors:read") ? { societyId: society._id } : "skip");
   return { society, data, people: personLinkCandidates(members, directors) };
 }
 
@@ -392,21 +410,23 @@ function RegisterTable({
   columns,
   render,
   empty,
+  restricted,
 }: {
   title: string;
   rows: any[];
   columns: string[];
   render: (row: any) => any[];
   empty: ReactNode;
+  restricted?: boolean;
 }) {
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card__head">
         <h2 className="card__title">{title}</h2>
-        <span className="card__subtitle">{rows.length} row{rows.length === 1 ? "" : "s"}</span>
+        <span className="card__subtitle">{restricted ? "Access limited" : `${rows.length} row${rows.length === 1 ? "" : "s"}`}</span>
       </div>
       {rows.length === 0 ? (
-        <div className="card__body muted">{empty}</div>
+        <div className="card__body muted">{restricted ? "This section requires additional access." : empty}</div>
       ) : (
         <table className="table">
           <thead>
@@ -529,4 +549,9 @@ function uniqueSources(rows: any[]) {
 
 function countRestricted(rows: any[]) {
   return rows.filter((row) => row.notes?.toLowerCase?.().includes("restricted") || row.sourceExternalIds?.length).length;
+}
+
+function RegisterAccessNotice({ resources }: { resources?: string[] }) {
+  if (!resources?.length) return null;
+  return <p className="muted" role="status">Your role limits access to these register sections: {resources.join(", ")}. Accessible records remain available.</p>;
 }

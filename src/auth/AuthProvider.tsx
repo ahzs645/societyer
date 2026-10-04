@@ -289,6 +289,7 @@ function MembershipProviderReady({
   const signingOutRef = useRef(false);
   const preferredSocietyIdRef = useRef<Id<"societies"> | null>(null);
 
+  const sessionSignedOut = !session && !sessionPending && !sessionError;
   const sessionFailure = sessionError
     ? authFailure(sessionError, "Your session could not be checked.")
     : null;
@@ -319,7 +320,9 @@ function MembershipProviderReady({
     if (!session || !convexAuth.isAuthenticated) {
       setMembershipSocietyIds(null);
       setPrincipalUsers(null);
-      setStoredSocietyId(null);
+      // Session/token initialization can temporarily look unauthenticated.
+      // Retain the preference until sign-out or resolved membership rejects it.
+      if (sessionSignedOut) setStoredSocietyId(null);
       setStoredUserId(null);
       setMemberships(null);
       setMembershipStatus(null);
@@ -367,7 +370,7 @@ function MembershipProviderReady({
         console.error("[societyer-auth] failed to resolve principal memberships", error);
         setMembershipSocietyIds(null);
         setPrincipalUsers(null);
-        setStoredSocietyId(null);
+        // A failed lookup does not establish that the saved workspace is foreign.
         setStoredUserId(null);
         setMemberships([]);
         setMembershipFailure(authFailure(error, "Your workspace membership could not be checked."));
@@ -376,7 +379,7 @@ function MembershipProviderReady({
     return () => {
       active = false;
     };
-  }, [convex, convexAuth.isAuthenticated, membershipRefresh, session]);
+  }, [convex, convexAuth.isAuthenticated, membershipRefresh, session, sessionSignedOut]);
 
   const sessionStatus: SessionStatus = sessionPending
     ? "loading"

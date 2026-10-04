@@ -3,6 +3,7 @@ import { api } from "@/lib/convexApi";
 import { Link } from "react-router-dom";
 import { UserCog, Users } from "lucide-react";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { initials } from "../lib/format";
 
 /** Renders a parsed @mention with avatar + type icon + link to the detail
@@ -10,13 +11,14 @@ import { initials } from "../lib/format";
  * chip when the id isn't found (e.g. deleted record). */
 export function MentionChip({ id, label }: { id: string; label: string }) {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
   const members = useQuery(
     api.members.list,
-    society ? { societyId: society._id } : "skip",
+    society && loaded && can("members:read") ? { societyId: society._id } : "skip",
   ) as any[] | undefined;
   const directors = useQuery(
     api.directors.list,
-    society ? { societyId: society._id } : "skip",
+    society && loaded && can("directors:read") ? { societyId: society._id } : "skip",
   ) as any[] | undefined;
 
   const member = members?.find((m) => String(m._id) === id);

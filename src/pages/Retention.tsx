@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Archive } from "lucide-react";
@@ -27,12 +29,14 @@ import type { Id } from "../../convex/_generated/dataModel";
  */
 export function RetentionPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("documents:write");
   const expired = useQuery(
     api.retention.expiredForSociety,
     society ? { societyId: society._id } : "skip",
   );
-  const flag = useMutation(api.documents.flagForDeletion);
-  const archive = useMutation(api.documents.archive);
+  const flag = usePermissionedMutation(api.documents.flagForDeletion, canWrite);
+  const archive = usePermissionedMutation(api.documents.archive, canWrite);
   const prompt = usePrompt();
   const toast = useToast();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
@@ -98,9 +102,11 @@ export function RetentionPage() {
                   className="btn btn--ghost btn--sm"
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (!canWrite) return;
                     flag({ id: r._id as any, flagged: !r.flagged });
                   }}
-                >
+                disabled={!canWrite}
+               >
                   {r.flagged ? "Keep record" : "Flag for purge review"}
                 </button>
                 <button
@@ -108,6 +114,7 @@ export function RetentionPage() {
                   aria-label={`Archive ${r.title}`}
                   onClick={async (e) => {
                     e.stopPropagation();
+                    if (!canWrite) return;
                     const reason = await prompt({
                       title: "Archive retained document",
                       message: `"${r.title}" will stay in the audit trail as archived instead of being permanently deleted.`,
@@ -119,7 +126,8 @@ export function RetentionPage() {
                     await archive({ id: r._id as any, reason });
                     toast.success("Document archived");
                   }}
-                >
+                disabled={!canWrite}
+               >
                   <Archive size={12} />
                 </button>
               </>

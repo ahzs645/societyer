@@ -3,19 +3,21 @@ import { createPortal } from "react-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { detectMentionTrigger, insertMention } from "../lib/mentions";
 
 type Candidate = { id: string; label: string; hint?: string };
 
 function useCandidates(): Candidate[] {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
   const members = useQuery(
     api.members.list,
-    society ? { societyId: society._id } : "skip",
+    society && loaded && can("members:read") ? { societyId: society._id } : "skip",
   );
   const directors = useQuery(
     api.directors.list,
-    society ? { societyId: society._id } : "skip",
+    society && loaded && can("directors:read") ? { societyId: society._id } : "skip",
   );
   return useMemo(() => {
     const mapped: Candidate[] = [];

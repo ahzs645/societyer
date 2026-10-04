@@ -44,7 +44,7 @@ async function uploadFile(absPath, title, category) {
 
   let uploadUrl;
   try {
-    uploadUrl = await client.mutation(api.files.generateUploadUrl, {});
+    uploadUrl = await client.mutation(api.files.generateUploadUrl, { societyId: SOCIETY_ID });
   } catch (err) {
     console.error(`     ✗ generateUploadUrl: ${err.message}`);
     throw err;

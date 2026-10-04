@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "convex/react";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -30,18 +32,24 @@ import type { Id } from "../../convex/_generated/dataModel";
  */
 export function ProxiesPage() {
   const society = useSociety();
+  const permissions = usePermissions();
+  const canWrite = permissions.loaded && permissions.can("proxies:write");
   const { rules } = useBylawRules();
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const proxies = useQuery(api.proxies.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.proxies.create);
-  const update = useMutation(api.proxies.update);
-  const revoke = useMutation(api.proxies.revoke);
-  const remove = useMutation(api.proxies.remove);
+  const create = usePermissionedMutation(api.proxies.create, canWrite);
+  const update = usePermissionedMutation(api.proxies.update, canWrite);
+  const revoke = usePermissionedMutation(api.proxies.revoke, canWrite);
+  const remove = usePermissionedMutation(api.proxies.remove, canWrite);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+
+  useEffect(() => {
+    if (!canWrite) setOpen(false);
+  }, [canWrite]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -68,6 +76,7 @@ export function ProxiesPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite || !rules?.allowProxyVoting) return;
     setForm({
       meetingId: meetings?.[0]?._id,
       grantorName: "",
@@ -77,6 +86,7 @@ export function ProxiesPage() {
     setOpen(true);
   };
   const save = async () => {
+    if (!canWrite || !rules?.allowProxyVoting) return;
     await create({ societyId: society._id, ...form });
     setOpen(false);
   };
@@ -91,7 +101,7 @@ export function ProxiesPage() {
         iconColor="purple"
         subtitle={`Proxy appointments for general meetings. Active rule set: ${rules?.allowProxyVoting ? "proxies allowed" : "proxies disabled"}, ${rules?.proxyLimitPerGrantorPerMeeting ?? 1} holder(s) per grantor per meeting.`}
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!rules?.allowProxyVoting}>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite || !rules?.allowProxyVoting}>
             <Plus size={12} /> New proxy
           </button>
         }
@@ -114,7 +124,8 @@ export function ProxiesPage() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={tableData.hydratedView}
           records={records}
-          onUpdate={async ({ recordId, fieldName, value }) => {
+          onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
+            if (!canWrite) return;
             // Skip writes for the two projected fields (they're derived
             // from `meetingId` / `revokedAtISO` and not columns in the
             // real `proxies` table).
@@ -125,7 +136,7 @@ export function ProxiesPage() {
               id: recordId as Id<"proxies">,
               patch: { [fieldName]: value } as any,
             });
-          }}
+          } : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -144,14 +155,14 @@ export function ProxiesPage() {
             renderRowActions={(r) => (
               <>
                 {!r.revokedAtISO && (
-                  <button className="btn btn--ghost btn--sm" onClick={() => revoke({ id: r._id })}>
+                  <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => revoke({ id: r._id })}>
                     Revoke
                   </button>
                 )}
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Delete proxy for ${r.grantorName}`}
-                  onClick={() => remove({ id: r._id })}
+                  disabled={!canWrite} onClick={() => remove({ id: r._id })}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -168,10 +179,10 @@ export function ProxiesPage() {
       )}
 
       <Drawer
-        open={open}
+        open={open && canWrite}
         onClose={() => setOpen(false)}
         title="New proxy"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite}>Save</button></>}
       >
         {form && (
           <div>

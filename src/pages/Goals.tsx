@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Progress, Segmented } from "../components/primitives";
@@ -19,6 +20,8 @@ const CATEGORIES = ["Strategic", "Operational", "Program", "Fundraising", "Gover
 
 export function GoalsPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("commitments:write");
   const goals = useQuery(api.goals.list, society ? { societyId: society._id } : "skip");
   const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
   const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
@@ -51,6 +54,7 @@ export function GoalsPage() {
   });
 
   const openNew = () => {
+    if (!canWrite) return;
     setForm({
       title: "",
       category: "Strategic",
@@ -64,6 +68,7 @@ export function GoalsPage() {
     setOpen(true);
   };
   const save = async () => {
+    if (!canWrite) return;
     await create({ societyId: society._id, ...form });
     setOpen(false);
   };
@@ -95,7 +100,7 @@ export function GoalsPage() {
                 { id: "board", label: "Board" },
               ]}
             />
-            <button className="btn-action btn-action--primary" onClick={openNew}>
+            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
               <Plus size={12} /> New goal
             </button>
           </>
@@ -107,6 +112,7 @@ export function GoalsPage() {
           items={filtered}
           getItemId={(g) => g._id}
           getColumnId={(g) => g.status}
+          canMove={canWrite}
           onMove={(g, toColumnId) => update({ id: g._id, patch: { status: toColumnId } })}
           columns={STATUSES.map((s) => ({
             id: s,
@@ -204,13 +210,13 @@ export function GoalsPage() {
       )}
 
       <Drawer
-        open={open}
+        open={open && canWrite}
         onClose={() => setOpen(false)}
         title="New goal"
         footer={
           <>
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Create</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canWrite}>Create</button>
           </>
         }
       >

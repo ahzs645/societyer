@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-10-04T21:09:41.773Z",
+  "passed": true,
+  "check": "Concurrent uploads: a later lost acknowledgement preserves already accepted receipt and native mappings",
+  "runtime": "Actual PowerSync SDK SQLite and durable queue in Chromium; staged transport scheduling",
+  "limitations": [
+    "This check stages transport responses; separate live tests qualify actual Convex receipts and replication"
+  ]
+}

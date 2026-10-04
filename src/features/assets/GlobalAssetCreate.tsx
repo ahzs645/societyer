@@ -7,6 +7,7 @@
  * other caller) can pop this from anywhere in the app.
  */
 import { useEffect, useState } from "react";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useSociety } from "../../hooks/useSociety";
 import { AssetCreateModal } from "./AssetCreateModal";
 import type { AssetFormInitialValues } from "./AssetFormFields";
@@ -25,22 +26,26 @@ export function openGlobalAssetCreate(initialValues?: AssetFormInitialValues) {
 
 export function GlobalAssetCreate() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canCreate = can("financials:write");
   const [open, setOpen] = useState(false);
   const [initialValues, setInitialValues] = useState<AssetFormInitialValues | undefined>();
 
   useEffect(() => {
     const handler = (event: Event) => {
+      if (!canCreate) return;
       setInitialValues((event as CustomEvent<AssetCreateEventDetail>).detail?.initialValues);
       setOpen(true);
     };
     window.addEventListener(OPEN_ASSET_CREATE_EVENT, handler as EventListener);
     return () => window.removeEventListener(OPEN_ASSET_CREATE_EVENT, handler as EventListener);
-  }, []);
+  }, [canCreate]);
 
-  if (!society) return null;
+  if (!society || !open || !canCreate) return null;
 
   return (
     <AssetCreateModal
+      key={society._id}
       open={open}
       onClose={() => {
         setOpen(false);

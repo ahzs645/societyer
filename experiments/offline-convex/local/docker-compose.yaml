@@ -26,5 +26,51 @@ services:
       retries: 30
     stop_signal: SIGINT
     stop_grace_period: 10s
+  sync-storage:
+    profiles: [powersync]
+    # postgres:17.6, resolved 2026-10-04.
+    image: postgres@sha256:00bc86618629af00d2937fdc5a5d63db3ff8450acf52f0636ec813c7f4902929
+    environment:
+      POSTGRES_USER: powersync
+      POSTGRES_DB: powersync
+      POSTGRES_PASSWORD: ${PILOT_SYNC_STORAGE_PASSWORD:?Run local/start.mjs --powersync first}
+    volumes:
+      - pilot-sync-storage:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U powersync -d powersync"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  powersync:
+    profiles: [powersync]
+    # journeyapps/powersync-service:1.26.1, resolved 2026-10-04.
+    image: journeyapps/powersync-service@sha256:413a0c813e96935ebe7203b5759f8a594a7b7cd8aa42134713e63af637e0f079
+    ports:
+      - "127.0.0.1:43220:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/service.yaml
+      PS_CONVEX_DEPLOYMENT_URL: http://backend:3210
+      # Backend-only bootstrap parses this optional service before key generation.
+      # start.mjs generates the key before launching the powersync profile.
+      PS_CONVEX_DEPLOY_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY:-not-configured}
+      PS_STORAGE_URI: postgresql://powersync:${PILOT_SYNC_STORAGE_PASSWORD}@sync-storage:5432/powersync
+      PS_JWKS_URL: http://host.docker.internal:43212/jwks.json
+      PS_PUBLIC_ORIGIN: http://127.0.0.1:43220
+      NO_PROXY: ${NO_PROXY:-},backend,sync-storage,host.docker.internal,127.0.0.1,localhost
+      no_proxy: ${NO_PROXY:-},backend,sync-storage,host.docker.internal,127.0.0.1,localhost
+    volumes:
+      - ./.runtime-service.local.yaml:/config/service.yaml:ro
+      - ../powersync/sync-config.yaml:/config/sync-config.yaml:ro
+    depends_on:
+      backend: {condition: service_healthy}
+      sync-storage: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/probes/readiness').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 volumes:
   pilot-convex-data:
+  pilot-sync-storage:

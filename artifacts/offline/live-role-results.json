@@ -1,0 +1,1392 @@
+{
+  "completedAt": "2026-10-04T21:22:11.217Z",
+  "endpoint": "http://127.0.0.1:43230",
+  "auth": "Real Better Auth email sessions and /api/auth/token JWTs verified by actual self-hosted Convex",
+  "readEndpoints": [
+    "members:list",
+    "directors:list",
+    "employees:list",
+    "committees:list",
+    "meetings:list",
+    "minutes:list",
+    "motions:list",
+    "proxies:list",
+    "conflicts:list",
+    "attestations:list",
+    "auditors:list",
+    "courtOrders:list",
+    "filings:list",
+    "deadlines:list",
+    "commitments:list",
+    "financials:list",
+    "elections:list",
+    "documents:list",
+    "users:list",
+    "tasks:list",
+    "volunteers:list",
+    "grants:list",
+    "society:getById",
+    "agendas:listForSociety",
+    "peopleDirectory:list",
+    "peopleDirectory:duplicates",
+    "peopleDirectory:searchByPrefix",
+    "communications:listTemplates",
+    "activity:list",
+    "secrets:list",
+    "exports:listExportableTables",
+    "insurance:list",
+    "assets:list",
+    "reconciliation:overview",
+    "receipts:list",
+    "pipaTraining:list",
+    "inspections:list",
+    "transparency:listPublications",
+    "subscriptions:plans",
+    "paperless:listConnection",
+    "workflows:list"
+  ],
+  "writeEndpoints": [
+    "peopleDirectory:upsert",
+    "members:create",
+    "directors:create",
+    "employees:create",
+    "committees:create",
+    "meetings:create",
+    "motions:create",
+    "auditors:create",
+    "courtOrders:create",
+    "filings:create",
+    "deadlines:create",
+    "commitments:create",
+    "financials:create",
+    "elections:create",
+    "documents:create",
+    "tasks:create",
+    "users:upsert",
+    "grants:upsertGrant",
+    "volunteers:upsertVolunteer",
+    "communications:upsertTemplate",
+    "society:clearLogo",
+    "society:updateModules",
+    "society:updateIntegrationSettings",
+    "agendas:create",
+    "minutes:create",
+    "conflicts:create",
+    "attestations:sign",
+    "proxies:create"
+  ],
+  "roleReadMatrix": {
+    "members:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "directors:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "employees:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "committees:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "meetings:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "minutes:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "motions:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "proxies:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "conflicts:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "attestations:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "auditors:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "courtOrders:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "filings:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "deadlines:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "commitments:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "financials:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "elections:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "documents:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "users:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "tasks:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "volunteers:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "grants:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "society:getById": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "agendas:listForSociety": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "peopleDirectory:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "peopleDirectory:duplicates": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "peopleDirectory:searchByPrefix": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "communications:listTemplates": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "activity:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "secrets:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "exports:listExportableTables": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": false
+    },
+    "insurance:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "assets:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "reconciliation:overview": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "receipts:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "pipaTraining:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "inspections:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "transparency:listPublications": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "subscriptions:plans": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": true
+    },
+    "paperless:listConnection": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    },
+    "workflows:list": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": true,
+      "Viewer": true
+    }
+  },
+  "roleWriteMatrix": {
+    "peopleDirectory:upsert": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "members:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "directors:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "employees:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "committees:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "meetings:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": false
+    },
+    "motions:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "auditors:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "courtOrders:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "filings:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "deadlines:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "commitments:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "financials:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "elections:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "documents:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": true,
+      "Member": false,
+      "Viewer": false
+    },
+    "tasks:create": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "users:upsert": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "grants:upsertGrant": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "volunteers:upsertVolunteer": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "communications:upsertTemplate": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "society:clearLogo": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "society:updateModules": {
+      "Owner": true,
+      "Admin": true,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    },
+    "society:updateIntegrationSettings": {
+      "Owner": true,
+      "Admin": false,
+      "Director": false,
+      "Member": false,
+      "Viewer": false
+    }
+  },
+  "nativePublicAttemptCount": 722,
+  "nativeAttempts": {
+    "queries": 406,
+    "mutations": 316,
+    "completed": 294,
+    "rejected": 428,
+    "operatorFixtureCalls": 10,
+    "brokerRequests": 16,
+    "byEndpoint": {
+      "members:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 5,
+        "rejected": 4
+      },
+      "directors:list": {
+        "kind": "query",
+        "attempted": 10,
+        "completed": 5,
+        "rejected": 5
+      },
+      "employees:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "committees:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "meetings:list": {
+        "kind": "query",
+        "attempted": 10,
+        "completed": 6,
+        "rejected": 4
+      },
+      "minutes:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 5,
+        "rejected": 4
+      },
+      "motions:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 5,
+        "rejected": 4
+      },
+      "proxies:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "conflicts:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "attestations:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "auditors:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "courtOrders:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "filings:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "deadlines:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "commitments:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "financials:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "elections:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 5,
+        "rejected": 4
+      },
+      "documents:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 5,
+        "rejected": 4
+      },
+      "users:list": {
+        "kind": "query",
+        "attempted": 10,
+        "completed": 5,
+        "rejected": 5
+      },
+      "tasks:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 5,
+        "rejected": 4
+      },
+      "volunteers:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 5,
+        "rejected": 4
+      },
+      "grants:list": {
+        "kind": "query",
+        "attempted": 10,
+        "completed": 6,
+        "rejected": 4
+      },
+      "society:getById": {
+        "kind": "query",
+        "attempted": 10,
+        "completed": 6,
+        "rejected": 4
+      },
+      "agendas:listForSociety": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 5,
+        "rejected": 4
+      },
+      "peopleDirectory:list": {
+        "kind": "query",
+        "attempted": 11,
+        "completed": 7,
+        "rejected": 4
+      },
+      "peopleDirectory:duplicates": {
+        "kind": "query",
+        "attempted": 10,
+        "completed": 6,
+        "rejected": 4
+      },
+      "peopleDirectory:searchByPrefix": {
+        "kind": "query",
+        "attempted": 10,
+        "completed": 6,
+        "rejected": 4
+      },
+      "communications:listTemplates": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 5,
+        "rejected": 4
+      },
+      "activity:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "secrets:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "exports:listExportableTables": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 3,
+        "rejected": 6
+      },
+      "insurance:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "assets:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "reconciliation:overview": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "receipts:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "pipaTraining:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "inspections:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 5,
+        "rejected": 4
+      },
+      "transparency:listPublications": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "subscriptions:plans": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 4,
+        "rejected": 5
+      },
+      "paperless:listConnection": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 5,
+        "rejected": 4
+      },
+      "workflows:list": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 5,
+        "rejected": 4
+      },
+      "peopleDirectory:upsert": {
+        "kind": "mutation",
+        "attempted": 21,
+        "completed": 8,
+        "rejected": 13
+      },
+      "members:create": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "directors:create": {
+        "kind": "mutation",
+        "attempted": 10,
+        "completed": 3,
+        "rejected": 7
+      },
+      "employees:create": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "committees:create": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "meetings:create": {
+        "kind": "mutation",
+        "attempted": 11,
+        "completed": 5,
+        "rejected": 6
+      },
+      "motions:create": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "auditors:create": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "courtOrders:create": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "filings:create": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "deadlines:create": {
+        "kind": "mutation",
+        "attempted": 11,
+        "completed": 4,
+        "rejected": 7
+      },
+      "commitments:create": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "financials:create": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "elections:create": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "documents:create": {
+        "kind": "mutation",
+        "attempted": 11,
+        "completed": 5,
+        "rejected": 6
+      },
+      "tasks:create": {
+        "kind": "mutation",
+        "attempted": 10,
+        "completed": 2,
+        "rejected": 8
+      },
+      "users:upsert": {
+        "kind": "mutation",
+        "attempted": 11,
+        "completed": 3,
+        "rejected": 8
+      },
+      "grants:upsertGrant": {
+        "kind": "mutation",
+        "attempted": 11,
+        "completed": 3,
+        "rejected": 8
+      },
+      "volunteers:upsertVolunteer": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "communications:upsertTemplate": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "society:clearLogo": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "society:updateModules": {
+        "kind": "mutation",
+        "attempted": 11,
+        "completed": 4,
+        "rejected": 7
+      },
+      "society:updateIntegrationSettings": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 1,
+        "rejected": 8
+      },
+      "agendas:create": {
+        "kind": "mutation",
+        "attempted": 10,
+        "completed": 3,
+        "rejected": 7
+      },
+      "minutes:create": {
+        "kind": "mutation",
+        "attempted": 10,
+        "completed": 4,
+        "rejected": 6
+      },
+      "conflicts:create": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "attestations:sign": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 2,
+        "rejected": 7
+      },
+      "proxies:create": {
+        "kind": "mutation",
+        "attempted": 9,
+        "completed": 0,
+        "rejected": 9
+      },
+      "minutes:update": {
+        "kind": "mutation",
+        "attempted": 10,
+        "completed": 4,
+        "rejected": 6
+      },
+      "meetings:get": {
+        "kind": "query",
+        "attempted": 1,
+        "completed": 0,
+        "rejected": 1
+      },
+      "meetings:update": {
+        "kind": "mutation",
+        "attempted": 2,
+        "completed": 0,
+        "rejected": 2
+      },
+      "users:get": {
+        "kind": "query",
+        "attempted": 2,
+        "completed": 1,
+        "rejected": 1
+      },
+      "permissions:myPermissions": {
+        "kind": "query",
+        "attempted": 6,
+        "completed": 5,
+        "rejected": 1
+      },
+      "users:setRole": {
+        "kind": "mutation",
+        "attempted": 7,
+        "completed": 4,
+        "rejected": 3
+      },
+      "users:remove": {
+        "kind": "mutation",
+        "attempted": 3,
+        "completed": 1,
+        "rejected": 2
+      },
+      "peopleDirectory:addToSociety": {
+        "kind": "mutation",
+        "attempted": 1,
+        "completed": 0,
+        "rejected": 1
+      },
+      "firm:overview": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 6,
+        "rejected": 3
+      },
+      "firm:search": {
+        "kind": "query",
+        "attempted": 9,
+        "completed": 6,
+        "rejected": 3
+      },
+      "firm:batchGeneratePacket": {
+        "kind": "mutation",
+        "attempted": 11,
+        "completed": 2,
+        "rejected": 9
+      },
+      "volunteers:submitApplication": {
+        "kind": "mutation",
+        "attempted": 1,
+        "completed": 0,
+        "rejected": 1
+      },
+      "roleFixture:inspect": {
+        "kind": "query",
+        "attempted": 1,
+        "completed": 0,
+        "rejected": 1
+      },
+      "roleFixture:seed": {
+        "kind": "mutation",
+        "attempted": 1,
+        "completed": 0,
+        "rejected": 1
+      }
+    }
+  },
+  "hostilePrincipals": [
+    "anonymous",
+    "foreign workspace Owner",
+    "disabled Admin",
+    "invited Admin"
+  ],
+  "proxyQualification": "Owner/Admin requests pass their write authority and are rejected by the active bylaw prohibition on proxy voting; lower roles are rejected by permissions.",
+  "passed": 84,
+  "failed": 0,
+  "results": [
+    {
+      "name": "Read roles and hostile principals: members:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: directors:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: employees:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: committees:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: meetings:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: minutes:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: motions:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: proxies:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: conflicts:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: attestations:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: auditors:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: courtOrders:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: filings:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: deadlines:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: commitments:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: financials:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: elections:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: documents:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: users:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: tasks:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: volunteers:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: grants:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: society:getById",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: agendas:listForSociety",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: peopleDirectory:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: peopleDirectory:duplicates",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: peopleDirectory:searchByPrefix",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: communications:listTemplates",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: activity:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: secrets:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: exports:listExportableTables",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: insurance:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: assets:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: reconciliation:overview",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: receipts:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: pipaTraining:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: inspections:list",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: transparency:listPublications",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: subscriptions:plans",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: paperless:listConnection",
+      "passed": true
+    },
+    {
+      "name": "Read roles and hostile principals: workflows:list",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: peopleDirectory:upsert",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: members:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: directors:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: employees:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: committees:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: meetings:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: motions:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: auditors:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: courtOrders:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: filings:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: deadlines:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: commitments:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: financials:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: elections:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: documents:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: tasks:create",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: users:upsert",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: grants:upsertGrant",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: volunteers:upsertVolunteer",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: communications:upsertTemplate",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: society:clearLogo",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: society:updateModules",
+      "passed": true
+    },
+    {
+      "name": "Write roles and hostile principals: society:updateIntegrationSettings",
+      "passed": true
+    },
+    {
+      "name": "References for child endpoint authorization come from actual protected records",
+      "passed": true
+    },
+    {
+      "name": "Child writes and inferred workspace: agendas:create",
+      "passed": true
+    },
+    {
+      "name": "Child writes and inferred workspace: minutes:create",
+      "passed": true
+    },
+    {
+      "name": "Child writes and inferred workspace: conflicts:create",
+      "passed": true
+    },
+    {
+      "name": "Child writes and inferred workspace: attestations:sign",
+      "passed": true
+    },
+    {
+      "name": "Child writes and inferred workspace: proxies:create",
+      "passed": true
+    },
+    {
+      "name": "Drafting permission cannot approve or clear minutes approval",
+      "passed": true
+    },
+    {
+      "name": "Carried adoption checks approval authority atomically, while unchanged adoption remains draftable",
+      "passed": true
+    },
+    {
+      "name": "Cross-workspace row and nested-reference substitutions are denied",
+      "passed": true
+    },
+    {
+      "name": "Caller actor fields cannot impersonate another workspace user",
+      "passed": true
+    },
+    {
+      "name": "Self profile and policy inspection do not grant Member workspace roster access",
+      "passed": true
+    },
+    {
+      "name": "Admin manages ordinary roles while elevated authority remains Owner-only",
+      "passed": true
+    },
+    {
+      "name": "Last Active Owner survives demotion/removal/ordinary disabling",
+      "passed": true
+    },
+    {
+      "name": "An existing session immediately loses write authority after role downgrade",
+      "passed": true
+    },
+    {
+      "name": "Hosted directory edits and references cannot cross workspaces",
+      "passed": true
+    },
+    {
+      "name": "Legacy global directory is readable only through authorized links and unsafe edits are denied",
+      "passed": true
+    },
+    {
+      "name": "Firm overview and mixed search include only current authorized workspaces and resource reads",
+      "passed": true
+    },
+    {
+      "name": "Firm packet batching accepts Owner/Admin but denies readonly and mixed foreign selections before side effects",
+      "passed": true
+    },
+    {
+      "name": "All optional switches persist separately from assigned role grants",
+      "passed": true
+    },
+    {
+      "name": "Public callers cannot access operator-only fixture helpers",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Static inventory does not mean every operation state and input on all 920 public endpoints was exercised",
+    "Optional feature switches preserve role permissions; public intake and selected execution handlers additionally enforce module enablement",
+    "Clerk and tenant-restricted Microsoft external sign-in require configured providers; separate reconciled regression checks retain those policies",
+    "Role matrix is server qualification, not browser route coverage"
+  ]
+}

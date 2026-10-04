@@ -1,4 +1,6 @@
-import { useMutation, useQuery } from "convex/react";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useCurrentUser } from "../hooks/useCurrentUser";
@@ -93,16 +95,19 @@ export function SignaturePanel({
   title?: string;
   signerScope?: "people" | "directors";
 }) {
-  const signatures = useQuery(api.signatures.listForEntity, {
+  const { can } = usePermissions();
+  const canRead = can("documents:read");
+  const canWrite = can("documents:write");
+  const signatures = useQuery(api.signatures.listForEntity, canRead ? {
     entityType,
     subjectId: entityId,
-  });
-  const signatureProfiles = useQuery(api.signatures.listProfilesForSociety, { societyId });
-  const sign = useMutation(api.signatures.sign);
-  const revoke = useMutation(api.signatures.revoke);
-  const deleteProfile = useMutation(api.signatures.deleteProfile);
-  const members = useQuery(api.members.list, { societyId });
-  const directors = useQuery(api.directors.list, { societyId });
+  } : "skip");
+  const signatureProfiles = useQuery(api.signatures.listProfilesForSociety, canRead ? { societyId } : "skip");
+  const sign = usePermissionedMutation(api.signatures.sign, canWrite);
+  const revoke = usePermissionedMutation(api.signatures.revoke, canWrite);
+  const deleteProfile = usePermissionedMutation(api.signatures.deleteProfile, canWrite);
+  const members = useQuery(api.members.list, can("members:read") ? { societyId } : "skip");
+  const directors = useQuery(api.directors.list, can("directors:read") ? { societyId } : "skip");
   const user = useCurrentUser();
   const toast = useToast();
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -287,7 +292,7 @@ export function SignaturePanel({
             </span>
             <div className="signature-list-row__actions">
               {savedProfile && (
-                <button
+                <button disabled={!canWrite}
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Remove ${s.signerName}'s saved signature from their account`}
                   title="Remove saved signature from this person's account (keeps their sign-off on this document)"
@@ -309,7 +314,7 @@ export function SignaturePanel({
                   <UserX size={12} />
                 </button>
               )}
-              <button
+              <button disabled={!canWrite}
                 className="signature-list-row__trash btn btn--ghost btn--sm btn--icon"
                 aria-label={`Remove ${s.signerName}'s sign-off from this document`}
                 onClick={async () => {
@@ -334,6 +339,7 @@ export function SignaturePanel({
           );
         })}
 
+        {canWrite && <>
         <div className="signature-form-row">
           <Field label={signerScope === "directors" ? "Director who signed" : "Person who signed"}>
             <NameAutocomplete
@@ -347,7 +353,7 @@ export function SignaturePanel({
           </Field>
           <button
             className="btn btn--accent"
-            disabled={!signatureReady}
+            disabled={!canWrite || !signatureReady}
             onClick={async () => {
               const name = typedName.trim();
               if (!name) {
@@ -418,7 +424,7 @@ export function SignaturePanel({
             </div>
             {profilePreview(selectedProfile, typedName.trim())}
             <div className="signature-profile-preview__actions">
-              <button
+              <button disabled={!canWrite}
                 type="button"
                 className="btn btn--ghost btn--sm btn--icon"
                 aria-label={`Delete ${selectedProfile.signerName}'s saved signature`}
@@ -519,7 +525,8 @@ export function SignaturePanel({
             </label>
           </>
 
-        {nameOptions.length === 0 && (
+        </>}
+        {canWrite && nameOptions.length === 0 && (
           <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>
             {signerScope === "directors"
               ? <>No directors on file — add one in <Link to="/app/directors">Directors</Link> to enable autocomplete.</>

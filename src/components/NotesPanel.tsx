@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useState } from "react";
 import { useSociety } from "../hooks/useSociety";
@@ -10,6 +10,8 @@ import { useConfirm } from "./Modal";
 import { MentionInput } from "./MentionInput";
 import { MentionChip } from "./MentionChip";
 import { parseMentions } from "../lib/mentions";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 
 type Note = {
   _id: string;
@@ -30,14 +32,17 @@ export function NotesPanel({
 }) {
   const society = useSociety();
   const user = useCurrentUser();
+  const { loaded, can } = usePermissions();
+  const canRead = loaded && can("tasks:read");
+  const canWrite = canRead && can("tasks:write");
   const confirm = useConfirm();
   const notes = useQuery(
     api.notes.listForRecord,
-    society ? { societyId: society._id, entityType, subjectId: entityId } : "skip",
+    society && canRead ? { societyId: society._id, entityType, subjectId: entityId } : "skip",
   ) as Note[] | undefined;
-  const createNote = useMutation(api.notes.create);
-  const updateNote = useMutation(api.notes.update);
-  const removeNote = useMutation(api.notes.remove);
+  const createNote = usePermissionedMutation(api.notes.create, canWrite);
+  const updateNote = usePermissionedMutation(api.notes.update, canWrite);
+  const removeNote = usePermissionedMutation(api.notes.remove, canWrite);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -46,7 +51,7 @@ export function NotesPanel({
   const author = user?.displayName ?? user?.email ?? "Someone";
 
   const submit = async () => {
-    if (!society || !draft.trim()) return;
+    if (!canWrite || !society || !draft.trim()) return;
     setSaving(true);
     try {
       await createNote({
@@ -63,13 +68,14 @@ export function NotesPanel({
   };
 
   const saveEdit = async (id: string) => {
-    if (!editDraft.trim()) return;
+    if (!canWrite || !editDraft.trim() || !notes?.some(note => note._id === id && note.author === author)) return;
     await updateNote({ id: id as any, body: editDraft.trim() });
     setEditingId(null);
     setEditDraft("");
   };
 
   const destroy = async (note: Note) => {
+    if (!canWrite || note.author !== author) return;
     const ok = await confirm({
       title: "Delete note?",
       message: "This can't be undone.",
@@ -80,9 +86,13 @@ export function NotesPanel({
     await removeNote({ id: note._id as any });
   };
 
+  if (loaded && !canRead) {
+    return <p className="muted" role="status">Notes require additional access.</p>;
+  }
+
   return (
     <div className="notes-panel">
-      <form
+      {canWrite ? <form
         className="notes-panel__compose"
         onSubmit={(e) => {
           e.preventDefault();
@@ -101,12 +111,12 @@ export function NotesPanel({
             variant="accent"
             size="sm"
             type="submit"
-            disabled={!draft.trim() || saving}
+            disabled={!canWrite || !draft.trim() || saving}
           >
             {saving ? "Saving…" : "Post note"}
           </Button>
         </div>
-      </form>
+      </form> : loaded && <p className="muted" role="status">Read-only notes. Your role cannot add, edit, or delete notes.</p>}
 
       {notes === undefined ? (
         <div className="notes-panel__list" aria-busy="true">
@@ -128,8 +138,8 @@ export function NotesPanel({
       ) : (
         <ul className="notes-panel__list">
           {notes.map((note) => {
-            const isEditing = editingId === note._id;
-            const canEdit = note.author === author;
+            const isEditing = canWrite && editingId === note._id;
+            const canEdit = canWrite && note.author === author;
             return (
               <li key={note._id} className="notes-panel__item">
                 <div className="notes-panel__head">
@@ -145,6 +155,7 @@ export function NotesPanel({
                         className="btn btn--ghost btn--sm btn--icon"
                         aria-label="Edit note"
                         onClick={() => {
+                          if (!canWrite) return;
                           setEditingId(note._id);
                           setEditDraft(note.body);
                         }}
@@ -180,7 +191,7 @@ export function NotesPanel({
                       onChange={setEditDraft}
                       rows={3}
                     />
-                    <Button size="sm" variant="accent" onClick={() => saveEdit(note._id)}>
+                    <Button size="sm" variant="accent" disabled={!canWrite || !editDraft.trim()} onClick={() => saveEdit(note._id)}>
                       Save
                     </Button>
                   </div>

@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -24,15 +26,21 @@ import type { Id } from "../../convex/_generated/dataModel";
 
 export function InspectionsPage() {
   const society = useSociety();
+  const permissions = usePermissions();
+  const canWrite = permissions.loaded && permissions.can("documents:write");
   const items = useQuery(api.inspections.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.inspections.create);
-  const remove = useMutation(api.inspections.remove);
+  const create = usePermissionedMutation(api.inspections.create, canWrite);
+  const remove = usePermissionedMutation(api.inspections.remove, canWrite);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [params, setParams] = useSearchParams();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+
+  useEffect(() => {
+    if (!canWrite) setOpen(false);
+  }, [canWrite]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -46,7 +54,8 @@ export function InspectionsPage() {
     copies: r.copyPages ? `${r.copyPages} pg · ${money(r.copyFeeCents)}` : "—",
   })), [items]);
 
-  const openNew = () => {
+  const openNew = useCallback(() => {
+    if (!canWrite) return;
     setForm({
       inspectorName: "",
       isMember: false,
@@ -58,8 +67,9 @@ export function InspectionsPage() {
       copyFeeDollars: "",
     });
     setOpen(true);
-  };
+  }, [canWrite]);
   const save = async () => {
+    if (!canWrite) return;
     const { feeDollars, copyFeeDollars, ...rest } = form;
     await create({
       societyId: society._id,
@@ -71,7 +81,7 @@ export function InspectionsPage() {
   };
 
   useEffect(() => {
-    if (!society || open) return;
+    if (!canWrite || !society || open) return;
     if (params.get("intent") !== "start-response") return;
     setParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -79,7 +89,7 @@ export function InspectionsPage() {
       return next;
     }, { replace: true });
     openNew();
-  }, [open, params, setParams, society]);
+  }, [canWrite, open, openNew, params, setParams, society]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -92,7 +102,7 @@ export function InspectionsPage() {
         iconColor="gray"
         subtitle="Log of who inspected official records and what fees were charged (s.24 — public may pay up to $10/day inspection + $0.50/page copies, $0.10 electronic)."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Log inspection
           </button>
         }
@@ -128,7 +138,7 @@ export function InspectionsPage() {
               return undefined;
             }}
             renderRowActions={(r) => (
-              <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete inspection by ${r.inspectorName}`} onClick={() => remove({ id: r._id })}>
+              <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete inspection by ${r.inspectorName}`} disabled={!canWrite} onClick={() => remove({ id: r._id })}>
                 <Trash2 size={12} />
               </button>
             )}
@@ -137,13 +147,13 @@ export function InspectionsPage() {
       ) : null}
 
       <Drawer
-        open={open}
+        open={open && canWrite}
         onClose={() => setOpen(false)}
         title="Log records inspection"
         footer={
           <>
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Save</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canWrite}>Save</button>
           </>
         }
       >

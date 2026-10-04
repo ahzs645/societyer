@@ -43,7 +43,7 @@ export function DocumentsPage() {
   const canEdit = permissions.loaded && permissions.can("documents:write");
   const docs = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const reviewQueues = useQuery(api.documents.reviewQueues, society ? { societyId: society._id } : "skip");
-  const importSessions = useQuery(api.importSessions.list, society ? { societyId: society._id } : "skip");
+  const importSessions = useQuery(api.importSessions.list, society && permissions.loaded && permissions.can("settings:read") ? { societyId: society._id } : "skip");
   const create = useMutation(api.documents.create);
   const flag = useMutation(api.documents.flagForDeletion);
   const remove = useMutation(api.documents.remove);
@@ -52,7 +52,7 @@ export function DocumentsPage() {
   const completeUpload = useAction(api.documentVersions.completeUpload);
   const recordVersionUpload = useMutation(api.documentVersions.recordUploadedVersion);
   const syncDocument = useAction(api.paperless.syncDocument);
-  const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
+  const committees = useQuery(api.committees.list, society && permissions.loaded && permissions.can("committees:read") ? { societyId: society._id } : "skip");
   const paperlessConnection = useQuery(api.paperless.listConnection, society ? { societyId: society._id } : "skip");
   const confirm = useConfirm();
   const toast = useToast();

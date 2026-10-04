@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
@@ -53,6 +55,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function BylawDiffPage() {
   const society = useSociety();
+  const permissions = usePermissions();
+  const canWrite = permissions.loaded && permissions.can("documents:write");
   const toast = useToast();
   const confirm = useConfirm();
   const prompt = usePrompt();
@@ -61,21 +65,25 @@ export function BylawDiffPage() {
     api.bylawAmendments.list,
     society ? { societyId: society._id } : "skip",
   );
-  const createDraft = useMutation(api.bylawAmendments.createDraft);
-  const updateDraft = useMutation(api.bylawAmendments.updateDraft);
-  const startConsultation = useMutation(api.bylawAmendments.startConsultation);
-  const markResolutionPassed = useMutation(api.bylawAmendments.markResolutionPassed);
-  const markFiled = useMutation(api.bylawAmendments.markFiled);
-  const withdraw = useMutation(api.bylawAmendments.withdraw);
-  const supersede = useMutation(api.bylawAmendments.supersede);
-  const materializeSections = useMutation(api.bylawAmendments.materializeSections);
-  const remove = useMutation(api.bylawAmendments.remove);
+  const createDraft = usePermissionedMutation(api.bylawAmendments.createDraft, canWrite);
+  const updateDraft = usePermissionedMutation(api.bylawAmendments.updateDraft, canWrite);
+  const startConsultation = usePermissionedMutation(api.bylawAmendments.startConsultation, canWrite);
+  const markResolutionPassed = usePermissionedMutation(api.bylawAmendments.markResolutionPassed, canWrite);
+  const markFiled = usePermissionedMutation(api.bylawAmendments.markFiled, canWrite);
+  const withdraw = usePermissionedMutation(api.bylawAmendments.withdraw, canWrite);
+  const supersede = usePermissionedMutation(api.bylawAmendments.supersede, canWrite);
+  const materializeSections = usePermissionedMutation(api.bylawAmendments.materializeSections, canWrite);
+  const remove = usePermissionedMutation(api.bylawAmendments.remove, canWrite);
 
   const [selectedId, setSelectedId] = useState<Id<"bylawAmendments"> | null>(null);
   const [title, setTitle] = useState("");
   const [oldText, setOldText] = useState("");
   const [newText, setNewText] = useState("");
   const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (!canWrite) setVoteModal(null);
+  }, [canWrite]);
 
   // Reset form when selecting a different amendment.
   useEffect(() => {
@@ -120,6 +128,7 @@ export function BylawDiffPage() {
   if (society === null) return <SeedPrompt />;
 
   const newDraft = () => {
+    if (!canWrite) return;
     setSelectedId(null);
     setTitle("");
     setOldText("");
@@ -128,6 +137,7 @@ export function BylawDiffPage() {
   };
 
   const saveAsNewDraft = async () => {
+    if (!canWrite) return;
     if (!title.trim()) {
       toast.warn("Add a title for this amendment first.");
       return;
@@ -144,6 +154,7 @@ export function BylawDiffPage() {
   };
 
   const saveEdits = async () => {
+    if (!canWrite) return;
     if (!selected) return;
     await updateDraft({
       id: selected._id,
@@ -191,17 +202,17 @@ export function BylawDiffPage() {
         subtitle="Draft, consult, pass and file bylaw amendments. Each draft keeps a full history of edits and lifecycle events."
         actions={
           <>
-            <button className="btn-action" onClick={newDraft}><Plus size={12} /> New draft</button>
+            <button className="btn-action" onClick={newDraft} disabled={!canWrite}><Plus size={12} /> New draft</button>
             <button className="btn-action" onClick={exportRedline} disabled={!oldText && !newText}>
               <FileDown size={12} /> Export redline
             </button>
             {selected && isDraft && (
-              <button className="btn-action btn-action--primary" onClick={saveEdits} disabled={!dirty}>
+              <button className="btn-action btn-action--primary" onClick={saveEdits} disabled={!canWrite || !dirty}>
                 <Save size={12} /> {dirty ? "Save changes" : "Saved"}
               </button>
             )}
             {!selected && (oldText || newText) && (
-              <button className="btn-action btn-action--primary" onClick={saveAsNewDraft}>
+              <button className="btn-action btn-action--primary" onClick={saveAsNewDraft} disabled={!canWrite}>
                 <Save size={12} /> Save as draft
               </button>
             )}
@@ -255,7 +266,9 @@ export function BylawDiffPage() {
                   {status === "Draft" && (
                     <button
                       className="btn-action btn-action--primary"
+                      disabled={!canWrite}
                       onClick={async () => {
+                        if (!canWrite) return;
                         await startConsultation({ id: selected._id });
                         toast.success("Consultation started");
                       }}
@@ -266,7 +279,8 @@ export function BylawDiffPage() {
                   {status === "Consultation" && (
                     <button
                       className="btn-action btn-action--primary"
-                      onClick={() => setVoteModal({ f: "", a: "0", x: "0" })}
+                      disabled={!canWrite}
+                      onClick={() => { if (canWrite) setVoteModal({ f: "", a: "0", x: "0" }); }}
                     >
                       <ClipboardCheck size={12} /> Record resolution
                     </button>
@@ -274,7 +288,9 @@ export function BylawDiffPage() {
                   {status === "ResolutionPassed" && (
                     <button
                       className="btn-action btn-action--primary"
+                      disabled={!canWrite}
                       onClick={async () => {
+                        if (!canWrite) return;
                         const ok = await confirm({
                           title: "Mark bylaw amendment as filed?",
                           message: "Confirm the special resolution, final bylaw text, and registry filing evidence are captured in filings or documents before marking this amendment filed.",
@@ -292,7 +308,9 @@ export function BylawDiffPage() {
                   {status !== "Filed" && status !== "Withdrawn" && (
                     <button
                       className="btn-action"
+                      disabled={!canWrite}
                       onClick={async () => {
+                        if (!canWrite) return;
                         const reason = await prompt({
                           title: "Withdraw amendment",
                           message: "Optionally record why it's being withdrawn.",
@@ -310,7 +328,9 @@ export function BylawDiffPage() {
                   {status !== "Draft" && status !== "Withdrawn" && status !== "Superseded" && (
                     <button
                       className="btn-action"
+                      disabled={!canWrite}
                       onClick={async () => {
+                        if (!canWrite) return;
                         const reason = await prompt({
                           title: "Supersede amendment",
                           message: "Mark this amendment as superseded by a newer version.",
@@ -328,7 +348,9 @@ export function BylawDiffPage() {
                   {status === "Draft" && (
                     <button
                       className="btn-action"
+                      disabled={!canWrite}
                       onClick={async () => {
+                        if (!canWrite) return;
                         const ok = await confirm({
                           title: "Delete draft?",
                           message: "This amendment draft will be permanently removed.",
@@ -351,7 +373,7 @@ export function BylawDiffPage() {
                   <input
                     className="input"
                     value={title}
-                    disabled={!isDraft}
+                    disabled={!canWrite || !isDraft}
                     onChange={(e) => { setTitle(e.target.value); setDirty(true); }}
                   />
                 </Field>
@@ -376,7 +398,7 @@ export function BylawDiffPage() {
                 className="textarea"
                 style={{ minHeight: 240, fontFamily: "var(--font-mono)", fontSize: "var(--fs-sm)" }}
                 value={oldText}
-                disabled={selected != null && !isDraft}
+                disabled={!canWrite || (selected != null && !isDraft)}
                 onChange={(e) => { setOldText(e.target.value); setDirty(true); }}
                 placeholder="Paste the current bylaws section here…"
               />
@@ -386,7 +408,7 @@ export function BylawDiffPage() {
                 className="textarea"
                 style={{ minHeight: 240, fontFamily: "var(--font-mono)", fontSize: "var(--fs-sm)" }}
                 value={newText}
-                disabled={selected != null && !isDraft}
+                disabled={!canWrite || (selected != null && !isDraft)}
                 onChange={(e) => { setNewText(e.target.value); setDirty(true); }}
                 placeholder="Paste the proposed replacement text here…"
               />
@@ -410,7 +432,9 @@ export function BylawDiffPage() {
                 <button
                   className="btn-action"
                   style={{ marginLeft: "auto" }}
+                  disabled={!canWrite}
                   onClick={async () => {
+                    if (!canWrite) return;
                     const secs = parseBylawSections(newText).map((s) => ({
                       heading: s.heading,
                       key: s.key,
@@ -477,7 +501,7 @@ export function BylawDiffPage() {
       </div>
 
       <Modal
-        open={!!voteModal}
+        open={!!voteModal && canWrite}
         onClose={() => setVoteModal(null)}
         title="Record resolution vote"
         size="sm"
@@ -486,8 +510,9 @@ export function BylawDiffPage() {
             <button className="btn" onClick={() => setVoteModal(null)}>Cancel</button>
             <button
               className="btn btn--accent"
-              disabled={!voteModal || !Number.isFinite(Number(voteModal.f)) || voteModal.f === ""}
+              disabled={!canWrite || !voteModal || !Number.isFinite(Number(voteModal.f)) || voteModal.f === ""}
               onClick={async () => {
+                if (!canWrite) return;
                 if (!voteModal || !selected) return;
                 const f = Number(voteModal.f);
                 const a = Number(voteModal.a) || 0;

@@ -1,6 +1,8 @@
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
@@ -25,12 +27,14 @@ import type { Id } from "../../convex/_generated/dataModel";
 
 export function WrittenResolutionsPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("motions:write");
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const items = useQuery(api.writtenResolutions.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.writtenResolutions.create);
-  const sign = useMutation(api.writtenResolutions.sign);
-  const markFailed = useMutation(api.writtenResolutions.markFailed);
-  const remove = useMutation(api.writtenResolutions.remove);
+  const create = usePermissionedMutation(api.writtenResolutions.create, canWrite);
+  const sign = usePermissionedMutation(api.writtenResolutions.sign, canWrite);
+  const markFailed = usePermissionedMutation(api.writtenResolutions.markFailed, canWrite);
+  const remove = usePermissionedMutation(api.writtenResolutions.remove, canWrite);
   const prompt = usePrompt();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -55,6 +59,7 @@ export function WrittenResolutionsPage() {
   const eligibleVoters = (members ?? []).filter((m: any) => m.status === "Active" && m.votingRights).length;
 
   const openNew = () => {
+    if (!canWrite) return;
     setForm({
       title: "",
       text: "",
@@ -64,6 +69,7 @@ export function WrittenResolutionsPage() {
     setOpen(true);
   };
   const save = async () => {
+    if (!canWrite) return;
     await create({ societyId: society._id, ...form });
     setOpen(false);
   };
@@ -76,7 +82,7 @@ export function WrittenResolutionsPage() {
         iconColor="purple"
         subtitle="Members' resolutions in lieu of a meeting — ordinary resolutions need majority consent in writing; special resolutions need unanimous written consent from all voting members."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New resolution
           </button>
         }
@@ -134,7 +140,9 @@ export function WrittenResolutionsPage() {
                 {r.status === "Circulating" && (
                   <button
                     className="btn btn--ghost btn--sm"
+                    disabled={!canWrite}
                     onClick={async () => {
+                      if (!canWrite) return;
                       const name = await prompt({
                         title: "Sign resolution",
                         message: "Enter the name of the signer as it will appear on the record.",
@@ -151,9 +159,9 @@ export function WrittenResolutionsPage() {
                   </button>
                 )}
                 {r.status === "Circulating" && (
-                  <button className="btn btn--ghost btn--sm" onClick={() => markFailed({ id: r._id })}>Mark failed</button>
+                  <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => canWrite && markFailed({ id: r._id })}>Mark failed</button>
                 )}
-                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete written resolution ${r.title}`} onClick={() => remove({ id: r._id })}><Trash2 size={12} /></button>
+                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete written resolution ${r.title}`} disabled={!canWrite} onClick={() => canWrite && remove({ id: r._id })}><Trash2 size={12} /></button>
               </>
             )}
           />
@@ -161,10 +169,10 @@ export function WrittenResolutionsPage() {
       ) : null}
 
       <Drawer
-        open={open}
+        open={open && canWrite}
         onClose={() => setOpen(false)}
         title="New written resolution"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Circulate</button></>}
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={save}>Circulate</button></>}
       >
         {form && (
           <div>

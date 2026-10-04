@@ -12,6 +12,7 @@ export async function createFixture() {
     "./_generated/server.js": () => import("../../convex/_generated/server.js"),
     "./offlineDrafts.js": () => import("./convex/offlineDrafts"),
     "./offlineMeetings.js": () => import("./convex/offlineMeetings"),
+    "./users.js": () => import("./convex/users"),
   } as any);
   const ids = await native.run(async ctx => {
     const societyA = await ctx.db.insert("societies", { name: "Evaluation A", isCharity: false, isMemberFunded: false, updatedAt: Date.now() });

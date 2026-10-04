@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, EmptyState, Field } from "../components/ui";
@@ -22,15 +24,17 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 export function CommitteeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("committees:write");
+  const canWriteTasks = loaded && can("tasks:write");
   const detail = useQuery(api.committees.detail, id ? { id: id as Id<"committees"> } : "skip");
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
-  const update = useMutation(api.committees.update);
-  const addMember = useMutation(api.committees.addMember);
-  const removeMember = useMutation(api.committees.removeMember);
-  const removeCommittee = useMutation(api.committees.remove);
+  const addMember = usePermissionedMutation(api.committees.addMember, canWrite);
+  const removeMember = usePermissionedMutation(api.committees.removeMember, canWrite);
+  const removeCommittee = usePermissionedMutation(api.committees.remove, canWrite);
   const navigate = useNavigate();
-  const createTask = useMutation(api.tasks.create);
-  const updateTask = useMutation(api.tasks.update);
+  const createTask = usePermissionedMutation(api.tasks.create, canWriteTasks);
+  const updateTask = usePermissionedMutation(api.tasks.update, canWriteTasks);
   const confirm = useConfirm();
   const toast = useToast();
   const [memberDrawer, setMemberDrawer] = useState(false);
@@ -70,6 +74,7 @@ export function CommitteeDetailPage() {
   const openTasks = tasks.filter((t: any) => t.status !== "Done").length;
 
   const saveMember = async () => {
+    if (!canWrite || !memberForm) return;
     await addMember({
       committeeId: committee._id,
       societyId: society._id,
@@ -81,6 +86,7 @@ export function CommitteeDetailPage() {
     setMemberDrawer(false);
   };
   const saveTask = async () => {
+    if (!canWriteTasks || !taskForm) return;
     await createTask({
       societyId: society._id,
       title: taskForm.title,
@@ -171,7 +177,8 @@ export function CommitteeDetailPage() {
           <div className="card__head">
             <h2 className="card__title">Members</h2>
             <div style={{ marginLeft: "auto" }}>
-              <button className="btn btn--accent btn--sm" onClick={() => {
+              <button className="btn btn--accent btn--sm" disabled={!canWrite} onClick={() => {
+                if (!canWrite) return;
                 setMemberForm({ name: "", email: "", role: "Member", directorId: "" });
                 setMemberDrawer(true);
               }}>
@@ -200,8 +207,10 @@ export function CommitteeDetailPage() {
                   <td className="table__actions">
                     <button
                       className="btn btn--ghost btn--sm btn--icon"
+                      disabled={!canWrite}
                       aria-label={`Remove ${m.name} from committee`}
                       onClick={async () => {
+                        if (!canWrite) return;
                         const ok = await confirm({
                           title: "Remove member?",
                           message: `${m.name} will no longer be a committee member.`,
@@ -251,7 +260,8 @@ export function CommitteeDetailPage() {
           <div className="card__head">
             <h2 className="card__title">Tasks</h2>
             <div style={{ marginLeft: "auto" }}>
-              <button className="btn btn--accent btn--sm" onClick={() => {
+              <button className="btn btn--accent btn--sm" disabled={!canWriteTasks} onClick={() => {
+                if (!canWriteTasks) return;
                 setTaskForm({ title: "", status: "Todo", priority: "Medium", assignee: "", dueDate: "", tags: [] });
                 setTaskDrawer(true);
               }}>
@@ -271,8 +281,9 @@ export function CommitteeDetailPage() {
                   <td>
                     <Select
                       size="sm"
+                      disabled={!canWriteTasks}
                       value={t.status}
-                      onChange={(v) => updateTask({ id: t._id, patch: { status: v } })}
+                      onChange={(v) => { if (canWriteTasks) void updateTask({ id: t._id, patch: { status: v } }); }}
                       style={{ width: 120, maxWidth: "100%" }}
                       options={["Todo", "InProgress", "Blocked", "Done"].map((s) => ({ value: s, label: s }))}
                     />
@@ -319,7 +330,9 @@ export function CommitteeDetailPage() {
         actions={
           <button
             className="btn-action"
+            disabled={!canWrite}
             onClick={async () => {
+              if (!canWrite) return;
               const ok = await confirm({
                 title: "Delete committee?",
                 message: `"${committee.name}" will be permanently deleted along with its membership roster. Linked meetings, tasks, and goals are kept but unlinked.`,
@@ -378,14 +391,14 @@ export function CommitteeDetailPage() {
         footer={
           <>
             <button className="btn" onClick={() => setMemberDrawer(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveMember}>Add</button>
+            <button className="btn btn--accent" disabled={!canWrite} onClick={saveMember}>Add</button>
           </>
         }
       >
         {memberForm && (
           <div>
             <Field label="Link to existing director (optional)">
-              <Select
+              <Select disabled={!canWrite}
                 value={memberForm.directorId}
                 onChange={(v) => {
                   const d = (directors ?? []).find((d: any) => d._id === v);
@@ -405,10 +418,10 @@ export function CommitteeDetailPage() {
                 }))}
               />
             </Field>
-            <Field label="Name"><input className="input" value={memberForm.name} onChange={(e) => setMemberForm({ ...memberForm, name: e.target.value })} /></Field>
-            <Field label="Email"><input className="input" value={memberForm.email} onChange={(e) => setMemberForm({ ...memberForm, email: e.target.value })} /></Field>
+            <Field label="Name"><input disabled={!canWrite} className="input" value={memberForm.name} onChange={(e) => setMemberForm({ ...memberForm, name: e.target.value })} /></Field>
+            <Field label="Email"><input disabled={!canWrite} className="input" value={memberForm.email} onChange={(e) => setMemberForm({ ...memberForm, email: e.target.value })} /></Field>
             <Field label="Role">
-              <Select
+              <Select disabled={!canWrite}
                 value={memberForm.role}
                 onChange={(v) => setMemberForm({ ...memberForm, role: v })}
                 options={["Chair", "Vice-Chair", "Secretary", "Treasurer", "Member", "Volunteer"].map((r) => ({ value: r, label: r }))}
@@ -425,34 +438,34 @@ export function CommitteeDetailPage() {
         footer={
           <>
             <button className="btn" onClick={() => setTaskDrawer(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveTask}>Create</button>
+            <button className="btn btn--accent" disabled={!canWriteTasks} onClick={saveTask}>Create</button>
           </>
         }
       >
         {taskForm && (
           <div>
-            <Field label="Title"><input className="input" value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} /></Field>
-            <Field label="Description"><MarkdownEditor rows={4} value={taskForm.description ?? ""} onChange={(markdown) => setTaskForm({ ...taskForm, description: markdown })} /></Field>
+            <Field label="Title"><input disabled={!canWriteTasks} className="input" value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} /></Field>
+            <Field label="Description"><MarkdownEditor readOnly={!canWriteTasks} rows={4} value={taskForm.description ?? ""} onChange={(markdown) => setTaskForm({ ...taskForm, description: markdown })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Status">
-                <Select
+                <Select disabled={!canWriteTasks}
                   value={taskForm.status}
                   onChange={(v) => setTaskForm({ ...taskForm, status: v })}
                   options={["Todo", "InProgress", "Blocked", "Done"].map((s) => ({ value: s, label: s }))}
                 />
               </Field>
               <Field label="Priority">
-                <Select
+                <Select disabled={!canWriteTasks}
                   value={taskForm.priority}
                   onChange={(v) => setTaskForm({ ...taskForm, priority: v })}
                   options={["Low", "Medium", "High", "Urgent"].map((p) => ({ value: p, label: p }))}
                 />
               </Field>
               <Field label="Due">
-                <DatePicker value={taskForm.dueDate ?? ""} onChange={(v) => setTaskForm({ ...taskForm, dueDate: v })} />
+                <DatePicker disabled={!canWriteTasks} value={taskForm.dueDate ?? ""} onChange={(v) => setTaskForm({ ...taskForm, dueDate: v })} />
               </Field>
             </div>
-            <Field label="Assignee"><input className="input" value={taskForm.assignee ?? ""} onChange={(e) => setTaskForm({ ...taskForm, assignee: e.target.value })} /></Field>
+            <Field label="Assignee"><input disabled={!canWriteTasks} className="input" value={taskForm.assignee ?? ""} onChange={(e) => setTaskForm({ ...taskForm, assignee: e.target.value })} /></Field>
           </div>
         )}
       </Drawer>

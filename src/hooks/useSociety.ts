@@ -35,9 +35,14 @@ export function setMembershipSocietyIds(
 export function getStoredSocietyId(): Id<"societies"> | null {
   if (isStaticDemoRuntime()) return staticSocietyId;
   const value = localStorage.getItem(KEY) as Id<"societies"> | null;
-  if (requiresMembershipSelection() && value && !membershipUserIds?.has(value)) {
-    localStorage.removeItem(KEY);
-    return null;
+  if (requiresMembershipSelection() && value) {
+    // An unresolved membership set grants no access, but cannot invalidate a
+    // durable preference during initial session/token hydration or a retry.
+    if (membershipUserIds === null) return null;
+    if (!membershipUserIds.has(value)) {
+      localStorage.removeItem(KEY);
+      return null;
+    }
   }
   return value;
 }
@@ -64,13 +69,19 @@ export function setStoredSocietyId(id: Id<"societies"> | null) {
 
 export function useSocieties() {
   const auth = useAuth();
-  const localSocieties = useQuery(
+  const queriedSocieties = useQuery(
     api.society.list,
-    auth.mode !== "none" ? "skip" : {},
+    auth.mode === "none" || (auth.isConvexAuthenticated && auth.membershipStatus === "bound") ? {} : "skip",
   ) as SocietyView[] | undefined;
-  const societies = (auth.mode !== "none" ? auth.societies : localSocieties) as
-    | SocietyView[]
-    | undefined;
+  // Membership lookup establishes identity and the allowed workspace set. The
+  // live query supplies reactive organization records and resolved branding
+  // URLs; a one-off membership snapshot cannot reflect edits or storage URLs.
+  const allowedIds = auth.mode !== "none" && auth.societies
+    ? new Set(auth.societies.map((society) => society._id))
+    : null;
+  const societies = auth.mode === "none"
+    ? queriedSocieties
+    : queriedSocieties?.filter((society) => allowedIds?.has(society._id));
   return useMemo(() => {
     if (!societies) return societies;
     return [...societies].sort((a, b) =>

@@ -1,6 +1,7 @@
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import {
   CalendarPlus,
   ClipboardCheck,
@@ -21,13 +22,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Banner, Field } from "../components/ui";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Modal, useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
-import { useBylawRules } from "../hooks/useBylawRules";
 import { useModuleEnabled } from "../hooks/useModules";
 import { CitationBadge } from "../components/CitationTooltip";
 import { Select } from "../components/Select";
@@ -71,7 +72,11 @@ const MEMBER_DATA_ACCESS_STATUS_OPTIONS = [
 
 export function PrivacyPage() {
   const society = useSociety();
-  const { rules } = useBylawRules();
+  const { loaded, can } = usePermissions();
+  const canWriteDocuments = loaded && can("documents:write");
+  const canWriteSociety = loaded && can("society:write");
+  const canWriteMotions = loaded && can("motions:write");
+  const rules = useQuery(api.bylawRules.getActive, society && loaded && can("documents:read") ? { societyId: society._id } : "skip");
   const toast = useToast();
   const confirm = useConfirm();
   const communicationsEnabled = useModuleEnabled("communications");
@@ -80,19 +85,19 @@ export function PrivacyPage() {
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const training = useQuery(
     api.pipaTraining.list,
-    society && trainingEnabled ? { societyId: society._id } : "skip",
+    society && trainingEnabled && loaded && can("attestations:read") ? { societyId: society._id } : "skip",
   );
   const prefs = useQuery(
     api.communications.listMemberPrefs,
-    society && communicationsEnabled ? { societyId: society._id } : "skip",
+    society && communicationsEnabled && loaded && can("communications:read") ? { societyId: society._id } : "skip",
   );
   const motionBacklog = useQuery(api.motionBacklog.list, society ? { societyId: society._id } : "skip");
-  const createPolicyDraft = useMutation(api.documents.createPipaPolicyDraft);
-  const createMemberDataGapMemoDraft = useMutation(api.documents.createMemberDataGapMemoDraft);
-  const updateDraftContent = useMutation(api.documents.updateDraftContent);
-  const linkPrivacyPolicyEvidence = useMutation(api.documents.linkPrivacyPolicyEvidence);
-  const seedPipaSetupMotions = useMutation(api.motionBacklog.seedPipaSetup);
-  const upsertSociety = useMutation(api.society.upsert);
+  const createPolicyDraft = usePermissionedMutation(api.documents.createPipaPolicyDraft, canWriteDocuments);
+  const createMemberDataGapMemoDraft = usePermissionedMutation(api.documents.createMemberDataGapMemoDraft, canWriteDocuments);
+  const updateDraftContent = usePermissionedMutation(api.documents.updateDraftContent, canWriteDocuments);
+  const linkPrivacyPolicyEvidence = usePermissionedMutation(api.documents.linkPrivacyPolicyEvidence, canWriteDocuments);
+  const seedPipaSetupMotions = usePermissionedMutation(api.motionBacklog.seedPipaSetup, canWriteMotions);
+  const upsertSociety = usePermissionedMutation(api.society.upsert, canWriteSociety);
   const [draftEditor, setDraftEditor] = useState<DraftEditorState | null>(null);
   const [draftViewMode, setDraftViewMode] = useState<DraftViewMode>("edit");
   const [draftBusy, setDraftBusy] = useState(false);
@@ -110,6 +115,7 @@ export function PrivacyPage() {
 
   const privacyOpsForm = privacyForm ?? society;
   const setPrivacyField = (key: string, value: any) => {
+    if (!canWriteSociety) return;
     setPrivacyForm((current: any) => ({ ...(current ?? society), [key]: value }));
   };
   const hasPolicyEvidence = !!society.privacyPolicyDocId;
@@ -156,9 +162,9 @@ export function PrivacyPage() {
 
   const openPolicyDraft = async () => {
     if (policyDraft) {
-      const prepared = preparePolicyDraftForSociety(policyDraft, society);
+      const prepared = canWriteDocuments ? preparePolicyDraftForSociety(policyDraft, society) : policyDraft;
       setDraftEditor(editorStateFromDocument(prepared, "policy"));
-      setDraftViewMode("edit");
+      setDraftViewMode(canWriteDocuments ? "edit" : "preview");
       toast.success(
         prepared !== policyDraft
           ? "Filled policy draft with society details"
@@ -168,12 +174,13 @@ export function PrivacyPage() {
       return;
     }
 
+    if (!canWriteDocuments) return;
     setDraftBusy(true);
     try {
       const result = await createPolicyDraft({ societyId: society._id });
       if (!result?.document) throw new Error("Draft document was not returned.");
       setDraftEditor(editorStateFromDocument(preparePolicyDraftForSociety(result.document, society), "policy"));
-      setDraftViewMode("edit");
+      setDraftViewMode(canWriteDocuments ? "edit" : "preview");
       toast.success(
         result.refreshed
           ? "Filled existing policy draft with society details"
@@ -189,7 +196,7 @@ export function PrivacyPage() {
   };
 
   const rebuildPolicyDraft = async () => {
-    if (!draftEditor || draftEditor.kind !== "policy") return;
+    if (!canWriteDocuments || !draftEditor || draftEditor.kind !== "policy") return;
     const ok = await confirm({
       title: "Use current society details?",
       message:
@@ -206,7 +213,7 @@ export function PrivacyPage() {
         content: buildClientPipaPolicyDraft(society),
         tags: withDraftTags(draftEditor.tags, ["privacy", "privacy-policy", "pipa", "draft", "societyer-template", "society-filled"]),
       });
-      setDraftViewMode("edit");
+      setDraftViewMode(canWriteDocuments ? "edit" : "preview");
       toast.success("Policy draft filled from society details", "Review and save the draft to persist these template fields.");
     } catch (error: any) {
       toast.error(error?.message ?? "Could not fill the draft from society details");
@@ -216,6 +223,7 @@ export function PrivacyPage() {
   };
 
   const openMemberDataMemoDraft = async () => {
+    if (!canWriteDocuments && !memberDataMemoDraft) return;
     setDraftBusy(true);
     try {
       const result = memberDataMemoDraft
@@ -223,7 +231,7 @@ export function PrivacyPage() {
         : await createMemberDataGapMemoDraft({ societyId: society._id });
       if (!result?.document) throw new Error("Draft document was not returned.");
       setDraftEditor(editorStateFromDocument(result.document, "memberDataMemo"));
-      setDraftViewMode("edit");
+      setDraftViewMode(canWriteDocuments ? "edit" : "preview");
       toast.success(result.reused ? "Opened existing data-gap memo" : "Data-gap memo draft created");
     } catch (error: any) {
       toast.error(error?.message ?? "Could not create the data-gap memo");
@@ -233,7 +241,7 @@ export function PrivacyPage() {
   };
 
   const saveDraftEditor = async () => {
-    if (!draftEditor) return;
+    if (!canWriteDocuments || !draftEditor) return;
     setDraftBusy(true);
     try {
       const updated = await updateDraftContent({
@@ -252,7 +260,7 @@ export function PrivacyPage() {
   };
 
   const linkDraftAsEvidence = async () => {
-    if (!draftEditor || draftEditor.kind !== "policy") return;
+    if (!canWriteDocuments || !draftEditor || draftEditor.kind !== "policy") return;
     const ok = await confirm({
       title: "Link as adopted evidence?",
       message:
@@ -290,6 +298,7 @@ export function PrivacyPage() {
   };
 
   const addPipaSetupMotions = async () => {
+    if (!canWriteMotions) return;
     const result = await seedPipaSetupMotions({ societyId: society._id });
     toast.success(
       result.inserted ? `Added ${result.inserted} PIPA setup motions` : "PIPA setup motions already exist",
@@ -298,6 +307,7 @@ export function PrivacyPage() {
   };
 
   const savePrivacyOperations = async () => {
+    if (!canWriteSociety) return;
     setPrivacySaving(true);
     try {
       await upsertSociety({
@@ -343,9 +353,9 @@ export function PrivacyPage() {
         subtitle={`A practical setup checklist for privacy policies, complaint handling, member-data access, consent, and training. ${LEGAL_COPY_REVIEWED}.`}
         actions={
           <>
-            <button className="btn-action btn-action--primary" disabled={draftBusy} onClick={openPolicyDraft}>
+            <button className="btn-action btn-action--primary" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
               {policyDraft ? <PenLine size={12} /> : <Plus size={12} />}
-              {policyDraft ? "Edit policy draft" : "Create policy draft"}
+              {policyDraft ? canWriteDocuments ? "Edit policy draft" : "View policy draft" : "Create policy draft"}
             </button>
             {communicationsEnabled && (
               <Link className="btn-action" to="/app/communications">
@@ -397,13 +407,13 @@ export function PrivacyPage() {
                   </span>
                 </div>
                 <div className="privacy-document-path__actions">
-                  <button className="btn btn--accent btn--sm" disabled={draftBusy} onClick={openPolicyDraft}>
+                  <button className="btn btn--accent btn--sm" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
                     {policyDraft ? <PenLine size={12} /> : <Plus size={12} />}
-                    {policyDraft ? "Edit draft" : "Create draft"}
+                    {policyDraft ? canWriteDocuments ? "Edit draft" : "View draft" : "Create draft"}
                   </button>
-                  <button className="btn btn--ghost btn--sm" disabled={draftBusy} onClick={openMemberDataMemoDraft}>
+                  <button className="btn btn--ghost btn--sm" disabled={draftBusy || (!canWriteDocuments && !memberDataMemoDraft)} onClick={openMemberDataMemoDraft}>
                     {memberDataMemoDraft ? <PenLine size={12} /> : <Plus size={12} />}
-                    {memberDataMemoDraft ? "Edit data memo" : "Create data memo"}
+                    {memberDataMemoDraft ? canWriteDocuments ? "Edit data memo" : "View data memo" : "Create data memo"}
                   </button>
                 </div>
               </div>
@@ -431,7 +441,7 @@ export function PrivacyPage() {
                   </span>
                 </div>
                 <div className="privacy-document-path__actions">
-                  <button className="btn btn--accent btn--sm" onClick={addPipaSetupMotions}>
+                  <button className="btn btn--accent btn--sm" disabled={!canWriteMotions} onClick={addPipaSetupMotions}>
                     <Plus size={12} />
                     Add setup motions
                   </button>
@@ -457,7 +467,7 @@ export function PrivacyPage() {
                   Internal PIPA setup state, including student-newspaper member-data custody notes.
                 </p>
               </div>
-              <button className="btn btn--accent btn--sm" disabled={privacySaving} onClick={savePrivacyOperations}>
+              <button className="btn btn--accent btn--sm" disabled={!canWriteSociety || privacySaving} onClick={savePrivacyOperations}>
                 {privacySaving ? "Saving..." : "Save record"}
               </button>
             </div>
@@ -468,6 +478,7 @@ export function PrivacyPage() {
                   <div className="society-field-grid">
                     <Field label="Status" hint="Use Documented after the policy, practices, access/correction process, and complaint process are adopted.">
                       <Select
+                        disabled={!canWriteSociety}
                         value={privacyOpsForm.privacyProgramStatus ?? ""}
                         onChange={(value) => setPrivacyField("privacyProgramStatus", value)}
                         clearable
@@ -476,6 +487,7 @@ export function PrivacyPage() {
                     </Field>
                     <Field label="Reviewed">
                       <DatePicker
+                        disabled={!canWriteSociety}
                         value={privacyOpsForm.privacyProgramReviewedAtISO ?? ""}
                         onChange={(value) => setPrivacyField("privacyProgramReviewedAtISO", value)}
                       />
@@ -483,6 +495,7 @@ export function PrivacyPage() {
                   </div>
                   <Field label="Notes" hint="Examples: complaint process location, access-request procedure, retention schedule, training owner.">
                     <MarkdownEditor
+                      readOnly={!canWriteSociety}
                       rows={4}
                       value={privacyOpsForm.privacyProgramNotes ?? ""}
                       onChange={(markdown) => setPrivacyField("privacyProgramNotes", markdown)}
@@ -494,6 +507,7 @@ export function PrivacyPage() {
                   <div className="society-field-grid">
                     <Field label="Status" hint="Use Institution-held when a university or parent body holds the full member list outside society control.">
                       <Select
+                        disabled={!canWriteSociety}
                         value={privacyOpsForm.memberDataAccessStatus ?? ""}
                         onChange={(value) => setPrivacyField("memberDataAccessStatus", value)}
                         clearable
@@ -502,18 +516,21 @@ export function PrivacyPage() {
                     </Field>
                     <Field label="Reviewed">
                       <DatePicker
+                        disabled={!canWriteSociety}
                         value={privacyOpsForm.memberDataAccessReviewedAtISO ?? ""}
                         onChange={(value) => setPrivacyField("memberDataAccessReviewedAtISO", value)}
                       />
                     </Field>
                   </div>
                   <Toggle
+                    disabled={!canWriteSociety}
                     checked={!!privacyOpsForm.memberDataGapDocumented}
                     onChange={(value) => setPrivacyField("memberDataGapDocumented", value)}
                     label="Member data-access gap documented"
                   />
                   <Field label="Notes" hint="Record source requests, refusal/limits, aggregate remittances, direct collection paths, and next review.">
                     <MarkdownEditor
+                      readOnly={!canWriteSociety}
                       rows={4}
                       value={privacyOpsForm.memberDataAccessNotes ?? ""}
                       onChange={(markdown) => setPrivacyField("memberDataAccessNotes", markdown)}
@@ -562,9 +579,9 @@ export function PrivacyPage() {
               citationIds={["PIPA-POLICY", "OIPC-PIPA-PRIVACY-POLICY-GUIDE"]}
               actions={(
                 <>
-                  <button className="btn btn--accent btn--sm" disabled={draftBusy} onClick={openPolicyDraft}>
+                  <button className="btn btn--accent btn--sm" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
                     {policyDraft ? <PenLine size={12} /> : <Plus size={12} />}
-                    {policyDraft ? "Edit draft" : "Create draft"}
+                    {policyDraft ? canWriteDocuments ? "Edit draft" : "View draft" : "Create draft"}
                   </button>
                   <a className="btn btn--ghost btn--sm" href="#privacy-operations"><FileText size={12} /> Program status</a>
                 </>
@@ -589,7 +606,7 @@ export function PrivacyPage() {
               actions={(
                 <>
                   {policyDraft && (
-                    <button className="btn btn--ghost btn--sm" disabled={draftBusy} onClick={openPolicyDraft}>
+                    <button className="btn btn--ghost btn--sm" disabled={draftBusy || (!canWriteDocuments && !policyDraft)} onClick={openPolicyDraft}>
                       <PenLine size={12} /> Review draft
                     </button>
                   )}
@@ -610,9 +627,9 @@ export function PrivacyPage() {
               citationIds={["PIPA-POLICY", "BC-SOC-RECORDS"]}
               actions={(
                 <>
-                  <button className="btn btn--ghost btn--sm" disabled={draftBusy} onClick={openMemberDataMemoDraft}>
+                  <button className="btn btn--ghost btn--sm" disabled={draftBusy || (!canWriteDocuments && !memberDataMemoDraft)} onClick={openMemberDataMemoDraft}>
                     {memberDataMemoDraft ? <PenLine size={12} /> : <Plus size={12} />}
-                    {memberDataMemoDraft ? "Edit memo" : "Create memo"}
+                    {memberDataMemoDraft ? canWriteDocuments ? "Edit memo" : "View memo" : "Create memo"}
                   </button>
                   <a className="btn btn--ghost btn--sm" href="#privacy-operations"><UsersRound size={12} /> Data access</a>
                 </>
@@ -667,9 +684,10 @@ export function PrivacyPage() {
                 <ResourceRow
                   key={resource.title}
                   resource={resource}
-                  onCreateDraft={resource.title.includes("starter") ? openPolicyDraft : undefined}
+                  onCreateDraft={resource.title.includes("starter") && (canWriteDocuments || policyDraft) ? openPolicyDraft : undefined}
                   draftBusy={draftBusy}
                   hasDraft={!!policyDraft}
+                  canEditDraft={canWriteDocuments}
                 />
               ))}
             </div>
@@ -719,7 +737,7 @@ export function PrivacyPage() {
       <Modal
         open={!!draftEditor}
         onClose={() => setDraftEditor(null)}
-        title={draftEditor?.kind === "memberDataMemo" ? "Edit member-data gap memo" : "Edit privacy policy draft"}
+        title={`${canWriteDocuments ? "Edit" : "View"} ${draftEditor?.kind === "memberDataMemo" ? "member-data gap memo" : "privacy policy draft"}`}
         size="xl"
         footer={
           <>
@@ -732,17 +750,17 @@ export function PrivacyPage() {
             </button>
             {draftEditor?.kind === "policy" && (
               <>
-                <button className="btn" disabled={draftBusy} onClick={rebuildPolicyDraft}>
+                <button className="btn" disabled={!canWriteDocuments || draftBusy} onClick={rebuildPolicyDraft}>
                   <RefreshCw size={12} />
                   Use society details
                 </button>
-                <button className="btn" disabled={draftBusy} onClick={linkDraftAsEvidence}>
+                <button className="btn" disabled={!canWriteDocuments || draftBusy} onClick={linkDraftAsEvidence}>
                   <FileCheck2 size={12} />
                   Link as adopted evidence
                 </button>
               </>
             )}
-            <button className="btn btn--accent" disabled={draftBusy} onClick={saveDraftEditor}>
+            <button className="btn btn--accent" disabled={!canWriteDocuments || draftBusy} onClick={saveDraftEditor}>
               <Save size={12} />
               Save draft
             </button>
@@ -759,6 +777,7 @@ export function PrivacyPage() {
             <Field label="Document title">
               <input
                 className="input"
+                readOnly={!canWriteDocuments}
                 value={draftEditor.title}
                 onChange={(event) => setDraftEditor({ ...draftEditor, title: event.target.value })}
               />
@@ -769,7 +788,8 @@ export function PrivacyPage() {
                 role="tab"
                 aria-selected={draftViewMode === "edit"}
                 className={`segmented__btn ${draftViewMode === "edit" ? "is-active" : ""}`}
-                onClick={() => setDraftViewMode("edit")}
+                disabled={!canWriteDocuments}
+                onClick={() => canWriteDocuments && setDraftViewMode("edit")}
               >
                 Edit Markdown
               </button>
@@ -783,7 +803,7 @@ export function PrivacyPage() {
                 Preview
               </button>
             </div>
-            {draftViewMode === "edit" ? (
+            {canWriteDocuments && draftViewMode === "edit" ? (
               <Field label="Markdown draft" hint="Replace bracketed placeholders before adoption.">
                 <MarkdownEditor
                   rows={4}
@@ -854,11 +874,13 @@ function ResourceRow({
   onCreateDraft,
   draftBusy,
   hasDraft,
+  canEditDraft,
 }: {
   resource: (typeof PIPA_TEMPLATE_RESOURCES)[number];
   onCreateDraft?: () => void;
   draftBusy?: boolean;
   hasDraft?: boolean;
+  canEditDraft?: boolean;
 }) {
   const externalHref = "href" in resource ? resource.href : undefined;
   return (
@@ -880,7 +902,7 @@ function ResourceRow({
       ) : onCreateDraft ? (
         <button className="btn btn--ghost btn--sm" disabled={draftBusy} onClick={onCreateDraft}>
           {hasDraft ? <PenLine size={12} /> : <Plus size={12} />}
-          {hasDraft ? "Edit" : "Create"}
+          {hasDraft ? canEditDraft ? "Edit" : "View" : "Create"}
         </button>
       ) : (
         <Link className="btn btn--ghost btn--sm" to="/app/documents">

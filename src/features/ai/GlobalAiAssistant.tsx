@@ -1,4 +1,6 @@
-import { useAction, useMutation, useQuery } from "convex/react";
+import { usePermissions } from "@/hooks/usePermissions";
+import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
+import { useAction, useQuery } from "convex/react";
 import {
   AlertTriangle,
   ArrowDown,
@@ -103,32 +105,37 @@ export function openGlobalAiAssistant() {
 
 export function GlobalAiAssistant() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canRead = can("tasks:read");
+  const canWrite = can("tasks:write");
+  const canReadSettings = can("settings:read");
+  const canListModels = can("settings:write");
+  const [open, setOpen] = useState(false);
   const actingUserId = useCurrentUserId() ?? undefined;
   const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
   const sendChatMessage = useAction(api.aiChatActions.sendChatMessage);
   const listProviderModels = useAction(api.aiSettingsActions.listProviderModels);
-  const archiveThread = useMutation(api.aiChat.archiveThread);
-  const renameThread = useMutation(api.aiChat.renameThread);
-  const deleteThread = useMutation(api.aiChat.deleteThread);
-  const approveDraft = useMutation(api.aiAgents.approveToolDraft);
-  const rejectDraft = useMutation(api.aiAgents.rejectToolDraft);
+  const archiveThread = usePermissionedMutation(api.aiChat.archiveThread, canWrite);
+  const renameThread = usePermissionedMutation(api.aiChat.renameThread, canWrite);
+  const deleteThread = usePermissionedMutation(api.aiChat.deleteThread, canWrite);
+  const approveDraft = usePermissionedMutation(api.aiAgents.approveToolDraft, canWrite);
+  const rejectDraft = usePermissionedMutation(api.aiAgents.rejectToolDraft, canWrite);
 
   const aiSettings = useQuery(
     api.aiSettings.getEffective,
-    society ? { societyId: society._id } : "skip",
+    open && canRead && canReadSettings && society ? { societyId: society._id } : "skip",
   ) as any | undefined;
   const threads = useQuery(
     api.aiChat.listThreads,
-    society ? { societyId: society._id, limit: 30 } : "skip",
+    open && canRead && society ? { societyId: society._id, limit: 30 } : "skip",
   ) as any[] | undefined;
   const toolDrafts = useQuery(
     api.aiAgents.listToolDrafts,
-    society ? { societyId: society._id, limit: 12 } : "skip",
+    open && canRead && society ? { societyId: society._id, limit: 12 } : "skip",
   ) as any[] | undefined;
 
-  const [open, setOpen] = useState(false);
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
   const [input, setInput] = useState("");
   const [streamingText, setStreamingText] = useState("");
@@ -148,7 +155,7 @@ export function GlobalAiAssistant() {
 
   const messages = useQuery(
     api.aiChat.messagesForThread,
-    selectedThreadId ? { threadId: selectedThreadId as any } : "skip",
+    open && canRead && selectedThreadId && threads?.some((thread) => thread._id === selectedThreadId && thread.societyId === society?._id) ? { threadId: selectedThreadId as any } : "skip",
   ) as any[] | undefined;
 
   const browsingContext = useMemo(
@@ -184,7 +191,7 @@ export function GlobalAiAssistant() {
   }, [toolDrafts, selectedThreadId]);
 
   useEffect(() => {
-    if (!open || catalogLoaded || !effectiveProvider?.provider) return;
+    if (!canRead || !canListModels || !open || catalogLoaded || !effectiveProvider?.provider) return;
     let cancelled = false;
     setCatalogLoaded(true);
     listProviderModels({
@@ -202,13 +209,13 @@ export function GlobalAiAssistant() {
     return () => {
       cancelled = true;
     };
-  }, [open, catalogLoaded, effectiveProvider?.provider, society?._id, actingUserId, listProviderModels]);
+  }, [canRead, canListModels, open, catalogLoaded, effectiveProvider?.provider, society?._id, actingUserId, listProviderModels]);
 
   useEffect(() => {
-    const onOpen = () => setOpen(true);
+    const onOpen = () => { if (canRead) setOpen(true); };
     window.addEventListener(OPEN_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_EVENT, onOpen);
-  }, []);
+  }, [canRead]);
 
   useEffect(() => {
     if (!open) return;
@@ -248,6 +255,7 @@ export function GlobalAiAssistant() {
   };
 
   const startNewThread = () => {
+    if (!canWrite) return;
     setSelectedThreadId(undefined);
     setInput("");
     setStreamingText("");
@@ -259,7 +267,7 @@ export function GlobalAiAssistant() {
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
-    if (!society || !input.trim()) return;
+    if (!canWrite || !open || !society || !input.trim()) return;
     const trimmed = input.trim();
     const filesNote = attachedFiles.length
       ? `\n\n[Attached files: ${attachedFiles
@@ -304,6 +312,7 @@ export function GlobalAiAssistant() {
   };
 
   const openSettings = () => {
+    if (!canReadSettings) return;
     navigate("/app/ai-agents");
     setOpen(false);
   };
@@ -325,6 +334,7 @@ export function GlobalAiAssistant() {
   };
 
   const handleRename = async (threadId: string, title: string) => {
+    if (!canWrite) return;
     try {
       await renameThread({ threadId: threadId as any, title });
     } catch (error: any) {
@@ -333,6 +343,7 @@ export function GlobalAiAssistant() {
   };
 
   const handleArchive = async (threadId: string) => {
+    if (!canWrite) return;
     try {
       await archiveThread({ threadId: threadId as any });
       if (threadId === selectedThreadId) setSelectedThreadId(undefined);
@@ -342,6 +353,7 @@ export function GlobalAiAssistant() {
   };
 
   const handleDelete = async (threadId: string) => {
+    if (!canWrite) return;
     if (!window.confirm("Delete this chat thread? This can't be undone.")) return;
     try {
       await deleteThread({ threadId: threadId as any });
@@ -352,6 +364,7 @@ export function GlobalAiAssistant() {
   };
 
   const handleApproveDraft = async (draftId: string) => {
+    if (!canWrite) return;
     if (!society) return;
     try {
       await approveDraft({ societyId: society._id, id: draftId as any });
@@ -362,6 +375,7 @@ export function GlobalAiAssistant() {
   };
 
   const handleRejectDraft = async (draftId: string) => {
+    if (!canWrite) return;
     if (!society) return;
     try {
       await rejectDraft({ societyId: society._id, id: draftId as any });
@@ -399,7 +413,7 @@ export function GlobalAiAssistant() {
 
   return (
     <>
-      {open && (
+      {open && canRead && (
         <div className="global-ai-shell" role="dialog" aria-modal="true" aria-label="Societyer AI assistant">
           <button className="global-ai-backdrop" type="button" aria-label="Close AI assistant" onClick={() => setOpen(false)} />
           <aside
@@ -425,7 +439,7 @@ export function GlobalAiAssistant() {
                     <Wrench size={11} /> {draftCount}
                   </span>
                 )}
-                <button type="button" className="icon-btn" onClick={openSettings} aria-label="AI settings" title="AI settings">
+                <button type="button" className="icon-btn" onClick={openSettings} disabled={!canReadSettings} aria-label="AI settings" title="AI settings">
                   <Settings size={14} />
                 </button>
                 <button type="button" className="icon-btn" onClick={() => setOpen(false)} aria-label="Close AI assistant" title="Close">
@@ -449,6 +463,7 @@ export function GlobalAiAssistant() {
                           <ThreadItem
                             key={thread._id}
                             thread={thread}
+                            readOnly={!canWrite}
                             isActive={selectedThreadId === thread._id}
                             onSelect={() => onSelectThread(thread._id)}
                             onRename={(title) => handleRename(thread._id, title)}
@@ -460,7 +475,7 @@ export function GlobalAiAssistant() {
                     ))
                   )}
                 </div>
-                <button type="button" className="global-ai-thread-new" onClick={startNewThread}>
+                <button type="button" className="global-ai-thread-new" onClick={startNewThread} disabled={!canWrite}>
                   <Plus size={13} /> New chat
                 </button>
               </section>
@@ -505,7 +520,7 @@ export function GlobalAiAssistant() {
                     />
                   )}
                   {busy && !streamingText && hasMessages && <ShimmerLine label="Thinking" />}
-                  {pendingDraftsForThread.length > 0 && (
+                  {canWrite && pendingDraftsForThread.length > 0 && (
                     <div className="global-ai-drafts">
                       {pendingDraftsForThread.map((draft) => (
                         <ToolDraftCard
@@ -550,6 +565,7 @@ export function GlobalAiAssistant() {
                   <div className="global-ai-composer__box">
                     <textarea
                       ref={composerRef}
+                      readOnly={!canWrite}
                       value={input}
                       onChange={(event) => setInput(event.target.value)}
                       placeholder="Ask the assistant to inspect this page, find records, draft tasks, or use workspace tools."
@@ -566,6 +582,7 @@ export function GlobalAiAssistant() {
                           aria-label="Attach files"
                           title="Attach files"
                           onClick={() => fileInputRef.current?.click()}
+                          disabled={!canWrite}
                         >
                           <Paperclip size={13} />
                         </button>
@@ -584,14 +601,14 @@ export function GlobalAiAssistant() {
                           options={modelOptions}
                           onChange={setPickedModelId}
                           providerActive={providerActive}
-                          locked={isModelLocked}
+                          locked={!canWrite || isModelLocked}
                           providerLabel={effectiveProvider?.label}
                         />
                       </div>
                       <button
                         type="submit"
                         className="global-ai-send"
-                        disabled={busy || !input.trim() || !society}
+                        disabled={!canWrite || busy || !input.trim() || !society}
                         aria-label="Send message"
                         title="Send (⌘/Ctrl + Enter)"
                       >
@@ -783,6 +800,7 @@ function ToolDraftCard({
 
 function ThreadItem({
   thread,
+  readOnly = false,
   isActive,
   onSelect,
   onRename,
@@ -790,6 +808,7 @@ function ThreadItem({
   onDelete,
 }: {
   thread: any;
+  readOnly?: boolean;
   isActive: boolean;
   onSelect: () => void;
   onRename: (title: string) => void;
@@ -863,6 +882,7 @@ function ThreadItem({
           type="button"
           className="global-ai-thread__menu-trigger"
           aria-label="Thread actions"
+          disabled={readOnly}
           onClick={(event) => {
             event.stopPropagation();
             setMenuOpen((value) => !value);
@@ -870,7 +890,7 @@ function ThreadItem({
         >
           <MoreHorizontal size={12} />
         </button>
-        {menuOpen && (
+        {!readOnly && menuOpen && (
           <div className="global-ai-thread__menu-pop" onClick={(event) => event.stopPropagation()}>
             <button
               type="button"

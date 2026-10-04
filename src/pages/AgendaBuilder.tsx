@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { ArrowDown, ArrowUp, ClipboardList, ExternalLink, IndentDecrease, IndentIncrease, Plus, Save, Trash2 } from "lucide-react";
@@ -29,6 +31,10 @@ type AgendaDraftItem = {
 
 export function AgendaBuilderPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("agendas:write");
+  const canApplyTemplate = can("meetings:write");
+  const canAddBacklog = can("motions:write");
   const toast = useToast();
 
   const agendas = useQuery(
@@ -69,11 +75,11 @@ export function AgendaBuilderPage() {
     selected ? { meetingId: selected.agenda.meetingId } : "skip",
   );
 
-  const createAgenda = useMutation(api.agendas.create);
-  const syncAgenda = useMutation(api.agendas.syncForMeeting);
-  const startMinutesFromAgenda = useMutation(api.agendas.startMinutesFromAgenda);
-  const applyMeetingTemplate = useMutation(api.meetings.applyTemplate);
-  const addBacklogToAgenda = useMutation(api.motionBacklog.addToAgenda);
+  const createAgenda = usePermissionedMutation(api.agendas.create, canWrite);
+  const syncAgenda = usePermissionedMutation(api.agendas.syncForMeeting, canWrite);
+  const startMinutesFromAgenda = usePermissionedMutation(api.agendas.startMinutesFromAgenda, canWrite);
+  const applyMeetingTemplate = usePermissionedMutation(api.meetings.applyTemplate, canApplyTemplate);
+  const addBacklogToAgenda = usePermissionedMutation(api.motionBacklog.addToAgenda, canAddBacklog);
 
   const meetingById = useMemo(() => {
     const map = new Map<string, any>();
@@ -101,6 +107,7 @@ export function AgendaBuilderPage() {
   if (society === null) return <SeedPrompt />;
 
   const handleCreate = async () => {
+    if (!canWrite) return;
     if (!newMeetingId || !newTitle.trim()) {
       toast.info("Pick a meeting and give the agenda a title.");
       return;
@@ -117,6 +124,7 @@ export function AgendaBuilderPage() {
   };
 
   const handleApplyTemplate = async () => {
+    if (!canApplyTemplate) return;
     if (!newMeetingId || !applyTemplateId) {
       toast.info("Pick a meeting and a template to apply.");
       return;
@@ -140,6 +148,7 @@ export function AgendaBuilderPage() {
     motionId: Id<"motions">;
     motionText: string;
   }> = {}) => {
+    if (!canWrite) return;
     setDraftItems((current) => [...current, {
       type,
       title: extra.title ?? defaultTitleForType(type),
@@ -154,6 +163,7 @@ export function AgendaBuilderPage() {
   };
 
   const handleMove = (index: number, direction: -1 | 1) => {
+    if (!canWrite) return;
     const next = draftItems.slice();
     const target = index + direction;
     if (target < 0 || target >= next.length) return;
@@ -162,10 +172,12 @@ export function AgendaBuilderPage() {
   };
 
   const patchDraftItem = (index: number, patch: Partial<AgendaDraftItem>) => {
+    if (!canWrite) return;
     setDraftItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
   };
 
   const removeDraftItem = (index: number) => {
+    if (!canWrite) return;
     setDraftItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
@@ -175,6 +187,7 @@ export function AgendaBuilderPage() {
   // the motion's lifecycle stays correct. The agenda requery re-hydrates the
   // editor with the new item.
   const handleAddSuggestion = async (row: any) => {
+    if (!canAddBacklog) return;
     if (!selected) return;
     try {
       await addBacklogToAgenda({ backlogId: row._id, agendaId: selected.agenda._id });
@@ -185,6 +198,7 @@ export function AgendaBuilderPage() {
   };
 
   const saveSelectedAgenda = async () => {
+    if (!canWrite) return;
     if (!selected || !society) return;
     const items = draftItems
       .map((item) => ({
@@ -215,6 +229,7 @@ export function AgendaBuilderPage() {
   };
 
   const finalized = draftStatus === "Finalized";
+  const editingLocked = !canWrite || finalized;
 
   return (
     <div className="page agenda-builder">
@@ -239,15 +254,14 @@ export function AgendaBuilderPage() {
 }))]} className="input" style={{
   flex: "1 1 220px",
   minWidth: 0
-}} />
+}} disabled={!canWrite} />
           <input
             className="input"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             placeholder="Agenda title (e.g. Board — May 2026)"
-            style={{ flex: "1 1 220px", minWidth: 0 }}
-          />
-          <button className="btn btn--accent" onClick={handleCreate}>
+            style={{ flex: "1 1 220px", minWidth: 0 }} disabled={!canWrite} />
+          <button className="btn btn--accent" onClick={handleCreate} disabled={!canWrite}>
             <Plus size={14} /> Create
           </button>
         </div>
@@ -259,12 +273,12 @@ export function AgendaBuilderPage() {
 }, ...(meetingTemplates ?? []).map((t: any) => ({
   value: t._id,
   label: t.name
-}))]} className="input" style={{ flex: "1 1 220px", minWidth: 0 }} />
+}))]} className="input" style={{ flex: "1 1 220px", minWidth: 0 }} disabled={!canApplyTemplate} />
           <label className="row muted" style={{ gap: 4, flex: "0 0 auto", alignItems: "center" }}>
-            <input type="checkbox" checked={replaceExisting} onChange={(e) => setReplaceExisting(e.target.checked)} />
+            <input type="checkbox" checked={replaceExisting} onChange={(e) => setReplaceExisting(e.target.checked)} disabled={!canApplyTemplate} />
             Replace existing items
           </label>
-          <button className="btn" onClick={handleApplyTemplate} disabled={!newMeetingId || !applyTemplateId}>
+          <button className="btn" onClick={handleApplyTemplate} disabled={!canApplyTemplate || (!newMeetingId || !applyTemplateId)}>
             <ClipboardList size={14} /> Apply to meeting
           </button>
         </div>
@@ -311,14 +325,14 @@ export function AgendaBuilderPage() {
               {draftItems.length} items · {draftStatus}
             </span>
             <div className="row" style={{ gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-              <Select value={draftStatus} onChange={value => setDraftStatus(value)} options={[...STATUS_OPTIONS.map(status => ({
+              <Select value={draftStatus} disabled={!canWrite} onChange={value => setDraftStatus(value)} options={[...STATUS_OPTIONS.map(status => ({
   value: status,
   label: status
 }))]} className="input" />
               <Link className="btn" to={`/app/meetings/${selected.agenda.meetingId}?tab=minutes`}>
                 <ExternalLink size={12} /> Open meeting
               </Link>
-              <button className="btn btn--accent" onClick={saveSelectedAgenda}>
+              <button className="btn btn--accent" onClick={saveSelectedAgenda} disabled={!canWrite}>
                 <Save size={12} /> Save agenda
               </button>
             </div>
@@ -331,7 +345,7 @@ export function AgendaBuilderPage() {
             )}
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               {ITEM_TYPES.map((t) => (
-                <button key={t} className="btn" onClick={() => handleAddItem(t)} disabled={finalized}>
+                <button key={t} className="btn" onClick={() => handleAddItem(t)} disabled={editingLocked}>
                   <Plus size={12} /> {t.replace("_", " ")}
                 </button>
               ))}
@@ -347,7 +361,7 @@ export function AgendaBuilderPage() {
                     motionText: t?.body ?? "",
                   });
                 }}
-                disabled={finalized}
+                disabled={editingLocked}
                 options={[
                   { value: "", label: "Add from motion library..." },
                   ...(templates ?? []).map((template: any) => ({ value: template._id, label: template.title })),
@@ -387,7 +401,7 @@ export function AgendaBuilderPage() {
                           </div>
                         )}
                       </div>
-                      <button className="btn" onClick={() => handleAddSuggestion(row)} disabled={finalized}>
+                      <button className="btn" onClick={() => handleAddSuggestion(row)} disabled={!canAddBacklog || editingLocked}>
                         <Plus size={12} /> Add
                       </button>
                     </div>
@@ -415,11 +429,11 @@ export function AgendaBuilderPage() {
 })} options={[...ITEM_TYPES.map(type => ({
   value: type,
   label: type.replace("_", " ")
-}))]} className="input" disabled={finalized} />
-                        <button className="btn" onClick={() => patchDraftItem(i, { depth: 0 })} disabled={finalized || item.depth === 0} title="Outdent item">
+}))]} className="input" disabled={editingLocked} />
+                        <button className="btn" onClick={() => patchDraftItem(i, { depth: 0 })} disabled={editingLocked || item.depth === 0} title="Outdent item">
                           <IndentDecrease size={12} />
                         </button>
-                        <button className="btn" onClick={() => patchDraftItem(i, { depth: 1 })} disabled={finalized || item.depth === 1 || i === 0} title="Indent item">
+                        <button className="btn" onClick={() => patchDraftItem(i, { depth: 1 })} disabled={editingLocked || item.depth === 1 || i === 0} title="Indent item">
                           <IndentIncrease size={12} />
                         </button>
                         {item.timeAllottedMinutes && (
@@ -431,7 +445,7 @@ export function AgendaBuilderPage() {
                       <input
                         className="input"
                         value={item.title}
-                        disabled={finalized}
+                        disabled={editingLocked}
                         onChange={(e) => patchDraftItem(i, { title: e.target.value })}
                         style={{ width: "100%", marginTop: 4 }}
                       />
@@ -439,7 +453,7 @@ export function AgendaBuilderPage() {
                         <input
                           className="input"
                           value={item.presenter}
-                          disabled={finalized}
+                          disabled={editingLocked}
                           onChange={(e) => patchDraftItem(i, { presenter: e.target.value })}
                           placeholder="Presenter"
                           style={{ flex: "1 1 180px" }}
@@ -447,7 +461,7 @@ export function AgendaBuilderPage() {
                         <input
                           className="input"
                           value={item.timeAllottedMinutes}
-                          disabled={finalized}
+                          disabled={editingLocked}
                           onChange={(e) => patchDraftItem(i, { timeAllottedMinutes: e.target.value.replace(/[^\d]/g, "") })}
                           placeholder="Minutes"
                           inputMode="numeric"
@@ -457,7 +471,7 @@ export function AgendaBuilderPage() {
                       <div style={{ marginTop: 6 }}>
                         <MarkdownEditor
                           value={item.details}
-                          readOnly={finalized}
+                          readOnly={editingLocked}
                           onChange={(markdown) => patchDraftItem(i, { details: markdown })}
                           placeholder="Agenda details / starter minutes notes"
                           rows={2}
@@ -467,7 +481,7 @@ export function AgendaBuilderPage() {
                         <div style={{ marginTop: 6 }}>
                           <MarkdownEditor
                             value={item.motionText ?? ""}
-                            readOnly={finalized}
+                            readOnly={editingLocked}
                             onChange={(markdown) => patchDraftItem(i, { motionText: markdown })}
                             placeholder="Motion text"
                             rows={3}
@@ -476,17 +490,17 @@ export function AgendaBuilderPage() {
                       )}
                     </div>
                     <div className="col" style={{ gap: 4 }}>
-                      <button className="btn" onClick={() => handleMove(i, -1)} disabled={finalized || i === 0}>
+                      <button className="btn" onClick={() => handleMove(i, -1)} disabled={editingLocked || i === 0}>
                         <ArrowUp size={12} />
                       </button>
                       <button
                         className="btn"
                         onClick={() => handleMove(i, 1)}
-                        disabled={finalized || i === draftItems.length - 1}
+                        disabled={editingLocked || i === draftItems.length - 1}
                       >
                         <ArrowDown size={12} />
                       </button>
-                      <button className="btn" onClick={() => removeDraftItem(i)} disabled={finalized}>
+                      <button className="btn" onClick={() => removeDraftItem(i)} disabled={editingLocked}>
                         <Trash2 size={12} />
                       </button>
                     </div>

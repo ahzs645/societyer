@@ -17,6 +17,8 @@ import { committeeAppointmentIsActive, getPortable as getAccessibleDocument } fr
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireSocietyMembership } from "./access";
+import { readableProjectionPermissions } from "./projectionPermissions";
+import { requirePermissionPortable, type Permission } from "./permissions";
 
 // ----- portable access helpers (copied from convex/lib/access/*) ------------
 
@@ -255,6 +257,9 @@ export async function packageForMeetingPortable(
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("meetings not found.");
   const societyId = candidate.societyId;
   await requireSocietyMembership(ctx, societyId);
+  await requirePermissionPortable(ctx, societyId, "meetings:read");
+  const readable = await readableProjectionPermissions(ctx, societyId, ["meetings:read", "minutes:read", "agendas:read", "tasks:read", "documents:read"]);
+  const restrictedResources = ["minutes", "agendas", "tasks", "documents"].filter(resource => !readable.has(`${resource}:read` as Permission));
   const meeting = await getOwned(ctx, "meetings", meetingId, societyId);
 
   const [materials, minutes, tasks] = await Promise.all([
@@ -262,20 +267,20 @@ export async function packageForMeetingPortable(
       .query("meetingMaterials")
       .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
       .collect(),
-    ctx.db
+    readable.has("minutes:read") ? ctx.db
       .query("minutes")
       .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-      .first(),
-    ctx.db
+      .first() : Promise.resolve(null),
+    readable.has("tasks:read") ? ctx.db
       .query("tasks")
       .withIndex("by_meeting", (q) => q.eq("meetingId", meetingId))
-      .collect(),
+      .collect() : Promise.resolve([]),
   ]);
   const accessContext = await documentAccessContextForActor(ctx, meeting.societyId, actingUserId);
   const visibleMaterials = materials.filter((material) => canAccessMeetingMaterial(material, accessContext!));
 
   const materialRows = await Promise.all(
-    visibleMaterials.map(async (material) => {
+    (readable.has("documents:read") ? visibleMaterials : []).map(async (material) => {
       const document = await getAccessibleDocument(ctx, { id: String(material.documentId) });
       const downloadUrl = document?.storageId
         ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(document.storageId) })).url
@@ -287,10 +292,11 @@ export async function packageForMeetingPortable(
     }),
   );
 
-  const agenda = (await readMeetingAgendaEntries(ctx, meetingId)).map((entry) => entry.title);
+  const agenda = readable.has("agendas:read") ? (await readMeetingAgendaEntries(ctx, meetingId)).map((entry) => entry.title) : [];
   const visibleMaterialSummary = summarizeMeetingMaterials(visibleMaterials);
   return {
     meeting,
+    restrictedResources,
     minutes,
     agenda,
       materials: materialRows

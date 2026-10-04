@@ -4,7 +4,7 @@ import type schema from "./schema";
 import { toPortableMutationCtx, toPortableQueryCtx } from "../../../convex/lib/portable";
 import { hostedPrincipal } from "../../../convex/lib/authIdentity";
 import { assertNativeFileStorageEnabled } from "../../../convex/providers/env";
-import { requirePermissionPortable } from "../../../shared/functions/permissions";
+import { hasPermission, requirePermissionPortable } from "../../../shared/functions/permissions";
 import { claimStorageId } from "../../../shared/functions/access";
 import { listPortable as listMeetings } from "../../../shared/functions/meetings";
 import { listForMeetingPortable } from "../../../shared/functions/meetingMaterials";
@@ -26,7 +26,8 @@ const commandValidator = v.union(
 );
 
 async function visibleSnapshots(portable: PortableQueryCtx, societyId: string): Promise<Snapshot[]> {
-  await requirePermissionPortable(portable, societyId, "meetings:read");
+  const membership = await requirePermissionPortable(portable, societyId, "meetings:read");
+  const canEdit = hasPermission(String(membership.role), "meetings:write") && hasPermission(String(membership.role), "minutes:write");
   await requirePermissionPortable(portable, societyId, "minutes:read");
   await requirePermissionPortable(portable, societyId, "agendas:read");
   const meetings = await listMeetings(portable, { societyId });
@@ -49,14 +50,14 @@ async function visibleSnapshots(portable: PortableQueryCtx, societyId: string): 
       [{ uuid: document.uuid, name: file.name, sha256: file.sha256, size: file.size, available: Boolean(aggregate.fileStorageId) }] : [];
     result.push({ meetingUuid: aggregate.uuid, revision: aggregate.revision, title: meeting.title, scheduledAt: meeting.scheduledAt,
       ids: { minutes: mappings.find(row => row.table === "minutes")!.uuid, agenda: mappings.find(row => row.table === "agendas")!.uuid,
-        items: items.map(item => mappings.find(row => row.nativeId === item._id)!.uuid) }, editable: !minutes?.approvedAt,
+        items: items.map(item => mappings.find(row => row.nativeId === item._id)!.uuid) }, editable: canEdit && !minutes?.approvedAt,
       notes: meeting.notes ?? "", discussion: minutes?.discussion ?? "", agenda: items.map(row => row.title), files });
   }
   return result;
 }
 
 /** Internal, bounded pilot materializer. Must run after EVERY ACL/identity change. */
-async function rebuild(ctx: any, societyId: string) {
+export async function rebuildMeetingDownloads(ctx: any, societyId: string) {
   const portable = await toPortableQueryCtx(ctx);
   const users = await ctx.db.query("users").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).take(51);
   if (users.length > 50) throw new Error("PILOT_MEMBERSHIP_LIMIT");
@@ -70,12 +71,13 @@ async function rebuild(ctx: any, societyId: string) {
     const scoped = { ...portable, principal };
     // Only membership/permission denial clears this actor's view. Other errors
     // must abort rebuilding, rather than silently publishing an incomplete view.
-    try { await requirePermissionPortable(scoped, societyId, "meetings:read"); }
+    let snapshots: Snapshot[];
+    try { snapshots = await visibleSnapshots(scoped, societyId); }
     catch (error) {
-      if (/membership not found|membership is not active|User is disabled|External identity is disabled|Permission meetings:read required/.test(String(error))) continue;
+      if (/membership not found|membership is not active|User is disabled|External identity is disabled|Permission (meetings|minutes|agendas|documents):read required/.test(String(error))) continue;
       throw error;
     }
-    for (const snapshot of await visibleSnapshots(scoped, societyId)) {
+    for (const snapshot of snapshots) {
       const uuid = JSON.stringify([societyId, actorKey, snapshot.meetingUuid]);
       desired.set(uuid, { uuid, society_id: societyId, actor_key: actorKey, meeting_uuid: snapshot.meetingUuid, revision: snapshot.revision, payload: JSON.stringify(snapshot) });
     }
@@ -88,7 +90,7 @@ async function rebuild(ctx: any, societyId: string) {
   for (const row of desired.values()) await ctx.db.insert("offlineMeetingDownloads", row);
 }
 
-export const rebuildDownloads = internalMutation({ args: { societyId: v.id("societies") }, handler: (ctx, args) => rebuild(ctx, args.societyId) });
+export const rebuildDownloads = internalMutation({ args: { societyId: v.id("societies") }, handler: (ctx, args) => rebuildMeetingDownloads(ctx, args.societyId) });
 export const applyCommand = mutation({
   args: { societyId: v.id("societies"), command: commandValidator },
   handler: async (ctx, { societyId, command }) => {
@@ -116,7 +118,7 @@ export const applyCommand = mutation({
       ...(command.kind === "create-meeting" && command.file ? { file: JSON.stringify(command.file) } : {}), updatedByUserId: user._id as any });
     const result: MeetingResult = { accepted: true, revision, mappings, replay: false };
     await ctx.db.insert("offlineMeetingReceipts", { societyId, userId: user._id as any, operationId: command.operationId, payload, result: JSON.stringify(result) });
-    await rebuild(ctx, societyId);
+    await rebuildMeetingDownloads(ctx, societyId);
     return result;
   },
 });
@@ -164,7 +166,7 @@ export const commitFile = mutation({ args: { societyId: v.id("societies"), meeti
   await portable.db.patch(document.nativeId, { storageId: args.storageId, fileSizeBytes: file.size });
   await portable.db.patch(material.nativeId, { syncStatus: "synced" });
   await ctx.db.patch(aggregate._id, { fileStorageId: args.storageId });
-  await rebuild(ctx, args.societyId);
+  await rebuildMeetingDownloads(ctx, args.societyId);
   return { accepted: true, storageId: args.storageId };
 } });
 

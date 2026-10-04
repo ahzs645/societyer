@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Calendar as CalIcon, ChevronLeft, ChevronRight, Clock, X } from "lucide-react";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { useDialogFocus } from "../lib/useDialogFocus";
 
 type Props = {
   /** ISO-ish "YYYY-MM-DDTHH:mm" (matches native datetime-local). Empty string for no value. */
@@ -80,7 +81,7 @@ export function DateTimeInput({
   const [mm, setMM] = useState(parsed.mm);
 
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const popRef = useRef<HTMLDivElement>(null);
+  const popRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false));
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   // Phones render the calendar as a viewport-pinned bottom sheet (same pattern
   // as Select/Menu/DatePicker) instead of an anchor-positioned popover.
@@ -133,7 +134,7 @@ export function DateTimeInput({
     if (Math.abs(top - pos.top) > 0.5 || Math.abs(left - pos.left) > 0.5) {
       setPos({ top, left });
     }
-  }, [open, pos, isBottomSheet]);
+  }, [open, pos, isBottomSheet, popRef]);
 
   useEffect(() => {
     if (!open) return;
@@ -148,26 +149,34 @@ export function DateTimeInput({
       // and scrolling inside the popover itself must not dismiss it.
       if (isBottomSheet) return;
       if (e.target instanceof Node && popRef.current?.contains(e.target)) return;
-      setOpen(false);
+      // Browser scrolling to the trigger can finish after the click that
+      // opens this portal. Keep visible calendars anchored instead of
+      // dismissing them before their first date or time choice is usable.
+      const anchor = triggerRef.current?.getBoundingClientRect();
+      if (!anchor || anchor.bottom <= 0 || anchor.top >= window.innerHeight) {
+        setOpen(false);
+        return;
+      }
+      const panel = popRef.current?.getBoundingClientRect();
+      if (!panel) return;
+      const below = anchor.bottom + 4;
+      const top = below + panel.height <= window.innerHeight - 8 ? below : Math.max(8, anchor.top - panel.height - 4);
+      const left = Math.min(Math.max(8, anchor.left), Math.max(8, window.innerWidth - panel.width - 8));
+      setPos({ top, left });
     };
     const onResize = () => {
       if (isBottomSheet) return;
       setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onResize);
-    document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
-      document.removeEventListener("keydown", onKey);
     };
-  }, [open, isBottomSheet]);
+  }, [open, isBottomSheet, popRef]);
 
   const cells = useMemo(() => {
     const first = new Date(view.getFullYear(), view.getMonth(), 1);
@@ -267,17 +276,19 @@ export function DateTimeInput({
             )}
             <div
               ref={popRef}
+              role="dialog"
+              aria-label="Date and time picker"
               className={`calendar calendar--with-time${isBottomSheet ? " calendar--sheet" : ""}`}
               style={isBottomSheet || !pos ? undefined : { top: pos.top, left: pos.left }}
             >
               <div className="calendar__head">
-                <button type="button" className="calendar__nav" onClick={() => setView((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}>
+                <button type="button" className="calendar__nav" aria-label="Previous month" onClick={() => setView((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}>
                   <ChevronLeft size={14} />
                 </button>
                 <div className="calendar__title">
                   {MONTHS[view.getMonth()]} {view.getFullYear()}
                 </div>
-                <button type="button" className="calendar__nav" onClick={() => setView((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}>
+                <button type="button" className="calendar__nav" aria-label="Next month" onClick={() => setView((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}>
                   <ChevronRight size={14} />
                 </button>
               </div>
@@ -303,6 +314,7 @@ export function DateTimeInput({
                 <Clock size={12} />
                 <select
                   className="calendar__time-select"
+                  aria-label="Hour"
                   value={currentHourDisplay}
                   onChange={(e) => handleHourChange(Number(e.target.value))}
                 >
@@ -311,6 +323,7 @@ export function DateTimeInput({
                 <span>:</span>
                 <select
                   className="calendar__time-select"
+                  aria-label="Minute"
                   value={mm}
                   onChange={(e) => setTime(hh, Number(e.target.value))}
                 >
@@ -319,6 +332,7 @@ export function DateTimeInput({
                 {clock === 12 && (
                   <select
                     className="calendar__time-select"
+                    aria-label="AM or PM"
                     value={isPM ? "PM" : "AM"}
                     onChange={(e) => {
                       const base = hh % 12;

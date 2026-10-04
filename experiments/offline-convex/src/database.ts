@@ -9,7 +9,7 @@ export const schema = new Schema({
   portableMeetingRows: new Table({ table_name: column.text, body: column.text }, { localOnly: true }),
   meetingLocalState: new Table({ revision: column.integer, mappings: column.text, origin: column.text }, { localOnly: true }),
   meetingCommandHistory: new Table({ meeting_uuid: column.text, body: column.text, state: column.text, result: column.text }, { localOnly: true }),
-  meetingFiles: new Table({ meeting_uuid: column.text, descriptor: column.text, content: column.text, state: column.text }, { localOnly: true }),
+  meetingFiles: new Table({ meeting_uuid: column.text, descriptor: column.text, content: column.text, state: column.text, origin: column.text }, { localOnly: true }),
   fixtureMeetingSnapshots: new Table({ payload: column.text }, { localOnly: true }),
 });
 export async function openDatabase(scope: Scope) {

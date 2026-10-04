@@ -2,11 +2,47 @@ import assert from "node:assert/strict";
 import { convexTest } from "convex-test";
 import schema from "../convex/schema";
 import { api } from "../convex/_generated/api";
+import { PortableRuntime } from "../shared/portable/define";
+import { MemoryDb } from "../shared/portable/memoryDb";
+import { makeCapabilities } from "../shared/portable/capabilities";
+import { PORTABLE_FUNCTIONS } from "../shared/functions/registry";
+
+// The portable registry must enforce the same explicit scope and permissions,
+// and surface missing storage rather than returning a successful null upload.
+const portableDb = new MemoryDb({ seed: {
+  societies: [{ _id: "workspace", name: "Portable upload" }, { _id: "foreign-workspace", name: "Foreign" }],
+  users: ["Owner", "Admin", "Director", "Member", "Viewer"].map(role => ({ _id: role, societyId: "workspace", role, status: "Active", authIssuer: "https://portable-upload.test", authSubject: role })),
+} });
+let portableCalls = 0;
+function portableActor(subject: string, available = true) {
+  return new PortableRuntime({ db: portableDb,
+    principalProvider: () => ({ kind: "user", runtime: "test", assurance: "verified-jwt", issuer: "https://portable-upload.test", subject }),
+    capabilities: makeCapabilities(available ? { storage: {
+      createUploadUrl: async () => { portableCalls++; return { uploadUrl: "https://uploads.test/scoped", storageKey: "" }; },
+      getDownloadUrl: async () => ({ url: null }), delete: async () => {},
+    } } : {}),
+  }).registerAll(PORTABLE_FUNCTIONS);
+}
+const portableUpload = (role: string, args: any = { societyId: "workspace" }) => portableActor(role).runMutation("files:generateUploadUrl", args);
+assert.equal(await portableUpload("Director", { societyId: "workspace", purpose: "meeting" }), "https://uploads.test/scoped");
+assert.equal(await portableUpload("Admin", { societyId: "workspace", purpose: "asset" }), "https://uploads.test/scoped");
+const allowedCalls = portableCalls;
+for (const [role, args] of [["Viewer", { societyId: "workspace" }], ["Member", { societyId: "workspace" }], ["Owner", {}], ["Owner", { societyId: "foreign-workspace" }], ["Director", { societyId: "workspace", purpose: "inventory" }], ["Owner", { societyId: "workspace", purpose: "toString" }]] as const) {
+  await assert.rejects(() => portableUpload(role, args), /permission|workspace|membership|purpose/i);
+}
+assert.equal(portableCalls, allowedCalls, "denied uploads never reach the storage capability");
+await assert.rejects(() => portableActor("Director").runMutation("files:generateLogoUploadUrl", { societyId: "workspace" }), /society:write/);
+await assert.rejects(() => portableActor("Owner", false).runMutation("files:generateUploadUrl", { societyId: "workspace" }), /CAPABILITY_UNAVAILABLE: storage/);
+console.log("Portable upload parity passed: explicit scope, purpose permissions, denial before capability and structured unavailable storage.");
 
 const modules = {
   "./_generated/api.js": () => import("../convex/_generated/api.js"),
   "./_generated/server.js": () => import("../convex/_generated/server.js"),
   "./authorization.js": () => import("../convex/authorization"),
+  "./assets.js": () => import("../convex/assets"),
+  "./inventoryHub.js": () => import("../convex/inventoryHub"),
+  "./files.js": () => import("../convex/files"),
+  "./society.js": () => import("../convex/society"),
   "./documentVersions.js": () => import("../convex/documentVersions"),
 };
 const test = convexTest(schema, modules);
@@ -16,7 +52,17 @@ const seeded = await test.run(async (ctx) => {
   const actorUserId = await ctx.db.insert("users", { societyId, email: "owner@upload.test", displayName: "Upload owner", role: "Owner", status: "Active", authSubject: "owner", authIssuer: issuer, createdAtISO: new Date().toISOString() });
   const documentId = await ctx.db.insert("documents", { societyId, title: "Test", category: "Other", tags: [], createdAtISO: new Date().toISOString(), flaggedForDeletion: false });
   await ctx.db.insert("users", { societyId, email: "other@upload.test", displayName: "Other owner", role: "Owner", status: "Active", authSubject: "other", authIssuer: issuer, createdAtISO: new Date().toISOString() });
-  return { societyId, actorUserId, documentId };
+  const foreignSocietyId = await ctx.db.insert("societies", { name: "Foreign upload test", isCharity: false, isMemberFunded: false, updatedAt: 0 });
+  const foreignDocumentId = await ctx.db.insert("documents", { societyId: foreignSocietyId, title: "Foreign", category: "Other", tags: [], createdAtISO: new Date().toISOString(), flaggedForDeletion: false });
+  for (const role of ["Admin", "Director", "Member", "Viewer"]) {
+    await ctx.db.insert("users", { societyId, email: `${role}@upload.test`, displayName: role, role, status: "Active", authSubject: role, authIssuer: issuer, createdAtISO: new Date().toISOString() });
+  }
+  await ctx.db.insert("users", { societyId: foreignSocietyId, email: "foreign@upload.test", displayName: "Foreign", role: "Owner", status: "Active", authSubject: "foreign", authIssuer: issuer, createdAtISO: new Date().toISOString() });
+  await ctx.db.insert("users", { societyId, email: "disabled@upload.test", displayName: "Disabled", role: "Owner", status: "Disabled", authSubject: "disabled", authIssuer: issuer, createdAtISO: new Date().toISOString() });
+  const meetingId = await ctx.db.insert("meetings", { societyId, type: "Board", title: "ACL fixture", scheduledAt: "2026-10-01", electronic: false, status: "Scheduled", attendeeIds: [] });
+  const restrictedDocumentId = await ctx.db.insert("documents", { societyId, title: "Restricted", category: "Other", tags: [], createdAtISO: new Date().toISOString(), flaggedForDeletion: false });
+  await ctx.db.insert("meetingMaterials", { societyId, meetingId, documentId: restrictedDocumentId, order: 0, requiredForMeeting: false, accessLevel: "restricted", accessGrants: [], availabilityStatus: "available", createdAtISO: new Date().toISOString() });
+  return { societyId, actorUserId, documentId, foreignSocietyId, foreignDocumentId, restrictedDocumentId };
 });
 const owner = test.withIdentity({ issuer, subject: "owner" });
 const other = test.withIdentity({ issuer, subject: "other" });
@@ -44,6 +90,63 @@ try {
     process.env.VITE_AUTH_MODE = broker;
     process.env.BETTER_AUTH_BASE_URL = broker === "clerk" ? "https://signer.upload.test" : issuer;
     process.env.CLERK_JWT_ISSUER_DOMAIN = issuer;
+  // Invoke the production authorized handlers with verified broker identities.
+  // Deliberately no client userId or society context in the principal.
+  const actor = (subject: string) => test.withIdentity({ issuer, subject });
+  const uploadArgs = { societyId: seeded.societyId };
+  await assert.rejects(() => owner.mutation(api.files.generateUploadUrl, {} as any), /societyId|workspace|validator/i);
+  for (const subject of ["Member", "Viewer", "foreign", "disabled"]) {
+    await assert.rejects(() => actor(subject).mutation(api.files.generateUploadUrl, uploadArgs), /permission|membership|disabled/i);
+    await assert.rejects(() => actor(subject).mutation(api.files.generateLogoUploadUrl, uploadArgs), /permission|membership|disabled/i);
+  }
+  await assert.rejects(() => test.mutation(api.files.generateUploadUrl, uploadArgs), /authentication/i);
+  await assert.rejects(() => test.withIdentity({ issuer: "https://untrusted.test", subject: "owner" }).mutation(api.files.generateUploadUrl, uploadArgs), /authentication|membership/i);
+  for (const purpose of ["document", "meeting", "asset", "inventory"] as const) {
+    assert.equal(typeof await owner.mutation(api.files.generateUploadUrl, { ...uploadArgs, purpose }), "string");
+    await assert.rejects(() => actor("foreign").mutation(api.files.generateUploadUrl, { ...uploadArgs, purpose }), /membership/i);
+  }
+  assert.equal(typeof await actor("Director").mutation(api.files.generateUploadUrl, { ...uploadArgs, purpose: "meeting" }), "string");
+  await assert.rejects(() => actor("Director").mutation(api.files.generateUploadUrl, { ...uploadArgs, purpose: "asset" }), /financials:write/i);
+  await assert.rejects(() => actor("Director").mutation(api.files.generateLogoUploadUrl, uploadArgs), /society:write/i);
+  assert.equal(typeof await actor("Admin").mutation(api.files.generateUploadUrl, { ...uploadArgs, purpose: "inventory" }), "string");
+  await assert.rejects(() => owner.mutation(api.files.generateUploadUrl, { ...uploadArgs, purpose: "unknown" } as any), /purpose|validator/i);
+  process.env.SOCIETYER_DISABLE_NATIVE_FILE_STORAGE = "true";
+  await assert.rejects(() => owner.mutation(api.files.generateUploadUrl, uploadArgs), /Native file storage is disabled/);
+  assert.equal(typeof await owner.mutation(api.files.generateLogoUploadUrl, uploadArgs), "string", "branding remains available with native document storage disabled");
+  const storageId = await test.run(ctx => ctx.storage.store(new Blob([bytes], { type: "text/plain" })));
+  const assetArgs = { societyId: seeded.societyId, assetTag: `UPLOAD-${broker}`, name: "Guarded asset", category: "Program equipment", condition: "Good", status: "Available", capitalized: false };
+  const imageLessAsset = await owner.mutation(api.assets.create, assetArgs);
+  await assert.rejects(() => owner.mutation(api.assets.create, { ...assetArgs, assetTag: `${assetArgs.assetTag}-image`, imageStorageId: storageId }), /Native file storage is disabled/);
+  await assert.rejects(() => owner.mutation(api.assets.update, { id: imageLessAsset, patch: { imageStorageId: storageId } }), /Native file storage is disabled/);
+  await assert.rejects(() => owner.mutation(api.inventoryHub.upsertItem, { societyId: seeded.societyId, name: "Blocked image", category: "Program equipment", itemType: "asset", unitOfMeasure: "each", imageStorageId: storageId }), /Native file storage is disabled/);
+  await owner.mutation(api.assets.update, { id: imageLessAsset, patch: { imageUrl: "https://images.test/external.png" } });
+  await test.run(ctx => ctx.db.patch(imageLessAsset, { imageStorageId: storageId }));
+  await owner.mutation(api.assets.update, { id: imageLessAsset, patch: { imageStorageId: storageId, name: "Metadata remains editable" } });
+  const imageLessItem = await owner.mutation(api.inventoryHub.upsertItem, { societyId: seeded.societyId, name: "Item metadata", category: "Program equipment", itemType: "asset", unitOfMeasure: "each" });
+  await test.run(ctx => ctx.db.patch(imageLessItem, { imageStorageId: storageId }));
+  await owner.mutation(api.inventoryHub.upsertItem, { id: imageLessItem, societyId: seeded.societyId, name: "Metadata remains editable", category: "Program equipment", itemType: "asset", unitOfMeasure: "each", imageStorageId: storageId });
+
+  await assert.rejects(() => owner.mutation(api.files.attachUploadedFileToDocument, { documentId: seeded.documentId, storageId, fileName: "blocked.txt" }), /Native file storage is disabled/);
+  delete process.env.SOCIETYER_DISABLE_NATIVE_FILE_STORAGE;
+  await owner.mutation(api.assets.create, { ...assetArgs, assetTag: `${assetArgs.assetTag}-allowed-image`, imageStorageId: storageId });
+  await assert.rejects(() => actor("foreign").mutation(api.assets.create, { ...assetArgs, societyId: seeded.foreignSocietyId, assetTag: `${assetArgs.assetTag}-foreign-image`, imageStorageId: storageId }), /storageOwnership not found/i);
+  await owner.mutation(api.inventoryHub.upsertItem, { societyId: seeded.societyId, name: "Allowed image", category: "Program equipment", itemType: "asset", unitOfMeasure: "each", imageStorageId: storageId });
+  await assert.rejects(() => actor("foreign").mutation(api.inventoryHub.upsertItem, { societyId: seeded.foreignSocietyId, name: "Foreign image", category: "Program equipment", itemType: "asset", unitOfMeasure: "each", imageStorageId: storageId }), /storageOwnership not found/i);
+  const attachment = { documentId: seeded.documentId, storageId, fileName: "native.txt", fileSizeBytes: 999, mimeType: "forged/type" };
+  await assert.rejects(() => actor("foreign").mutation(api.files.attachUploadedFileToDocument, attachment), /membership/i);
+  await assert.rejects(() => actor("Viewer").mutation(api.files.attachUploadedFileToDocument, attachment), /permission/i);
+  await assert.rejects(() => actor("Director").mutation(api.files.attachUploadedFileToDocument, { ...attachment, documentId: seeded.restrictedDocumentId }), /documents not found/i);
+  await owner.mutation(api.files.attachUploadedFileToDocument, attachment);
+  await owner.mutation(api.files.attachUploadedFileToDocument, attachment);
+  const native = await test.run(ctx => ctx.db.get(seeded.documentId));
+  assert.equal(native?.fileSizeBytes, bytes.length);
+  const storageMetadata = await test.run(ctx => ctx.db.system.get(storageId));
+  assert.equal(native?.mimeType, storageMetadata?.contentType, "native metadata comes from stored bytes");
+  assert.notEqual(native?.mimeType, "forged/type");
+  assert.equal((await test.run(ctx => ctx.db.query("storageOwnership").withIndex("by_storage", q => q.eq("storageId", storageId)).collect())).length, 1, "reattaching the same blob keeps one workspace claim");
+  await assert.rejects(() => actor("foreign").mutation(api.files.attachUploadedFileToDocument, { ...attachment, documentId: seeded.foreignDocumentId }), /storageOwnership not found/i);
+  await assert.rejects(() => actor("Viewer").query(api.files.getUrl, { storageId }), /storageOwnership not found/i);
+  console.log(`Native scoped uploads under ${broker} passed: workspace and purpose permissions, branding exception, storage switch, authoritative bytes, ACL, idempotent ownership and foreign denial.`);
   for (const provider of ["rustfs", "r2"] as const) {
     process.env.SOCIETYER_STORAGE_PROVIDER = provider;
     process.env.R2_ACCOUNT_ID = "test-account";

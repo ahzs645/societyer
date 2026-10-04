@@ -3,6 +3,7 @@ import { useConvex, useQuery } from "convex/react";
 import { CheckCircle2, Database, Download, FileJson, ShieldAlert } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { Badge } from "../components/ui";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { useToast } from "../components/Toast";
@@ -32,6 +33,8 @@ type ImportPreview = {
 
 export function ExportsPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canDownload = loaded && can("exports:download");
   const convex = useConvex();
   const toast = useToast();
   const [format, setFormat] = useState<Format>("csv");
@@ -47,11 +50,11 @@ export function ExportsPage() {
 
   const tableSummaries = useQuery(
     api.exports.listExportableTables,
-    society ? { societyId: society._id } : "skip",
+    society && canDownload ? { societyId: society._id } : "skip",
   ) as TableSummary[] | undefined;
   const validation = useQuery(
     api.exports.validateCurrentDatabase,
-    society ? { societyId: society._id } : "skip",
+    society && canDownload ? { societyId: society._id } : "skip",
   ) as any;
 
   const visibleTables = useMemo(() => {
@@ -66,6 +69,13 @@ export function ExportsPage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
+  if (!loaded) return <PageLoading />;
+  if (!canDownload) return (
+    <div className="page">
+      <PageHeader title="Data export" icon={<Database size={16} />} iconColor="blue" />
+      <p role="status">Your workspace role does not include export downloads. Ask an Owner or Admin for access.</p>
+    </div>
+  );
 
   const download = async (table: string) => {
     setBusy(table);

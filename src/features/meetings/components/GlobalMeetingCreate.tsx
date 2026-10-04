@@ -8,6 +8,7 @@
  * any other caller) can pop this from anywhere in the app.
  */
 import { useEffect, useState } from "react";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useSociety } from "../../../hooks/useSociety";
 import { MeetingCreateModal } from "./MeetingCreateModal";
 
@@ -19,18 +20,21 @@ export function openGlobalMeetingCreate() {
 
 export function GlobalMeetingCreate() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canCreate = can("meetings:write");
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const handler = () => setOpen(true);
+    const handler = () => { if (canCreate) setOpen(true); };
     window.addEventListener(OPEN_MEETING_CREATE_EVENT, handler);
     return () => window.removeEventListener(OPEN_MEETING_CREATE_EVENT, handler);
-  }, []);
+  }, [canCreate]);
 
-  if (!society) return null;
+  if (!society || !open || !canCreate) return null;
 
   return (
     <MeetingCreateModal
+      key={society._id}
       open={open}
       onClose={() => setOpen(false)}
       societyId={society._id}

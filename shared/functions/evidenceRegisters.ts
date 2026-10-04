@@ -9,6 +9,9 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { readableProjectionPermissions } from "./projectionPermissions";
+import { requirePermissionPortable, type Permission } from "./permissions";
+import { documentAccessPredicate, filterDocumentLinkedRows } from "./documents";
 import { getOwned, requireSocietyMembership } from "./access";
 
 const REGISTER_TABLES = [
@@ -27,17 +30,50 @@ const REGISTER_TABLES = [
   "archiveAccessions",
 ] as const;
 
+const REGISTER_READ_PERMISSIONS: Readonly<Record<string, Permission>> = {
+  "boardRoleAssignments": "directors:read",
+  "boardRoleChanges": "directors:read",
+  "signingAuthorities": "documents:read",
+  "meetingAttendanceRecords": "meetings:read",
+  "motionEvidence": "motions:read",
+  "budgetSnapshots": "financials:read",
+  "budgetSnapshotLines": "financials:read",
+  "financialStatementImports": "financials:read",
+  "financialStatementImportLines": "financials:read",
+  "treasurerReports": "financials:read",
+  "transactionCandidates": "financials:read",
+  "sourceEvidence": "documents:read",
+  "archiveAccessions": "documents:read"
+};
+const FINANCIAL_REGISTERS = new Set(["budgetSnapshots", "budgetSnapshotLines", "financialStatementImports", "financialStatementImportLines", "treasurerReports", "transactionCandidates"]);
+
 export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
+  const readable = await readableProjectionPermissions(ctx, societyId, Object.values(REGISTER_READ_PERMISSIONS));
+  const restrictedResources = [...new Set(Object.values(REGISTER_READ_PERMISSIONS).filter(permission => !readable.has(permission)).map(permission => permission.split(":")[0]))].sort();
   const result: Record<string, any[]> = {};
   for (const table of REGISTER_TABLES) {
+    if (!readable.has(REGISTER_READ_PERMISSIONS[table])) { result[table] = []; continue; }
     result[table] = await ctx.db
       .query(table)
       .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
       .collect();
   }
 
+  // A resource grant does not override the ACL on the document it evidences.
+  // Unlinked register metadata retains its existing read policy; source evidence
+  // uses the same conservative missing-source policy as the minute book.
+  for (const table of REGISTER_TABLES) {
+    result[table] = await filterRegisterSourceRows(ctx, societyId, result[table], table);
+  }
+  // Detail lines inherit the source ACL of their imported parent register.
+  const budgetIds = new Set(result.budgetSnapshots.map(row => String(row._id)));
+  const statementIds = new Set(result.financialStatementImports.map(row => String(row._id)));
+  result.budgetSnapshotLines = result.budgetSnapshotLines.filter(row => budgetIds.has(String(row.snapshotId)));
+  result.financialStatementImportLines = result.financialStatementImportLines.filter(row => statementIds.has(String(row.statementImportId)));
+
   return {
+    restrictedResources,
     boardRoleAssignments: sortDesc(result.boardRoleAssignments, "startDate"),
     boardRoleChanges: sortDesc(result.boardRoleChanges, "effectiveDate"),
     signingAuthorities: sortDesc(result.signingAuthorities, "effectiveDate"),
@@ -62,7 +98,9 @@ export async function updateReviewPortable(
   const candidate = await ctx.db.get(id, table);
   if (!candidate || typeof candidate.societyId !== "string") throw new Error(`${table} not found.`);
   await requireSocietyMembership(ctx, candidate.societyId);
+  await requirePermissionPortable(ctx, candidate.societyId, FINANCIAL_REGISTERS.has(table) ? "financials:write" : "documents:write");
   await getOwned(ctx, table, id, candidate.societyId);
+  if (!(await filterRegisterSourceRows(ctx, candidate.societyId, [candidate], table)).length) throw new Error(`${table} not found.`);
   const patch: Record<string, any> = {};
   if (status != null) patch.status = cleanText(status) || "NeedsReview";
   if (notes != null) patch.notes = cleanText(notes);
@@ -85,6 +123,7 @@ export async function promoteBoardRoleToDirectorPortable(
   const candidate = await ctx.db.get(args.assignmentId, "boardRoleAssignments");
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("boardRoleAssignments not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
+  await requirePermissionPortable(ctx, candidate.societyId, "directors:write");
   const assignment = await getOwned(ctx, "boardRoleAssignments", args.assignmentId, candidate.societyId);
   const name = splitName(assignment.personName);
   const directorId = await ctx.db.insert("directors", {
@@ -118,6 +157,7 @@ export async function finishFinancePaperlessReviewPortable(
   { societyId }: { societyId: string },
 ) {
   await requireSocietyMembership(ctx, societyId);
+  await requirePermissionPortable(ctx, societyId, "financials:write");
   const completedAt = todayDate();
   const counts = {
     budgetVerified: 0,
@@ -224,6 +264,8 @@ export async function finishSafePaperlessReviewPortable(
   { societyId }: { societyId: string },
 ) {
   await requireSocietyMembership(ctx, societyId);
+  const readable = await readableProjectionPermissions(ctx, societyId, ["financials:write"]);
+  const canWriteInsurance = readable.has("financials:write");
   const completedAt = todayDate();
   const counts: Record<string, number> = {
     boardRoleAssignmentsRejected: 0,
@@ -354,7 +396,8 @@ export async function finishSafePaperlessReviewPortable(
     .query("sourceEvidence")
     .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
     .collect();
-  for (const row of evidenceRows) {
+  const visibleEvidence = await filterRegisterSourceRows(ctx, societyId, evidenceRows, "sourceEvidence");
+  for (const row of visibleEvidence) {
     if (row.status !== "NeedsReview" || sourceEvidenceKeepReview.has(row._id)) continue;
     await ctx.db.patch(row._id, {
       status: "Verified",
@@ -370,7 +413,8 @@ export async function finishSafePaperlessReviewPortable(
     .query("archiveAccessions")
     .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
     .collect();
-  for (const row of archiveRows) {
+  const visibleArchives = await filterRegisterSourceRows(ctx, societyId, archiveRows, "archiveAccessions");
+  for (const row of visibleArchives) {
     if (row.status !== "NeedsReview") continue;
     await ctx.db.patch(row._id, {
       status: "InCustody",
@@ -382,40 +426,42 @@ export async function finishSafePaperlessReviewPortable(
     counts.archiveAccessionsInCustody += 1;
   }
 
-  for (const policy of SAFE_REVIEW.insuranceVerifiedLapsed) {
-    if (await patchOwned(ctx, "insurancePolicies", policy.id, societyId, (row) => ({
-      ...policy.patch,
-      status: "Lapsed",
-      confidence: "High",
-      notes: appendReviewNote(
-        row.notes,
-        `Paperless insurance review completed ${completedAt}: corrected and verified against rendered source text, then marked lapsed because the coverage period has ended.`,
-      ),
-      updatedAtISO: new Date().toISOString(),
-    }))) counts.insuranceVerifiedLapsed += 1;
-  }
+  if (canWriteInsurance) {
+    for (const policy of SAFE_REVIEW.insuranceVerifiedLapsed) {
+      if (await patchOwned(ctx, "insurancePolicies", policy.id, societyId, (row) => ({
+        ...policy.patch,
+        status: "Lapsed",
+        confidence: "High",
+        notes: appendReviewNote(
+          row.notes,
+          `Paperless insurance review completed ${completedAt}: corrected and verified against rendered source text, then marked lapsed because the coverage period has ended.`,
+        ),
+        updatedAtISO: new Date().toISOString(),
+      }))) counts.insuranceVerifiedLapsed += 1;
+    }
 
-  for (const id of SAFE_REVIEW.insuranceHistoricalLapsed) {
-    if (await patchOwned(ctx, "insurancePolicies", id, societyId, (row) => ({
-      status: "Lapsed",
-      notes: appendReviewNote(
-        row.notes,
-        `Paperless insurance review completed ${completedAt}: marked lapsed because the imported coverage/renewal dates are historical and should not remain active coverage.`,
-      ),
-      updatedAtISO: new Date().toISOString(),
-    }))) counts.insuranceLapsed += 1;
-  }
+    for (const id of SAFE_REVIEW.insuranceHistoricalLapsed) {
+      if (await patchOwned(ctx, "insurancePolicies", id, societyId, (row) => ({
+        status: "Lapsed",
+        notes: appendReviewNote(
+          row.notes,
+          `Paperless insurance review completed ${completedAt}: marked lapsed because the imported coverage/renewal dates are historical and should not remain active coverage.`,
+        ),
+        updatedAtISO: new Date().toISOString(),
+      }))) counts.insuranceLapsed += 1;
+    }
 
-  for (const id of SAFE_REVIEW.insuranceCancel) {
-    if (await patchOwned(ctx, "insurancePolicies", id, societyId, (row) => ({
-      status: "Cancelled",
-      confidence: "High",
-      notes: appendReviewNote(
-        row.notes,
-        `Paperless insurance review completed ${completedAt}: removed from active use as a duplicate, placeholder-heavy, or non-insurance import.`,
-      ),
-      updatedAtISO: new Date().toISOString(),
-    }))) counts.insuranceCancelled += 1;
+    for (const id of SAFE_REVIEW.insuranceCancel) {
+      if (await patchOwned(ctx, "insurancePolicies", id, societyId, (row) => ({
+        status: "Cancelled",
+        confidence: "High",
+        notes: appendReviewNote(
+          row.notes,
+          `Paperless insurance review completed ${completedAt}: removed from active use as a duplicate, placeholder-heavy, or non-insurance import.`,
+        ),
+        updatedAtISO: new Date().toISOString(),
+      }))) counts.insuranceCancelled += 1;
+    }
   }
 
   for (const id of SAFE_REVIEW.oldTranspositionPendingReject) {
@@ -424,7 +470,7 @@ export async function finishSafePaperlessReviewPortable(
     }
   }
 
-  return counts;
+  return { ...counts, restrictedResources: canWriteInsurance ? [] : ["financials"], restrictedDocumentEvidence: visibleEvidence.length < evidenceRows.length || visibleArchives.length < archiveRows.length };
 }
 
 export async function createManualPortable(
@@ -488,6 +534,17 @@ export async function createManualPortable(
   }
 
   throw new Error(`Manual creation is not configured for ${kind}`);
+}
+
+/** Linked ledgers inherit document ACL; unlinked metadata retains resource policy. */
+async function filterRegisterSourceRows(ctx: PortableQueryCtx, societyId: string, rows: any[], table: string) {
+  if (!rows.length) return rows;
+  const linked = rows.filter(row => row.sourceDocumentId || row.documentId || row.sourceDocumentIds?.length || row.documentIds?.length);
+  if (!linked.length && table !== "sourceEvidence") return rows;
+  const visible = await filterDocumentLinkedRows(ctx, societyId, table === "sourceEvidence" ? rows : linked, table);
+  const allowed = new Set(visible.map(row => String(row._id)));
+  const linkedIds = new Set(linked.map(row => String(row._id)));
+  return rows.filter(row => (table !== "sourceEvidence" && !linkedIds.has(String(row._id))) || allowed.has(String(row._id)));
 }
 
 function sortDesc(rows: any[], field: string) {
@@ -559,6 +616,7 @@ async function patchOwned(ctx: PortableMutationCtx, table: string, id: string, s
   const row = await ctx.db.get(id, table);
   if (!row || String(row.societyId) !== String(societyId)) return false;
   await getOwned(ctx, table, id, societyId);
+  if (!(await filterRegisterSourceRows(ctx, societyId, [row], table)).length) return false;
   await ctx.db.patch(id as any, patchFor(row));
   return true;
 }
@@ -567,6 +625,7 @@ async function rejectImportRecord(ctx: PortableMutationCtx, id: string, societyI
   const doc = await ctx.db.get(id, "documents");
   if (!doc || String(doc.societyId) !== String(societyId)) return false;
   await getOwned(ctx, "documents", id, societyId);
+  if (!(await documentAccessPredicate(ctx, societyId))(doc, "manage")) return false;
   const payload = parseJson(doc.content);
   if (payload.status === "Rejected") return false;
   await ctx.db.patch(id as any, {

@@ -1,0 +1,26 @@
+{
+  "name": "societyer-live-qualification",
+  "private": true,
+  "type": "module",
+  "peerDependencies": {
+    "convex": "1.42.1"
+  },
+  "scripts": {
+    "start": "node setup.mjs start",
+    "deploy": "node setup.mjs deploy",
+    "auth": "node setup.mjs auth",
+    "web": "node setup.mjs web",
+    "seed": "node setup.mjs seed",
+    "prepare:interface": "node prepare-interface.mjs",
+    "test:roles": "node check-roles.mjs",
+    "test:uploads": "node check-uploads.mjs",
+    "test:public-intake": "node check-public-intake.mjs",
+    "test": "npm run test:roles && npm run test:uploads && npm run test:public-intake && npm run test:vault && npm run test:projections",
+    "test:vault": "node check-vault.mjs",
+    "report:interface": "node summarize-interface.mjs",
+    "test:projections": "node check-projections.mjs",
+    "prepare:minute-book-interface": "node prepare-minute-book-interface.mjs",
+    "cleanup:minute-book-interface": "node prepare-minute-book-interface.mjs cleanup",
+    "test:document-coverage": "node check-document-coverage.mjs"
+  }
+}

@@ -1,6 +1,8 @@
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Bell, CheckCircle2, AlertTriangle, Info, XCircle, X, Clock } from "lucide-react";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
@@ -10,20 +12,23 @@ import { useSociety } from "../hooks/useSociety";
 
 export function NotificationBell() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canRead = can("tasks:read");
+  const canWrite = can("tasks:write");
   const userId = useCurrentUserId() ?? undefined;
   const notifications = useQuery(
     api.notifications.list,
-    society ? { societyId: society._id, userId, limit: 15 } : "skip",
+    canRead && society ? { societyId: society._id, userId, limit: 15 } : "skip",
   );
   const unread = useQuery(
     api.notifications.unreadCount,
-    society ? { societyId: society._id, userId } : "skip",
+    canRead && society ? { societyId: society._id, userId } : "skip",
   );
-  const markRead = useMutation(api.notifications.markRead);
-  const markAllRead = useMutation(api.notifications.markAllRead);
-  const dismiss = useMutation(api.notifications.dismiss);
-  const dismissAll = useMutation(api.notifications.dismissAll);
-  const snooze = useMutation(api.notifications.snooze);
+  const markRead = usePermissionedMutation(api.notifications.markRead, canWrite);
+  const markAllRead = usePermissionedMutation(api.notifications.markAllRead, canWrite);
+  const dismiss = usePermissionedMutation(api.notifications.dismiss, canWrite);
+  const dismissAll = usePermissionedMutation(api.notifications.dismissAll, canWrite);
+  const snooze = usePermissionedMutation(api.notifications.snooze, canWrite);
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -66,6 +71,8 @@ export function NotificationBell() {
   }, [open]);
 
   if (!society) return null;
+
+  if (!canRead) return null;
 
   return (
     <>
@@ -135,7 +142,9 @@ export function NotificationBell() {
                 <>
                   <button
                     className="btn btn--ghost btn--sm"
+                    disabled={!canWrite}
                     onClick={async () => {
+                      if (!canWrite) return;
                       await markAllRead({ societyId: society._id, userId });
                     }}
                   >
@@ -143,8 +152,10 @@ export function NotificationBell() {
                   </button>
                   <button
                     className="btn btn--ghost btn--sm"
+                    disabled={!canWrite}
                     title="Clear all notifications from this list"
                     onClick={async () => {
+                      if (!canWrite) return;
                       await dismissAll({ societyId: society._id, userId });
                     }}
                   >
@@ -188,7 +199,7 @@ export function NotificationBell() {
                     cursor: "pointer",
                   }}
                   onClick={async () => {
-                    if (!n.readAt) await markRead({ id: n._id });
+                    if (canWrite && !n.readAt) await markRead({ id: n._id });
                     setOpen(false);
                   }}
                 >
@@ -215,6 +226,7 @@ export function NotificationBell() {
               const clearButton = (
                 <button
                   className="notif-clear"
+                  disabled={!canWrite}
                   aria-label="Clear notification"
                   title="Clear notification"
                   onClick={(event) => {
@@ -222,6 +234,7 @@ export function NotificationBell() {
                     // navigates the link or marks-read underneath.
                     event.preventDefault();
                     event.stopPropagation();
+                    if (!canWrite) return;
                     void dismiss({ id: n._id });
                   }}
                 >
@@ -231,11 +244,13 @@ export function NotificationBell() {
               const snoozeButton = (
                 <button
                   className="notif-clear notif-clear--secondary"
+                  disabled={!canWrite}
                   aria-label="Snooze for 1 day"
                   title="Snooze for 1 day"
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
+                    if (!canWrite) return;
                     const until = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
                     void snooze({ id: n._id, untilISO: until });
                   }}

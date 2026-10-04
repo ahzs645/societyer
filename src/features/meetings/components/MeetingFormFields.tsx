@@ -5,7 +5,7 @@
  * (MeetingCreateModal).
  */
 import { useEffect, useMemo, useRef } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Field } from "@/components/ui";
 import { Select } from "@/components/Select";
@@ -15,6 +15,8 @@ import { NameAutocomplete } from "@/components/NameAutocomplete";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
 import { AlertTriangle, BookMarked } from "lucide-react";
 import { formatDateTime, toDateTimeLocalValue } from "@/lib/format";
+import { usePermissions } from "@/hooks/usePermissions";
+import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useBylawRules } from "@/hooks/useBylawRules";
 import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow } from "../lib/noticeWindow";
 import { useHiddenSuggestions, looksLikeLink } from "@/lib/hiddenSuggestions";
@@ -61,26 +63,28 @@ export function useMeetingFormData(
   societyId: Id<"societies"> | undefined,
   scheduledAt?: string,
 ): MeetingFormData {
-  const { rules } = useBylawRules();
-  const seedMeetingTemplates = useMutation(api.meetingTemplates.seedDefaults);
+  const { can } = usePermissions();
+  const canCreate = !!societyId && can("meetings:write");
+  const { rules } = useBylawRules(!!societyId);
+  const seedMeetingTemplates = usePermissionedMutation(api.meetingTemplates.seedDefaults, canCreate);
   const templateSeedRequested = useRef(false);
-  const meetings = useQuery(api.meetings.list, societyId ? { societyId } : "skip") as
+  const meetings = useQuery(api.meetings.list, societyId && can("meetings:read") ? { societyId } : "skip") as
     | Doc<"meetings">[]
     | undefined;
   const meetingTemplates = useQuery(
     api.meetingTemplates.list,
-    societyId ? { societyId } : "skip",
+    societyId && can("meetings:read") ? { societyId } : "skip",
   ) as Doc<"meetingTemplates">[] | undefined;
   const committees = useQuery(
     api.committees.list,
-    societyId ? { societyId } : "skip",
+    societyId && can("committees:read") ? { societyId } : "skip",
   ) as Doc<"committees">[] | undefined;
   const formRules = useQuery(
     api.bylawRules.getForDate,
-    societyId && scheduledAt ? { societyId, dateISO: scheduledAt } : "skip",
+    societyId && scheduledAt && can("documents:read") ? { societyId, dateISO: scheduledAt } : "skip",
   );
   useEffect(() => {
-    if (!societyId || meetingTemplates === undefined || templateSeedRequested.current) return;
+    if (!canCreate || !societyId || meetingTemplates === undefined || templateSeedRequested.current) return;
     const hasBoard = meetingTemplates.some((template) => template.meetingType === "Board");
     const hasAgm = meetingTemplates.some((template) => template.meetingType === "AGM");
     if (hasBoard && hasAgm) return;
@@ -88,7 +92,7 @@ export function useMeetingFormData(
     void seedMeetingTemplates({ societyId }).catch(() => {
       templateSeedRequested.current = false;
     });
-  }, [meetingTemplates, seedMeetingTemplates, societyId]);
+  }, [canCreate, meetingTemplates, seedMeetingTemplates, societyId]);
   const { hide: hideLocationSuggestion, isHidden: isHiddenLocation } =
     useHiddenSuggestions("meeting-location");
 

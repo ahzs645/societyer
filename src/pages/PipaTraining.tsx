@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useEffect, useState } from "react";
+import { useQuery } from "convex/react";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -28,14 +30,20 @@ import type { Id } from "../../convex/_generated/dataModel";
  */
 export function PipaTrainingPage() {
   const society = useSociety();
+  const permissions = usePermissions();
+  const canWrite = permissions.loaded && permissions.can("attestations:write");
   const items = useQuery(api.pipaTraining.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.pipaTraining.create);
-  const update = useMutation(api.pipaTraining.update);
-  const remove = useMutation(api.pipaTraining.remove);
+  const create = usePermissionedMutation(api.pipaTraining.create, canWrite);
+  const update = usePermissionedMutation(api.pipaTraining.update, canWrite);
+  const remove = usePermissionedMutation(api.pipaTraining.remove, canWrite);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+
+  useEffect(() => {
+    if (!canWrite) setOpen(false);
+  }, [canWrite]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -47,6 +55,7 @@ export function PipaTrainingPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite) return;
     setForm({
       participantName: "",
       role: "Staff",
@@ -57,6 +66,7 @@ export function PipaTrainingPage() {
     setOpen(true);
   };
   const save = async () => {
+    if (!canWrite) return;
     await create({ societyId: society._id, ...form });
     setOpen(false);
   };
@@ -72,7 +82,7 @@ export function PipaTrainingPage() {
         iconColor="green"
         subtitle="PIPA + CASL training records for directors, staff, and volunteers. Annual renewal recommended."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Log training
           </button>
         }
@@ -86,12 +96,13 @@ export function PipaTrainingPage() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={tableData.hydratedView}
           records={records}
-          onUpdate={async ({ recordId, fieldName, value }) => {
+          onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
+            if (!canWrite) return;
             await update({
               id: recordId as Id<"pipaTrainings">,
               patch: { [fieldName]: value } as any,
             });
-          }}
+          } : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -128,7 +139,7 @@ export function PipaTrainingPage() {
               <button
                 className="btn btn--ghost btn--sm btn--icon"
                 aria-label={`Delete training record for ${r.participantName}`}
-                onClick={() => remove({ id: r._id })}
+                disabled={!canWrite} onClick={() => remove({ id: r._id })}
               >
                 <Trash2 size={12} />
               </button>
@@ -144,10 +155,10 @@ export function PipaTrainingPage() {
       )}
 
       <Drawer
-        open={open}
+        open={open && canWrite}
         onClose={() => setOpen(false)}
         title="Log training"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite}>Save</button></>}
       >
         {form && (
           <div>

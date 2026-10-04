@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useEffect, useState } from "react";
+import { useQuery } from "convex/react";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -27,15 +29,21 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
  */
 export function CourtOrdersPage() {
   const society = useSociety();
+  const permissions = usePermissions();
+  const canWrite = permissions.loaded && permissions.can("courtOrders:write");
   const items = useQuery(api.courtOrders.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.courtOrders.create);
-  const update = useMutation(api.courtOrders.update);
-  const remove = useMutation(api.courtOrders.remove);
+  const create = usePermissionedMutation(api.courtOrders.create, canWrite);
+  const update = usePermissionedMutation(api.courtOrders.update, canWrite);
+  const remove = usePermissionedMutation(api.courtOrders.remove, canWrite);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+
+  useEffect(() => {
+    if (!canWrite) setOpen(false);
+  }, [canWrite]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -47,6 +55,7 @@ export function CourtOrdersPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite) return;
     setForm({
       title: "",
       orderDate: new Date().toISOString().slice(0, 10),
@@ -57,6 +66,7 @@ export function CourtOrdersPage() {
     setOpen(true);
   };
   const save = async () => {
+    if (!canWrite) return;
     await create({ societyId: society._id, ...form });
     setOpen(false);
   };
@@ -72,7 +82,7 @@ export function CourtOrdersPage() {
         iconColor="red"
         subtitle="Court orders affecting the society — required to be kept with governance records under s.20."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Record order
           </button>
         }
@@ -86,12 +96,13 @@ export function CourtOrdersPage() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={tableData.hydratedView}
           records={records}
-          onUpdate={async ({ recordId, fieldName, value }) => {
+          onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
+            if (!canWrite) return;
             await update({
               id: recordId as Id<"courtOrders">,
               patch: { [fieldName]: value } as any,
             });
-          }}
+          } : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -111,7 +122,7 @@ export function CourtOrdersPage() {
               <button
                 className="btn btn--ghost btn--sm btn--icon"
                 aria-label={`Delete court order ${r.title}`}
-                onClick={() => remove({ id: r._id })}
+                disabled={!canWrite} onClick={() => remove({ id: r._id })}
               >
                 <Trash2 size={12} />
               </button>
@@ -127,10 +138,10 @@ export function CourtOrdersPage() {
       )}
 
       <Drawer
-        open={open}
+        open={open && canWrite}
         onClose={() => setOpen(false)}
         title="Record court order"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite}>Save</button></>}
       >
         {form && (
           <div>

@@ -105,8 +105,25 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
     const onScroll = (event: Event) => {
       // A long sheet must remain open while its own options are scrolled.
       if (event.target instanceof Node && menuRef.current?.contains(event.target)) return;
-      setOpen(false);
+      // A trigger click may follow a browser scroll in the same frame. Keep
+      // the opened sheet usable and re-anchor desktop menus to visible rows.
+      if (isBottomSheet) return;
+      const anchor = triggerRef.current?.getBoundingClientRect();
+      if (!anchor || anchor.bottom <= 0 || anchor.top >= window.innerHeight) {
+        setOpen(false);
+        return;
+      }
+      const panel = menuRef.current?.getBoundingClientRect();
+      if (!panel) return;
+      const margin = 8;
+      const left = Math.max(margin, Math.min(align === "right" ? anchor.right - panel.width : anchor.left, window.innerWidth - panel.width - margin));
+      const below = anchor.bottom + 4;
+      const above = anchor.top - panel.height - 4;
+      const top = below + panel.height <= window.innerHeight - margin ? below : above >= margin ? above : Math.max(margin, window.innerHeight - panel.height - margin);
+      setPos({ top, left, triggerWidth: anchor.width });
+      setPosClamped(true);
     };
+    const onResize = () => { if (!isBottomSheet) setOpen(false); };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpen(false);
@@ -128,15 +145,15 @@ export function Menu({ trigger, sections, minWidth, align = "left" }: Props) {
     };
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onResize);
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", onResize);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, flat, activeIdx]);
+  }, [open, flat, activeIdx, align, isBottomSheet]);
 
   useEffect(() => {
     if (open) setActiveIdx(0);

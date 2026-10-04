@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ClipboardCheck, Download, ExternalLink, FileText, ShieldCheck } from "lucide-react";
 import { Badge } from "../../../components/ui";
@@ -72,6 +73,9 @@ export function MeetingPackageHub({
   sendPackageBackToReview: () => void | Promise<void>;
   removeMeetingMaterial: (args: { id: any }) => void | Promise<void>;
 }) {
+  const { can } = usePermissions();
+  const canWrite = can("meetings:write");
+  const canDownload = can("exports:download");
   const topics = Array.from(new Set(agenda.length ? agenda : ["General materials"]));
   const materialsForTopic = (topic: string) =>
     packageMaterials.filter((material: any) => (material.agendaLabel || "General materials") === topic);
@@ -92,10 +96,10 @@ export function MeetingPackageHub({
             </p>
           </div>
           <div className="row" style={{ gap: 6, flexWrap: "wrap", marginLeft: "auto" }}>
-            <button className="btn-action" onClick={() => openMaterialDrawer()}>
+            <button className="btn-action" onClick={() => openMaterialDrawer()} disabled={!canWrite}>
               <FileText size={12} /> Add material
             </button>
-            <button className="btn-action" onClick={startJoinEdit}>
+            <button className="btn-action" onClick={startJoinEdit} disabled={!canWrite}>
               <ExternalLink size={12} /> {joinDetails.url ? "Edit join link" : "Add join link"}
             </button>
             <Menu
@@ -110,20 +114,22 @@ export function MeetingPackageHub({
                       label: "Meeting pack (ZIP)",
                       hint: "Printable HTML pack, agenda text, and an attachment manifest.",
                       icon: <Download size={14} />,
-                      onSelect: downloadMeetingPack,
+                      disabled: !canDownload,
+                      onSelect: () => { if (canDownload) downloadMeetingPack(); },
                     },
                     {
                       id: "outbox",
                       label: "Email outbox (ZIP)",
                       hint: "Openable .eml email draft with the materials attached, ready to send.",
                       icon: <Download size={14} />,
-                      onSelect: downloadOutboxPackage,
+                      disabled: !canDownload,
+                      onSelect: () => { if (canDownload) downloadOutboxPackage(); },
                     },
                   ],
                 },
               ]}
               trigger={
-                <button className="btn-action btn-action--primary" type="button">
+                <button className="btn-action btn-action--primary" type="button" disabled={!canDownload}>
                   <Download size={12} /> Distribute
                 </button>
               }
@@ -147,7 +153,7 @@ export function MeetingPackageHub({
               <div key={`${topicIndex}-${topic}`} className="meeting-package-topic">
                 <div className="meeting-package-topic__head">
                   <strong>{topic}</strong>
-                  <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(topic)}>Add</button>
+                  <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(topic)} disabled={!canWrite}>Add</button>
                 </div>
                 <div className="col" style={{ gap: 6 }}>
                   {materialsForTopic(topic).map((material: any) => {
@@ -172,10 +178,10 @@ export function MeetingPackageHub({
                         <Badge tone={(material.accessGrants ?? []).length ? "info" : "neutral"}>
                           {(material.accessGrants ?? []).length ? `${material.accessGrants.length} grant${material.accessGrants.length === 1 ? "" : "s"}` : accessLevelLabel(material.accessLevel)}
                         </Badge>
-                        <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(material.agendaLabel, material)}>
+                        <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(material.agendaLabel, material)} disabled={!canWrite}>
                           Edit
                         </button>
-                        <button className="btn btn--ghost btn--sm" onClick={() => removeMeetingMaterial({ id: material._id })}>
+                        <button className="btn btn--ghost btn--sm" onClick={() => removeMeetingMaterial({ id: material._id })} disabled={!canWrite}>
                           Remove
                         </button>
                       </div>
@@ -225,7 +231,7 @@ export function MeetingPackageHub({
                   {emptyTopics.map((topic, topicIndex) => (
                     <div key={`${topicIndex}-${topic}`} className="meeting-package-topic-pill">
                       <span>{topic}</span>
-                      <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(topic)}>Add</button>
+                      <button className="btn btn--ghost btn--sm" onClick={() => openMaterialDrawer(topic)} disabled={!canWrite}>Add</button>
                     </div>
                   ))}
                 </div>
@@ -277,15 +283,14 @@ export function MeetingPackageHub({
                           rows={2}
                           value={sourceReviewNote}
                           onChange={(markdown) => setSourceReviewNote(markdown)}
-                          placeholder="Review note"
-                        />
-                        <button className="btn-action btn-action--primary" onClick={completeSourceReview}>
+                          placeholder="Review note" readOnly={!canWrite} />
+                        <button className="btn-action btn-action--primary" onClick={completeSourceReview} disabled={!canWrite}>
                           <ShieldCheck size={12} /> Mark source reviewed
                         </button>
                       </>
                     )}
                     {sourceReviewStatus === "source_reviewed" && (
-                      <button className="btn-action" onClick={reopenSourceReview}>
+                      <button className="btn-action" onClick={reopenSourceReview} disabled={!canWrite}>
                         Reopen source review
                       </button>
                     )}
@@ -313,18 +318,17 @@ export function MeetingPackageHub({
                     rows={2}
                     value={packageReviewNote}
                     onChange={(markdown) => setPackageReviewNote(markdown)}
-                    placeholder="Package review note"
-                  />
+                    placeholder="Package review note" readOnly={!canWrite} />
                   <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                     <button
                       className="btn-action btn-action--primary"
                       onClick={markPackageReady}
-                      disabled={packageReviewBlockers.length > 0}
+                      disabled={!canWrite || (packageReviewBlockers.length > 0)}
                     >
                       <ClipboardCheck size={12} /> Mark package ready
                     </button>
                     {(packageReviewStatus === "ready" || packageReviewStatus === "released") && (
-                      <button className="btn-action" onClick={sendPackageBackToReview}>Return to review</button>
+                      <button className="btn-action" onClick={sendPackageBackToReview} disabled={!canWrite}>Return to review</button>
                     )}
                   </div>
                 </div>

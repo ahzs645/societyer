@@ -134,10 +134,9 @@ await check("Promoting another Owner allows demotion; current roles gate even re
   await owner.mutation(ref("users:setRole"), { id: ids.users["owner-a"], role: "Viewer" });
   await assert.rejects(() => apply(owner), /Permission meetings:write/);
 });
-await check("Disabled membership denies reads and disappears after explicit projection rebuild", async () => {
+await check("Disabled membership denies reads and automatically removes its projection", async () => {
   await viewer.mutation(ref("users:securityDisable"), { id: ids.users["owner-a"], reason: "Local pilot revocation check" });
   await assert.rejects(() => snapshot(owner), /disabled/i);
-  await internal("offlineMeetings:rebuildDownloads", { societyId: ids.societyA });
   const state = await internal("localPilotAdmin:inspect", { societyId: ids.societyA });
   assert.equal(state.downloads.some(row => row.actor_key === `${issuer}|owner-a-${run}`), false);
 });
@@ -145,6 +144,6 @@ writeFileSync(new URL("../../../artifacts/offline/local-convex-results.json", im
   completedAt: new Date().toISOString(), endpoint: url, image: "ghcr.io/get-convex/convex-backend@sha256:d715e9ec088784407ca4ba2d3db592702cd328d02c76cdca3852c0018f2a76b4",
   auth: "Local ES256 test signer with real Convex JWT verification; production identity/membership policies",
   passed: results.length, results,
-  limitations: ["No live Clerk or tenant-restricted Microsoft login flow exercised", "PowerSync service/download replication not exercised by this test", "ACL/membership projection invalidation still requires explicit rebuild", "Local cloud-workspace instance, not the user's Mac or Zoer host"],
+  limitations: ["No live Clerk or tenant-restricted Microsoft login flow exercised", "PowerSync service/download replication not exercised by this test", "Supported pilot user-role/status/removal mutations refresh projections automatically; other document ACL/external identity/expiry pathways remain outside this qualification", "Local cloud-workspace instance, not the user's Mac or Zoer host"],
 }, null, 2) + "\n");
 console.log(`${results.length} live local Convex checks passed.`);

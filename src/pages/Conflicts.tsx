@@ -1,6 +1,8 @@
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -25,16 +27,22 @@ import type { Id } from "../../convex/_generated/dataModel";
 
 export function ConflictsPage() {
   const society = useSociety();
+  const permissions = usePermissions();
+  const canWrite = permissions.loaded && permissions.can("conflicts:write");
   const conflicts = useQuery(api.conflicts.list, society ? { societyId: society._id } : "skip");
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
-  const create = useMutation(api.conflicts.create);
-  const resolve = useMutation(api.conflicts.resolve);
+  const create = usePermissionedMutation(api.conflicts.create, canWrite);
+  const resolve = usePermissionedMutation(api.conflicts.resolve, canWrite);
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [params, setParams] = useSearchParams();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+
+  useEffect(() => {
+    if (!canWrite) setOpen(false);
+  }, [canWrite]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -55,7 +63,8 @@ export function ConflictsPage() {
   }), [conflicts, dirMap]);
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
-  const openNew = () => {
+  const openNew = useCallback(() => {
+    if (!canWrite) return;
     if (!directors || directors.length === 0) {
       toast.error("Add a director before recording a conflict disclosure.");
       return;
@@ -69,11 +78,15 @@ export function ConflictsPage() {
       leftRoom: true,
     });
     setOpen(true);
+  }, [canWrite, directors, toast]);
+  const save = async () => {
+    if (!canWrite) return;
+    await create({ societyId: society._id, ...form });
+    setOpen(false);
   };
-  const save = async () => { await create({ societyId: society._id, ...form }); setOpen(false); };
 
   useEffect(() => {
-    if (!society || open || directors === undefined) return;
+    if (!canWrite || !society || open || directors === undefined) return;
     if (params.get("intent") !== "disclose") return;
     setParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -81,7 +94,7 @@ export function ConflictsPage() {
       return next;
     }, { replace: true });
     openNew();
-  }, [directors, open, params, setParams, society]);
+  }, [canWrite, directors, open, openNew, params, setParams, society]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -94,7 +107,7 @@ export function ConflictsPage() {
         iconColor="red"
         subtitle="Disclosures under s.56. Directors & senior managers must disclose material interests, leave the room, and abstain."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> New disclosure
           </button>
         }
@@ -133,15 +146,15 @@ export function ConflictsPage() {
               return undefined;
             }}
             renderRowActions={(r) => !r.resolvedAt ? (
-              <button className="btn btn--sm" onClick={() => resolve({ id: r._id, resolvedAt: new Date().toISOString().slice(0, 10) })}>Resolve</button>
+              <button className="btn btn--sm" disabled={!canWrite} onClick={() => resolve({ id: r._id, resolvedAt: new Date().toISOString().slice(0, 10) })}>Resolve</button>
             ) : null}
           />
         </RecordTableScope>
       ) : null}
 
       <Drawer
-        open={open} onClose={() => setOpen(false)} title="Record disclosure"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}
+        open={open && canWrite} onClose={() => setOpen(false)} title="Record disclosure"
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite}>Save</button></>}
       >
         {form && directors && (
           <div>

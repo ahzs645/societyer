@@ -16,6 +16,7 @@ import type { PortableQueryCtx } from "../portable/ctx";
 import { documentAccessPredicate, filterDocumentLinkedRows } from "./documents";
 import { requireSocietyMembership } from "./access";
 import { createDownloadUrl } from "../storage/signedUrl";
+import { visibleDirectoryRows } from "./peopleDirectory";
 
 const EXPORT_VERSION = 2;
 
@@ -477,19 +478,10 @@ async function paginateForSociety(
     return paginateCollectedRows(rows, paginationOpts, options);
   }
 
-  // peopleDirectory is cross-tenant and therefore has no societyId. Export
-  // only the directory people referenced by this society's role holders or
-  // signer register; treating it as a global table would leak other workspaces.
+  // Include tenant-owned contacts and legacy people visible through current
+  // authorized role links; global directory scans would leak other workspaces.
   if (table === "peopleDirectory") {
-    const [roleHolders, entitySigners] = await Promise.all([
-      ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("entitySigners").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ]);
-    const ids = new Set<string>();
-    for (const row of [...roleHolders, ...entitySigners]) {
-      if (row.directoryPersonId) ids.add(String(row.directoryPersonId));
-    }
-    const rows = (await Promise.all(Array.from(ids, (id) => ctx.db.get(id)))).filter(Boolean);
+    const rows = (await visibleDirectoryRows(ctx, societyId)).map(({ editable: _editable, ...row }) => row);
     return paginateCollectedRows(rows, paginationOpts, options);
   }
 

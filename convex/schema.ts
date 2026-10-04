@@ -309,7 +309,8 @@ export default defineSchema({
   })
     .index("by_society", ["societyId"])
     .index("by_society_role", ["societyId", "roleType"])
-    .index("by_society_status", ["societyId", "status"]),
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_directory_person", ["directoryPersonId"]),
 
   // Append-only edit history for roleHolders: each row is a closed (superseded)
   // prior version. The live roleHolders row stays the current version, so reads

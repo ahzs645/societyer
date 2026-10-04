@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { GitBranch } from "lucide-react";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
@@ -10,13 +11,14 @@ import { formatDateTime, money } from "../lib/format";
 
 export function TimelinePage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
-  const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
-  const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip");
-  const commitments = useQuery(api.commitments.list, society ? { societyId: society._id } : "skip");
-  const commitmentEvents = useQuery(api.commitments.eventsForSociety, society ? { societyId: society._id } : "skip");
-  const feeTimeline = useQuery(api.subscriptions.feeTimeline, society ? { societyId: society._id } : "skip");
-  const fundingSources = useQuery(api.fundingSources.list, society ? { societyId: society._id } : "skip");
+  const committees = useQuery(api.committees.list, society && loaded && can("committees:read") ? { societyId: society._id } : "skip");
+  const filings = useQuery(api.filings.list, society && loaded && can("filings:read") ? { societyId: society._id } : "skip");
+  const commitments = useQuery(api.commitments.list, society && loaded && can("commitments:read") ? { societyId: society._id } : "skip");
+  const commitmentEvents = useQuery(api.commitments.eventsForSociety, society && loaded && can("commitments:read") ? { societyId: society._id } : "skip");
+  const feeTimeline = useQuery(api.subscriptions.feeTimeline, society && loaded && can("settings:read") ? { societyId: society._id } : "skip");
+  const fundingSources = useQuery(api.fundingSources.list, society && loaded && can("financials:read") ? { societyId: society._id } : "skip");
 
   const grouped = useMemo(() => {
     const events: { date: string; kind: string; title: string; sub?: string; to?: string; past: boolean; color?: string }[] = [];

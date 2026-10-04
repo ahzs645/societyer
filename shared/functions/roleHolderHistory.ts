@@ -12,7 +12,7 @@
 import type { PortableQueryCtx } from "../portable/ctx";
 import { requireOwnedRow, requireSocietyMembership } from "./access";
 import { requirePermissionPortable } from "./permissions";
-import { filterControllerRegisters } from "./roleHolderReadAccess";
+import { filterRoleHolderRegisters, readableRoleHolderTypes } from "./roleHolderReadAccess";
 import {
   buildTimeline,
   changesBetween as changesBetweenPure,
@@ -69,6 +69,9 @@ export async function revisionHistoryPortable(
   if (timeline.some(version => version.roleType === "controller")) {
     await requirePermissionPortable(ctx, societyId, "settings:read");
   }
+  if (timeline.some(version => ["director", "officer"].includes(String(version.roleType)))) {
+    await requirePermissionPortable(ctx, societyId, "directors:read");
+  }
   return timeline.map((version, index) => ({
     enteredAtISO: version.enteredAtISO,
     enteredByUserId: version.enteredByUserId ?? null,
@@ -90,7 +93,7 @@ export async function registerAsOfPortable(
     ctx.db.query("roleHolderRevisions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
   ]);
-  return filterControllerRegisters(ctx, societyId, registerAsOfPure(
+  return filterRoleHolderRegisters(ctx, societyId, registerAsOfPure(
     toStoredRevisions(revisionRows),
     liveRows.map((row: any) => ({ ...row, _id: String(row._id) })) as LiveRoleHolder[],
     asOfISO,
@@ -113,7 +116,8 @@ export async function changesBetweenPortable(
     fromISO,
     toISO,
   );
-  return diff.map((row) => ({
+  const readable = await readableRoleHolderTypes(ctx, societyId);
+  return diff.filter(row => (!row.current || readable(row.current.roleType)) && (!row.desired || readable(row.desired.roleType))).map((row) => ({
     op: row.op,
     key: row.key,
     name: String((row.desired ?? row.current)?.fullName ?? ""),

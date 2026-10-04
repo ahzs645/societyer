@@ -1,6 +1,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { Plus, Pencil, Trash2, Circle, CheckCircle2, AlertTriangle, MessageSquare, ChevronDown } from "lucide-react";
 import { ReactNode, useState } from "react";
 import { formatDate, relative } from "../lib/format";
@@ -54,10 +55,14 @@ export function ActivityTimeline({
   limit?: number;
 }) {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canReadActivity = loaded && can("audit:read");
   const rows = useQuery(
     api.activity.listForRecord,
-    society ? { societyId: society._id, entityType, subjectId: entityId, limit } : "skip",
+    society && canReadActivity ? { societyId: society._id, entityType, subjectId: entityId, limit } : "skip",
   ) as ActivityRow[] | undefined;
+
+  if (loaded && !canReadActivity) return <EmptyState icon={<Circle size={18} />} title="Activity history unavailable" description="Your workspace role does not include activity history access." />;
 
   if (rows === undefined) {
     return (

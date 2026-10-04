@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { Field } from "./ui";
 import { DatePicker } from "./DatePicker";
+import { usePermissions } from "../hooks/usePermissions";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 
 type Props = {
   societyId: any;
@@ -17,10 +19,13 @@ type Props = {
 // type. Changes blur-save to `customFields.setValue`. If no definitions
 // exist yet, shows a helpful empty state with a link to the admin page.
 export function CustomFieldsPanel({ societyId, entityType, entityId, title = "Custom fields" }: Props) {
-  const definitions = useQuery(api.customFields.listDefinitions, { societyId, entityType });
-  const values = useQuery(api.customFields.listValues, entityId ? { entityType, subjectId: entityId } : "skip");
-  const setValue = useMutation(api.customFields.setValue);
-  const clearValue = useMutation(api.customFields.clearValue);
+  const { loaded, can } = usePermissions();
+  const canRead = loaded && can("settings:read");
+  const canWrite = canRead && can("settings:write") && Boolean(entityId);
+  const definitions = useQuery(api.customFields.listDefinitions, canRead && societyId ? { societyId, entityType } : "skip");
+  const values = useQuery(api.customFields.listValues, canRead && entityId ? { entityType, subjectId: entityId } : "skip");
+  const setValue = usePermissionedMutation(api.customFields.setValue, canWrite);
+  const clearValue = usePermissionedMutation(api.customFields.clearValue, canWrite);
 
   const valuesByDef = useMemo(() => {
     const map = new Map<string, any>();
@@ -28,7 +33,10 @@ export function CustomFieldsPanel({ societyId, entityType, entityId, title = "Cu
     return map;
   }, [values]);
 
-  if (!definitions) {
+  if (loaded && !canRead) {
+    return <p className="muted" role="status">Custom fields require additional access.</p>;
+  }
+  if (!definitions || (entityId && values === undefined)) {
     return (
       <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
         Loading custom fields…
@@ -38,11 +46,8 @@ export function CustomFieldsPanel({ societyId, entityType, entityId, title = "Cu
   if (definitions.length === 0) {
     return (
       <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-        No custom fields defined for {entityType}.{" "}
-        <Link className="link" to="/app/custom-fields">
-          Add one
-        </Link>
-        .
+        No custom fields defined for {entityType}.
+        {canWrite && <> <Link className="link" to="/app/custom-fields">Add one</Link>.</>}
       </div>
     );
   }
@@ -57,7 +62,9 @@ export function CustomFieldsPanel({ societyId, entityType, entityId, title = "Cu
             key={def._id}
             def={def}
             value={current?.value}
+            readOnly={!canWrite}
             onSave={async (next) => {
+              if (!canWrite) return;
               if (next === undefined || next === "" || next === null) {
                 await clearValue({ entityType, subjectId: entityId, definitionId: def._id });
               } else {
@@ -81,10 +88,12 @@ function CustomFieldInput({
   def,
   value,
   onSave,
+  readOnly,
 }: {
   def: any;
   value: any;
   onSave: (next: any) => Promise<void> | void;
+  readOnly: boolean;
 }) {
   const [draft, setDraft] = useState<any>(value ?? "");
   const externalRef = useState(value)[0];
@@ -102,7 +111,9 @@ function CustomFieldInput({
         <input
           type="checkbox"
           checked={Boolean(draft)}
+          disabled={readOnly}
           onChange={(e) => {
+            if (readOnly) return;
             setDraft(e.target.checked);
             onSave(e.target.checked);
           }}
@@ -117,7 +128,9 @@ function CustomFieldInput({
       <Field label={label}>
         <DatePicker
           value={typeof draft === "string" ? draft : ""}
+          disabled={readOnly}
           onChange={(value) => {
+            if (readOnly) return;
             setDraft(value);
             onSave(value);
           }}
@@ -138,8 +151,9 @@ function CustomFieldInput({
           className="input"
           type="number"
           value={draft === "" || draft == null ? "" : String(draft)}
+          readOnly={readOnly}
           onChange={(e) => setDraft(e.target.value === "" ? "" : Number(e.target.value))}
-          onBlur={() => onSave(draft === "" ? undefined : draft)}
+          onBlur={() => { if (!readOnly) return onSave(draft === "" ? undefined : draft); }}
         />
         {def.description && (
           <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 2 }}>
@@ -157,8 +171,9 @@ function CustomFieldInput({
         className="input"
         type={inputType}
         value={draft ?? ""}
+        readOnly={readOnly}
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => onSave(draft)}
+        onBlur={() => { if (!readOnly) return onSave(draft); }}
       />
       {def.description && (
         <div className="muted" style={{ fontSize: "var(--fs-xs)", marginTop: 2 }}>

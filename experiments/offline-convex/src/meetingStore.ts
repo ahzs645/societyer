@@ -53,7 +53,7 @@ export async function saveMeetingCommand(db: PowerSyncDatabase, scope: Scope, ro
         await tx.execute("INSERT INTO meetingCommandHistory (id, meeting_uuid, body, state) VALUES (?, ?, ?, 'waiting')", [command.operationId, command.meetingUuid, body]);
         if (current) await tx.execute("UPDATE meetingLocalState SET revision = ?, mappings = ? WHERE id = ?", [command.baseRevision + 1, JSON.stringify(mappings), command.meetingUuid]);
         else await tx.execute("INSERT INTO meetingLocalState (id, revision, mappings, origin) VALUES (?, ?, ?, 'authored')", [command.meetingUuid, command.baseRevision + 1, JSON.stringify(mappings)]);
-        if (file && command.kind === "create-meeting") await tx.execute("INSERT INTO meetingFiles (id, meeting_uuid, descriptor, content, state) VALUES (?, ?, ?, ?, 'waiting')", [command.keys.document, command.meetingUuid, JSON.stringify(file.descriptor), file.content]);
+        if (file && command.kind === "create-meeting") await tx.execute("INSERT INTO meetingFiles (id, meeting_uuid, descriptor, content, state, origin) VALUES (?, ?, ?, ?, 'waiting', 'authored')", [command.keys.document, command.meetingUuid, JSON.stringify(file.descriptor), file.content]);
       });
     },
   };
@@ -84,6 +84,11 @@ export async function exportMeetingRecovery(db: PowerSyncDatabase, scope: Scope)
  */
 export async function hydrateMeetingSnapshots(db: PowerSyncDatabase, scope: Scope, snapshots: Snapshot[], protectedMeetingIds: ReadonlySet<string> = new Set()) {
   await db.writeTransaction(async tx => {
+    // A complete authorized projection controls cached downloads even when a
+    // local draft, pending upload or currently edited form must be preserved.
+    const allowedFiles = new Set(snapshots.flatMap(snapshot => snapshot.files.map(file => file.uuid)));
+    const downloadedFiles = await tx.getAll<{ id: string }>("SELECT id FROM meetingFiles WHERE origin = 'downloaded'");
+    for (const file of downloadedFiles) if (!allowedFiles.has(file.id)) await tx.execute("DELETE FROM meetingFiles WHERE id = ?", [file.id]);
     const received = new Set(snapshots.map(row => row.meetingUuid));
     const downloaded = await tx.getAll<{ id: string; mappings: string }>("SELECT id, mappings FROM meetingLocalState WHERE origin = 'downloaded'");
     for (const row of downloaded) {
@@ -91,8 +96,11 @@ export async function hydrateMeetingSnapshots(db: PowerSyncDatabase, scope: Scop
       if (received.has(row.id) || pending || protectedMeetingIds.has(row.id)) continue;
       for (const mapping of JSON.parse(row.mappings) as Mapping[]) await tx.execute("DELETE FROM portableMeetingRows WHERE id = ?", [mapping.nativeId]);
       await tx.execute("DELETE FROM meetingLocalState WHERE id = ?", [row.id]);
+      await tx.execute("DELETE FROM meetingFiles WHERE meeting_uuid = ? AND origin = 'downloaded'", [row.id]);
     }
     for (const snapshot of snapshots) {
+      const permittedFiles = snapshot.files.map(file => file.uuid);
+      await tx.execute(`DELETE FROM meetingFiles WHERE meeting_uuid = ? AND origin = 'downloaded'${permittedFiles.length ? ` AND id NOT IN (${permittedFiles.map(() => "?").join(",")})` : ""}`, [snapshot.meetingUuid, ...permittedFiles]);
       if (!uuidPattern.test(snapshot.meetingUuid) || !uuidPattern.test(snapshot.ids.minutes) || !uuidPattern.test(snapshot.ids.agenda) || snapshot.ids.items.some(id => !uuidPattern.test(id)) || snapshot.ids.items.length !== snapshot.agenda.length) throw new Error("Invalid downloaded identities.");
       const pending = await tx.getOptional("SELECT id FROM meetingCommandHistory WHERE meeting_uuid = ? AND state != 'accepted' LIMIT 1", [snapshot.meetingUuid]);
       if (pending || protectedMeetingIds.has(snapshot.meetingUuid)) continue; // Preserve pending and currently edited drafts.

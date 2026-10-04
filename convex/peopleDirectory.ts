@@ -11,19 +11,20 @@ import {
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = authorizedQuery("peopleDirectory:list", query)({
-  args: {},
+  args: { societyId: v.optional(v.id("societies")) },
   returns: v.any(),
-  handler: async (ctx) => listPortable(await toPortableQueryCtx(ctx)),
+  handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const searchByPrefix = authorizedQuery("peopleDirectory:searchByPrefix", query)({
-  args: { prefix: v.string(), limit: v.optional(v.number()) },
+  args: { societyId: v.optional(v.id("societies")), prefix: v.string(), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, args) => searchByPrefixPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const upsert = authorizedMutation("peopleDirectory:upsert", mutation)({
   args: {
+    societyId: v.optional(v.id("societies")),
     id: v.optional(v.id("peopleDirectory")),
     fullName: v.string(),
     firstName: v.optional(v.string()),
@@ -58,7 +59,7 @@ export const addToSociety = authorizedMutation("peopleDirectory:addToSociety", m
 });
 
 export const duplicates = authorizedQuery("peopleDirectory:duplicates", query)({
-  args: {},
+  args: { societyId: v.optional(v.id("societies")) },
   returns: v.any(),
-  handler: async (ctx) => duplicatesPortable(await toPortableQueryCtx(ctx)),
+  handler: async (ctx, args) => duplicatesPortable(await toPortableQueryCtx(ctx), args),
 });

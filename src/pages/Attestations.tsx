@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote, RecordChip } from "../components/ui";
@@ -29,6 +31,8 @@ import type { Id } from "../../convex/_generated/dataModel";
  */
 export function AttestationsPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("attestations:write");
   const year = new Date().getFullYear();
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
   const attestations = useQuery(api.attestations.list, society ? { societyId: society._id } : "skip");
@@ -36,7 +40,7 @@ export function AttestationsPage() {
     api.attestations.missingForYear,
     society ? { societyId: society._id, year } : "skip",
   );
-  const sign = useMutation(api.attestations.sign);
+  const sign = usePermissionedMutation(api.attestations.sign, canWrite);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [params, setParams] = useSearchParams();
@@ -77,6 +81,7 @@ export function AttestationsPage() {
   }, [directors, attestations, year]);
 
   const openSign = (directorId: string) => {
+    if (!canWrite) return;
     setForm({
       directorId,
       year,
@@ -89,12 +94,13 @@ export function AttestationsPage() {
     setOpen(true);
   };
   const save = async () => {
+    if (!canWrite) return;
     await sign({ societyId: society._id, ...form });
     setOpen(false);
   };
 
   useEffect(() => {
-    if (!society || open || missing === undefined) return;
+    if (!canWrite || !society || open || missing === undefined) return;
     if (params.get("intent") !== "request") return;
     setParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -103,7 +109,7 @@ export function AttestationsPage() {
     }, { replace: true });
     const firstMissing = missing?.[0];
     if (firstMissing?.directorId) openSign(String(firstMissing.directorId));
-  }, [missing, open, params, setParams, society]);
+  }, [canWrite, missing, open, params, setParams, society]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -168,7 +174,7 @@ export function AttestationsPage() {
               return undefined;
             }}
             renderRowActions={(r) => (
-              <button className="btn-action btn-action--primary" onClick={() => openSign(String(r._id))}>
+              <button className="btn-action btn-action--primary" onClick={() => openSign(String(r._id))} disabled={!canWrite}>
                 <PenLine size={12} /> {r.signed ? "Re-sign" : "Sign"}
               </button>
             )}
@@ -189,7 +195,7 @@ export function AttestationsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Sign</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canWrite}>Sign</button>
           </>
         }
       >

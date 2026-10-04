@@ -107,6 +107,7 @@ const dashboardGoalValidator = validator.object({
 });
 
 const dashboardSummaryValidator = validator.object({
+  readAccess: validator.array(validator.string()),
   society: dashboardSocietyValidator,
   counts: validator.object({
     members: validator.number(),

@@ -1,8 +1,10 @@
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 /* eslint-disable max-lines-per-function */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field } from "../components/ui";
@@ -73,9 +75,11 @@ function useScrollEdges<T extends HTMLElement>() {
 
 export function MinuteBookPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("minutes:write");
   const detail = useQuery(api.minuteBook.overview, society ? { societyId: society._id } : "skip");
-  const upsert = useMutation(api.minuteBook.upsert);
-  const remove = useMutation(api.minuteBook.remove);
+  const upsert = usePermissionedMutation(api.minuteBook.upsert, canWrite);
+  const remove = usePermissionedMutation(api.minuteBook.remove, canWrite);
   const confirm = useConfirm();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -109,7 +113,9 @@ export function MinuteBookPage() {
     maps,
   }), [society, detail, maps]);
 
+  const canExport = loaded && can("exports:download");
   const runExport = (format: "html" | "csv") => {
+    if (!canExport) return;
     if (!detail) {
       toast.info("Minute book export", "Records are still loading. Try again in a moment.");
       return;
@@ -126,7 +132,7 @@ export function MinuteBookPage() {
   };
 
   useEffect(() => {
-    if (!society || params.get("intent") !== "export") return;
+    if (!society || params.get("intent") !== "export" || !canExport) return;
     if (!detail) return;
     setParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -135,12 +141,13 @@ export function MinuteBookPage() {
     }, { replace: true });
     runExport("html");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params, setParams, society, detail]);
+  }, [params, setParams, society, detail, canExport]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite) return;
     setDraft({
       title: "",
       recordType: "minute_book_record",
@@ -150,6 +157,7 @@ export function MinuteBookPage() {
   };
 
   const save = async () => {
+    if (!canWrite) return;
     if (!draft) return;
     await upsert({
       id: draft._id,
@@ -176,6 +184,7 @@ export function MinuteBookPage() {
   };
 
   const confirmDelete = async (row: any) => {
+    if (!canWrite) return;
     const ok = await confirm({
       title: "Delete minute book record?",
       message: `"${row.title}" will be removed from the minute book spine.`,
@@ -189,8 +198,9 @@ export function MinuteBookPage() {
 
   const items = Array.isArray(detail) ? [] : detail?.items ?? [];
   const checks = safeRows(detail, "checks");
+  const partial = Boolean(detail?.restrictedResources?.length || detail?.documentCoverageLimited);
   const recordBundles = safeRows(detail, "recordBundles");
-  const openCheckCount = checks.filter((check: any) => !check.ok).length;
+  const openCheckCount = checks.filter((check: any) => check.status !== "unknown" && !check.ok).length;
   const bundleGapCount = recordBundles.reduce((count: number, row: any) => count + actionableGaps(row.gaps).length, 0);
   const recordSpineRecords = items.map((row: Record<string, unknown>) => ({
     ...row,
@@ -209,32 +219,35 @@ export function MinuteBookPage() {
           <>
             <MoreActionsMenu
               items={[
-                { id: "export-html", label: "Export HTML", icon: <Download size={14} />, onSelect: () => runExport("html") },
-                { id: "export-csv", label: "Export CSV", icon: <Download size={14} />, onSelect: () => runExport("csv") },
+                { id: "export-html", disabled: !canExport, label: "Export HTML", icon: <Download size={14} />, onSelect: () => runExport("html") },
+                { id: "export-csv", disabled: !canExport, label: "Export CSV", icon: <Download size={14} />, onSelect: () => runExport("csv") },
               ]}
             />
-            <Button variant="accent" icon={<Plus size={14} />} onClick={openNew}>New record</Button>
+            <Button variant="accent" icon={<Plus size={14} />} disabled={!canWrite} onClick={openNew}>New record</Button>
           </>
         }
       />
 
       <RelatedDocumentViews current="/app/minute-book" />
+      {detail?.restrictedResources?.length > 0 && <p className="muted" role="status">Your role limits access to these record sections: {detail.restrictedResources.join(", ")}. Accessible records remain available.</p>}
+
+      {detail?.documentCoverageLimited && <p className="muted" role="status">Some supporting documents are unavailable to your role. Document completeness is unknown.</p>}
 
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Connected records" value={recordBundles.length} />
         <Stat label="Manual records" value={items.length} />
-        <Stat label="Documents" value={safeCount(detail, "documents")} />
-        <Stat label="Meetings" value={safeCount(detail, "meetings")} />
+        <Stat label="Documents" value={detail?.restrictedResources?.includes("documents") ? "Restricted" : safeCount(detail, "documents")} />
+        <Stat label="Meetings" value={detail?.restrictedResources?.includes("meetings") ? "Restricted" : safeCount(detail, "meetings")} />
         <Stat label="Record gaps" value={bundleGapCount} tone={bundleGapCount ? "warn" : undefined} />
         <Stat label="Open checks" value={openCheckCount} tone={openCheckCount ? "warn" : undefined} />
       </div>
 
-      <RecordBundlesCard rows={recordBundles} />
+      <RecordBundlesCard rows={recordBundles} partial={partial} />
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
-          <h2 className="card__title">Completeness checks</h2>
-          <Badge tone={openCheckCount ? "warn" : "success"}>{openCheckCount ? `${openCheckCount} open` : "Clear"}</Badge>
+          <h2 className="card__title">{partial ? "Accessible completeness checks" : "Completeness checks"}</h2>
+          <Badge tone={openCheckCount ? "warn" : partial ? "neutral" : "success"}>{openCheckCount ? `${openCheckCount} visible open` : partial ? "Access limited" : "Clear"}</Badge>
         </div>
         <div className="card__body">
           <div className="grid two">
@@ -245,7 +258,7 @@ export function MinuteBookPage() {
                   <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{check.detail}</div>
                 </div>
                 <Badge tone={check.ok ? "success" : check.severity === "danger" ? "danger" : check.severity === "warn" ? "warn" : "info"}>
-                  {check.count}
+                  {check.status === "unknown" ? "Unknown" : check.count}
                 </Badge>
               </div>
             ))}
@@ -314,7 +327,7 @@ export function MinuteBookPage() {
                     setOpen(true);
                   }}
                 >
-                  Edit
+                  {canWrite ? "Edit" : "View"}
                 </Button>
                 <Button
                   variant="ghost"
@@ -322,7 +335,7 @@ export function MinuteBookPage() {
                   icon={<Trash2 size={12} />}
                   iconOnly
                   aria-label="Delete minute book record"
-                  onClick={() => confirmDelete(row)}
+                  disabled={!canWrite} onClick={() => confirmDelete(row)}
                 />
               </>
             )}
@@ -339,25 +352,25 @@ export function MinuteBookPage() {
       <div className="spacer-4" />
 
       <div className="grid two">
-        <LinkedList title="Canonical documents" rows={safeRows(detail, "documents")} getTitle={(row: any) => row.title} getMeta={(row: any) => row.category} />
-        <LinkedList title="Meetings and minutes" rows={safeRows(detail, "meetings")} getTitle={(row: any) => row.title} getMeta={(row: any) => `${row.type} - ${row.scheduledAt ? formatDate(row.scheduledAt) : "unscheduled"}`} />
-        <LinkedList title="Filings" rows={safeRows(detail, "filings")} getTitle={(row: any) => humanize(row.kind)} getMeta={(row: any) => `${humanize(row.status)} - ${row.dueDate ? formatDate(row.dueDate) : "no due date"}`} />
-        <LinkedList title="Policies and workflow packages" rows={[...safeRows(detail, "policies"), ...safeRows(detail, "workflowPackages")]} getTitle={(row: any) => row.policyName ?? row.packageName} getMeta={(row: any) => humanize(row.status ?? row.eventType)} />
+        <LinkedList restricted={detail?.restrictedResources?.includes("documents")} title="Canonical documents" rows={safeRows(detail, "documents")} getTitle={(row: any) => row.title} getMeta={(row: any) => row.category} />
+        <LinkedList restricted={detail?.restrictedResources?.includes("meetings")} title="Meetings and minutes" rows={safeRows(detail, "meetings")} getTitle={(row: any) => row.title} getMeta={(row: any) => `${row.type} - ${row.scheduledAt ? formatDate(row.scheduledAt) : "unscheduled"}`} />
+        <LinkedList restricted={detail?.restrictedResources?.includes("filings")} title="Filings" rows={safeRows(detail, "filings")} getTitle={(row: any) => humanize(row.kind)} getMeta={(row: any) => `${humanize(row.status)} - ${row.dueDate ? formatDate(row.dueDate) : "no due date"}`} />
+        <LinkedList restricted={detail?.restrictedResources?.some((resource: string) => ["documents", "tasks"].includes(resource))} title="Policies and workflow packages" rows={[...safeRows(detail, "policies"), ...safeRows(detail, "workflowPackages")]} getTitle={(row: any) => row.policyName ?? row.packageName} getMeta={(row: any) => humanize(row.status ?? row.eventType)} />
       </div>
 
       <Drawer
         open={open}
         onClose={() => { setOpen(false); setDraft(null); }}
-        title={draft?._id ? "Edit minute book record" : "New minute book record"}
+        title={draft?._id ? `${canWrite ? "Edit" : "View"} minute book record` : "New minute book record"}
         footer={
           <>
             <Button onClick={() => { setOpen(false); setDraft(null); }}>Cancel</Button>
-            <Button variant="accent" onClick={save}>Save</Button>
+            <Button variant="accent" disabled={!canWrite} onClick={save}>Save</Button>
           </>
         }
       >
         {draft && (
-          <>
+          <fieldset disabled={!canWrite} style={{ border: 0, margin: 0, padding: 0 }}>
             <Field label="Title"><input className="input" value={draft.title ?? ""} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <OptionSelect label="Record type" setName="minuteBookRecordTypes" value={draft.recordType ?? ""} onChange={(value) => setDraft({ ...draft, recordType: value })} />
@@ -374,15 +387,15 @@ export function MinuteBookPage() {
             <RecordSelect label="Policy" value={draft.policyId} rows={safeRows(detail, "policies")} onChange={(value) => setDraft({ ...draft, policyId: value })} getLabel={(row: any) => row.policyName} />
             <RecordSelect label="Workflow package" value={draft.workflowPackageId} rows={safeRows(detail, "workflowPackages")} onChange={(value) => setDraft({ ...draft, workflowPackageId: value })} getLabel={(row: any) => row.packageName} />
             <RecordSelect label="Written resolution" value={draft.writtenResolutionId} rows={safeRows(detail, "writtenResolutions")} onChange={(value) => setDraft({ ...draft, writtenResolutionId: value })} getLabel={(row: any) => row.title} />
-            <Field label="Notes"><MarkdownEditor rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
-          </>
+            <Field label="Notes"><MarkdownEditor readOnly={!canWrite} rows={4} value={draft.notes ?? ""} onChange={(markdown) => setDraft({ ...draft, notes: markdown })} /></Field>
+          </fieldset>
         )}
       </Drawer>
     </div>
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone?: "warn" }) {
+function Stat({ label, value, tone }: { label: string; value: number | string; tone?: "warn" }) {
   return (
     <div className="stat">
       <div className="stat__label">{label}</div>
@@ -391,7 +404,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "wa
   );
 }
 
-function RecordBundlesCard({ rows }: { rows: any[] }) {
+function RecordBundlesCard({ rows, partial }: { rows: any[]; partial?: boolean }) {
   const scroll = useScrollEdges<HTMLDivElement>();
   const gapCount = rows.reduce((count, row) => count + actionableGaps(row.gaps).length, 0);
   const visibleRows = rows
@@ -407,7 +420,7 @@ function RecordBundlesCard({ rows }: { rows: any[] }) {
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card__head">
         <h2 className="card__title">Connected records</h2>
-        <Badge tone={gapCount ? "warn" : "success"}>{gapCount ? `${gapCount} gaps` : `${rows.length} records`}</Badge>
+        <Badge tone={gapCount ? "warn" : partial ? "neutral" : "success"}>{gapCount ? `${gapCount} visible gaps` : partial ? "Access limited" : `${rows.length} records`}</Badge>
       </div>
       <div ref={scroll.ref} className={`table-wrap ${scroll.className}`}>
         <table className="table">
@@ -430,9 +443,9 @@ function RecordBundlesCard({ rows }: { rows: any[] }) {
                     {(row.badges ?? []).slice(0, 3).map((badge: any) => <Badge key={`${row.key}:${badge.label}`} tone={badge.tone}>{badge.label}</Badge>)}
                   </div>
                 </td>
-                <td><BundleLinks links={row.links ?? []} /></td>
-                <td><CountBadges counts={row.counts ?? {}} /></td>
-                <td><GapBadges gaps={row.gaps ?? []} /></td>
+                <td><BundleLinks links={row.links ?? []} partial={partial} /></td>
+                <td><CountBadges counts={row.counts ?? {}} partial={partial} /></td>
+                <td><GapBadges gaps={row.gaps ?? []} partial={partial} /></td>
                 <td><Badge tone={toneForStatus(row.status)}>{humanize(row.status) || "-"}</Badge></td>
               </tr>
             ))}
@@ -447,8 +460,8 @@ function RecordBundlesCard({ rows }: { rows: any[] }) {
   );
 }
 
-function BundleLinks({ links }: { links: any[] }) {
-  if (!links.length) return <span className="muted">No linked evidence</span>;
+function BundleLinks({ links, partial }: { links: any[]; partial?: boolean }) {
+  if (!links.length) return <span className="muted">{partial ? "No accessible linked evidence" : "No linked evidence"}</span>;
   return (
     <div style={{ display: "grid", gap: 4 }}>
       {links.slice(0, 5).map((link) => (
@@ -462,9 +475,9 @@ function BundleLinks({ links }: { links: any[] }) {
   );
 }
 
-function CountBadges({ counts }: { counts: Record<string, number> }) {
+function CountBadges({ counts, partial }: { counts: Record<string, number>; partial?: boolean }) {
   const entries = Object.entries(counts).filter(([, value]) => Number(value) > 0);
-  if (!entries.length) return <span className="muted">No counts</span>;
+  if (!entries.length) return <span className="muted">{partial ? "No accessible counts" : "No counts"}</span>;
   return (
     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
       {entries.slice(0, 6).map(([key, value]) => <Badge key={key}>{labelize(key)} {value}</Badge>)}
@@ -472,9 +485,9 @@ function CountBadges({ counts }: { counts: Record<string, number> }) {
   );
 }
 
-function GapBadges({ gaps }: { gaps: any[] }) {
+function GapBadges({ gaps, partial }: { gaps: any[]; partial?: boolean }) {
   const visibleGaps = actionableGaps(gaps);
-  if (!visibleGaps.length) return <Badge tone="success">No gaps</Badge>;
+  if (!visibleGaps.length) return <Badge tone={partial ? "neutral" : "success"}>{partial ? "Access limited" : "No gaps"}</Badge>;
   return (
     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
       {visibleGaps.slice(0, 4).map((gap) => (
@@ -497,12 +510,12 @@ function gapScore(gaps: any[] = []) {
   }, 0);
 }
 
-function LinkedList({ title, rows, getTitle, getMeta }: any) {
+function LinkedList({ title, rows, getTitle, getMeta, restricted }: any) {
   return (
     <div className="card">
       <div className="card__head">
         <h2 className="card__title">{title}</h2>
-        <Badge>{rows.length}</Badge>
+        <Badge>{restricted ? "Access limited" : rows.length}</Badge>
       </div>
       <div className="card__body">
         {rows.slice(0, 8).map((row: any) => (
@@ -511,7 +524,7 @@ function LinkedList({ title, rows, getTitle, getMeta }: any) {
             <span className="muted">{getMeta(row)}</span>
           </div>
         ))}
-        {rows.length === 0 && <div className="muted">No records yet.</div>}
+        {rows.length === 0 && <div className="muted">{restricted ? "This section requires additional access." : "No records yet."}</div>}
       </div>
     </div>
   );

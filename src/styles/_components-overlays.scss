@@ -553,10 +553,15 @@ body.modal-resizing {
 }
 .modal__title {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
   margin: 0;
   font-size: token('fs-lg');
   font-weight: 600;
   color: token('text-primary');
+}
+.modal__head > button {
+  flex-shrink: 0;
 }
 .modal__body {
   padding: 14px;

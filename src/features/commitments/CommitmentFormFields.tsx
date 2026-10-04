@@ -9,6 +9,7 @@
  * dropdown-data hook, and the create/update payload builder live here too so
  * callers never re-declare them.
  */
+import { usePermissions } from "@/hooks/usePermissions";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -141,8 +142,9 @@ export type CommitmentFormData = {
  * societyId so callers can call it above an early-return without violating hook
  * ordering. */
 export function useCommitmentFormData(societyId: Id<"societies"> | null | undefined): CommitmentFormData {
-  const args = societyId ? { societyId } : "skip";
-  const documents = useQuery(api.documents.list, args);
+  const { can } = usePermissions();
+  const args = (permission: string) => societyId && can(permission) ? { societyId } : "skip";
+  const documents = useQuery(api.documents.list, args("documents:read"));
   return { documents };
 }
 

@@ -3,6 +3,7 @@
 
 import { type DragEvent as ReactDragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { usePermissions } from "@/hooks/usePermissions";
 import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, Eye, EyeOff, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field, MenuRow } from "../../../components/ui";
 import { MarkdownEditor, type MarkdownEditorHandle } from "../../../components/MarkdownEditor";
@@ -100,34 +101,65 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   agenda,
   agendaTree,
   agendaEdit,
-  setAgendaEdit,
-  saveAgenda,
+  setAgendaEdit: setAgendaEditProp,
+  saveAgenda: saveAgendaProp,
   attendanceEdit,
-  setAttendanceEdit,
-  startAttendanceEdit,
-  autofillCurrentDirectors,
+  setAttendanceEdit: setAttendanceEditProp,
+  startAttendanceEdit: startAttendanceEditProp,
+  autofillCurrentDirectors: autofillCurrentDirectorsProp,
   attendanceAutofillLabel,
-  saveAttendance,
+  saveAttendance: saveAttendanceProp,
   quorumSnapshot,
   activeProxyCount,
   quorumLegalGuides,
   members,
   directors,
-  saveMinuteSections,
-  saveMinuteMotions,
+  saveMinuteSections: saveMinuteSectionsProp,
+  saveMinuteMotions: saveMinuteMotionsProp,
   resolvedMotions,
-  addSectionToBacklog,
+  addSectionToBacklog: addSectionToBacklogProp,
   onOpenMotions,
   meetingTasks,
-  applyTaskUpdate,
-  createTaskForMeeting,
+  applyTaskUpdate: applyTaskUpdateProp,
+  createTaskForMeeting: createTaskForMeetingProp,
   transcriptOnFile,
   transcriptEdit,
-  setTranscriptEdit,
-  saveTranscriptEditText,
+  setTranscriptEdit: setTranscriptEditProp,
+  saveTranscriptEditText: saveTranscriptEditTextProp,
   savingTranscript,
   adoptionTargets,
   } = props;
+  const { can } = usePermissions();
+  const canEditMinutes = can("minutes:write");
+  // These callbacks save both records; gate both before the first write.
+  const canEditAgenda = canEditMinutes && can("agendas:write");
+  const canEditSections = canEditAgenda;
+  const canEditAttendance = canEditMinutes && can("meetings:write");
+  const canEditMotions = canEditMinutes; // Parent saves embedded motions with minutes.update.
+  const canEditTasks = can("tasks:write");
+  const canEditTranscript = can("meetings:write");
+  const canAddToBacklog = can("motions:write");
+  const authority = useRef(can);
+  authority.current = can;
+  const allowed = (...permissions: string[]) => permissions.every(permission => authority.current(permission));
+  const guard = <T extends (...args: any[]) => any>(permissions: string[], callback: T): T =>
+    ((...args: Parameters<T>) => {
+      if (!allowed(...permissions)) return Promise.reject(new Error("Your workspace role cannot perform this action."));
+      return callback(...args);
+    }) as T;
+  const setAgendaEdit = (value: AgendaItemEntry[] | null) => { if (value === null || allowed("agendas:write", "minutes:write")) setAgendaEditProp(value); };
+  const saveAgenda = guard(["agendas:write", "minutes:write"], saveAgendaProp);
+  const setAttendanceEdit = (value: any) => { if (value === null || allowed("minutes:write", "meetings:write")) setAttendanceEditProp(value); };
+  const startAttendanceEdit = guard(["minutes:write", "meetings:write"], startAttendanceEditProp);
+  const autofillCurrentDirectors = guard(["minutes:write", "meetings:write"], autofillCurrentDirectorsProp);
+  const saveAttendance = guard(["minutes:write", "meetings:write"], saveAttendanceProp);
+  const saveMinuteSections = guard(["minutes:write", "agendas:write"], saveMinuteSectionsProp);
+  const saveMinuteMotions = guard(["minutes:write"], saveMinuteMotionsProp);
+  const addSectionToBacklog = guard(["motions:write"], addSectionToBacklogProp);
+  const applyTaskUpdate = guard(["tasks:write"], applyTaskUpdateProp);
+  const createTaskForMeeting = createTaskForMeetingProp ? guard(["tasks:write"], createTaskForMeetingProp) : undefined;
+  const setTranscriptEdit = (value: string | null) => { if (value === null || allowed("meetings:write")) setTranscriptEditProp(value); };
+  const saveTranscriptEditText = guard(["meetings:write"], saveTranscriptEditTextProp);
   const sections = Array.isArray(minutes?.sections) ? minutes.sections : [];
   // Resolved motions (table-sourced for drafts, snapshots for approved) so the
   // section editor + its index-based remaps operate on the same list the rest of
@@ -220,6 +252,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   }, [isMobileSectionEditor, sectionEditIndex]);
 
   const addSection = async () => {
+    if (!allowed("minutes:write", "agendas:write")) return;
     const newTitle = "New section";
     const newIndex = sections.length;
     const next = [
@@ -255,6 +288,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   };
 
   const removeSection = async (index: number) => {
+    if (!allowed("minutes:write", "agendas:write")) return;
     const removed = sections[index];
     // Removing a root drops its trailing children too — leaving them parentless
     // would break the agenda invariant on the next save and surprise the user.
@@ -784,6 +818,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     return map;
   }, [rootGroups]);
   const reorderRoots = async (fromRootIndex: number, toRootIndex: number) => {
+    if (!allowed("minutes:write", "agendas:write")) return;
     // toRootIndex is a "drop slot" — drop above index N means insert before
     // the group currently at N. Dropping at fromRootIndex (above self) or
     // fromRootIndex+1 (immediately below self) is a no-op.
@@ -813,6 +848,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   // Reorder a child within its parent's group only — children can't escape
   // their parent here. Same motion-remap logic as reorderRoots.
   const moveChild = async (childSectionIndex: number, direction: -1 | 1) => {
+    if (!allowed("minutes:write", "agendas:write")) return;
     const groupIdx = rootGroups.findIndex((group) => group.includes(childSectionIndex));
     if (groupIdx < 0) return;
     const group = rootGroups[groupIdx];
@@ -834,6 +870,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   // Single source for the "delete this section" interaction — empty sections
   // remove silently, populated ones go through the confirm modal first.
   const confirmAndRemoveSection = async (index: number) => {
+    if (!allowed("minutes:write", "agendas:write")) return;
     const section = sections[index];
     if (!section) return;
     // When the user is mid-edit on this section, evaluate the in-progress
@@ -937,6 +974,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   );
 
   const toggleActionItemDone = (sectionIndex: number, actionIndex: number) => {
+    if (!allowed("minutes:write", "agendas:write")) return;
     const next = sections.map((section: any, idx: number) => {
       if (idx !== sectionIndex) return section;
       const items = (section.actionItems ?? []).map((item: any, aIdx: number) =>
@@ -948,6 +986,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   };
 
   const startSectionEdit = (index: number) => {
+    if (!allowed("minutes:write", "agendas:write")) return;
     const section = sections[index] ?? {};
     setSectionEditIndex(index);
     setSectionEditorTab("notes");
@@ -965,6 +1004,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   };
 
   const saveSectionEdit = async () => {
+    if (!allowed("minutes:write", "agendas:write") || (!!sectionDraft && Object.keys(sectionDraft.taskUpdates).length > 0 && !allowed("tasks:write"))) return;
     if (sectionEditIndex == null || !sectionDraft) return;
     // Flush any in-progress motion draft first so it lands in motions[] before
     // we close the editor. commitDraft is a no-op when there's nothing to
@@ -1033,6 +1073,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   }, [sectionEditIndex]);
 
   const assignMotionToSection = async (motionIndex: number, targetIndexValue: string) => {
+    if (!allowed("minutes:write")) return;
     const existingMotion = motions[motionIndex];
     const existingIndex = assignedSectionIndexForMotion(existingMotion, sections);
     if (targetIndexValue === "") {
@@ -1098,6 +1139,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     });
   };
   const updateTaskDraft = (taskId: string, patch: { status?: string; completionNote?: string }) => {
+    if (!allowed("tasks:write")) return;
     if (!sectionDraft) return;
     setSectionDraft({
       ...sectionDraft,
@@ -1114,7 +1156,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   );
 
   const renderSectionEditor = (mode: "inline" | "mobile" = "inline") => {
-    if (sectionEditIndex == null || !sectionDraft) return null;
+    if (!canEditSections || sectionEditIndex == null || !sectionDraft) return null;
     const index = sectionEditIndex;
     const motionRows = motions
       .map((motion, motionIndex) => ({
@@ -1263,6 +1305,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
             <MotionEditor
               ref={sectionMotionEditorRef}
               motions={motions}
+              readOnly={!canEditMotions}
               onChange={(next) => { void saveMinuteMotions(next); }}
               directorNames={assigneeOptions}
               people={motionPeople}
@@ -1327,11 +1370,13 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                     <div className="meeting-minutes-section-task" key={task._id}>
                       <div className="meeting-minutes-section-task__head">
                         <strong className="meeting-minutes-section-task__title">{task.title}</strong>
-                        <Segmented
-                          value={currentStatus}
-                          onChange={(next) => updateTaskDraft(task._id, { status: next })}
-                          items={SECTION_TASK_STATUS_ITEMS}
-                        />
+                        <fieldset disabled={!canEditTasks} style={{ border: 0, padding: 0, margin: 0 }}>
+                          <Segmented
+                            value={currentStatus}
+                            onChange={(next) => updateTaskDraft(task._id, { status: next })}
+                            items={SECTION_TASK_STATUS_ITEMS}
+                          />
+                        </fieldset>
                         {task.priority && (
                           <Badge tone={task.priority === "High" ? "danger" : task.priority === "Medium" ? "warn" : "neutral"}>
                             {task.priority}
@@ -1354,6 +1399,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                         <MarkdownEditor
                           rows={2}
                           value={noteValue}
+                          readOnly={!canEditTasks}
                           onChange={(markdown) => updateTaskDraft(task._id, { completionNote: markdown })}
                           placeholder="Outcome, blockers, or notes for the kanban card."
                         />
@@ -1363,7 +1409,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                 })
               )}
 
-              {createTaskForMeeting && (
+              {canEditTasks && createTaskForMeeting && (
                 <QuickAddTaskForm
                   onSubmit={createTaskForMeeting}
                   onCreated={(taskId) => attachLinkedTask(taskId)}
@@ -1422,6 +1468,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     });
   };
   return {
+    canEditMinutes, canEditAgenda, canEditSections, canEditAttendance, canEditMotions, canEditTasks, canEditTranscript, canAddToBacklog,
     minutes,
     agenda,
     agendaTree,

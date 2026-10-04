@@ -1,5 +1,7 @@
+import { usePermissions } from "@/hooks/usePermissions";
+import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Badge, Field } from "../../../components/ui";
@@ -30,10 +32,13 @@ export function MeetingProxiesCard({
   presentCount: number;
   quorumRequired?: number;
 }) {
-  const proxies = useQuery(api.proxies.forMeeting, { meetingId });
-  const createProxy = useMutation(api.proxies.create);
-  const revokeProxy = useMutation(api.proxies.revoke);
-  const removeProxy = useMutation(api.proxies.remove);
+  const { can } = usePermissions();
+  const canRead = can("proxies:read");
+  const canWrite = can("proxies:write");
+  const proxies = useQuery(api.proxies.forMeeting, canRead ? { meetingId } : "skip");
+  const createProxy = usePermissionedMutation(api.proxies.create, canWrite);
+  const revokeProxy = usePermissionedMutation(api.proxies.revoke, canWrite);
+  const removeProxy = usePermissionedMutation(api.proxies.remove, canWrite);
   const toast = useToast();
 
   const memberOptions = useMemo(
@@ -60,6 +65,7 @@ export function MeetingProxiesCard({
   const quorumMet = quorumRequired != null ? effective >= quorumRequired : null;
 
   const save = async () => {
+    if (!canWrite) return;
     if (saving) return;
     if (!grantor.trim() || !holder.trim()) {
       toast.error("Enter both the grantor and the proxy holder.");
@@ -99,7 +105,7 @@ export function MeetingProxiesCard({
           Proxies
         </h3>
         {!adding && (
-          <button className="btn-action" style={{ marginLeft: "auto" }} onClick={() => setAdding(true)}>
+          <button className="btn-action" style={{ marginLeft: "auto" }} disabled={!canWrite} onClick={() => { if (canWrite) setAdding(true); }}>
             Appoint proxy
           </button>
         )}
@@ -147,11 +153,11 @@ export function MeetingProxiesCard({
             </div>
             <div className="meeting-conflict-row__actions">
               {!proxy.revokedAtISO && (
-                <button className="btn-action" title="Revoke" aria-label="Revoke proxy" onClick={() => revokeProxy({ id: proxy._id })}>
+                <button className="btn-action" title="Revoke" aria-label="Revoke proxy" disabled={!canWrite} onClick={() => revokeProxy({ id: proxy._id })}>
                   <Ban size={12} />
                 </button>
               )}
-              <button className="btn-action" title="Remove" aria-label="Remove proxy" onClick={() => removeProxy({ id: proxy._id })}>
+              <button className="btn-action" title="Remove" aria-label="Remove proxy" disabled={!canWrite} onClick={() => removeProxy({ id: proxy._id })}>
                 <Trash2 size={12} />
               </button>
             </div>
@@ -178,7 +184,7 @@ export function MeetingProxiesCard({
             </Field>
             <div className="row" style={{ gap: 6, justifyContent: "flex-end", marginTop: 8 }}>
               <button className="btn" onClick={() => { setAdding(false); }}>Cancel</button>
-              <button className="btn btn--accent" onClick={save} disabled={saving}>
+              <button className="btn btn--accent" onClick={save} disabled={!canWrite || saving}>
                 {saving ? "Appointing…" : "Appoint"}
               </button>
             </div>

@@ -1,4 +1,4 @@
-import { useMutation } from "convex/react";
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { PageLoading, SeedPrompt } from "./_helpers";
@@ -16,6 +16,8 @@ import { WorkspaceStorageCard } from "../components/WorkspaceStorageCard";
 import { DocumentStorageSettingsCard } from "../components/DocumentStorageSettingsCard";
 import { IdentitySessionSettingsCard } from "../components/IdentitySessionSettingsCard";
 import { resolveAppRuntime } from "../lib/appRuntime";
+import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { readFileDataUrl } from "../lib/readFileDataUrl";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
 import { useThemePreference } from "../hooks/useThemePreference";
@@ -42,23 +44,25 @@ export function SettingsPage() {
   const requestedTab = searchParams.get("tab");
   const activeTab: SettingsTab = requestedTab === "modules" || requestedTab === "runtime" ? requestedTab : "workspace";
   const { loaded: permissionsLoaded, can } = usePermissions();
-  const canManageModules = permissionsLoaded && can("society:write");
+  const canEditBranding = permissionsLoaded && can("society:write");
+  const canEditSettings = permissionsLoaded && can("settings:write");
+  const canManageModules = canEditSettings;
   const [demo, setDemo] = useState(isDemoMode());
   const appRuntime = resolveAppRuntime();
-  const updateModules = useMutation(api.society.updateModules);
-  const updateInventorySettings = useMutation(api.society.updateInventorySettings);
-  const updateNotificationSettings = useMutation(api.society.updateNotificationSettings);
+  const updateModules = usePermissionedMutation(api.society.updateModules, canEditSettings);
+  const updateInventorySettings = usePermissionedMutation(api.society.updateInventorySettings, canEditSettings);
+  const updateNotificationSettings = usePermissionedMutation(api.society.updateNotificationSettings, canEditSettings);
   // Logos use the dedicated branding-upload path, which stays available even
   // when native file storage is disabled (a logo isn't document content).
-  const generateUploadUrl = useMutation(api.files.generateLogoUploadUrl);
-  const setLogo = useMutation(api.society.setLogo);
-  const clearLogo = useMutation(api.society.clearLogo);
-  const setDarkLogo = useMutation(api.society.setDarkLogo);
-  const clearDarkLogo = useMutation(api.society.clearDarkLogo);
-  const setLetterhead = useMutation(api.society.setLetterhead);
-  const clearLetterhead = useMutation(api.society.clearLetterhead);
-  const setLogoInvertInDarkMode = useMutation(api.society.setLogoInvertInDarkMode);
-  const seedSharedViews = useMutation(api.views.seedGovernanceDataTableViews);
+  const generateUploadUrl = usePermissionedMutation(api.files.generateLogoUploadUrl, canEditBranding);
+  const setLogo = usePermissionedMutation(api.society.setLogo, canEditBranding);
+  const clearLogo = usePermissionedMutation(api.society.clearLogo, canEditBranding);
+  const setDarkLogo = usePermissionedMutation(api.society.setDarkLogo, canEditBranding);
+  const clearDarkLogo = usePermissionedMutation(api.society.clearDarkLogo, canEditBranding);
+  const setLetterhead = usePermissionedMutation(api.society.setLetterhead, canEditBranding);
+  const clearLetterhead = usePermissionedMutation(api.society.clearLetterhead, canEditBranding);
+  const setLogoInvertInDarkMode = usePermissionedMutation(api.society.setLogoInvertInDarkMode, canEditBranding);
+  const seedSharedViews = usePermissionedMutation(api.views.seedGovernanceDataTableViews, canEditSettings);
   const confirm = useConfirm();
   const toast = useToast();
   const { preference: theme, resolvedTheme, setPreference: setTheme } = useThemePreference();
@@ -143,6 +147,7 @@ export function SettingsPage() {
   };
 
   const toggleConsumablePrompt = async (checked: boolean) => {
+    if (!canEditSettings) return;
     setInventoryPromptEnabled(checked);
     setSavingInventorySettings(true);
     try {
@@ -163,7 +168,7 @@ export function SettingsPage() {
   const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 
   const uploadLogoVariant = async (variant: "light" | "dark" | "letterhead", file: File) => {
-    if (!society) return;
+    if (!society || !canEditBranding) return;
     if (!LOGO_ALLOWED_TYPES.includes(file.type)) {
       toast.error("Unsupported file type", "Please upload an SVG, PNG, or JPG.");
       return;
@@ -174,14 +179,19 @@ export function SettingsPage() {
     }
     setUploadingLogo(variant);
     try {
-      const uploadUrl = await generateUploadUrl({});
-      const res = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!res.ok) throw new Error(`Upload failed (${res.status})`);
-      const { storageId } = await res.json();
+      let storageId: string;
+      if (isLocalDataRuntime()) {
+        storageId = await readFileDataUrl(file);
+      } else {
+        const uploadUrl = await generateUploadUrl({ societyId: society._id });
+        const res = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+        ({ storageId } = await res.json());
+      }
       if (variant === "light") {
         await setLogo({ societyId: society._id, storageId });
       } else if (variant === "dark") {
@@ -222,7 +232,7 @@ export function SettingsPage() {
   };
 
   const removeLogoVariant = async (variant: "light" | "dark" | "letterhead") => {
-    if (!society) return;
+    if (!society || !canEditBranding) return;
     const messages = {
       light: { title: "Remove logo?", body: "The letter avatar will be shown instead until you upload a new logo." },
       dark: { title: "Remove dark-mode logo?", body: "The light-mode logo will be used in dark mode until you upload a new variant." },
@@ -255,7 +265,7 @@ export function SettingsPage() {
   };
 
   const toggleLogoInvert = async (checked: boolean) => {
-    if (!society) return;
+    if (!society || !canEditBranding) return;
     try {
       await setLogoInvertInDarkMode({ societyId: society._id, invert: checked });
     } catch (error) {
@@ -264,6 +274,7 @@ export function SettingsPage() {
   };
 
   const changeRetention = async (value: string) => {
+    if (!canEditSettings) return;
     const previous = retentionDays;
     setRetentionDays(value);
     setSavingRetention(true);
@@ -340,7 +351,7 @@ export function SettingsPage() {
                 <button
                   type="button"
                   className="btn"
-                  disabled={uploadingLogo === "light"}
+                  disabled={!canEditBranding || uploadingLogo === "light"}
                   onClick={() => lightLogoInputRef.current?.click()}
                 >
                   {uploadingLogo === "light"
@@ -353,7 +364,7 @@ export function SettingsPage() {
                   <button
                     type="button"
                     className="btn"
-                    disabled={uploadingLogo === "light"}
+                    disabled={!canEditBranding || uploadingLogo === "light"}
                     onClick={() => { void removeLogoVariant("light"); }}
                   >
                     Remove
@@ -367,6 +378,7 @@ export function SettingsPage() {
           </div>
 
           <Toggle
+            disabled={!canEditBranding}
             checked={showDarkLogoSection}
             onChange={setShowDarkLogoSection}
             label="Customize logo for dark mode"
@@ -379,6 +391,7 @@ export function SettingsPage() {
                 name="dark-logo-mode"
                 value={darkLogoMode}
                 onChange={async (val) => {
+                  if (!canEditBranding) return;
                   if (val === "invert" && society.logoDarkUrl) {
                     const ok = await confirm({
                       title: "Switch to inverted logo?",
@@ -396,8 +409,8 @@ export function SettingsPage() {
                   }
                 }}
                 options={[
-                  { value: "invert", label: "Invert the light logo", hint: "Works best for monochrome (black-line) logos." },
-                  { value: "upload", label: "Upload a separate logo", hint: "Use a different file optimized for dark backgrounds." },
+                  { value: "invert", disabled: !canEditBranding, label: "Invert the light logo", hint: "Works best for monochrome (black-line) logos." },
+                  { value: "upload", disabled: !canEditBranding, label: "Upload a separate logo", hint: "Use a different file optimized for dark backgrounds." },
                 ]}
               />
 
@@ -434,7 +447,7 @@ export function SettingsPage() {
                       <button
                         type="button"
                         className="btn"
-                        disabled={uploadingLogo === "dark"}
+                        disabled={!canEditBranding || uploadingLogo === "dark"}
                         onClick={() => darkLogoInputRef.current?.click()}
                       >
                         {uploadingLogo === "dark"
@@ -447,7 +460,7 @@ export function SettingsPage() {
                         <button
                           type="button"
                           className="btn"
-                          disabled={uploadingLogo === "dark"}
+                          disabled={!canEditBranding || uploadingLogo === "dark"}
                           onClick={() => { void removeLogoVariant("dark"); }}
                         >
                           Remove
@@ -461,6 +474,7 @@ export function SettingsPage() {
           )}
 
           <Toggle
+            disabled={!canEditBranding}
             checked={showLetterheadSection}
             onChange={setShowLetterheadSection}
             label="Use a custom document letterhead"
@@ -493,7 +507,7 @@ export function SettingsPage() {
                   <button
                     type="button"
                     className="btn"
-                    disabled={uploadingLogo === "letterhead"}
+                    disabled={!canEditBranding || uploadingLogo === "letterhead"}
                     onClick={() => letterheadInputRef.current?.click()}
                   >
                     {uploadingLogo === "letterhead"
@@ -506,7 +520,7 @@ export function SettingsPage() {
                     <button
                       type="button"
                       className="btn"
-                      disabled={uploadingLogo === "letterhead"}
+                      disabled={!canEditBranding || uploadingLogo === "letterhead"}
                       onClick={() => { void removeLogoVariant("letterhead"); }}
                     >
                       Remove
@@ -644,7 +658,7 @@ export function SettingsPage() {
           <Toggle
             checked={inventoryPromptEnabled}
             onChange={toggleConsumablePrompt}
-            disabled={savingInventorySettings}
+            disabled={!canEditSettings || savingInventorySettings}
             label="Prompt for current count when adding consumables"
             hint="When adding stock to a consumable item, ask how many are left first, then add the new amount to that observed count."
           />
@@ -714,7 +728,7 @@ export function SettingsPage() {
               <Select
                 value={retentionDays}
                 onChange={changeRetention}
-                disabled={savingRetention}
+                disabled={!canEditSettings || savingRetention}
                 options={[
                   { value: "7", label: "7 days" },
                   { value: "14", label: "14 days" },
@@ -768,8 +782,9 @@ export function SettingsPage() {
             <div className="row">
               <button
                 className="btn btn--accent"
-                disabled={sharedViewsBusy}
+                disabled={!canEditSettings || sharedViewsBusy}
                 onClick={async () => {
+                  if (!canEditSettings) return;
                   setSharedViewsBusy(true);
                   try {
                     const result = await seedSharedViews({ societyId: society._id });

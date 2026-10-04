@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState } from "../components/ui";
 import { Progress } from "../components/primitives";
@@ -18,6 +19,9 @@ import { taskStatusLabel } from "./Tasks";
 export function GoalDetailPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("commitments:write");
+  const canCreateTask = loaded && can("tasks:write");
   const goal = useQuery(api.goals.get, id ? { id: id as Id<"goals"> } : "skip");
   const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
   const allTasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
@@ -67,12 +71,14 @@ export function GoalDetailPage() {
             <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}`} className="btn-action">
               <ListTodo size={12} /> Tasks
             </Link>
-            <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}&new=1`} className="btn-action btn-action--primary">
+            {canCreateTask && <Link to={`/app/tasks?goalId=${encodeURIComponent(String(goal._id))}&new=1`} className="btn-action btn-action--primary">
               <Plus size={12} /> New task
-            </Link>
+            </Link>}
             <button
               className="btn-action"
+              disabled={!canWrite}
               onClick={async () => {
+                if (!canWrite) return;
                 const ok = await confirm({
                   title: "Delete goal?",
                   message: `"${goal.title}" and its milestones will be permanently deleted. Linked tasks are kept but unlinked.`,
@@ -103,6 +109,7 @@ export function GoalDetailPage() {
               <div className="row" style={{ marginTop: 10, gap: 6 }}>
                 <input
                   type="range"
+                  disabled={!canWrite}
                   min={0}
                   max={100}
                   step={5}
@@ -121,6 +128,7 @@ export function GoalDetailPage() {
               {goal.milestones.map((m: any, i: number) => (
                 <div key={i} className="row" style={{ padding: 8, border: "1px solid var(--border)", borderRadius: 4, gap: 8 }}>
                   <Checkbox
+                    disabled={!canWrite}
                     checked={!!m.done}
                     onChange={() => toggleMilestone({ id: goal._id, index: i })}
                     bare
@@ -191,6 +199,7 @@ export function GoalDetailPage() {
               <Row label="Status">
                 <Select
                   size="sm"
+                  disabled={!canWrite}
                   value={goal.status}
                   onChange={(v) => update({ id: goal._id, patch: { status: v } })}
                   style={{ width: 140, maxWidth: "100%" }}

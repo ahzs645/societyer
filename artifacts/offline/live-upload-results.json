@@ -1,0 +1,47 @@
+{
+  "completedAt": "2026-10-04T20:58:22.552Z",
+  "endpoint": "http://127.0.0.1:43230",
+  "auth": "Real Better Auth email sessions and broker JWTs verified by actual self-hosted Convex",
+  "passed": 8,
+  "failed": 0,
+  "results": [
+    {
+      "name": "All upload purposes enforce real current roles and hostile principal denial",
+      "passed": true
+    },
+    {
+      "name": "Production uploads require an explicit workspace and validate the supplied purpose",
+      "passed": true
+    },
+    {
+      "name": "Logo capabilities use the same Owner/Admin policy as branding sinks",
+      "passed": true
+    },
+    {
+      "name": "Actual bytes attach using authoritative storage metadata and download unchanged",
+      "passed": true
+    },
+    {
+      "name": "Repeated attachment is safe; cross-workspace storage rebinding is denied",
+      "passed": true
+    },
+    {
+      "name": "Denied document readers and writers cannot use guessed blob identifiers",
+      "passed": true
+    },
+    {
+      "name": "Asset photo writes and persisted native image delivery obey financial roles",
+      "passed": true
+    },
+    {
+      "name": "Inventory photo writes and persisted native image delivery obey financial roles",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Actual Better Auth broker exercised live; Clerk JWT principal parity tested through native oracle.",
+    "Native storage off and logo exception tested in isolated native oracle; shared live backend storage configuration remained unchanged.",
+    "External RustFS/R2 byte verification tested with deterministic HTTP adapters; no production external storage endpoint configured.",
+    "PowerSync replication and browser viewport qualification are separate suites."
+  ]
+}

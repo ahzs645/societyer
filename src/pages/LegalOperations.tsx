@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/convexApi";
@@ -121,8 +121,11 @@ export function RoleHoldersPage() {
   });
   const history = useQuery(
     api.roleHolderHistory.revisionHistory,
-    historyId ? { roleHolderId: historyId as any } : "skip",
+    historyId && can("members:read") && rows?.some(row => row._id === historyId && row.historyReadable === true) ? { roleHolderId: historyId as any } : "skip",
   ) as any[] | undefined;
+  useEffect(() => {
+    if (historyId && (!can("members:read") || (rows && !rows.some(row => row._id === historyId && row.historyReadable === true)))) setHistoryId(null);
+  }, [historyId, rows, can]);
   const auditDiff = useQuery(
     api.roleHolderHistory.changesBetween,
     society && auditFrom && auditTo
@@ -336,7 +339,7 @@ export function RoleHoldersPage() {
               loading={tableData.loading || rows === undefined}
               renderRowActions={(record) => (
                 <>
-                  <button className="btn btn--ghost btn--sm" onClick={() => setHistoryId(record._id)}>
+                  <button className="btn btn--ghost btn--sm" disabled={!can("members:read") || record.historyReadable !== true} title={record.historyReadable === true ? undefined : "Your role cannot read this record’s complete history."} onClick={() => { if (can("members:read") && record.historyReadable === true) setHistoryId(record._id); }}>
                     History
                   </button>
                   <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setDraft(editRoleHolder(record))}>
@@ -393,8 +396,8 @@ export function RoleHoldersPage() {
         {historyId && (
           <div>
             <p className="muted" style={{ marginTop: 0 }}>
-              Every edit appends a version. "Who" is client-asserted (this backend has no
-              auth yet), so treat the actor as advisory until auth is added.
+              Every edit appends a stored version. Actor names on historical imports
+              reflect the source record and may differ from the current account.
             </p>
             {(history ?? []).slice().reverse().map((version, idx) => (
               <div key={idx} className="card" style={{ marginBottom: 10, padding: 12 }}>

@@ -1,0 +1,61 @@
+{
+  "completedAt": "2026-10-04T21:46:44.135Z",
+  "endpoint": "http://127.0.0.1:43230",
+  "auth": "Real Better Auth email sessions and broker JWTs verified by actual self-hosted Convex",
+  "passed": 9,
+  "failed": 0,
+  "resolvedFindings": [
+    {
+      "finding": "Real Better Auth update/reveal rejected because the JWT has no default workspace",
+      "resolution": "Derive the workspace from the authorized vault row."
+    },
+    {
+      "finding": "Admin could replace owner_only with owner_admin and then reveal",
+      "resolution": "Existing owner_only ACL or stored-value changes now require authenticated Owner; unchanged metadata remains editable."
+    }
+  ],
+  "results": [
+    {
+      "name": "Owner and Admin encrypted create, metadata redaction and default Admin reveal grant",
+      "passed": true
+    },
+    {
+      "name": "Encrypted rotation and metadata updates derive scope from the bound row",
+      "passed": true
+    },
+    {
+      "name": "Owner-only record restricts Admin reveal while Owner remains authorized",
+      "passed": true
+    },
+    {
+      "name": "Admin cannot weaken owner-only ACL or replace its stored value; unchanged metadata remains editable",
+      "passed": true
+    },
+    {
+      "name": "Authenticated Owner can rotate owner-only value and update its access policy",
+      "passed": true
+    },
+    {
+      "name": "Forged actingUserId cannot impersonate another principal during create/update/reveal",
+      "passed": true
+    },
+    {
+      "name": "Foreign workspace cannot create against or mutate/reveal guessed vault records",
+      "passed": true
+    },
+    {
+      "name": "Lower roles and disabled/invited/anonymous principals cannot create/update/reveal/delete",
+      "passed": true
+    },
+    {
+      "name": "Own fixture records delete successfully without touching concurrent browser fixtures",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Synthetic values only; no production credentials or external secret systems used.",
+    "Public metadata redaction and native encrypt/decrypt/rotate handlers exercised; raw ciphertext and encryption keys never exported.",
+    "Clerk principal binding is qualified separately by the native authorization oracle.",
+    "Browser viewport, role controls and reload behavior are qualified separately."
+  ]
+}

@@ -12,6 +12,9 @@
 import { documentAccessPredicate, filterDocumentLinkedRows } from "./documents";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
+import { readableProjectionPermissions } from "./projectionPermissions";
+import type { Permission } from "./permissions";
+import { interfaceRouteReadPermission } from "../interfaceRouteAccess";
 import { assertAllowedOption } from "../orgHubOptions";
 
 const BINDER_DOCUMENT_CATEGORIES = ["Constitution", "Bylaws", "Minutes", "Policy", "Filing", "FinancialStatement", "WorkflowGenerated"];
@@ -22,8 +25,99 @@ const CORE_RECORD_LIMIT = 10;
 const SUPPORT_RECORD_LIMIT = 20;
 const DELIVERY_RECORD_LIMIT = 20;
 
+const CHECK_READ_PERMISSIONS: Readonly<Record<string, readonly Permission[]>> = {
+  missing_core_documents: ["documents:read"],
+  missing_signatures: ["documents:read", "minutes:read"],
+  open_filings: ["filings:read"],
+  unresolved_resolutions: ["motions:read"],
+  policy_adoption_gaps: ["documents:read", "meetings:read", "minutes:read", "motions:read"],
+  written_resolution_spine_gaps: ["motions:read", "minutes:read"],
+  paper_archive_gap: ["documents:read"],
+  workflow_package_gaps: ["tasks:read"],
+  policy_review_gaps: ["documents:read"],
+  meeting_minutes_gap: ["meetings:read", "minutes:read"],
+};
+
+const GAP_READ_PERMISSIONS: Readonly<Record<string, readonly Permission[]>> = {
+  missing_minutes: ["minutes:read"],
+  minutes_approval_gap: ["minutes:read"],
+  minutes_source_gap: ["documents:read"],
+  materials_gap: ["meetings:read", "documents:read"],
+  agm_workflow_gap: ["meetings:read"],
+  open_filing: ["filings:read"],
+  filing_evidence_gap: ["documents:read"],
+  policy_adoption_gap: ["meetings:read", "minutes:read", "motions:read"],
+  policy_document_gap: ["documents:read"],
+  policy_review_gap: ["documents:read"],
+  policy_signature_gap: ["documents:read"],
+  written_resolution_spine_gap: ["minutes:read"],
+  written_resolution_signature_gap: ["documents:read"],
+  bylaw_resolution_meeting_gap: ["meetings:read"],
+  bylaw_filing_gap: ["filings:read"],
+  financials_agm_gap: ["meetings:read"],
+  financials_statement_gap: ["documents:read"],
+  workflow_package_in_progress: ["tasks:read"],
+};
+
+const MINUTE_BOOK_READ_PERMISSIONS: Readonly<Record<string, Permission>> = {
+  "minuteBookItems": "minutes:read",
+  "meetings": "meetings:read",
+  "minutes": "minutes:read",
+  "filings": "filings:read",
+  "policies": "documents:read",
+  "workflowPackages": "tasks:read",
+  "signatures": "documents:read",
+  "sourceEvidence": "documents:read",
+  "motionEvidence": "motions:read",
+  "archiveAccessions": "documents:read",
+  "meetingMaterials": "meetings:read",
+  "meetingAttendanceRecords": "meetings:read",
+  "communicationCampaigns": "communications:read",
+  "communicationDeliveries": "communications:read",
+  "noticeDeliveries": "meetings:read",
+  "agmRuns": "meetings:read",
+  "financials": "financials:read",
+  "elections": "elections:read",
+  "proxies": "proxies:read",
+  "memberProposals": "motions:read",
+  "tasks": "tasks:read",
+  "bylawAmendments": "documents:read",
+  "writtenResolutions": "motions:read",
+  "agendas": "agendas:read",
+  "agendaItems": "agendas:read",
+  "recordsLocation": "documents:read"
+};
+
+const BUNDLE_COUNT_READ_PERMISSIONS: Readonly<Record<string, Permission>> = {
+  documents: "documents:read",
+  signatures: "documents:read",
+  tasks: "tasks:read",
+  filings: "filings:read",
+  financials: "financials:read",
+  proxies: "proxies:read",
+  elections: "elections:read",
+  amendments: "documents:read",
+  agendas: "agendas:read",
+  agendaItems: "agendas:read",
+  motions: "motions:read",
+  notices: "communications:read",
+  meetings: "meetings:read",
+  manualRecords: "minutes:read",
+  attendance: "meetings:read",
+  materials: "documents:read",
+  sourceEvidence: "documents:read",
+  archiveAccessions: "documents:read",
+  restrictedSources: "documents:read",
+  recordsLocations: "documents:read",
+  signers: "tasks:read",
+  parts: "tasks:read",
+};
+
 export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
+  const readable = await readableProjectionPermissions(ctx, societyId, Object.values(MINUTE_BOOK_READ_PERMISSIONS));
+  const read = (table: string, limit: number) => readable.has(MINUTE_BOOK_READ_PERMISSIONS[table]) ? collectBySociety(ctx, table, societyId, limit) : Promise.resolve([]);
+  const restrictedResources = [...new Set(Object.values(MINUTE_BOOK_READ_PERMISSIONS).filter(permission => !readable.has(permission)).map(permission => permission.split(":")[0]))].sort();
   const [
     items,
     meetings,
@@ -52,40 +146,46 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
     agendaItems,
     recordsLocations,
   ] = await Promise.all([
-    collectBySociety(ctx, "minuteBookItems", societyId, SUPPORT_RECORD_LIMIT),
-    ctx.db.query("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId)).order("desc").take(MEETING_RECORD_LIMIT),
-    collectBySociety(ctx, "minutes", societyId, MINUTES_RECORD_LIMIT),
-    collectBySociety(ctx, "filings", societyId, CORE_RECORD_LIMIT),
-    collectBySociety(ctx, "policies", societyId, CORE_RECORD_LIMIT),
-    collectBySociety(ctx, "workflowPackages", societyId, CORE_RECORD_LIMIT),
-    collectBySociety(ctx, "signatures", societyId, SUPPORT_RECORD_LIMIT),
-    collectBySociety(ctx, "sourceEvidence", societyId, SUPPORT_RECORD_LIMIT),
-    collectBySociety(ctx, "motionEvidence", societyId, SUPPORT_RECORD_LIMIT),
-    collectBySociety(ctx, "archiveAccessions", societyId, CORE_RECORD_LIMIT),
-    collectBySociety(ctx, "meetingMaterials", societyId, SUPPORT_RECORD_LIMIT),
-    collectBySociety(ctx, "meetingAttendanceRecords", societyId, SUPPORT_RECORD_LIMIT),
-    collectBySociety(ctx, "communicationCampaigns", societyId, SUPPORT_RECORD_LIMIT),
-    collectBySociety(ctx, "communicationDeliveries", societyId, DELIVERY_RECORD_LIMIT),
-    collectBySociety(ctx, "noticeDeliveries", societyId, DELIVERY_RECORD_LIMIT),
-    collectBySociety(ctx, "agmRuns", societyId, CORE_RECORD_LIMIT),
-    collectBySociety(ctx, "financials", societyId, CORE_RECORD_LIMIT),
-    collectBySociety(ctx, "elections", societyId, CORE_RECORD_LIMIT),
-    collectBySociety(ctx, "proxies", societyId, SUPPORT_RECORD_LIMIT),
-    collectBySociety(ctx, "memberProposals", societyId, CORE_RECORD_LIMIT),
-    collectBySociety(ctx, "tasks", societyId, SUPPORT_RECORD_LIMIT),
-    collectBySociety(ctx, "bylawAmendments", societyId, CORE_RECORD_LIMIT),
-    collectBySociety(ctx, "writtenResolutions", societyId, CORE_RECORD_LIMIT),
-    collectBySociety(ctx, "agendas", societyId, CORE_RECORD_LIMIT),
-    collectBySociety(ctx, "agendaItems", societyId, SUPPORT_RECORD_LIMIT),
-    collectBySociety(ctx, "recordsLocation", societyId, CORE_RECORD_LIMIT),
+    read("minuteBookItems", SUPPORT_RECORD_LIMIT),
+    readable.has("meetings:read") ? ctx.db.query("meetings").withIndex("by_society_date", (q) => q.eq("societyId", societyId)).order("desc").take(MEETING_RECORD_LIMIT) : Promise.resolve([]),
+    read("minutes", MINUTES_RECORD_LIMIT),
+    read("filings", CORE_RECORD_LIMIT),
+    read("policies", CORE_RECORD_LIMIT),
+    read("workflowPackages", CORE_RECORD_LIMIT),
+    read("signatures", SUPPORT_RECORD_LIMIT),
+    read("sourceEvidence", SUPPORT_RECORD_LIMIT),
+    read("motionEvidence", SUPPORT_RECORD_LIMIT),
+    read("archiveAccessions", CORE_RECORD_LIMIT),
+    read("meetingMaterials", SUPPORT_RECORD_LIMIT),
+    read("meetingAttendanceRecords", SUPPORT_RECORD_LIMIT),
+    read("communicationCampaigns", SUPPORT_RECORD_LIMIT),
+    read("communicationDeliveries", DELIVERY_RECORD_LIMIT),
+    read("noticeDeliveries", DELIVERY_RECORD_LIMIT),
+    read("agmRuns", CORE_RECORD_LIMIT),
+    read("financials", CORE_RECORD_LIMIT),
+    read("elections", CORE_RECORD_LIMIT),
+    read("proxies", SUPPORT_RECORD_LIMIT),
+    read("memberProposals", CORE_RECORD_LIMIT),
+    read("tasks", SUPPORT_RECORD_LIMIT),
+    read("bylawAmendments", CORE_RECORD_LIMIT),
+    read("writtenResolutions", CORE_RECORD_LIMIT),
+    read("agendas", CORE_RECORD_LIMIT),
+    read("agendaItems", SUPPORT_RECORD_LIMIT),
+    read("recordsLocation", CORE_RECORD_LIMIT),
   ]);
 
-  const documents = await collectBinderDocumentPreviews(ctx, societyId);
+  const binderPreview = readable.has("documents:read") ? await collectBinderDocumentPreviews(ctx, societyId) : { documents: [], coverageLimited: false };
+  const documents = binderPreview.documents;
   const binderDocuments = documents;
   const visibleItems = await filterDocumentLinkedRows(ctx, String(societyId), items, "minuteBookItems");
   const visibleEvidence = await filterDocumentLinkedRows(ctx, String(societyId), sourceEvidence, "sourceEvidence");
   const visibleMaterials = await filterDocumentLinkedRows(ctx, String(societyId), meetingMaterials, "meetingMaterials");
   const visibleSignatures = await filterDocumentLinkedRows(ctx, String(societyId), signatures, "signatures");
+  const documentCoverageLimited = binderPreview.coverageLimited ||
+    visibleItems.length < items.length ||
+    visibleEvidence.length < sourceEvidence.length ||
+    visibleMaterials.length < meetingMaterials.length ||
+    visibleSignatures.length < signatures.length;
   const graphInput = {
     items: visibleItems,
     documents,
@@ -117,6 +217,8 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
   };
 
   return {
+    restrictedResources,
+    documentCoverageLimited,
     items: sortDesc(visibleItems.map(minuteBookItemPreview), "effectiveDate"),
     documents: sortDesc(binderDocuments, "createdAtISO"),
     meetings: sortDesc(meetings.map(meetingPreview), "scheduledAt"),
@@ -144,7 +246,29 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
     agendas: sortDesc(agendas.map(agendaPreview), "updatedAtISO"),
     agendaItems: agendaItems.map(agendaItemPreview),
     recordsLocations: recordsLocations.map(recordsLocationPreview),
-    recordBundles: buildRecordBundles(graphInput),
+    recordBundles: buildRecordBundles(graphInput).map(bundle => ({
+      ...bundle,
+      restrictedResources,
+      documentCoverageLimited,
+      gaps: bundle.gaps
+        .filter((gap: any) => (GAP_READ_PERMISSIONS[gap.key] ?? []).every(permission => readable.has(permission)))
+        .map((gap: any) => documentCoverageLimited && GAP_READ_PERMISSIONS[gap.key]?.includes("documents:read") ? {
+          ...gap,
+          label: "Document evidence coverage unknown",
+          status: "unknown",
+          severity: "info",
+          detail: "Document access limits this preview.",
+        } : gap),
+      counts: Object.fromEntries(Object.entries(bundle.counts).filter(([key]) => {
+        const permission = BUNDLE_COUNT_READ_PERMISSIONS[key];
+        return !permission || readable.has(permission);
+      })),
+      links: bundle.links.filter((link: any) => {
+        const permission = interfaceRouteReadPermission(link.href);
+        return !permission || readable.has(permission);
+      }),
+      badges: bundle.badges.map((badge: any) => (restrictedResources.length || documentCoverageLimited) && /gap/i.test(badge.label) ? { ...badge, label: "Supporting access limited", tone: "neutral" } : badge),
+    })),
     checks: minuteBookChecks({
       items: visibleItems,
       documents,
@@ -158,7 +282,16 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
       motionEvidence,
       archiveAccessions,
       writtenResolutions,
-    }),
+    }).filter(check => (CHECK_READ_PERMISSIONS[check.key] ?? ["minutes:read"]).every(permission => readable.has(permission)))
+      .map(check => documentCoverageLimited && CHECK_READ_PERMISSIONS[check.key]?.includes("documents:read") ? {
+        ...check,
+        label: check.key === "missing_core_documents" ? "Core document completeness" : check.label,
+        status: "unknown",
+        count: null,
+        ok: null,
+        severity: "info",
+        detail: "Completeness is unknown because document access limits this preview.",
+      } : check),
   };
 }
 
@@ -255,14 +388,19 @@ async function collectBinderDocumentPreviews(ctx: PortableQueryCtx, societyId: a
     ),
   );
   const allows = await documentAccessPredicate(ctx, String(societyId));
-  return groups.flat().filter((doc) => allows(doc)).map((doc: any) => ({
-    _id: doc._id,
-    title: doc.title,
-    category: doc.category,
-    createdAtISO: doc.createdAtISO,
-    reviewStatus: doc.reviewStatus,
-    tags: doc.tags ?? [],
-  }));
+  const candidates = groups.flat();
+  const visible = candidates.filter((doc) => allows(doc));
+  return {
+    coverageLimited: visible.length < candidates.length,
+    documents: visible.map((doc: any) => ({
+      _id: doc._id,
+      title: doc.title,
+      category: doc.category,
+      createdAtISO: doc.createdAtISO,
+      reviewStatus: doc.reviewStatus,
+      tags: doc.tags ?? [],
+    })),
+  };
 }
 
 function buildRecordBundles(data: Record<string, any[]>) {

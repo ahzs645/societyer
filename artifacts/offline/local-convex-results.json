@@ -1,5 +1,5 @@
 {
-  "completedAt": "2026-10-04T20:09:06.526Z",
+  "completedAt": "2026-10-04T21:14:39.263Z",
   "endpoint": "http://127.0.0.1:43210",
   "image": "ghcr.io/get-convex/convex-backend@sha256:d715e9ec088784407ca4ba2d3db592702cd328d02c76cdca3852c0018f2a76b4",
   "auth": "Local ES256 test signer with real Convex JWT verification; production identity/membership policies",
@@ -66,29 +66,14 @@
       "passed": true
     },
     {
-      "name": "Disabled membership denies reads and disappears after explicit projection rebuild",
+      "name": "Disabled membership denies reads and automatically removes its projection",
       "passed": true
     }
   ],
   "limitations": [
     "No live Clerk or tenant-restricted Microsoft login flow exercised",
     "PowerSync service/download replication not exercised by this test",
-    "ACL/membership projection invalidation still requires explicit rebuild",
-    "Local cloud-workspace instance, not the user's Mac or Zoer host",
-    "Production unscoped files:generateUploadUrl and callers require workspace-context integration; the pilot uses a scoped endpoint"
-  ],
-  "baselineCommit": "ef5f8d94d541c0745142500723730c4f262c6e9f",
-  "reconciledMain": "4b15fd20f3b82baa6b18cb95be7b2c62404884b3",
-  "productionSourceChange": "shared/portable/define.ts: use server environment without falling through to import.meta",
-  "additionalVerification": {
-    "reconciledSecurity": "passed",
-    "combinedBuild": "passed",
-    "desktopTypecheck": "passed",
-    "pilotTypecheck": "passed",
-    "pilotLint": "passed",
-    "pilotBuild": "passed",
-    "nativeFixtureChecks": 27,
-    "browserFixtureChecks": 34,
-    "builtPwaFixtureChecks": 2
-  }
+    "Supported pilot user-role/status/removal mutations refresh projections automatically; other document ACL/external identity/expiry pathways remain outside this qualification",
+    "Local cloud-workspace instance, not the user's Mac or Zoer host"
+  ]
 }

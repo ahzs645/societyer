@@ -3,14 +3,28 @@
  *
  * `getUrl` resolves a stored blob reference to a download URL through the
  * injected `ctx.capabilities.storage` (Convex `_storage` on hosted Convex; an
- * inline/null resolver on the local runtime). Upload-side handlers
- * (generateUploadUrl / generateLogoUploadUrl / attachUploadedFileToDocument)
- * still need the write side of storage and stay on Convex.
+ * inline/null resolver on the local runtime). Upload URL handlers use the same
+ * workspace policy and injected storage capability on each runtime. Attaching
+ * native blobs remains on Convex.
  */
 
-import type { PortableQueryCtx } from "../portable/ctx";
+import type { PortableQueryCtx, PortableMutationCtx } from "../portable/ctx";
 import { documentAccessPredicate } from "./documents";
 import { requireSocietyMembership } from "./access";
+import { requirePermissionPortable } from "./permissions";
+import { uploadPermission, type UploadPurpose } from "./uploadPolicy";
+
+export async function generateUploadUrlPortable(ctx: PortableMutationCtx, args: { societyId: string; purpose?: UploadPurpose }) {
+  if (!args.societyId) throw new Error("An authorized workspace is required.");
+  await requirePermissionPortable(ctx, args.societyId, uploadPermission(args.purpose));
+  return (await ctx.capabilities.storage.createUploadUrl({})).uploadUrl;
+}
+
+export async function generateLogoUploadUrlPortable(ctx: PortableMutationCtx, args: { societyId: string }) {
+  if (!args.societyId) throw new Error("An authorized workspace is required.");
+  await requirePermissionPortable(ctx, args.societyId, "society:write");
+  return (await ctx.capabilities.storage.createUploadUrl({})).uploadUrl;
+}
 
 export async function getUrlPortable(ctx: PortableQueryCtx, { storageId }: { storageId: string }) {
   if (!storageId.startsWith("data:")) {

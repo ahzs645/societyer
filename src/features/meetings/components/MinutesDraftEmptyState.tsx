@@ -25,6 +25,10 @@ export function MinutesDraftEmptyState({
   audioInputRef,
   audioFile,
   busy,
+  canDraft,
+  canPasteDraft,
+  canChooseAudio,
+  canUploadDraft,
   onDraftFromPastedText,
   onDraftFromSavedTranscript,
   onUploadAudioAndDraft,
@@ -35,6 +39,10 @@ export function MinutesDraftEmptyState({
   audioInputRef: any;
   audioFile: File | null;
   busy: boolean;
+  canDraft: boolean;
+  canPasteDraft: boolean;
+  canChooseAudio: boolean;
+  canUploadDraft: boolean;
   onDraftFromPastedText: (text: string) => Promise<void> | void;
   onDraftFromSavedTranscript: () => Promise<void> | void;
   onUploadAudioAndDraft: () => Promise<void> | void;
@@ -82,8 +90,8 @@ export function MinutesDraftEmptyState({
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busy || !remoteAvailable}
-              onClick={() => onDraftFromSavedTranscript()}
+              disabled={!canDraft || busy || !remoteAvailable}
+              onClick={() => { if (canDraft) return onDraftFromSavedTranscript(); }}
             >
               <Sparkles size={12} /> {busy ? "Drafting..." : "Draft from saved transcript"}
             </button>
@@ -101,14 +109,15 @@ export function MinutesDraftEmptyState({
             value={pasted}
             onChange={(e) => setPasted(e.target.value)}
             placeholder="Paste the meeting transcript or your raw notes — anything in plain text works."
-            disabled={busy || !remoteAvailable}
+            disabled={!canPasteDraft || busy || !remoteAvailable}
           />
           <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busy || !remoteAvailable || pasted.trim().length === 0}
+              disabled={!canPasteDraft || busy || !remoteAvailable || pasted.trim().length === 0}
               onClick={async () => {
+                if (!canPasteDraft) return;
                 await onDraftFromPastedText(pasted);
                 setPasted("");
               }}
@@ -125,16 +134,16 @@ export function MinutesDraftEmptyState({
           <button
             type="button"
             className="btn"
-            disabled={busy || !remoteAvailable}
-            onClick={() => audioInputRef.current?.click()}
+            disabled={!canChooseAudio || busy || !remoteAvailable}
+            onClick={() => { if (canChooseAudio) audioInputRef.current?.click(); }}
           >
             <Upload size={12} /> {audioFile ? `Change audio (${audioFile.name})` : "Choose audio"}
           </button>
           <button
             type="button"
             className="btn"
-            disabled={busy || !remoteAvailable || !audioFile}
-            onClick={() => onUploadAudioAndDraft()}
+            disabled={!canUploadDraft || busy || !remoteAvailable || !audioFile}
+            onClick={() => { if (canUploadDraft) return onUploadAudioAndDraft(); }}
           >
             <Sparkles size={12} /> {busy ? "Running..." : "Transcribe & draft"}
           </button>

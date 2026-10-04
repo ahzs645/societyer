@@ -58,6 +58,7 @@ import { useMeetingMinutesColumn, type MeetingMinutesColumnProps } from "./useMe
 
 export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const {
+    canEditAgenda, canEditSections, canEditAttendance, canEditTranscript, canAddToBacklog,
     minutes,
     agenda,
     agendaTree,
@@ -150,7 +151,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     toggleSection,
     openAgendaSection,
   } = useMeetingMinutesColumn(props);
-  if (transcriptEdit !== null) {
+  if (transcriptEdit !== null && canEditTranscript) {
     return (
       <div className="meeting-minutes-layout meeting-minutes-layout--transcript-focus">
         <div className="card meeting-minutes-transcript-focus">
@@ -166,14 +167,14 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
             <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
               <button
                 className="btn-action"
-                disabled={savingTranscript}
+                disabled={savingTranscript || !canEditTranscript}
                 onClick={() => setTranscriptEdit(null)}
               >
                 Cancel
               </button>
               <button
                 className="btn-action btn-action--primary"
-                disabled={savingTranscript}
+                disabled={savingTranscript || !canEditTranscript}
                 onClick={() => { void saveTranscriptEditText(); }}
               >
                 <Save size={12} /> {savingTranscript ? "Saving..." : "Save"}
@@ -200,7 +201,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
         <div className="card meeting-minutes-agenda-card">
           <div className="card__head">
             <h2 className="card__title">Agenda</h2>
-            {agendaEdit !== null && (
+            {agendaEdit !== null && canEditAgenda && (
               <div className="meeting-minutes-agenda-numbering">
                 <Segmented
                   value={agendaNumberingMode}
@@ -217,7 +218,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                   // Disabled while a section is mid-edit: the two editors
                   // hold independent optimistic copies and saving either while
                   // the other is dirty silently overwrites the live record.
-                  disabled={sectionEditIndex !== null}
+                  disabled={!canEditAgenda || sectionEditIndex !== null}
                   title={sectionEditIndex !== null ? "Finish editing the open section first" : "Edit agenda"}
                   aria-label="Edit agenda"
                 >
@@ -235,6 +236,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                   </button>
                   <button
                     className="btn-action btn-action--icon btn-action--primary"
+                    disabled={!canEditAgenda}
                     onClick={() => { void saveAgenda(); }}
                     title="Save agenda"
                     aria-label="Save agenda"
@@ -246,7 +248,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
             </div>
           </div>
           <div className="card__body">
-            {agendaEdit !== null ? (
+            {agendaEdit !== null && canEditAgenda ? (
               <div className="meeting-minutes-agenda-editor">
                 {agendaItems.length === 0 && (
                   <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
@@ -528,7 +530,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                 </span>
               </div>
               <div className="card__body">
-                {attendanceEdit ? (
+                {attendanceEdit && canEditAttendance ? (
                   <div className="col" style={{ gap: 12 }}>
                     <AttendanceRoster
                       people={attendanceEdit.people}
@@ -559,7 +561,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                     })()}
                     <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
                       <button className="btn-action" onClick={() => setAttendanceEdit(null)}>Cancel</button>
-                      <button className="btn-action btn-action--primary" onClick={saveAttendance}>
+                      <button className="btn-action btn-action--primary" disabled={!canEditAttendance} onClick={saveAttendance}>
                         <Save size={12} /> Save attendance
                       </button>
                     </div>
@@ -578,7 +580,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                       <div style={{ flexBasis: "100%" }}>
                         <LegalGuideInline rules={quorumLegalGuides} />
                       </div>
-                      <button className="btn-action" onClick={startAttendanceEdit}>
+                      <button className="btn-action" disabled={!canEditAttendance} onClick={startAttendanceEdit}>
                         Edit attendance
                       </button>
                     </div>
@@ -618,6 +620,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                       <div className="action-item" key={`${a.sectionIndex}-${a.actionIndex}`}>
                         <Checkbox
                           checked={!!a.done}
+                          disabled={!canEditSections}
                           onChange={() => toggleActionItemDone(a.sectionIndex, a.actionIndex)}
                           bare
                         />
@@ -659,7 +662,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                         // editor; while the agenda is mid-edit, that would
                         // hold both editors open at once. The agenda editor
                         // already has its own "Add item" affordance.
-                        disabled={agendaEdit !== null}
+                        disabled={!canEditSections || agendaEdit !== null}
                         title={agendaEdit !== null ? "Use the agenda editor to add items" : "Add section"}
                         aria-label="Add section"
                         onClick={addSection}
@@ -696,7 +699,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                           // editor is active — otherwise the optimistic state
                           // could race the reorder save.
                           const reorderEnabled =
-                            rootIndex != null && agendaEdit === null && sectionEditIndex === null;
+                            canEditSections && rootIndex != null && agendaEdit === null && sectionEditIndex === null;
                           const isDragging = dragRootIndex != null && rootIndex === dragRootIndex;
                           const showDropAbove =
                             reorderEnabled && rootIndex != null && dropRootIndex === rootIndex;
@@ -778,7 +781,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                               // edit (would race the open draft). On the same
                               // section being edited, the menu opens with a
                               // Save action so right-click → save works.
-                              if (agendaEdit !== null) return;
+                              if (!canEditSections || agendaEdit !== null) return;
                               if (sectionEditIndex !== null && sectionEditIndex !== index) return;
                               event.preventDefault();
                               event.stopPropagation();
@@ -799,7 +802,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                   </span>
                                 )}
                                 {!isEditingThis && <ChevronDown size={13} aria-hidden="true" className="meeting-minutes-section-item__expand" />}
-                                {sectionEditIndex === index && sectionDraft && !isMobileSectionEditor ? (
+                                {canEditSections && sectionEditIndex === index && sectionDraft && !isMobileSectionEditor ? (
                                   <span
                                     className="meeting-minutes-section-item__title-edit"
                                     onClick={(event) => event.stopPropagation()}
@@ -908,7 +911,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                           <button
                                             className="btn-action btn-action--icon"
                                             type="button"
-                                            disabled={agendaEdit !== null || !canUp}
+                                            disabled={!canEditSections || agendaEdit !== null || !canUp}
                                             aria-label="Move section up"
                                             onClick={(event) => {
                                               event.preventDefault();
@@ -921,7 +924,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                           <button
                                             className="btn-action btn-action--icon"
                                             type="button"
-                                            disabled={agendaEdit !== null || !canDown}
+                                            disabled={!canEditSections || agendaEdit !== null || !canDown}
                                             aria-label="Move section down"
                                             onClick={(event) => {
                                               event.preventDefault();
@@ -937,7 +940,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                     <button
                                       className="btn-action btn-action--icon"
                                       type="button"
-                                      disabled={agendaEdit !== null}
+                                      disabled={!canEditSections || agendaEdit !== null}
                                       aria-label="Edit agenda item"
                                       onClick={(event) => {
                                         event.preventDefault();
@@ -950,7 +953,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                     <button
                                       className="btn-action btn-action--icon"
                                       type="button"
-                                      disabled={agendaEdit !== null}
+                                      disabled={!canEditSections || agendaEdit !== null}
                                       aria-label="Remove section"
                                       onClick={(event) => {
                                         event.preventDefault();
@@ -970,7 +973,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                   full-screen portal below — mounting a second
                                   hidden instance here would steal the editor
                                   refs and drop unflushed edits on save. */}
-                              {sectionEditIndex === index && sectionDraft && !isMobileSectionEditor ? renderSectionEditor("inline") : (
+                              {canEditSections && sectionEditIndex === index && sectionDraft && !isMobileSectionEditor ? renderSectionEditor("inline") : (
                                 <>
                                   {section.presenter && <p><strong>Presenter:</strong> {section.presenter}</p>}
                                   {section.discussion ? (
@@ -1042,7 +1045,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                   })()}
                                   {isDeferredSection(section) && (
                                     <div className="row" style={{ gap: 6, justifyContent: "space-between", flexWrap: "wrap" }}>
-                                      <button className="btn-action" onClick={() => addSectionToBacklog(section)}>
+                                      <button className="btn-action" disabled={!canAddToBacklog} onClick={() => addSectionToBacklog(section)}>
                                         Add to backlog
                                       </button>
                                     </div>
@@ -1084,7 +1087,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                   <button
                     className="btn-action btn-action--icon"
                     type="button"
-                    disabled={agendaEdit !== null}
+                    disabled={!canEditSections || agendaEdit !== null}
                     title={agendaEdit !== null ? "Use the agenda editor to add items" : "Add section"}
                     aria-label="Add section"
                     onClick={startFreshAgendaSection}
@@ -1122,8 +1125,8 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
           </div>
         )}
       </div>
-      {isMobileSectionEditor && sectionEditIndex !== null && sectionDraft && renderSectionEditor("mobile")}
-      {agendaItemMenu && (() => {
+      {canEditSections && isMobileSectionEditor && sectionEditIndex !== null && sectionDraft && renderSectionEditor("mobile")}
+      {canEditAgenda && agendaItemMenu && (() => {
         const i = agendaItemMenu.index;
         const item = agendaItems[i];
         if (!item) return null;
@@ -1208,7 +1211,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
           document.body,
         );
       })()}
-      {sectionContextMenu && (() => {
+      {canEditSections && sectionContextMenu && (() => {
         const i = sectionContextMenu.sectionIndex;
         const section = sections[i];
         if (!section) return null;

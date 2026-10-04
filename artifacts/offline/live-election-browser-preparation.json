@@ -1,0 +1,53 @@
+{
+  "preparedAt": "2026-10-04T22:23:48.657Z",
+  "endpoint": "http://127.0.0.1:43230",
+  "societyId": "qh7qshj4psf9hypf743ejtacvx8fm34y",
+  "browserElectionIds": {
+    "narrow-phone": {
+      "electionId": "t97cx131ym2e3sgscptw60xh658fne5j",
+      "questionId": "t5773tf8fezkg2fdcsvs0nf9kd8fmp8t"
+    },
+    "phone": {
+      "electionId": "t978kwcwk71wc5f46rf6ae14758fnt9q",
+      "questionId": "t57bssn5szkeet42061tes1s4n8fm8v2"
+    },
+    "tablet": {
+      "electionId": "t97dzmv8n2espqrct0krnwwwpx8fn5js",
+      "questionId": "t57cjvxk7zzccxbsdpdq5jw4js8fn96z"
+    },
+    "desktop": {
+      "electionId": "t971k397sww5z5q8vehntzb85x8fm2pp",
+      "questionId": "t57frx058vrnfyznq07qk3tr4x8fnaqd"
+    }
+  },
+  "nativePublicAttemptCount": 12,
+  "nativeAttempts": {
+    "queries": 0,
+    "mutations": 12,
+    "completed": 12,
+    "rejected": 0,
+    "brokerRequests": 3,
+    "operatorFixtureCalls": 2,
+    "byEndpoint": {
+      "elections:create": {
+        "kind": "mutation",
+        "attempted": 4,
+        "completed": 4,
+        "rejected": 0
+      },
+      "elections:addQuestion": {
+        "kind": "mutation",
+        "attempted": 4,
+        "completed": 4,
+        "rejected": 0
+      },
+      "elections:snapshotEligibleVoters": {
+        "kind": "mutation",
+        "attempted": 4,
+        "completed": 4,
+        "rejected": 0
+      }
+    }
+  },
+  "qualification": "Browser fixture preparation only: actual Owner create/questions/snapshot APIs and new real broker Member. No rerun of unchanged native participation assertions. Temporary Owner membership removed; A unchanged."
+}

@@ -1,6 +1,8 @@
+import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
@@ -18,14 +20,16 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function PoliciesPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("documents:write");
   const policies = useQuery(api.policies.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const adoptionOptions = useQuery(api.policies.adoptionOptions, society ? { societyId: society._id } : "skip");
-  const upsert = useMutation(api.policies.upsert);
-  const remove = useMutation(api.policies.remove);
-  const createReviewTask = useMutation(api.policies.createReviewTask);
-  const createSignerTask = useMutation(api.policies.createRequiredSignerTask);
-  const createTransparencyDraft = useMutation(api.policies.createTransparencyDraft);
+  const upsert = usePermissionedMutation(api.policies.upsert, canWrite);
+  const remove = usePermissionedMutation(api.policies.remove, canWrite);
+  const createReviewTask = usePermissionedMutation(api.policies.createReviewTask, canWrite);
+  const createSignerTask = usePermissionedMutation(api.policies.createRequiredSignerTask, canWrite);
+  const createTransparencyDraft = usePermissionedMutation(api.policies.createTransparencyDraft, canWrite);
   const confirm = useConfirm();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -48,6 +52,7 @@ export function PoliciesPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite) return;
     setDraft({
       policyName: "",
       status: "Draft",
@@ -60,6 +65,7 @@ export function PoliciesPage() {
   };
 
   const save = async () => {
+    if (!canWrite) return;
     if (!draft) return;
     await upsert({
       id: draft._id,
@@ -89,6 +95,7 @@ export function PoliciesPage() {
   };
 
   const confirmDelete = async (row: any) => {
+    if (!canWrite) return;
     const ok = await confirm({
       title: "Delete policy?",
       message: `"${row.policyName}" will be removed from the policy registry.`,
@@ -101,12 +108,14 @@ export function PoliciesPage() {
   };
 
   const createLifecycleTask = async (row: any, kind: "review" | "signers") => {
+    if (!canWrite) return;
     if (kind === "review") await createReviewTask({ policyId: row._id });
     if (kind === "signers") await createSignerTask({ policyId: row._id });
     toast.success(kind === "review" ? "Review task created" : "Signer task created");
   };
 
   const createPublication = async (row: any) => {
+    if (!canWrite) return;
     await createTransparencyDraft({ policyId: row._id });
     toast.success("Transparency draft ready");
   };
@@ -119,7 +128,7 @@ export function PoliciesPage() {
         iconColor="green"
         subtitle="First-class policy records with source documents, review dates, signers, jurisdictions, and entity scope."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New policy
           </button>
         }
@@ -180,7 +189,7 @@ export function PoliciesPage() {
                       <Menu
                         align="right"
                         trigger={
-                          <button className="btn btn--ghost btn--sm btn--icon" aria-label="Policy actions">
+                          <button className="btn btn--ghost btn--sm btn--icon" aria-label="Policy actions" disabled={!canWrite}>
                             <MoreHorizontal size={14} />
                           </button>
                         }
@@ -193,7 +202,7 @@ export function PoliciesPage() {
                                 ? [{ id: "signers", label: "Signer task", onSelect: () => createLifecycleTask(row, "signers") }]
                                 : []),
                               { id: "publish", label: "Publish draft", onSelect: () => createPublication(row) },
-                              { id: "edit", label: "Edit", onSelect: () => { setDraft({ ...row }); setOpen(true); } },
+                              { id: "edit", label: "Edit", onSelect: () => { if (!canWrite) return; setDraft({ ...row }); setOpen(true); } },
                               { id: "delete", label: "Delete", icon: <Trash2 size={14} />, destructive: true, onSelect: () => confirmDelete(row) },
                             ],
                           },
@@ -212,13 +221,13 @@ export function PoliciesPage() {
       </div>
 
       <Drawer
-        open={open}
+        open={open && canWrite}
         onClose={() => { setOpen(false); setDraft(null); }}
         title={draft?._id ? "Edit policy" : "New policy"}
         footer={
           <>
             <button className="btn" onClick={() => { setOpen(false); setDraft(null); }}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Save</button>
+            <button className="btn btn--accent" disabled={!canWrite} onClick={save}>Save</button>
           </>
         }
       >

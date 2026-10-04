@@ -1,0 +1,43 @@
+{
+  "completedAt": "2026-10-04T22:28:39.461Z",
+  "endpoint": "http://127.0.0.1:43230",
+  "passed": 3,
+  "results": [
+    {
+      "name": "Actual Owner and Viewer retain declared full resource reads",
+      "passed": true
+    },
+    {
+      "name": "Actual Member receives authorized data and no restricted board, filing, goal or proof projection",
+      "passed": true
+    },
+    {
+      "name": "Foreign and disabled principals cannot read either dashboard composite",
+      "passed": true
+    }
+  ],
+  "nativePublicAttemptCount": 8,
+  "nativeAttempts": {
+    "queries": 8,
+    "mutations": 0,
+    "completed": 4,
+    "rejected": 4,
+    "brokerRequests": 10,
+    "byEndpoint": {
+      "dashboard:summary": {
+        "attempted": 5,
+        "completed": 3,
+        "rejected": 2
+      },
+      "dashboard:navCounts": {
+        "attempted": 3,
+        "completed": 1,
+        "rejected": 2
+      }
+    }
+  },
+  "qualification": "Actual Better Auth broker JWTs and production native Convex exports; no fixture/membership/module mutations",
+  "limitations": [
+    "Service-scope behavior and populated private evidence markers are verified by the native convex-test production-wrapper regression, separately from this live role projection check."
+  ]
+}

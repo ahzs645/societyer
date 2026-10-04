@@ -1,3 +1,4 @@
+import { usePermissions } from "../../../hooks/usePermissions";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
@@ -29,6 +30,7 @@ import {
 export function MeetingMinutesPreviewPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
+  const { loaded, can } = usePermissions();
   const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const liveMotionRows = useQuery(api.motions.listForMinutes, minutes ? { minutesId: minutes._id } : "skip");
@@ -43,7 +45,7 @@ export function MeetingMinutesPreviewPage() {
   // Needed to resolve ID-linked movers/seconders to display names, so this
   // page's exports match the meeting-detail Export tab output.
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
-  const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
+  const directors = useQuery(api.directors.list, society && loaded && can("directors:read") ? { societyId: society._id } : "skip");
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));

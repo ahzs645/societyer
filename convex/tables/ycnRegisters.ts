@@ -19,6 +19,7 @@ export const sharedRegisterTables = {
   // Cross-tenant people directory: store a person once, reuse across entities.
   // Logic: shared/peopleDirectory.ts.
   peopleDirectory: defineTable({
+    societyId: v.optional(v.id("societies")), // Hosted tenant owner; absent on legacy/local reusable records.
     fullName: v.string(),
     searchName: v.string(), // normalizeSearchName(fullName)
     firstName: v.optional(v.string()),
@@ -35,6 +36,7 @@ export const sharedRegisterTables = {
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })
+    .index("by_society", ["societyId"])
     .index("by_search_name", ["searchName"])
     .searchIndex("search_full_name", { searchField: "fullName" }),
 
@@ -103,7 +105,8 @@ export const sharedRegisterTables = {
     corpSign: v.optional(v.string()),
     createdAtISO: v.string(),
   })
-    .index("by_society", ["societyId"]),
+    .index("by_society", ["societyId"])
+    .index("by_directory_person", ["directoryPersonId"]),
 };
 
 /** Registers specific to the CORPORATION track (no society analog). */

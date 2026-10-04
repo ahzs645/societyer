@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { isLocalDataRuntime } from "../../../lib/staticRuntime";
 import { Mic, Save, Sparkles, Upload } from "lucide-react";
 import { Badge } from "../../../components/ui";
@@ -48,6 +49,9 @@ export function MeetingTranscriptCard({
 }) {
   // Re-drafting is allowed even when minutes already exist; the parent
   // callback handles the overwrite confirmation when appropriate.
+  const { can } = usePermissions();
+  const canWrite = can("meetings:write");
+  const canDraft = can("minutes:write");
   const remoteAvailable = !isLocalDataRuntime();
   const canDraftFromTranscript =
     !!onDraftFromTranscript && transcriptOnFile.trim().length > 0;
@@ -79,7 +83,7 @@ export function MeetingTranscriptCard({
           const file = event.target.files?.[0];
           if (!file) return;
           try {
-            await onImportVtt(file);
+            if (canWrite) await onImportVtt(file);
           } finally {
             if (vttInputRef.current) vttInputRef.current.value = "";
           }
@@ -96,6 +100,7 @@ export function MeetingTranscriptCard({
         {transcriptEdit !== null ? (
           <textarea
             className="textarea meeting-notes-editor"
+            readOnly={!canWrite}
             value={transcriptEdit}
             onChange={(event) => setTranscriptEdit(event.target.value)}
             placeholder="Add meeting notes or paste the raw transcript here."
@@ -118,21 +123,21 @@ export function MeetingTranscriptCard({
             <>
               <button
                 className="btn-action"
-                disabled={savingTranscript || pipelineBusy}
+                disabled={!canWrite || (savingTranscript || pipelineBusy)}
                 onClick={() => setTranscriptEdit(transcriptOnFile)}
               >
                 {transcriptOnFile ? "Edit" : "Add notes"}
               </button>
               <button
                 className="btn-action"
-                disabled={savingTranscript || pipelineBusy}
+                disabled={!canWrite || (savingTranscript || pipelineBusy)}
                 onClick={() => vttInputRef.current?.click()}
               >
                 <Upload size={12} /> Import VTT
               </button>
               <button
                 className="btn-action"
-                disabled={savingTranscript || pipelineBusy}
+                disabled={!canWrite || (savingTranscript || pipelineBusy)}
                 onClick={() => audioInputRef.current?.click()}
               >
                 <Upload size={12} /> {audioFile ? "Change audio" : "Choose audio"}
@@ -140,8 +145,8 @@ export function MeetingTranscriptCard({
               {canDraftFromTranscript && (
                 <button
                   className="btn-action btn-action--primary"
-                  disabled={!remoteAvailable || savingTranscript || pipelineBusy || draftingFromTranscript}
-                  onClick={() => onDraftFromTranscript?.()}
+                  disabled={!canDraft || (!remoteAvailable || savingTranscript || pipelineBusy || draftingFromTranscript)}
+                  onClick={() => { if (canDraft) onDraftFromTranscript?.(); }}
                   title="Generate a minutes draft from the saved transcript using AI."
                 >
                   <Sparkles size={12} /> {draftingFromTranscript ? "Drafting..." : "Draft from transcript"}
@@ -155,8 +160,8 @@ export function MeetingTranscriptCard({
               </button>
               <button
                 className="btn-action btn-action--primary"
-                disabled={savingTranscript}
-                onClick={onSaveTranscript}
+                disabled={!canWrite || (savingTranscript)}
+                onClick={() => { if (canWrite) void onSaveTranscript(); }}
               >
                 <Save size={12} /> {savingTranscript ? "Saving..." : "Save"}
               </button>
@@ -175,21 +180,21 @@ export function MeetingTranscriptCard({
             ) : (
               <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>No audio selected.</span>
             )}
-            <button className="btn-action" onClick={() => audioInputRef.current?.click()}>
+            <button className="btn-action" onClick={() => audioInputRef.current?.click()} disabled={!canWrite}>
               <Upload size={12} /> {audioFile ? "Change file" : "Choose file"}
             </button>
             <button
               className="btn-action btn-action--primary"
-              disabled={!remoteAvailable || !audioFile || pipelineBusy}
-              onClick={() => onUploadAudioAndRun(false)}
+              disabled={!canWrite || (!remoteAvailable || !audioFile || pipelineBusy)}
+              onClick={() => { if (canWrite) onUploadAudioAndRun(false); }}
             >
               <Mic size={12} /> {pipelineBusy ? "Transcribing..." : "Transcribe"}
             </button>
             {!hasMinutes && (
               <button
                 className="btn-action"
-                disabled={!remoteAvailable || !audioFile || pipelineBusy}
-                onClick={() => onUploadAudioAndRun(true)}
+                disabled={!canDraft || (!remoteAvailable || !audioFile || pipelineBusy)}
+                onClick={() => { if (canWrite && canDraft) onUploadAudioAndRun(true); }}
               >
                 <Sparkles size={12} /> {pipelineBusy ? "Running..." : "Draft minutes"}
               </button>

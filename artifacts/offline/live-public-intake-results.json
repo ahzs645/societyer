@@ -1,0 +1,81 @@
+{
+  "completedAt": "2026-10-04T21:12:11.050Z",
+  "endpoint": "http://127.0.0.1:43230",
+  "passed": 6,
+  "results": [
+    {
+      "name": "Published public intake contexts and anonymous native application submissions work",
+      "passed": true
+    },
+    {
+      "name": "Public applicants cannot enumerate rosters or substitute private member/grant identities",
+      "passed": true
+    },
+    {
+      "name": "Unpublished workspaces reject public applications",
+      "passed": true
+    },
+    {
+      "name": "Disabled modules reject anonymous intake and remove public contexts",
+      "passed": true
+    },
+    {
+      "name": "Publication and intake flags each deny direct API submissions",
+      "passed": true
+    },
+    {
+      "name": "General grant intake closes when no opportunity accepts public applications",
+      "passed": true
+    }
+  ],
+  "nativePublicAttemptCount": 19,
+  "nativeAttempts": {
+    "queries": 6,
+    "mutations": 13,
+    "completed": 7,
+    "rejected": 12,
+    "operatorFixtureCalls": 6,
+    "byEndpoint": {
+      "publicPortal:volunteerIntakeContext": {
+        "kind": "query",
+        "attempted": 2,
+        "completed": 2,
+        "rejected": 0
+      },
+      "publicPortal:grantIntakeContext": {
+        "kind": "query",
+        "attempted": 2,
+        "completed": 2,
+        "rejected": 0
+      },
+      "volunteers:submitApplication": {
+        "kind": "mutation",
+        "attempted": 6,
+        "completed": 1,
+        "rejected": 5
+      },
+      "grants:submitApplication": {
+        "kind": "mutation",
+        "attempted": 7,
+        "completed": 2,
+        "rejected": 5
+      },
+      "volunteers:list": {
+        "kind": "query",
+        "attempted": 1,
+        "completed": 0,
+        "rejected": 1
+      },
+      "grants:list": {
+        "kind": "query",
+        "attempted": 1,
+        "completed": 0,
+        "rejected": 1
+      }
+    }
+  },
+  "qualification": "Actual anonymous Convex HTTP mutations and public context queries; private operator-only disposable fixtures; no role/membership or main UI fixture changes",
+  "limitations": [
+    "This qualifies native public APIs; browser form usability is tested separately."
+  ]
+}

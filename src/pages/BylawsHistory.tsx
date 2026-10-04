@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Banner, Field } from "../components/ui";
@@ -77,6 +78,9 @@ type View = "timeline" | "current";
 
 export function BylawsHistoryPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canScanPaperless = loaded && can("documents:write");
+  const canStageRegistry = loaded && can("settings:manage");
   const toast = useToast();
   const amendments = useQuery(
     api.bylawAmendments.list,
@@ -131,7 +135,7 @@ export function BylawsHistoryPage() {
   };
 
   const runPaperlessBot = async () => {
-    if (paperlessBusy) return;
+    if (!canScanPaperless || paperlessBusy) return;
     setPaperlessBusy(true);
     try {
       const result = await scanPaperlessBylaws({
@@ -152,7 +156,7 @@ export function BylawsHistoryPage() {
   };
 
   const runRegistryBot = async () => {
-    if (registryBusy) return;
+    if (!canStageRegistry || registryBusy) return;
     setRegistryBusy(true);
     try {
       const response = await authenticatedFetch("/api/v1/browser-connectors/bylaws-history/import", {
@@ -200,7 +204,7 @@ export function BylawsHistoryPage() {
               <button className={`segmented__btn${view === "timeline" ? " is-active" : ""}`} onClick={() => setView("timeline")}>Timeline</button>
               <button className={`segmented__btn${view === "current" ? " is-active" : ""}`} onClick={() => setView("current")}>Current bylaws</button>
             </div>
-            <Link to="/app/bylaw-diff" className="btn-action"><GitCompare size={12} /> New amendment</Link>
+            <Link to="/app/bylaw-diff" className="btn-action"><GitCompare size={12} /> {canScanPaperless ? "New amendment" : "Review amendments"}</Link>
             {current && <button className="btn-action" onClick={exportCurrent}><FileDown size={12} /> Export current</button>}
           </>
         }
@@ -243,6 +247,7 @@ export function BylawsHistoryPage() {
             <Field label="Paperless search">
               <input
                 className="input"
+                disabled={!canScanPaperless}
                 value={paperlessQuery}
                 onChange={(event) => setPaperlessQuery(event.target.value)}
               />
@@ -253,14 +258,15 @@ export function BylawsHistoryPage() {
                 type="number"
                 min={1}
                 max={1179}
+                disabled={!canScanPaperless}
                 value={paperlessLimit}
                 onChange={(event) => setPaperlessLimit(Number(event.target.value) || 1)}
               />
             </Field>
-            <button className="btn-action btn-action--primary" disabled={paperlessBusy} onClick={runPaperlessBot}>
+            <button className="btn-action btn-action--primary" disabled={!canScanPaperless || paperlessBusy} onClick={runPaperlessBot}>
               <Database size={12} /> {paperlessBusy ? "Scanning..." : "Scan Paperless"}
             </button>
-            <button className="btn-action" disabled={registryBusy} onClick={runRegistryBot}>
+            <button className="btn-action" disabled={!canStageRegistry || registryBusy} onClick={runRegistryBot}>
               <FileDown size={12} /> {registryBusy ? "Staging..." : "Stage BC Registry"}
             </button>
           </div>

@@ -1,0 +1,58 @@
+{
+  "timestamp": "2026-10-04T20:59:28.933Z",
+  "endpoint": "http://127.0.0.1:43220",
+  "convexEndpoint": "http://127.0.0.1:43210",
+  "service": "1.26.1",
+  "transport": "PowerSync NDJSON stream from actual Convex export",
+  "results": [
+    {
+      "name": "PowerSync readiness and liveness are healthy",
+      "passed": true
+    },
+    {
+      "name": "Actual export stream delivers only owner-authorized meeting projection",
+      "passed": true
+    },
+    {
+      "name": "Viewer receives a separate read-only projection with no privileged fields",
+      "passed": true
+    },
+    {
+      "name": "A committed child update reaches a new independently authenticated stream",
+      "passed": true
+    },
+    {
+      "name": "Foreign actor and workspace claim substitutions return no rows",
+      "passed": true
+    },
+    {
+      "name": "Client request parameters cannot override signed workspace claims",
+      "passed": true
+    },
+    {
+      "name": "PowerSync rejects missing, expired, wrong audience and invalid signature credentials",
+      "passed": true
+    },
+    {
+      "name": "Role promotion and demotion automatically replicate write capabilities without explicit rebuild",
+      "passed": true
+    },
+    {
+      "name": "Upsert suspension and reactivation automatically delete and restore replicated views",
+      "passed": true
+    },
+    {
+      "name": "Security disable automatically deletes projections for already issued credentials and denies Convex reads",
+      "passed": true
+    },
+    {
+      "name": "Membership removal automatically deletes a restored actor projection",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Local ES256 test signer; no external Clerk or Microsoft login flow",
+    "Direct protocol qualification; separate browser tests qualify actual SQLite SDK",
+    "Automatic invalidation covers the pilot exported setRole/upsert/remove/securityDisable paths only; other document/material ACL, identity changes and expiry paths still require release support"
+  ]
+}

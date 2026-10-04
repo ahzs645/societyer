@@ -460,6 +460,28 @@ function useResizableDialog(params: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, storageKey]);
 
+  // A desktop dialog keeps an explicit rect after opening. Refit that rect
+  // when the window shrinks (or rotates) so its header and footer remain
+  // reachable without overwriting the user's remembered preferred size.
+  useLayoutEffect(() => {
+    if (!active) return;
+    const refit = () => {
+      setRect((current) => {
+        if (!current) return current;
+        const availableWidth = Math.max(1, window.innerWidth - RESIZE_MARGIN * 2);
+        const availableHeight = Math.max(1, window.innerHeight - RESIZE_MARGIN * 2);
+        const width = Math.min(current.width, availableWidth);
+        const height = Math.min(current.height, availableHeight);
+        const left = clampNum(current.left, RESIZE_MARGIN, window.innerWidth - width - RESIZE_MARGIN);
+        const top = clampNum(current.top, RESIZE_MARGIN, window.innerHeight - height - RESIZE_MARGIN);
+        if (width === current.width && height === current.height && left === current.left && top === current.top) return current;
+        return { left, top, width, height };
+      });
+    };
+    window.addEventListener("resize", refit);
+    return () => window.removeEventListener("resize", refit);
+  }, [active]);
+
   const onPointerMove = useCallback((event: PointerEvent) => {
     const drag = dragRef.current;
     if (!drag) return;
