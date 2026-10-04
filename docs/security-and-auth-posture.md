@@ -3,6 +3,11 @@
 This document makes the project's **current** identity/authorization model explicit, because it
 is a load-bearing deployment assumption that is not obvious from the code.
 
+The [Convex-hosted authentication pathways](convex-hosted-auth-pathways.md) compare
+native Convex Auth with the Better Auth Convex component, including the membership
+schema migration and the component's enterprise SSO limitation. That evaluation
+does not enable a new broker or change the current posture documented here.
+
 > **Status: rewritten 2026-08-03.** An earlier revision described a "client-asserted
 > authorization" model where Convex functions trusted a caller-supplied `actingUserId`. That is
 > no longer accurate — the Stage 2 migration replaced it. See `STAGE2-PLAN.md` for the plan and
