@@ -54,6 +54,11 @@ other Convex offline projects are detailed in the linked evaluation document.
 
 ## Expanded meeting pilot
 
+An isolated real self-hosted backend is now available for local testing. See
+the [local Convex instructions and results](../../docs/local-convex-pilot.md).
+`npm run test:live` verifies authenticated HTTP and WebSocket requests against
+that backend; the browser lab below continues to use its fixture transport.
+
 Open `http://127.0.0.1:4192/meeting.html` for the meeting, child minutes,
 attachment and recovery workflow. This now exercises the existing portable
 business handlers through a selected PowerSync-backed `LocalRowStore`, versioned

@@ -49,10 +49,12 @@ type RuntimeImportMeta = ImportMeta & {
 };
 
 function environmentValue(name: string): string | boolean | undefined {
-  const processValue = (globalThis as {
+  const processEnvironment = (globalThis as {
     process?: { env?: Record<string, string | undefined> };
-  }).process?.env?.[name];
-  if (processValue !== undefined) return processValue;
+  }).process?.env;
+  // Convex supports process.env but rejects accessing import.meta. An unset
+  // server variable must stay unset rather than falling through to Vite's env.
+  if (processEnvironment) return processEnvironment[name];
   return (import.meta as RuntimeImportMeta).env?.[name];
 }
 

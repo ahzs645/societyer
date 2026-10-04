@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import type schema from "./schema";
 import { toPortableMutationCtx, toPortableQueryCtx } from "../../../convex/lib/portable";
 import { hostedPrincipal } from "../../../convex/lib/authIdentity";
+import { assertNativeFileStorageEnabled } from "../../../convex/providers/env";
 import { requirePermissionPortable } from "../../../shared/functions/permissions";
 import { claimStorageId } from "../../../shared/functions/access";
 import { listPortable as listMeetings } from "../../../shared/functions/meetings";
@@ -135,7 +136,16 @@ export const downloads = query({ args: { societyId: v.id("societies") }, handler
   return ctx.db.query("offlineMeetingDownloads").withIndex("by_actor", q => q.eq("actor_key", actorKey).eq("society_id", args.societyId)).collect();
 } });
 
+export const prepareFileUpload = mutation({ args: { societyId: v.id("societies") }, handler: async (ctx, args) => {
+  assertNativeFileStorageEnabled();
+  const portable = await toPortableMutationCtx(ctx);
+  await requirePermissionPortable(portable, args.societyId, "meetings:write");
+  await requirePermissionPortable(portable, args.societyId, "documents:write");
+  return ctx.storage.generateUploadUrl();
+} });
+
 export const commitFile = mutation({ args: { societyId: v.id("societies"), meetingUuid: v.string(), storageId: v.id("_storage") }, handler: async (ctx, args) => {
+  assertNativeFileStorageEnabled();
   const portable = await toPortableMutationCtx(ctx);
   await requirePermissionPortable(portable, args.societyId, "meetings:write");
   await requirePermissionPortable(portable, args.societyId, "documents:write");

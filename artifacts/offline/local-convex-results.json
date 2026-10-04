@@ -1,0 +1,94 @@
+{
+  "completedAt": "2026-10-04T20:09:06.526Z",
+  "endpoint": "http://127.0.0.1:43210",
+  "image": "ghcr.io/get-convex/convex-backend@sha256:d715e9ec088784407ca4ba2d3db592702cd328d02c76cdca3852c0018f2a76b4",
+  "auth": "Local ES256 test signer with real Convex JWT verification; production identity/membership policies",
+  "passed": 16,
+  "results": [
+    {
+      "name": "Signed ES256 JWT is verified and bound to workspace membership",
+      "passed": true
+    },
+    {
+      "name": "Anonymous callers cannot invoke admin-only fixtures or business commands",
+      "passed": true
+    },
+    {
+      "name": "Forged signatures, expired JWTs, wrong issuer and wrong audience are denied",
+      "passed": true
+    },
+    {
+      "name": "Owner command creates the real meeting/agenda/minutes/attachment graph atomically",
+      "passed": true
+    },
+    {
+      "name": "Lost acknowledgement replay has one durable effect and stable ID mappings",
+      "passed": true
+    },
+    {
+      "name": "Changed replay payload is rejected",
+      "passed": true
+    },
+    {
+      "name": "Viewer retains allowed reads but cannot upload commands",
+      "passed": true
+    },
+    {
+      "name": "Foreign workspace reads, uploads and role changes are denied",
+      "passed": true
+    },
+    {
+      "name": "Stale revisions cannot overwrite accepted preparation",
+      "passed": true
+    },
+    {
+      "name": "Per-principal projections match authorized snapshots",
+      "passed": true
+    },
+    {
+      "name": "Native file upload verifies content hash before linking metadata",
+      "passed": true
+    },
+    {
+      "name": "Two independently authenticated WebSocket clients observe committed child edits",
+      "passed": true
+    },
+    {
+      "name": "Last active Owner cannot be demoted, removed or ordinarily disabled",
+      "passed": true
+    },
+    {
+      "name": "Viewer cannot grant themselves Owner authority",
+      "passed": true
+    },
+    {
+      "name": "Promoting another Owner allows demotion; current roles gate even receipt replays",
+      "passed": true
+    },
+    {
+      "name": "Disabled membership denies reads and disappears after explicit projection rebuild",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "No live Clerk or tenant-restricted Microsoft login flow exercised",
+    "PowerSync service/download replication not exercised by this test",
+    "ACL/membership projection invalidation still requires explicit rebuild",
+    "Local cloud-workspace instance, not the user's Mac or Zoer host",
+    "Production unscoped files:generateUploadUrl and callers require workspace-context integration; the pilot uses a scoped endpoint"
+  ],
+  "baselineCommit": "ef5f8d94d541c0745142500723730c4f262c6e9f",
+  "reconciledMain": "4b15fd20f3b82baa6b18cb95be7b2c62404884b3",
+  "productionSourceChange": "shared/portable/define.ts: use server environment without falling through to import.meta",
+  "additionalVerification": {
+    "reconciledSecurity": "passed",
+    "combinedBuild": "passed",
+    "desktopTypecheck": "passed",
+    "pilotTypecheck": "passed",
+    "pilotLint": "passed",
+    "pilotBuild": "passed",
+    "nativeFixtureChecks": 27,
+    "browserFixtureChecks": 34,
+    "builtPwaFixtureChecks": 2
+  }
+}

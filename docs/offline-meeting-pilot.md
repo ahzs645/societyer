@@ -1,6 +1,13 @@
 # Meeting offline pilot and Zoer test target
 
-Status: locally verified pilot; **not deployed, production-enabled, or live-replication qualified**.
+Status: the pilot is now deployed and tested against an isolated local Convex
+backend. See the [local backend follow-up](local-convex-pilot.md) for 16 live
+checks and the shared runtime fix. PowerSync replication and Zoer deployment
+remain unverified.
+
+The record below describes the original fixture baseline at `ef5f8d9`, before
+that local backend follow-up. Its source fingerprints and unchanged-source
+claims apply to that historical baseline.
 
 Prepared on 2026-10-04. Reconciled main is
 `4b15fd20f3b82baa6b18cb95be7b2c62404884b3`; interface fixes are the existing
