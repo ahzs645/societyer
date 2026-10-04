@@ -14,6 +14,7 @@ import { RecordTableEmpty } from "./RecordTableEmpty";
 import { RecordTableAggregateFooter, RecordTableAggregateFooterRow } from "./RecordTableAggregateFooter";
 import { RecordTableActionRow, RecordTableActionRowCells } from "./RecordTableActionRow";
 import { useRecordTableKeyboardNavigation } from "../hooks/useRecordTableKeyboardNavigation";
+import { useCurrentUserId } from "../../../../hooks/useCurrentUser";
 import { useIsMobile } from "../../../../lib/useIsMobile";
 import { getMobileTableLayout, limitColumnsForPhone } from "../../../../lib/mobileTableLayout";
 import { FieldDisplay } from "../../record-field/components/FieldDisplay";
@@ -196,6 +197,32 @@ export function RecordTable({
   // sideways through the whole set — the rest of the record lives in the
   // drawer. Column pickers/sort/filter still see the full column list.
   const isMobile = useIsMobile();
+  const actorId = useCurrentUserId();
+  const [mobileSelectionMode, setMobileSelectionMode] = useState(false);
+  const selectionScope = useRef({ actorId, objectName: objectMetadata._id });
+  const inlineSelection = isMobile && selectable && mobileSelectionMode && viewType === "table";
+  useEffect(() => {
+    const scopeChanged = selectionScope.current.actorId !== actorId || selectionScope.current.objectName !== objectMetadata._id;
+    selectionScope.current = { actorId, objectName: objectMetadata._id };
+    if (scopeChanged || !isMobile || !selectable || viewType !== "table") {
+      setMobileSelectionMode(false);
+      if (scopeChanged || mobileSelectionMode) handle.get().clearSelection();
+    }
+  }, [actorId, objectMetadata._id, isMobile, selectable, viewType, mobileSelectionMode, handle]);
+  const mobileSelectionControls = isMobile && selectable ? (
+    <div className="record-table__mobile-selection-controls">
+      <button type="button" className="btn btn--sm" aria-pressed={inlineSelection}
+        onKeyDown={(event) => {
+          if (!event.ctrlKey && !event.metaKey && !event.altKey) event.stopPropagation();
+        }}
+        onClick={() => {
+          if (mobileSelectionMode) handle.get().clearSelection();
+          setMobileSelectionMode(!mobileSelectionMode);
+        }}>
+        {inlineSelection ? "Exit selection" : "Select records"}
+      </button>
+    </div>
+  ) : null;
   const visibleColumns = useMemo(
     () => limitColumnsForPhone(columns.filter((c) => c.isVisible), isMobile),
     [columns, isMobile],
@@ -262,7 +289,7 @@ export function RecordTable({
   );
   const handleTableKeyDown = useRecordTableKeyboardNavigation({
     enabled: keyboardNavigation,
-    selectable: effectiveSelectable,
+    selectable: effectiveSelectable || inlineSelection,
   });
 
   useEffect(() => {
@@ -502,11 +529,12 @@ export function RecordTable({
         aria-label={`${objectMetadata.labelPlural} table`}
         tabIndex={0}
         onKeyDown={handleTableKeyDown}
-        className="record-table__scroll-frame"
+        className={`record-table__scroll-frame${inlineSelection ? " is-mobile-selecting" : ""}`}
         style={{
           "--record-table-identifier-left": effectiveSelectable ? "28px" : "0px",
         } as CSSProperties}
       >
+        {mobileSelectionControls}
         <div ref={setScrollNode} className={`record-table__scroll ${densityClass}`}>
           <table className="record-table" role="grid">
             <thead className="record-table__thead">
@@ -524,6 +552,7 @@ export function RecordTable({
                     record={record}
                     rowIndex={i}
                     selectable={effectiveSelectable}
+                    mobileSelectionMode={inlineSelection}
                     showDragHandle={showDragHandle}
                     renderRowActions={renderRowActions}
                     rowMenuSections={rowMenuSections}
@@ -553,7 +582,7 @@ export function RecordTable({
   return (
     <div
       ref={tableRootRef}
-      className="record-table__interaction-root"
+      className={`record-table__interaction-root${inlineSelection ? " is-mobile-selecting" : ""}`}
       role="region"
       aria-label={`${objectMetadata.labelPlural} table`}
       tabIndex={0}
@@ -562,6 +591,7 @@ export function RecordTable({
         "--record-table-identifier-left": effectiveSelectable ? "28px" : "0px",
       } as CSSProperties}
     >
+      {mobileSelectionControls}
       <TableVirtuoso
         ref={virtuosoRef}
         scrollerRef={setVirtualScrollNode}
@@ -593,6 +623,7 @@ export function RecordTable({
               record={record}
               rowIndex={index}
               selectable={effectiveSelectable}
+              mobileSelectionMode={inlineSelection}
               showDragHandle={showDragHandle}
               renderRowActions={renderRowActions}
               rowMenuSections={rowMenuSections}

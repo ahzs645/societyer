@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { Link } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
@@ -59,6 +60,8 @@ const CANDIDATE_TONES: Record<string, "neutral" | "info" | "success" | "danger">
 };
 
 function GrantOpportunityQueue({ societyId }: { societyId: any }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("grants:write");
   const toast = useToast();
   const candidates = useQuery(api.grantSources.candidates, { societyId });
   const sources = useQuery(api.grantSources.list, { societyId });
@@ -120,12 +123,12 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
                   <option key={s._id} value={s._id}>{s.name}</option>
                 ))}
               </select>
-              <button className="btn-action" disabled={discovering || !discoverSourceId} onClick={runDiscover}>
+              <button className="btn-action" disabled={!canWrite || (discovering || !discoverSourceId)} onClick={runDiscover}>
                 <RefreshCw size={12} /> Discover
               </button>
             </>
           )}
-          <button className="btn-action btn-action--primary" onClick={() => setAdding((v) => !v)}>
+          <button className="btn-action btn-action--primary" onClick={() => setAdding((v) => !v)} disabled={!canWrite}>
             <Plus size={12} /> {adding ? "Close" : "Add opportunity"}
           </button>
         </div>
@@ -143,7 +146,7 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
             </div>
             <Field label="Opportunity URL"><input className="input" value={form.opportunityUrl} onChange={(e) => setForm({ ...form, opportunityUrl: e.target.value })} placeholder="https://…" /></Field>
             <div className="row" style={{ gap: 8 }}>
-              <button className="btn btn--accent" onClick={save}><Plus size={14} /> Add</button>
+              <button className="btn btn--accent" onClick={save} disabled={!canWrite}><Plus size={14} /> Add</button>
             </div>
           </div>
         )}
@@ -161,10 +164,10 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
               </span>
               <span className="row" style={{ gap: 6 }}>
                 {c.status !== "Accepted" && (
-                  <button className="btn btn--sm" onClick={async () => { await setStatus({ candidateId: c._id, status: "Accepted" }); toast.success("Accepted"); }}>Accept</button>
+                  <button className="btn btn--sm" onClick={async () => { await setStatus({ candidateId: c._id, status: "Accepted" }); toast.success("Accepted"); }} disabled={!canWrite}>Accept</button>
                 )}
                 {c.status !== "Rejected" && (
-                  <button className="btn btn--sm btn--ghost" onClick={async () => { await setStatus({ candidateId: c._id, status: "Rejected" }); toast.info("Rejected"); }}>Reject</button>
+                  <button className="btn btn--sm btn--ghost" onClick={async () => { await setStatus({ candidateId: c._id, status: "Rejected" }); toast.info("Rejected"); }} disabled={!canWrite}>Reject</button>
                 )}
               </span>
             </div>

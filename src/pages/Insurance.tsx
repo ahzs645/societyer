@@ -1,3 +1,4 @@
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { type ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
@@ -26,6 +27,7 @@ const KINDS = ["DirectorsOfficers", "GeneralLiability", "PropertyCasualty", "Cyb
 const STATUSES = ["NeedsReview", "Active", "Lapsed", "Cancelled"];
 
 export function InsurancePage() {
+  const { canWrite } = useFinancePermissions();
   const society = useSociety();
   const navigate = useNavigate();
   const items = useQuery(api.insurance.list, society ? { societyId: society._id } : "skip");
@@ -163,7 +165,7 @@ export function InsurancePage() {
         actions={
           <div className="row" style={{ gap: 8 }}>
             <Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>
-            <button className="btn-action btn-action--primary" onClick={openNew}>
+            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
               <Plus size={12} /> New policy
             </button>
           </div>
@@ -213,10 +215,10 @@ export function InsurancePage() {
             }}
             renderRowActions={(r) => (
               <>
-                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
+                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); openEdit(r); }} disabled={!canWrite}>
                   <Pencil size={12} /> Edit
                 </button>
-                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete insurance policy ${r.policyNumber ?? r.insurer}`} onClick={(e) => { e.stopPropagation(); remove({ id: r._id }); }}>
+                <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete insurance policy ${r.policyNumber ?? r.insurer}`} onClick={(e) => { e.stopPropagation(); remove({ id: r._id }); }} disabled={!canWrite}>
                   <Trash2 size={12} />
                 </button>
               </>
@@ -235,7 +237,7 @@ export function InsurancePage() {
             ? (
               <>
                 <button className="btn" onClick={() => setOpen(false)}>Close</button>
-                <button className="btn btn--accent" onClick={() => setDrawerMode("edit")}>
+                <button className="btn btn--accent" onClick={() => setDrawerMode("edit")} disabled={!canWrite}>
                   <Pencil size={12} /> Edit policy
                 </button>
               </>
@@ -243,7 +245,7 @@ export function InsurancePage() {
             : (
               <>
                 <button className="btn" onClick={() => (editingId ? setDrawerMode("view") : setOpen(false))}>Cancel</button>
-                <button className="btn btn--accent" onClick={save}>Save</button>
+                <button className="btn btn--accent" onClick={save} disabled={!canWrite}>Save</button>
               </>
             )
         }

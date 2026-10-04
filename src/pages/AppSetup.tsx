@@ -1,3 +1,4 @@
+import { appRouteHref } from "../lib/appRouteHref";
 import { useEffect, useState } from "react";
 import { Building2, Check, CloudCog, HardDrive, Loader2, Upload } from "lucide-react";
 import {
@@ -38,7 +39,7 @@ export function AppSetupPage() {
     // Full document load, not a client-side navigation: the data client is
     // constructed once at module import from the choice we just wrote.
     setBusy(true);
-    window.location.assign(path);
+    window.location.assign(appRouteHref(path, { demo: false }));
   };
 
   const chooseLocal = (intent: "fresh" | "restore") => {
@@ -128,7 +129,7 @@ export function AppSetupPage() {
           />
 
           <p className="muted app-setup__footnote">
-            Just looking around? <a href="/demo">Open the seeded demo</a> — it runs on sample data and never
+            Just looking around? <a href={appRouteHref("/demo", { demo: false })}>Open the seeded demo</a> — it runs on sample data and never
             touches your workspace.
           </p>
         </main>

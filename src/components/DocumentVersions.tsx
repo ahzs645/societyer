@@ -5,6 +5,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { Drawer, Field, Badge } from "./ui";
 import { useToast } from "./Toast";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { usePermissions } from "../hooks/usePermissions";
 import { History, Upload, RotateCcw, Download } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { openDocumentDownloadTarget } from "../lib/documentStorage";
@@ -38,6 +39,8 @@ export function DocumentVersionsDrawer({
   const syncDocument = useAction(api.paperless.syncDocument);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const permissions = usePermissions();
+  const canEdit = permissions.loaded && permissions.can("documents:write");
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [changeNote, setChangeNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -56,7 +59,7 @@ export function DocumentVersionsDrawer({
   };
 
   const handleFile = async (file: File) => {
-    if (!documentId) return;
+    if (!documentId || !canEdit || busy) return;
     setBusy(true);
     try {
       const result = await uploadDocumentVersion({
@@ -122,7 +125,7 @@ export function DocumentVersionsDrawer({
           {nativeStorage && (
             <button
               className="btn btn--accent"
-              disabled={busy}
+              disabled={busy || !canEdit}
               onClick={() => fileRef.current?.click()}
             >
               <Upload size={12} /> Upload new version
@@ -131,6 +134,7 @@ export function DocumentVersionsDrawer({
         </>
       }
     >
+      {permissions.loaded && !canEdit && <p className="muted">Document editing permission is required to upload or restore versions.</p>}
       {nativeStorage ? (
         <Field
           label="Change note (optional)"
@@ -199,16 +203,21 @@ export function DocumentVersionsDrawer({
             <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
               <button
                 className="btn btn--ghost btn--sm"
-                onClick={() => download(v._id)}
+                onClick={() => download(v._id).catch((error: any) => toast.error("Could not download version", error?.message ?? String(error)))}
               >
                 <Download size={12} /> Download
               </button>
               {!v.isCurrent && (
                 <button
                   className="btn btn--ghost btn--sm"
+                  disabled={!canEdit}
                   onClick={async () => {
-                    await rollback({ versionId: v._id });
-                    toast.success(`Rolled back to v${v.version}`);
+                    try {
+                      await rollback({ versionId: v._id });
+                      toast.success(`Rolled back to v${v.version}`);
+                    } catch (error: any) {
+                      toast.error("Could not restore version", error?.message ?? String(error));
+                    }
                   }}
                 >
                   <RotateCcw size={12} /> Restore

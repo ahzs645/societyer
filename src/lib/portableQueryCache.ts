@@ -293,14 +293,15 @@ export class PortableQueryCache {
         if (!pagination) return () => undefined;
         pagination.subscribers += 1;
         this.portableListeners.add(callback);
-        const unsubStore = this.store.onUpdate(recompute);
+        // The client-level store listener refreshes each active cache key once.
+        // An additional listener per paginated subscriber would replay every
+        // loaded page twice (or more when two components share this query).
         recompute();
         let subscribed = true;
         return () => {
           if (!subscribed) return;
           subscribed = false;
           this.portableListeners.delete(callback);
-          unsubStore();
           pagination.subscribers -= 1;
           if (pagination.subscribers > 0) return;
           if (this.portableWatchSpecs.get(cacheKey) === spec) {

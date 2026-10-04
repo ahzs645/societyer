@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Button, Drawer, Field, SettingsShell } from "../components/ui";
@@ -17,6 +18,7 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function WorkflowPackagesPage() {
   const society = useSociety();
+  const canManage = usePermissions().can("tasks:write");
   const packages = useQuery(api.workflowPackages.list, society ? { societyId: society._id } : "skip");
   const workflows = useQuery(api.workflows.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
@@ -26,6 +28,7 @@ export function WorkflowPackagesPage() {
   const markFiled = useMutation(api.workflowPackages.markFiled);
   const confirm = useConfirm();
   const toast = useToast();
+  const [activeTab, setActiveTab] = useState("packages");
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<any>(null);
 
@@ -38,6 +41,7 @@ export function WorkflowPackagesPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canManage) return;
     setDraft({
       eventType: "custom.event",
       packageName: "",
@@ -52,7 +56,7 @@ export function WorkflowPackagesPage() {
   };
 
   const save = async () => {
-    if (!draft) return;
+    if (!canManage || !draft) return;
     await upsert({
       id: draft._id,
       societyId: society._id,
@@ -78,23 +82,26 @@ export function WorkflowPackagesPage() {
   };
 
   const confirmDelete = async (row: any) => {
+    if (!canManage) return;
     const ok = await confirm({
       title: "Delete workflow package?",
       message: `"${row.packageName}" will be removed from legal package tracking.`,
       confirmLabel: "Delete",
       tone: "danger",
     });
-    if (!ok) return;
+    if (!canManage || !ok) return;
     await remove({ id: row._id });
     toast.success("Workflow package deleted");
   };
 
   const createPackageTask = async (row: any) => {
+    if (!canManage) return;
     await createFollowUpTask({ packageId: row._id });
     toast.success("Package task created");
   };
 
   const filePackage = async (row: any) => {
+    if (!canManage) return;
     await markFiled({ packageId: row._id });
     toast.success("Package marked filed");
   };
@@ -110,15 +117,17 @@ export function WorkflowPackagesPage() {
           { id: "packages", label: "Packages", icon: <Workflow size={14} /> },
           { id: "lifecycle", label: "Lifecycle" },
         ]}
-        activeTab="packages"
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
         actions={
-          <Button variant="accent" onClick={openNew}>
+          <Button variant="accent" disabled={!canManage} onClick={openNew}>
             <Plus size={12} /> New package
           </Button>
         }
       >
 
-      <div className="card">
+      {activeTab === "lifecycle" && <section role="tabpanel" aria-label="Lifecycle" className="card"><div className="card__head"><h2 className="card__title">Package lifecycle</h2></div><div className="card__body col" style={{ gap: 16 }}>{(packages ?? []).length ? (packages ?? []).map((row: any) => <div key={row._id}><strong>{row.packageName || optionLabel("eventTypes", row.eventType)}</strong><PackageLifecycle lifecycle={row.lifecycle} /></div>) : <p className="muted">No workflow packages yet. Create a package to track signers, payment, follow-up tasks, and filing.</p>}</div></section>}
+      {activeTab === "packages" && <div className="card">
         <div className="card__head">
           <h2 className="card__title">Packages</h2>
           <Badge>{packages?.length ?? 0}</Badge>
@@ -170,11 +179,13 @@ export function WorkflowPackagesPage() {
                     <td><Badge tone={toneForPackageStatus(row.status)}>{optionLabel("workflowPackageStatuses", row.status)}</Badge></td>
                     <td>
                       <div className="row" style={{ justifyContent: "flex-end" }}>
-                        <button className="btn btn--ghost btn--sm" onClick={() => createPackageTask(row)}>Task</button>
-                        {!row.lifecycle?.filed && <button className="btn btn--ghost btn--sm" onClick={() => filePackage(row)}>Filed</button>}
+                        <button className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => createPackageTask(row)}>Task</button>
+                        {!row.lifecycle?.filed && <button className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => filePackage(row)}>Filed</button>}
                         <button
                           className="btn btn--ghost btn--sm"
+                          disabled={!canManage}
                           onClick={() => {
+                            if (!canManage) return;
                             setDraft({
                               ...row,
                               supportingDocumentId: row.supportingDocumentIds?.[0],
@@ -189,7 +200,7 @@ export function WorkflowPackagesPage() {
                         >
                           Edit
                         </button>
-                        <button className="btn btn--ghost btn--sm btn--icon" aria-label="Delete workflow package" onClick={() => confirmDelete(row)}>
+                        <button className="btn btn--ghost btn--sm btn--icon" aria-label="Delete workflow package" disabled={!canManage} onClick={() => confirmDelete(row)}>
                           <Trash2 size={12} />
                         </button>
                       </div>
@@ -205,6 +216,7 @@ export function WorkflowPackagesPage() {
         </div>
       </div>
 
+      }
       <Drawer
         open={open}
         onClose={() => { setOpen(false); setDraft(null); }}
@@ -212,7 +224,7 @@ export function WorkflowPackagesPage() {
         footer={
           <>
             <button className="btn" onClick={() => { setOpen(false); setDraft(null); }}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Save</button>
+            <button className="btn btn--accent" disabled={!canManage} onClick={save}>Save</button>
           </>
         }
       >

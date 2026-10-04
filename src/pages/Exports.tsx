@@ -5,6 +5,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { Badge } from "../components/ui";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { useToast } from "../components/Toast";
 import { escapeCsvCell } from "../lib/csv";
 
 type TableSummary = {
@@ -32,6 +33,7 @@ type ImportPreview = {
 export function ExportsPage() {
   const society = useSociety();
   const convex = useConvex();
+  const toast = useToast();
   const [format, setFormat] = useState<Format>("csv");
   const [busy, setBusy] = useState<string | null>(null);
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
@@ -72,6 +74,8 @@ export function ExportsPage() {
       const body = format === "csv" ? toCsv(rows) : JSON.stringify(rows, null, 2);
       const mime = format === "csv" ? "text/csv" : "application/json";
       downloadBlob(body, mime, `${slug(society.name)}-${table}-${today()}.${format}`);
+    } catch (error) {
+      toast.error("Could not export table", error instanceof Error ? error.message : "Please try again.");
     } finally {
       setBusy(null);
     }
@@ -125,6 +129,8 @@ export function ExportsPage() {
         "application/json",
         `${slug(society.name)}-workspace-export-${today()}.json`,
       );
+    } catch (error) {
+      toast.error("Could not export workspace", error instanceof Error ? error.message : "Please try again.");
     } finally {
       setBusy(null);
       setWorkspaceBusy(false);
@@ -139,6 +145,8 @@ export function ExportsPage() {
         const count = await countTableRows(table.name);
         setTableCounts((current) => ({ ...current, [table.name]: count }));
       }
+    } catch (error) {
+      toast.error("Could not validate rows", error instanceof Error ? error.message : "Please try again.");
     } finally {
       setBusy(null);
       setCountBusy(false);
@@ -308,7 +316,8 @@ export function ExportsPage() {
             type="file"
             accept="application/json,.json"
             onChange={(event) => void inspectImportFile(event.target.files?.[0])}
-            style={{ maxWidth: 420 }}
+            aria-label="Workspace export JSON"
+            style={{ width: "100%", minWidth: 0, maxWidth: 420, boxSizing: "border-box" }}
           />
           {importError && (
             <div className="notice notice--danger" style={{ marginTop: 12 }}>

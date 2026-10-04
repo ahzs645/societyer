@@ -4,6 +4,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -38,6 +39,8 @@ const CAT_LABELS: Record<string, string> = {
 export function DocumentsPage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
+  const permissions = usePermissions();
+  const canEdit = permissions.loaded && permissions.can("documents:write");
   const docs = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const reviewQueues = useQuery(api.documents.reviewQueues, society ? { societyId: society._id } : "skip");
   const importSessions = useQuery(api.importSessions.list, society ? { societyId: society._id } : "skip");
@@ -83,6 +86,7 @@ export function DocumentsPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canEdit) return;
     setForm({ title: "", category: "Other", tags: [], retentionYears: 10 });
     setOpen(true);
   };
@@ -118,6 +122,7 @@ export function DocumentsPage() {
   };
 
   const save = async () => {
+    if (!canEdit || busy) return;
     setBusy(true);
     try {
       const newDocId = await create({ societyId: society._id, ...documentPayload(form) });
@@ -135,6 +140,7 @@ export function DocumentsPage() {
   };
 
   const quickUpload = async (file: File) => {
+    if (!canEdit || busy) return;
     setBusy(true);
     try {
       const docId = await create({ societyId: society._id, title: file.name, category: "Other", tags: [], retentionYears: 10 });
@@ -180,14 +186,14 @@ export function DocumentsPage() {
                         id: "upload",
                         label: "Upload",
                         icon: <Upload size={14} />,
-                        disabled: busy,
+                        disabled: busy || !canEdit,
                         onSelect: () => fileInputRef.current?.click(),
                       },
                     ]
                   : []),
               ]}
             />
-            <button className="btn-action btn-action--primary" disabled={busy} onClick={openNew}>
+            <button className="btn-action btn-action--primary" disabled={busy || !canEdit} onClick={openNew}>
               <Plus size={12} /> New document
             </button>
           </>
@@ -195,6 +201,7 @@ export function DocumentsPage() {
       />
 
       <RelatedDocumentViews current="/app/documents" />
+      {permissions.loaded && !canEdit && <p className="muted">Your role can read accessible documents. Document editing permission is required to create, upload, sync or delete records.</p>}
 
       {reviewQueues && (
         <>
@@ -296,7 +303,7 @@ export function DocumentsPage() {
                 <PaperlessDocumentAction
                   societyId={society._id}
                   documentId={r._id}
-                  disabled={!r.storageId && !r.fileName}
+                  disabled={!canEdit || (!r.storageId && !r.fileName)}
                 />
                 <button
                   className="btn btn--ghost btn--sm"
@@ -305,12 +312,13 @@ export function DocumentsPage() {
                 >
                   <History size={12} /> Versions
                 </button>
-                <button className="btn btn--ghost btn--sm" onClick={() => flag({ id: r._id, flagged: !r.flaggedForDeletion })}>
+                <button className="btn btn--ghost btn--sm" disabled={!canEdit} onClick={() => flag({ id: r._id, flagged: !r.flaggedForDeletion }).catch((error: any) => toast.error("Could not update document flag", error?.message ?? String(error)))}>
                   {r.flaggedForDeletion ? "Unflag" : "Flag"}
                 </button>
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Delete ${r.title}`}
+                  disabled={!canEdit}
                   onClick={async () => {
                     const ok = await confirm({
                       title: "Delete document?",
@@ -319,8 +327,12 @@ export function DocumentsPage() {
                       tone: "danger",
                     });
                     if (!ok) return;
-                    await remove({ id: r._id });
-                    toast.success("Document deleted");
+                    try {
+                      await remove({ id: r._id });
+                      toast.success("Document deleted");
+                    } catch (error: any) {
+                      toast.error("Could not delete document", error?.message ?? String(error));
+                    }
                   }}
                 >
                   <Trash2 size={12} />
@@ -333,7 +345,7 @@ export function DocumentsPage() {
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title="Add document"
-        footer={<><button className="btn" disabled={busy} onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={save}>Save</button></>}
+        footer={<><button className="btn" disabled={busy} onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" disabled={busy || !canEdit} onClick={save}>Save</button></>}
       >
         {form && (
           <div>

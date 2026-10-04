@@ -1,13 +1,13 @@
+import { authenticatedFetch } from "../lib/authToken";
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, Drawer, Field } from "../components/ui";
+import { Badge, Banner, Button, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
-import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Webhook, Plus, Power } from "lucide-react";
 import { formatDateTime } from "../lib/format";
@@ -17,17 +17,16 @@ type Draft = {
   name: string;
   targetUrl: string;
   eventTypesText: string;
-  secret: string;
   status: string;
 };
 
-const EMPTY_DRAFT: Draft = { name: "", targetUrl: "", eventTypesText: "*", secret: "", status: "active" };
+const EMPTY_DRAFT: Draft = { name: "", targetUrl: "", eventTypesText: "*", status: "active" };
 
 export function WebhooksPage() {
   const society = useSociety();
-  const actingUserId = useCurrentUserId() ?? undefined;
   const { can } = usePermissions();
-  const canManage = can("settings:write");
+  const canManage = can("settings:manage");
+  const canConfigure = canManage && !isLocalDataRuntime();
   const subscriptions = useQuery(
     api.apiPlatform.listWebhookSubscriptions,
     society ? { societyId: society._id } : "skip",
@@ -36,10 +35,10 @@ export function WebhooksPage() {
     api.apiPlatform.listWebhookDeliveries,
     society ? { societyId: society._id } : "skip",
   );
-  const upsert = useMutation(api.apiPlatform.upsertWebhookSubscription);
   const setStatus = useMutation(api.apiPlatform.setWebhookSubscriptionStatus);
-  const confirm = useConfirm();
   const toast = useToast();
+  const [saving, setSaving] = useState(false);
+  const [signingSecret, setSigningSecret] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
 
   if (society === undefined) return <PageLoading />;
@@ -51,32 +50,35 @@ export function WebhooksPage() {
       toast.warn("Name and target URL are required");
       return;
     }
-    if (!draft.id && !draft.secret.trim()) {
-      toast.warn("A signing secret is required for a new endpoint");
-      return;
-    }
     const eventTypes = draft.eventTypesText
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    await upsert({
-      id: draft.id as any,
-      societyId: society._id,
-      name: draft.name.trim(),
-      targetUrl: draft.targetUrl.trim(),
-      eventTypes: eventTypes.length ? eventTypes : ["*"],
-      secretEncrypted: draft.secret,
-      status: draft.status,
-      createdByUserId: actingUserId as any,
-    } as any);
-    toast.success(draft.id ? "Endpoint updated" : "Endpoint created");
-    setDraft(null);
+    if (!canConfigure || saving) return;
+    setSaving(true);
+    try {
+      const response = await authenticatedFetch("/api/v1/webhook-subscriptions", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: draft.id, societyId: society._id, name: draft.name.trim(), targetUrl: draft.targetUrl.trim(), eventTypes: eventTypes.length ? eventTypes : ["*"], status: draft.status }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || typeof result?.data?.signingSecret !== "string") {
+        throw new Error(result?.error?.message || "The API server could not save this endpoint.");
+      }
+      setSigningSecret(result.data.signingSecret);
+      toast.success(draft.id ? "Endpoint updated; signing secret rotated" : "Endpoint created");
+      setDraft(null);
+    } catch (error) {
+      toast.error("Could not save endpoint", error instanceof Error ? error.message : "Please try again.");
+    } finally { setSaving(false); }
   };
 
   const toggle = async (sub: any) => {
     const next = sub.status === "active" ? "disabled" : "active";
-    await setStatus({ id: sub._id, societyId: society._id, status: next } as any);
-    toast.success(next === "active" ? "Endpoint enabled" : "Endpoint disabled");
+    try {
+      await setStatus({ id: sub._id, societyId: society._id, status: next } as any);
+      toast.success(next === "active" ? "Endpoint enabled" : "Endpoint disabled");
+    } catch (error) { toast.error("Could not update endpoint", error instanceof Error ? error.message : "Please try again."); }
   };
 
   return (
@@ -91,7 +93,7 @@ export function WebhooksPage() {
             <a className="btn-action" href="/api/docs" target="_blank" rel="noreferrer">
               API docs
             </a>
-            {canManage && (
+            {canConfigure && (
               <button className="btn-action btn-action--primary" onClick={() => setDraft({ ...EMPTY_DRAFT })}>
                 <Plus size={12} /> Add endpoint
               </button>
@@ -100,9 +102,11 @@ export function WebhooksPage() {
         }
       />
 
+      {isLocalDataRuntime() && <Banner tone="info" title="Webhook delivery requires a connected server">Configure endpoints in your hosted workspace so its API server can protect signing secrets and dispatch notifications.</Banner>}
+      {signingSecret && <Banner tone="warn" title="Copy this signing secret now — it will not be shown again" onDismiss={() => setSigningSecret(null)}><code className="mono" style={{ overflowWrap: "anywhere", whiteSpace: "normal" }}>{signingSecret}</code><Button size="sm" onClick={async () => { try { await navigator.clipboard.writeText(signingSecret); toast.success("Signing secret copied"); } catch { toast.error("Clipboard unavailable"); } }}>Copy signing secret</Button></Banner>}
       <div className="card">
         <div className="card__head"><h2 className="card__title">Endpoints</h2><Badge>{subscriptions?.length ?? 0}</Badge></div>
-        <table className="table">
+        <div style={{ overflowX: "auto" }}><table className="table">
           <thead>
             <tr><th>Name</th><th>Target URL</th><th>Events</th><th>Secret</th><th>Status</th><th /></tr>
           </thead>
@@ -115,9 +119,9 @@ export function WebhooksPage() {
                 <td>{sub.hasSecret ? <Badge tone="success">set</Badge> : <Badge tone="warn">none</Badge>}</td>
                 <td><Badge tone={sub.status === "active" ? "success" : "neutral"}>{sub.status}</Badge></td>
                 <td className="table__actions">
-                  {canManage && (
+                  {canConfigure && (
                     <>
-                      <button className="btn btn--ghost btn--sm" onClick={() => setDraft({ id: sub._id, name: sub.name, targetUrl: sub.targetUrl, eventTypesText: (sub.eventTypes ?? []).join(", "), secret: "", status: sub.status })}>Edit</button>
+                      <button className="btn btn--ghost btn--sm" onClick={() => setDraft({ id: sub._id, name: sub.name, targetUrl: sub.targetUrl, eventTypesText: (sub.eventTypes ?? []).join(", "), status: sub.status })}>Edit</button>
                       <button className="btn btn--ghost btn--sm btn--icon" aria-label={sub.status === "active" ? "Disable" : "Enable"} title={sub.status === "active" ? "Disable" : "Enable"} onClick={() => toggle(sub)}>
                         <Power size={12} />
                       </button>
@@ -127,15 +131,15 @@ export function WebhooksPage() {
               </tr>
             ))}
             {(subscriptions ?? []).length === 0 && (
-              <tr><td colSpan={6} className="muted" style={{ textAlign: "center", padding: 24 }}>No webhook endpoints yet.</td></tr>
+              <tr><td colSpan={6} className="muted" style={{ textAlign: "center", padding: 24 }}>{subscriptions === undefined ? "Loading endpoints…" : "No webhook endpoints yet."}</td></tr>
             )}
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       <div className="card">
         <div className="card__head"><h2 className="card__title">Recent deliveries</h2><Badge>{deliveries?.length ?? 0}</Badge></div>
-        <table className="table">
+        <div style={{ overflowX: "auto" }}><table className="table">
           <thead>
             <tr><th>Event</th><th>Status</th><th>Attempts</th><th>When</th><th>Error</th></tr>
           </thead>
@@ -150,10 +154,10 @@ export function WebhooksPage() {
               </tr>
             ))}
             {(deliveries ?? []).length === 0 && (
-              <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>No deliveries yet. Deliveries appear here once an event fires for an active endpoint.</td></tr>
+              <tr><td colSpan={5} className="muted" style={{ textAlign: "center", padding: 24 }}>{deliveries === undefined ? "Loading deliveries…" : "No deliveries yet. Deliveries appear here once an event fires for an active endpoint."}</td></tr>
             )}
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       <Drawer
@@ -163,7 +167,7 @@ export function WebhooksPage() {
         footer={
           <>
             <button className="btn" onClick={() => setDraft(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Save endpoint</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canConfigure || saving || !draft?.name.trim() || !draft?.targetUrl.trim()}>{saving ? "Saving…" : "Save endpoint"}</button>
           </>
         }
       >
@@ -174,9 +178,7 @@ export function WebhooksPage() {
             <Field label="Event types (comma-separated, * for all)">
               <input className="input" value={draft.eventTypesText} onChange={(e) => setDraft({ ...draft, eventTypesText: e.target.value })} placeholder="*, meeting.created, filing.due" />
             </Field>
-            <Field label={draft.id ? "Signing secret (leave to re-enter; required to save edits)" : "Signing secret"}>
-              <input className="input" type="password" value={draft.secret} onChange={(e) => setDraft({ ...draft, secret: e.target.value })} placeholder="Used to sign each delivery (HMAC)" />
-            </Field>
+            <p className="muted">{draft.id ? "Saving rotates the signing secret. Update your receiving service with the new secret." : "The server generates a signing secret and shows it once after saving."}</p>
             <Field label="Status">
               <Select value={draft.status} onChange={(v) => setDraft({ ...draft, status: v })} options={[{ value: "active", label: "Active" }, { value: "disabled", label: "Disabled" }]} />
             </Field>

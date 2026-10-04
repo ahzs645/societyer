@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
 import { Badge, Drawer, EmptyState } from "../components/ui";
@@ -51,6 +52,8 @@ function computeConflicts(meetings: Doc<"meetings">[]): Map<string, string[]> {
 
 export function MeetingsPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canManage = loaded && can("meetings:write");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<MeetingDraft | null>(null);
   const [params, setParams] = useSearchParams();
@@ -116,7 +119,7 @@ export function MeetingsPage() {
     toast.success("Meeting deleted", meeting.title);
   };
 
-  const meetingMenuSections = (meeting: Doc<"meetings">): MenuSection[] => [
+  const meetingMenuSections = (meeting: Doc<"meetings">): MenuSection[] => !canManage ? [{ id: "actions", items: [{ id: "open", label: "Open", icon: <ExternalLink size={14} />, onSelect: () => navigate(`/app/meetings/${meeting._id}`) }] }] : [
     {
       id: "actions",
       items: [
@@ -149,7 +152,7 @@ export function MeetingsPage() {
   ];
 
   useEffect(() => {
-    if (!society || open || !meetingTemplates) return;
+    if (!society || open || !meetingTemplates || !canManage) return;
     const intent = params.get("intent");
     if (intent !== "create" && intent !== "generate-agm-package") return;
     const type = params.get("type") === "AGM" ? "AGM" : "Board";
@@ -167,7 +170,7 @@ export function MeetingsPage() {
       next.delete("type");
       return next;
     }, { replace: true });
-  }, [open, params, setParams, society, meetingTemplates]);
+  }, [open, params, setParams, society, meetingTemplates, canManage]);
 
   if (society === undefined) return <div className="page meetings-page">Loading…</div>;
   if (society === null) return <SeedPrompt />;
@@ -244,6 +247,7 @@ export function MeetingsPage() {
             className="btn-action btn-action--primary meetings-page__new"
             type="button"
             onClick={() => openNew()}
+            disabled={!canManage}
             aria-label="New meeting"
             title={`New meeting — general meetings need ${noticeMinDays}–${noticeMaxDays} days of notice`}
           >
@@ -262,11 +266,11 @@ export function MeetingsPage() {
             hydratedView={tableData.hydratedView}
             records={meetings ?? []}
             onRecordClick={(recordId) => navigate(`/app/meetings/${recordId}`)}
-            onCreate={() => openNew()}
-            onUpdate={async ({ recordId, fieldName, value }) => {
+            onCreate={canManage ? () => openNew() : undefined}
+            onUpdate={canManage ? async ({ recordId, fieldName, value }) => {
               if (fieldName === "minutes") return;
               await updateMeeting({ id: recordId as Doc<"meetings">["_id"], patch: { [fieldName]: value } as any });
-            }}
+            } : undefined}
           >
             <RecordTableViewToolbar
               societyId={society._id}
@@ -288,7 +292,7 @@ export function MeetingsPage() {
                   title="No meetings scheduled yet"
                   description="Schedule a board, committee, or general meeting to start tracking agendas, attendees, and minutes."
                   action={
-                    <button className="btn btn--accent" type="button" onClick={() => openNew()}>
+                    <button className="btn btn--accent" type="button" onClick={() => openNew()} disabled={!canManage}>
                       <Plus size={12} /> Schedule meeting
                     </button>
                   }
@@ -346,7 +350,7 @@ export function MeetingsPage() {
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title={editingId ? "Edit meeting" : "Schedule meeting"}
-        footer={<><button className="btn" type="button" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" type="button" onClick={save} disabled={hasUnacknowledgedConflict}>{editingId ? "Save" : "Schedule"}</button></>}
+        footer={<><button className="btn" type="button" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" type="button" onClick={save} disabled={!canManage || hasUnacknowledgedConflict}>{editingId ? "Save" : "Schedule"}</button></>}
       >
         {form && (
           <MeetingFormFields

@@ -200,6 +200,9 @@ function argsFor(
   const args = materialized && typeof materialized === "object" && !Array.isArray(materialized)
     ? materialized as Record<string, unknown>
     : {};
+  // Use a real recognized role so the history probe reaches tenant authority
+  // rather than stopping at validation of the generic string fixture.
+  if (entry.name === "registerHistory:roleHoldersAsOfDate") args.roleType = "director";
   if (target && targetTenant) setPath(args, target, targetTenant);
   return args;
 }

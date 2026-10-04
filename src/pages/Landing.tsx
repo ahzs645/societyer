@@ -1,3 +1,4 @@
+import { appRouteHref } from "../lib/appRouteHref";
 import { type MouseEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -170,7 +171,7 @@ export function LandingPage() {
       : `Switch to ${nextTheme} mode`;
 
   const authEnabled = isAuthenticatedAuthMode();
-  const demoHref = "/demo";
+  const demoHref = appRouteHref("/demo", { demo: false });
   const navCtaLabel = "Open demo";
   const primaryCtaLabel = "Open the live demo";
   const authMeta = authEnabled
@@ -239,7 +240,7 @@ export function LandingPage() {
             <a href={demoHref} className="landing__btn landing__btn--primary landing__btn--lg">
               {primaryCtaLabel} <ArrowRight size={16} />
             </a>
-            <a href="/setup" className="landing__btn landing__btn--ghost landing__btn--lg">
+            <a href={appRouteHref("/setup", { demo: false })} className="landing__btn landing__btn--ghost landing__btn--lg">
               Set up your own workspace
             </a>
             <a

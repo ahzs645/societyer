@@ -1,7 +1,9 @@
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
 import { Badge, Field } from "../components/ui";
@@ -12,6 +14,8 @@ import { useEffect, useState } from "react";
 
 export function PaperlessPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canConfigure = can("settings:write") && can("documents:write");
   const status = useQuery(api.paperless.connectionStatus, society ? { societyId: society._id } : "skip");
   const recentSyncs = useQuery(api.paperless.recentSyncs, society ? { societyId: society._id, limit: 12 } : "skip");
   const tagProfiles = useQuery(api.paperless.tagProfiles, {});
@@ -41,6 +45,7 @@ export function PaperlessPage() {
   const connected = connection?.status === "connected";
 
   const save = async () => {
+    if (!canConfigure || busy) return;
     setBusy(true);
     try {
       await upsertConnection({
@@ -58,6 +63,7 @@ export function PaperlessPage() {
   };
 
   const runTest = async () => {
+    if (!canConfigure || busy) return;
     setBusy(true);
     try {
       const result = await testConnection({ societyId: society._id });
@@ -66,6 +72,8 @@ export function PaperlessPage() {
       } else {
         toast.error(result.error ?? "Paperless-ngx connection failed");
       }
+    } catch (error) {
+      toast.error("Could not test Paperless-ngx", error instanceof Error ? error.message : "Please try again.");
     } finally {
       setBusy(false);
     }
@@ -80,10 +88,10 @@ export function PaperlessPage() {
         subtitle="Technical setup area. Connects Societyer to an external document archive that automatically scans (OCR) and tags uploaded files so they're searchable — typically configured once by an administrator, not a page a board member needs to visit."
         actions={
           <>
-            <button className="btn-action" disabled={busy} onClick={runTest}>
+            <button className="btn-action" disabled={busy || !canConfigure} onClick={runTest}>
               <RefreshCw size={12} /> Test
             </button>
-            <button className="btn-action btn-action--primary" disabled={busy} onClick={save}>
+            <button className="btn-action btn-action--primary" disabled={busy || !canConfigure} onClick={save}>
               <UploadCloud size={12} /> {connected ? "Save connection" : "Enable connection"}
             </button>
           </>
@@ -122,17 +130,23 @@ export function PaperlessPage() {
               </div>
             )}
             {connection?.lastError && <div className="alert alert--danger">{connection.lastError}</div>}
+            {isLocalDataRuntime() && <p className="muted">This local adapter previews Paperless records. Disconnect the external provider from its connected server workspace.</p>}
             <div className="row">
-              <button className="btn btn--accent" disabled={busy} onClick={save}>
+              <button className="btn btn--accent" disabled={busy || !canConfigure} onClick={save}>
                 {connected ? "Save settings" : "Enable connection"}
               </button>
               {connection && (
                 <button
                   className="btn"
-                  disabled={busy}
+                  disabled={busy || !canConfigure || isLocalDataRuntime()}
                   onClick={async () => {
-                    await disconnect({ societyId: society._id });
-                    toast.success("Paperless-ngx connection disabled");
+                    if (!canConfigure || isLocalDataRuntime() || busy) return;
+                    setBusy(true);
+                    try {
+                      await disconnect({ societyId: society._id });
+                      toast.success("Paperless-ngx connection disabled");
+                    } catch (error) { toast.error("Could not disconnect Paperless-ngx", error instanceof Error ? error.message : "Please try again."); }
+                    finally { setBusy(false); }
                   }}
                 >
                   Disable
@@ -149,12 +163,14 @@ export function PaperlessPage() {
           </div>
           <div className="card__body col" style={{ gap: 12 }}>
             <Toggle
+              disabled={!canConfigure}
               checked={autoCreateTags}
               onChange={setAutoCreateTags}
               label="Create missing Paperless tags"
               hint="When enabled, Societyer creates any tags that don't already exist in Paperless before uploading a document."
             />
             <Toggle
+              disabled={!canConfigure}
               checked={autoUpload}
               onChange={setAutoUpload}
               label="Auto-upload new document versions"
@@ -162,6 +178,7 @@ export function PaperlessPage() {
             />
             <Field label="Tag prefix">
               <input
+                disabled={!canConfigure}
                 className="input"
                 value={tagPrefix}
                 onChange={(event) => setTagPrefix(event.target.value)}

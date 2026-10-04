@@ -1,4 +1,6 @@
 import { ArrowDownAZ, ArrowUpAZ, Plus, Trash2 } from "lucide-react";
+import type { RefObject } from "react";
+import { ViewportPopover } from "@/components/ViewportPopover";
 import { Select } from "@/components/Select";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import type { ViewSortDirection } from "../../types";
@@ -6,9 +8,11 @@ import type { ViewSortDirection } from "../../types";
 export function RecordTableSortPopover({
   open,
   onClose,
+  anchorRef,
 }: {
   open: boolean;
   onClose: () => void;
+  anchorRef: RefObject<HTMLElement | null>;
 }) {
   const columns = useRecordTableState((state) => state.columns);
   const sorts = useRecordTableState((state) => state.sorts);
@@ -26,7 +30,7 @@ export function RecordTableSortPopover({
   };
 
   return (
-    <div className="record-table__sort-popover">
+    <ViewportPopover open onClose={onClose} anchorRef={anchorRef} label="Sort records" className="record-table__sort-popover">
       <div className="record-table__popover-head">
         <strong>Sort records</strong>
         <button type="button" className="record-table__secondary-btn" onClick={onClose}>
@@ -87,6 +91,6 @@ export function RecordTableSortPopover({
         <Plus size={12} />
         <span>Add sort</span>
       </button>
-    </div>
+    </ViewportPopover>
   );
 }

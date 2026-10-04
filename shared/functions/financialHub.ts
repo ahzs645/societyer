@@ -3,8 +3,8 @@
  * accounts, transactions, transaction lookups by external id, budgets,
  * operating subscriptions).
  *
- * Only the pure `ctx.db` handlers live here. The sync/disconnect/connection
- * surface (anything that talks to Wave or the scheduler) stays on Convex.
+ * Pure connection status changes also run locally. Live connection setup,
+ * provider synchronization and scheduler operations remain hosted capabilities.
  *
  * Each handler reads/writes exclusively through the portable `ctx.db` contract
  * and runs unchanged on hosted Convex, the local Dexie runtime, and the
@@ -71,6 +71,32 @@ export async function connectionsPortable(ctx: PortableQueryCtx, { societyId }: 
     .query("financialConnections")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
+}
+
+/** Disconnect changes local metadata; it neither deletes cached records nor
+ * asserts that a remote provider revoked its credential. */
+export async function disconnectPortable(ctx: PortableMutationCtx, { connectionId, actingUserId }: { connectionId: string; actingUserId?: string }) {
+  const connection = await ctx.db.get(connectionId, "financialConnections");
+  if (!connection) throw new Error("Financial connection not found.");
+  await requireRolePortable(ctx, { societyId: String(connection.societyId), actingUserId, required: "Admin" });
+  await getOwned(ctx, "financialConnections", connectionId, String(connection.societyId));
+  await ctx.db.patch(connectionId, { status: "disconnected" });
+  return null;
+}
+
+/** Offline connection setup is explicitly a demo record, never a live OAuth
+ * connection. Existing imported records remain unchanged on reconnect. */
+export async function markDemoConnectionConnectedPortable(ctx: PortableMutationCtx, args: { societyId: string; provider: string; accountLabel?: string; externalBusinessId?: string; demo: boolean; actingUserId?: string }) {
+  await requireRolePortable(ctx, { societyId: args.societyId, actingUserId: args.actingUserId, required: "Admin" });
+  const society = await ctx.db.get(args.societyId, "societies");
+  if (!args.demo || society?.demoMode !== true) throw new Error("Local connection setup requires a demo workspace. Live Wave connections require the configured server.");
+  if (args.provider !== "wave") throw new Error("This local demo supports the Wave provider only.");
+  const existing = await ctx.db.query("financialConnections").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect();
+  const connection = existing.find((row: any) => row.provider === args.provider);
+  if (connection && connection.demo !== true) throw new Error("A live connection cannot be changed into a demo connection. Use the configured server to manage it.");
+  const payload = { societyId: args.societyId, provider: args.provider, status: "connected", accountLabel: args.accountLabel, externalBusinessId: args.externalBusinessId, syncMode: "demo", demo: true, connectedAtISO: new Date().toISOString() };
+  if (connection) { await ctx.db.patch(connection._id, payload); return connection._id; }
+  return ctx.db.insert("financialConnections", payload);
 }
 
 export async function accountsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {

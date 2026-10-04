@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
@@ -66,6 +67,8 @@ const STATUS_TONE: Record<string, "neutral" | "warn" | "success" | "danger" | "i
  */
 export function OutboxPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("communications:write");
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const confirm = useConfirm();
@@ -83,6 +86,7 @@ export function OutboxPage() {
   const cancel = useMutation(api.pendingEmails.cancel);
   const remove = useMutation(api.pendingEmails.remove);
 
+  const [saving, setSaving] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState<PendingEmail | null>(null);
   const [attachPickerOpen, setAttachPickerOpen] = useState(false);
@@ -118,6 +122,7 @@ export function OutboxPage() {
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   const openNew = () => {
+    if (!canWrite) return;
     setSelected({
       _id: "",
       societyId: society._id as any,
@@ -137,7 +142,9 @@ export function OutboxPage() {
   };
 
   const save = async () => {
-    if (!selected) return;
+    if (!selected || saving || !canWrite) return;
+    setSaving(true);
+    try {
     const { _id, societyId: _s, createdAtISO: _c, sentAtISO: _sa, ...rest } = selected;
     if (_id) {
       await update({
@@ -175,6 +182,8 @@ export function OutboxPage() {
       toast.success("Email queued");
       setSelected({ ...selected, _id: id as unknown as string });
     }
+    } catch (error) { toast.error("Could not save email draft", error instanceof Error ? error.message : "Please try again."); }
+    finally { setSaving(false); }
   };
 
   const doMarkSent = async (row: PendingEmail, channel: string = "personal_email") => {
@@ -251,13 +260,14 @@ export function OutboxPage() {
 
   return (
     <div className="page">
+      {!canWrite && <p className="muted">You can review outbox records. Creating drafts and recording dispatch requires communications write access.</p>}
       <PageHeader
         title="Outbox"
         icon={<Inbox size={16} />}
         iconColor="orange"
         subtitle="Queue manual-send emails when no email provider is configured. Review content, attach documents, then mark each one sent once you've dispatched it from your own inbox."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New draft
           </button>
         }
@@ -312,7 +322,7 @@ export function OutboxPage() {
               return undefined;
             }}
             renderRowActions={(row: PendingEmail) =>
-              row.status === "sent" || row.status === "cancelled" ? (
+              !canWrite ? null : row.status === "sent" || row.status === "cancelled" ? (
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label="Delete record"
@@ -361,8 +371,8 @@ export function OutboxPage() {
             <button className="btn" onClick={() => setDrawerOpen(false)}>
               Close
             </button>
-            {selected && selected.status !== "sent" && (
-              <button className="btn btn--accent" onClick={save}>
+            {canWrite && selected && selected.status !== "sent" && (
+              <button className="btn btn--accent" disabled={saving} onClick={save}>
                 Save
               </button>
             )}
@@ -398,7 +408,7 @@ export function OutboxPage() {
                   className="input"
                   value={selected.fromName ?? ""}
                   onChange={(e) => setSelected({ ...selected, fromName: e.target.value })}
-                  disabled={selected.status === "sent"}
+                  disabled={!canWrite || selected.status === "sent"}
                 />
               </Field>
               <Field label="From email">
@@ -406,7 +416,7 @@ export function OutboxPage() {
                   className="input"
                   value={selected.fromEmail ?? ""}
                   onChange={(e) => setSelected({ ...selected, fromEmail: e.target.value })}
-                  disabled={selected.status === "sent"}
+                  disabled={!canWrite || selected.status === "sent"}
                 />
               </Field>
             </div>
@@ -415,7 +425,7 @@ export function OutboxPage() {
                 className="input"
                 value={selected.to}
                 onChange={(e) => setSelected({ ...selected, to: e.target.value })}
-                disabled={selected.status === "sent"}
+                disabled={!canWrite || selected.status === "sent"}
               />
             </Field>
             <div className="row" style={{ gap: 12 }}>
@@ -424,7 +434,7 @@ export function OutboxPage() {
                   className="input"
                   value={selected.replyTo ?? ""}
                   onChange={(e) => setSelected({ ...selected, replyTo: e.target.value })}
-                  disabled={selected.status === "sent"}
+                  disabled={!canWrite || selected.status === "sent"}
                 />
               </Field>
               <Field label="CC">
@@ -432,7 +442,7 @@ export function OutboxPage() {
                   className="input"
                   value={selected.cc ?? ""}
                   onChange={(e) => setSelected({ ...selected, cc: e.target.value })}
-                  disabled={selected.status === "sent"}
+                  disabled={!canWrite || selected.status === "sent"}
                 />
               </Field>
               <Field label="BCC">
@@ -440,7 +450,7 @@ export function OutboxPage() {
                   className="input"
                   value={selected.bcc ?? ""}
                   onChange={(e) => setSelected({ ...selected, bcc: e.target.value })}
-                  disabled={selected.status === "sent"}
+                  disabled={!canWrite || selected.status === "sent"}
                 />
               </Field>
             </div>
@@ -449,7 +459,7 @@ export function OutboxPage() {
                 className="input"
                 value={selected.subject}
                 onChange={(e) => setSelected({ ...selected, subject: e.target.value })}
-                disabled={selected.status === "sent"}
+                disabled={!canWrite || selected.status === "sent"}
               />
             </Field>
             <Field label="Body">
@@ -457,7 +467,7 @@ export function OutboxPage() {
                 rows={10}
                 value={selected.body}
                 onChange={(markdown) => setSelected({ ...selected, body: markdown })}
-                readOnly={selected.status === "sent"}
+                readOnly={!canWrite || selected.status === "sent"}
               />
             </Field>
 
@@ -534,7 +544,7 @@ export function OutboxPage() {
                   rows={2}
                   value={selected.notes}
                   onChange={(markdown) => setSelected({ ...selected, notes: markdown })}
-                  readOnly={selected.status === "sent"}
+                  readOnly={!canWrite || selected.status === "sent"}
                 />
               </Field>
             )}

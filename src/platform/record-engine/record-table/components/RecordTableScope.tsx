@@ -10,6 +10,7 @@ import {
 } from "../contexts/RecordTableContext";
 import type { HydratedView, ObjectMetadata } from "../../types";
 import { RecordTableSidePanel } from "./RecordTableSidePanel";
+import { useCurrentUserId } from "@/hooks/useCurrentUser";
 
 /**
  * Sets up both the per-instance zustand store *and* the metadata context
@@ -42,15 +43,23 @@ export function RecordTableScope({
 }) {
   // Object metadata is society-scoped, so changing it denotes a workspace
   // switch even when the route's tableId stays the same.
-  const scopeIdentity = `${tableId}:${objectMetadata._id}`;
+  const actorId = useCurrentUserId();
+  const hasAuthorizedView = hydratedView !== null;
+  const scopeIdentity = `${tableId}:${objectMetadata._id}:${actorId ?? "unbound"}:${hasAuthorizedView}`;
   const store = useMemo<RecordTableStore>(
-    () =>
-      createRecordTableStore({
+    () => {
+      const next = createRecordTableStore({
         tableId,
         objectMetadataId: objectMetadata._id,
         labelIdentifierFieldName: objectMetadata.labelIdentifierFieldName,
-      }),
-    [tableId, objectMetadata._id, objectMetadata.labelIdentifierFieldName],
+      });
+      // The first render for a different actor must not retain the previous
+      // actor's filters, saved view, selection, cells or drawer record. Hydrate
+      // a newly scoped store immediately from the current authorized snapshot.
+      if (hydratedView) next.getState().loadView(hydratedView);
+      return next;
+    },
+    [tableId, objectMetadata._id, objectMetadata.labelIdentifierFieldName, actorId, hasAuthorizedView],
   );
   const [sidePanelRecord, setSidePanelRecord] = useState<{
     scopeIdentity: string;

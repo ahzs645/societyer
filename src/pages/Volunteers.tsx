@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -25,6 +26,8 @@ import type { Id } from "../../convex/_generated/dataModel";
 
 export function VolunteersPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("volunteers:write");
   const actingUserId = useCurrentUserId() ?? undefined;
   const volunteers = useQuery(
     api.volunteers.list,
@@ -48,7 +51,7 @@ export function VolunteersPage() {
   );
   const committees = useQuery(
     api.committees.list,
-    society ? { societyId: society._id } : "skip",
+    society && can("committees:read") ? { societyId: society._id } : "skip",
   );
   const documents = useQuery(
     api.documents.list,
@@ -111,6 +114,7 @@ export function VolunteersPage() {
 
   return (
     <div className="page">
+      {!canWrite && <p className="muted">You can review volunteer records. Applications, roster changes, and screening updates require volunteers write access.</p>}
       <PageHeader
         title="Volunteers & screening"
         icon={<HandHeart size={16} />}
@@ -120,6 +124,7 @@ export function VolunteersPage() {
           <>
             <button
               className="btn-action"
+              disabled={!canWrite}
               onClick={() =>
                 setScreeningDraft({
                   societyId: society._id,
@@ -136,7 +141,7 @@ export function VolunteersPage() {
               <ShieldCheck size={12} /> Log check
             </button>
             <button
-              className="btn-action btn-action--primary"
+              className="btn-action btn-action--primary" disabled={!canWrite}
               onClick={() =>
                 setVolunteerDraft({
                   societyId: society._id,
@@ -208,7 +213,7 @@ export function VolunteersPage() {
               <>
                 {row.status === "Submitted" && (
                   <button
-                    className="btn btn--ghost btn--sm"
+                    className="btn btn--ghost btn--sm" disabled={!canWrite}
                     onClick={async () => {
                       await reviewApplication({ id: row._id, status: "Reviewing" });
                       toast.success("Application moved to review");
@@ -219,7 +224,7 @@ export function VolunteersPage() {
                 )}
                 {!["Converted", "Declined"].includes(row.status) && (
                   <button
-                    className="btn btn--ghost btn--sm"
+                    className="btn btn--ghost btn--sm" disabled={!canWrite}
                     onClick={async () => {
                       await convertApplication({
                         id: row._id,
@@ -234,7 +239,7 @@ export function VolunteersPage() {
                 )}
                 {row.status !== "Declined" && (
                   <button
-                    className="btn btn--ghost btn--sm"
+                    className="btn btn--ghost btn--sm" disabled={!canWrite}
                     onClick={async () => {
                       await reviewApplication({ id: row._id, status: "Declined" });
                       toast.success("Application declined");
@@ -291,11 +296,11 @@ export function VolunteersPage() {
             }}
             renderRowActions={(row) => (
               <>
-                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setVolunteerDraft({ ...row, id: row._id }); }}>
+                <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={(e) => { e.stopPropagation(); setVolunteerDraft({ ...row, id: row._id }); }}>
                   Edit
                 </button>
                 <button
-                  className="btn btn--ghost btn--sm btn--icon"
+                  className="btn btn--ghost btn--sm btn--icon" disabled={!canWrite}
                   aria-label={`Delete volunteer ${row.firstName} ${row.lastName}`}
                   onClick={async (e) => {
                     e.stopPropagation();
@@ -348,11 +353,11 @@ export function VolunteersPage() {
             }}
             renderRowActions={(row) => (
               <>
-                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setScreeningDraft({ ...row, id: row._id }); }}>
+                <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={(e) => { e.stopPropagation(); setScreeningDraft({ ...row, id: row._id }); }}>
                   Edit
                 </button>
                 <button
-                  className="btn btn--ghost btn--sm btn--icon"
+                  className="btn btn--ghost btn--sm btn--icon" disabled={!canWrite}
                   aria-label={`Delete screening check for ${row.volunteerName}`}
                   onClick={async (e) => {
                     e.stopPropagation();
@@ -376,7 +381,7 @@ export function VolunteersPage() {
           <>
             <button className="btn" onClick={() => setVolunteerDraft(null)}>Cancel</button>
             <button
-              className="btn btn--accent"
+              className="btn btn--accent" disabled={!canWrite}
               onClick={async () => {
                 await upsertVolunteer({
                   ...volunteerDraft,
@@ -494,7 +499,7 @@ export function VolunteersPage() {
           <>
             <button className="btn" onClick={() => setScreeningDraft(null)}>Cancel</button>
             <button
-              className="btn btn--accent"
+              className="btn btn--accent" disabled={!canWrite}
               onClick={async () => {
                 await upsertScreening({
                   ...screeningDraft,

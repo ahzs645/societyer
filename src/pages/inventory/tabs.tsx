@@ -1,3 +1,4 @@
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 // Tab views for the Inventory page. Each is a thin presentational wrapper over
 // DataTable that receives its data + row callbacks from the orchestrator, so the
 // page component stays focused on state and the tables stay independently
@@ -43,6 +44,7 @@ export function StockTab({
   onArchive: (item: any) => void;
   onDelete: (item: any) => void;
 }) {
+  const { canWrite } = useFinancePermissions();
   const { itemById, locationById, onHandByItemId, receiptLinksByItemId } = maps;
   // Locations that currently hold stock, used as preset options for the Location
   // filter on both tables.
@@ -108,12 +110,12 @@ export function StockTab({
         ]}
         renderRowActions={(row) => (
           <>
-            <button className="btn btn--ghost btn--sm" onClick={() => onPlace(row)}><MapPin size={12} /> Place / move</button>
-            <button className="btn btn--ghost btn--sm" onClick={() => onLink(row)}><Link2 size={12} /> Link purchase</button>
-            {(row.trackLot || row.trackSerial) && <button className="btn btn--ghost btn--sm" onClick={() => onAddLot(row._id)}><Layers size={12} /> Lot</button>}
-            <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)}><Pencil size={12} /> Edit</button>
-            <button className="btn btn--ghost btn--sm" onClick={() => onArchive(row)}>{row.status === "archived" ? "Restore" : "Archive"}</button>
-            <button className="btn btn--ghost btn--sm" onClick={() => onDelete(row)}><Trash2 size={12} /></button>
+            <button className="btn btn--ghost btn--sm" onClick={() => onPlace(row)} disabled={!canWrite}><MapPin size={12} /> Place / move</button>
+            <button className="btn btn--ghost btn--sm" onClick={() => onLink(row)} disabled={!canWrite}><Link2 size={12} /> Link purchase</button>
+            {(row.trackLot || row.trackSerial) && <button className="btn btn--ghost btn--sm" onClick={() => onAddLot(row._id)} disabled={!canWrite}><Layers size={12} /> Lot</button>}
+            <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)} disabled={!canWrite}><Pencil size={12} /> Edit</button>
+            <button className="btn btn--ghost btn--sm" onClick={() => onArchive(row)} disabled={!canWrite}>{row.status === "archived" ? "Restore" : "Archive"}</button>
+            <button className="btn btn--ghost btn--sm" onClick={() => onDelete(row)} disabled={!canWrite}><Trash2 size={12} /></button>
             {row.assetId && <Link className="btn btn--ghost btn--sm" to={`/app/assets/${row.assetId}`}>Asset</Link>}
           </>
         )}
@@ -306,6 +308,7 @@ export function LocationsTab({
   collapsedIds: Set<string>;
   onToggleCollapse: (id: string) => void;
 }) {
+  const { canWrite, canExport } = useFinancePermissions();
   const { balancesByLocationId } = maps;
   // Locations that hold stock directly — a sole overarching root is only inferred
   // away when it isn't itself storing anything.
@@ -334,7 +337,7 @@ export function LocationsTab({
     {inferredRoot && (
       <div className="muted" style={{ display: "flex", gap: 6, alignItems: "center", margin: "0 0 6px", fontSize: 13 }}>
         <MapPin size={12} /> Within <strong style={{ color: "var(--text-secondary)" }}>{inferredRoot.name}</strong>
-        <button className="btn btn--ghost btn--sm" style={{ padding: "0 4px" }} onClick={() => onEdit(inferredRoot)}><Pencil size={12} /> edit</button>
+        <button className="btn btn--ghost btn--sm" style={{ padding: "0 4px" }} onClick={() => onEdit(inferredRoot)} disabled={!canWrite}><Pencil size={12} /> edit</button>
       </div>
     )}
     <DataTable
@@ -403,9 +406,9 @@ export function LocationsTab({
       renderRowActions={(row) => (
         <>
           <button className="btn btn--ghost btn--sm" onClick={() => onWhatsHere(row)}><Boxes size={12} /> What's here</button>
-          {row.code && <button className="btn btn--ghost btn--sm" onClick={() => onLabel(row)} title="Show printable QR label"><QrCode size={12} /> Label</button>}
-          <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)}><Pencil size={12} /> Edit</button>
-          <button className="btn btn--ghost btn--sm" onClick={() => onDelete(row)}><Trash2 size={12} /></button>
+          {row.code && <button className="btn btn--ghost btn--sm" onClick={() => onLabel(row)} title="Show printable QR label" disabled={!canExport}><QrCode size={12} /> Label</button>}
+          <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)} disabled={!canWrite}><Pencil size={12} /> Edit</button>
+          <button className="btn btn--ghost btn--sm" onClick={() => onDelete(row)} disabled={!canWrite}><Trash2 size={12} /></button>
         </>
       )}
     />
@@ -426,6 +429,7 @@ export function LotsTab({
   onEdit: (lot: any) => void;
   onDelete: (lot: any) => void;
 }) {
+  const { canWrite } = useFinancePermissions();
   const { itemById } = maps;
   return (
     <DataTable
@@ -464,8 +468,8 @@ export function LotsTab({
       ]}
       renderRowActions={(row) => (
         <>
-          <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)}><Pencil size={12} /> Edit</button>
-          <button className="btn btn--ghost btn--sm" onClick={() => onDelete(row)}><Trash2 size={12} /></button>
+          <button className="btn btn--ghost btn--sm" onClick={() => onEdit(row)} disabled={!canWrite}><Pencil size={12} /> Edit</button>
+          <button className="btn btn--ghost btn--sm" onClick={() => onDelete(row)} disabled={!canWrite}><Trash2 size={12} /></button>
         </>
       )}
     />
@@ -483,6 +487,7 @@ export function CountsTab({
   onEnter: (count: any) => void;
   onVoid: (count: any) => void;
 }) {
+  const { canWrite } = useFinancePermissions();
   return (
     <DataTable
       label="Physical counts"
@@ -515,8 +520,8 @@ export function CountsTab({
       ]}
       renderRowActions={(row) => (
         <>
-          {row.status === "open" && <button className="btn btn--ghost btn--sm" onClick={() => onEnter(row)}><Pencil size={12} /> Enter counts</button>}
-          {row.status === "open" && <button className="btn btn--ghost btn--sm" onClick={() => onVoid(row)}>Void</button>}
+          {row.status === "open" && <button className="btn btn--ghost btn--sm" onClick={() => onEnter(row)} disabled={!canWrite}><Pencil size={12} /> Enter counts</button>}
+          {row.status === "open" && <button className="btn btn--ghost btn--sm" onClick={() => onVoid(row)} disabled={!canWrite}>Void</button>}
         </>
       )}
     />

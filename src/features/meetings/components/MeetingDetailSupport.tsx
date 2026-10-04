@@ -1,3 +1,4 @@
+import { isLocalDataRuntime } from "../../../lib/staticRuntime";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAction, useQuery } from "convex/react";
@@ -264,7 +265,7 @@ export function SourceDocumentRow({
   const [busy, setBusy] = useState(false);
   // Pulling copies the Paperless file into Convex, which the no-native-storage
   // mode forbids — keep "Open Paperless" but hide the pull/refresh action.
-  const canPull = !!externalId?.match(/^paperless:\d+$/i) && isNativeFileStorageEnabled();
+  const canPull = !isLocalDataRuntime() && !!externalId?.match(/^paperless:\d+$/i) && isNativeFileStorageEnabled();
   const hasActions = !!downloadUrl || (!!document.url && !downloadUrl) || canPull;
 
   const pull = async () => {

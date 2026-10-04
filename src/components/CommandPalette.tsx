@@ -55,6 +55,7 @@ import { isModuleEnabled, type ModuleKey } from "../lib/modules";
 import { useUIStore } from "../lib/store";
 import { useRegisteredCommands } from "../lib/commands";
 import { useStaticCommands } from "../lib/useStaticCommands";
+import { useDialogFocus } from "../lib/useDialogFocus";
 import { ROUTE_IDENTITY, groupToneCssVar, type RouteGroup } from "../lib/routeIdentity";
 import type { CSSProperties } from "react";
 
@@ -425,6 +426,7 @@ function writeStringArray(key: string, value: string[]) {
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
+  const dialogRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false), ".kbar__input");
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
   const [recents, setRecents] = useState<string[]>(() => readRecents());
@@ -541,7 +543,6 @@ export function CommandPalette() {
       setActive(0);
       setMetadataCommands([]);
       setRecents(readRecents());
-      setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
 
@@ -683,6 +684,7 @@ export function CommandPalette() {
       )}
       <div
         className="kbar"
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

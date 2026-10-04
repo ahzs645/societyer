@@ -19,9 +19,11 @@ const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"];
 export function UsersPage() {
   const society = useSociety();
   const auth = useAuth();
+  const { role: myRole, permissions, can, loaded: permissionsLoaded } = usePermissions();
+  const canViewRoster = permissionsLoaded && can("users:read");
   const users = useQuery(
     api.users.list,
-    society ? { societyId: society._id } : "skip",
+    society && canViewRoster ? { societyId: society._id } : "skip",
   );
   const upsert = useMutation(api.users.upsert);
   const setRole = useMutation(api.users.setRole);
@@ -29,7 +31,6 @@ export function UsersPage() {
   const securityDisable = useMutation(api.users.securityDisable);
   const [incident, setIncident] = useState<{ id: any; name: string; reason: string } | null>(null);
   const actingUserId = useCurrentUserId() ?? undefined;
-  const { role: myRole, permissions, can, loaded: permissionsLoaded } = usePermissions();
   const canManageUsers = permissionsLoaded && can("users:write");
   const canRemoveUsers = permissionsLoaded && myRole === "Owner";
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -86,7 +87,7 @@ export function UsersPage() {
           <div className="card__body">
             <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 6 }}>
               {roleSummary(myRole)}
-              {!canManageUsers && " You can view users but not change roles."}
+              {!canManageUsers && (canViewRoster ? " You can view users but not change roles." : " Your role does not permit viewing the workspace roster.")}
             </div>
             <details>
               <summary className="muted" style={{ fontSize: "var(--fs-sm)", cursor: "pointer" }}>
@@ -111,7 +112,9 @@ export function UsersPage() {
               : "Workspace roles and invitations control access for signed-in accounts."}
           </span>
         </div>
-        <table className="table">
+        {!permissionsLoaded && <p role="status" className="muted">Checking workspace access…</p>}
+        {permissionsLoaded && !canViewRoster && <p role="status" className="muted">Your role does not permit viewing the workspace roster. Your own access is shown above.</p>}
+        {canViewRoster && <table className="table">
           <thead>
             <tr>
               <th>Name</th>
@@ -213,7 +216,7 @@ export function UsersPage() {
               </tr>
             )}
           </tbody>
-        </table>
+        </table>}
       </div>
 
       {canManageUsers && users && users.length > 0 && (

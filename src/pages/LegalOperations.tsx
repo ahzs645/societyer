@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -100,6 +101,8 @@ type RoleHolderDraft = {
 
 export function RoleHoldersPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("documents:write");
   const rows = useQuery(api.legalOperations.listRoleHolders, society ? { societyId: society._id } : "skip");
   const upsert = useMutation(api.legalOperations.upsertRoleHolder);
   const remove = useMutation(api.legalOperations.removeRoleHolder);
@@ -136,6 +139,7 @@ export function RoleHoldersPage() {
   const openNew = (roleType = corporationWorkspace ? "director" : "authorized_representative") =>
     setDraft(defaultRoleHolderDraft(roleType, corporationWorkspace));
   const persistRoleHolder = async (roleHolder: RoleHolderDraft) => {
+    if (!canWrite) return;
     await upsert({
       id: roleHolder._id,
       societyId: society._id,
@@ -198,13 +202,14 @@ export function RoleHoldersPage() {
     });
   };
   const save = async () => {
-    if (!draft) return;
+    if (!draft || !canWrite) return;
     await persistRoleHolder(draft);
     setDraft(null);
     toast.success("Role holder saved");
   };
 
   const confirmDelete = async (row: any) => {
+    if (!canWrite) return;
     const ok = await confirm({
       title: "Delete role holder?",
       message: `"${row.fullName}" will be removed from the canonical role/control register.`,
@@ -239,18 +244,19 @@ export function RoleHoldersPage() {
           <div className="row" style={{ flexWrap: "wrap" }}>
             {corporationWorkspace && (
               <>
-                <button className="btn-action" onClick={() => openNew("officer")}><Plus size={12} /> Officer</button>
-                <button className="btn-action" onClick={() => openNew("shareholder")}><Plus size={12} /> Shareholder</button>
-                <button className="btn-action" onClick={() => openNew("controller")}><Plus size={12} /> Controller</button>
+                <button className="btn-action" disabled={!canWrite} onClick={() => openNew("officer")}><Plus size={12} /> Officer</button>
+                <button className="btn-action" disabled={!canWrite} onClick={() => openNew("shareholder")}><Plus size={12} /> Shareholder</button>
+                <button className="btn-action" disabled={!canWrite} onClick={() => openNew("controller")}><Plus size={12} /> Controller</button>
               </>
             )}
-            <button className="btn-action btn-action--primary" onClick={() => openNew()}>
+            <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={() => openNew()}>
               <Plus size={12} /> {corporationWorkspace ? "Director" : "New holder"}
             </button>
           </div>
         }
       />
 
+      {!can("settings:read") && <p className="muted">Controller records require additional workspace access and are omitted from this view. The visible register is not a complete controller register.</p>}
       {corporationWorkspace && (
         <>
           <div className="stat-grid" style={{ marginBottom: 16 }}>
@@ -307,11 +313,12 @@ export function RoleHoldersPage() {
             hydratedView={tableData.hydratedView}
             records={records}
             onRecordClick={(_, record) => setDraft(editRoleHolder(record))}
-            onUpdate={async ({ recordId, fieldName, value }) => {
+            onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
+              if (!canWrite) return;
               const record = records.find((row) => row._id === recordId);
               if (!record) return;
               await persistRoleHolder({ ...record, [fieldName]: value });
-            }}
+            } : undefined}
           >
             <RecordTableViewToolbar
               societyId={society._id}
@@ -332,12 +339,13 @@ export function RoleHoldersPage() {
                   <button className="btn btn--ghost btn--sm" onClick={() => setHistoryId(record._id)}>
                     History
                   </button>
-                  <button className="btn btn--ghost btn--sm" onClick={() => setDraft(editRoleHolder(record))}>
+                  <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setDraft(editRoleHolder(record))}>
                     Edit
                   </button>
                   <button
                     className="btn btn--ghost btn--sm btn--icon"
                     aria-label="Delete role holder"
+                    disabled={!canWrite}
                     onClick={() => confirmDelete(record)}
                   >
                     <Trash2 size={12} />
@@ -414,7 +422,7 @@ export function RoleHoldersPage() {
         open={Boolean(draft)}
         onClose={() => setDraft(null)}
         title={draft?._id ? "Edit role holder" : "New role holder"}
-        footer={<><button className="btn" onClick={() => setDraft(null)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}
+        footer={<><button className="btn" onClick={() => setDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={save}>Save</button></>}
       >
         {draft && (
           <>
@@ -479,6 +487,8 @@ export function RoleHoldersPage() {
 
 export function RightsLedgerPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("documents:write");
   // As-of date (YYYY-MM-DD); "" = live. Reconstructs the cap table at a past date.
   const [asOf, setAsOf] = useState<string>("");
   const [holderDrill, setHolderDrill] = useState<string | null>(null);
@@ -505,7 +515,7 @@ export function RightsLedgerPage() {
   if (society === null) return <SeedPrompt />;
 
   const saveClass = async () => {
-    if (!classDraft) return;
+    if (!classDraft || !canWrite) return;
     await upsertClass({
       id: classDraft._id,
       societyId: society._id,
@@ -530,7 +540,7 @@ export function RightsLedgerPage() {
   };
 
   const saveTransfer = async () => {
-    if (!transferDraft) return;
+    if (!transferDraft || !canWrite) return;
     await upsertTransfer({
       id: transferDraft._id,
       societyId: society._id,
@@ -560,6 +570,7 @@ export function RightsLedgerPage() {
   };
 
   const deleteRow = async (kind: "class" | "transfer", row: any) => {
+    if (!canWrite) return;
     const ok = await confirm({
       title: kind === "class" ? "Delete rights class?" : "Delete ledger transfer?",
       message: `"${kind === "class" ? row.className : row.transferType}" will be removed from the rights ledger.`,
@@ -573,6 +584,7 @@ export function RightsLedgerPage() {
   };
 
   const stageIssuancePacket = async (row: any) => {
+    if (!canWrite) return;
     await stageShareIssuancePacket({
       societyId: society._id,
       transferId: row._id,
@@ -582,7 +594,7 @@ export function RightsLedgerPage() {
   };
 
   const runSplit = async () => {
-    if (!splitDraft) return;
+    if (!splitDraft || !canWrite) return;
     const numerator = Number(splitDraft.numerator);
     const denominator = Number(splitDraft.denominator);
     try {
@@ -622,11 +634,12 @@ export function RightsLedgerPage() {
               <DatePicker value={asOf} onChange={(value) => setAsOf(value)} style={{ width: 150 }} />
               {asOf && <button className="btn btn--ghost btn--sm" onClick={() => setAsOf("")} title="Back to live">Live</button>}
             </label>
-            <button className="btn-action" onClick={() => setTransferDraft({ transferType: corporationWorkspace ? "issuance" : "transfer", status: "draft", priceToOrganizationCurrency: "cad", priceToVendorCurrency: "cad" })}><Plus size={12} /> {corporationWorkspace ? "Issuance" : "Transfer"}</button>
-            <button className="btn-action btn-action--primary" onClick={() => setClassDraft({ classType: corporationWorkspace ? "share" : "membership", status: "active" })}><Plus size={12} /> {corporationWorkspace ? "Share class" : "Class"}</button>
+            <button className="btn-action" disabled={!canWrite} onClick={() => setTransferDraft({ transferType: corporationWorkspace ? "issuance" : "transfer", status: "draft", priceToOrganizationCurrency: "cad", priceToVendorCurrency: "cad" })}><Plus size={12} /> {corporationWorkspace ? "Issuance" : "Transfer"}</button>
+            <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={() => setClassDraft({ classType: corporationWorkspace ? "share" : "membership", status: "active" })}><Plus size={12} /> {corporationWorkspace ? "Share class" : "Class"}</button>
           </div>
         }
       />
+      {!can("settings:read") && <p className="muted">Controller records require additional workspace access and are omitted from this view. The visible register is not a complete controller register.</p>}
       {asOf && (
         <div className="muted" style={{ marginBottom: 12 }}>
           Showing the register as it stood on <strong>{asOf}</strong>. Issuance, transfers, and holdings reflect that date.
@@ -648,7 +661,7 @@ export function RightsLedgerPage() {
                   <td>
                     <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
                       {row.classType === "share" && (
-                        <button className="btn btn--ghost btn--sm" onClick={() => setSplitDraft({ rightsClassId: row._id, className: row.className, numerator: 2, denominator: 1 })}>Split</button>
+                        <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={() => setSplitDraft({ rightsClassId: row._id, className: row.className, numerator: 2, denominator: 1 })}>Split</button>
                       )}
                       <RowActions onEdit={() => setClassDraft(editRightsClass(row))} onDelete={() => deleteRow("class", row)} label="rights class" />
                     </div>
@@ -756,7 +769,7 @@ export function RightsLedgerPage() {
                       {row.precedentRunId ? (
                         <Link className="btn btn--sm" to="/app/template-engine"><BookTemplate size={12} /> Packet</Link>
                       ) : corporationWorkspace && row.transferType === "issuance" ? (
-                        <button className="btn btn--sm" onClick={() => stageIssuancePacket(row)}>
+                        <button className="btn btn--sm" disabled={!canWrite} onClick={() => stageIssuancePacket(row)}>
                           <BookTemplate size={12} /> Packet
                         </button>
                       ) : (
@@ -777,7 +790,7 @@ export function RightsLedgerPage() {
         open={Boolean(splitDraft)}
         onClose={() => setSplitDraft(null)}
         title={`Subdivide / consolidate ${splitDraft?.className ?? "shares"}`}
-        footer={<><button className="btn" onClick={() => setSplitDraft(null)}>Cancel</button><button className="btn btn--accent" onClick={runSplit}>Stage split</button></>}
+        footer={<><button className="btn" onClick={() => setSplitDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={runSplit}>Stage split</button></>}
       >
         {splitDraft && (
           <>
@@ -794,7 +807,7 @@ export function RightsLedgerPage() {
         )}
       </Drawer>
 
-      <Drawer open={Boolean(classDraft)} onClose={() => setClassDraft(null)} title={classDraft?._id ? "Edit rights class" : "New rights class"} footer={<><button className="btn" onClick={() => setClassDraft(null)}>Cancel</button><button className="btn btn--accent" onClick={saveClass}>Save</button></>}>
+      <Drawer open={Boolean(classDraft)} onClose={() => setClassDraft(null)} title={classDraft?._id ? "Edit rights class" : "New rights class"} footer={<><button className="btn" onClick={() => setClassDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={saveClass}>Save</button></>}>
         {classDraft && (
           <>
             <Field label="Class name"><input className="input" value={classDraft.className ?? ""} onChange={(e) => setClassDraft({ ...classDraft, className: e.target.value })} /></Field>
@@ -815,7 +828,7 @@ export function RightsLedgerPage() {
         )}
       </Drawer>
 
-      <Drawer open={Boolean(transferDraft)} onClose={() => setTransferDraft(null)} title={transferDraft?._id ? "Edit ledger transfer" : "New ledger transfer"} footer={<><button className="btn" onClick={() => setTransferDraft(null)}>Cancel</button><button className="btn btn--accent" onClick={saveTransfer}>Save</button></>}>
+      <Drawer open={Boolean(transferDraft)} onClose={() => setTransferDraft(null)} title={transferDraft?._id ? "Edit ledger transfer" : "New ledger transfer"} footer={<><button className="btn" onClick={() => setTransferDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={saveTransfer}>Save</button></>}>
         {transferDraft && (
           <>
             <div className="grid two">
@@ -928,6 +941,8 @@ export function RightsLedgerPage() {
 
 export function TemplateEnginePage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("documents:write");
   const data = useQuery(api.legalOperations.templateEngine, society ? { societyId: society._id } : "skip");
   const upsertField = useMutation(api.legalOperations.upsertTemplateDataField);
   const upsertTemplate = useMutation(api.legalOperations.upsertLegalTemplate);
@@ -948,6 +963,7 @@ export function TemplateEnginePage() {
   if (society === null) return <SeedPrompt />;
 
   const del = async (remover: (args: { id: any }) => Promise<unknown>, id: any, label: string) => {
+    if (!canWrite) return;
     const ok = await confirm({
       title: `Delete ${label}?`,
       message: `This permanently removes the ${label}. This can't be undone.`,
@@ -960,7 +976,7 @@ export function TemplateEnginePage() {
   };
 
   const save = async () => {
-    if (!draft) return;
+    if (!draft || !canWrite) return;
     if (draft.kind === "field") {
       await upsertField({ id: draft._id, societyId: society._id, name: draft.name || "Unnamed field", label: empty(draft.label), fieldType: empty(draft.fieldType), required: draft.required, reviewRequired: draft.reviewRequired, notes: empty(draft.notes) });
     } else if (draft.kind === "template") {
@@ -1063,6 +1079,7 @@ export function TemplateEnginePage() {
   };
 
   const addStarterTemplates = async () => {
+    if (!canWrite) return;
     const result = await seedStarterTemplates({ societyId: society._id });
     toast.success(
       result.inserted || result.updated
@@ -1073,6 +1090,7 @@ export function TemplateEnginePage() {
   };
 
   const addCorporationPackets = async () => {
+    if (!canWrite) return;
     const result = await seedCorporationPackets({ societyId: society._id });
     const changed = result.insertedTemplates + result.updatedTemplates + result.insertedPrecedents + result.updatedPrecedents;
     toast.success(
@@ -1100,14 +1118,14 @@ export function TemplateEnginePage() {
         }
         actions={
           <div className="row" style={{ flexWrap: "wrap" }}>
-            <button className="btn-action" onClick={addStarterTemplates}><FileSignature size={12} /> Starter templates</button>
-            <button className="btn-action" onClick={addCorporationPackets}><FileSignature size={12} /> Corporation packets</button>
-            <button className="btn-action" onClick={() => setDraft({ kind: "field" })}><Plus size={12} /> Field</button>
-            <button className="btn-action" onClick={() => setDraft({ kind: "precedent", status: "draft" })}><Plus size={12} /> Precedent</button>
-            <button className="btn-action" onClick={() => setDraft({ kind: "run", status: "draft" })}><Plus size={12} /> Run</button>
-            <button className="btn-action" onClick={() => setDraft({ kind: "document", status: "draft" })}><Plus size={12} /> Draft</button>
-            <button className="btn-action" onClick={() => setDraft({ kind: "signer", status: "unsigned" })}><Plus size={12} /> Signer</button>
-            <button className="btn-action btn-action--primary" onClick={() => setDraft({ kind: "template", templateType: "document", status: "draft" })}><Plus size={12} /> Template</button>
+            <button className="btn-action" disabled={!canWrite} onClick={addStarterTemplates}><FileSignature size={12} /> Starter templates</button>
+            <button className="btn-action" disabled={!canWrite} onClick={addCorporationPackets}><FileSignature size={12} /> Corporation packets</button>
+            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "field" })}><Plus size={12} /> Field</button>
+            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "precedent", status: "draft" })}><Plus size={12} /> Precedent</button>
+            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "run", status: "draft" })}><Plus size={12} /> Run</button>
+            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "document", status: "draft" })}><Plus size={12} /> Draft</button>
+            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "signer", status: "unsigned" })}><Plus size={12} /> Signer</button>
+            <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={() => setDraft({ kind: "template", templateType: "document", status: "draft" })}><Plus size={12} /> Template</button>
           </div>
         }
       />
@@ -1163,7 +1181,7 @@ export function TemplateEnginePage() {
         />
       </Section>
 
-      <Drawer open={Boolean(draft)} onClose={() => setDraft(null)} title={draftTitle(draft)} footer={<><button className="btn" onClick={() => setDraft(null)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}>
+      <Drawer open={Boolean(draft)} onClose={() => setDraft(null)} title={draftTitle(draft)} footer={<><button className="btn" onClick={() => setDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={save}>Save</button></>}>
         {draft && <TemplateDraftForm draft={draft} setDraft={setDraft} />}
       </Drawer>
     </div>
@@ -1172,6 +1190,8 @@ export function TemplateEnginePage() {
 
 export function FormationMaintenancePage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("documents:write");
   const data = useQuery(api.legalOperations.formationMaintenance, society ? { societyId: society._id } : "skip");
   const upsertFormation = useMutation(api.legalOperations.upsertFormationRecord);
   const upsertNameSearch = useMutation(api.legalOperations.upsertNameSearchItem);
@@ -1187,6 +1207,7 @@ export function FormationMaintenancePage() {
   const toast = useToast();
   const [draft, setDraft] = useState<any>(null);
   const del = async (remover: (args: { id: any }) => Promise<unknown>, id: any, label: string) => {
+    if (!canWrite) return;
     const ok = await confirm({
       title: `Delete ${label}?`,
       message: `This permanently removes the ${label}. This can't be undone.`,
@@ -1206,7 +1227,7 @@ export function FormationMaintenancePage() {
   if (society === null) return <SeedPrompt />;
 
   const save = async () => {
-    if (!draft) return;
+    if (!draft || !canWrite) return;
     if (draft.kind === "formation") {
       await upsertFormation({
         id: draft._id,
@@ -1254,12 +1275,12 @@ export function FormationMaintenancePage() {
         subtitle="Formation packages, NUANS/name-search artifacts, amendments, annual maintenance filings, jurisdiction attributes, and operational event logs."
         actions={
           <div className="row" style={{ flexWrap: "wrap" }}>
-            <button className="btn-action" onClick={() => setDraft({ kind: "nameSearch" })}><Plus size={12} /> Name search</button>
-            <button className="btn-action" onClick={() => setDraft({ kind: "amendment", status: "draft" })}><Plus size={12} /> Amendment</button>
-            <button className="btn-action" onClick={() => setDraft({ kind: "annual", status: "draft" })}><Plus size={12} /> Annual</button>
-            <button className="btn-action" onClick={() => setDraft({ kind: "jurisdiction" })}><Plus size={12} /> Jurisdiction</button>
-            <button className="btn-action" onClick={() => setDraft({ kind: "log", logType: "edit", severity: "info" })}><Plus size={12} /> Log</button>
-            <button className="btn-action btn-action--primary" onClick={() => setDraft({ kind: "formation", status: "draft" })}><Plus size={12} /> Formation</button>
+            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "nameSearch" })}><Plus size={12} /> Name search</button>
+            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "amendment", status: "draft" })}><Plus size={12} /> Amendment</button>
+            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "annual", status: "draft" })}><Plus size={12} /> Annual</button>
+            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "jurisdiction" })}><Plus size={12} /> Jurisdiction</button>
+            <button className="btn-action" disabled={!canWrite} onClick={() => setDraft({ kind: "log", logType: "edit", severity: "info" })}><Plus size={12} /> Log</button>
+            <button className="btn-action btn-action--primary" disabled={!canWrite} onClick={() => setDraft({ kind: "formation", status: "draft" })}><Plus size={12} /> Formation</button>
           </div>
         }
       />
@@ -1330,7 +1351,7 @@ export function FormationMaintenancePage() {
         />
       </Section>
 
-      <Drawer open={Boolean(draft)} onClose={() => setDraft(null)} title={formationDraftTitle(draft)} footer={<><button className="btn" onClick={() => setDraft(null)}>Cancel</button><button className="btn btn--accent" onClick={save}>Save</button></>}>
+      <Drawer open={Boolean(draft)} onClose={() => setDraft(null)} title={formationDraftTitle(draft)} footer={<><button className="btn" onClick={() => setDraft(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite} onClick={save}>Save</button></>}>
         {draft && <FormationDraftForm draft={draft} setDraft={setDraft} jurisdictionByCode={latestJurisdictionByCode} />}
       </Drawer>
     </div>
@@ -1525,18 +1546,22 @@ function roleHolderForHolding(roleHolders: any[], holderKey: string) {
 }
 
 function RowActions({ onEdit, onDelete, label }: { onEdit: () => void; onDelete: () => void; label: string }) {
+  const { can } = usePermissions();
+  const canWrite = can("documents:write");
   return (
     <div className="row" style={{ justifyContent: "flex-end" }}>
-      <button className="btn btn--ghost btn--sm" onClick={onEdit}>Edit</button>
-      <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete ${label}`} onClick={onDelete}><Trash2 size={12} /></button>
+      <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={onEdit}>Edit</button>
+      <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete ${label}`} disabled={!canWrite} onClick={onDelete}><Trash2 size={12} /></button>
     </div>
   );
 }
 
 function DeleteCell({ onDelete, label }: { onDelete: () => void; label: string }) {
+  const { can } = usePermissions();
+  const canWrite = can("documents:write");
   return (
     <div className="row" style={{ justifyContent: "flex-end" }}>
-      <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete ${label}`} onClick={onDelete}><Trash2 size={12} /></button>
+      <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Delete ${label}`} disabled={!canWrite} onClick={onDelete}><Trash2 size={12} /></button>
     </div>
   );
 }

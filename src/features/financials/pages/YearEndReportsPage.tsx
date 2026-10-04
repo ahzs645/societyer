@@ -1,3 +1,4 @@
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -110,15 +111,16 @@ function ToneBadge({ tone }: { tone: string }) {
 }
 
 function ReportActions({ title, filenameBase, bodyHtml }: { title: string; filenameBase: string; bodyHtml: string }) {
+  const { canExport } = useFinancePermissions();
   return (
     <div className="row" style={{ gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
-      <button className="btn-action btn-action--primary" onClick={() => void exportWordDocx({ filename: `${filenameBase}.docx`, title, bodyHtml })}>
+      <button className="btn-action btn-action--primary" onClick={() => void exportWordDocx({ filename: `${filenameBase}.docx`, title, bodyHtml })} disabled={!canExport}>
         <FileDown size={12} /> Export Word
       </button>
-      <button className="btn-action" onClick={() => void exportPdfDownload({ filename: `${filenameBase}.pdf`, title, bodyHtml })}>
+      <button className="btn-action" onClick={() => void exportPdfDownload({ filename: `${filenameBase}.pdf`, title, bodyHtml })} disabled={!canExport}>
         <FileDown size={12} /> Download PDF
       </button>
-      <button className="btn-action" onClick={() => void printPdfDocument({ title, bodyHtml })}>
+      <button className="btn-action" onClick={() => void printPdfDocument({ title, bodyHtml })} disabled={!canExport}>
         <Printer size={12} /> Print
       </button>
     </div>
@@ -136,6 +138,7 @@ function PreviewBox({ bodyHtml }: { bodyHtml: string }) {
 }
 
 export function YearEndReportsPage() {
+  const { canEditSettings } = useFinancePermissions();
   const society = useSociety();
   const [tab, setTab] = useState<TabId>("readiness");
   const financials = useQuery(api.financials.list, society ? { societyId: society._id } : "skip");
@@ -432,7 +435,7 @@ export function YearEndReportsPage() {
           {!edit ? (
             <>
               <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-                <button className="btn-action btn-action--primary" onClick={startNew}>
+                <button className="btn-action btn-action--primary" onClick={startNew} disabled={!canEditSettings}>
                   <Plus size={12} /> New statement
                 </button>
                 <Field label="Prefill from grant">
@@ -476,10 +479,10 @@ export function YearEndReportsPage() {
                           </div>
                           <div className="row" style={{ gap: 6 }}>
                             <Badge tone={s.status === "Final" ? "success" : "neutral"}>{s.status}</Badge>
-                            <button className="btn-action" onClick={() => setEdit(editFromStatement(s))}>
+                            <button className="btn-action" onClick={() => setEdit(editFromStatement(s))} disabled={!canEditSettings}>
                               Edit
                             </button>
-                            <button className="btn-action" onClick={() => void deleteStatement(s._id)}>
+                            <button className="btn-action" onClick={() => void deleteStatement(s._id)} disabled={!canEditSettings}>
                               <Trash2 size={12} /> Delete
                             </button>
                           </div>
@@ -603,6 +606,7 @@ function ProgramStatementEditor({
   onSave: () => void;
   onCancel: () => void;
 }) {
+  const { canEditSettings } = useFinancePermissions();
   const statement = statementFromEdit(edit);
   const totals = computeStatementTotals(statement);
   const bodyHtml = renderProgramStatementHtml(statement, society);
@@ -615,7 +619,7 @@ function ProgramStatementEditor({
           <ArrowLeft size={12} /> Back to list
         </button>
         <div className="row" style={{ gap: 6 }}>
-          <button className="btn-action btn-action--primary" onClick={onSave}>
+          <button className="btn-action btn-action--primary" onClick={onSave} disabled={!canEditSettings}>
             Save statement
           </button>
         </div>

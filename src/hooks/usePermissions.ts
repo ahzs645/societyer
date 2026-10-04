@@ -5,10 +5,9 @@ import { useCurrentUserId } from "./useCurrentUser";
 
 /**
  * Surfaces the current user's role + permission set (from permissions.myPermissions)
- * and a `can(permission)` helper for gating UI. Deliberately PERMISSIVE while the
- * query is loading or unavailable (`can` returns true) so we never hide controls
- * on a slow/absent query — the server still enforces every write via
- * requirePermission, so UI gating is a convenience, not the security boundary.
+ * and a `can(permission)` helper for gating UI. Controls wait for the current
+ * actor's authorized permission result, including after an account/workspace
+ * switch. The server still independently enforces every write.
  */
 export function usePermissions() {
   const society = useSociety();
@@ -22,6 +21,6 @@ export function usePermissions() {
     role: (data?.role as string | null) ?? null,
     permissions: permissions ?? [],
     loaded: data !== undefined,
-    can: (permission: string) => (permissions === undefined ? true : permissions.includes(permission)),
+    can: (permission: string) => permissions?.includes(permission) ?? false,
   };
 }

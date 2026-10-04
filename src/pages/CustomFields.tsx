@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/Modal";
 import { PageLoading, SeedPrompt } from "./_helpers";
@@ -46,6 +47,8 @@ const ENTITY_LABELS: Record<string, string> = {
  */
 export function CustomFieldsPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("settings:write");
   const definitions = useQuery(
     api.customFields.listDefinitions,
     society ? { societyId: society._id } : "skip",
@@ -68,10 +71,14 @@ export function CustomFieldsPage() {
     viewId: currentViewId,
   });
 
+  const records = (definitions ?? []) as any[];
+  const linkAudit = useMemo(() => buildLinkAudit(records), [records]);
+
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canWrite) return;
     setDraft({
       entityType: "members",
       key: "",
@@ -84,7 +91,7 @@ export function CustomFieldsPage() {
   };
 
   const save = async () => {
-    if (!draft) return;
+    if (!draft || !canWrite) return;
     if (!draft.label?.trim()) {
       toast.error("Label is required");
       return;
@@ -127,6 +134,7 @@ export function CustomFieldsPage() {
   };
 
   const doDelete = async (row: any) => {
+    if (!canWrite) return;
     const ok = await confirm({
       title: `Delete "${row.label}"?`,
       message: "All stored values for this custom field will be removed across every person in this category.",
@@ -134,12 +142,10 @@ export function CustomFieldsPage() {
       tone: "danger",
     });
     if (!ok) return;
-    await deleteDef({ id: row._id });
-    toast.success("Deleted");
+    try { await deleteDef({ id: row._id }); toast.success("Deleted"); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Could not delete field"); }
   };
 
-  const records = (definitions ?? []) as any[];
-  const linkAudit = useMemo(() => buildLinkAudit(records), [records]);
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
@@ -156,7 +162,7 @@ export function CustomFieldsPage() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         actions={activeTab === "definitions" ? (
-          <Button variant="accent" onClick={openNew}>
+          <Button variant="accent" disabled={!canWrite} onClick={openNew}>
             <Plus size={12} /> New field
           </Button>
         ) : null}
@@ -201,6 +207,7 @@ export function CustomFieldsPage() {
               <button
                 className="btn btn--ghost btn--sm btn--icon"
                 aria-label={`Delete ${row.label}`}
+                disabled={!canWrite}
                 onClick={(e) => {
                   e.stopPropagation();
                   doDelete(row);
@@ -226,7 +233,8 @@ export function CustomFieldsPage() {
             setDraft({ ...record });
             setDrawerOpen(true);
           }}
-          onUpdate={async ({ recordId, fieldName, value }) => {
+          onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
+            if (!canWrite) return;
             // `entityType` and `key` are immutable after create — the
             // seed marks `key` read-only; entityType is filterable but
             // not meant to be edited inline (ignore if it slips through).
@@ -239,7 +247,7 @@ export function CustomFieldsPage() {
             else if (fieldName === "order") patch.order = value;
             else return;
             await updateDef(patch);
-          }}
+          } : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -259,6 +267,7 @@ export function CustomFieldsPage() {
               <button
                 className="btn btn--ghost btn--sm btn--icon"
                 aria-label={`Delete ${row.label}`}
+                disabled={!canWrite}
                 onClick={(e) => {
                   e.stopPropagation();
                   doDelete(row);
@@ -285,20 +294,20 @@ export function CustomFieldsPage() {
       <Drawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        title={draft?._id ? "Edit custom field" : "New custom field"}
+        title={draft?._id ? (canWrite ? "Edit custom field" : "View custom field") : "New custom field"}
         footer={
           <>
             <button className="btn" onClick={() => setDrawerOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" onClick={save}>
+            <button className="btn btn--accent" disabled={!canWrite} onClick={save}>
               Save
             </button>
           </>
         }
       >
         {draft && (
-          <div>
+          <fieldset disabled={!canWrite} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <Field label="Category">
               <Select
                 value={draft.entityType}
@@ -335,6 +344,7 @@ export function CustomFieldsPage() {
             </Field>
             <Field label="Description">
               <MarkdownEditor
+                readOnly={!canWrite}
                 rows={2}
                 value={draft.description ?? ""}
                 onChange={(markdown) => setDraft({ ...draft, description: markdown })}
@@ -348,7 +358,7 @@ export function CustomFieldsPage() {
               />
               <span>Required</span>
             </label>
-          </div>
+          </fieldset>
         )}
       </Drawer>
       </SettingsShell>

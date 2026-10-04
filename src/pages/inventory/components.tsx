@@ -1,3 +1,4 @@
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 // Presentational, state-free building blocks for the Inventory module.
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -86,6 +87,7 @@ export function CountEntry({
   onSaveLine: (lineId: string, countedQuantity: number) => Promise<void>;
   onAddLine: (args: { inventoryItemId: string; locationId: string; countedQuantity: number }) => Promise<void>;
 }) {
+  const { canWrite } = useFinancePermissions();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [add, setAdd] = useState({ inventoryItemId: "", locationId: "", quantity: "" });
   const open = count.status === "open";
@@ -128,11 +130,11 @@ export function CountEntry({
                       value={draft}
                       onChange={(e) => setDrafts({ ...drafts, [line._id]: e.target.value })}
                       onBlur={async () => {
-                        if (draft.trim() === "") return;
+                        if (!canWrite || draft.trim() === "") return;
                         const n = Number(draft);
                         if (Number.isFinite(n)) await onSaveLine(line._id, n);
                       }}
-                      disabled={!open}
+                      disabled={!canWrite || !open}
                     />
                   </td>
                   <td className="mono" style={{ textAlign: "right", color: variance ? "var(--warn, #b45309)" : undefined }}>{variance == null ? "-" : variance > 0 ? `+${variance}` : variance}</td>
@@ -155,7 +157,7 @@ export function CountEntry({
           <input className="input mono" style={{ width: 90 }} inputMode="decimal" placeholder="Qty" value={add.quantity} onChange={(e) => setAdd({ ...add, quantity: e.target.value })} />
           <button
             className="btn btn--sm"
-            disabled={!add.inventoryItemId || !add.locationId || add.quantity.trim() === "" || lineKeys.has(`${add.inventoryItemId}::${add.locationId}`)}
+            disabled={!canWrite || (!add.inventoryItemId || !add.locationId || add.quantity.trim() === "" || lineKeys.has(`${add.inventoryItemId}::${add.locationId}`))}
             title={lineKeys.has(`${add.inventoryItemId}::${add.locationId}`) ? "That item/location is already on the sheet" : undefined}
             onClick={submitAdd}
           >

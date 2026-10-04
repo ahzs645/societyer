@@ -3,6 +3,7 @@ import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { usePermissions } from "../hooks/usePermissions";
 import { useToast } from "./Toast";
 import { Badge } from "./ui";
 import { ExternalLink, RefreshCw, UploadCloud } from "lucide-react";
@@ -23,10 +24,12 @@ export function PaperlessDocumentAction({
   const syncDocument = useAction(api.paperless.syncDocument);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const permissions = usePermissions();
+  const canEdit = permissions.loaded && permissions.can("documents:write");
   const [busy, setBusy] = useState(false);
 
   const run = async () => {
-    if (!resolvedSocietyId) return;
+    if (!resolvedSocietyId || !canEdit || busy) return;
     setBusy(true);
     try {
       const result = await syncDocument({
@@ -67,7 +70,7 @@ export function PaperlessDocumentAction({
       )}
       <button
         className="btn btn--ghost btn--sm"
-        disabled={busy || disabled || !resolvedSocietyId}
+        disabled={busy || disabled || !resolvedSocietyId || !canEdit}
         onClick={run}
         title="Send the current document file to Paperless-ngx with Societyer tags"
       >

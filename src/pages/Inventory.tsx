@@ -1,3 +1,4 @@
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -60,6 +61,7 @@ import { CountsTab, LocationsTab, LotsTab, StockTab } from "./inventory/tabs";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 
 export function InventoryPage() {
+  const { canWrite, canExport } = useFinancePermissions();
   const society = useSociety();
   const navigate = useNavigate();
   const toast = useToast();
@@ -627,14 +629,14 @@ export function InventoryPage() {
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <MoreActionsMenu
               items={[
-                { id: "add-library", label: "Add library", icon: <Boxes size={14} />, onSelect: openNewConnection },
-                { id: "backfill-assets", label: "Backfill assets", icon: <RefreshCw size={14} />, onSelect: runBackfill },
-                { id: "openboxes-import", label: "OpenBoxes import", icon: <Boxes size={14} />, onSelect: () => { setSyncConnectionId(null); setDrawer("openboxes"); } },
-                { id: "new-movement", label: "New movement", icon: <Plus size={14} />, onSelect: () => { setMovementForm(emptyMovementForm()); setDrawer("movement"); } },
+                { disabled: !canWrite, id: "add-library", label: "Add library", icon: <Boxes size={14} />, onSelect: openNewConnection },
+                { disabled: !canWrite, id: "backfill-assets", label: "Backfill assets", icon: <RefreshCw size={14} />, onSelect: runBackfill },
+                { disabled: !canWrite, id: "openboxes-import", label: "OpenBoxes import", icon: <Boxes size={14} />, onSelect: () => { setSyncConnectionId(null); setDrawer("openboxes"); } },
+                { disabled: !canWrite, id: "new-movement", label: "New movement", icon: <Plus size={14} />, onSelect: () => { setMovementForm(emptyMovementForm()); setDrawer("movement"); } },
                 { id: "assets", label: "Assets", icon: <ArrowLeft size={14} />, onSelect: () => navigate("/app/assets") },
               ]}
             />
-            <button className="btn-action btn-action--primary" onClick={openNewItem}><Plus size={12} /> New item</button>
+            <button className="btn-action btn-action--primary" onClick={openNewItem} disabled={!canWrite}><Plus size={12} /> New item</button>
           </div>
         }
       />
@@ -682,7 +684,7 @@ export function InventoryPage() {
             onClick={async () => {
               for (const { count } of varianceLines) await reconcileCount({ inventoryCountId: count._id, reason: "Physical inventory reconciliation" });
               toast.success("Count variance adjustments posted");
-            }}
+            }} disabled={!canWrite}
           >
             Post adjustments
           </button>
@@ -714,7 +716,7 @@ export function InventoryPage() {
                     <span className="row" style={{ gap: 6 }}>
                       <button
                         className="btn btn--sm"
-                        disabled={!resolved}
+                        disabled={!canWrite || (!resolved)}
                         title={resolved ? "Post as a stock movement" : "Match an inventory item and location first"}
                         onClick={async () => {
                           try {
@@ -732,7 +734,7 @@ export function InventoryPage() {
                         onClick={async () => {
                           await setCandidateStatus({ candidateId: c._id, status: "ignored" });
                           toast.info("Candidate ignored");
-                        }}
+                        }} disabled={!canWrite}
                       >
                         Ignore
                       </button>
@@ -764,21 +766,21 @@ export function InventoryPage() {
                 aria-hidden
                 style={{ width: 7, height: 7, borderRadius: 999, background: connection.status === "active" ? "var(--success)" : connection.status === "disabled" ? "var(--text-tertiary)" : "var(--warning, orange)" }}
               />
-              <button className="btn btn--ghost btn--sm" style={{ padding: "0 2px" }} onClick={() => openEditConnection(connection)} title="Edit library">
+              <button className="btn btn--ghost btn--sm" style={{ padding: "0 2px" }} onClick={() => openEditConnection(connection)} title="Edit library" disabled={!canWrite}>
                 {connection.displayName}
               </button>
               {connection.provider === "openboxes" && (
-                <button className="btn btn--ghost btn--sm btn--icon" onClick={() => { setSyncConnectionId(connection._id); setDrawer("openboxes"); }} aria-label={`Sync ${connection.displayName}`} title="Import an OpenBoxes snapshot">
+                <button className="btn btn--ghost btn--sm btn--icon" onClick={() => { setSyncConnectionId(connection._id); setDrawer("openboxes"); }} aria-label={`Sync ${connection.displayName}`} title="Import an OpenBoxes snapshot" disabled={!canWrite}>
                   <RefreshCw size={12} />
                 </button>
               )}
-              <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Remove ${connection.displayName}`} title="Remove library" onClick={() => removeConnection(connection)}>
+              <button className="btn btn--ghost btn--sm btn--icon" aria-label={`Remove ${connection.displayName}`} title="Remove library" onClick={() => removeConnection(connection)} disabled={!canWrite}>
                 <Trash2 size={12} />
               </button>
             </span>
           ))
         )}
-        <button className="btn btn--sm btn--ghost" style={{ marginLeft: "auto" }} onClick={openNewConnection}>
+        <button className="btn btn--sm btn--ghost" style={{ marginLeft: "auto" }} onClick={openNewConnection} disabled={!canWrite}>
           <Plus size={12} /> Add library
         </button>
       </div>
@@ -792,9 +794,9 @@ export function InventoryPage() {
         {tab === "locations" && collapsedLocationIds.size > 0 && <button className="btn btn--sm" onClick={() => setCollapsedLocationIds(new Set())}>Expand all</button>}
         {tab === "locations" && <button className="btn btn--sm" onClick={() => setCollapsedLocationIds(new Set(((locations ?? []) as any[]).filter((l) => ((locations ?? []) as any[]).some((c) => String(c.parentLocationId) === String(l._id))).map((l) => String(l._id))))}>Collapse all</button>}
         {tab === "locations" && <button className="btn btn--sm" onClick={() => setScanOpen(true)}><ScanLine size={12} /> Scan bin</button>}
-        {tab === "locations" && <button className="btn btn--sm btn--accent" onClick={openNewLocation}><Plus size={12} /> New location</button>}
-        {tab === "lots" && <button className="btn btn--sm btn--accent" onClick={() => openNewLot()}><Plus size={12} /> New lot / serial</button>}
-        {tab === "counts" && <button className="btn btn--sm btn--accent" onClick={() => { setCountForm(emptyCountForm()); setDrawer("count-start"); }}><Plus size={12} /> Start count</button>}
+        {tab === "locations" && <button className="btn btn--sm btn--accent" onClick={openNewLocation} disabled={!canWrite}><Plus size={12} /> New location</button>}
+        {tab === "lots" && <button className="btn btn--sm btn--accent" onClick={() => openNewLot()} disabled={!canWrite}><Plus size={12} /> New lot / serial</button>}
+        {tab === "counts" && <button className="btn btn--sm btn--accent" onClick={() => { setCountForm(emptyCountForm()); setDrawer("count-start"); }} disabled={!canWrite}><Plus size={12} /> Start count</button>}
       </div>
 
       {tab === "stock" && (
@@ -855,7 +857,7 @@ export function InventoryPage() {
         open={drawer === "movement"}
         onClose={() => setDrawer(null)}
         title="Post stock movement"
-        footer={<button className="btn-action btn-action--primary" onClick={saveMovement}>Post movement</button>}
+        footer={<button className="btn-action btn-action--primary" onClick={saveMovement} disabled={!canWrite}>Post movement</button>}
       >
         <div className="form-grid">
           <Field label="Movement type">
@@ -905,7 +907,7 @@ export function InventoryPage() {
         footer={
           <>
             <button className="btn" onClick={() => setDrawer(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveConnection}>{editingConnectionId ? "Save library" : "Add library"}</button>
+            <button className="btn btn--accent" onClick={saveConnection} disabled={!canWrite}>{editingConnectionId ? "Save library" : "Add library"}</button>
           </>
         }
       >
@@ -945,7 +947,7 @@ export function InventoryPage() {
         onClose={() => { setDrawer(null); setSyncConnectionId(null); }}
         title={syncConnectionId ? "Sync OpenBoxes library" : "Import OpenBoxes snapshot"}
         size="wide"
-        footer={<button className="btn-action btn-action--primary" onClick={runOpenBoxesImport}>{syncConnectionId ? "Sync snapshot" : "Import snapshot"}</button>}
+        footer={<button className="btn-action btn-action--primary" onClick={runOpenBoxesImport} disabled={!canWrite}>{syncConnectionId ? "Sync snapshot" : "Import snapshot"}</button>}
       >
         <Field label="Normalized OpenBoxes JSON">
           <textarea
@@ -962,7 +964,7 @@ export function InventoryPage() {
         onClose={() => setDrawer(null)}
         title={editingItemId ? "Edit item" : "New item"}
         size="wide"
-        footer={<button className="btn-action btn-action--primary" onClick={saveItem}>{editingItemId ? "Save item" : "Create item"}</button>}
+        footer={<button className="btn-action btn-action--primary" onClick={saveItem} disabled={!canWrite}>{editingItemId ? "Save item" : "Create item"}</button>}
       >
         <ImageUploadField
           label="Item photo"
@@ -1010,7 +1012,7 @@ export function InventoryPage() {
         open={drawer === "location"}
         onClose={() => { setDrawer(null); setEditingLocationId(null); }}
         title={editingLocationId ? "Edit location" : "New location"}
-        footer={<button className="btn-action btn-action--primary" onClick={saveLocation}>{editingLocationId ? "Save location" : "Create location"}</button>}
+        footer={<button className="btn-action btn-action--primary" onClick={saveLocation} disabled={!canWrite}>{editingLocationId ? "Save location" : "Create location"}</button>}
       >
         <div className="form-grid">
           <Field label="Name" required>
@@ -1116,7 +1118,7 @@ export function InventoryPage() {
                 </Field>
                 <AssetQrLabel assetTag={labelLocation.code} name={labelLocation.name} url={labelLocation.code} labelType={labelType} />
                 <p className="muted">Print and stick this on the bin. Scanning it with <strong>Scan bin</strong> opens this location.</p>
-                <button className="btn-action" onClick={() => window.print()}>Print label</button>
+                <button className="btn-action" onClick={() => window.print()} disabled={!canExport}>Print label</button>
               </>
             ) : (
               <p className="muted">Add a bin code to this location to generate a scannable label.</p>
@@ -1137,7 +1139,7 @@ export function InventoryPage() {
         open={drawer === "lot"}
         onClose={() => setDrawer(null)}
         title={editingLotId ? "Edit lot / serial" : "New lot / serial"}
-        footer={<button className="btn-action btn-action--primary" onClick={saveLot}>{editingLotId ? "Save lot" : "Create lot"}</button>}
+        footer={<button className="btn-action btn-action--primary" onClick={saveLot} disabled={!canWrite}>{editingLotId ? "Save lot" : "Create lot"}</button>}
       >
         <div className="form-grid">
           <Field label="Item" required>
@@ -1173,7 +1175,7 @@ export function InventoryPage() {
         open={drawer === "count-start"}
         onClose={() => setDrawer(null)}
         title="Start physical count"
-        footer={<button className="btn-action btn-action--primary" onClick={startCount}>Start count</button>}
+        footer={<button className="btn-action btn-action--primary" onClick={startCount} disabled={!canWrite}>Start count</button>}
       >
         <div className="form-grid">
           <Field label="Title" required>
@@ -1252,7 +1254,7 @@ export function InventoryPage() {
         onClose={() => setDrawer(null)}
         title={linkItem ? `Link purchase: ${linkItem.name}` : "Link purchase"}
         size="wide"
-        footer={<button className="btn-action btn-action--primary" onClick={saveLink}>Link purchase</button>}
+        footer={<button className="btn-action btn-action--primary" onClick={saveLink} disabled={!canWrite}>Link purchase</button>}
       >
         {linkItem && (
           <>
@@ -1266,7 +1268,7 @@ export function InventoryPage() {
                       {link.receiptDocument?.title ?? link.receiptLineLabel ?? "Linked purchase"}
                       {link.financialTransactionId && <Badge tone="info">transaction</Badge>}
                     </span>
-                    <button className="btn btn--ghost btn--sm btn--icon" aria-label="Remove link" onClick={async () => { await unlinkReceipt({ id: link._id }); toast.success("Link removed"); }}>
+                    <button className="btn btn--ghost btn--sm btn--icon" aria-label="Remove link" onClick={async () => { await unlinkReceipt({ id: link._id }); toast.success("Link removed"); }} disabled={!canWrite}>
                       <Trash2 size={12} />
                     </button>
                   </div>

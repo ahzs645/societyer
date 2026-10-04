@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useState } from "react";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Flag } from "../components/ui";
 import { formatDate, formatDateTime, relative } from "../lib/format";
@@ -49,6 +50,7 @@ function writeHiddenOnboardingFlowSocietyIds(ids: string[]) {
 
 export function Dashboard() {
   const society = useSociety();
+  const { can } = usePermissions();
   const jurisdictionCopy = jurisdictionDisplayCopy(society);
   const navigate = useNavigate();
   const toast = useToast();
@@ -105,6 +107,11 @@ export function Dashboard() {
   const runRemediationAction = async (flag: any, action: any) => {
     if (action.intent === "navigate") {
       navigate(action.to);
+      return;
+    }
+
+    if (!can(action.intent === "createPipaPolicyDraft" || action.intent === "createMemberDataGapMemoDraft" ? "documents:write" : "deadlines:write")) {
+      toast.error("Your current workspace role cannot perform this action.");
       return;
     }
 
@@ -378,7 +385,8 @@ export function Dashboard() {
                     {f.remediationActions?.length > 0 && (
                       <div className="dashboard-remediation__actions">
                         {f.remediationActions.map((action: any) => {
-                          const disabled = busyRemediationAction === `${f.ruleId}:${action.id}`;
+                          const disabled = busyRemediationAction === `${f.ruleId}:${action.id}`
+                            || (action.intent !== "navigate" && !can(action.intent === "createPipaPolicyDraft" || action.intent === "createMemberDataGapMemoDraft" ? "documents:write" : "deadlines:write"));
                           return action.intent === "navigate" ? (
                             <Link key={action.id} className="btn btn--sm" to={action.to}>
                               {action.label}
@@ -391,7 +399,7 @@ export function Dashboard() {
                               disabled={disabled}
                               onClick={() => runRemediationAction(f, action)}
                             >
-                              {disabled ? "Working..." : action.label}
+                              {busyRemediationAction === `${f.ruleId}:${action.id}` ? "Working..." : action.label}
                             </button>
                           );
                         })}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { INTEGRATION_CATALOG } from "../../shared/integrationCatalog";
@@ -73,6 +73,8 @@ export function IntegrationMarketplacePage() {
   const createTask = useMutation(api.tasks.create);
   const setPackageReviewStatus = useMutation(api.meetings.setPackageReviewStatus);
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") === "setup" ? "setup" : "catalog";
   const [selectedSlug, setSelectedSlug] = useState("board-pack-workflow");
   const [detailOpen, setDetailOpen] = useState(false);
   const [busySlug, setBusySlug] = useState<string | null>(null);
@@ -225,16 +227,17 @@ export function IntegrationMarketplacePage() {
           { id: "catalog", label: "Catalog", icon: <Plug size={14} /> },
           { id: "setup", label: "Setup" },
         ]}
-        activeTab="catalog"
+        activeTab={activeTab}
+        onTabChange={(tab) => setSearchParams((previous) => { const next = new URLSearchParams(previous); next.set("tab", tab); return next; })}
       >
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))",
             gap: 12,
           }}
         >
-          {rows.map((item) => (
+          {rows.filter((item) => activeTab === "catalog" || item.installed).map((item) => (
             <button
               key={item.slug}
               type="button"
@@ -270,7 +273,8 @@ export function IntegrationMarketplacePage() {
               </div>
             </button>
           ))}
-          {rows.length === 0 && <div className="muted">No integrations available.</div>}
+          {activeTab === "setup" && installations === undefined && <p className="muted">Loading installed integrations…</p>}
+          {activeTab === "setup" && installations !== undefined && !rows.some((item) => item.installed) && <p className="muted">No integrations installed. Open the Catalog to review available connectors and setup requirements.</p>}
         </div>
 
         <Drawer
@@ -283,11 +287,11 @@ export function IntegrationMarketplacePage() {
               <Button onClick={() => setDetailOpen(false)}>Close</Button>
               <Button
                 variant={selected.installed ? "secondary" : "accent"}
-                disabled={busySlug === selected.slug}
+                disabled={busySlug === selected.slug || selected.status === "planned"}
                 onClick={() => install(selected)}
               >
                 {selected.installed ? <RefreshCw size={12} /> : <Plug size={12} />}
-                {selected.installed ? "Refresh setup" : "Install"}
+                {selected.status === "planned" ? "Coming soon" : selected.installed ? "Refresh setup" : "Install"}
               </Button>
             </>
           ) : undefined}

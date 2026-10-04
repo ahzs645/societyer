@@ -12,6 +12,7 @@ export function RecordTableRow({
   record,
   rowIndex,
   selectable,
+  mobileSelectionMode = false,
   showDragHandle = false,
   renderRowActions,
   rowMenuSections,
@@ -21,6 +22,7 @@ export function RecordTableRow({
   record: any;
   rowIndex: number;
   selectable: boolean;
+  mobileSelectionMode?: boolean;
   showDragHandle?: boolean;
   renderRowActions?: (record: any) => ReactNode;
   /** Menu sections rendered behind a trailing "…" kebab (and, via
@@ -123,6 +125,14 @@ export function RecordTableRow({
           isLabelIdentifier={
             column.field.name === objectMetadata.labelIdentifierFieldName
           }
+          selectionControl={mobileSelectionMode && idx === 0 ? (
+            <label className="record-table__mobile-selection-checkbox"
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}>
+              <input type="checkbox" aria-label={isSelected ? "Deselect row" : "Select row"}
+                checked={isSelected} onChange={() => toggleRow()} />
+            </label>
+          ) : undefined}
           renderCell={renderCell}
         />
       ))}

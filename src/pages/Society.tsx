@@ -9,6 +9,7 @@ import { Building2, CheckCircle2, FileDown, KeyRound, Landmark, MapPin, Plus, Tr
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
+import { usePermissions } from "../hooks/usePermissions";
 import { setStoredSocietyId } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field, LockedField, Badge, Drawer } from "../components/ui";
@@ -364,6 +365,8 @@ function RestoreBackupCard({
 
 export function SocietyPage() {
   const society = useSociety();
+  const permissions = usePermissions();
+  const canEdit = permissions.loaded && permissions.can("society:write");
   const detail = useQuery(api.organizationDetails.overview, society ? { societyId: society._id } : "skip");
   const evidenceDocuments = useQuery(api.documents.list, society ? { societyId: society._id } : "skip") as any[] | undefined;
   const toast = useToast();
@@ -400,7 +403,7 @@ export function SocietyPage() {
   }, [society]);
 
   useEffect(() => {
-    if (!society || detail === undefined || seededAddressSocietyId === society._id) return;
+    if (!canEdit || !society || detail === undefined || seededAddressSocietyId === society._id) return;
     setSeededAddressSocietyId(society._id);
     const addresses = detail?.addresses ?? [];
     const hasStructuredRegisteredOffice = addresses.some((row: any) => row.type === "registered_office");
@@ -411,15 +414,15 @@ export function SocietyPage() {
         console.error("Society address backfill failed", error);
       });
     }
-  }, [detail, seededAddressSocietyId, seedStructuredAddresses, society]);
+  }, [canEdit, detail, seededAddressSocietyId, seedStructuredAddresses, society]);
 
   useEffect(() => {
-    if (!society || detail === undefined || autoBackfilledSocietyId === society._id) return;
+    if (!canEdit || !society || detail === undefined || autoBackfilledSocietyId === society._id) return;
     setAutoBackfilledSocietyId(society._id);
     void backfillRecords({ societyId: society._id }).catch((error) => {
       console.error("Organization detail backfill failed", error);
     });
-  }, [autoBackfilledSocietyId, backfillRecords, detail, society]);
+  }, [canEdit, autoBackfilledSocietyId, backfillRecords, detail, society]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -467,6 +470,7 @@ export function SocietyPage() {
   };
 
   const save = async () => {
+    if (!canEdit || saving) return;
     setSaving(true);
     try {
       validateEntitySetup(form);
@@ -523,6 +527,8 @@ export function SocietyPage() {
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
+    } catch (error: any) {
+      toast.error("Could not save organization", error?.message ?? String(error));
     } finally {
       setSaving(false);
     }
@@ -698,7 +704,7 @@ export function SocietyPage() {
             <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
               {saved ? "Saved" : `Last updated ${formatDate(society.updatedAt)}`}
             </span>
-            <button className="btn btn--accent" onClick={save} disabled={saving}>
+            <button className="btn btn--accent" onClick={save} disabled={saving || !canEdit}>
               {saving ? "Saving…" : "Save changes"}
             </button>
           </>
@@ -707,6 +713,7 @@ export function SocietyPage() {
 
       {["preparing", "submitted"].includes(form.formationStatus ?? "") && <IncorporationPreparation organization={form} />}
 
+      <fieldset disabled={!canEdit} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div className="society-layout">
         <main className="society-layout__main">
           <div className="card">
@@ -726,7 +733,7 @@ export function SocietyPage() {
                 )}
               </LockedField>
 
-              <div className="society-field-grid society-field-grid--three">
+              <div className="society-field-grid society-field-grid--three society-field-grid--registry-dates">
                 <LockedField
                   label="Incorporation #"
                   reason="The incorporation or corporation number is assigned by the registry and generally stays stable for the life of the organization. Edit only to fix a data-entry error."
@@ -1099,6 +1106,7 @@ export function SocietyPage() {
           </div>
         </div>
       </details>
+      </fieldset>
 
       <Drawer
         open={!!drawerKind}
@@ -1107,7 +1115,7 @@ export function SocietyPage() {
         footer={
           <>
             <button className="btn" onClick={() => { setDrawerKind(null); setDraft(null); }}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveDetailDrawer}>Save</button>
+            <button className="btn btn--accent" disabled={!canEdit} onClick={saveDetailDrawer}>Save</button>
           </>
         }
       >

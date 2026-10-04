@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Calendar as CalIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { useDialogFocus } from "../lib/useDialogFocus";
 
 type Props = {
   value: string; // "YYYY-MM-DD" or ""
@@ -83,7 +84,7 @@ export function DatePicker({
   const [quick, setQuick] = useState<"month" | "year" | null>(null);
   const [focusDate, setFocusDate] = useState<Date | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const popRef = useRef<HTMLDivElement>(null);
+  const popRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false), ".calendar__cell.is-active:not(:disabled)");
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   // Phones render the calendar as a viewport-pinned bottom sheet (same pattern
   // as Select/Menu) instead of an anchor-positioned popover.
@@ -115,6 +116,10 @@ export function DatePicker({
       setFocusDate(selected ?? new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1));
     }
   }, [open]);
+
+  useEffect(() => {
+    if (open && !quick) popRef.current?.querySelector<HTMLElement>(".calendar__cell.is-active:not(:disabled)")?.focus({ preventScroll: true });
+  }, [open, focusDate, quick, popRef]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -157,31 +162,28 @@ export function DatePicker({
       setOpen(false);
     };
     const onScroll = (e: Event) => {
-      // A bottom sheet is viewport-pinned — it can't drift from its anchor —
-      // and scrolling inside the popover itself must not dismiss it.
+      // Ignore scrolling inside the calendar and keep visible anchors aligned.
       if (isBottomSheet) return;
       if (e.target instanceof Node && popRef.current?.contains(e.target)) return;
-      setOpen(false);
+      const anchor = triggerRef.current?.getBoundingClientRect();
+      if (!anchor || anchor.bottom <= 0 || anchor.top >= window.innerHeight) { setOpen(false); return; }
+      const calendar = popRef.current?.getBoundingClientRect();
+      const below = anchor.bottom + 4;
+      const top = below + (calendar?.height ?? 0) <= window.innerHeight - 8 ? below : Math.max(8, anchor.top - (calendar?.height ?? 0) - 4);
+      const left = Math.min(Math.max(8, anchor.left), Math.max(8, window.innerWidth - (calendar?.width ?? 0) - 8));
+      setPos({ top, left });
     };
     const onResize = () => {
       if (isBottomSheet) return;
       setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onResize);
-    document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
-      document.removeEventListener("keydown", onKey);
     };
   }, [open, isBottomSheet]);
 
@@ -198,15 +200,20 @@ export function DatePicker({
     });
   }, [viewMonth]);
 
-  const shiftMonth = (delta: number) =>
-    setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
+  const goToMonth = (year: number, month: number) => {
+    const target = new Date(year, month, 1);
+    const day = Math.min((focusDate ?? selected ?? today).getDate(), new Date(year, month + 1, 0).getDate());
+    setViewMonth(target);
+    setFocusDate(new Date(target.getFullYear(), target.getMonth(), day));
+  };
+  const shiftMonth = (delta: number) => goToMonth(viewMonth.getFullYear(), viewMonth.getMonth() + delta);
 
   const pick = (d: Date) => {
     if (minD && d < minD) return;
     if (maxD && d > maxD) return;
     onChange(toISO(d));
     setOpen(false);
-    triggerRef.current?.focus();
+    triggerRef.current?.focus({ preventScroll: true });
   };
 
   const moveFocus = (delta: number) => {
@@ -214,6 +221,7 @@ export function DatePicker({
       const base = prev ?? selected ?? new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
       const next = new Date(base);
       next.setDate(base.getDate() + delta);
+      if ((minD && next < minD) || (maxD && next > maxD)) return prev;
       if (next.getMonth() !== viewMonth.getMonth() || next.getFullYear() !== viewMonth.getFullYear()) {
         setViewMonth(new Date(next.getFullYear(), next.getMonth(), 1));
       }
@@ -222,7 +230,16 @@ export function DatePicker({
   };
 
   const onPopoverKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
+      return;
+    }
     if (quick) return; // the quick-grid handles its own keys
+    const target = e.target as HTMLElement;
+    // Header and footer buttons retain their native keyboard activation.
+    if (target !== e.currentTarget && !target.classList.contains("calendar__cell")) return;
     switch (e.key) {
       case "ArrowLeft":
         e.preventDefault();
@@ -335,6 +352,7 @@ export function DatePicker({
               className={`calendar${isBottomSheet ? " calendar--sheet" : ""}`}
               role="dialog"
               aria-label="Date picker"
+              aria-modal={isBottomSheet || undefined}
               tabIndex={-1}
               onKeyDown={onPopoverKey}
               style={isBottomSheet || !pos ? undefined : { top: pos.top, left: pos.left }}
@@ -383,7 +401,7 @@ export function DatePicker({
                       type="button"
                       className={`calendar__quick-cell${i === viewMonth.getMonth() ? " is-current" : ""}`}
                       onClick={() => {
-                        setViewMonth((m) => new Date(m.getFullYear(), i, 1));
+                        goToMonth(viewMonth.getFullYear(), i);
                         setQuick(null);
                       }}
                     >
@@ -400,7 +418,7 @@ export function DatePicker({
                         type="button"
                         className={`calendar__quick-cell${y === viewMonth.getFullYear() ? " is-current" : ""}`}
                         onClick={() => {
-                          setViewMonth((m) => new Date(y, m.getMonth(), 1));
+                          goToMonth(y, viewMonth.getMonth());
                           setQuick(null);
                         }}
                       >
@@ -431,6 +449,9 @@ export function DatePicker({
                         }${isToday ? " is-today" : ""}${isFocused ? " is-active" : ""}${disabled ? " is-disabled" : ""}`}
                         onClick={() => !disabled && pick(d)}
                         disabled={!!disabled}
+                        tabIndex={isFocused ? 0 : -1}
+                        aria-label={d.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                        aria-pressed={Boolean(isSel)}
                         aria-current={isToday ? "date" : undefined}
                       >
                         {d.getDate()}

@@ -1,3 +1,4 @@
+import { isLocalDataRuntime } from "../../../lib/staticRuntime";
 import { useState } from "react";
 import { Sparkles, Upload, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "../../../components/ui";
@@ -38,6 +39,7 @@ export function MinutesDraftEmptyState({
   onDraftFromSavedTranscript: () => Promise<void> | void;
   onUploadAudioAndDraft: () => Promise<void> | void;
 }) {
+  const remoteAvailable = !isLocalDataRuntime();
   const [pasted, setPasted] = useState("");
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
@@ -64,14 +66,14 @@ export function MinutesDraftEmptyState({
         </h2>
         {!collapsed && (
           <span className="card__subtitle">
-            Paste a transcript, upload audio, or use the transcript already on file —
-            we'll generate a structured draft you can edit below.
+            {remoteAvailable ? "Paste or upload a transcript to generate a draft you can edit below." : "AI drafting is unavailable in this local workspace. Write minutes manually or save a text transcript from Sources."}
           </span>
         )}
         {hasSavedTranscript && <Badge tone="info">Transcript on file</Badge>}
       </div>
       {collapsed ? null : (
       <div className="card__body col" style={{ gap: 12 }}>
+        {!remoteAvailable && <p className="muted" role="status">AI minutes drafting and audio transcription require a connected server. Saved transcripts and manual minutes remain available.</p>}
         {hasSavedTranscript && (
           <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
@@ -80,7 +82,7 @@ export function MinutesDraftEmptyState({
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busy}
+              disabled={busy || !remoteAvailable}
               onClick={() => onDraftFromSavedTranscript()}
             >
               <Sparkles size={12} /> {busy ? "Drafting..." : "Draft from saved transcript"}
@@ -99,13 +101,13 @@ export function MinutesDraftEmptyState({
             value={pasted}
             onChange={(e) => setPasted(e.target.value)}
             placeholder="Paste the meeting transcript or your raw notes — anything in plain text works."
-            disabled={busy}
+            disabled={busy || !remoteAvailable}
           />
           <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busy || pasted.trim().length === 0}
+              disabled={busy || !remoteAvailable || pasted.trim().length === 0}
               onClick={async () => {
                 await onDraftFromPastedText(pasted);
                 setPasted("");
@@ -123,7 +125,7 @@ export function MinutesDraftEmptyState({
           <button
             type="button"
             className="btn"
-            disabled={busy}
+            disabled={busy || !remoteAvailable}
             onClick={() => audioInputRef.current?.click()}
           >
             <Upload size={12} /> {audioFile ? `Change audio (${audioFile.name})` : "Choose audio"}
@@ -131,7 +133,7 @@ export function MinutesDraftEmptyState({
           <button
             type="button"
             className="btn"
-            disabled={busy || !audioFile}
+            disabled={busy || !remoteAvailable || !audioFile}
             onClick={() => onUploadAudioAndDraft()}
           >
             <Sparkles size={12} /> {busy ? "Running..." : "Transcribe & draft"}

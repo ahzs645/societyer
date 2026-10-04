@@ -6,6 +6,11 @@
 .wave-cache-table td {
   overflow-wrap: anywhere;
 }
+.treasurer-page {
+  // The dashboard scrolls inside a fixed-height app pane. Auto tracks can
+  // shrink the header below its wrapped contents and cover its buttons.
+  grid-auto-rows: max-content;
+}
 @media (max-width: 1100px) {
   .treasurer-overview-grid,
   .treasurer-category-grid,

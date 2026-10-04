@@ -1,3 +1,5 @@
+import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -162,6 +164,8 @@ function newBudgetForm() {
 }
 
 export function OrganizationHistoryPage() {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("society:write");
   const society = useSociety();
   const data = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
   const saveSourceRecord = useMutation(api.organizationHistory.saveSource);
@@ -345,10 +349,10 @@ export function OrganizationHistoryPage() {
         subtitle="Build an editable, source-backed organization profile from Paperless, archive, registry, and meeting records."
         actions={
           <>
-            <button className="btn-action" onClick={() => setImportOpen(true)}>
+            <button className="btn-action" onClick={() => setImportOpen(true)} disabled={!canWrite}>
               <Upload size={12} /> Import JSON
             </button>
-            <button className="btn-action btn-action--primary" onClick={() => setSourceForm(newSourceForm())}>
+            <button className="btn-action btn-action--primary" onClick={() => setSourceForm(newSourceForm())} disabled={!canWrite}>
               <Plus size={12} /> Add source
             </button>
           </>
@@ -383,10 +387,10 @@ export function OrganizationHistoryPage() {
               <span className="card__subtitle">Paged, searchable claims with source-document links</span>
             </div>
             <div className="row" style={{ gap: 8 }}>
-              <button className="btn-action" onClick={() => setWorkflowOpen(true)}>
+              <button className="btn-action" onClick={() => setWorkflowOpen(true)} disabled={!canWrite}>
                 <BookOpen size={12} /> Workflow
               </button>
-              <button className="btn-action" onClick={() => setFactForm(newFactForm())}>
+              <button className="btn-action" onClick={() => setFactForm(newFactForm())} disabled={!canWrite}>
                 <Plus size={12} /> Add fact
               </button>
             </div>
@@ -478,7 +482,7 @@ export function OrganizationHistoryPage() {
                 </span>
               </div>
               {peopleSection === "terms" && (
-                <button className="btn-action" onClick={() => setBoardTermForm(newBoardTermForm())}>
+                <button className="btn-action" onClick={() => setBoardTermForm(newBoardTermForm())} disabled={!canWrite}>
                   <Plus size={12} /> Add term
                 </button>
               )}
@@ -585,7 +589,7 @@ export function OrganizationHistoryPage() {
               <h2 className="card__title">Converted motions</h2>
               <span className="card__subtitle">Paperless minute motions merged with editable org-history records</span>
             </div>
-            <button className="btn-action" onClick={() => setMotionForm(newMotionForm())}>
+            <button className="btn-action" onClick={() => setMotionForm(newMotionForm())} disabled={!canWrite}>
               <Plus size={12} /> Add motion
             </button>
           </div>
@@ -667,7 +671,7 @@ export function OrganizationHistoryPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Budget snapshots</h2>
-            <button className="btn-action" onClick={() => setBudgetForm(newBudgetForm())}>
+            <button className="btn-action" onClick={() => setBudgetForm(newBudgetForm())} disabled={!canWrite}>
               <Plus size={12} /> Add budget
             </button>
           </div>
@@ -738,7 +742,7 @@ export function OrganizationHistoryPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">History timeline</h2>
-            <button className="btn-action" onClick={() => setEventForm(newEventForm())}>
+            <button className="btn-action" onClick={() => setEventForm(newEventForm())} disabled={!canWrite}>
               <Plus size={12} /> Add event
             </button>
           </div>
@@ -773,7 +777,7 @@ export function OrganizationHistoryPage() {
               <EmptyCallout
                 title="No history events yet"
                 body="Create dated milestones after source records are added and reviewed."
-                action={<button className="btn-action" onClick={() => setEventForm(newEventForm())}><Plus size={12} /> Add event</button>}
+                action={<button className="btn-action" onClick={() => setEventForm(newEventForm())} disabled={!canWrite}><Plus size={12} /> Add event</button>}
               />
             )}
           </div>
@@ -784,7 +788,7 @@ export function OrganizationHistoryPage() {
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Source records</h2>
-            <button className="btn-action" onClick={() => setSourceForm(newSourceForm())}>
+            <button className="btn-action" onClick={() => setSourceForm(newSourceForm())} disabled={!canWrite}>
               <Plus size={12} /> Add source
             </button>
           </div>
@@ -834,7 +838,7 @@ export function OrganizationHistoryPage() {
               <EmptyCallout
                 title="No source records yet"
                 body="Start by adding Paperless document IDs or importing a reviewed JSON bundle."
-                action={<button className="btn-action" onClick={() => setSourceForm(newSourceForm())}><Plus size={12} /> Add source</button>}
+                action={<button className="btn-action" onClick={() => setSourceForm(newSourceForm())} disabled={!canWrite}><Plus size={12} /> Add source</button>}
               />
             </div>
           )}
@@ -863,7 +867,7 @@ export function OrganizationHistoryPage() {
         open={!!sourceForm}
         onClose={() => setSourceForm(null)}
         title={sourceForm?._id ? "Edit source" : "Add source"}
-        footer={<><button className="btn" onClick={() => setSourceForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveSource}>Save source</button></>}
+        footer={<><button className="btn" onClick={() => setSourceForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveSource} disabled={!canWrite}>Save source</button></>}
       >
         {sourceForm && (
           <div>
@@ -905,7 +909,7 @@ export function OrganizationHistoryPage() {
         open={!!factForm}
         onClose={() => setFactForm(null)}
         title={factForm?._id ? "Edit profile fact" : "Add profile fact"}
-        footer={<><button className="btn" onClick={() => setFactForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveFact}>Save fact</button></>}
+        footer={<><button className="btn" onClick={() => setFactForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveFact} disabled={!canWrite}>Save fact</button></>}
       >
         {factForm && (
           <div>
@@ -927,7 +931,7 @@ export function OrganizationHistoryPage() {
         open={!!eventForm}
         onClose={() => setEventForm(null)}
         title={eventForm?._id ? "Edit history event" : "Add history event"}
-        footer={<><button className="btn" onClick={() => setEventForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveEvent}>Save event</button></>}
+        footer={<><button className="btn" onClick={() => setEventForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveEvent} disabled={!canWrite}>Save event</button></>}
       >
         {eventForm && (
           <div>
@@ -958,7 +962,7 @@ export function OrganizationHistoryPage() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         title="Import history JSON"
-        footer={<><button className="btn" onClick={() => setImportOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={runBulkImport}>Import</button></>}
+        footer={<><button className="btn" onClick={() => setImportOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={runBulkImport} disabled={!canWrite}>Import</button></>}
       >
         <Field
           label="JSON bundle"
@@ -982,7 +986,7 @@ export function OrganizationHistoryPage() {
         open={!!boardTermForm}
         onClose={() => setBoardTermForm(null)}
         title={boardTermForm?._id ? "Edit board term" : "Add board term"}
-        footer={<><button className="btn" onClick={() => setBoardTermForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveBoardTerm}>Save term</button></>}
+        footer={<><button className="btn" onClick={() => setBoardTermForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveBoardTerm} disabled={!canWrite}>Save term</button></>}
       >
         {boardTermForm && (
           <div>
@@ -1022,7 +1026,7 @@ export function OrganizationHistoryPage() {
         open={!!motionForm}
         onClose={() => setMotionForm(null)}
         title={motionForm?._id ? "Edit motion" : "Add motion"}
-        footer={<><button className="btn" onClick={() => setMotionForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveMotion}>Save motion</button></>}
+        footer={<><button className="btn" onClick={() => setMotionForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveMotion} disabled={!canWrite}>Save motion</button></>}
       >
         {motionForm && (
           <div>
@@ -1070,7 +1074,7 @@ export function OrganizationHistoryPage() {
         open={!!budgetForm}
         onClose={() => setBudgetForm(null)}
         title={budgetForm?._id ? "Edit budget snapshot" : "Add budget snapshot"}
-        footer={<><button className="btn" onClick={() => setBudgetForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveBudget}>Save budget</button></>}
+        footer={<><button className="btn" onClick={() => setBudgetForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveBudget} disabled={!canWrite}>Save budget</button></>}
       >
         {budgetForm && (
           <div>
@@ -1114,6 +1118,8 @@ export function OrganizationHistoryPage() {
 }
 
 export function OrganizationHistoryBudgetPage() {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("society:write");
   const { budgetId } = useParams();
   const society = useSociety();
   const data = useQuery(api.organizationHistory.list, society ? { societyId: society._id } : "skip");
@@ -1195,7 +1201,7 @@ export function OrganizationHistoryBudgetPage() {
         subtitle={`Budget snapshot · ${fiscalYearLabel}${budget.sourceDate ? ` · source date ${budget.sourceDate}` : ""}`}
         actions={(
           <>
-            <button className="btn-action" type="button" disabled={extracting || !budget.sourceIds?.length} onClick={runSourceExtraction}>
+            <button className="btn-action" type="button" disabled={!canWrite || (extracting || !budget.sourceIds?.length)} onClick={runSourceExtraction}>
               {extracting ? <RefreshCw size={12} /> : <FileText size={12} />}
               {extracting ? "Extracting" : "Extract source detail"}
             </button>
@@ -1852,6 +1858,8 @@ function SourceDocumentList({
 }
 
 function SourceDocumentRow({ source, societyId }: { source: any; societyId: any }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("documents:write");
   const downloadUrl = useQuery(api.files.getUrl, source?.storageId ? { storageId: source.storageId } : "skip");
   const pullSourceDocument = useAction(api.paperless.pullSourceDocument);
   const toast = useToast();
@@ -1860,11 +1868,11 @@ function SourceDocumentRow({ source, societyId }: { source: any; societyId: any 
   const url = sourceUrl(source);
   // Pulling copies the Paperless file into Convex, which the no-native-storage
   // mode forbids — keep "Open Paperless" but hide the pull/refresh action.
-  const canPull = Boolean(source?._id && sourcePaperlessExternalId(source)) && isNativeFileStorageEnabled();
+  const canPull = !isLocalDataRuntime() && Boolean(source?._id && sourcePaperlessExternalId(source)) && isNativeFileStorageEnabled();
 
   const pull = async () => {
     const externalId = sourcePaperlessExternalId(source);
-    if (!source?._id || !externalId) return;
+    if (!canWrite || !canPull || !source?._id || !externalId) return;
     setBusy(true);
     try {
       const result = await pullSourceDocument({
@@ -1919,7 +1927,7 @@ function SourceDocumentRow({ source, societyId }: { source: any; societyId: any 
           </a>
         )}
         {canPull && (
-          <button className="btn btn--ghost btn--sm" disabled={busy} onClick={pull}>
+          <button className="btn btn--ghost btn--sm" disabled={!canWrite || (busy)} onClick={pull}>
             {busy ? <RefreshCw size={12} /> : <Download size={12} />}
             {busy ? "Pulling" : source.storageId ? "Refresh file" : "Pull file"}
           </button>
@@ -2086,6 +2094,8 @@ function MoneyField({ label, value, onChange }: { label: string; value: number |
 }
 
 function BudgetLinesEditor({ lines, onChange }: { lines: any[]; onChange: (lines: any[]) => void }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("society:write");
   const updateLine = (index: number, patch: any) => {
     onChange(lines.map((line, i) => i === index ? { ...line, ...patch } : line));
   };
@@ -2117,7 +2127,7 @@ function BudgetLinesEditor({ lines, onChange }: { lines: any[]; onChange: (lines
             }}
             placeholder="Amount"
           />
-          <button className="btn btn--ghost btn--sm btn--icon" aria-label="Remove line" onClick={() => onChange(lines.filter((_, i) => i !== index))}>
+          <button className="btn btn--ghost btn--sm btn--icon" aria-label="Remove line" onClick={() => onChange(lines.filter((_, i) => i !== index))} disabled={!canWrite}>
             <Trash2 size={12} />
           </button>
         </div>
@@ -2125,7 +2135,7 @@ function BudgetLinesEditor({ lines, onChange }: { lines: any[]; onChange: (lines
       <button
         className="btn-action"
         onClick={() => onChange([...lines, { section: "note", label: "", amountCents: undefined, notes: "" }])}
-        type="button"
+        type="button" disabled={!canWrite}
       >
         <Plus size={12} /> Add line
       </button>
@@ -2146,8 +2156,10 @@ function WorkflowRow({ icon, title, body }: { icon: ReactNode; title: string; bo
 }
 
 function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("society:write");
   return (
-    <button className="btn btn--ghost btn--sm btn--icon" aria-label={label} title={label} onClick={onClick}>
+    <button className="btn btn--ghost btn--sm btn--icon" aria-label={label} title={label} onClick={onClick} disabled={!canWrite}>
       {children}
     </button>
   );

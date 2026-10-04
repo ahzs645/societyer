@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
@@ -37,6 +38,8 @@ const KIND_LABEL: Record<string, string> = { society: "Society", corporation: "C
  * document packet across many entities at once (the YCN Multiple_Copy analogue).
  */
 export function PortfolioPage() {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("society:write");
   const data = useQuery(api.firm.overview, {}) as
     | { today: string; entities: FirmEntity[]; totals: any }
     | undefined;
@@ -128,7 +131,7 @@ export function PortfolioPage() {
                   Select all {packetKind}s
                 </button>
               )}
-              <button className="btn btn--accent" disabled={busy || !packetKey || selectedIds.length === 0} onClick={runBatch}>
+              <button className="btn btn--accent" disabled={!canWrite || (busy || !packetKey || selectedIds.length === 0)} onClick={runBatch}>
                 {busy ? "Generating…" : `Generate for ${selectedIds.length} selected`}
               </button>
             </div>

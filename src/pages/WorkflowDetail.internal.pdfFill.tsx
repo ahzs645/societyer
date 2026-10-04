@@ -1,3 +1,4 @@
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 // WorkflowDetail: PDF template selection, preview, and pdf_fill node setup.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -89,7 +90,7 @@ export function PdfFillSetup({
     : null;
 
   const autoDetectFields = async () => {
-    if (!selectedDoc) return;
+    if (!selectedDoc || isLocalDataRuntime()) return;
     setDetecting(true);
     try {
       const result = await inspectPdfTemplate({ documentId: selectedDoc._id });
@@ -213,6 +214,7 @@ export function PdfFillSetup({
         onMappingsChange={(next) => onSave({ fieldMappings: next })}
       />
 
+      {isLocalDataRuntime() && <p className="muted" role="status">Automatic PDF field detection requires a connected server. Existing field mappings remain available.</p>}
       {inspection && (
         <Field label="Detected structure">
           <div className="workflow-codebox">
@@ -228,7 +230,7 @@ export function PdfFillSetup({
         <button
           type="button"
           className="btn btn--ghost btn--sm"
-          disabled={!selectedDoc || detecting}
+          disabled={isLocalDataRuntime() || !selectedDoc || detecting}
           title={selectedDoc ? "Read AcroForm field names from the selected PDF." : "Pick a PDF template first."}
           onClick={autoDetectFields}
         >

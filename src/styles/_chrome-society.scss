@@ -818,3 +818,11 @@
     justify-content: center;
   }
 }
+@media (max-width: 380px) {
+  .society-layout .society-field-grid--registry-dates {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .society-layout .society-field-grid--registry-dates > :first-child {
+    grid-column: auto;
+  }
+}

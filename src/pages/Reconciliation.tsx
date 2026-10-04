@@ -1,3 +1,4 @@
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -33,6 +34,7 @@ import type { Id } from "../../convex/_generated/dataModel";
  * `selected` so the panel rehydrates with that transaction.
  */
 export function ReconciliationPage() {
+  const { canWrite } = useFinancePermissions();
   const society = useSociety();
   const overview = useQuery(
     api.reconciliation.overview,
@@ -187,10 +189,10 @@ export function ReconciliationPage() {
             <MoreActionsMenu
               items={[
                 { id: "ledger-reconciliation", label: "Ledger reconciliation", icon: <Scale size={14} />, onSelect: () => navigate("/app/financials/accounting") },
-                { id: "add-transaction", label: "Add transaction", icon: <Plus size={14} />, onSelect: () => setAddOpen(true) },
+                { disabled: !canWrite, id: "add-transaction", label: "Add transaction", icon: <Plus size={14} />, onSelect: () => setAddOpen(true) },
               ]}
             />
-            <button className="btn-action btn-action--primary" onClick={autoMatchAllHighConfidence}>
+            <button className="btn-action btn-action--primary" onClick={autoMatchAllHighConfidence} disabled={!canWrite}>
               <Link2 size={12} /> Auto-match high confidence
             </button>
           </>
@@ -204,7 +206,7 @@ export function ReconciliationPage() {
         footer={
           <>
             <button className="btn" onClick={() => setAddOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveManualTxn}>Add transaction</button>
+            <button className="btn btn--accent" onClick={saveManualTxn} disabled={!canWrite}>Add transaction</button>
           </>
         }
       >
@@ -319,7 +321,7 @@ export function ReconciliationPage() {
                       onClick={async () => {
                         await unmatchM({ txnId: selectedRow.txn._id });
                         toast.info("Reconciliation removed");
-                      }}
+                      }} disabled={!canWrite}
                     >
                       <Undo2 size={12} /> Unmatch
                     </button>
@@ -359,7 +361,7 @@ export function ReconciliationPage() {
                               actor: actorName,
                             });
                             toast.success("Matched");
-                          }}
+                          }} disabled={!canWrite}
                         >
                           <Link2 size={12} /> Match
                         </button>
@@ -378,7 +380,7 @@ export function ReconciliationPage() {
                         if (!note) return;
                         await markManualM({ txnId: selectedRow.txn._id, note, actor: actorName });
                         toast.success("Manual reconciliation recorded");
-                      }}
+                      }} disabled={!canWrite}
                     >
                       Mark manually reconciled…
                     </button>
@@ -398,7 +400,7 @@ export function ReconciliationPage() {
                       <Link to="/app/inventory">{link.inventoryItem?.name ?? link.asset?.name ?? link.receiptLineLabel ?? "Linked item"}</Link>
                       <button
                         className="btn-action"
-                        onClick={async () => { await unlinkInventoryReceipt({ id: link._id }); toast.info("Item unlinked"); }}
+                        onClick={async () => { await unlinkInventoryReceipt({ id: link._id }); toast.info("Item unlinked"); }} disabled={!canWrite}
                       >
                         <Undo2 size={12} /> Unlink
                       </button>
@@ -414,7 +416,7 @@ export function ReconciliationPage() {
                         options={((inventoryItems ?? []) as any[]).map((i) => ({ value: i._id, label: i.sku ? `${i.name} (${i.sku})` : i.name }))}
                       />
                     </div>
-                    <button className="btn-action btn-action--primary" onClick={linkSelectedItem}>
+                    <button className="btn-action btn-action--primary" onClick={linkSelectedItem} disabled={!canWrite}>
                       <Link2 size={12} /> Link item
                     </button>
                   </div>

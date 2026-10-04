@@ -96,6 +96,7 @@ export function TaskFormFields({
   data,
   mode = "create",
   autoFocusTitle = true,
+  readOnly = false,
 }: {
   value: TaskFormValue;
   onChange: (patch: Partial<TaskFormValue>) => void;
@@ -104,6 +105,7 @@ export function TaskFormFields({
    * that already exist. */
   mode?: "create" | "edit";
   autoFocusTitle?: boolean;
+  readOnly?: boolean;
 }) {
   const { committees, goals, users, filings, workflows, documents, commitments } = data;
   return (
@@ -118,6 +120,7 @@ export function TaskFormFields({
       </Field>
       <Field label="Description" className="field--grow">
         <MarkdownEditor
+          readOnly={readOnly}
           rows={4}
           value={value.description}
           onChange={(markdown) => onChange({ description: markdown })}
@@ -233,6 +236,7 @@ export function TaskFormFields({
       {mode === "edit" && (
         <Field label="Completion note">
           <MarkdownEditor
+          readOnly={readOnly}
             rows={4}
             value={value.completionNote}
             onChange={(markdown) => onChange({ completionNote: markdown })}

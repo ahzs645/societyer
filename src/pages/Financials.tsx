@@ -1,3 +1,4 @@
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -48,6 +49,7 @@ import { openGlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
 import { assetCategoryFromTransaction, isAssetPurchaseTransaction } from "../features/assets/assetUtils";
 
 export function FinancialsPage() {
+  const { canWrite, canEditSettings, canManageIntegration } = useFinancePermissions();
   const society = useSociety();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -353,11 +355,16 @@ export function FinancialsPage() {
                     id: "sync",
                     label: "Sync",
                     icon: <RefreshCw size={14} />,
-                    disabled: busy,
+                    disabled: !canWrite || (busy),
                     onSelect: async () => {
                       setBusy(true);
                       try {
                         const result = await sync({ connectionId: activeConnection._id });
+                        if (!result) {
+                          if (isDemoMode() && activeConnection.demo === true) toast.info("Demo bookkeeping data is already loaded. Live sync requires configured Wave credentials.");
+                          else toast.warn("The bookkeeping source returned no sync result. Check the connection before trying again.");
+                          return;
+                        }
                         toast.success(
                           `Synced ${result.accounts} accounts, ${result.transactions} transactions.`,
                         );
@@ -368,9 +375,9 @@ export function FinancialsPage() {
                       }
                     },
                   },
-                  { id: "cache", label: "Cache", icon: <Database size={14} />, disabled: busy, onSelect: refreshWaveCache },
-                  { id: "check", label: "Check", icon: <ShieldCheck size={14} />, disabled: busy || waveHealthBusy, onSelect: runWaveHealthCheck },
-                  {
+                  { id: "cache", label: "Cache", icon: <Database size={14} />, disabled: !canEditSettings || (busy), onSelect: refreshWaveCache },
+                  { id: "check", label: "Check", icon: <ShieldCheck size={14} />, disabled: !canEditSettings || (busy || waveHealthBusy), onSelect: runWaveHealthCheck },
+                  { disabled: !canManageIntegration,
                     id: "disconnect",
                     label: "Disconnect",
                     destructive: true,
@@ -387,12 +394,12 @@ export function FinancialsPage() {
               <MoreActionsMenu
                 items={[
                   { id: "accounting", label: "Accounting", icon: <PiggyBank size={14} />, onSelect: () => navigate("/app/financials/accounting") },
-                  { id: "check", label: "Check", icon: <ShieldCheck size={14} />, disabled: busy || waveHealthBusy, onSelect: runWaveHealthCheck },
+                  { id: "check", label: "Check", icon: <ShieldCheck size={14} />, disabled: !canEditSettings || (busy || waveHealthBusy), onSelect: runWaveHealthCheck },
                 ]}
               />
               <button
                 className="btn-action btn-action--primary"
-                disabled={busy || !canConnectWave}
+                disabled={!canManageIntegration || (busy || !canConnectWave)}
                 onClick={connect}
                 title={!canConnectWave ? "Configure Wave credentials before connecting this workspace." : undefined}
               >
@@ -576,7 +583,7 @@ export function FinancialsPage() {
             <div style={{ marginLeft: "auto" }}>
               <button
                 className="btn-action"
-                onClick={() => setBudgetForm({ category: "", planned: "" })}
+                onClick={() => setBudgetForm({ category: "", planned: "" })} disabled={!canWrite}
               >
                 <PlusCircle size={12} /> Add budget line
               </button>
@@ -610,7 +617,7 @@ export function FinancialsPage() {
                       <button
                         className="btn btn--ghost btn--sm btn--icon"
                         aria-label={`Delete budget ${b.name}`}
-                        onClick={() => removeBudget({ id: b._id })}
+                        onClick={() => removeBudget({ id: b._id })} disabled={!canWrite}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -694,12 +701,12 @@ export function FinancialsPage() {
               objectMetadata={tableData.objectMetadata}
               hydratedView={financialHydratedView}
               records={records}
-              onUpdate={async ({ recordId, fieldName, value }) => {
+              onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
                 await updateTransaction({
                   id: recordId as Id<"financialTransactions">,
                   patch: { [fieldName]: value } as any,
                 });
-              }}
+              } : undefined}
             >
               <RecordTableViewToolbar
                 societyId={society._id}
@@ -732,7 +739,7 @@ export function FinancialsPage() {
                             {!link.asset && <button
                                 className="btn btn--ghost btn--sm btn--icon"
                                 aria-label="Unlink inventory item"
-                                onClick={async (e) => { e.stopPropagation(); await unlinkInventoryReceipt({ id: link._id }); toast.success("Inventory item unlinked"); }}
+                                onClick={async (e) => { e.stopPropagation(); await unlinkInventoryReceipt({ id: link._id }); toast.success("Inventory item unlinked"); }} disabled={!canWrite}
                               >
                                 <Trash2 size={12} />
                               </button>}
@@ -741,7 +748,7 @@ export function FinancialsPage() {
                         {directlyLinkedAssets.map((asset: any) => (
                           <Link key={asset._id} to={`/app/assets/${asset._id}`} onClick={(e) => e.stopPropagation()}>{asset.name}</Link>
                         ))}
-                        {isAssetPurchaseTransaction(t) && <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setLinkTxn(t); setLinkAssetId(""); setLinkItemId(""); }}>
+                        {isAssetPurchaseTransaction(t) && <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setLinkTxn(t); setLinkAssetId(""); setLinkItemId(""); }} disabled={!canWrite}>
                           <Link2 size={12} /> Link purchase
                         </button>}
                       </div>
@@ -940,7 +947,7 @@ export function FinancialsPage() {
         footer={
           <>
             <button className="btn" onClick={closePurchaseLink}>Cancel</button>
-            <button className="btn btn--accent" onClick={savePurchaseLink}>Link purchase</button>
+            <button className="btn btn--accent" onClick={savePurchaseLink} disabled={!canWrite}>Link purchase</button>
           </>
         }
       >
@@ -1018,6 +1025,7 @@ function BankCsvImportCard({
   societyId: any;
   accounts: any[];
 }) {
+  const { canWrite } = useFinancePermissions();
   const importCsv = useMutation(api.financialHub.importBankCsvTransactions);
   const toast = useToast();
   const [accountId, setAccountId] = useState("");
@@ -1090,7 +1098,7 @@ function BankCsvImportCard({
           }}
         />
         {parsed && <span className="muted">{parsed.length} row{parsed.length === 1 ? "" : "s"} ready</span>}
-        <button className="btn btn--accent" disabled={busy || !accountId || !parsed?.length} onClick={doImport}>
+        <button className="btn btn--accent" disabled={!canWrite || (busy || !accountId || !parsed?.length)} onClick={doImport}>
           Import
         </button>
       </div>

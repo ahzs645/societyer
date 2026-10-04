@@ -17,7 +17,7 @@ import {
   upsertPluginInstallationPortable,
   listIntegrationSyncStatesPortable,
 } from "../shared/functions/apiPlatform";
-import { hasPermission, listPermissionsForRole } from "../shared/functions/permissions";
+import { hasPermission, listPermissionsForRole, requirePermissionPortable } from "../shared/functions/permissions";
 import { isActiveMembership } from "../shared/functions/access";
 import { bootstrapUserIdentityPortable, migrateUserToClerkPortable } from "../shared/functions/users";
 import { assertConvexOutboundUrl } from "./lib/outboundUrlPolicy";
@@ -281,10 +281,20 @@ export const createToken = authorizedMutation("apiPlatform:createToken", mutatio
     );
     const portable = await toPortableMutationCtx(ctx);
     await getOwned(portable, "apiClients", args.clientId, args.societyId);
-    const actor = args.serviceToken
-      ? null
-      : await requireSocietyMembership(portable, args.societyId);
-    const createdByUserId = actor?._id as Id<"users"> | undefined;
+    let actor;
+    if (args.serviceToken) {
+      // The trusted gateway supplies its verified actor after authenticating
+      // the service credential. Recheck current issuance authority here rather
+      // than losing that binding or accepting a client-selected creator.
+      actor = args.createdByUserId ? await ctx.db.get(args.createdByUserId) : null;
+      if (!actor || actor.societyId !== args.societyId || !isActiveMembership(actor) || !hasPermission(actor.role, "settings:manage")) throw new Error("A current authorized API-key creator is required.");
+      if (!actor.authSubject || !actor.authIssuer) throw new Error("The API-key creator must have a verified identity binding.");
+      if (actor.externalIdentityId) {
+        const identity = await ctx.db.get(actor.externalIdentityId as Id<"externalIdentities">);
+        if (!identity || identity.status !== "Active" || identity.issuer !== actor.authIssuer || identity.subject !== actor.authSubject) throw new Error("The API-key creator identity is disabled or invalid.");
+      }
+    } else actor = await requirePermissionPortable(portable, args.societyId, "settings:manage");
+    const createdByUserId = actor._id as Id<"users">;
     const { serviceToken: _serviceToken, ...rest } = args;
     return await ctx.db.insert("apiTokens", {
       ...rest,
@@ -535,10 +545,17 @@ export const upsertWebhookSubscription = authorizedMutation("apiPlatform:upsertW
         args.societyId,
       );
     }
-    const actor = args.serviceToken
-      ? null
-      : await requireSocietyMembership(portable, args.societyId);
-    const createdByUserId = actor?._id as Id<"users"> | undefined;
+    let actor;
+    if (args.serviceToken) {
+      actor = args.createdByUserId ? await ctx.db.get(args.createdByUserId) : null;
+      if (!actor || actor.societyId !== args.societyId || !isActiveMembership(actor) || !hasPermission(actor.role, "settings:manage")) throw new Error("A current authorized webhook creator is required.");
+      if (!actor.authSubject || !actor.authIssuer) throw new Error("The webhook creator must have a verified identity binding.");
+      if (actor.externalIdentityId) {
+        const identity = await ctx.db.get(actor.externalIdentityId as Id<"externalIdentities">);
+        if (!identity || identity.status !== "Active" || identity.issuer !== actor.authIssuer || identity.subject !== actor.authSubject) throw new Error("The webhook creator identity is disabled or invalid.");
+      }
+    } else actor = await requireSocietyMembership(portable, args.societyId);
+    const createdByUserId = actor._id as Id<"users">;
     assertConvexOutboundUrl(args.targetUrl, {
       source: "tenant",
       operation: "webhook_subscription_save",
@@ -553,7 +570,6 @@ export const upsertWebhookSubscription = authorizedMutation("apiPlatform:upsertW
     if (id) {
       await ctx.db.patch(id, {
         ...rest,
-        createdByUserId,
         status: rest.status ?? "active",
         updatedAtISO: at,
       });

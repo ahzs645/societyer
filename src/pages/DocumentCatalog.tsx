@@ -10,6 +10,7 @@ import { api } from "@/lib/convexApi";
 import { FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 import { IncorporationPreparation } from "../components/IncorporationPreparation";
 import { incorporationPreparationForOrganization } from "../../shared/incorporationPreparation";
@@ -89,7 +90,10 @@ export function DocumentCatalogPage() {
     society ? { societyId: society._id } : "skip",
   ) as CatalogData | undefined;
   const generate = useMutation(api.legalOperations.generateDocumentFromCatalog);
+  const seedCatalog = useMutation(api.legalOperations.seedDocumentPacketsForEntity);
+  const permissions = usePermissions();
   const toast = useToast();
+  const [seeding, setSeeding] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [doneKey, setDoneKey] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -98,6 +102,19 @@ export function DocumentCatalogPage() {
   if (society === null) return <SeedPrompt />;
 
   const preparation = entityPreparationDecision(society);
+
+  const onSeedCatalog = async () => {
+    if (seeding || !preparation.allowed || !permissions.can("documents:write")) return;
+    setSeeding(true);
+    try {
+      await seedCatalog({ societyId: society._id });
+      toast.success("Document catalog initialized");
+    } catch (error: any) {
+      toast.error("Could not initialize document catalog", error?.message ?? String(error));
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   const onGenerate = async (t: CatalogTemplate) => {
     const key = packetKeyOf(t);
@@ -184,6 +201,11 @@ export function DocumentCatalogPage() {
             actual documents. Those already exist and can be viewed on{" "}
             <Link to="/app/documents">Documents</Link>.
           </p>
+          {preparation.allowed && permissions.loaded && permissions.can("documents:write") && (
+            <button className="btn" disabled={seeding} onClick={onSeedCatalog}>
+              {seeding ? "Initializing…" : "Initialize document catalog"}
+            </button>
+          )}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -233,14 +255,14 @@ export function DocumentCatalogPage() {
                         <span style={{ marginLeft: "auto" }}>
                           {doneKey === t._id ? (
                             <span style={{ color: "var(--green-11)", fontSize: 13 }}>
-                              Draft staged ✓ — open Template Engine
+                              Draft staged ✓ — <Link to="/app/template-engine">Open Template Engine</Link>
                             </span>
                           ) : (
                             <button
                               className="btn btn--accent"
-                              disabled={busyKey === t._id || !packetKeyOf(t) || !canPrepare || !packetApplies(t)}
+                              disabled={busyKey === t._id || !permissions.loaded || !permissions.can("documents:write") || !packetKeyOf(t) || !canPrepare || !packetApplies(t)}
                               onClick={() => onGenerate(t)}
-                              title={!preparation.allowed ? preparation.message : !compatibleJurisdiction || !compatibleEntity ? "Choose a template for this entity and home jurisdiction" : packetKeyOf(t) ? "Prepare an editable draft" : "No packet key on this template"}
+                              title={!permissions.can("documents:write") ? "Document editing permission is required" : !preparation.allowed ? preparation.message : !compatibleJurisdiction || !compatibleEntity ? "Choose a template for this entity and home jurisdiction" : packetKeyOf(t) ? "Prepare an editable draft" : "No packet key on this template"}
                             >
                               {busyKey === t._id ? "Preparing…" : "Prepare draft"}
                             </button>

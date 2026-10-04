@@ -14,6 +14,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { useThemePreference } from "../hooks/useThemePreference";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -109,17 +110,20 @@ function isCurrentDirector(d: any): boolean {
 
 export function OrgChartPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canReadAssignments = can("settings:read");
+  const canEditAssignments = can("settings:write");
   // As-of date (YYYY-MM-DD); "" = live. Time-travel to a past org structure.
   const [asOf, setAsOf] = useState<string>("");
   const [selected, setSelected] = useState<string | null>(null);
 
-  const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
-  const employees = useQuery(api.employees.list, society ? { societyId: society._id } : "skip");
-  const volunteers = useQuery(api.volunteers.list, society ? { societyId: society._id } : "skip");
-  const liveAssignments = useQuery(api.orgChartAssignments.list, society ? { societyId: society._id } : "skip");
+  const directors = useQuery(api.directors.list, society && can("directors:read") ? { societyId: society._id } : "skip");
+  const employees = useQuery(api.employees.list, society && can("employees:read") ? { societyId: society._id } : "skip");
+  const volunteers = useQuery(api.volunteers.list, society && can("volunteers:read") ? { societyId: society._id } : "skip");
+  const liveAssignments = useQuery(api.orgChartAssignments.list, society && canReadAssignments ? { societyId: society._id } : "skip");
   const asOfAssignments = useQuery(
     api.orgChartAssignments.listAsOf,
-    society && asOf ? { societyId: society._id, asOf } : "skip",
+    society && canReadAssignments && asOf ? { societyId: society._id, asOf } : "skip",
   );
   const upsertAssignment = useMutation(api.orgChartAssignments.upsert);
   const removeAssignment = useMutation(api.orgChartAssignments.remove);
@@ -228,7 +232,7 @@ export function OrgChartPage() {
   }, [allPeople, assignmentBySubject, society?.name, setNodes, setEdges]);
 
   const saveManager = async (person: OrgPerson, value: string) => {
-    if (!society) return;
+    if (!society || !canEditAssignments || asOf) return;
     if (!value) {
       await removeAssignment({ societyId: society._id, subjectType: person.type, subjectId: person.id });
       return;
@@ -272,6 +276,8 @@ export function OrgChartPage() {
         }
       />
 
+      {(!can("directors:read") || !can("employees:read") || !can("volunteers:read") || !canReadAssignments) && <p className="muted">This chart includes only the people records and reporting lines your current role can read. Omitted categories are not a complete organization roster.</p>}
+      {!canEditAssignments && <p className="muted">Reporting-line editing requires workspace settings write access.</p>}
       {asOf && (
         <div className="muted" style={{ marginBottom: 12 }}>
           Showing the structure as it stood on <strong>{asOf}</strong> (reporting lines from the saved history; people active on that date).
@@ -316,7 +322,7 @@ export function OrgChartPage() {
                     <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>Reports to</span>
                     <Select
                       value={selectedManagerValue}
-                      disabled={Boolean(asOf)}
+                      disabled={Boolean(asOf) || !canEditAssignments}
                       onChange={(value) => saveManager(selectedPerson, value)}
                       options={[
                         { value: "", label: "No manager (reports to the entity)" },
@@ -326,7 +332,7 @@ export function OrgChartPage() {
                       ]}
                     />
                   </label>
-                  {selectedManagerValue && !asOf && (
+                  {selectedManagerValue && !asOf && canEditAssignments && (
                     <button className="btn btn--ghost btn--sm" onClick={() => saveManager(selectedPerson, "")}>
                       <X size={12} /> Clear manager
                     </button>

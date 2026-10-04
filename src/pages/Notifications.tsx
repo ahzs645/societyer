@@ -1,3 +1,5 @@
+import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { usePermissions } from "../hooks/usePermissions";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -14,6 +16,8 @@ import { useConfirm } from "../components/Modal";
 
 export function NotificationsPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const digestAvailable = !isLocalDataRuntime() && can("tasks:write");
   const userId = useCurrentUserId() ?? undefined;
   const notifications = useQuery(
     api.notifications.list,
@@ -52,8 +56,9 @@ export function NotificationsPage() {
             <button
               className="btn-action"
               title="Send a digest email to members who have opted in to notification emails."
-              disabled={busy}
+              disabled={busy || !digestAvailable}
               onClick={async () => {
+                if (!digestAvailable) return;
                 const ok = await confirm({
                   title: "Send notification digest?",
                   message: "This queues digest emails for members who have opted in to notification emails for this society.",
@@ -92,11 +97,13 @@ export function NotificationsPage() {
         }
       />
 
+      {isLocalDataRuntime() && <p className="muted" role="status">Email and SMS digests require a connected server. In-app notifications and reminders remain available here.</p>}
+
       <div className="card">
         <div className="card__head">
           <h2 className="card__title">Recent</h2>
           <span className="card__subtitle">
-            {notifications?.length ?? 0} total · {unreadCount} unread · cron runs daily at 07:00 UTC
+            {notifications?.length ?? 0} total · {unreadCount} unread · {isLocalDataRuntime() ? "Local notification history" : "server schedule: daily at 07:00 UTC"}
           </span>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
             {scope === "dismissed" && dismissedCount > 0 && (

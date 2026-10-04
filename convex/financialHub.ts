@@ -12,6 +12,7 @@ import { providers } from "./providers/env";
 import { redactWaveDiagnostic } from "./providers/waveDiagnostics";
 import {
   connectionsPortable,
+  disconnectPortable,
   accountsPortable,
   transactionsPortable,
   transactionsForAccountExternalIdPortable,
@@ -220,19 +221,7 @@ export const markConnectionConnected = authorizedMutation("financialHub:markConn
 export const disconnect = authorizedMutation("financialHub:disconnect", mutation)({
   args: { connectionId: v.id("financialConnections"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
-  handler: async (ctx, { connectionId, actingUserId }) => {
-    const portableCtx = await toPortableMutationCtx(ctx);
-    const conn = await portableCtx.db.get(connectionId, "financialConnections");
-    if (!conn) return;
-    await requireSocietyMembership(portableCtx, String(conn.societyId));
-    await requireRole(ctx, {
-      actingUserId,
-      societyId: conn.societyId as Id<"societies">,
-      required: "Admin",
-    });
-    await getOwned(portableCtx, "financialConnections", connectionId, String(conn.societyId));
-    await ctx.db.patch(connectionId, { status: "disconnected" });
-  },
+  handler: async (ctx, args) => disconnectPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeDemoData = authorizedMutation("financialHub:removeDemoData", mutation)({

@@ -3,10 +3,12 @@ import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Plus, CalendarCheck, Trash2 } from "lucide-react";
+import { useToast } from "../components/Toast";
 
 /**
  * Annual Filings — per-year, per-jurisdiction annual-filing ledger. Lists each
@@ -27,6 +29,8 @@ type Filing = {
 
 export function AnnualFilingsPage() {
   const society = useSociety();
+  const permissions = usePermissions();
+  const canEdit = permissions.loaded && permissions.can("filings:write");
   const items = useQuery(
     api.annualFilings.list,
     society ? { societyId: society._id } : "skip",
@@ -39,11 +43,14 @@ export function AnnualFilingsPage() {
   const remove = useMutation(api.annualFilings.remove);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const openNew = () => {
+    if (!canEdit) return;
     setForm({
       id: undefined,
       jurisdiction: "",
@@ -57,6 +64,7 @@ export function AnnualFilingsPage() {
   };
 
   const openEdit = (r: Filing) => {
+    if (!canEdit) return;
     setForm({
       id: r._id,
       jurisdiction: r.jurisdiction,
@@ -70,18 +78,33 @@ export function AnnualFilingsPage() {
   };
 
   const save = async () => {
-    await upsert({
-      id: form.id || undefined,
-      societyId: society._id,
-      jurisdiction: form.jurisdiction,
-      year: form.year,
-      filed: !!form.filed,
-      filedOn: form.filedOn || undefined,
-      regnNature: form.regnNature || undefined,
-      regnLegislation: form.regnLegislation || undefined,
-      nowISO: new Date().toISOString(),
-    });
-    setOpen(false);
+    if (saving || !canEdit) return;
+    if (!form.jurisdiction.trim() || !/^[1-9]\d{3}$/.test(form.year.trim())) {
+      toast.error("Enter a jurisdiction and a four-digit filing year.");
+      return;
+    }
+    if (form.filed && !form.filedOn) {
+      toast.error("Add the filed-on date before marking this filing as filed.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await upsert({
+        id: form.id || undefined,
+        societyId: society._id,
+        jurisdiction: form.jurisdiction.trim(),
+        year: form.year.trim(),
+        filed: !!form.filed,
+        filedOn: form.filedOn || undefined,
+        regnNature: form.regnNature || undefined,
+        regnLegislation: form.regnLegislation || undefined,
+        nowISO: new Date().toISOString(),
+      });
+      setOpen(false);
+      toast.success("Annual filing saved");
+    } catch (error: any) {
+      toast.error("Could not save annual filing", error?.message ?? String(error));
+    } finally { setSaving(false); }
   };
 
   const rows = items;
@@ -94,7 +117,7 @@ export function AnnualFilingsPage() {
     const forJuris = rows.filter((r) => r.jurisdiction === j);
     const years = forJuris
       .map((r) => Number(r.year))
-      .filter((y) => Number.isFinite(y));
+      .filter((y) => Number.isInteger(y) && y >= 1000 && y <= 9999);
     if (years.length === 0) return [];
     const min = Math.min(...years);
     const max = Math.max(...years);
@@ -116,7 +139,7 @@ export function AnnualFilingsPage() {
         iconColor="green"
         subtitle="Per-year, per-jurisdiction annual-filing ledger — track which annual filings have been filed and when."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" disabled={!canEdit} onClick={openNew}>
             <Plus size={12} /> Add filing
           </button>
         }
@@ -167,7 +190,7 @@ export function AnnualFilingsPage() {
                       <tr
                         key={r._id ?? `${r.jurisdiction}-${r.year}`}
                         onClick={() => openEdit(r)}
-                        style={{ cursor: "pointer" }}
+                        style={{ cursor: canEdit ? "pointer" : "default" }}
                       >
                         <td>{r.year}</td>
                         <td>{r.filed ? "✓" : "✗"}</td>
@@ -176,9 +199,10 @@ export function AnnualFilingsPage() {
                           <button
                             className="btn btn--ghost btn--sm btn--icon"
                             aria-label={`Delete ${r.jurisdiction} ${r.year} filing`}
+                            disabled={!canEdit}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (r._id) remove({ id: r._id });
+                              if (canEdit && r._id) remove({ id: r._id }).catch((error: any) => toast.error("Could not delete annual filing", error?.message ?? String(error)));
                             }}
                           >
                             <Trash2 size={12} />
@@ -203,8 +227,8 @@ export function AnnualFilingsPage() {
             <button className="btn" onClick={() => setOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" onClick={save}>
-              Save
+            <button className="btn btn--accent" onClick={save} disabled={saving || !canEdit}>
+              {saving ? "Saving…" : "Save"}
             </button>
           </>
         }

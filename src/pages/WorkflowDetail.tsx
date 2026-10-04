@@ -1,3 +1,4 @@
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -13,6 +14,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
@@ -96,6 +98,7 @@ import type {
 export function WorkflowDetailPage() {
   const { id } = useParams();
   const society = useSociety();
+  const canManage = usePermissions().can("tasks:write");
   const workflow = useQuery(api.workflows.get, id ? { id: id as any } : "skip");
   const runs = useQuery(api.workflows.runsForWorkflow, id ? { workflowId: id as any } : "skip");
   const catalog = useQuery(api.workflows.listCatalog, {});
@@ -148,11 +151,14 @@ export function WorkflowDetailPage() {
   const launchUsesIntake = visibleIntakeFields.length > 0;
 
   const openIntake = () => {
+    if (!canManage) return;
     setIntake(initialIntakeValues(intakeFields, sampleInput));
     setIntakeOpen(true);
   };
 
   const runWorkflow = async (input?: Record<string, unknown>) => {
+    if (!canManage) return;
+    if (isLocalDataRuntime()) { toast.warn("Workflow execution requires a connected server"); return; }
     setBusy(true);
     try {
       const result = await run({
@@ -193,9 +199,9 @@ export function WorkflowDetailPage() {
         <div className="workflow-topbar__actions">
           <button
             className="btn btn--ghost btn--sm"
-            disabled={busy}
+            disabled={!canManage || busy}
             onClick={() =>
-              setStatus({
+              canManage && setStatus({
                 id: workflow._id,
                 status: isActive ? "paused" : "active",
               })
@@ -206,7 +212,7 @@ export function WorkflowDetailPage() {
           </button>
           <button
             className="btn btn--ghost btn--sm"
-            disabled={busy}
+            disabled={!canManage || busy || isLocalDataRuntime()}
             onClick={() => (launchUsesIntake ? openIntake() : runWorkflow())}
           >
             <Play size={12} /> Launch
@@ -216,7 +222,8 @@ export function WorkflowDetailPage() {
           </Link>
           <button
             className="btn btn--ghost btn--sm"
-            onClick={() => setAddOpen(true)}
+            disabled={!canManage}
+            onClick={() => { if (canManage) setAddOpen(true); }}
             title="Insert a new step into this workflow"
           >
             <Plus size={12} /> Add Node
@@ -233,6 +240,7 @@ export function WorkflowDetailPage() {
         </div>
       </div>
 
+      {isLocalDataRuntime() && <p className="muted" style={{ padding: "8px 16px", margin: 0 }}>Workflow execution requires a connected server. You can prepare and review this workflow here.</p>}
       <div className="workflow-shell">
         <section className="workflow-canvas" aria-label="Workflow canvas">
           <ReactFlow
@@ -287,8 +295,9 @@ export function WorkflowDetailPage() {
                 <div className="workflow-sidepanel__section">
                   <button
                     className="btn btn--ghost btn--sm"
+                    disabled={!canManage}
                     onClick={async () => {
-                      if (!workflow) return;
+                      if (!canManage || !workflow) return;
                       await removeNode({
                         id: workflow._id,
                         key: selectedNode.key,
@@ -301,14 +310,16 @@ export function WorkflowDetailPage() {
                   </button>
                 </div>
               )}
+              <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
               <NodeSetupPanel
                 key={selectedNode.key}
                 node={selectedNode}
                 workflow={workflow}
                 documents={documents ?? []}
                 onLaunch={() => (launchUsesIntake ? openIntake() : runWorkflow())}
-                launchDisabled={busy}
+                launchDisabled={!canManage || busy || isLocalDataRuntime()}
                 onSave={async (patch) => {
+                  if (!canManage) return;
                   await updateNodeConfig({
                     id: workflow._id,
                     key: selectedNode.key,
@@ -316,6 +327,7 @@ export function WorkflowDetailPage() {
                   });
                 }}
               />
+              </fieldset>
               {workflow.provider === "n8n" && (
                 <div className="workflow-sidepanel__section">
                   <div className="field__label">Workflow-level n8n webhook</div>
@@ -359,9 +371,9 @@ export function WorkflowDetailPage() {
               key={entry.type}
               type="button"
               className="workflow-node-picker__item"
-              disabled={busy}
+              disabled={!canManage || busy}
               onClick={async () => {
-                if (!workflow) return;
+                if (!canManage || !workflow) return;
                 setBusy(true);
                 try {
                   const result = await addNode({
@@ -409,7 +421,7 @@ export function WorkflowDetailPage() {
             </button>
             <button
               className="btn btn--accent"
-              disabled={busy}
+              disabled={!canManage || busy}
               onClick={() => {
                 const missing = missingRequiredIntakeFields(intakeFields, intake);
                 if (missing.length > 0) {

@@ -1,7 +1,9 @@
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
@@ -122,6 +124,7 @@ type TriggerKind = "cron" | "manual" | "date_offset";
  */
 export function WorkflowsPage() {
   const society = useSociety();
+  const canManage = usePermissions().can("tasks:write");
   const catalog = useQuery(api.workflows.listCatalog, {});
   const rows = useQuery(api.workflows.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.workflows.create);
@@ -176,6 +179,7 @@ export function WorkflowsPage() {
   if (society === null) return <SeedPrompt />;
 
   const openNew = (recipeKey?: string) => {
+    if (!canManage) return;
     const first = recipeKey ?? catalog?.[0]?.key ?? "agm_prep";
     const selected = catalog?.find((c: any) => c.key === first);
     const defaultTriggerKind = selected?.config?.defaultTriggerKind;
@@ -199,7 +203,7 @@ export function WorkflowsPage() {
   };
 
   const save = async () => {
-    if (!form) return;
+    if (!canManage || !form) return;
     const trigger: any = { kind: form.triggerKind };
     if (form.triggerKind === "cron") trigger.cron = form.cron;
     if (form.triggerKind === "date_offset") {
@@ -224,6 +228,7 @@ export function WorkflowsPage() {
 
   return (
     <div className="page">
+      {isLocalDataRuntime() && <p className="muted">Workflow execution requires a connected server. You can prepare and review workflows here.</p>}
       <PageHeader
         title="Workflows"
         icon={<WorkflowIcon size={16} />}
@@ -244,50 +249,58 @@ export function WorkflowsPage() {
                   id: "unbc-example",
                   label: "UNBC example",
                   icon: <WorkflowIcon size={14} />,
+                  disabled: !canManage,
                   onSelect: () => openNew("unbc_affiliate_id_request"),
                 },
                 {
                   id: "key-request",
                   label: "Key request",
                   icon: <WorkflowIcon size={14} />,
+                  disabled: !canManage,
                   onSelect: () => openNew("unbc_key_access_request"),
                 },
                 {
                   id: "ote-access",
                   label: "OTE access",
                   icon: <WorkflowIcon size={14} />,
+                  disabled: !canManage,
                   onSelect: () => openNew("ote_keycard_access_request"),
                 },
                 {
                   id: "csj-orientation",
                   label: "CSJ orientation",
                   icon: <WorkflowIcon size={14} />,
+                  disabled: !canManage,
                   onSelect: () => openNew("csj_remote_worker_orientation"),
                 },
                 {
                   id: "agm-deadlines",
                   label: "AGM deadlines",
                   icon: <WorkflowIcon size={14} />,
+                  disabled: !canManage,
                   onSelect: () => openNew("agm_date_deadlines"),
                 },
                 {
                   id: "filing-notice",
                   label: "Filing notice",
                   icon: <WorkflowIcon size={14} />,
+                  disabled: !canManage,
                   onSelect: () => openNew("filing_due_notify_officer"),
                 },
                 {
                   id: "conflict-agenda",
                   label: "Conflict agenda",
                   icon: <WorkflowIcon size={14} />,
+                  disabled: !canManage,
                   onSelect: () => openNew("conflict_disclosed_agenda_item"),
                 },
                 {
                   id: "link-n8n-recipes",
                   label: setupBusy ? "Setting up..." : "Set up governance automations",
                   icon: <WorkflowIcon size={14} />,
-                  disabled: setupBusy,
+                  disabled: !canManage || setupBusy,
                   onSelect: async () => {
+                    if (!canManage) return;
                     setSetupBusy(true);
                     try {
                       const result = await setupGovernanceN8nRecipes({
@@ -303,7 +316,7 @@ export function WorkflowsPage() {
                 },
               ]}
             />
-            <button className="btn-action btn-action--primary" onClick={() => openNew()}>
+            <button className="btn-action btn-action--primary" disabled={!canManage} onClick={() => openNew()}>
               <Plus size={12} /> New workflow
             </button>
           </>
@@ -319,7 +332,8 @@ export function WorkflowsPage() {
           hydratedView={tableData.hydratedView}
           records={records}
           onRecordClick={(_, record) => navigate(`/app/workflows/${record._id}`)}
-          onUpdate={async ({ recordId, fieldName, value }) => {
+          onUpdate={canManage ? async ({ recordId, fieldName, value }) => {
+            if (!canManage) return;
             // Only `name` and `status` are safe for inline edits — the
             // other visible columns are projected (recipeLabel,
             // triggerLabel) or Director-gated state (provider / run
@@ -332,7 +346,7 @@ export function WorkflowsPage() {
               id: recordId as Id<"workflows">,
               patch,
             });
-          }}
+          } : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -366,11 +380,13 @@ export function WorkflowsPage() {
                 </Link>
                 <button
                   className="btn btn--ghost btn--sm"
-                  disabled={busyId === r._id}
+                  disabled={!canManage || isLocalDataRuntime() || busyId === r._id}
                   onClick={async (e) => {
                     e.stopPropagation();
+                    if (!canManage) return;
                     setBusyId(r._id);
                     try {
+                      if (isLocalDataRuntime()) return;
                       const result = await run({
                         societyId: society._id,
                         workflowId: r._id,
@@ -392,8 +408,10 @@ export function WorkflowsPage() {
                 </button>
                 <button
                   className="btn btn--ghost btn--sm"
+                  disabled={!canManage}
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (!canManage) return;
                     setStatus({
                       id: r._id,
                       status: r.status === "active" ? "paused" : "active",
@@ -405,8 +423,10 @@ export function WorkflowsPage() {
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Remove ${r.name}`}
+                  disabled={!canManage}
                   onClick={async (e) => {
                     e.stopPropagation();
+                    if (!canManage) return;
                     await remove({ id: r._id });
                     toast.success("Workflow removed");
                   }}
@@ -432,7 +452,7 @@ export function WorkflowsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Create</button>
+            <button className="btn btn--accent" disabled={!canManage} onClick={save}>Create</button>
           </>
         }
       >

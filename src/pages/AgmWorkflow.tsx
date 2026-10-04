@@ -1,3 +1,6 @@
+import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { usePermissions } from "../hooks/usePermissions";
+import { useToast } from "../components/Toast";
 import { noticeWindowSatisfied } from "../features/meetings/lib/noticeWindow";
 import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
@@ -46,6 +49,10 @@ if (STEP_ORDER.map((s) => s.id).join(",") !== AGM_STEP_ORDER.join(",")) {
 export function AgmWorkflowPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
+  const { can } = usePermissions();
+  const toast = useToast();
+  const canSendNotice = !isLocalDataRuntime() && can("communications:write");
+  const [sendingNotice, setSendingNotice] = useState(false);
   const meeting = useQuery(api.meetings.get, id ? { id: id as Id<"meetings"> } : "skip");
   const minutes = useQuery(api.minutes.getByMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
   const run = useQuery(api.agm.runForMeeting, id ? { meetingId: id as Id<"meetings"> } : "skip");
@@ -165,6 +172,8 @@ export function AgmWorkflowPage() {
         subtitle={`${formatDateTime(meeting.scheduledAt)} · ${daysToMeeting >= 0 ? `in ${daysToMeeting} days` : `${-daysToMeeting} days ago`}`}
       />
 
+      {isLocalDataRuntime() && <p className="muted" role="status">Sending meeting notices requires a connected server. Prepare the notice and retain evidence of any delivery made outside the app.</p>}
+
       <div className="card">
         <div className="card__head"><h2 className="card__title">Compliance posture</h2></div>
         <div className="card__body col" style={{ gap: 8 }}>
@@ -212,14 +221,14 @@ export function AgmWorkflowPage() {
                     ? <CheckCircle2 size={18} style={{ color: "var(--success)" }} />
                     : <Circle size={18} style={{ color: "var(--text-tertiary)" }} />}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div className="row" style={{ gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                     <Icon size={14} style={{ color: "var(--text-secondary)" }} />
                     <strong>{s.label}</strong>
                     {active && <Badge tone="accent">Up next</Badge>}
                   </div>
                   <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>{s.sub}</div>
-                  <div className="row" style={{ gap: 6, marginTop: 8 }}>
+                  <div className="row agm-workflow__step-actions" style={{ gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                     {done && <Badge tone="success">Completed</Badge>}
                     {!done && s.id === "notice" && (
                       <>
@@ -235,7 +244,8 @@ export function AgmWorkflowPage() {
                                 { value: "in-person", label: "In person" },
                               ]}
                             />
-                            <button className="btn-action btn-action--primary" onClick={async () => {
+                            <button className="btn-action btn-action--primary" disabled={!canSendNotice || sendingNotice} onClick={async () => {
+                              if (!canSendNotice || sendingNotice) return;
                               const ok = await confirm({
                                 title: "Send AGM notice?",
                                 message: `This will send AGM notice by ${noticeChannel}. Confirm the notice window, participation details, agenda, and member recipient list are correct.`,
@@ -243,12 +253,16 @@ export function AgmWorkflowPage() {
                                 tone: "warn",
                               });
                               if (!ok) return;
+                              setSendingNotice(true);
+                              try {
                               const res = await sendMeetingNotice({
                                 societyId: society._id,
                                 meetingId: meeting._id,
                                 channel: noticeChannel,
                               });
                               await advance("notice", { noticeSentAt: new Date().toISOString(), noticeRecipientCount: res.deliveredCount });
+                              } catch (error) { toast.error("Notice could not be sent", error instanceof Error ? error.message : "Please try again."); }
+                              finally { setSendingNotice(false); }
                             }}>
                               <Send size={12} /> Send notice to all voting members
                             </button>
@@ -361,7 +375,7 @@ export function AgmWorkflowPage() {
 
 function Item({ label, value, tone }: { label: string; value: string; tone: "success" | "warn" | "danger" | "info" | "neutral" }) {
   return (
-    <div className="row">
+    <div className="row agm-workflow__posture-item" style={{ flexWrap: "wrap", gap: 6 }}>
       <span className="muted" style={{ minWidth: 160 }}>{label}</span>
       <Badge tone={tone as any}>{value}</Badge>
     </div>

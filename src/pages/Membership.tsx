@@ -1,3 +1,5 @@
+import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { usePermissions } from "../hooks/usePermissions";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -77,6 +79,9 @@ function feeDraftFromPeriod(period: any) {
 
 export function MembershipPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canManage = loaded && can("settings:write");
+  const paymentsAvailable = !isLocalDataRuntime() && canManage;
   const plans = useQuery(
     api.subscriptions.plans,
     society ? { societyId: society._id } : "skip",
@@ -123,17 +128,18 @@ export function MembershipPage() {
         title="Membership & billing"
         icon={<CreditCard size={16} />}
         iconColor="turquoise"
-        subtitle="Fee tiers, dated member-fee history, self-serve signup and renewal. Stripe Checkout in live mode; demo mode simulates the full lifecycle."
+        subtitle="Fee tiers, dated member-fee history, signup and renewal. Payments and activation require a connected server."
         actions={
           <>
             <MoreActionsMenu
-              items={[
+              items={canManage ? [
                 { id: "import-levy", label: "Import levy", icon: <Upload size={14} />, onSelect: () => setLevyImportOpen(true) },
                 { id: "add-fee-period", label: "Add fee period", icon: <CalendarClock size={14} />, onSelect: () => setFeeDraft(newFeeDraft()) },
-              ]}
+              ] : []}
             />
             <button
               className="btn-action btn-action--primary"
+              disabled={!canManage}
               onClick={() =>
                 setPlanDraft({
                   name: "",
@@ -153,6 +159,7 @@ export function MembershipPage() {
         }
       />
 
+      {isLocalDataRuntime() && <p className="muted" role="status">Checkout and subscription activation require a connected server. Plans and fee history can still be maintained locally.</p>}
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Active plans" value={String(activePlans.length)} />
         <Stat label="Active subscribers" value={String(activeSubs.length)} />
@@ -209,6 +216,7 @@ export function MembershipPage() {
               <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
                 <button
                   className="btn btn--accent btn--sm"
+                  disabled={!paymentsAvailable}
                   onClick={() =>
                     setSignup({
                       planId: p._id,
@@ -222,18 +230,21 @@ export function MembershipPage() {
                 </button>
                 <button
                   className="btn btn--ghost btn--sm"
+                  disabled={!canManage}
                   onClick={() => setFeeDraft(newFeeDraft(p))}
                 >
                   Fee
                 </button>
                 <button
                   className="btn btn--ghost btn--sm"
+                  disabled={!canManage}
                   onClick={() => setPlanDraft({ ...p, id: p._id })}
                 >
                   Edit
                 </button>
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
+                  disabled={!canManage}
                   aria-label={`Delete membership plan ${p.name}`}
                   onClick={() => removePlan({ id: p._id })}
                 >
@@ -256,7 +267,7 @@ export function MembershipPage() {
             <h2 className="card__title">Member fee timeline</h2>
             <span className="card__subtitle">Historical, current, and planned fee periods by tier.</span>
           </div>
-          <button className="btn btn--ghost btn--sm" onClick={() => setFeeDraft(newFeeDraft())}>
+          <button className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => setFeeDraft(newFeeDraft())}>
             <CalendarClock size={12} /> Add period
           </button>
         </div>
@@ -299,6 +310,7 @@ export function MembershipPage() {
                   <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
                     <button
                       className="btn btn--ghost btn--sm"
+                      disabled={!canManage}
                       onClick={() => setFeeDraft(feeDraftFromPeriod(period))}
                     >
                       {period.synthetic ? "Add" : "Edit"}
@@ -306,6 +318,7 @@ export function MembershipPage() {
                     {!period.synthetic && (
                       <button
                         className="btn btn--ghost btn--sm btn--icon"
+                        disabled={!canManage}
                         aria-label={`Delete fee period ${period.label}`}
                         onClick={async () => {
                           await removeFeePeriod({ id: period._id });
@@ -380,6 +393,7 @@ export function MembershipPage() {
                     {s.status !== "canceled" && (
                       <button
                         className="btn btn--ghost btn--sm"
+                        disabled={!canManage}
                         onClick={() => cancelSub({ id: s._id })}
                       >
                         Cancel
@@ -409,7 +423,9 @@ export function MembershipPage() {
             <button className="btn" onClick={() => setPlanDraft(null)}>Cancel</button>
             <button
               className="btn btn--accent"
+              disabled={!canManage}
               onClick={async () => {
+                if (!canManage) return;
                 await upsertPlan({
                   ...planDraft,
                   societyId: society._id,
@@ -495,7 +511,7 @@ export function MembershipPage() {
             <button className="btn" onClick={() => setFeeDraft(null)}>Cancel</button>
             <button
               className="btn btn--accent"
-              disabled={!feeDraft?.label || !feeDraft?.effectiveFrom}
+              disabled={!canManage || !feeDraft?.label || !feeDraft?.effectiveFrom}
               onClick={async () => {
                 const priceCents = dollarInputToCents(feeDraft.priceDollars) ?? 0;
                 await upsertFeePeriod({
@@ -629,8 +645,9 @@ export function MembershipPage() {
               </button>
               <button
                 className="btn btn--accent"
+                disabled={!paymentsAvailable}
                 onClick={async () => {
-                  if (!signup) return;
+                  if (!signup || !paymentsAvailable) return;
                   await simulateActivation({
                     societyId: society._id,
                     planId: signup.planId,
@@ -659,7 +676,7 @@ export function MembershipPage() {
               </button>
               <button
                 className="btn btn--accent"
-                disabled={!signupForm.fullName || !signupForm.email}
+                disabled={!paymentsAvailable || !signupForm.fullName || !signupForm.email}
                 onClick={async () => {
                   if (!signup) return;
                   const { url, demo } = await beginCheckout({

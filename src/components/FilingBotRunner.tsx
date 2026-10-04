@@ -1,3 +1,5 @@
+import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { usePermissions } from "../hooks/usePermissions";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
@@ -21,6 +23,8 @@ export function FilingBotRunner({
   societyId: Id<"societies">;
   filingLabel: string;
 }) {
+  const { loaded, can } = usePermissions();
+  const canPrepare = !isLocalDataRuntime() && loaded && can("filings:write");
   const runs = useQuery(
     api.filingBot.runsForFiling,
     filingId ? { filingId } : "skip",
@@ -49,9 +53,9 @@ export function FilingBotRunner({
           <button className="btn" onClick={onClose}>Close</button>
           <button
             className="btn btn--accent"
-            disabled={busy || !!active}
+            disabled={!canPrepare || busy || !!active}
             onClick={async () => {
-              if (!filingId) return;
+              if (!filingId || !canPrepare) return;
               setBusy(true);
               try {
                 await runBot({ societyId, filingId });
@@ -76,6 +80,7 @@ export function FilingBotRunner({
         after you submit in Societies Online, record the real confirmation number in Filings.
       </div>
 
+      {isLocalDataRuntime() && <p className="muted" role="status">Preparing a filing with the bot requires a connected server. The packet preview and official portal remain available for manual filing.</p>}
       {packet && (
         <div className="card" style={{ marginBottom: 12 }}>
           <div className="card__head">

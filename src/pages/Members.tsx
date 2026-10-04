@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -35,6 +36,8 @@ import type { Id } from "../../convex/_generated/dataModel";
 
 export function MembersPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canManage = loaded && can("members:write");
   const actingUserId = useCurrentUserId() ?? undefined;
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const create = useMutation(api.members.create);
@@ -141,7 +144,7 @@ export function MembersPage() {
   };
 
   const save = async () => {
-    if (!selected) return;
+    if (!selected || !canManage) return;
     if (selected._id) {
       const { _id, _creationTime, societyId, ...patch } = selected;
       patch.aliases = cleanAliases(patch.aliases);
@@ -170,7 +173,7 @@ export function MembersPage() {
                 { id: "export", label: "Export CSV", icon: <Download size={14} />, onSelect: exportMembersCsv },
               ]}
             />
-            <button className="btn-action btn-action--primary" onClick={openNew}>
+            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
               <Plus size={12} /> New member
             </button>
           </div>
@@ -189,12 +192,12 @@ export function MembersPage() {
             setSelected(record);
             setDrawerOpen(true);
           }}
-          onUpdate={async ({ recordId, fieldName, value }) => {
+          onUpdate={canManage ? async ({ recordId, fieldName, value }) => {
             await update({
               id: recordId as Id<"members">,
               patch: { [fieldName]: value } as any,
             });
-          }}
+          } : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -211,12 +214,17 @@ export function MembersPage() {
           <RecordTableFilterChips />
 
           <RecordTable
-            selectable
+            renderCell={({ field, record }) => field.name === "firstName" ? (
+              <button type="button" className="record-table__identifier-button" onClick={() => { setSelected(record); setDrawerOpen(true); }}>
+                {record.firstName || "Open member"}
+              </button>
+            ) : undefined}
+            selectable={canManage}
             loading={metadataLoading || members === undefined}
           />
 
           <RecordTableBulkBar
-            actions={[
+            actions={canManage ? [
               {
                 id: "bulk-edit",
                 label: "Edit",
@@ -246,7 +254,7 @@ export function MembersPage() {
                   for (const r of rows) await confirmRemove(r);
                 },
               },
-            ]}
+            ] : []}
           />
         </RecordTableScope>
       ) : (
@@ -301,7 +309,7 @@ export function MembersPage() {
       <Drawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        title={selected?._id ? "Edit member" : "Add member"}
+        title={selected?._id ? (canManage ? "Edit member" : "View member") : "Add member"}
         footer={
           <>
             {selected?._id && (
@@ -310,12 +318,12 @@ export function MembersPage() {
               </Link>
             )}
             <button className="btn" onClick={() => setDrawerOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Save</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canManage}>Save</button>
           </>
         }
       >
         {selected && (
-          <div>
+          <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <div className="row" style={{ gap: 12 }}>
               <Field label="First name"><input className="input" value={selected.firstName} onChange={(e) => setSelected({ ...selected, firstName: e.target.value })} /></Field>
               <Field label="Last name"><input className="input" value={selected.lastName} onChange={(e) => setSelected({ ...selected, lastName: e.target.value })} /></Field>
@@ -355,7 +363,7 @@ export function MembersPage() {
               onChange={(v) => setSelected({ ...selected, votingRights: v })}
               label="Voting rights"
             />
-            <Field label="Notes"><MarkdownEditor rows={4} value={selected.notes ?? ""} onChange={(markdown) => setSelected({ ...selected, notes: markdown })} /></Field>
+            <Field label="Notes"><MarkdownEditor readOnly={!canManage} rows={4} value={selected.notes ?? ""} onChange={(markdown) => setSelected({ ...selected, notes: markdown })} /></Field>
             {selected._id && (
               <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
                 <CustomFieldsPanel
@@ -365,7 +373,7 @@ export function MembersPage() {
                 />
               </div>
             )}
-          </div>
+          </fieldset>
         )}
       </Drawer>
     </div>

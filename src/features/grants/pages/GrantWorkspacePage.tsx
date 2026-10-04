@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -26,19 +27,21 @@ export function GrantEditPage() {
 }
 
 function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boolean }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("grants:write");
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const grant = useQuery(api.grants.get, id ? { id } : "skip");
   const reports = useQuery(api.grants.reports, society ? { societyId: society._id } : "skip");
-  const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
-  const users = useQuery(api.users.list, society ? { societyId: society._id } : "skip");
-  const accounts = useQuery(api.financialHub.accounts, society ? { societyId: society._id } : "skip");
+  const committees = useQuery(api.committees.list, society && loaded && can("committees:read") ? { societyId: society._id } : "skip");
+  const users = useQuery(api.users.list, society && loaded && can("users:read") ? { societyId: society._id } : "skip");
+  const accounts = useQuery(api.financialHub.accounts, society && loaded && can("financials:read") ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
-  const employees = useQuery(api.employees.list, society ? { societyId: society._id } : "skip");
+  const employees = useQuery(api.employees.list, society && loaded && can("employees:read") ? { societyId: society._id } : "skip");
   const employeeLinks = useQuery(api.grants.employeeLinks, society ? { societyId: society._id, grantId: id } : "skip");
-  const secretVaultItems = useQuery(api.secrets.list, society ? { societyId: society._id } : "skip");
+  const secretVaultItems = useQuery(api.secrets.list, society && loaded && can("settings:read") ? { societyId: society._id } : "skip");
   const upsertEmployeeLink = useMutation(api.grants.upsertEmployeeLink);
   const removeEmployeeLink = useMutation(api.grants.removeEmployeeLink);
   const createEmployee = useMutation(api.employees.create);
@@ -89,12 +92,14 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
   };
 
   const saveGrant = async () => {
-    if (!grantDraft) return;
+    if (!canWrite || !grantDraft) return;
     setSaving(true);
     try {
       await upsertGrant(buildGrantPayload(grantDraft, society._id, actingUserId));
       toast.success("Grant saved");
       setEditing(false);
+    } catch (error: any) {
+      toast.error("Could not save the grant", error?.message ?? "Try again.");
     } finally {
       setSaving(false);
     }
@@ -194,23 +199,24 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
         iconColor="green"
         subtitle={editing ? "Editing grant workspace details, format library, evidence, and source data." : `${grant.funder}${grant.program ? ` · ${grant.program}` : ""}`}
         actions={
-          editing ? (
+          editing && canWrite ? (
             <>
               <button className="btn-action" onClick={cancelEditing} disabled={saving}>Cancel</button>
-              <button className="btn-action btn-action--primary" onClick={saveGrant} disabled={saving}>
+              <button className="btn-action btn-action--primary" onClick={saveGrant} disabled={!canWrite || (saving)}>
                 <Save size={12} /> {saving ? "Saving…" : "Save changes"}
               </button>
             </>
           ) : (
-            <button className="btn-action btn-action--primary" onClick={startEditing}>
+            <button className="btn-action btn-action--primary" onClick={startEditing} disabled={!canWrite}>
               <Pencil size={12} /> Edit workspace
             </button>
           )
         }
       />
 
-      {editing && grantDraft ? (
+      {editing && canWrite && grantDraft ? (
         <GrantReadPanel
+          key="edit"
           {...sharedReadPanelProps}
           grant={grantDraft}
           editable
@@ -229,7 +235,7 @@ function GrantWorkspacePage({ initialEditing = false }: { initialEditing?: boole
           }
         />
       ) : (
-        <GrantReadPanel {...sharedReadPanelProps} grant={grant} />
+        <GrantReadPanel key="read" {...sharedReadPanelProps} grant={grant} />
       )}
     </div>
   );

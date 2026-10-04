@@ -187,6 +187,7 @@ export function InspectorHost({ onOpenChange }: { onOpenChange?: (isOpen: boolea
   useEffect(() => {
     if (!inspector) return;
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape" && isOpen) {
         inspector.closeActive();
         return;

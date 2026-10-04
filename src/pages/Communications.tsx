@@ -1,6 +1,8 @@
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { useMemo, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -211,6 +213,8 @@ function estimateAudience(args: {
 
 export function CommunicationsPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canWrite = can("communications:write");
   const actingUserId = useCurrentUserId() ?? undefined;
   const templates = useQuery(
     api.communications.listTemplates,
@@ -234,23 +238,23 @@ export function CommunicationsPage() {
   );
   const members = useQuery(
     api.members.list,
-    society ? { societyId: society._id } : "skip",
+    society && can("members:read") ? { societyId: society._id } : "skip",
   );
   const directors = useQuery(
     api.directors.list,
-    society ? { societyId: society._id } : "skip",
+    society && can("directors:read") ? { societyId: society._id } : "skip",
   );
   const committees = useQuery(
     api.committees.list,
-    society ? { societyId: society._id } : "skip",
+    society && can("committees:read") ? { societyId: society._id } : "skip",
   );
   const volunteers = useQuery(
     api.volunteers.list,
-    society ? { societyId: society._id } : "skip",
+    society && can("volunteers:read") ? { societyId: society._id } : "skip",
   );
   const subscriptions = useQuery(
     api.subscriptions.allSubscriptions,
-    society ? { societyId: society._id } : "skip",
+    society && can("settings:read") ? { societyId: society._id } : "skip",
   );
   const ensureDefaults = useMutation(api.communications.ensureDefaultTemplates);
   const upsertTemplate = useMutation(api.communications.upsertTemplate);
@@ -263,6 +267,7 @@ export function CommunicationsPage() {
   const [templateDraft, setTemplateDraft] = useState<any | null>(null);
   const [segmentDraft, setSegmentDraft] = useState<any | null>(null);
   const [prefDraft, setPrefDraft] = useState<any | null>(null);
+  const [sending, setSending] = useState(false);
   const [sendDraft, setSendDraft] = useState<any | null>(null);
   const [templatesViewId, setTemplatesViewId] = useState<Id<"views"> | undefined>(undefined);
   const [templatesFilterOpen, setTemplatesFilterOpen] = useState(false);
@@ -274,7 +279,7 @@ export function CommunicationsPage() {
   const [deliveriesFilterOpen, setDeliveriesFilterOpen] = useState(false);
   const committeeDetail = useQuery(
     api.committees.detail,
-    society && sendDraft?.audiencePreset === "committee" && sendDraft.audienceTarget
+    society && can("committees:read") && sendDraft?.audiencePreset === "committee" && sendDraft.audienceTarget
       ? { id: sendDraft.audienceTarget as any }
       : "skip",
   );
@@ -393,6 +398,7 @@ export function CommunicationsPage() {
 
   return (
     <div className="page">
+      {!canWrite && <p className="muted">You can review communications. Editing templates, segments, contact preferences, or campaigns requires communications write access.</p>}
       <PageHeader
         title="Communications"
         icon={<Mail size={16} />}
@@ -404,6 +410,7 @@ export function CommunicationsPage() {
               items={[
                 {
                   id: "install-defaults",
+                  disabled: !canWrite || isLocalDataRuntime(),
                   label: "Install defaults",
                   icon: <Settings2 size={14} />,
                   onSelect: async () => {
@@ -417,6 +424,7 @@ export function CommunicationsPage() {
                 },
                 {
                   id: "new-segment",
+                  disabled: !canWrite,
                   label: "New segment",
                   icon: <Plus size={14} />,
                   onSelect: () =>
@@ -432,6 +440,7 @@ export function CommunicationsPage() {
                 },
                 {
                   id: "new-template",
+                  disabled: !canWrite,
                   label: "New template",
                   icon: <Plus size={14} />,
                   onSelect: () =>
@@ -451,6 +460,7 @@ export function CommunicationsPage() {
             />
             <button
               className="btn-action btn-action--primary"
+              disabled={!canWrite}
               onClick={() =>
                 {
                   const initialTemplate = templates?.[0];
@@ -520,7 +530,7 @@ export function CommunicationsPage() {
               return undefined;
             }}
             renderRowActions={(row) => (
-              <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setTemplateDraft({ ...row, id: row._id }); }}>
+              <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={(e) => { e.stopPropagation(); setTemplateDraft({ ...row, id: row._id }); }}>
                 Edit
               </button>
             )}
@@ -570,11 +580,12 @@ export function CommunicationsPage() {
             }}
             renderRowActions={(row) => (
               <>
-                <button className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); setSegmentDraft({ ...row, id: row._id }); }}>
+                <button className="btn btn--ghost btn--sm" disabled={!canWrite} onClick={(e) => { e.stopPropagation(); setSegmentDraft({ ...row, id: row._id }); }}>
                   Edit
                 </button>
                 <button
                   className="btn btn--ghost btn--sm"
+                  disabled={!canWrite}
                   onClick={async (e) => {
                     e.stopPropagation();
                     await removeSegment({ id: row._id });
@@ -751,6 +762,7 @@ export function CommunicationsPage() {
         renderRowActions={(row) => (
           <button
             className="btn btn--ghost btn--sm"
+            disabled={!canWrite}
             onClick={() =>
               setPrefDraft({
                 memberId: row.memberId,
@@ -781,6 +793,7 @@ export function CommunicationsPage() {
             <button className="btn" onClick={() => setTemplateDraft(null)}>Cancel</button>
             <button
               className="btn btn--accent"
+              disabled={!canWrite}
               onClick={async () => {
                 await upsertTemplate({ ...templateDraft, societyId: society._id });
                 toast.success("Template saved");
@@ -842,6 +855,7 @@ export function CommunicationsPage() {
             <button className="btn" onClick={() => setSegmentDraft(null)}>Cancel</button>
             <button
               className="btn btn--accent"
+              disabled={!canWrite}
               onClick={async () => {
                 await upsertSegment({
                   ...segmentDraft,
@@ -907,6 +921,7 @@ export function CommunicationsPage() {
             <button className="btn" onClick={() => setPrefDraft(null)}>Cancel</button>
             <button
               className="btn btn--accent"
+              disabled={!canWrite}
               onClick={async () => {
                 await upsertPref({
                   societyId: society._id,
@@ -961,12 +976,9 @@ export function CommunicationsPage() {
             <button className="btn" onClick={() => setSendDraft(null)}>Cancel</button>
             <button
               className="btn btn--accent"
-              disabled={
-                !!sendDraft &&
-                ["segment", "committee", "member_class", "member_status"].includes(sendDraft.audiencePreset) &&
-                !sendDraft.audienceTarget
-              }
+              disabled={!canWrite || isLocalDataRuntime() || sending || (!!sendDraft && ["segment", "committee", "member_class", "member_status"].includes(sendDraft.audiencePreset) && !sendDraft.audienceTarget)}
               onClick={async () => {
+                if (!canWrite || isLocalDataRuntime() || sending) return;
                 const recipientCount = audiencePreview ?? 0;
                 if (!sendDraft.subject.trim() || !sendDraft.bodyText.trim()) {
                   toast.error("Add a subject and body before sending");
@@ -979,6 +991,8 @@ export function CommunicationsPage() {
                   tone: "warn",
                 });
                 if (!ok) return;
+                setSending(true);
+                try {
                 const result = await sendCampaign({
                   societyId: society._id,
                   templateId: sendDraft.templateId || undefined,
@@ -989,12 +1003,15 @@ export function CommunicationsPage() {
                   bodyText: sendDraft.bodyText,
                   customMessage: sendDraft.customMessage || undefined,
                 });
+                if (!result) throw new Error("The server did not confirm campaign delivery.");
                 toast.success(
                   result.bouncedCount
                     ? `Sent ${result.deliveredCount} with ${result.bouncedCount} issue(s)`
                     : `Sent ${result.deliveredCount} delivery${result.deliveredCount === 1 ? "" : "ies"}`,
                 );
                 setSendDraft(null);
+                } catch (error) { toast.error("Could not send campaign", error instanceof Error ? error.message : "Please try again."); }
+                finally { setSending(false); }
               }}
             >
               Send
@@ -1002,6 +1019,7 @@ export function CommunicationsPage() {
           </>
         }
       >
+        {isLocalDataRuntime() && <p className="muted">Campaign delivery requires a connected server. Review the message and audience here, then send from your hosted workspace.</p>}
         {sendDraft && (
           <div>
             <Field label="Template">

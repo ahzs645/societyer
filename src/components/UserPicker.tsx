@@ -13,6 +13,7 @@ import { useSociety } from "../hooks/useSociety";
 import { ChevronDown, LogOut } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
+import { useDialogFocus } from "../lib/useDialogFocus";
 
 const ClerkAccountButton = lazy(() => import("../auth/ClerkAccountButton"));
 
@@ -36,7 +37,7 @@ export function UserPicker() {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false), '[aria-selected="true"]');
 
   useEffect(() => {
     if (!open) return;
@@ -145,6 +146,8 @@ export function UserPicker() {
         className="user-picker"
         onClick={() => setOpen((v) => !v)}
         title="Switch acting user"
+        aria-haspopup="listbox"
+        aria-expanded={open}
       >
         <span style={{ fontWeight: 500, flex: 1, minWidth: 0, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {current?.displayName ?? (users && users.length === 0 ? "No users" : "Pick user")}
@@ -169,6 +172,18 @@ export function UserPicker() {
         createPortal(
           <div
             ref={menuRef}
+            role="listbox"
+            aria-label="Acting user"
+            tabIndex={-1}
+            onKeyDown={(event) => {
+              if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+              const options = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="option"]'));
+              if (!options.length) return;
+              const index = options.indexOf(document.activeElement as HTMLElement);
+              const next = event.key === "Home" ? 0 : event.key === "End" ? options.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+              event.preventDefault();
+              options[next].focus();
+            }}
             style={{
               position: "fixed",
               top: anchor.top,
@@ -188,6 +203,15 @@ export function UserPicker() {
             {(users ?? []).map((u) => (
               <div
                 key={u._id}
+                role="option"
+                tabIndex={0}
+                aria-selected={u._id === currentId}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  setStoredUserId(u._id as Id<"users">);
+                  setOpen(false);
+                }}
                 onClick={() => {
                   setStoredUserId(u._id as Id<"users">);
                   setOpen(false);

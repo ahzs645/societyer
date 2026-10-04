@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
-import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
+import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useBylawRules } from "../hooks/useBylawRules";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
@@ -29,7 +30,9 @@ const EMPTY_OPTION_LABELS = ["", ""];
 
 export function ElectionsPage() {
   const society = useSociety();
-  const currentUser = useCurrentUser();
+  const { loaded, can } = usePermissions();
+  const canManage = loaded && can("elections:write");
+  const canTally = loaded && can("elections:tally");
   const actingUserId = useCurrentUserId() ?? undefined;
   const elections = useQuery(
     api.elections.list,
@@ -37,7 +40,7 @@ export function ElectionsPage() {
   );
   const users = useQuery(
     api.users.list,
-    society ? { societyId: society._id } : "skip",
+    society && loaded && can("users:read") ? { societyId: society._id } : "skip",
   );
   const myElections = useQuery(
     api.elections.listMine,
@@ -55,11 +58,6 @@ export function ElectionsPage() {
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
-
-  const canManage =
-    currentUser?.role === "Owner" ||
-    currentUser?.role === "Admin" ||
-    currentUser?.role === "Director";
 
   const openCreate = () => {
     const now = new Date();
@@ -81,7 +79,7 @@ export function ElectionsPage() {
   };
 
   const save = async () => {
-    if (!form) return;
+    if (!form || !canManage) return;
 
     const electionId = await create({
       societyId: society._id,
@@ -290,7 +288,7 @@ export function ElectionsPage() {
                             <CheckCircle2 size={12} /> Close
                           </button>
                         )}
-                        {election.status === "Closed" && (
+                        {canTally && election.status === "Closed" && (
                           <button
                             className="btn btn--ghost btn--sm"
                             onClick={async () => {
@@ -329,7 +327,7 @@ export function ElectionsPage() {
             <button className="btn" onClick={() => setOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" onClick={save}>
+            <button className="btn btn--accent" onClick={save} disabled={!canManage}>
               Save
             </button>
           </>

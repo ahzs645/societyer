@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { ScrollText, Plus, Trash2 } from "lucide-react";
+import { useToast } from "../components/Toast";
 
 type Certificate = {
   _id?: string;
@@ -27,6 +29,8 @@ type Certificate = {
  */
 export function CertificateRegisterPage() {
   const society = useSociety();
+  const permissions = usePermissions();
+  const canEdit = permissions.loaded && permissions.can("documents:write");
   const [asOf, setAsOf] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const register = useQuery(
     api.shareCertificates.register,
@@ -43,6 +47,8 @@ export function CertificateRegisterPage() {
   const remove = useMutation(api.shareCertificates.remove);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -50,6 +56,7 @@ export function CertificateRegisterPage() {
   const outstanding = register?.outstandingByClass ?? {};
 
   const openNew = () => {
+    if (!canEdit) return;
     setForm({
       certificateNumber: "",
       holderName: "",
@@ -62,6 +69,9 @@ export function CertificateRegisterPage() {
   };
 
   const save = async () => {
+    if (saving || !canEdit) return;
+    setSaving(true);
+    try {
     await create({
       societyId: society._id,
       certificateNumber: form.certificateNumber,
@@ -73,10 +83,16 @@ export function CertificateRegisterPage() {
       nowISO: new Date().toISOString(),
     });
     setOpen(false);
+    toast.success("Certificate recorded");
+    } catch (error: any) {
+      toast.error("Could not record certificate", error?.message ?? String(error));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const cancel = async (id?: string) => {
-    if (!id) return;
+    if (!id || !canEdit) return;
     await update({
       id,
       patch: { cancelledOn: new Date().toISOString().slice(0, 10) },
@@ -97,7 +113,7 @@ export function CertificateRegisterPage() {
         iconColor="purple"
         subtitle="Register of physical share certificates — holder, class, shares and issue date — with outstanding shares by class as of a chosen date."
         actions={
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>As of</span>
               <DatePicker
@@ -105,7 +121,7 @@ export function CertificateRegisterPage() {
                 onChange={(value) => setAsOf(value)}
               />
             </label>
-            <button className="btn-action btn-action--primary" onClick={openNew}>
+            <button className="btn-action btn-action--primary" disabled={!canEdit} onClick={openNew}>
               <Plus size={12} /> Issue certificate
             </button>
           </div>
@@ -153,7 +169,8 @@ export function CertificateRegisterPage() {
                       {!c.cancelledOn && (
                         <button
                           className="btn btn--sm"
-                          onClick={() => cancel(c._id)}
+                          disabled={!canEdit}
+                          onClick={() => cancel(c._id).catch((error: any) => toast.error("Could not cancel certificate", error?.message ?? String(error)))}
                         >
                           Cancel
                         </button>
@@ -161,7 +178,8 @@ export function CertificateRegisterPage() {
                       <button
                         className="btn btn--ghost btn--sm btn--icon"
                         aria-label={`Delete certificate ${c.certificateNumber}`}
-                        onClick={() => remove({ id: c._id })}
+                        disabled={!canEdit}
+                        onClick={() => remove({ id: c._id }).catch((error: any) => toast.error("Could not delete certificate", error?.message ?? String(error)))}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -183,8 +201,8 @@ export function CertificateRegisterPage() {
             <button className="btn" onClick={() => setOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" onClick={save}>
-              Save
+            <button className="btn btn--accent" onClick={save} disabled={saving || !canEdit}>
+              {saving ? "Saving…" : "Save"}
             </button>
           </>
         }

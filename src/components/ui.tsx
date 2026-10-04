@@ -1,3 +1,4 @@
+import { useDialogFocus } from "../lib/useDialogFocus";
 import {
   Children,
   cloneElement,
@@ -919,94 +920,26 @@ export function Flag({
   );
 }
 
-const FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "textarea:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
-
 function useStableDomId(prefix: string) {
   const id = useId();
   return `${prefix}-${id.replace(/:/g, "")}`;
-}
-
-function useDialogFocus<T extends HTMLElement>(open: boolean, onClose: () => void) {
-  const ref = useRef<T | null>(null);
-  const onCloseRef = useRef(onClose);
-
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
-
-  useEffect(() => {
-    if (!open) return;
-    const previouslyFocused =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const focusTimer = window.setTimeout(() => {
-      const first = ref.current?.querySelector<HTMLElement>("[autofocus]") ?? getFocusable(ref.current)[0];
-      (first ?? ref.current)?.focus();
-    }, 0);
-
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const focusable = getFocusable(ref.current);
-      if (focusable.length === 0) {
-        event.preventDefault();
-        ref.current?.focus();
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-
-      if (event.shiftKey && (active === first || !ref.current?.contains(active))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", onKey);
-    return () => {
-      window.clearTimeout(focusTimer);
-      document.removeEventListener("keydown", onKey);
-      previouslyFocused?.focus();
-    };
-  }, [open]);
-
-  return ref;
-}
-
-function getFocusable(root: HTMLElement | null) {
-  if (!root) return [];
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (element) =>
-      !element.hasAttribute("disabled") &&
-      element.getAttribute("aria-hidden") !== "true" &&
-      element.offsetParent !== null,
-  );
 }
 
 function getFirstChildId(children: ReactNode): string | undefined {
   let found: string | undefined;
   Children.forEach(children, (child) => {
     if (found || !isValidElement(child)) return;
-    const props = child.props as { id?: string };
-    if (props.id) found = props.id;
+    const props = child.props as { id?: string; children?: ReactNode; type?: string };
+    if (props.type === "hidden") return;
+    if (isFieldContainer(child)) found = getFirstChildId(props.children);
+    else if (props.id) found = props.id;
   });
   return found;
+}
+
+function isFieldContainer(child: ReactElement) {
+  return child.type === Fragment || (typeof child.type === "string" &&
+    !["input", "textarea", "select", "button", "output", "meter", "progress"].includes(child.type));
 }
 
 function enhanceFieldChildren(
@@ -1016,13 +949,17 @@ function enhanceFieldChildren(
   invalid: boolean,
 ) {
   let applied = false;
-  return Children.map(children, (child) => {
+  const enhance = (nodes: ReactNode): ReactNode => Children.map(nodes, (child) => {
     if (applied || !isValidElement(child)) return child;
     const childProps = child.props as {
       id?: string;
+      children?: ReactNode;
+      type?: string;
       "aria-describedby"?: string;
       "aria-invalid"?: boolean;
     };
+    if (childProps.type === "hidden") return child;
+    if (isFieldContainer(child)) return cloneElement(child as ReactElement<{ children?: ReactNode }>, { children: enhance(childProps.children) });
     const nextProps: Record<string, unknown> = {};
     if (!childProps.id) nextProps.id = id;
     if (describedBy) {
@@ -1034,4 +971,5 @@ function enhanceFieldChildren(
     applied = true;
     return cloneElement(child as ReactElement, nextProps);
   });
+  return enhance(children);
 }

@@ -2,11 +2,13 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { convexSiteUrl } from "../lib/convexSite";
 import { CalendarClock, UploadCloud, Rss, Copy, RefreshCw } from "lucide-react";
 
@@ -47,11 +49,15 @@ function parseIcs(text: string): ParsedEvent[] {
 
 export function CalendarSyncPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canManageFeed = can("settings:write");
+  const canStage = can("settings:write") && can("meetings:write");
+  const feedAvailable = !isLocalDataRuntime() && Boolean(convexSiteUrl());
   const navigate = useNavigate();
   const toast = useToast();
   const stage = useMutation(api.calendarSync.stageCalendarEvents);
   const setFeedToken = useMutation(api.calendarFeed.setFeedToken);
-  const feedToken = useQuery(api.calendarFeed.getFeedToken, society ? { societyId: society._id } : "skip");
+  const feedToken = useQuery(api.calendarFeed.getFeedToken, society && canManageFeed ? { societyId: society._id } : "skip");
   const [provider, setProvider] = useState("ics");
   const [calendarName, setCalendarName] = useState("");
   const [icsText, setIcsText] = useState("");
@@ -68,10 +74,11 @@ export function CalendarSyncPage() {
     setIcsText(await file.text());
   };
 
-  const feedUrl = feedToken ? `${convexSiteUrl()}/calendar/feed?token=${feedToken}` : null;
+  const feedUrl = feedAvailable && feedToken ? `${convexSiteUrl()}/calendar/feed?token=${feedToken}` : null;
   const webcalUrl = feedUrl ? feedUrl.replace(/^https?:\/\//, "webcal://") : null;
 
   const enableFeed = async () => {
+    if (!feedAvailable || !canManageFeed) return;
     setFeedBusy(true);
     try {
       // Token is generated client-side (128 bits) and stored by the mutation,
@@ -87,6 +94,7 @@ export function CalendarSyncPage() {
   };
 
   const disableFeed = async () => {
+    if (!canManageFeed) return;
     setFeedBusy(true);
     try {
       await setFeedToken({ societyId: society._id, token: null });
@@ -109,6 +117,7 @@ export function CalendarSyncPage() {
   };
 
   const submit = async () => {
+    if (!canStage) return;
     if (parsed.length === 0) {
       toast.warn("No calendar events found. Paste an .ics feed or upload a file.");
       return;
@@ -147,19 +156,20 @@ export function CalendarSyncPage() {
         iconColor="purple"
         subtitle="Import events from an external calendar (Google, Outlook, or any .ics feed) into a reviewable import session. Events become candidate deadlines and source evidence you can apply to governance records."
         actions={
-          <button className="btn-action btn-action--primary" disabled={busy || parsed.length === 0} onClick={submit}>
+          <button className="btn-action btn-action--primary" disabled={!canStage || busy || parsed.length === 0} onClick={submit}>
             <UploadCloud size={12} /> Stage {parsed.length || ""} event{parsed.length === 1 ? "" : "s"}
           </button>
         }
       />
 
+      {!canStage && <p className="muted">You can preview calendar events. Staging imports requires workspace settings and meeting write access.</p>}
       <div className="card">
         <div className="card__head">
           <h2 className="card__title">
             <Rss size={14} style={{ display: "inline-block", marginRight: 6, verticalAlign: -2 }} />
             Subscribe (outbound feed)
           </h2>
-          {feedToken ? <Badge tone="success">On</Badge> : <Badge tone="neutral">Off</Badge>}
+          {feedAvailable && feedToken ? <Badge tone="success">On</Badge> : <Badge tone="neutral">Off</Badge>}
         </div>
         <div className="card__body col" style={{ gap: 12 }}>
           <div className="muted">
@@ -167,17 +177,22 @@ export function CalendarSyncPage() {
             Google Calendar, Outlook, or Apple Calendar to keep governance dates in your everyday calendar —
             it refreshes automatically.
           </div>
-          {feedToken === undefined ? (
+          {!canManageFeed ? (
+            <p className="muted">Managing outbound calendar subscriptions requires workspace settings write access.</p>
+          ) : !feedAvailable ? (
+            <p className="muted">Outbound calendar subscriptions require a connected server. You can import .ics events locally below.</p>
+          ) : feedToken === undefined ? (
             <div className="muted">Loading…</div>
           ) : feedToken ? (
             <>
               <Field label="Subscribe URL">
-                <div className="row" style={{ gap: 8 }}>
+                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                   <input
                     className="input mono"
                     readOnly
+                    aria-label="Subscribe URL"
                     value={feedUrl ?? ""}
-                    style={{ flex: 1, fontSize: 12 }}
+                    style={{ flex: "1 1 180px", minWidth: 0, fontSize: 12 }}
                     onFocus={(e) => e.currentTarget.select()}
                   />
                   <button className="btn" onClick={copyFeed}><Copy size={12} /> Copy</button>
@@ -185,10 +200,10 @@ export function CalendarSyncPage() {
                 </div>
               </Field>
               <div className="row" style={{ gap: 8 }}>
-                <button className="btn btn--ghost btn--sm" disabled={feedBusy} onClick={enableFeed}>
+                <button className="btn btn--ghost btn--sm" disabled={!canManageFeed || feedBusy} onClick={enableFeed}>
                   <RefreshCw size={12} /> Regenerate link
                 </button>
-                <button className="btn btn--ghost btn--sm" disabled={feedBusy} onClick={disableFeed}>
+                <button className="btn btn--ghost btn--sm" disabled={!canManageFeed || feedBusy} onClick={disableFeed}>
                   Disable feed
                 </button>
               </div>
@@ -198,7 +213,7 @@ export function CalendarSyncPage() {
             </>
           ) : (
             <div>
-              <button className="btn-action btn-action--primary" disabled={feedBusy} onClick={enableFeed}>
+              <button className="btn-action btn-action--primary" disabled={!canManageFeed || feedBusy} onClick={enableFeed}>
                 <Rss size={12} /> Enable calendar feed
               </button>
             </div>

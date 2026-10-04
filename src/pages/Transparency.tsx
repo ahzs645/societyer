@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { appBasePath } from "../lib/staticRuntime";
+import { usePermissions } from "../hooks/usePermissions";
+import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { appRouteHref, appRouteAbsoluteHref } from "../lib/appRouteHref";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
@@ -41,6 +43,9 @@ const PUBLICATION_PRESETS = [
  */
 export function TransparencyPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canPublish = can("settings:write");
+  const canEditSettings = can("society:write");
   const actingUserId = useCurrentUserId() ?? undefined;
   const documents = useQuery(
     api.documents.list,
@@ -56,7 +61,7 @@ export function TransparencyPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const publicHref = useMemo(
-    () => `${appBasePath()}${society?.publicSlug ? `/public/${society.publicSlug}` : "/public"}`,
+    () => appRouteHref(society?.publicSlug ? `/public/${society.publicSlug}` : "/public"),
     [society?.publicSlug],
   );
   const [settingsDraft, setSettingsDraft] = useState<any | null>(null);
@@ -72,8 +77,8 @@ export function TransparencyPage() {
 
   const absolutePublicHref = useMemo(() => {
     if (typeof window === "undefined") return publicHref;
-    return `${window.location.origin}${publicHref}`;
-  }, [publicHref]);
+    return appRouteAbsoluteHref(society?.publicSlug ? `/public/${society.publicSlug}` : "/public");
+  }, [publicHref, society?.publicSlug]);
   const publishedCount = (publications ?? []).filter((row: any) => row.status === "Published").length;
   const draftCount = (publications ?? []).filter((row: any) => row.status === "Draft").length;
 
@@ -85,7 +90,7 @@ export function TransparencyPage() {
   const publicPageLive = Boolean(society.publicTransparencyEnabled && society.publicSlug);
   const builderChecks = [
     { label: "Public URL", complete: Boolean(society.publicSlug), detail: society.publicSlug ? publicHref : "Add a slug" },
-    { label: "Page enabled", complete: Boolean(society.publicTransparencyEnabled), detail: society.publicTransparencyEnabled ? "Live when published" : "Draft only" },
+    { label: "Page enabled", complete: Boolean(society.publicTransparencyEnabled), detail: society.publicTransparencyEnabled ? (isLocalDataRuntime() ? "Local preview only" : "Live when published") : "Draft only" },
     { label: "Contact", complete: Boolean(society.publicContactEmail), detail: society.publicContactEmail ?? "Add a public email" },
     { label: "Directors", complete: Boolean(society.publicShowBoard), detail: society.publicShowBoard ? "Board roster visible" : "Hidden" },
     { label: "Published records", complete: publishedCount > 0, detail: `${publishedCount} published` },
@@ -106,7 +111,7 @@ export function TransparencyPage() {
                   ? [
                       {
                         id: "view-public",
-                        label: "View public page",
+                        label: isLocalDataRuntime() ? "Preview public page" : "View public page",
                         icon: <Globe size={14} />,
                         onSelect: () => window.open(publicHref, "_blank", "noreferrer"),
                       },
@@ -128,6 +133,7 @@ export function TransparencyPage() {
                 {
                   id: "edit-settings",
                   label: "Edit settings",
+                  disabled: !canEditSettings,
                   icon: <Save size={14} />,
                   onSelect: () => setSettingsDraft({
                     id: society._id,
@@ -162,6 +168,7 @@ export function TransparencyPage() {
             />
             <button
               className="btn-action btn-action--primary"
+              disabled={!canPublish}
               onClick={() =>
                 setPublicationDraft({
                   societyId: society._id,
@@ -241,6 +248,7 @@ export function TransparencyPage() {
               <button
                 type="button"
                 className="transparency-builder__preset"
+                disabled={!canPublish}
                 key={preset.category}
                 onClick={() =>
                   setPublicationDraft({
@@ -272,7 +280,8 @@ export function TransparencyPage() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={tableData.hydratedView}
           records={records}
-          onUpdate={async ({ recordId, fieldName, value }) => {
+          onUpdate={canPublish ? async ({ recordId, fieldName, value }) => {
+            if (!canPublish) return;
             // Route everything back through upsertPublication so the
             // publish-guardrails stay intact. We copy the existing row
             // from the local `publications` list and override just the
@@ -307,7 +316,7 @@ export function TransparencyPage() {
               approvedAtISO: merged.approvedAtISO,
               featured: merged.featured,
             });
-          }}
+          } : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -327,6 +336,7 @@ export function TransparencyPage() {
               <>
                 <button
                   className="btn btn--ghost btn--sm"
+                  disabled={!canPublish}
                   onClick={() =>
                     setPublicationDraft({
                       ...row,
@@ -342,7 +352,9 @@ export function TransparencyPage() {
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Delete publication ${row.title}`}
+                  disabled={!canPublish}
                   onClick={async () => {
+                    if (!canPublish) return;
                     const ok = await confirm({
                       title: "Remove publication",
                       message: `"${row.title}" will be removed from the internal publication list and the public page if it is live.`,
@@ -350,8 +362,8 @@ export function TransparencyPage() {
                       tone: "danger",
                     });
                     if (!ok) return;
-                    await removePublication({ id: row._id });
-                    toast.success("Publication removed");
+                    try { await removePublication({ id: row._id }); toast.success("Publication removed"); }
+                    catch (error) { toast.error(error instanceof Error ? error.message : "Could not remove publication"); }
                   }}
                 >
                   <Trash2 size={12} />
@@ -377,8 +389,10 @@ export function TransparencyPage() {
             <button className="btn" onClick={() => setSettingsDraft(null)}>Cancel</button>
             <button
               className="btn btn--accent"
+              disabled={!canEditSettings}
               onClick={async () => {
-                await upsertSociety({
+                if (!canEditSettings) return;
+                try { await upsertSociety({
                   ...settingsDraft,
                   publicSlug: normalizePublicSlug(settingsDraft.publicSlug) || undefined,
                   publicSummary: settingsDraft.publicSummary || undefined,
@@ -386,6 +400,7 @@ export function TransparencyPage() {
                 });
                 toast.success("Public settings saved");
                 setSettingsDraft(null);
+                } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save public settings"); }
               }}
             >
               Save
@@ -417,7 +432,9 @@ export function TransparencyPage() {
             <button className="btn" onClick={() => setPublicationDraft(null)}>Cancel</button>
             <button
               className="btn btn--accent"
+              disabled={!canPublish}
               onClick={async () => {
+                if (!canPublish) return;
                 if (publicationDraft.status === "Published") {
                   if (!publicationDraft.title?.trim()) {
                     toast.error("Add a title before publishing");
@@ -434,7 +451,7 @@ export function TransparencyPage() {
                   });
                   if (!ok) return;
                 }
-                await upsertPublication({
+                try { await upsertPublication({
                   ...publicationDraft,
                   societyId: society._id,
                   summary: publicationDraft.summary || undefined,
@@ -453,6 +470,7 @@ export function TransparencyPage() {
                 });
                 toast.success("Publication saved");
                 setPublicationDraft(null);
+                } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save publication"); }
               }}
             >
               Save

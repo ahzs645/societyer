@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/convexApi";
 import { Field } from "./ui";
 import { DatePicker } from "./DatePicker";
@@ -38,9 +39,9 @@ export function CustomFieldsPanel({ societyId, entityType, entityId, title = "Cu
     return (
       <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
         No custom fields defined for {entityType}.{" "}
-        <a className="link" href="/app/custom-fields">
+        <Link className="link" to="/app/custom-fields">
           Add one
-        </a>
+        </Link>
         .
       </div>
     );

@@ -1,9 +1,11 @@
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { bylawBaselineForOrganization } from "../../shared/bylawBaselines";
 import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useToast } from "../components/Toast";
 import { Id } from "../../convex/_generated/dataModel";
+import { appRouteHref } from "../lib/appRouteHref";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -315,6 +317,7 @@ export function MeetingDetailPage() {
   // Defined above the early returns because the `?intent=draft-minutes`
   // effect needs to call it.
   const runGenerate = async (overrideText?: string) => {
+    if (isLocalDataRuntime()) { toast.info("AI minutes drafting requires a connected server. Your saved transcripts and manual minutes remain available."); return; }
     if (!meeting) {
       toast.error("Meeting not loaded yet.");
       return;
@@ -363,6 +366,7 @@ export function MeetingDetailPage() {
   // inline. Saves it as the meeting's canonical transcript first so it isn't
   // lost on reload, then runs the AI draft against the same text.
   const draftFromPastedTranscript = async (pastedText: string) => {
+    if (isLocalDataRuntime()) { toast.info("AI minutes drafting requires a connected server. Save your transcript from Sources or write minutes manually."); return; }
     if (!meeting) {
       toast.error("Meeting not loaded yet.");
       return;
@@ -619,6 +623,7 @@ export function MeetingDetailPage() {
     : [];
 
   const uploadAudioAndRun = async (draftMinutes: boolean) => {
+    if (isLocalDataRuntime()) { toast.info("Audio transcription requires a connected server. Saved text transcripts remain available."); return; }
     if (!audioFile) {
       toast.error("Choose an audio or video file first.");
       return;
@@ -1153,7 +1158,7 @@ export function MeetingDetailPage() {
       return;
     }
     if (!meeting || !minutes) return;
-    window.open(`/app/meetings/${meeting._id}/preview`, "_blank", "noopener,noreferrer");
+    window.open(appRouteHref(`/app/meetings/${meeting._id}/preview`), "_blank", "noopener,noreferrer");
   };
 
   /** Names to scrub: every current member + director. Emails/phones/postal codes use the regex rules. */

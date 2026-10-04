@@ -2236,17 +2236,23 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   color: token('text-secondary');
 }
 
-/* Touch devices work like Researcher's phone table: no floating per-row or
- * per-cell controls at all. Tapping the title opens the record, tapping an
- * editable cell edits it, and the table swipes sideways without buttons
- * drifting over the scrolling content. The actions cells now have real width,
- * so hide the whole column (all three row types render it consistently). */
+/* Touch has no hover affordance. Keep row actions in the table's own
+ * horizontal scroller, with real tap targets; a static trailing column avoids
+ * wide action groups covering the frozen identifier or the visible data. */
 @media (hover: none), (pointer: coarse) {
-  .record-table__row-actions,
-  .record-table__cell-actions,
+  .record-table__cell-actions { display: none; }
   .record-table__row-actions-head,
   .record-table__row-actions-cell {
-    display: none;
+    position: static;
+  }
+  .record-table__row-actions {
+    opacity: 1;
+    transform: none;
+    .btn, button, a {
+      min-width: 44px;
+      min-height: 44px;
+      box-sizing: border-box;
+    }
   }
 }
 
@@ -2408,4 +2414,58 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
       overflow: visible;
     }
   }
+}
+
+/* Touch selection is opt-in; the ordinary phone table keeps its frozen name column. */
+@media (max-width: 760px) {
+  .record-table__mobile-selection-controls {
+    display: flex;
+    padding: 8px 0;
+    .btn { min-height: 44px; }
+  }
+  .record-table__mobile-selection-checkbox {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    input { width: 20px; height: 20px; margin: 0; }
+  }
+  .record-table__cell.record-table__cell--mobile-selecting {
+    padding-left: 44px;
+    height: 44px;
+  }
+  .is-mobile-selecting.record-table__scroll-frame,
+  .is-mobile-selecting.record-table__interaction-root {
+    .record-table > thead > tr > th:first-child,
+    .record-table > tbody > tr:not(.record-table__action-row) > td:first-child,
+    .record-table > tfoot > tr > td:first-child {
+      width: 46vw !important;
+    }
+    .record-table > tbody > tr > td:first-child .record-table__identifier-button {
+      .record-table__cell-content { display: block; max-width: calc(42vw - 44px); }
+      .record-table__identifier-avatar { display: none; }
+    }
+  }
+  .record-table__bulk-bar {
+    left: auto;
+    transform: none;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .record-table__bulk-bar-count { flex: 1; }
+  .record-table__bulk-bar-clear { order: 1; width: 44px; height: 44px; }
+  .record-table__bulk-bar-actions {
+    order: 2;
+    width: 100%;
+    flex-wrap: wrap;
+    border-left: 0;
+    padding-left: 0;
+  }
+  .record-table__bulk-bar-button { min-height: 44px; }
 }

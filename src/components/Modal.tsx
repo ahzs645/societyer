@@ -1,3 +1,4 @@
+import { useDialogFocus } from "../lib/useDialogFocus";
 import {
   createContext,
   CSSProperties,
@@ -303,15 +304,6 @@ export function usePrompt() {
   return ctx;
 }
 
-const FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "textarea:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
-
 function useStableDomId(prefix: string) {
   const id = useId();
   return `${prefix}-${id.replace(/:/g, "")}`;
@@ -334,72 +326,6 @@ export function useDialogStackSlot(open: boolean): number {
     };
   }, [open]);
   return slot;
-}
-
-function useDialogFocus<T extends HTMLElement>(open: boolean, onClose: () => void) {
-  const ref = useRef<T | null>(null);
-  const onCloseRef = useRef(onClose);
-
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
-
-  useEffect(() => {
-    if (!open) return;
-    const previouslyFocused =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const focusTimer = window.setTimeout(() => {
-      const first = ref.current?.querySelector<HTMLElement>("[autofocus]") ?? getFocusable(ref.current)[0];
-      (first ?? ref.current)?.focus();
-    }, 0);
-
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const focusable = getFocusable(ref.current);
-      if (focusable.length === 0) {
-        event.preventDefault();
-        ref.current?.focus();
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-
-      if (event.shiftKey && (active === first || !ref.current?.contains(active))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", onKey);
-    return () => {
-      window.clearTimeout(focusTimer);
-      document.removeEventListener("keydown", onKey);
-      previouslyFocused?.focus();
-    };
-  }, [open]);
-
-  return ref;
-}
-
-function getFocusable(root: HTMLElement | null) {
-  if (!root) return [];
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (element) =>
-      !element.hasAttribute("disabled") &&
-      element.getAttribute("aria-hidden") !== "true" &&
-      element.offsetParent !== null,
-  );
 }
 
 // ---------------- Drag-to-resize dialog frame ---------------- //

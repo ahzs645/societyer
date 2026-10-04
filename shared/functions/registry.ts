@@ -933,6 +933,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
 
   // financialHub
   definePortableQuery({ name: "financialHub:connections", handler: financialHubFns.connectionsPortable }),
+  definePortableMutation({ name: "financialHub:disconnect", handler: financialHubFns.disconnectPortable }),
+  definePortableMutation({ name: "financialHub:markConnectionConnected", handler: financialHubFns.markDemoConnectionConnectedPortable }),
   definePortableQuery({ name: "financialHub:accounts", handler: financialHubFns.accountsPortable }),
   definePortableQuery({ name: "financialHub:transactions", handler: financialHubFns.transactionsPortable }),
   definePortableQuery({ name: "financialHub:transactionsForAccountExternalId", handler: financialHubFns.transactionsForAccountExternalIdPortable }),

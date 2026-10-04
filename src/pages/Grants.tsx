@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { authenticatedFetch } from "@/lib/authToken";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -41,6 +42,8 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 
 export function GrantsPage() {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("grants:write");
   const society = useSociety();
   const navigate = useNavigate();
   const gcosInputRef = useRef<HTMLInputElement>(null);
@@ -100,15 +103,15 @@ export function GrantsPage() {
   );
   const committees = useQuery(
     api.committees.list,
-    society && supportDataNeeded ? { societyId: society._id } : "skip",
+    society && loaded && can("committees:read") && supportDataNeeded ? { societyId: society._id } : "skip",
   );
   const users = useQuery(
     api.users.list,
-    society && supportDataNeeded ? { societyId: society._id } : "skip",
+    society && loaded && can("users:read") && supportDataNeeded ? { societyId: society._id } : "skip",
   );
   const accounts = useQuery(
     api.financialHub.accounts,
-    society && supportDataNeeded ? { societyId: society._id } : "skip",
+    society && loaded && can("financials:read") && supportDataNeeded ? { societyId: society._id } : "skip",
   );
   const documents = useQuery(
     api.documents.list,
@@ -116,7 +119,7 @@ export function GrantsPage() {
   );
   const employees = useQuery(
     api.employees.list,
-    society && grantDetailDataNeeded ? { societyId: society._id } : "skip",
+    society && loaded && can("employees:read") && grantDetailDataNeeded ? { societyId: society._id } : "skip",
   );
   const employeeLinks = useQuery(
     api.grants.employeeLinks,
@@ -124,7 +127,7 @@ export function GrantsPage() {
   );
   const secretVaultItems = useQuery(
     api.secrets.list,
-    society && grantDetailDataNeeded ? { societyId: society._id } : "skip",
+    society && loaded && can("settings:read") && grantDetailDataNeeded ? { societyId: society._id } : "skip",
   );
   const upsertGrant = useMutation(api.grants.upsertGrant);
   const removeGrant = useMutation(api.grants.removeGrant);
@@ -249,13 +252,13 @@ export function GrantsPage() {
                   icon: <FileText size={14} />,
                   onSelect: () => navigate("/app/grants/sources"),
                 },
-                {
+                { disabled: !canWrite,
                   id: "import-gcos",
                   label: "Import GCOS",
                   icon: <Upload size={14} />,
                   onSelect: () => gcosInputRef.current?.click(),
                 },
-                {
+                { disabled: !canWrite,
                   id: "ledger-entry",
                   label: "Ledger entry",
                   icon: <FileText size={14} />,
@@ -269,7 +272,7 @@ export function GrantsPage() {
                       description: "",
                     }),
                 },
-                {
+                { disabled: !canWrite,
                   id: "new-report",
                   label: "New report",
                   icon: <FileText size={14} />,
@@ -286,7 +289,7 @@ export function GrantsPage() {
             />
             <button
               className="btn-action btn-action--primary"
-              onClick={() => setGrantDraft(newGrantDraft(society._id))}
+              onClick={() => setGrantDraft(newGrantDraft(society._id))} disabled={!canWrite}
             >
               <Plus size={12} /> New grant
             </button>
@@ -340,7 +343,7 @@ export function GrantsPage() {
                     onClick={async () => {
                       await reviewApplication({ id: row._id, status: "Reviewing" });
                       toast.success("Application moved to review");
-                    }}
+                    }} disabled={!canWrite}
                   >
                     Review
                   </button>
@@ -355,7 +358,7 @@ export function GrantsPage() {
                         program: grantById.get(String(row.grantId))?.program ?? undefined,
                       });
                       toast.success("Application converted into grant pipeline item");
-                    }}
+                    }} disabled={!canWrite}
                   >
                     Convert
                   </button>
@@ -366,7 +369,7 @@ export function GrantsPage() {
                     onClick={async () => {
                       await reviewApplication({ id: row._id, status: "Declined" });
                       toast.success("Application declined");
-                    }}
+                    }} disabled={!canWrite}
                   >
                     Decline
                   </button>
@@ -451,13 +454,13 @@ export function GrantsPage() {
             }}
             renderRowActions={(row) => (
               <>
-                <Link
+                {canWrite && <Link
                   className="btn btn--ghost btn--sm"
                   to={`/app/grants/${row._id}/edit`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   Edit
-                </Link>
+                </Link>}
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Delete grant ${row.title}`}
@@ -465,7 +468,7 @@ export function GrantsPage() {
                     e.stopPropagation();
                     await removeGrant({ id: row._id });
                     toast.success("Grant removed");
-                  }}
+                  }} disabled={!canWrite}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -509,7 +512,7 @@ export function GrantsPage() {
             }}
             renderRowActions={(row) => (
               <>
-                <button className="btn btn--ghost btn--sm" onClick={() => setTxnDraft({ ...row, id: row._id, amountDollars: centsToDollarInput(row.amountCents) })}>
+                <button className="btn btn--ghost btn--sm" onClick={() => setTxnDraft({ ...row, id: row._id, amountDollars: centsToDollarInput(row.amountCents) })} disabled={!canWrite}>
                   Edit
                 </button>
                 <button
@@ -518,7 +521,7 @@ export function GrantsPage() {
                   onClick={async () => {
                     await removeTransaction({ id: row._id });
                     toast.success("Ledger entry removed");
-                  }}
+                  }} disabled={!canWrite}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -563,7 +566,7 @@ export function GrantsPage() {
             }}
             renderRowActions={(row) => (
               <>
-                <button className="btn btn--ghost btn--sm" onClick={() => setReportDraft({ ...row, id: row._id, spendingToDateDollars: centsToDollarInput(row.spendingToDateCents) })}>
+                <button className="btn btn--ghost btn--sm" onClick={() => setReportDraft({ ...row, id: row._id, spendingToDateDollars: centsToDollarInput(row.spendingToDateCents) })} disabled={!canWrite}>
                   Edit
                 </button>
                 <button
@@ -572,7 +575,7 @@ export function GrantsPage() {
                   onClick={async () => {
                     await removeReport({ id: row._id });
                     toast.success("Report removed");
-                  }}
+                  }} disabled={!canWrite}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -595,9 +598,9 @@ export function GrantsPage() {
                 <Link className="btn" to={`/app/grants/${selectedGrant._id}`}>
                   <ExternalLink size={12} /> Open full screen
                 </Link>
-                <Link className="btn btn--accent" to={`/app/grants/${selectedGrant._id}/edit`}>
+                {canWrite && <Link className="btn btn--accent" to={`/app/grants/${selectedGrant._id}/edit`}>
                   <Pencil size={12} /> Edit
-                </Link>
+                </Link>}
               </>
             )}
           </>

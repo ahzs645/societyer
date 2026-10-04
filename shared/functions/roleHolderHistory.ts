@@ -11,6 +11,8 @@
 
 import type { PortableQueryCtx } from "../portable/ctx";
 import { requireOwnedRow, requireSocietyMembership } from "./access";
+import { requirePermissionPortable } from "./permissions";
+import { filterControllerRegisters } from "./roleHolderReadAccess";
 import {
   buildTimeline,
   changesBetween as changesBetweenPure,
@@ -64,6 +66,9 @@ export async function revisionHistoryPortable(
     toStoredRevisions(revisionRows),
     liveRow ? ({ ...liveRow, _id: String(liveRow._id) } as LiveRoleHolder) : undefined,
   );
+  if (timeline.some(version => version.roleType === "controller")) {
+    await requirePermissionPortable(ctx, societyId, "settings:read");
+  }
   return timeline.map((version, index) => ({
     enteredAtISO: version.enteredAtISO,
     enteredByUserId: version.enteredByUserId ?? null,
@@ -85,11 +90,11 @@ export async function registerAsOfPortable(
     ctx.db.query("roleHolderRevisions").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
   ]);
-  return registerAsOfPure(
+  return filterControllerRegisters(ctx, societyId, registerAsOfPure(
     toStoredRevisions(revisionRows),
     liveRows.map((row: any) => ({ ...row, _id: String(row._id) })) as LiveRoleHolder[],
     asOfISO,
-  );
+  ));
 }
 
 /** What changed in the register between two instants (new/update/delete). */

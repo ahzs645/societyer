@@ -30,7 +30,8 @@ export function AssetScanner({
    * row (e.g. a verification sweep). Defaults to single-shot. */
   continuous?: boolean;
 }) {
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const onDetectedRef = useRef(onDetected);
+  onDetectedRef.current = onDetected;
   // Last code handled + its timestamp, so the same code held in frame (which
   // decodes many times per second) only fires once per cooldown window.
   const lastRef = useRef<{ code: string; at: number }>({ code: "", at: 0 });
@@ -42,15 +43,16 @@ export function AssetScanner({
     lastRef.current = { code: "", at: 0 };
     setCameraError(null);
     let cancelled = false;
+    let scanner: Html5Qrcode | null = null;
 
     const start = async () => {
       try {
-        const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, { verbose: false });
-        scannerRef.current = scanner;
+        scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, { verbose: false });
         await scanner.start(
           { facingMode: "environment" },
           { fps: 10, qrbox: { width: 220, height: 220 } },
           (decodedText) => {
+            if (cancelled) return;
             const now = Date.now();
             const last = lastRef.current;
             // Ignore the same code within a 2.5s cooldown. In single-shot mode
@@ -58,7 +60,7 @@ export function AssetScanner({
             if (decodedText === last.code && now - last.at < 2500) return;
             if (!continuous && last.at !== 0) return;
             lastRef.current = { code: decodedText, at: now };
-            onDetected(decodedText);
+            onDetectedRef.current(decodedText);
           },
           () => {
             // Per-frame decode failures are normal; ignore them.
@@ -74,26 +76,21 @@ export function AssetScanner({
         }
       }
     };
-    void start();
+    const starting = start();
 
     return () => {
       cancelled = true;
-      const scanner = scannerRef.current;
-      scannerRef.current = null;
-      if (scanner) {
-        scanner
-          .stop()
-          .catch(() => {})
-          .finally(() => {
-            try {
-              scanner.clear();
-            } catch {
-              // already torn down
-            }
-          });
-      }
+      // start() can still be awaiting camera permission when the dialog closes.
+      // Wait for it to settle, then release any stream that eventually opened.
+      // stop() throws synchronously when camera startup failed; a Promise catch
+      // on its return value cannot catch that throw during React cleanup.
+      void starting.then(async () => {
+        if (!scanner) return;
+        try { await scanner.stop(); } catch { /* camera never started */ }
+        try { scanner.clear(); } catch { /* dialog already unmounted */ }
+      });
     };
-  }, [open, onDetected]);
+  }, [open, continuous]);
 
   const submitManual = () => {
     const code = manual.trim();

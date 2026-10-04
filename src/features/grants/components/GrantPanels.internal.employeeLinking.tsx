@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 // GrantPanels: grant-funded employee assignment parsing, validation, and linking UI.
 import { type ReactNode, useEffect, useState } from "react";
 import { ExternalLink, ListChecks, Plus, Trash2 } from "lucide-react";
@@ -62,6 +63,8 @@ export function GrantFundedEmployeesPanel({
   onQueueEmployeeOrientationEmail?: (employee: any, grant: any) => void | Promise<void>;
   onCreateSinVaultRecord?: (draft: Record<string, unknown>) => Promise<string | void>;
 }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("grants:write");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [showNewEmployee, setShowNewEmployee] = useState(false);
   const [employeeDraft, setEmployeeDraft] = useState(() => defaultGrantEmployeeDraft(grant));
@@ -206,12 +209,12 @@ export function GrantFundedEmployeesPanel({
                   </div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
                     {employee && onQueueEmployeeOrientationEmail && (
-                      <button className="btn btn--accent btn--sm" type="button" disabled={!employee.email} onClick={() => onQueueEmployeeOrientationEmail(employee, grant)}>
+                      <button className="btn btn--accent btn--sm" type="button" disabled={!(canWrite && loaded && can("communications:write")) || (!employee.email)} onClick={() => onQueueEmployeeOrientationEmail(employee, grant)}>
                         Queue orientation email
                       </button>
                     )}
                     {onUnlinkEmployee && (
-                      <button className="btn btn--ghost btn--sm" type="button" onClick={() => onUnlinkEmployee(String(link._id))}>
+                      <button className="btn btn--ghost btn--sm" type="button" onClick={() => onUnlinkEmployee(String(link._id))} disabled={!canWrite}>
                         Unlink
                       </button>
                     )}
@@ -237,14 +240,14 @@ export function GrantFundedEmployeesPanel({
                 })),
               ]}
             />
-            <button className="btn btn--accent" type="button" disabled={!selectedEmployeeId} onClick={linkSelected}>
+            <button className="btn btn--accent" type="button" disabled={!canWrite || (!selectedEmployeeId)} onClick={linkSelected}>
               Link employee
             </button>
           </div>
         )}
         {onCreateEmployee && onLinkEmployee && canLinkMoreEmployees && (
           <div style={{ display: "grid", gap: 8, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
-            <button className="btn btn--ghost btn--sm" type="button" onClick={() => setShowNewEmployee((value) => !value)}>
+            <button className="btn btn--ghost btn--sm" type="button" onClick={() => setShowNewEmployee((value) => !value)} disabled={!(canWrite && loaded && can("employees:write"))}>
               {showNewEmployee ? "Cancel new employee" : "Add and link new employee"}
             </button>
             {showNewEmployee && (
@@ -295,7 +298,7 @@ export function GrantFundedEmployeesPanel({
                 </Field>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   {onCreateSinVaultRecord && (
-                    <button className="btn btn--ghost btn--sm" type="button" onClick={() => setShowSinVaultForm((value) => !value)}>
+                    <button className="btn btn--ghost btn--sm" type="button" onClick={() => setShowSinVaultForm((value) => !value)} disabled={!(canWrite && loaded && can("settings:write"))}>
                       {showSinVaultForm ? "Cancel SIN vault record" : "Add SIN vault record"}
                     </button>
                   )}
@@ -315,7 +318,7 @@ export function GrantFundedEmployeesPanel({
                       <Field label="Custodian name"><input className="input" value={sinVaultDraft.custodianPersonName} onChange={(event) => setSinVaultDraft({ ...sinVaultDraft, custodianPersonName: event.target.value })} /></Field>
                       <Field label="Custodian email"><input className="input" type="email" value={sinVaultDraft.custodianEmail} onChange={(event) => setSinVaultDraft({ ...sinVaultDraft, custodianEmail: event.target.value })} /></Field>
                     </div>
-                    <button className="btn btn--accent btn--sm" type="button" disabled={!canCreateSinVaultRecord(sinVaultDraft)} onClick={createSinVaultRecord}>
+                    <button className="btn btn--accent btn--sm" type="button" disabled={!(canWrite && loaded && can("settings:write")) || (!canCreateSinVaultRecord(sinVaultDraft))} onClick={createSinVaultRecord}>
                       Create and link SIN vault record
                     </button>
                   </div>
@@ -372,7 +375,7 @@ export function GrantFundedEmployeesPanel({
                         ...employeeDraft,
                         endDate: calculatedGrantEndDate(employeeDraft.startDate, lockedAssignment.weeks) ?? employeeDraft.endDate,
                       });
-                    }}
+                    }} disabled={!canWrite}
                   >
                     Use calculated end date
                   </button>
@@ -386,7 +389,7 @@ export function GrantFundedEmployeesPanel({
                   </Field>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <button className="btn btn--accent btn--sm" type="button" disabled={!canCreateGrantEmployee(employeeDraft)} onClick={createAndLink}>
+                  <button className="btn btn--accent btn--sm" type="button" disabled={!(canWrite && loaded && can("employees:write")) || (!canCreateGrantEmployee(employeeDraft))} onClick={createAndLink}>
                     Create and link employee
                   </button>
                   {!canCreateGrantEmployee(employeeDraft) && <span className="muted" style={{ fontSize: 12 }}>First name, last name, role, start, hourly wage, birth date, home address, phone, and SIN vault record are required.</span>}

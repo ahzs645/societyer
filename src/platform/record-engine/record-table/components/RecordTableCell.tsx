@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Copy, ExternalLink, Mail, Pencil } from "lucide-react";
 import type { RecordField } from "../../types";
@@ -20,11 +20,13 @@ export function RecordTableCell({
   isLabelIdentifier,
   columnIndex,
   renderCell,
+  selectionControl,
 }: {
   recordField: RecordField;
   isLabelIdentifier: boolean;
   columnIndex: number;
   renderCell?: RecordTableCellRenderer;
+  selectionControl?: ReactNode;
 }) {
   const tableCtx = useRecordTableContextOrThrow();
   const { record, recordId, rowIndex } = useRecordTableRowContextOrThrow();
@@ -89,6 +91,7 @@ export function RecordTableCell({
     <td
       className={
         "record-table__cell" +
+        (selectionControl ? " record-table__cell--mobile-selecting" : "") +
         (isLabelIdentifier && tableCtx.onRecordClick ? " record-table__cell--identifier" : "") +
         (canEdit ? " record-table__cell--editable" : "") +
         (isHovered ? " record-table__cell--hovered" : "") +
@@ -132,6 +135,7 @@ export function RecordTableCell({
       data-field-name={recordField.field.name}
       ref={cellRef}
     >
+      {selectionControl}
       {isLabelIdentifier && tableCtx.onRecordClick ? (
         <button
           type="button"
@@ -208,6 +212,7 @@ export function RecordTableCell({
           onCancel={() => {
             handle.get().setEditingInitialValue(undefined);
             handle.get().setEditingCell(null);
+            cellRef.current?.focus({ preventScroll: true });
           }}
         />
       )}

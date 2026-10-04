@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { CalendarClock } from "lucide-react";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -24,6 +25,10 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 export function ComplianceSettingsPage() {
   const society = useSociety();
+  const permissions = usePermissions();
+  const canSaveSettings = permissions.loaded && permissions.can("settings:write");
+  const canGenerate = permissions.loaded && permissions.can("deadlines:write");
+  const canClone = permissions.loaded && permissions.can("society:write");
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -95,6 +100,7 @@ export function ComplianceSettingsPage() {
   const derived: DerivedDeadline[] = deriveComplianceDeadlines(settings, today);
 
   const onSave = async () => {
+    if (!canSaveSettings || saving) return;
     setSaving(true);
     try {
     await save({
@@ -121,6 +127,7 @@ export function ComplianceSettingsPage() {
   const deadlineKey = (d: { title?: string; dueDate?: string }) => `${d.title}::${d.dueDate}`;
   const existingKeys = new Set((existing ?? []).map(deadlineKey));
   const generate = async () => {
+    if (!canGenerate || generating) return;
     setGenerating(true);
     try {
       let added = 0;
@@ -142,7 +149,7 @@ export function ComplianceSettingsPage() {
         iconColor="orange"
         subtitle="AGM date and fiscal year-end drive your annual compliance deadlines. Set them once, then generate the deadlines."
         actions={
-          <button className="btn-action btn-action--primary" onClick={onSave} disabled={saving}>
+          <button className="btn-action btn-action--primary" onClick={onSave} disabled={saving || !canSaveSettings}>
             {saving ? "Saving…" : saved ? "Saved ✓" : "Save settings"}
           </button>
         }
@@ -209,7 +216,7 @@ export function ComplianceSettingsPage() {
           </Field>
           <button
             className="btn btn--accent"
-            disabled={!cloneName.trim()}
+            disabled={!cloneName.trim() || !canClone}
             onClick={async () => {
               const r = (await cloneSociety({
                 sourceSocietyId: society._id,
@@ -256,7 +263,7 @@ export function ComplianceSettingsPage() {
       <div className="card" style={{ maxWidth: 520 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <h3 style={{ margin: 0 }}>Derived deadlines</h3>
-          <button className="btn btn--accent" onClick={generate} disabled={generating || derived.length === 0}>
+          <button className="btn btn--accent" onClick={generate} disabled={generating || !canGenerate || derived.length === 0}>
             Generate {derived.length || ""}
           </button>
         </div>

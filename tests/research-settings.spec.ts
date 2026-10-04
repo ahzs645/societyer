@@ -106,15 +106,15 @@ test("local Owner can edit storage policy while acting Member remains restricted
   await picker.click();
   await page.getByText("Storage Policy Member", { exact: true }).click();
   await expect(picker).toContainText("Storage Policy Member");
-  await expect(provider).toBeDisabled();
-  await expect(page.getByLabel("Custodian / administrator contact", { exact: true })).toBeDisabled();
-  await expect(save).toBeDisabled();
-  await expect(page.getByText("The workspace Owner can change document storage policy.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Access restricted", exact: true })).toBeVisible();
+  await expect(provider).toHaveCount(0);
+  await expect(save).toHaveCount(0);
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(picker).toContainText("Storage Policy Member");
-  await expect(provider).toBeDisabled();
-  await expect(save).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "Access restricted", exact: true })).toBeVisible();
+  await expect(provider).toHaveCount(0);
+  await expect(save).toHaveCount(0);
   await picker.click();
   await page.getByText("Owner", { exact: true }).click();
   await expect(picker).toContainText("Owner");

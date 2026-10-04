@@ -18,6 +18,7 @@ import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
+import { usePermissions } from "../hooks/usePermissions";
 import { Drawer } from "../components/ui";
 import {
   TaskFormFields,
@@ -65,9 +66,11 @@ export function taskStatusLabel(status: string) {
 
 export function TasksPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canManage = loaded && can("tasks:write");
   const tasks = useQuery(api.tasks.list, society ? { societyId: society._id } : "skip");
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip");
-  const formData = useTaskFormData(society?._id);
+  const formData = useTaskFormData(canManage ? society?._id : undefined);
   const { committees, goals, users, filings, workflows, documents, commitments } = formData;
   const create = useMutation(api.tasks.create);
   const update = useMutation(api.tasks.update);
@@ -213,6 +216,7 @@ export function TasksPage() {
   );
 
   const openNew = useCallback(() => {
+    if (!canManage) return;
     setForm({
       ...makeTaskFormDefaults({
         committeeId: filterCommittee || undefined,
@@ -221,7 +225,7 @@ export function TasksPage() {
       tags: [],
     });
     setOpen(true);
-  }, [filterCommittee, filterGoal]);
+  }, [filterCommittee, filterGoal, canManage]);
 
   useEffect(() => {
     setFilterGoal(requestedGoalId);
@@ -232,7 +236,7 @@ export function TasksPage() {
   }, [requestedCommitteeId]);
 
   useEffect(() => {
-    if (!openNewFromUrl || open || society === undefined || society === null) return;
+    if (!canManage || !openNewFromUrl || open || society === undefined || society === null) return;
     openNew();
     setSearchParams(
       (previous) => {
@@ -242,7 +246,7 @@ export function TasksPage() {
       },
       { replace: true },
     );
-  }, [openNewFromUrl, open, openNew, setSearchParams, society]);
+  }, [canManage, openNewFromUrl, open, openNew, setSearchParams, society]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -288,7 +292,7 @@ export function TasksPage() {
   };
 
   const save = async () => {
-    if (!form) return;
+    if (!form || !canManage) return;
     if (form._id) {
       await update({
         id: form._id,
@@ -356,6 +360,7 @@ export function TasksPage() {
   };
 
   const confirmDelete = async (id: Id<"tasks">, title: string) => {
+    if (!canManage) return;
     const approved = await confirm({
       title: "Delete task?",
       message: `"${title}" will be permanently removed.`,
@@ -368,6 +373,7 @@ export function TasksPage() {
   };
 
   const markComplete = async (task: TaskRecord) => {
+    if (!canManage) return;
     await update({
       id: task._id,
       patch: {
@@ -383,6 +389,7 @@ export function TasksPage() {
     fieldName: string,
     value: unknown,
   ) => {
+    if (!canManage) return;
     const id = recordId as Id<"tasks">;
     if (fieldName === "status" && typeof value === "string") {
       await update({
@@ -409,7 +416,7 @@ export function TasksPage() {
   };
 
   const bulkDelete = async (ids: string[], selectedRecords: TaskRecord[]) => {
-    if (ids.length === 0) return;
+    if (!canManage || ids.length === 0) return;
     const previewTitles = selectedRecords.slice(0, 5).map((task) => task.title);
     const overflow = selectedRecords.length - previewTitles.length;
     const approved = await confirm({
@@ -470,7 +477,7 @@ export function TasksPage() {
         iconColor="turquoise"
         subtitle="Internal work items for your board and staff to get done. For dates set by law or regulation, use Deadlines; for promises made to funders or partners, use Commitments."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
             <Plus size={12} /> New task
           </button>
         }
@@ -553,9 +560,9 @@ export function TasksPage() {
           hydratedView={tableData.hydratedView}
           records={pageFilteredRecords}
           onRecordClick={(_recordId, record) => openEdit(record as TaskRecord)}
-          onUpdate={({ recordId, fieldName, value }) =>
+          onUpdate={canManage ? ({ recordId, fieldName, value }) =>
             updateInlineField(recordId, fieldName, value)
-          }
+          : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -582,6 +589,7 @@ export function TasksPage() {
               </div>
             ) : (
               <TaskPhoneList
+                canManage={canManage}
                 hasTasks={records.length > 0}
                 committeeById={committeeById}
                 goalById={goalById}
@@ -595,7 +603,7 @@ export function TasksPage() {
             )
           ) : (
             <RecordTable
-              selectable
+              selectable={canManage}
               loading={tableData.loading || tasks === undefined}
               renderRowActions={(record: TaskRecord) => (
                 <>
@@ -603,6 +611,7 @@ export function TasksPage() {
                     <button
                       type="button"
                       className="btn btn--sm"
+                      disabled={!canManage}
                       onClick={() => markComplete(record)}
                     >
                       <Check size={12} /> Complete
@@ -622,6 +631,7 @@ export function TasksPage() {
                     className="btn btn--ghost btn--sm btn--icon"
                     aria-label={`Delete task ${record.title}`}
                     title="Delete task"
+                    disabled={!canManage}
                     onClick={() => confirmDelete(record._id, record.title)}
                   >
                     <Trash2 size={12} />
@@ -632,7 +642,7 @@ export function TasksPage() {
           )}
 
           <RecordTableBulkBar
-            actions={[
+            actions={canManage ? [
               {
                 id: "delete",
                 label: bulkDeleting ? "Deleting…" : "Delete",
@@ -641,7 +651,7 @@ export function TasksPage() {
                 onRun: (ids, selectedRecords) =>
                   bulkDelete(ids, selectedRecords as TaskRecord[]),
               },
-            ]}
+            ] : []}
           />
         </RecordTableScope>
       ) : (
@@ -655,13 +665,14 @@ export function TasksPage() {
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
-        title={form?._id ? "Edit task" : "New task"}
+        title={form?._id ? (canManage ? "Edit task" : "View task") : "New task"}
         footer={
           <>
             {form?._id && (
               <button
                 className="btn btn--danger"
                 style={{ marginRight: "auto" }}
+                disabled={!canManage}
                 onClick={async () => {
                   if (!form._id) return;
                   const approved = await confirm({
@@ -682,7 +693,7 @@ export function TasksPage() {
             <button className="btn" onClick={() => setOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" onClick={save}>
+            <button className="btn btn--accent" onClick={save} disabled={!canManage}>
               {form?._id ? "Save" : "Create"}
             </button>
           </>
@@ -704,7 +715,9 @@ export function TasksPage() {
                 belong in Commitments.
               </p>
             )}
+            <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <TaskFormFields
+              readOnly={!canManage}
               value={form}
               onChange={(patch) =>
                 setForm((previous) =>
@@ -714,6 +727,7 @@ export function TasksPage() {
               data={formData}
               mode={form._id ? "edit" : "create"}
             />
+            </fieldset>
           </>
         )}
       </Drawer>
@@ -722,6 +736,7 @@ export function TasksPage() {
 }
 
 function TaskPhoneList({
+  canManage,
   hasTasks,
   committeeById,
   goalById,
@@ -730,6 +745,7 @@ function TaskPhoneList({
   onDelete,
   onStatusChange,
 }: {
+  canManage: boolean;
   hasTasks: boolean;
   committeeById: Map<string, Doc<"committees">>;
   goalById: Map<string, Doc<"goals">>;
@@ -834,6 +850,7 @@ function TaskPhoneList({
             >
               <Select
                 size="sm"
+                disabled={!canManage}
                 value={task.status}
                 onChange={(status) => void onStatusChange(task, status)}
                 style={{ width: 150 }}
@@ -855,6 +872,7 @@ function TaskPhoneList({
                 type="button"
                 className="btn btn--ghost btn--sm btn--icon"
                 aria-label={`Delete task ${task.title}`}
+                disabled={!canManage}
                 onClick={() => void onDelete(task._id, task.title)}
               >
                 <Trash2 size={12} />

@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -21,6 +22,8 @@ export function GrantSourceLibrarySection({
   societyId,
   sourceLibrary,
 }: GrantSourceLibrarySectionProps) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("grants:write");
   const toast = useToast();
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [sourceDraft, setSourceDraft] = useState<any | null>(null);
@@ -202,7 +205,7 @@ export function GrantSourceLibrarySection({
                   topicTagsText: "",
                   notes: "",
                 })
-              }
+              } disabled={!canWrite}
             >
               <Plus size={12} /> Add source
             </button>
@@ -294,6 +297,8 @@ function SourceActions({
   addGrantSourceFromLibrary: any;
   onAdded: (name: string) => void;
 }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("grants:write");
   return (
     <div className="grant-source-actions">
       <a className="btn btn--ghost btn--sm" href={row.url} target="_blank" rel="noreferrer">
@@ -313,7 +318,7 @@ function SourceActions({
               libraryKey: row.libraryKey,
             });
             onAdded(row.name);
-          }}
+          }} disabled={!canWrite}
         >
           <Plus size={12} /> Add source
         </button>

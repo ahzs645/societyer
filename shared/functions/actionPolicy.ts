@@ -2,6 +2,7 @@
 import type { PortableQueryCtx } from "../portable/ctx";
 import { requireAuthenticated } from "./access";
 import { requirePermissionPortable, type Permission } from "./permissions";
+import { isAllowedOption } from "../orgHubOptions";
 
 const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   society: ["society", "dashboard", "organizationDetails", "organizationHistory", "firm"],
@@ -22,6 +23,25 @@ const RESOURCE_GROUPS: Record<string, readonly string[]> = {
 };
 
 const RESOURCES = Object.fromEntries(Object.entries(RESOURCE_GROUPS).flatMap(([resource, domains]) => domains.map((domain) => [domain, resource])));
+// Built-in table names do not always equal their public function domain.
+// These aliases are schema-owned, not supplied by a request or metadata row.
+// Unknown/custom tables deliberately keep the settings catalog permission.
+const METADATA_TABLE_DOMAINS: Readonly<Record<string, string>> = {
+  roleHolders: "legalOperations", auditLogEntries: "activity",
+  workflowRuns: "workflows", outboxMessages: "pendingEmails",
+  auditorAppointments: "auditors", pipaTrainings: "pipaTraining",
+  directorAttestations: "attestations", customFieldDefinitions: "customFields",
+  publications: "transparency", apiClients: "apiPlatform", apiTokens: "apiPlatform",
+  secretVaultItems: "secrets", retentionRows: "retention",
+  reconciliationTransactions: "reconciliation", counterpartyTransactions: "financialHub",
+  accountTransactions: "financialHub", profileFacts: "organizationDetails",
+  donationReceipts: "receipts", minuteBookItems: "minuteBook",
+  insurancePolicies: "insurance", volunteerApplications: "volunteers",
+  volunteerScreenings: "volunteers", financialTransactions: "financialHub",
+  communicationTemplates: "communications", communicationSegments: "communications",
+  communicationCampaigns: "communications", communicationDeliveries: "communications",
+  grantApplications: "grants", grantTransactions: "grants", grantReports: "grants",
+};
 const HANDLER_POLICIES = new Set([
   "apiPlatform:createToken", "apiPlatform:verifyToken", "apiPlatform:resourceTenantStatus", "apiPlatform:listWebhookSubscriptionsForEvent", "apiPlatform:upsertWebhookSubscription", "apiPlatform:setWebhookSubscriptionStatus", "apiPlatform:createWebhookDelivery", "apiPlatform:updateWebhookDelivery", "apiPlatform:upsertIntegrationSyncState", "apiPlatform:bootstrapUserIdentity", "apiPlatform:migrateUserToClerk",
   "elections:castBallot", "elections:submitNomination",
@@ -75,6 +95,9 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (["society:updateModules", "society:updateComplianceSettings", "society:updateInventorySettings", "society:updateNotificationSettings"].includes(name)) return "settings:write";
   if (name === "society:updateIntegrationSettings" || name === "society:reset") return "settings:manage";
   if (resource === "audit") return kind === "query" ? "audit:read" : "settings:write";
+  if (domain === "orgChartAssignments") return kind === "query" ? "settings:read" : "settings:write";
+  if (name === "registerHistory:directorsAsOf") return "directors:read";
+  if (name === "registerHistory:significantIndividualsAsOf") return "settings:read";
   if (["pathways:approve", "pathways:reject"].includes(name)) return "documents:write";
   if (["pathways:requestSubmission", "pathways:recordManualReceipt"].includes(name)) return "filings:submit";
   if (name === "postIncorporation:recordEvidence") return "documents:write";
@@ -121,11 +144,19 @@ async function societyForArgs(ctx: PortableQueryCtx, name: string, args: Record<
 }
 
 export async function requireFunctionAction(ctx: PortableQueryCtx, name: string, kind: "query" | "mutation" | "action", args: Record<string, any>) {
-  const permission = actionPermission(name, kind);
+  let permission = actionPermission(name, kind);
   if (!permission) return; // Explicit handlers perform their specialized policy.
   requireAuthenticated(ctx);
+  if (kind === "query" && name === "registerHistory:roleHoldersAsOfDate") {
+    // This query can select registers with different read authority. Controller
+    // rows must not bypass the significant-individual endpoint's privacy gate.
+    if (["director", "officer"].includes(args.roleType)) permission = "directors:read";
+    else if (args.roleType === "controller") permission = "settings:read";
+    else if (args.roleType !== "other" && !isAllowedOption("representativeTypes", args.roleType)) throw new Error("Unsupported historical role type.");
+  }
   const societyId = await societyForArgs(ctx, name, args);
   if (societyId) {
+    if (kind === "query") permission = await scopedMetadataPermission(ctx, name, args, societyId) ?? permission;
     const actor = await requirePermissionPortable(ctx, societyId, permission);
     if (args.actingUserId && args.actingUserId !== actor._id) throw new Error("Authenticated actor does not match the current principal.");
     return;
@@ -139,4 +170,38 @@ export async function requireFunctionAction(ctx: PortableQueryCtx, name: string,
     try { await requirePermissionPortable(ctx, society._id, permission); return; } catch { /* Try another membership. */ }
   }
   throw new Error(`Permission ${permission} required in an active workspace.`);
+}
+
+/** Reading a table's layout requires that table's read permission. Catalog
+ * discovery and every metadata write retain the settings policy. Resolve the
+ * persisted object, never a client-supplied resource or route label. */
+async function scopedMetadataPermission(ctx: PortableQueryCtx, name: string, args: Record<string, any>, societyId: string): Promise<Permission | null> {
+  let object: any;
+  if (name === "views:listSharedForDataTable" && args.objectMetadataId) {
+    object = await ctx.db.get(args.objectMetadataId, "objectMetadata");
+  } else if (["objectMetadata:getByNameSingular", "objectMetadata:getFullTableSetup"].includes(name) || (name === "views:listSharedForDataTable" && typeof args.nameSingular === "string")) {
+    const rows = await ctx.db.query("objectMetadata").withIndex("by_society_name", q => q.eq("societyId", societyId).eq("nameSingular", args.nameSingular)).collect();
+    object = rows.sort((a, b) => String(a._id).localeCompare(String(b._id)))[0];
+  } else if (name === "objectMetadata:getByNamePlural") {
+    const rows = await ctx.db.query("objectMetadata").withIndex("by_society_name_plural", q => q.eq("societyId", societyId).eq("namePlural", args.namePlural)).collect();
+    object = rows.sort((a, b) => String(a._id).localeCompare(String(b._id)))[0];
+  } else if (name === "objectMetadata:get") {
+    object = await ctx.db.get(args.id, "objectMetadata");
+  } else if (["objectMetadata:getWithFields", "fieldMetadata:listForObject", "fieldMetadata:getByName", "views:listForObject"].includes(name)) {
+    object = await ctx.db.get(args.objectMetadataId, "objectMetadata");
+  } else if (name === "fieldMetadata:get") {
+    const field = await ctx.db.get(args.id, "fieldMetadata");
+    if (field?.societyId !== societyId) throw new Error("Record not found.");
+    object = await ctx.db.get(field.objectMetadataId, "objectMetadata");
+  } else if (["views:get", "views:getHydrated", "views:listFieldsForView"].includes(name)) {
+    const view = await ctx.db.get(args.id ?? args.viewId, "views");
+    if (view?.societyId !== societyId) throw new Error("Record not found.");
+    object = await ctx.db.get(view.objectMetadataId, "objectMetadata");
+  } else return null;
+  if (!object) return null;
+  if (object.societyId !== societyId) throw new Error("Record not found.");
+  const domain = Object.prototype.hasOwnProperty.call(METADATA_TABLE_DOMAINS, object.namePlural)
+    ? METADATA_TABLE_DOMAINS[object.namePlural] : object.namePlural;
+  const resource = Object.prototype.hasOwnProperty.call(RESOURCES, domain) ? RESOURCES[domain] : undefined;
+  return resource ? `${resource}:read` as Permission : null;
 }

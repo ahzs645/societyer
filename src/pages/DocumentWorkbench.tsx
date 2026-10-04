@@ -6,9 +6,10 @@ import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, EmptyState, Field } from "../components/ui";
-import { MarkdownEditor } from "../components/MarkdownEditor";
+import { MarkdownEditor, type MarkdownEditorHandle } from "../components/MarkdownEditor";
 import { SignaturePanel } from "../components/SignaturePanel";
 import { useToast } from "../components/Toast";
 import { formatDateTime } from "../lib/format";
@@ -44,13 +45,17 @@ export function DocumentWorkbenchPage() {
   const removeComment = useMutation(api.documentComments.remove);
   const getDownloadTarget = useAction(api.documentVersions.getDownloadTarget);
   const user = useCurrentUser();
+  const permissions = usePermissions();
+  const canEdit = permissions.loaded && permissions.can("documents:write");
   const toast = useToast();
   const openedRef = useRef(false);
+  const commentEditorRef = useRef<MarkdownEditorHandle>(null);
   const [draft, setDraft] = useState({
     pageNumber: "",
     anchorText: "",
     body: "",
   });
+  const [savingComment, setSavingComment] = useState(false);
 
   useEffect(() => {
     if (!document || openedRef.current) return;
@@ -105,22 +110,35 @@ export function DocumentWorkbenchPage() {
   };
 
   const saveComment = async () => {
-    const body = draft.body.trim();
+    if (!canEdit || savingComment) return;
+    const body = (commentEditorRef.current?.getMarkdown() ?? draft.body).trim();
     if (!body) {
       toast.error("Add a comment first.");
       return;
     }
-    await createComment({
-      societyId: society._id,
-      documentId: document._id,
-      pageNumber: numberOrUndefined(draft.pageNumber),
-      anchorText: draft.anchorText.trim() || undefined,
-      authorName: user?.displayName ?? "Reviewer",
-      authorUserId: userId,
-      body,
-    });
-    setDraft({ pageNumber: "", anchorText: "", body: "" });
-    toast.success("Comment added");
+    if (draft.pageNumber.trim() && (!Number.isInteger(Number(draft.pageNumber)) || Number(draft.pageNumber) < 1)) {
+      toast.error("Page must be a positive whole number.");
+      return;
+    }
+    setSavingComment(true);
+    try {
+      await createComment({
+        societyId: society._id,
+        documentId: document._id,
+        pageNumber: numberOrUndefined(draft.pageNumber),
+        anchorText: draft.anchorText.trim() || undefined,
+        authorName: user?.displayName ?? "Reviewer",
+        authorUserId: userId,
+        body,
+      });
+      commentEditorRef.current?.setMarkdown("");
+      setDraft({ pageNumber: "", anchorText: "", body: "" });
+      toast.success("Comment added");
+    } catch (error: any) {
+      toast.error("Could not add comment", error?.message ?? String(error));
+    } finally {
+      setSavingComment(false);
+    }
   };
 
   const reviewStatus = document.reviewStatus ?? "none";
@@ -141,13 +159,14 @@ export function DocumentWorkbenchPage() {
         actions={
           <>
             <Badge tone={reviewStatusTone(reviewStatus)}>{reviewStatusLabel(reviewStatus)}</Badge>
-            <button className="btn-action" onClick={openFile}>
+            <button className="btn-action" onClick={() => { void openFile().catch((error: any) => toast.error("Could not open document", error?.message ?? String(error))); }}>
               {downloadAvailable ? <Download size={12} /> : <ExternalLink size={12} />}
               Open file
             </button>
           </>
         }
       />
+      {permissions.loaded && !canEdit && <p className="muted">Your role can read this document. Document editing permission is required to change review status or comments.</p>}
 
       <div className="two-col">
         <div className="col" style={{ gap: 16 }}>
@@ -183,13 +202,18 @@ export function DocumentWorkbenchPage() {
                         <button
                           key={status}
                           className={`btn btn--sm ${reviewStatus === status ? "btn--accent" : "btn--ghost"}`}
+                          disabled={!canEdit}
                           onClick={async () => {
-                            await updateReviewStatus({
-                              id: document._id,
-                              reviewStatus: status === "none" ? undefined : status,
-                              actorName: user?.displayName,
-                            });
-                            toast.success("Review status updated");
+                            try {
+                              await updateReviewStatus({
+                                id: document._id,
+                                reviewStatus: status === "none" ? undefined : status,
+                                actorName: user?.displayName,
+                              });
+                              toast.success("Review status updated");
+                            } catch (error: any) {
+                              toast.error("Could not update review status", error?.message ?? String(error));
+                            }
                           }}
                         >
                           {reviewStatusLabel(status)}
@@ -233,6 +257,7 @@ export function DocumentWorkbenchPage() {
               </div>
               <Field label="Comment">
                 <MarkdownEditor
+                  ref={commentEditorRef}
                   rows={3}
                   value={draft.body}
                   onChange={(markdown) => setDraft({ ...draft, body: markdown })}
@@ -240,8 +265,8 @@ export function DocumentWorkbenchPage() {
                 />
               </Field>
               <div className="row" style={{ justifyContent: "flex-end" }}>
-                <button className="btn-action btn-action--primary" onClick={saveComment}>
-                  <Save size={12} /> Add comment
+                <button className="btn-action btn-action--primary" disabled={!canEdit || savingComment} onClick={saveComment}>
+                  <Save size={12} /> {savingComment ? "Adding…" : "Add comment"}
                 </button>
               </div>
 
@@ -263,10 +288,11 @@ export function DocumentWorkbenchPage() {
                     <div className="row" style={{ gap: 4 }}>
                       <button
                         className="btn btn--ghost btn--sm"
+                        disabled={!canEdit}
                         onClick={() => setCommentStatus({
                           id: comment._id,
                           status: comment.status === "resolved" ? "open" : "resolved",
-                        })}
+                        }).catch((error: any) => toast.error("Could not update comment", error?.message ?? String(error)))}
                       >
                         <CheckCircle2 size={12} />
                         {comment.status === "resolved" ? "Reopen" : "Resolve"}
@@ -274,7 +300,8 @@ export function DocumentWorkbenchPage() {
                       <button
                         className="btn btn--ghost btn--sm btn--icon"
                         aria-label="Delete comment"
-                        onClick={() => removeComment({ id: comment._id })}
+                        disabled={!canEdit}
+                        onClick={() => removeComment({ id: comment._id }).catch((error: any) => toast.error("Could not delete comment", error?.message ?? String(error)))}
                       >
                         <Trash2 size={12} />
                       </button>

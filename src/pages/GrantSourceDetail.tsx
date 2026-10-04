@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, ExternalLink, Globe2, Plus, FilePlus2 } from "lucide-react";
@@ -9,6 +10,8 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 
 export function GrantSourceDetailPage() {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("grants:write");
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
@@ -74,7 +77,7 @@ export function GrantSourceDetailPage() {
                     libraryKey: source.libraryKey,
                   });
                   toast.success("Grant source added", source.name);
-                }}
+                }} disabled={!canWrite}
               >
                 <Plus size={12} /> Add source
               </button>

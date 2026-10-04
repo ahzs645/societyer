@@ -1,3 +1,4 @@
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -26,6 +27,7 @@ import {
 import type { Id } from "../../convex/_generated/dataModel";
 
 export function ReceiptsPage() {
+  const { canWrite, canExport } = useFinancePermissions();
   const society = useSociety();
   const items = useQuery(api.receipts.list, society ? { societyId: society._id } : "skip");
   const issue = useMutation(api.receipts.issue);
@@ -106,7 +108,7 @@ export function ReceiptsPage() {
         iconColor="pink"
         subtitle={society.isCharity ? "CRA-compliant official donation receipts with serial numbering." : "Your society isn't flagged as a registered charity. Receipts are for reference only and won't be tax-deductible."}
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canWrite}>
             <Plus size={12} /> Issue receipt
           </button>
         }
@@ -145,7 +147,7 @@ export function ReceiptsPage() {
             }}
             renderRowActions={(r) => (
               <>
-                <button className="btn btn--ghost btn--sm" onClick={() => exportReceipt(r)}>
+                <button className="btn btn--ghost btn--sm" onClick={() => exportReceipt(r)} disabled={!canExport}>
                   <FileDown size={12} /> Export
                 </button>
                 {!r.voidedAtISO && (
@@ -162,7 +164,7 @@ export function ReceiptsPage() {
                       if (!reason) return;
                       await voidR({ id: r._id, reason });
                       toast.success("Receipt voided");
-                    }}
+                    }} disabled={!canWrite}
                   >
                     Void
                   </button>
@@ -177,7 +179,7 @@ export function ReceiptsPage() {
         open={open}
         onClose={() => setOpen(false)}
         title="Issue donation receipt"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save}>Issue</button></>}
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite}>Issue</button></>}
       >
         {form && (
           <div>

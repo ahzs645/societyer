@@ -1,6 +1,7 @@
 import { localDataClient, reseedLocalData } from "./localDataClient";
 import { getStoredSocietyId, setStoredSocietyId } from "../hooks/useSociety";
 import { setStoredUserId } from "../hooks/useCurrentUser";
+import { verifyFixtureFormation } from "../../scripts/helpers/verifiedFormation";
 
 type CorporationMvpFixture = {
   societyId: string;
@@ -65,6 +66,11 @@ async function setupCorporationMvp(): Promise<CorporationMvpFixture> {
     officialEmail: "records@northstar.example",
   }) as any;
 
+  // Planned dates do not activate statutory duties. This opt-in browser fixture
+  // records explicitly synthetic, owned file evidence through the same upload
+  // and certificate-verification mutations used by the native fixtures.
+  await verifyFixtureFormation(localDataClient, created.societyId, "2025-02-10");
+
   const directorId = await localDataClient.mutation("legalOperations:upsertRoleHolder", {
     societyId: created.societyId,
     roleType: "director",
@@ -120,6 +126,8 @@ async function setupCorporationMvp(): Promise<CorporationMvpFixture> {
     homeJurisdiction: "CA-FED-CBCA",
     registrationNumber: "ON-BROWSER-001",
     registrationDate: "2026-01-05",
+    activityCommencementDate: "2026-01-05",
+    corporationClass: "federal_corporation",
     annualReturnDueDate: "2026-06-30",
     registryPortalKey: "ontario_business_registry",
     status: "active",

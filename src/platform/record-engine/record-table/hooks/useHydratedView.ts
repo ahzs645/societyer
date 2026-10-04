@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { hydrateObjectMetadata, hydrateHydratedView } from "../../types";
 import type { HydratedView, ObjectMetadata } from "../../types";
+import { purgeLegacyMetadataCache } from "./legacyMetadataCache";
+import { useCurrentUserId } from "@/hooks/useCurrentUser";
 
 /**
  * Loads the object metadata + views + active-view columns for a single
@@ -11,61 +13,20 @@ import type { HydratedView, ObjectMetadata } from "../../types";
  *
  *   1. A single denormalized Convex query returns everything in one
  *      round-trip (no sequential `skip` chain).
- *   2. localStorage hydrates the table synchronously on mount so 2nd+
- *      visits paint instantly. Convex reactivity then overwrites the
- *      cache if anything changed server-side.
+ *   2. The current Convex/portable client supplies authorized warm snapshots.
+ *      A persisted browser snapshot cannot establish a personal view's ACL.
  *   3. `{ object: null }` is a *resolved* state — consumers show a
  *      "metadata not seeded" empty state instead of spinning forever.
  *
- * Cache keys are scoped by societyId + nameSingular + optional viewId
- * so switching societies or views doesn't leak stale data.
+ * Until the current query supplies a result, keep metadata unavailable rather
+ * than reusing a prior actor/session/workspace's personal filters or view names.
  */
-
-const CACHE_NAMESPACE = "societyer.record-table.v1";
-const CACHE_VERSION = 1;
 
 type RawSetup = {
   object: any | null;
   views: { _id: string; name: string; position: number; isSystem: boolean }[];
   activeView: { view: any; columns: { viewField: any; field: any }[] } | null;
 };
-
-type CachedEntry = { version: number; cachedAt: number; setup: RawSetup };
-
-function storageKey(
-  societyId: string,
-  nameSingular: string,
-  viewId?: string,
-): string {
-  return `${CACHE_NAMESPACE}.${societyId}.${nameSingular}${viewId ? `.${viewId}` : ""}`;
-}
-
-function readCached(key: string): RawSetup | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as CachedEntry;
-    if (parsed?.version !== CACHE_VERSION) return null;
-    return parsed.setup ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function writeCached(key: string, setup: RawSetup): void {
-  if (typeof window === "undefined") return;
-  try {
-    const entry: CachedEntry = {
-      version: CACHE_VERSION,
-      cachedAt: Date.now(),
-      setup,
-    };
-    window.localStorage.setItem(key, JSON.stringify(entry));
-  } catch {
-    // Quota exceeded / SSR / privacy mode — fall through silently.
-  }
-}
 
 export function useObjectRecordTableData({
   societyId,
@@ -81,22 +42,17 @@ export function useObjectRecordTableData({
   views: { _id: string; name: string; position: number; isSystem: boolean }[];
   loading: boolean;
 } {
-  const cacheKey = useMemo(
-    () =>
-      societyId ? storageKey(societyId, nameSingular, pinnedViewId) : null,
-    [societyId, nameSingular, pinnedViewId],
-  );
-
-  // Synchronous read on first render — the table paints from cache
-  // before Convex responds on warm mounts.
-  const [cached, setCached] = useState<RawSetup | null>(() =>
-    cacheKey ? readCached(cacheKey) : null,
-  );
-
-  // Swap cache when the key changes (e.g., switching societies or views).
+  const actorId = useCurrentUserId();
   useEffect(() => {
-    setCached(cacheKey ? readCached(cacheKey) : null);
-  }, [cacheKey]);
+    purgeLegacyMetadataCache();
+    return purgeLegacyMetadataCache;
+  }, [actorId]);
+  // A page can keep its selected personal view while the local operator changes
+  // actor. A pin belongs to the actor who selected it; a new selection records
+  // its new actor immediately, without exposing the earlier pin for one render.
+  const pin = useRef({ actorId, viewId: pinnedViewId });
+  if (pin.current.viewId !== pinnedViewId) pin.current = { actorId, viewId: pinnedViewId };
+  const effectiveViewId = pin.current.actorId === actorId ? pinnedViewId : undefined;
 
   const fresh = useQuery(
     api.objectMetadata.getFullTableSetup,
@@ -104,22 +60,12 @@ export function useObjectRecordTableData({
       ? {
           societyId,
           nameSingular,
-          ...(pinnedViewId ? { viewId: pinnedViewId } : {}),
+          ...(effectiveViewId ? { viewId: effectiveViewId } : {}),
         }
       : "skip",
   );
 
-  // Persist every fresh response so the next visit is instant.
-  useEffect(() => {
-    if (fresh !== undefined && cacheKey) {
-      writeCached(cacheKey, fresh as RawSetup);
-      setCached(fresh as RawSetup);
-    }
-  }, [fresh, cacheKey]);
-
-  // Prefer fresh data, fall back to cache until it arrives.
-  const setup: RawSetup | null =
-    (fresh as RawSetup | undefined) ?? cached ?? null;
+  const setup: RawSetup | null = (fresh as RawSetup | undefined) ?? null;
 
   const objectMetadata = useMemo<ObjectMetadata | null>(
     () => (setup?.object ? hydrateObjectMetadata(setup.object) : null),
@@ -136,7 +82,7 @@ export function useObjectRecordTableData({
   // updates then stream in reactively. When Convex has resolved with a
   // null-object (seeder not run), `setup.object === null` and loading
   // is false, so the caller can show the "metadata not seeded" state.
-  const loading = societyId !== undefined && fresh === undefined && cached === null;
+  const loading = societyId !== undefined && fresh === undefined;
 
   return { objectMetadata, hydratedView, views, loading };
 }

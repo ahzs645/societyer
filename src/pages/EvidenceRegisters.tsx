@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
+import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, RelatedDocumentViews, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
@@ -14,6 +15,8 @@ import { formatDate, money } from "../lib/format";
 
 export function GovernanceRegistersPage() {
   const { society, data, people } = useRegisters();
+  const permissions = usePermissions();
+  const canEdit = permissions.loaded && permissions.can("documents:write");
   const promoteBoardRole = useMutation(api.evidenceRegisters.promoteBoardRoleToDirector);
   const createManual = useMutation(api.evidenceRegisters.createManual);
   const confirm = useConfirm();
@@ -23,7 +26,7 @@ export function GovernanceRegistersPage() {
   if (society === null) return <SeedPrompt />;
 
   const saveManual = async () => {
-    if (!addForm || !society) return;
+    if (!addForm || !society || !canEdit) return;
     if (!String(addForm.personName ?? "").trim()) {
       toast.warn("Person name is required");
       return;
@@ -39,6 +42,7 @@ export function GovernanceRegistersPage() {
   const signing = data?.signingAuthorities ?? [];
 
   const promoteRole = async (row: any) => {
+    if (!canEdit) return;
     const ok = await confirm({
       title: "Promote to director register?",
       message: `${row.personName} will be added to the current directors register using this source-backed role assignment.`,
@@ -63,7 +67,7 @@ export function GovernanceRegistersPage() {
         subtitle="Source-backed director/officer timeline, board role changes, and signing authority records."
         actions={
           <>
-            <button className="btn-action" onClick={() => setAddForm({ kind: "boardRoleAssignment", personName: "", roleTitle: "Director", status: "Observed", startDate: new Date().toISOString().slice(0, 10), notes: "" })}>
+            <button className="btn-action" disabled={!canEdit} onClick={() => setAddForm({ kind: "boardRoleAssignment", personName: "", roleTitle: "Director", status: "Observed", startDate: new Date().toISOString().slice(0, 10), notes: "" })}>
               <Plus size={12} /> Add record
             </button>
             <Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>
@@ -75,7 +79,7 @@ export function GovernanceRegistersPage() {
         open={Boolean(addForm)}
         onClose={() => setAddForm(null)}
         title="Add register record"
-        footer={<><button className="btn" onClick={() => setAddForm(null)}>Cancel</button><button className="btn btn--accent" onClick={saveManual}>Add record</button></>}
+        footer={<><button className="btn" onClick={() => setAddForm(null)}>Cancel</button><button className="btn btn--accent" disabled={!canEdit} onClick={saveManual}>Add record</button></>}
       >
         {addForm && (
           <div>
@@ -142,7 +146,7 @@ export function GovernanceRegistersPage() {
           row.roleGroup ?? "-",
           formatDate(row.startDate),
           <Status key="s" value={row.status} />,
-          <PromoteAction key="a" row={row} onPromote={() => promoteRole(row)} />,
+          <PromoteAction key="a" row={row} disabled={!canEdit} onPromote={() => promoteRole(row)} />,
         ]}
       />
       <RegisterTable
@@ -435,11 +439,11 @@ function Status({ value }: { value?: string }) {
   return <Badge tone={tone}>{value ?? "NeedsReview"}</Badge>;
 }
 
-function PromoteAction({ row, onPromote }: { row: any; onPromote: () => void }) {
+function PromoteAction({ row, onPromote, disabled }: { row: any; onPromote: () => void; disabled?: boolean }) {
   if (row.directorId) return <Badge tone="success">Director</Badge>;
   if (row.status === "Rejected") return <span className="muted">Rejected</span>;
   return (
-    <button className="btn btn--ghost btn--sm" onClick={onPromote}>
+    <button className="btn btn--ghost btn--sm" disabled={disabled} onClick={onPromote}>
       Promote
     </button>
   );

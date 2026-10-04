@@ -13,6 +13,7 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { canReadView, requireViewAccess } from "./views";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 
 function firstStableMatch<T extends { _id: unknown }>(rows: T[]): T | null {
@@ -92,7 +93,7 @@ export async function getFullTableSetupPortable(
   ctx: PortableQueryCtx,
   { societyId, nameSingular, viewId }: { societyId: string; nameSingular: string; viewId?: string },
 ) {
-  await requireSocietyMembership(ctx, societyId);
+  const actor = await requireSocietyMembership(ctx, societyId);
   const matchingObjects = await ctx.db
     .query("objectMetadata")
     .withIndex("by_society_name", (q) =>
@@ -104,7 +105,7 @@ export async function getFullTableSetupPortable(
     return { object: null, views: [], activeView: null };
   }
 
-  const [fields, views] = await Promise.all([
+  const [fields, candidateViews] = await Promise.all([
     ctx.db
       .query("fieldMetadata")
       .withIndex("by_object", (q) => q.eq("objectMetadataId", object._id))
@@ -116,6 +117,7 @@ export async function getFullTableSetupPortable(
       )
       .collect(),
   ]);
+  const views = candidateViews.filter(view => view.societyId === societyId && canReadView(view, actor._id));
   fields.sort((a, b) => a.position - b.position);
   views.sort((a, b) => a.position - b.position);
 
@@ -127,7 +129,8 @@ export async function getFullTableSetupPortable(
   } | null = null;
 
   if (targetViewId) {
-    const ownedView = await getOwned(ctx, "views", targetViewId, societyId);
+    const ownedView = await requireViewAccess(ctx, targetViewId);
+    if (ownedView.societyId !== societyId) throw new Error("views not found.");
     if (ownedView.objectMetadataId !== object._id) throw new Error("views not found.");
     const view = views.find((v: any) => v._id === targetViewId);
     if (view) {

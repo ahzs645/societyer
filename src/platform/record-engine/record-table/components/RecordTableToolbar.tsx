@@ -1,3 +1,4 @@
+import { ViewportPopover } from "@/components/ViewportPopover";
 import { createElement, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import {
@@ -24,6 +25,7 @@ import { resolveRouteIdentity } from "../../../../lib/routeIdentity";
 import { useToast } from "../../../../components/Toast";
 import { RecordTableSortPopover } from "./RecordTableSortPopover";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
+import { usePermissions } from "../../../../hooks/usePermissions";
 
 /**
  * Compact search bar + column toggle + view switcher. Sits above the table
@@ -86,6 +88,7 @@ export function RecordTableToolbar({
   const isDirty = useRecordTableIsDirty();
   const { objectMetadata } = useRecordTableContextOrThrow();
   const toast = useToast();
+  const canPersistView = usePermissions().can("settings:write");
 
   // The section icon comes from the route registry so a table's icon always
   // matches its page header and sidebar nav (single source of truth, same as
@@ -107,6 +110,7 @@ export function RecordTableToolbar({
   const columnMenuRef = useRef<HTMLDivElement>(null);
   const viewMenuRef = useRef<HTMLDivElement>(null);
   const viewOptionsRef = useRef<HTMLDivElement>(null);
+  const sortButtonRef = useRef<HTMLButtonElement>(null);
 
   // Click-outside for dropdowns.
   useEffect(() => {
@@ -165,7 +169,7 @@ export function RecordTableToolbar({
               <ChevronDown size={12} />
             </button>
             {viewMenuOpen && (
-              <div className="record-table__menu">
+              <ViewportPopover open onClose={() => setViewMenuOpen(false)} anchorRef={viewMenuRef} label="Saved views" className="record-table__menu">
                 {views.map((v) => (
                   <button
                     key={v._id}
@@ -183,7 +187,7 @@ export function RecordTableToolbar({
                     {v.isSystem && <span className="record-table__menu-badge">system</span>}
                   </button>
                 ))}
-              </div>
+              </ViewportPopover>
             )}
           </div>
         ) : (
@@ -223,7 +227,7 @@ export function RecordTableToolbar({
             <button
               type="button"
               className="record-table__toolbar-button record-table__toolbar-button--dirty"
-              disabled={isSaving}
+              disabled={isSaving || !canPersistView}
               onClick={async () => {
                 try {
                   setIsSaving(true);
@@ -259,7 +263,7 @@ export function RecordTableToolbar({
           <button
             type="button"
             className="record-table__toolbar-button"
-            disabled={isSaving}
+            disabled={isSaving || !canPersistView}
             onClick={async () => {
               const name = window.prompt("Name this view");
               if (!name?.trim()) return;
@@ -334,7 +338,7 @@ export function RecordTableToolbar({
             <span>Options</span>
           </button>
           {viewOptionsOpen && (
-            <div className="record-table__menu record-table__menu--right record-table__menu--wide">
+            <ViewportPopover open onClose={() => setViewOptionsOpen(false)} anchorRef={viewOptionsRef} label="View options" className="record-table__menu record-table__menu--right record-table__menu--wide">
               {(viewType === "kanban" || viewType === "board") && (
                 <div className="record-table__menu-section">
                   <label className="record-table__menu-label" htmlFor="record-table-kanban-field">
@@ -380,7 +384,7 @@ export function RecordTableToolbar({
                   </select>
                 </div>
               )}
-            </div>
+            </ViewportPopover>
           )}
         </div>
         )}
@@ -405,12 +409,15 @@ export function RecordTableToolbar({
             "record-table__toolbar-button" +
             (sorts.length > 0 ? " record-table__toolbar-button--active" : "")
           }
+          ref={sortButtonRef}
+          aria-haspopup="dialog"
+          aria-expanded={sortMenuOpen}
           onClick={() => setSortMenuOpen((x) => !x)}
         >
           <ArrowDownUp size={12} />
           <span>Sort{sorts.length > 0 ? ` · ${sorts.length}` : ""}</span>
         </button>
-        <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} />
+        <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
 
         <div className="record-table__view-switcher" ref={columnMenuRef}>
           <button
@@ -422,7 +429,7 @@ export function RecordTableToolbar({
             <span>Options</span>
           </button>
           {columnMenuOpen && (
-            <div className="record-table__menu record-table__menu--right record-table__menu--wide">
+            <ViewportPopover open onClose={() => setColumnMenuOpen(false)} anchorRef={columnMenuRef} label="Table options" className="record-table__menu record-table__menu--right record-table__menu--wide">
               <div className="record-table__menu-section">
                 <span className="record-table__menu-label">Density</span>
                 <div className="record-table__density-options" role="radiogroup" aria-label="Row density">
@@ -462,7 +469,7 @@ export function RecordTableToolbar({
                 </label>
               ))}
               </div>
-            </div>
+            </ViewportPopover>
           )}
         </div>
 

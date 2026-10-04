@@ -1,3 +1,4 @@
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -269,6 +270,7 @@ function eventDraftFromRow(event: any, source: any) {
 }
 
 export function TreasurerPage() {
+  const { canWrite } = useFinancePermissions();
   const society = useSociety();
   const { from: defaultFrom, to: defaultTo, fy: defaultFy } = useMemo(
     () => getFiscalYearBounds(society?.fiscalYearEnd),
@@ -428,14 +430,14 @@ export function TreasurerPage() {
           <>
             <MoreActionsMenu
               items={[
-                { id: "import-levy", label: "Import levy", icon: <Upload size={14} />, onSelect: () => setLevyImportOpen(true) },
-                { id: "new-expense-claim", label: "New expense claim", icon: <Receipt size={14} />, onSelect: () => setExpenseDraft(newExpenseDraft()) },
+                { disabled: !canWrite, id: "import-levy", label: "Import levy", icon: <Upload size={14} />, onSelect: () => setLevyImportOpen(true) },
+                { disabled: !canWrite, id: "new-expense-claim", label: "New expense claim", icon: <Receipt size={14} />, onSelect: () => setExpenseDraft(newExpenseDraft()) },
               ]}
             />
-            <button className="btn-action" onClick={openQuickEntry}>
+            <button className="btn-action" onClick={openQuickEntry} disabled={!canWrite}>
               <DollarSign size={12} /> Quick entry
             </button>
-            <button className="btn-action btn-action--primary" onClick={() => setSourceDraft(newSourceDraft())}>
+            <button className="btn-action btn-action--primary" onClick={() => setSourceDraft(newSourceDraft())} disabled={!canWrite}>
               <PlusCircle size={12} /> New funding source
             </button>
           </>
@@ -511,7 +513,7 @@ export function TreasurerPage() {
               Reimbursement claims with receipt evidence and approval status.
             </span>
           </div>
-          <button className="btn btn--ghost btn--sm" onClick={() => setExpenseDraft(newExpenseDraft())}>
+          <button className="btn btn--ghost btn--sm" onClick={() => setExpenseDraft(newExpenseDraft())} disabled={!canWrite}>
             <Receipt size={12} /> New claim
           </button>
         </div>
@@ -571,18 +573,18 @@ export function TreasurerPage() {
                   </td>
                   <td>
                     <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                      <button className="btn btn--ghost btn--sm" onClick={() => setExpenseDraft(expenseDraftFromRow(report))}>Edit</button>
+                      <button className="btn btn--ghost btn--sm" onClick={() => setExpenseDraft(expenseDraftFromRow(report))} disabled={!canWrite}>Edit</button>
                       {report.status === "Draft" && (
-                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Submitted" })}>Submit</button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Submitted" })} disabled={!canWrite}>Submit</button>
                       )}
                       {report.status === "Submitted" && (
-                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Approved" })}>Approve</button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Approved" })} disabled={!canWrite}>Approve</button>
                       )}
                       {report.status === "Approved" && (
                         (financialAccounts ?? []).length > 0 ? (
-                          <button className="btn btn--ghost btn--sm" onClick={() => setPayingReport({ report, expenseAccountId: "", bankAccountId: "" })}>Mark paid</button>
+                          <button className="btn btn--ghost btn--sm" onClick={() => setPayingReport({ report, expenseAccountId: "", bankAccountId: "" })} disabled={!canWrite}>Mark paid</button>
                         ) : (
-                          <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Paid" })}>Mark paid</button>
+                          <button className="btn btn--ghost btn--sm" onClick={() => setExpenseStatus({ id: report._id, status: "Paid" })} disabled={!canWrite}>Mark paid</button>
                         )
                       )}
                       <button
@@ -591,7 +593,7 @@ export function TreasurerPage() {
                         onClick={async () => {
                           await removeExpenseReport({ id: report._id });
                           toast.success("Expense report removed");
-                        }}
+                        }} disabled={!canWrite}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -670,7 +672,7 @@ export function TreasurerPage() {
               <h2 className="card__title">Source register</h2>
               <span className="card__subtitle">{(fundingSources ?? []).length} tracked sources</span>
             </div>
-            <button className="btn btn--ghost btn--sm" onClick={() => setSourceDraft(newSourceDraft())}>
+            <button className="btn btn--ghost btn--sm" onClick={() => setSourceDraft(newSourceDraft())} disabled={!canWrite}>
               <PlusCircle size={12} /> Add
             </button>
           </div>
@@ -704,15 +706,15 @@ export function TreasurerPage() {
                     <td className="mono" style={{ textAlign: "right" }}>{source.receivedTotalCents ? cents(source.receivedTotalCents) : "—"}</td>
                     <td>
                       <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                        <button className="btn btn--ghost btn--sm" onClick={() => setEventDraft(newEventDraft(source))}>Event</button>
-                        <button className="btn btn--ghost btn--sm" onClick={() => setSourceDraft(sourceDraftFromRow(source))}>Edit</button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => setEventDraft(newEventDraft(source))} disabled={!canWrite}>Event</button>
+                        <button className="btn btn--ghost btn--sm" onClick={() => setSourceDraft(sourceDraftFromRow(source))} disabled={!canWrite}>Edit</button>
                         <button
                           className="btn btn--ghost btn--sm btn--icon"
                           aria-label={`Delete funding source ${source.name}`}
                           onClick={async () => {
                             await removeFundingSource({ id: source._id });
                             toast.success("Funding source removed");
-                          }}
+                          }} disabled={!canWrite}
                         >
                           <Trash2 size={12} />
                         </button>
@@ -771,14 +773,14 @@ export function TreasurerPage() {
                 <td>{event.attributionStatus ? <Badge tone="info">{event.attributionStatus}</Badge> : <span className="muted">—</span>}</td>
                 <td>
                   <div className="row" style={{ justifyContent: "flex-end", gap: 4 }}>
-                    <button className="btn btn--ghost btn--sm" onClick={() => setEventDraft(eventDraftFromRow(event, event.source))}>Edit</button>
+                    <button className="btn btn--ghost btn--sm" onClick={() => setEventDraft(eventDraftFromRow(event, event.source))} disabled={!canWrite}>Edit</button>
                     <button
                       className="btn btn--ghost btn--sm btn--icon"
                       aria-label={`Delete funding event ${event.label}`}
                       onClick={async () => {
                         await removeFundingEvent({ id: event._id });
                         toast.success("Funding event removed");
-                      }}
+                      }} disabled={!canWrite}
                     >
                       <Trash2 size={12} />
                     </button>
@@ -1304,7 +1306,7 @@ export function TreasurerPage() {
         footer={
           <>
             <button className="btn" onClick={() => setQuickEntryDraft(null)}>Cancel</button>
-            <button className="btn btn--accent" disabled={quickEntryBusy} onClick={saveQuickEntry}>Record</button>
+            <button className="btn btn--accent" disabled={!canWrite || (quickEntryBusy)} onClick={saveQuickEntry}>Record</button>
           </>
         }
       >

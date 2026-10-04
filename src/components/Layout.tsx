@@ -91,7 +91,9 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { setStoredUserId } from "../hooks/useCurrentUser";
 import { setStoredSocietyId, useSocietySelection } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
+import { getDialogFocusables } from "../lib/useDialogFocus";
 import { UserPicker } from "./UserPicker";
+import { RouteAccessGate } from "./RouteAccessGate";
 import { InspectorHost, InspectorProvider } from "./InspectorPanel";
 import { MenuRow, MenuSectionLabel, Pill, TintedIconTile } from "./ui";
 import { isModuleEnabled, type ModuleKey } from "../lib/modules";
@@ -460,15 +462,29 @@ export function Layout() {
     const main = mainRef.current as (HTMLDivElement & { inert?: boolean }) | null;
     main?.setAttribute("aria-hidden", "true");
     if (main) main.inert = true;
-    setTimeout(() => {
+    const focusTimer = window.setTimeout(() => {
       sidebarRef.current?.querySelector<HTMLElement>("button, a")?.focus();
     }, 0);
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMobileSidebarOpen(false);
+      if (event.defaultPrevented) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('[role="dialog"],[role="listbox"]') && !sidebarRef.current?.contains(target)) return;
+      if (event.key === "Escape") { event.preventDefault(); setMobileSidebarOpen(false); }
+      if (event.key === "Tab") {
+        const focusable = getDialogFocusables(sidebarRef.current);
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && (document.activeElement === first || !sidebarRef.current?.contains(document.activeElement))) {
+          event.preventDefault(); last?.focus({ preventScroll: true });
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault(); first?.focus({ preventScroll: true });
+        }
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+      window.clearTimeout(focusTimer);
       main?.removeAttribute("aria-hidden");
       if (main) main.inert = false;
       previousFocus?.focus?.();
@@ -1005,6 +1021,8 @@ export function Layout() {
         <aside
           className="sidebar"
           ref={sidebarRef}
+          role={isMobileNav && mobileSidebarOpen ? "dialog" : undefined}
+          aria-modal={isMobileNav && mobileSidebarOpen || undefined}
           aria-label={t("sidebar.navigation")}
           onTouchStart={isMobileNav ? (e) => {
             const touch = e.touches[0];
@@ -1686,7 +1704,7 @@ export function Layout() {
               <div className="workbench__body">
                 <div className="workbench__content" ref={workbenchContentRef}>
                   <Suspense fallback={<WorkbenchPageLoader />}>
-                    <Outlet />
+                    <RouteAccessGate><Outlet /></RouteAccessGate>
                   </Suspense>
                 </div>
                 <InspectorHost onOpenChange={setMobileInspectorOpen} />

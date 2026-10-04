@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Local-first desktop and web tools for society records, documents, and operations.",
   "author": "Societyer",
-  "copyright": "Copyright © Societyer",
+  "copyright": "Copyright \u00a9 Societyer",
   "type": "module",
   "main": "dist-electron/electron/main.js",
   "scripts": {
@@ -168,7 +168,19 @@
     "test:pathway-pipeline": "tsx scripts/check-pathway-pipeline.ts",
     "test:pathway-submissions": "tsx scripts/check-pathway-submissions.ts",
     "test:pathway-framework": "npm run test:pathway-registry && npm run test:pathway-pipeline && npm run test:pathway-submissions",
-    "test:pathway-ui": "playwright test -c playwright.pathway.config.ts"
+    "test:pathway-ui": "playwright test -c playwright.pathway.config.ts",
+    "test:interface-route-coverage": "tsx scripts/check-interface-route-coverage.ts",
+    "test:app-route-hrefs": "tsx scripts/check-app-route-hrefs.ts",
+    "test:portable-query-cache": "tsx scripts/check-portable-query-cache.ts",
+    "test:api-key-mint": "tsx scripts/check-api-key-mint.ts",
+    "test:personal-view-access": "tsx scripts/check-personal-view-access.ts",
+    "test:webhook-secret-route": "tsx scripts/check-webhook-secret-route.ts",
+    "test:financial-connection-state": "tsx scripts/check-financial-connection-state.ts",
+    "test:interface-checks": "npm run test:interface-route-coverage && npm run test:app-route-hrefs && npm run test:portable-query-cache && npm run test:api-key-mint && npm run test:personal-view-access && npm run test:webhook-secret-route && npm run test:financial-connection-state && npm run test:record-metadata-permissions && npm run test:sensitive-history-permissions",
+    "test:interface": "npm run test:interface-checks && playwright test -c playwright.interface.config.ts",
+    "test:interface-routes": "npm run test:interface-route-coverage && playwright test tests/interface-routes.spec.ts -c playwright.interface.config.ts",
+    "test:record-metadata-permissions": "tsx scripts/check-record-metadata-permissions.ts",
+    "test:sensitive-history-permissions": "tsx scripts/check-sensitive-history-permissions.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

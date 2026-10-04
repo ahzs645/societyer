@@ -752,6 +752,8 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
     "/webhook-subscriptions",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
+      const subscriptionId = stringValue(req.body?.id);
+      if (subscriptionId) await assertTenantId(client, req, subscriptionId, "Webhook subscription");
       const clientId = stringValue(req.body?.clientId);
       const pluginInstallationId = stringValue(req.body?.pluginInstallationId);
       if (clientId) await assertTenantId(client, req, clientId, "API client");
@@ -771,6 +773,7 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
       const rawSecret = createWebhookSecret();
       const secretEncrypted = encryptSecret(rawSecret);
       const id = await convexCall(client, mutation("apiPlatform.upsertWebhookSubscription"), {
+        id: subscriptionId,
         societyId: societyIdFrom(req, req.actor!),
         clientId,
         pluginInstallationId,
@@ -782,7 +785,7 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
         createdByUserId: req.actor?.userId,
         serviceToken: apiPlatformServiceToken(),
       });
-      res.status(201).json(singleResponse({ id, signingSecret: rawSecret }));
+      res.status(subscriptionId ? 200 : 201).json(singleResponse({ id, signingSecret: rawSecret }));
     }),
   );
 

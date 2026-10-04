@@ -4,6 +4,7 @@ import { ChevronDown, Check, Search } from "lucide-react";
 import { MenuRow } from "./ui";
 import { Tag, type TagColor } from "./Tag";
 import { bottomSheetMediaQuery } from "../lib/breakpoints";
+import { getDialogFocusables } from "../lib/useDialogFocus";
 import { useVisualViewportBottomInset } from "../lib/useVisualViewportBottomInset";
 
 export type SelectOption<T extends string = string> = {
@@ -206,6 +207,7 @@ export function Select<T extends string>({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
+        e.stopPropagation();
         setOpen(false);
         triggerRef.current?.focus({ preventScroll: true });
       }
@@ -229,8 +231,9 @@ export function Select<T extends string>({
     }
     const currentIdx = visibleItems.findIndex((o) => o.value === value);
     setActiveIdx(currentIdx >= 0 ? currentIdx : 0);
-    if (!renderedSearchable) setTimeout(() => menuRef.current?.focus({ preventScroll: true }), 0);
-  }, [open, value, visibleItems, renderedSearchable]);
+    const timer = (!renderedSearchable || isBottomSheet) ? window.setTimeout(() => menuRef.current?.focus({ preventScroll: true }), 0) : undefined;
+    return () => window.clearTimeout(timer);
+  }, [open, value, visibleItems, renderedSearchable, isBottomSheet]);
 
   // Keep the keyboard-focused option visible as the user moves through the menu.
   useEffect(() => {
@@ -264,7 +267,22 @@ export function Select<T extends string>({
   };
 
   const onMenuKey = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown") {
+    if (e.defaultPrevented) return;
+    if (["ArrowDown", "ArrowUp", "Enter", "Home", "End", "Escape", "Tab"].includes(e.key)) e.stopPropagation();
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus({ preventScroll: true });
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      if (!triggerRef.current) { setOpen(false); return; }
+      const root = triggerRef.current.closest<HTMLElement>('[role="dialog"]') ?? document.body;
+      const focusable = getDialogFocusables(root);
+      const index = focusable.indexOf(triggerRef.current);
+      const next = focusable[(index + (e.shiftKey ? -1 : 1) + focusable.length) % focusable.length];
+      setOpen(false);
+      next?.focus({ preventScroll: true });
+    } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIdx((i) => Math.min(i + 1, visibleItems.length - 1));
     } else if (e.key === "ArrowUp") {

@@ -1,3 +1,4 @@
+import { usePermissions } from "@/hooks/usePermissions";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -93,6 +94,8 @@ const KIND_LABELS: Record<string, string> = {
 };
 
 export function ImportSessionsPage() {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("settings:write");
   const society = useSociety();
   const toast = useToast();
   const [searchParams] = useSearchParams();
@@ -402,10 +405,10 @@ export function ImportSessionsPage() {
         subtitle="Stage converted Paperless records, review each item, then apply approved records into app modules."
         actions={
           <>
-          <button className="btn-action" onClick={() => setCsvOpen(true)}>
+          <button className="btn-action" onClick={() => setCsvOpen(true)} disabled={!canWrite}>
             <Upload size={12} /> Import members CSV
           </button>
-          <button className="btn-action btn-action--primary" onClick={() => setCreateOpen(true)}>
+          <button className="btn-action btn-action--primary" onClick={() => setCreateOpen(true)} disabled={!canWrite}>
             <Plus size={12} /> New session
           </button>
           </>
@@ -464,7 +467,7 @@ export function ImportSessionsPage() {
               <h2 className="card__title">Paperless meeting scan</h2>
               <p className="card__subtitle">Creates a review session from live Paperless meeting-minute documents.</p>
             </div>
-            <button className="btn-action btn-action--primary" disabled={paperlessBusy} onClick={runPaperlessMeetingScan}>
+            <button className="btn-action btn-action--primary" disabled={!(canWrite && loaded && can("documents:write")) || (paperlessBusy)} onClick={runPaperlessMeetingScan}>
               <FileText size={12} /> {paperlessBusy ? "Scanning..." : "Scan minutes"}
             </button>
           </div>
@@ -484,7 +487,7 @@ export function ImportSessionsPage() {
               <h2 className="card__title">Paperless expanded discovery</h2>
               <p className="card__subtitle">Creates a review session across app sections with source evidence, risk flags, and target modules.</p>
             </div>
-            <button className="btn-action btn-action--primary" disabled={discoveryBusy} onClick={runPaperlessDiscoveryScan}>
+            <button className="btn-action btn-action--primary" disabled={!(canWrite && loaded && can("documents:write")) || (discoveryBusy)} onClick={runPaperlessDiscoveryScan}>
               <Archive size={12} /> {discoveryBusy ? "Scanning..." : "Scan sections"}
             </button>
           </div>
@@ -504,7 +507,7 @@ export function ImportSessionsPage() {
               <h2 className="card__title">Paperless transposition</h2>
               <p className="card__subtitle">Reads Paperless OCR into section-native review records for filings, deadlines, publications, insurance, grants, records, HR, volunteers, and privacy training.</p>
             </div>
-            <button className="btn-action btn-action--primary" disabled={transposeBusy} onClick={runPaperlessTransposeScan}>
+            <button className="btn-action btn-action--primary" disabled={!(canWrite && loaded && can("documents:write")) || (transposeBusy)} onClick={runPaperlessTransposeScan}>
               <Archive size={12} /> {transposeBusy ? "Transposing..." : "Transpose records"}
             </button>
           </div>
@@ -588,22 +591,22 @@ export function ImportSessionsPage() {
             </div>
             {session && (
               <div className="import-review-actions">
-                <button className="btn-action" onClick={runOrgHistoryApply}>
+                <button className="btn-action" onClick={runOrgHistoryApply} disabled={!canWrite}>
                   <History size={12} /> Apply history
                 </button>
-                <button className="btn-action" onClick={runMeetingApply}>
+                <button className="btn-action" onClick={runMeetingApply} disabled={!canWrite}>
                   <FileText size={12} /> Create minutes
                 </button>
-                <button className="btn-action" onClick={runMeetingBackfill}>
+                <button className="btn-action" onClick={runMeetingBackfill} disabled={!canWrite}>
                   <History size={12} /> Refresh links
                 </button>
-                <button className="btn-action" onClick={runDocumentApply}>
+                <button className="btn-action" onClick={runDocumentApply} disabled={!canWrite}>
                   <FolderOpen size={12} /> Create docs
                 </button>
-                <button className="btn-action" onClick={runSectionApply}>
+                <button className="btn-action" onClick={runSectionApply} disabled={!canWrite}>
                   <Archive size={12} /> Apply sections
                 </button>
-                <button className="btn-action" onClick={deleteSession}>
+                <button className="btn-action" onClick={deleteSession} disabled={!canWrite}>
                   <Trash2 size={12} /> Delete
                 </button>
               </div>
@@ -653,10 +656,10 @@ export function ImportSessionsPage() {
                     placeholder="Search title, source, tag..."
                   />
                   <div className="import-review-bulk-actions">
-                    <button className="btn-action" onClick={() => bulkStatus("Approved")}>
+                    <button className="btn-action" onClick={() => bulkStatus("Approved")} disabled={!canWrite}>
                       <Check size={12} /> Approve visible
                     </button>
-                    <button className="btn-action" onClick={() => bulkStatus("Rejected")}>
+                    <button className="btn-action" onClick={() => bulkStatus("Rejected")} disabled={!canWrite}>
                       <X size={12} /> Reject visible
                     </button>
                   </div>
@@ -714,13 +717,13 @@ export function ImportSessionsPage() {
                         </td>
                         <td>
                           <div className="table__actions-inner" style={{ opacity: 1, visibility: "visible" }}>
-                            <button className="btn btn--ghost btn--icon" title="Approve" onClick={() => setRecordStatus(record, "Approved")}>
+                            <button className="btn btn--ghost btn--icon" title="Approve" onClick={() => setRecordStatus(record, "Approved")} disabled={!canWrite}>
                               <Check size={14} />
                             </button>
-                            <button className="btn btn--ghost btn--icon" title="Reject" onClick={() => setRecordStatus(record, "Rejected")}>
+                            <button className="btn btn--ghost btn--icon" title="Reject" onClick={() => setRecordStatus(record, "Rejected")} disabled={!canWrite}>
                               <X size={14} />
                             </button>
-                            <button className="btn btn--ghost btn--icon" title="Edit" onClick={() => setRecordForm(formFromRecord(record))}>
+                            <button className="btn btn--ghost btn--icon" title="Edit" onClick={() => setRecordForm(formFromRecord(record))} disabled={!canWrite}>
                               <Pencil size={14} />
                             </button>
                           </div>
@@ -748,7 +751,7 @@ export function ImportSessionsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setCreateOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={createFromJson}>
+            <button className="btn btn--accent" onClick={createFromJson} disabled={!canWrite}>
               <Upload size={14} /> Create session
             </button>
           </>
@@ -807,6 +810,8 @@ function RecordDrawer({
   onChange: (form: any) => void;
   onSave: () => void;
 }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("settings:write");
   return (
     <Drawer
       open={Boolean(form)}
@@ -815,7 +820,7 @@ function RecordDrawer({
       footer={
         <>
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn--accent" onClick={onSave}>Save review</button>
+          <button className="btn btn--accent" onClick={onSave} disabled={!canWrite}>Save review</button>
         </>
       }
     >
@@ -868,6 +873,8 @@ function InsuranceImportReviewPanel({
   onShow: () => void;
   onApproveReady: () => void;
 }) {
+  const { loaded, can } = usePermissions();
+  const canWrite = loaded && can("settings:write");
   const insurance = records.filter((record) => record.recordKind === "insurancePolicy");
   if (!insurance.length) return null;
   const ready = insurance.filter(isImportReadyInsuranceRecord);
@@ -889,7 +896,7 @@ function InsuranceImportReviewPanel({
           <button className="btn-action" type="button" onClick={onShow}>
             <ListChecks size={12} /> Show insurance records
           </button>
-          <button className="btn-action btn-action--primary" type="button" onClick={onApproveReady} disabled={!ready.length}>
+          <button className="btn-action btn-action--primary" type="button" onClick={onApproveReady} disabled={!canWrite || (!ready.length)}>
             <Check size={12} /> Approve import-ready insurance
           </button>
         </div>

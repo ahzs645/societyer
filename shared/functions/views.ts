@@ -8,25 +8,39 @@
  * runtime, and the convex-test oracle.
  */
 
-import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
+
+/** A personal view is private to its creator, including its filters and columns. */
+export function canReadView(view: PortableDoc, actorId: string): boolean {
+  if (view.visibility === "personal") return view.createdByUserId === actorId;
+  return view.isSystem === true || view.isShared === true || ["shared", "system"].includes(view.visibility) || view.createdByUserId === actorId;
+}
+
+export async function requireViewAccess(ctx: PortableQueryCtx, id: string) {
+  const view = await requireOwnedRow(ctx, "views", id);
+  const actorId = await principalUserId(ctx, String(view.societyId));
+  if (!actorId || !canReadView(view, actorId)) throw new Error("views not found.");
+  return view;
+}
 
 export async function listForObjectPortable(
   ctx: PortableQueryCtx,
   { objectMetadataId }: { objectMetadataId: string },
 ) {
-  await requireOwnedRow(ctx, "objectMetadata", objectMetadataId);
+  const object = await requireOwnedRow(ctx, "objectMetadata", objectMetadataId);
+  const actorId = await principalUserId(ctx, String(object.societyId));
   const rows = await ctx.db
     .query("views")
     .withIndex("by_object_position", (q) =>
       q.eq("objectMetadataId", objectMetadataId),
     )
     .collect();
-  return rows;
+  return rows.filter(row => row.societyId === object.societyId && actorId && canReadView(row, actorId));
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return requireOwnedRow(ctx, "views", id);
+  return requireViewAccess(ctx, id);
 }
 
 /**
@@ -34,7 +48,7 @@ export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string })
  * fieldMetadata joined in — the exact shape the RecordTable consumes.
  */
 export async function getHydratedPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
-  const view = await requireOwnedRow(ctx, "views", id);
+  const view = await requireViewAccess(ctx, id);
   const societyId = String(view.societyId);
   const viewFields = await ctx.db
     .query("viewFields")
@@ -43,7 +57,9 @@ export async function getHydratedPortable(ctx: PortableQueryCtx, { id }: { id: s
   viewFields.sort((a, b) => a.position - b.position);
   const fields = await Promise.all(
     viewFields.map(async (vf: Record<string, any>) => {
+      if (vf.societyId !== view.societyId) return null;
       const field = await getOwned(ctx, "fieldMetadata", vf.fieldMetadataId, societyId);
+      if (field.objectMetadataId !== view.objectMetadataId) return null;
       return { viewField: vf, field };
     }),
   );
@@ -167,7 +183,7 @@ export async function updatePortable(
     };
   },
 ) {
-  const authorizedRow = await requireOwnedRow(ctx, "views", id);
+  const authorizedRow = await requireViewAccess(ctx, id);
   const societyId = String(authorizedRow.societyId);
   if (patch.kanbanFieldMetadataId) {
     await getOwned(ctx, "fieldMetadata", patch.kanbanFieldMetadataId, societyId);
@@ -226,7 +242,7 @@ export async function listSharedForDataTablePortable(
     .withIndex("by_object_position", (q) => q.eq("objectMetadataId", object._id))
     .collect();
   return rows
-    .filter((row) => row.isShared || row.isSystem)
+    .filter((row) => row.visibility !== "personal" && (row.isShared || row.isSystem || ["shared", "system"].includes(row.visibility)))
     .sort((a, b) => a.position - b.position);
 }
 
@@ -293,7 +309,8 @@ export async function deleteSharedDataTableViewPortable(
   { societyId, id }: { societyId: string; id: string },
 ) {
   await requireSocietyMembership(ctx, societyId);
-  const view = await getOwned(ctx, "views", id, societyId);
+  const view = await requireViewAccess(ctx, id);
+  if (view.societyId !== societyId) throw new Error("views not found.");
   if (view.isSystem) {
     throw new Error("Cannot delete a system view.");
   }
@@ -398,7 +415,7 @@ export async function seedGovernanceDataTableViewsPortable(
 }
 
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  const view = await requireOwnedRow(ctx, "views", id);
+  const view = await requireViewAccess(ctx, id);
   if (view.isSystem) {
     throw new Error("Cannot delete a system view.");
   }
@@ -417,13 +434,17 @@ export async function listFieldsForViewPortable(
   ctx: PortableQueryCtx,
   { viewId }: { viewId: string },
 ) {
-  await requireOwnedRow(ctx, "views", viewId);
+  const view = await requireViewAccess(ctx, viewId);
   const rows = await ctx.db
     .query("viewFields")
     .withIndex("by_view_position", (q) => q.eq("viewId", viewId))
     .collect();
-  rows.sort((a, b) => a.position - b.position);
-  return rows;
+  const scoped = await Promise.all(rows.map(async row => {
+    if (row.societyId !== view.societyId) return null;
+    const field = await getOwned(ctx, "fieldMetadata", row.fieldMetadataId, String(view.societyId));
+    return field.objectMetadataId === view.objectMetadataId ? row : null;
+  }));
+  return scoped.filter((row): row is NonNullable<typeof row> => row !== null).sort((a, b) => a.position - b.position);
 }
 
 export async function addFieldPortable(
@@ -440,8 +461,10 @@ export async function addFieldPortable(
   },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
-  await getOwned(ctx, "views", args.viewId, args.societyId);
-  await getOwned(ctx, "fieldMetadata", args.fieldMetadataId, args.societyId);
+  const view = await requireViewAccess(ctx, args.viewId);
+  if (view.societyId !== args.societyId) throw new Error("views not found.");
+  const field = await getOwned(ctx, "fieldMetadata", args.fieldMetadataId, args.societyId);
+  if (field.objectMetadataId !== view.objectMetadataId) throw new Error("fieldMetadata not found.");
   const now = new Date().toISOString();
   let position = args.position;
   if (position === undefined) {
@@ -478,12 +501,14 @@ export async function updateFieldPortable(
     };
   },
 ) {
-  await requireOwnedRow(ctx, "viewFields", id);
+  const field = await requireOwnedRow(ctx, "viewFields", id);
+  await requireViewAccess(ctx, field.viewId);
   await ctx.db.patch(id, { ...patch, updatedAtISO: new Date().toISOString() });
 }
 
 export async function removeFieldPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  await requireOwnedRow(ctx, "viewFields", id);
+  const field = await requireOwnedRow(ctx, "viewFields", id);
+  await requireViewAccess(ctx, field.viewId);
   await ctx.db.delete(id);
 }
 
@@ -496,7 +521,7 @@ export async function reorderFieldsPortable(
   ctx: PortableMutationCtx,
   { viewId, orderedIds }: { viewId: string; orderedIds: string[] },
 ) {
-  const authorizedRow = await requireOwnedRow(ctx, "views", viewId);
+  const authorizedRow = await requireViewAccess(ctx, viewId);
   const societyId = String(authorizedRow.societyId);
   const now = new Date().toISOString();
   for (let i = 0; i < orderedIds.length; i++) {

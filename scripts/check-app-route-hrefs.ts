@@ -1,0 +1,23 @@
+import assert from "node:assert/strict";
+import { appRouteAbsoluteHref, appRouteBasePath, appRouteHref } from "../src/lib/appRouteHref";
+
+const browser = { runtimeMode: "convex-self-hosted" as const, baseUrl: "/", demo: false, locationHref: "https://society.example/app/meetings" };
+assert.equal(appRouteHref("/app/meetings/fixture/preview", browser), "/app/meetings/fixture/preview");
+assert.equal(appRouteHref("/app/motions?tab=tabled#vote", browser), "/app/motions?tab=tabled#vote");
+assert.equal(appRouteAbsoluteHref("/public/fixture", browser), "https://society.example/public/fixture");
+const demo = { ...browser, demo: true, locationHref: "https://society.example/demo/app/meetings" };
+assert.equal(appRouteBasePath(demo), "/demo");
+assert.equal(appRouteHref("/app/meetings/fixture/preview", demo), "/demo/app/meetings/fixture/preview");
+assert.equal(appRouteAbsoluteHref("/public/fixture", demo), "https://society.example/demo/public/fixture");
+const subdirectory = { ...browser, baseUrl: "/organizations/societyer/", locationHref: "https://society.example/organizations/societyer/app" };
+assert.equal(appRouteHref("/app/meetings/fixture/preview", subdirectory), "/organizations/societyer/app/meetings/fixture/preview");
+assert.equal(appRouteAbsoluteHref("/public/fixture", subdirectory), "https://society.example/organizations/societyer/public/fixture");
+const desktop = { runtimeMode: "electron-local" as const, baseUrl: "./", demo: false, locationHref: "file:///Applications/Societyer%20App/resources/app/dist/index.html#/app/meetings" };
+assert.equal(appRouteHref("/app/meetings/fixture/preview", desktop), "file:///Applications/Societyer%20App/resources/app/dist/index.html#/app/meetings/fixture/preview");
+assert.equal(appRouteAbsoluteHref("/public/fixture", desktop), "file:///Applications/Societyer%20App/resources/app/dist/index.html#/public/fixture", "A file-origin link must not start with null or lose index.html");
+assert.equal(appRouteHref("/app/motions?tab=tabled", { ...desktop, locationHref: "http://127.0.0.1:55173/?temporary=value#/app" }), "http://127.0.0.1:55173/#/app/motions?tab=tabled");
+assert.equal(appRouteBasePath({ baseUrl: "./", demo: false }), "");
+for (const invalid of ["https://foreign.example/path", "//foreign.example/path", "relative/path", "/\\foreign.example/path", "/app\n/foreign"]) assert.throws(() => appRouteHref(invalid, browser), /local router/i);
+assert.throws(() => appRouteBasePath({ baseUrl: "//foreign.example/", demo: false }), /local deployment/i);
+assert.throws(() => appRouteHref("/app", { ...desktop, locationHref: "javascript:alert(1)" }), /Unsupported/i);
+console.log("App route href checks passed: browser root, demo, custom basename, desktop file/hash, local preview URLs and unsafe route denial.");

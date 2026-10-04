@@ -1,3 +1,4 @@
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -120,6 +121,7 @@ function downloadZip(filename: string, files: Array<{ path: string; content: str
 }
 
 export function AccountingWorkbenchPage() {
+  const { canWrite, canExport } = useFinancePermissions();
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
@@ -368,15 +370,15 @@ export function AccountingWorkbenchPage() {
           <span>Set up, post, and reconcile the ledger.</span>
         </div>
         <div className="accounting-action-bar" role="group" aria-label="Accounting tools">
-          <button className="btn-action btn-action--primary" disabled={busy} onClick={() => run(async () => { await seedChart({ societyId: society._id }); }, "Chart of accounts seeded")}>
+          <button className="btn-action btn-action--primary" disabled={!canWrite || (busy)} onClick={() => run(async () => { await seedChart({ societyId: society._id }); }, "Chart of accounts seeded")}>
             <Landmark size={12} /> Seed chart
           </button>
-          <button className="btn-action" onClick={() => setDrawer("period")}><PlusCircle size={12} /> Fiscal period</button>
-          <button className="btn-action" onClick={() => setDrawer("opening")}><FileSpreadsheet size={12} /> Opening balances</button>
-          <button className="btn-action" onClick={() => setDrawer("journal")}><GitCompareArrows size={12} /> Journal entry</button>
-          <button className="btn-action" onClick={() => setDrawer("candidate")}><Split size={12} /> Post candidate</button>
-          <button className="btn-action" onClick={() => setDrawer("reconciliation")}><Scale size={12} /> Reconcile</button>
-          <button className="btn-action" disabled={busy} onClick={() => run(async () => {
+          <button className="btn-action" onClick={() => setDrawer("period")} disabled={!canWrite}><PlusCircle size={12} /> Fiscal period</button>
+          <button className="btn-action" onClick={() => setDrawer("opening")} disabled={!canWrite}><FileSpreadsheet size={12} /> Opening balances</button>
+          <button className="btn-action" onClick={() => setDrawer("journal")} disabled={!canWrite}><GitCompareArrows size={12} /> Journal entry</button>
+          <button className="btn-action" onClick={() => setDrawer("candidate")} disabled={!canWrite}><Split size={12} /> Post candidate</button>
+          <button className="btn-action" onClick={() => setDrawer("reconciliation")} disabled={!canWrite}><Scale size={12} /> Reconcile</button>
+          <button className="btn-action" disabled={!canWrite || (busy)} onClick={() => run(async () => {
             const result = await backfillTransactions({ societyId: society._id, fiscalYear: currentYear() });
             toast.success(`Backfilled ${result.posted} transaction${result.posted === 1 ? "" : "s"}`);
           })}>
@@ -418,9 +420,9 @@ export function AccountingWorkbenchPage() {
                 <div className="accounting-row__actions">
                   <Badge tone={period.status === "open" ? "success" : "warn"}>{period.status}</Badge>
                   {period.status === "open" ? (
-                    <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await closePeriod({ id: period._id }); }, "Period closed")}><Lock size={12} /> Close</button>
+                    <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await closePeriod({ id: period._id }); }, "Period closed")} disabled={!canWrite}><Lock size={12} /> Close</button>
                   ) : (
-                    <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await reopenPeriod({ id: period._id }); }, "Period reopened")}><Unlock size={12} /> Reopen</button>
+                    <button className="btn btn--ghost btn--sm" onClick={() => run(async () => { await reopenPeriod({ id: period._id }); }, "Period reopened")} disabled={!canWrite}><Unlock size={12} /> Reopen</button>
                   )}
                 </div>
               </div>
@@ -436,11 +438,11 @@ export function AccountingWorkbenchPage() {
           </div>
           <div className="accounting-export-grid">
             {["chart_of_accounts", "trial_balance", "journal_entries", "general_ledger"].map((kind) => (
-              <button key={kind} className="btn-action" onClick={() => doExport(kind)} disabled={!exportByKind[kind]}>
+              <button key={kind} className="btn-action" onClick={() => doExport(kind)} disabled={!canExport || (!exportByKind[kind])}>
                 <Download size={12} /> {kind.replace(/_/g, " ")}
               </button>
             ))}
-            <button className="btn-action btn-action--primary" onClick={doPackageExport} disabled={!boardAuditorPackage?.files}>
+            <button className="btn-action btn-action--primary" onClick={doPackageExport} disabled={!canExport || (!boardAuditorPackage?.files)}>
               <Download size={12} /> board/auditor ZIP
             </button>
           </div>
@@ -521,7 +523,7 @@ export function AccountingWorkbenchPage() {
       <section className="card">
         <div className="card__head">
           <h2 className="card__title">Fund restrictions register</h2>
-          <button className="btn-action" onClick={() => setDrawer("fundRestriction")}><PlusCircle size={12} /> Add restriction</button>
+          <button className="btn-action" onClick={() => setDrawer("fundRestriction")} disabled={!canWrite}><PlusCircle size={12} /> Add restriction</button>
         </div>
         <div className="accounting-list">
           {(fundRestrictions ?? []).map((row: any) => (
@@ -537,7 +539,7 @@ export function AccountingWorkbenchPage() {
       <section className="card">
         <div className="card__head">
           <h2 className="card__title">Counterparties</h2>
-          <button className="btn-action" onClick={() => setDrawer("counterparty")}><PlusCircle size={12} /> Add counterparty</button>
+          <button className="btn-action" onClick={() => setDrawer("counterparty")} disabled={!canWrite}><PlusCircle size={12} /> Add counterparty</button>
         </div>
         <div className="accounting-list">
           {(counterparties ?? []).map((row: any) => (
@@ -550,7 +552,7 @@ export function AccountingWorkbenchPage() {
         </div>
       </section>
 
-      <Drawer open={drawer === "fundRestriction"} onClose={() => setDrawer(null)} title="Add fund restriction" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveFundRestriction}>Save</button></>}>
+      <Drawer open={drawer === "fundRestriction"} onClose={() => setDrawer(null)} title="Add fund restriction" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy)} onClick={saveFundRestriction}>Save</button></>}>
         <div className="col">
           <Field label="Name"><input className="input" value={fundForm.name} onChange={(e) => setFundForm({ ...fundForm, name: e.target.value })} placeholder="e.g. Capital campaign 2026" /></Field>
           <Field label="Purpose"><input className="input" value={fundForm.purpose} onChange={(e) => setFundForm({ ...fundForm, purpose: e.target.value })} placeholder="What the funds are restricted to" /></Field>
@@ -560,7 +562,7 @@ export function AccountingWorkbenchPage() {
         </div>
       </Drawer>
 
-      <Drawer open={drawer === "counterparty"} onClose={() => setDrawer(null)} title="Add counterparty" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveCounterparty}>Save</button></>}>
+      <Drawer open={drawer === "counterparty"} onClose={() => setDrawer(null)} title="Add counterparty" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy)} onClick={saveCounterparty}>Save</button></>}>
         <div className="col">
           <Field label="Name"><input className="input" value={counterpartyForm.name} onChange={(e) => setCounterpartyForm({ ...counterpartyForm, name: e.target.value })} /></Field>
           <Field label="Kind"><Select value={counterpartyForm.kind} onChange={(value) => setCounterpartyForm({ ...counterpartyForm, kind: value })} options={[{ value: "vendor", label: "Vendor" }, { value: "customer", label: "Customer" }, { value: "other", label: "Other" }]} /></Field>
@@ -569,7 +571,7 @@ export function AccountingWorkbenchPage() {
         </div>
       </Drawer>
 
-      <Drawer open={drawer === "period"} onClose={() => setDrawer(null)} title="Create fiscal period" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={savePeriod}>Create</button></>}>
+      <Drawer open={drawer === "period"} onClose={() => setDrawer(null)} title="Create fiscal period" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy)} onClick={savePeriod}>Create</button></>}>
         <FormGrid>
           <Field label="Fiscal year"><input className="input" value={periodForm.fiscalYear} onChange={(e) => setPeriodForm({ ...periodForm, fiscalYear: e.target.value })} /></Field>
           <Field label="Period label"><input className="input" value={periodForm.periodLabel} onChange={(e) => setPeriodForm({ ...periodForm, periodLabel: e.target.value })} /></Field>
@@ -578,11 +580,11 @@ export function AccountingWorkbenchPage() {
         </FormGrid>
       </Drawer>
 
-      <Drawer open={drawer === "opening"} onClose={() => setDrawer(null)} title="Post opening balances" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveOpening}>Post</button></>}>
+      <Drawer open={drawer === "opening"} onClose={() => setDrawer(null)} title="Post opening balances" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy)} onClick={saveOpening}>Post</button></>}>
         <AccountingLines rows={openingRows} setRows={setOpeningRows} accounts={accounts ?? []} />
       </Drawer>
 
-      <Drawer open={drawer === "journal"} onClose={() => setDrawer(null)} title="Post journal entry" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveJournal}>Post</button></>}>
+      <Drawer open={drawer === "journal"} onClose={() => setDrawer(null)} title="Post journal entry" size="wide" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy)} onClick={saveJournal}>Post</button></>}>
         <FormGrid>
           <Field label="Date"><DatePicker value={journalForm.date} onChange={(value) => setJournalForm({ ...journalForm, date: value })} /></Field>
           <Field label="Fiscal year"><input className="input" value={journalForm.fiscalYear} onChange={(e) => setJournalForm({ ...journalForm, fiscalYear: e.target.value })} /></Field>
@@ -602,7 +604,7 @@ export function AccountingWorkbenchPage() {
         />
       </Drawer>
 
-      <Drawer open={drawer === "candidate"} onClose={() => setDrawer(null)} title="Post transaction candidate" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy || !candidateForm.candidateId} onClick={saveCandidateAllocation}>Post</button></>}>
+      <Drawer open={drawer === "candidate"} onClose={() => setDrawer(null)} title="Post transaction candidate" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy || !candidateForm.candidateId)} onClick={saveCandidateAllocation}>Post</button></>}>
         <div className="col">
           <Field label="Candidate"><Select value={candidateForm.candidateId} onChange={(value) => {
             const candidate = candidates.find((row: any) => row._id === value);
@@ -618,7 +620,7 @@ export function AccountingWorkbenchPage() {
         </div>
       </Drawer>
 
-      <Drawer open={drawer === "reconciliation"} onClose={() => setDrawer(null)} title="Create reconciliation run" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={busy} onClick={saveReconciliation}>Create</button></>}>
+      <Drawer open={drawer === "reconciliation"} onClose={() => setDrawer(null)} title="Create reconciliation run" footer={<><button className="btn" onClick={() => setDrawer(null)}>Cancel</button><button className="btn btn--accent" disabled={!canWrite || (busy)} onClick={saveReconciliation}>Create</button></>}>
         <div className="col">
           <Field label="Financial account"><AccountSelect accounts={cashAccounts} value={reconciliationForm.financialAccountId} onChange={(financialAccountId) => setReconciliationForm({ ...reconciliationForm, financialAccountId })} /></Field>
           <Field label="Statement date"><DatePicker value={reconciliationForm.statementDate} onChange={(value) => setReconciliationForm({ ...reconciliationForm, statementDate: value })} /></Field>

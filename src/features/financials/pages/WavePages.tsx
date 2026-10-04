@@ -1,3 +1,4 @@
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../../../hooks/useSociety";
@@ -47,6 +48,7 @@ import {
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 export function WaveResourceTablePage() {
+  const { canWrite, canEditSettings } = useFinancePermissions();
   const society = useSociety();
   const { resourceType: routeResourceType } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -170,7 +172,7 @@ export function WaveResourceTablePage() {
                 Zero-balance {hideZeroWaveAccounts ? "hidden" : "shown"}
               </button>
             )}
-            <button className="btn-action" disabled={busy} onClick={refreshWaveCache}>
+            <button className="btn-action" disabled={!(canWrite && canEditSettings) || (busy || !activeConnection)} title={!activeConnection ? "Connect Wave from Financials before refreshing cached records." : undefined} onClick={refreshWaveCache}>
               <RefreshCw size={12} /> Refresh
             </button>
           </>
@@ -180,6 +182,11 @@ export function WaveResourceTablePage() {
       <p className="muted" style={{ fontSize: 13, marginTop: -4, marginBottom: 12 }}>
         Wave is an external accounting tool — this shows the data it reported at last sync, before Societyer processes it into the ledger.
       </p>
+      {connections !== undefined && !activeConnection && (
+        <p className="muted" role="status">
+          Wave is disconnected. Previously synced records remain available for review. <Link to="/app/financials">Connect from Financials</Link> to refresh them.
+        </p>
+      )}
 
       {(tableResourceType === "account" || tableResourceType === "all") && (
         <WaveAccountViewControls
@@ -234,6 +241,7 @@ export function WaveResourceTablePage() {
 }
 
 export function WaveAccountDetailPage() {
+  const { canWrite } = useFinancePermissions();
   const society = useSociety();
   const { resourceId } = useParams();
   const connections = useQuery(
@@ -282,7 +290,7 @@ export function WaveAccountDetailPage() {
   }, [resource?._id]);
 
   useEffect(() => {
-    if (activity === undefined) return;
+    if (!canWrite || activity === undefined) return;
     if (!isTransactionAccount) return;
     if (activity.account && activity.total !== 0) return;
     if (browserBackedWaveConnection) return;
@@ -302,7 +310,7 @@ export function WaveAccountDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeConnection?._id, activity?.account?._id, activity?.total, browserBackedWaveConnection, isTransactionAccount, pullState, syncFinancials]);
+  }, [canWrite, activeConnection?._id, activity?.account?._id, activity?.total, browserBackedWaveConnection, isTransactionAccount, pullState, syncFinancials]);
 
   if (society === undefined || resource === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;

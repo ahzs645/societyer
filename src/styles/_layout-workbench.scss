@@ -316,6 +316,12 @@
     padding: 0;
   }
 
+  // The main area's base stacking context otherwise traps its fixed inspector
+  // beneath the sibling mobile utility bar, even while that bar is inert.
+  .app-shell.is-mobile .main:has(.inspector-host.is-open) {
+    z-index: token('z-inspector');
+  }
+
   .app-shell.is-mobile .workbench__panel {
     border-radius: 0;
   }

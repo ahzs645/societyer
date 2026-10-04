@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { authenticatedFetch } from "../lib/authToken";
+import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { usePermissions } from "../hooks/usePermissions";
+import { PERMISSIONS } from "../../shared/functions/permissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageLoading, SeedPrompt } from "./_helpers";
@@ -21,29 +25,6 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 
-async function sha256Hex(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const buf = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function randomToken(): string {
-  const bytes = new Uint8Array(24);
-  crypto.getRandomValues(bytes);
-  const base = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-  return `sk_${base}`;
-}
-
-/**
- * API keys page — two stacked record tables. Clients (top) allow
- * inline edits for name/description/kind/status via `updateClient`.
- * Tokens (bottom) are fully read-only (their backend mutation set is
- * create / revoke only — you can't retitle a minted token); the
- * `clientName` column is projected client-side from the clients
- * query since tokens only store the FK `clientId`.
- */
 export function ApiKeysPage() {
   const society = useSociety();
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -51,7 +32,14 @@ export function ApiKeysPage() {
   const tokens = useQuery(api.apiPlatform.listTokens, society ? { societyId: society._id } : "skip");
   const createClient = useMutation(api.apiPlatform.createClient);
   const updateClient = useMutation(api.apiPlatform.updateClient);
-  const createToken = useMutation(api.apiPlatform.createToken);
+  const { can, loaded } = usePermissions();
+  const canManageClients = loaded && can("settings:write");
+  const canMint = loaded && can("settings:manage") && !isLocalDataRuntime();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") === "tokens" ? "tokens" : "clients";
+  const changeTab = (tab: string) => setSearchParams((previous) => {
+    const next = new URLSearchParams(previous); next.set("tab", tab); return next;
+  });
   const revokeToken = useMutation(api.apiPlatform.revokeToken);
   const confirm = useConfirm();
   const toast = useToast();
@@ -59,8 +47,9 @@ export function ApiKeysPage() {
   const [clientOpen, setClientOpen] = useState(false);
   const [clientForm, setClientForm] = useState({ name: "", description: "" });
   const [tokenOpen, setTokenOpen] = useState(false);
-  const [tokenForm, setTokenForm] = useState({ clientId: "", name: "", scopes: "read:records" });
+  const [tokenForm, setTokenForm] = useState({ clientId: "", name: "", scopes: "documents:read" });
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const [clientsViewId, setClientsViewId] = useState<Id<"views"> | undefined>(undefined);
@@ -96,34 +85,44 @@ export function ApiKeysPage() {
   if (society === null) return <SeedPrompt />;
 
   const saveClient = async () => {
-    if (!clientForm.name.trim()) return;
-    await createClient({
-      societyId: society._id,
-      name: clientForm.name.trim(),
-      description: clientForm.description || undefined,
-      createdByUserId: actingUserId,
-    });
-    setClientOpen(false);
-    setClientForm({ name: "", description: "" });
-    toast.success("Client created");
+    if (!canManageClients || !clientForm.name.trim() || saving) return;
+    setSaving(true);
+    try {
+      await createClient({ societyId: society._id, name: clientForm.name.trim(),
+        description: clientForm.description || undefined, createdByUserId: actingUserId });
+      setClientOpen(false);
+      setClientForm({ name: "", description: "" });
+      changeTab("clients");
+      toast.success("Client created");
+    } catch (error) {
+      toast.error("Could not create client", error instanceof Error ? error.message : "Please try again.");
+    } finally { setSaving(false); }
   };
 
   const saveToken = async () => {
-    if (!tokenForm.clientId || !tokenForm.name.trim()) return;
-    const token = randomToken();
-    const tokenHash = await sha256Hex(token);
-    await createToken({
-      societyId: society._id,
-      clientId: tokenForm.clientId as any,
-      name: tokenForm.name.trim(),
-      tokenHash,
-      tokenStart: token.slice(0, 10),
-      scopes: tokenForm.scopes.split(/\s+/).filter(Boolean),
-      createdByUserId: actingUserId,
-    });
-    setRevealedToken(token);
-    setTokenOpen(false);
-    setTokenForm({ clientId: "", name: "", scopes: "read:records" });
+    if (!canMint || !tokenForm.clientId || !tokenForm.name.trim() || saving) return;
+    const scopes = tokenForm.scopes.split(/\s+/).filter(Boolean);
+    if (!scopes.length || scopes.some((scope) => !(PERMISSIONS as readonly string[]).includes(scope))) {
+      toast.warn("Choose supported permission scopes", "For example: documents:read members:read");
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await authenticatedFetch("/api/v1/api-tokens", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ societyId: society._id, clientId: tokenForm.clientId, name: tokenForm.name.trim(), scopes }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || typeof result?.data?.token !== "string") {
+        throw new Error(result?.error?.message || "The API server could not mint this token.");
+      }
+      setRevealedToken(result.data.token);
+      setTokenOpen(false);
+      changeTab("tokens");
+      setTokenForm({ clientId: "", name: "", scopes: "documents:read" });
+    } catch (error) {
+      toast.error("Could not mint token", error instanceof Error ? error.message : "Please try again.");
+    } finally { setSaving(false); }
   };
 
   const copyToken = async (value: string) => {
@@ -151,20 +150,21 @@ export function ApiKeysPage() {
           { id: "clients", label: "Clients", icon: <KeyRound size={14} /> },
           { id: "tokens", label: "Tokens", icon: <ShieldCheckIcon /> },
         ]}
-        activeTab="clients"
+        activeTab={activeTab}
+        onTabChange={changeTab}
         actions={
           <>
-            <Button onClick={() => setClientOpen(true)}>
+            <Button disabled={!canManageClients} onClick={() => setClientOpen(true)}>
               <Plus size={12} /> New client
             </Button>
             <Button
               variant="accent"
-              disabled={(clients ?? []).length === 0}
+              disabled={!canMint || !(clients ?? []).some((client: any) => client.status === "active")}
               onClick={() => {
                 setTokenForm({
-                  clientId: String(clients?.[0]?._id ?? ""),
+                  clientId: String(clients?.find((client: any) => client.status === "active")?._id ?? ""),
                   name: "",
-                  scopes: "read:records",
+                  scopes: "documents:read",
                 });
                 setTokenOpen(true);
               }}
@@ -175,14 +175,15 @@ export function ApiKeysPage() {
         }
       >
 
+      {isLocalDataRuntime() && <Banner tone="info" title="API tokens require a connected server">Client records can be managed here. Mint tokens from your hosted workspace so its API server can issue and verify them.</Banner>}
       {revealedToken && (
         <Banner
           tone="warn"
           title="Copy this token now — it won't be shown again"
           onDismiss={() => setRevealedToken(null)}
         >
-          <div className="row" style={{ gap: 8, alignItems: "center", marginTop: 6 }}>
-            <code className="mono" style={{ padding: "4px 8px", background: "var(--bg-panel)", borderRadius: 4 }}>
+          <div className="row" style={{ gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
+            <code className="mono" style={{ maxWidth: "100%", overflowWrap: "anywhere", whiteSpace: "normal", padding: "4px 8px", background: "var(--bg-panel)", borderRadius: 4 }}>
               {revealedToken}
             </code>
             <Button size="sm" onClick={() => copyToken(revealedToken)}>
@@ -192,6 +193,7 @@ export function ApiKeysPage() {
         </Banner>
       )}
 
+      {activeTab === "clients" && <section role="tabpanel" aria-label="Clients">
       <h2 style={{ marginTop: 24, fontSize: "var(--fs-md)" }}>Clients</h2>
       {clientsShowMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="apiClient" />
@@ -201,13 +203,13 @@ export function ApiKeysPage() {
           objectMetadata={clientsTableData.objectMetadata}
           hydratedView={clientsTableData.hydratedView}
           records={(clients ?? []) as any[]}
-          onUpdate={async ({ recordId, fieldName, value }) => {
-            if (!["name", "description", "kind", "status"].includes(fieldName)) return;
+          onUpdate={canManageClients ? async ({ recordId, fieldName, value }) => {
+            if (!canManageClients || !["name", "description", "kind", "status"].includes(fieldName)) return;
             await updateClient({
               id: recordId as Id<"apiClients">,
               patch: { [fieldName]: value } as any,
             });
-          }}
+          } : undefined}
         >
           <RecordTableViewToolbar
             societyId={society._id}
@@ -234,7 +236,8 @@ export function ApiKeysPage() {
         </div>
       )}
 
-      <div style={{ height: 24 }} />
+      </section>}
+      {activeTab === "tokens" && <section role="tabpanel" aria-label="Tokens">
       <h2 style={{ fontSize: "var(--fs-md)" }}>Tokens</h2>
       {tokensShowMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="apiToken" />
@@ -263,12 +266,14 @@ export function ApiKeysPage() {
           <RecordTable
             loading={tokensTableData.loading || tokens === undefined}
             renderRowActions={(r) =>
-              r.status === "active" ? (
+              canManageClients && r.status === "active" ? (
                 <button
                   className="btn btn--ghost btn--sm btn--icon"
                   aria-label={`Revoke token ${r.name}`}
+                  disabled={isLocalDataRuntime()}
                   onClick={async (e) => {
                     e.stopPropagation();
+                    if (!canManageClients || isLocalDataRuntime()) return;
                     const ok = await confirm({
                       title: "Revoke token?",
                       message:
@@ -276,7 +281,7 @@ export function ApiKeysPage() {
                       confirmLabel: "Revoke",
                       tone: "danger",
                     });
-                    if (!ok) return;
+                    if (!ok || !canManageClients || isLocalDataRuntime()) return;
                     await revokeToken({ id: r._id });
                     toast.success("Token revoked");
                   }}
@@ -295,6 +300,7 @@ export function ApiKeysPage() {
         </div>
       )}
 
+      </section>}
       <Drawer
         open={clientOpen}
         onClose={() => setClientOpen(false)}
@@ -302,7 +308,7 @@ export function ApiKeysPage() {
         footer={
           <>
             <Button onClick={() => setClientOpen(false)}>Cancel</Button>
-            <Button variant="accent" onClick={saveClient} disabled={!clientForm.name.trim()}>Create</Button>
+            <Button variant="accent" onClick={saveClient} disabled={!canManageClients || saving || !clientForm.name.trim()}>Create</Button>
           </>
         }
       >
@@ -321,7 +327,7 @@ export function ApiKeysPage() {
         footer={
           <>
             <Button onClick={() => setTokenOpen(false)}>Cancel</Button>
-            <Button variant="accent" onClick={saveToken} disabled={!tokenForm.name.trim() || !tokenForm.clientId}>Mint token</Button>
+            <Button variant="accent" onClick={saveToken} disabled={!canMint || saving || !tokenForm.name.trim() || !tokenForm.clientId}>Mint token</Button>
           </>
         }
       >
@@ -329,13 +335,13 @@ export function ApiKeysPage() {
           <Select
             value={tokenForm.clientId}
             onChange={(value) => setTokenForm({ ...tokenForm, clientId: value })}
-            options={(clients ?? []).map((c: any) => ({ value: c._id, label: c.name }))}
+            options={(clients ?? []).filter((client: any) => client.status === "active").map((c: any) => ({ value: c._id, label: c.name }))}
           />
         </Field>
         <Field label="Name">
           <input className="input" value={tokenForm.name} onChange={(e) => setTokenForm({ ...tokenForm, name: e.target.value })} />
         </Field>
-        <Field label="Scopes (space-separated)">
+        <Field label="Scopes (space-separated)" hint="Use current permission names, such as documents:read or members:read. Your role limits every token action.">
           <input className="input" value={tokenForm.scopes} onChange={(e) => setTokenForm({ ...tokenForm, scopes: e.target.value })} />
         </Field>
       </Drawer>

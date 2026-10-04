@@ -20,6 +20,7 @@ import {
 } from "../../shared/organizationDomain";
 import { corporationPacketForComplianceObligation } from "../../shared/corporationDocumentPackets";
 import { useToast } from "../components/Toast";
+import { usePermissions } from "../hooks/usePermissions";
 
 export function ComplianceObligationsPage() {
   const { organization, society, isLoading, missingWorkspace } = useOrganizationWorkspace();
@@ -35,6 +36,10 @@ export function ComplianceObligationsPage() {
   const dismissDecision = useMutation(api.complianceObligations.dismissDecision);
   const reopenDecision = useMutation(api.complianceObligations.reopenDecision);
   const toast = useToast();
+  const permissions = usePermissions();
+  const canReview = permissions.loaded && permissions.can("deadlines:write");
+  const canTrack = canReview && permissions.can("filings:write");
+  const canStage = canReview && permissions.can("documents:write");
 
   const factsList = useMemo(
     () => (organization ? complianceFactsForOrganization(organization, { registrations: detail?.registrations ?? [] }) : []),
@@ -216,7 +221,7 @@ export function ComplianceObligationsPage() {
           )}
           <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
             {jurisdictionModule.compliancePackIds.map((packId) => (
-              <Badge key={packId} tone="info">{packId}</Badge>
+              <Badge key={packId} tone="info"><span style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{packId}</span></Badge>
             ))}
             {!jurisdictionModule.compliancePackIds.length && <Badge tone="neutral">No configured pack</Badge>}
           </div>
@@ -231,7 +236,7 @@ export function ComplianceObligationsPage() {
           </div>
         </div>
         {obligations.length ? (
-          <div className="table-wrap">
+          <div className="table-wrap" style={{ marginInline: 0, maxWidth: "100%" }}>
             <table className="table">
               <thead>
                 <tr>
@@ -312,7 +317,7 @@ export function ComplianceObligationsPage() {
                       <td className="table__actions">
                         <div className="table__actions-inner">
                           {isDismissed ? (
-                            <button className="btn btn--sm" onClick={() => reopenObligation(obligation)}>
+                            <button className="btn btn--sm" disabled={!canReview} onClick={() => reopenObligation(obligation)}>
                               <RotateCcw size={12} /> Reopen
                             </button>
                           ) : (
@@ -320,25 +325,25 @@ export function ComplianceObligationsPage() {
                               {existingFiling ? (
                                 <Link className="btn btn--sm" to="/app/filings">Tracked</Link>
                               ) : filingKind ? (
-                                <button className="btn btn--sm" onClick={() => trackFiling(obligation)}>
+                                <button className="btn btn--sm" disabled={!canTrack} onClick={() => trackFiling(obligation)}>
                                   <Plus size={12} /> Track
                                 </button>
                               ) : isReviewed ? (
                                 <Badge tone="success">Workflow</Badge>
                               ) : (
-                                <button className="btn btn--sm" onClick={() => acknowledgeWorkflow(obligation)}>
+                                <button className="btn btn--sm" disabled={!canReview} onClick={() => acknowledgeWorkflow(obligation)}>
                                   <CheckCircle2 size={12} /> Review
                                 </button>
                               )}
                               {hasStagedPacket ? (
                                 <Link className="btn btn--sm" to="/app/template-engine">Packet</Link>
                               ) : packet ? (
-                                <button className="btn btn--sm" onClick={() => stageDocumentPacket(obligation, existingFiling?._id)}>
+                                <button className="btn btn--sm" disabled={!canStage} onClick={() => stageDocumentPacket(obligation, existingFiling?._id)}>
                                   <BookTemplate size={12} /> Packet
                                 </button>
                               ) : null}
                               {!isReviewed && (
-                                <button className="btn btn--sm" onClick={() => dismissObligation(obligation)}>
+                                <button className="btn btn--sm" disabled={!canReview} onClick={() => dismissObligation(obligation)}>
                                   <X size={12} /> Dismiss
                                 </button>
                               )}

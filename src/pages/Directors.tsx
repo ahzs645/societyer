@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote } from "../components/ui";
@@ -29,6 +30,8 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 
 export function DirectorsPage() {
   const society = useSociety();
+  const { loaded, can } = usePermissions();
+  const canManage = loaded && can("directors:write");
   const directorProfile = directorComplianceProfile(society);
   const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
@@ -84,7 +87,7 @@ export function DirectorsPage() {
   };
 
   const save = async () => {
-    if (!selected) return;
+    if (!selected || !canManage) return;
     if (selected._id) {
       const { _id, _creationTime, societyId, ...patch } = selected;
       patch.aliases = cleanAliases(patch.aliases);
@@ -127,7 +130,7 @@ export function DirectorsPage() {
                 <Archive size={12} /> Archived
               </button>
             </div>
-            <button className="btn-action btn-action--primary" onClick={openNew}>
+            <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
               <Plus size={12} /> New director
             </button>
           </div>
@@ -185,12 +188,12 @@ export function DirectorsPage() {
               setSelected(record);
               setOpen(true);
             }}
-            onUpdate={async ({ recordId, fieldName, value }) => {
+            onUpdate={canManage ? async ({ recordId, fieldName, value }) => {
               await update({
                 id: recordId as Id<"directors">,
                 patch: { [fieldName]: value } as any,
               });
-            }}
+            } : undefined}
           >
             <RecordTableViewToolbar
               societyId={society._id}
@@ -204,9 +207,17 @@ export function DirectorsPage() {
             />
             <RecordTableFilterPopover open={filterOpen} onClose={() => setFilterOpen(false)} />
             <RecordTableFilterChips />
-            <RecordTable selectable loading={tableData.loading || directors === undefined} />
+            <RecordTable
+              selectable={canManage}
+              loading={tableData.loading || directors === undefined}
+              renderCell={({ field, record }) => field.name === "firstName" ? (
+                <button type="button" className="record-table__identifier-button" onClick={() => { setSelected(record); setOpen(true); }}>
+                  {record.firstName || "Open director"}
+                </button>
+              ) : undefined}
+            />
             <RecordTableBulkBar
-              actions={[
+              actions={canManage ? [
                 {
                   id: "bulk-remove",
                   label: "Remove",
@@ -224,7 +235,7 @@ export function DirectorsPage() {
                     toast.success(`Removed ${rows.length} director${rows.length === 1 ? "" : "s"}`);
                   },
                 },
-              ]}
+              ] : []}
             />
           </RecordTableScope>
         ) : (
@@ -247,16 +258,16 @@ export function DirectorsPage() {
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
-        title={selected?._id ? "Edit director" : "Add director"}
+        title={selected?._id ? (canManage ? "Edit director" : "View director") : "Add director"}
         footer={
           <>
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save}>Save</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canManage}>Save</button>
           </>
         }
       >
         {selected && (
-          <div>
+          <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <InspectorNote tone="warn" title="Director register">
               Keep this register current. Changes to directors normally need to be reflected in your
               filing workflow within 30 days.
@@ -321,7 +332,7 @@ export function DirectorsPage() {
               onChange={(v) => setSelected({ ...selected, consentOnFile: v })}
               label="Director consent evidence on file"
             />
-            <Field label="Notes"><MarkdownEditor rows={4} value={selected.notes ?? ""} onChange={(markdown) => setSelected({ ...selected, notes: markdown })} /></Field>
+            <Field label="Notes"><MarkdownEditor readOnly={!canManage} rows={4} value={selected.notes ?? ""} onChange={(markdown) => setSelected({ ...selected, notes: markdown })} /></Field>
             {selected._id && (
               <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
                 <CustomFieldsPanel
@@ -331,7 +342,7 @@ export function DirectorsPage() {
                 />
               </div>
             )}
-          </div>
+          </fieldset>
         )}
       </Drawer>
     </div>

@@ -5,6 +5,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { Badge, Field } from "./ui";
 import { useToast } from "./Toast";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Pen, Trash2, Upload, UserX } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 import { NameAutocomplete } from "./NameAutocomplete";
@@ -521,8 +522,8 @@ export function SignaturePanel({
         {nameOptions.length === 0 && (
           <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 8 }}>
             {signerScope === "directors"
-              ? <>No directors on file — add one in <a href="/directors">Directors</a> to enable autocomplete.</>
-              : <>No members or directors on file — add one in <a href="/directors">Directors</a> or <a href="/members">Members</a> to enable autocomplete.</>}
+              ? <>No directors on file — add one in <Link to="/app/directors">Directors</Link> to enable autocomplete.</>
+              : <>No members or directors on file — add one in <Link to="/app/directors">Directors</Link> or <Link to="/app/members">Members</Link> to enable autocomplete.</>}
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { History } from "lucide-react";
+import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { DatePicker } from "../components/DatePicker";
@@ -66,8 +67,11 @@ function RoleColumn({
 
 export function PointInTimeRegisterPage() {
   const society = useSociety();
+  const { can } = usePermissions();
+  const canReadHistory = can("settings:read");
+  const visibleRoles = ROLES.filter((role) => canReadHistory && can(role.roleType === "member" ? "members:read" : "directors:read"));
   const [asOf, setAsOf] = useState<string>(() => new Date().toISOString().slice(0, 10));
-  const directors = useQuery(api.directors.list, society ? { societyId: society._id } : "skip");
+  const directors = useQuery(api.directors.list, society && can("directors:read") ? { societyId: society._id } : "skip");
 
   // Board term starts/ends as a timeline of transitions, so the snapshot above
   // gains context: who joined or left the board around the selected date.
@@ -106,8 +110,9 @@ export function PointInTimeRegisterPage() {
         }
       />
 
+      {visibleRoles.length < ROLES.length && <p className="muted">This snapshot excludes role registers outside your current read permissions. Historical role-holder snapshots require workspace settings read access.</p>}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-        {ROLES.map((role) => (
+        {visibleRoles.map((role) => (
           <RoleColumn
             key={role.roleType}
             societyId={society._id}

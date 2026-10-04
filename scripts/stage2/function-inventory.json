@@ -25185,6 +25185,28 @@
     ]
   },
   {
+    "key": "portable:financialHub:disconnect",
+    "surface": "portable",
+    "name": "financialHub:disconnect",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "connectionId",
+        "table": "financialConnections",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:financialHub:getConnection",
     "surface": "portable",
     "name": "financialHub:getConnection",
@@ -25197,6 +25219,28 @@
         "table": "financialConnections",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:financialHub:markConnectionConnected",
+    "surface": "portable",
+    "name": "financialHub:markConnectionConnected",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
       }
     ]
   },

@@ -1,6 +1,6 @@
 import type { StaticConvexClient } from "../../src/lib/staticConvex";
 
-/** Synthetic local upload metadata for statutory tests; never used by the app. */
+/** Synthetic local upload metadata for opt-in browser/native test fixtures only. */
 export async function verifyFixtureFormation(client: StaticConvexClient, societyId: string, certificateDate: string) {
   const certificateId = await client.mutation("documents:create", { societyId, title: "Synthetic official certificate fixture", category: "governance", fileName: "synthetic-certificate.pdf", mimeType: "application/pdf", tags: ["certificate", "test_fixture"] });
   await client.mutation("documentVersions:recordUploadedVersion", { societyId, documentId: certificateId, storageProvider: "local-filesystem", storageKey: `test-fixtures/${societyId}/synthetic-certificate.pdf`, fileName: "synthetic-certificate.pdf", mimeType: "application/pdf", fileSizeBytes: 32, sha256: "a".repeat(64) });

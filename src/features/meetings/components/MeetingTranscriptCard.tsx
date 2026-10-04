@@ -1,3 +1,4 @@
+import { isLocalDataRuntime } from "../../../lib/staticRuntime";
 import { Mic, Save, Sparkles, Upload } from "lucide-react";
 import { Badge } from "../../../components/ui";
 
@@ -47,6 +48,7 @@ export function MeetingTranscriptCard({
 }) {
   // Re-drafting is allowed even when minutes already exist; the parent
   // callback handles the overwrite confirmation when appropriate.
+  const remoteAvailable = !isLocalDataRuntime();
   const canDraftFromTranscript =
     !!onDraftFromTranscript && transcriptOnFile.trim().length > 0;
   return (
@@ -138,7 +140,7 @@ export function MeetingTranscriptCard({
               {canDraftFromTranscript && (
                 <button
                   className="btn-action btn-action--primary"
-                  disabled={savingTranscript || pipelineBusy || draftingFromTranscript}
+                  disabled={!remoteAvailable || savingTranscript || pipelineBusy || draftingFromTranscript}
                   onClick={() => onDraftFromTranscript?.()}
                   title="Generate a minutes draft from the saved transcript using AI."
                 >
@@ -162,6 +164,7 @@ export function MeetingTranscriptCard({
           )}
         </div>
 
+        {!remoteAvailable && <p className="muted" role="status">AI minutes drafting and audio transcription require a connected server. Saved text transcripts remain available.</p>}
         <div className="meeting-audio-tools">
           <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
             VTT/audio imports are optional.
@@ -177,7 +180,7 @@ export function MeetingTranscriptCard({
             </button>
             <button
               className="btn-action btn-action--primary"
-              disabled={!audioFile || pipelineBusy}
+              disabled={!remoteAvailable || !audioFile || pipelineBusy}
               onClick={() => onUploadAudioAndRun(false)}
             >
               <Mic size={12} /> {pipelineBusy ? "Transcribing..." : "Transcribe"}
@@ -185,7 +188,7 @@ export function MeetingTranscriptCard({
             {!hasMinutes && (
               <button
                 className="btn-action"
-                disabled={!audioFile || pipelineBusy}
+                disabled={!remoteAvailable || !audioFile || pipelineBusy}
                 onClick={() => onUploadAudioAndRun(true)}
               >
                 <Sparkles size={12} /> {pipelineBusy ? "Running..." : "Draft minutes"}

@@ -1,0 +1,202 @@
+[
+  {
+    "name": "preparation",
+    "width": 320,
+    "path": "artifacts/interface/preparation-320.png",
+    "bounds": {
+      "width": 320,
+      "scrollWidth": 320
+    },
+    "errors": []
+  },
+  {
+    "name": "pathway",
+    "width": 320,
+    "path": "artifacts/interface/pathway-320.png",
+    "bounds": {
+      "width": 320,
+      "scrollWidth": 320
+    },
+    "errors": []
+  },
+  {
+    "name": "profile",
+    "width": 320,
+    "path": "artifacts/interface/profile-320.png",
+    "bounds": {
+      "width": 320,
+      "scrollWidth": 320
+    },
+    "errors": []
+  },
+  {
+    "name": "compliance",
+    "width": 320,
+    "path": "artifacts/interface/compliance-320.png",
+    "bounds": {
+      "width": 320,
+      "scrollWidth": 320
+    },
+    "errors": []
+  },
+  {
+    "name": "workbench",
+    "width": 320,
+    "path": "artifacts/interface/workbench-320.png",
+    "bounds": {
+      "width": 320,
+      "scrollWidth": 320
+    },
+    "errors": []
+  },
+  {
+    "name": "preparation",
+    "width": 390,
+    "path": "artifacts/interface/preparation-390.png",
+    "bounds": {
+      "width": 390,
+      "scrollWidth": 390
+    },
+    "errors": []
+  },
+  {
+    "name": "pathway",
+    "width": 390,
+    "path": "artifacts/interface/pathway-390.png",
+    "bounds": {
+      "width": 390,
+      "scrollWidth": 390
+    },
+    "errors": []
+  },
+  {
+    "name": "profile",
+    "width": 390,
+    "path": "artifacts/interface/profile-390.png",
+    "bounds": {
+      "width": 390,
+      "scrollWidth": 390
+    },
+    "errors": []
+  },
+  {
+    "name": "compliance",
+    "width": 390,
+    "path": "artifacts/interface/compliance-390.png",
+    "bounds": {
+      "width": 390,
+      "scrollWidth": 390
+    },
+    "errors": []
+  },
+  {
+    "name": "workbench",
+    "width": 390,
+    "path": "artifacts/interface/workbench-390.png",
+    "bounds": {
+      "width": 390,
+      "scrollWidth": 390
+    },
+    "errors": []
+  },
+  {
+    "name": "preparation",
+    "width": 768,
+    "path": "artifacts/interface/preparation-768.png",
+    "bounds": {
+      "width": 768,
+      "scrollWidth": 768
+    },
+    "errors": []
+  },
+  {
+    "name": "pathway",
+    "width": 768,
+    "path": "artifacts/interface/pathway-768.png",
+    "bounds": {
+      "width": 768,
+      "scrollWidth": 768
+    },
+    "errors": []
+  },
+  {
+    "name": "profile",
+    "width": 768,
+    "path": "artifacts/interface/profile-768.png",
+    "bounds": {
+      "width": 768,
+      "scrollWidth": 768
+    },
+    "errors": []
+  },
+  {
+    "name": "compliance",
+    "width": 768,
+    "path": "artifacts/interface/compliance-768.png",
+    "bounds": {
+      "width": 768,
+      "scrollWidth": 768
+    },
+    "errors": []
+  },
+  {
+    "name": "workbench",
+    "width": 768,
+    "path": "artifacts/interface/workbench-768.png",
+    "bounds": {
+      "width": 768,
+      "scrollWidth": 768
+    },
+    "errors": []
+  },
+  {
+    "name": "preparation",
+    "width": 1440,
+    "path": "artifacts/interface/preparation-1440.png",
+    "bounds": {
+      "width": 1184,
+      "scrollWidth": 1184
+    },
+    "errors": []
+  },
+  {
+    "name": "pathway",
+    "width": 1440,
+    "path": "artifacts/interface/pathway-1440.png",
+    "bounds": {
+      "width": 1184,
+      "scrollWidth": 1184
+    },
+    "errors": []
+  },
+  {
+    "name": "profile",
+    "width": 1440,
+    "path": "artifacts/interface/profile-1440.png",
+    "bounds": {
+      "width": 1184,
+      "scrollWidth": 1184
+    },
+    "errors": []
+  },
+  {
+    "name": "compliance",
+    "width": 1440,
+    "path": "artifacts/interface/compliance-1440.png",
+    "bounds": {
+      "width": 1184,
+      "scrollWidth": 1184
+    },
+    "errors": []
+  },
+  {
+    "name": "workbench",
+    "width": 1440,
+    "path": "artifacts/interface/workbench-1440.png",
+    "bounds": {
+      "width": 1184,
+      "scrollWidth": 1184
+    },
+    "errors": []
+  }
+]

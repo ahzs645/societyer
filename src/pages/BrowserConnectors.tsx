@@ -1,5 +1,5 @@
 import { authenticatedFetch } from "@/lib/authToken";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, ClipboardPaste, ExternalLink, MonitorPlay, Play, RefreshCw, ShieldCheck, Square, Upload, XCircle } from "lucide-react";
 import { PageLoading, SeedPrompt } from "./_helpers";
@@ -237,6 +237,10 @@ export function BrowserConnectorsPage() {
   const [gcosIncludeAgreementPdfs, setGcosIncludeAgreementPdfs] = useState(true);
   const [gcosExportJson, setGcosExportJson] = useState("");
   const [pasteText, setPasteText] = useState("");
+  const [activeTab, setActiveTab] = useState("apps");
+  const refreshInFlight = useRef<{ societyId: string; controller: AbortController } | null>(null);
+  const currentSocietyId = useRef(society?._id);
+  currentSocietyId.current = society?._id;
   const [workspaceConnectorId, setWorkspaceConnectorId] = useState<string | null>(null);
 
   const availableConnectors = mergeConnectorManifests(connectors);
@@ -264,14 +268,26 @@ export function BrowserConnectorsPage() {
 
   useEffect(() => {
     if (staticDemo) return;
-    refresh();
-    const id = window.setInterval(refresh, 5000);
-    return () => window.clearInterval(id);
+    let stopped = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      await refresh();
+      if (!stopped) timer = window.setTimeout(poll, 5000);
+    };
+    void poll();
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+      refreshInFlight.current?.controller.abort();
+      refreshInFlight.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [society?._id, staticDemo]);
 
   useEffect(() => {
     setSessions([]);
+    setConnectors([]);
+    setHealth(staticDemo ? staticDemoHealth() : null);
     setProfileKey(profileKeyFor(availableConnectors.find((connector) => connector.id === connectorId)));
     setAuthCheck(null);
     setSavedConnection(null);
@@ -295,11 +311,14 @@ export function BrowserConnectorsPage() {
       throw new Error("Browser apps are a read-only preview in the static demo. Start the local app and connector stack to use them.");
     }
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 10_000);
+    const abort = () => controller.abort();
+    init?.signal?.addEventListener("abort", abort, { once: true });
+    if (init?.signal?.aborted) controller.abort();
+    const timeout = window.setTimeout(abort, 10_000);
     try {
       const response = await authenticatedFetch(`/api/v1/browser-connectors${path}`, {
         ...init,
-        signal: init?.signal ?? controller.signal,
+        signal: controller.signal,
         headers: {
           "content-type": "application/json",
           ...(init?.headers ?? {}),
@@ -315,6 +334,7 @@ export function BrowserConnectorsPage() {
       return payload;
     } finally {
       window.clearTimeout(timeout);
+      init?.signal?.removeEventListener("abort", abort);
     }
   }
 
@@ -325,12 +345,20 @@ export function BrowserConnectorsPage() {
       setSessions([]);
       return;
     }
+    const scope = String(society._id);
+    if (refreshInFlight.current?.societyId === scope) return;
+    refreshInFlight.current?.controller.abort();
+    const controller = new AbortController();
+    const request = { societyId: scope, controller };
+    refreshInFlight.current = request;
+    const isCurrent = () => !controller.signal.aborted && currentSocietyId.current === society._id && refreshInFlight.current === request;
     try {
       const [connectorsPayload, healthPayload, sessionsPayload] = await Promise.all([
-        apiFetch<{ connectors: ConnectorManifest[] }>(`/connectors?societyId=${society._id}`),
-        apiFetch<{ data: RunnerHealth }>(`/health?societyId=${society._id}`),
-        apiFetch<{ sessions: BrowserSession[] }>(`/sessions?societyId=${society._id}`),
+        apiFetch<{ connectors: ConnectorManifest[] }>(`/connectors?societyId=${encodeURIComponent(scope)}`, { signal: controller.signal }),
+        apiFetch<{ data: RunnerHealth }>(`/health?societyId=${encodeURIComponent(scope)}`, { signal: controller.signal }),
+        apiFetch<{ sessions: BrowserSession[] }>(`/sessions?societyId=${encodeURIComponent(scope)}`, { signal: controller.signal }),
       ]);
+      if (!isCurrent()) return;
       setConnectors(connectorsPayload.connectors ?? []);
       setHealth(healthPayload.data);
       const ownedSessions = (sessionsPayload.sessions ?? []).filter((session) =>
@@ -347,8 +375,11 @@ export function BrowserConnectorsPage() {
         });
       }
     } catch (error: any) {
+      if (!isCurrent()) return;
       setHealth({ ok: false, browser: { ok: false, provider: "blitz", detail: error?.message } });
       setSessions([]);
+    } finally {
+      if (refreshInFlight.current === request) refreshInFlight.current = null;
     }
   }
 
@@ -400,6 +431,7 @@ export function BrowserConnectorsPage() {
   }
 
   function backToApps() {
+    setActiveTab("apps");
     setWorkspaceConnectorId(null);
     setAuthCheck(null);
     setSavedConnection(null);
@@ -1105,7 +1137,11 @@ export function BrowserConnectorsPage() {
           { id: "runtime", label: "Runtime" },
           { id: "sessions", label: "Sessions" },
         ]}
-        activeTab={workspaceConnector ? "sessions" : "apps"}
+        activeTab={workspaceConnector ? "sessions" : activeTab}
+        onTabChange={(tab) => {
+          if (tab !== "sessions") backToApps();
+          setActiveTab(tab);
+        }}
         actions={
           <>
             {workspaceConnector && (
@@ -1120,7 +1156,7 @@ export function BrowserConnectorsPage() {
         }
       >
 
-      {!workspaceConnector && (
+      {!workspaceConnector && activeTab === "apps" && (
         <>
           <div className="card__head" style={{ marginBottom: 8 }}>
             <h2 className="card__title">Installed apps</h2>
@@ -1192,6 +1228,14 @@ export function BrowserConnectorsPage() {
         </>
       )}
 
+      {!workspaceConnector && activeTab === "runtime" && <section role="tabpanel" aria-label="Runtime" className="card">
+        <div className="card__head"><h2 className="card__title">Browser runtime</h2><Badge tone={runnerReady ? "success" : "danger"}>{runnerReady ? "Ready" : "Unavailable"}</Badge></div>
+        <div className="card__body col" style={{ gap: 12 }}><p>{health?.browser?.detail ?? "Checking the connector runner…"}</p><span>Provider: {health?.browser?.provider ?? "blitz"}</span><span>Active sessions: {sessions.length}</span></div>
+      </section>}
+      {!workspaceConnector && activeTab === "sessions" && <section role="tabpanel" aria-label="Sessions" className="card">
+        <div className="card__head"><h2 className="card__title">Browser sessions</h2><Badge>{sessions.length}</Badge></div>
+        <div className="card__body col" style={{ gap: 12 }}>{sessions.length ? sessions.map((session) => <div key={session.sessionId} className="row" style={{ flexWrap: "wrap", gap: 8 }}><span style={{ overflowWrap: "anywhere" }}>{session.connectorId}: {session.profileKey}</span><Button disabled={!session.connectorId} onClick={() => { if (session.connectorId) openWorkspace(session.connectorId); }}>Open workspace</Button></div>) : <p className="muted">No active browser sessions in this workspace.</p>}</div>
+      </section>}
       {workspaceConnector && selectedConnector && (
         <>
           <div className="grid two" style={{ marginBottom: 16 }}>

@@ -50,7 +50,9 @@ assert.equal(mapped[0].reason, "Holds >25% of votes");
 assert.equal(deriveSignificanceStatus({ ...mapped[0], ceasedSignificantOn: "2024-02-01", becameSignificantOn: "2019-01-01" }, "2024-06-01"), "former");
 
 // --- complianceDeadlines transformation (existing society fields) -------------
-const settings: ComplianceSettings = { fiscalYearEnd: "12-31", anniversaryDate: "2018-09-20" };
+// A formed BC society's annual report is tied to its recorded AGM, rather than
+// inferred from an incorporation anniversary.
+const settings: ComplianceSettings = { fiscalYearEnd: "12-31", incorporationDate: "2018-09-20", anniversaryDate: "2018-09-20", jurisdictionCode: "CA-BC", entityType: "society", annualMeetingDate: "2025-12-15" };
 const deadlines = deriveComplianceDeadlines(settings, "2026-01-01");
 const keys = deadlines.map((d) => d.key).sort();
 assert.ok(keys.includes("fiscal-year-end"));

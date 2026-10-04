@@ -1,8 +1,10 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { useRecordTableStoreHandle } from "../state/recordTableStore";
+import { useCurrentUserId } from "@/hooks/useCurrentUser";
+import { usePermissions } from "@/hooks/usePermissions";
 
 /**
  * Returns callbacks for saving view state back to Convex:
@@ -25,8 +27,26 @@ export function usePersistView({
   const addField = useMutation(api.views.addField);
   const reorderFields = useMutation(api.views.reorderFields);
   const handle = useRecordTableStoreHandle();
+  const actorId = useCurrentUserId();
+  const { can } = usePermissions();
+  const authority = useRef({ actorId, handle, canSave: can("settings:write") });
+  authority.current = { actorId, handle, canSave: can("settings:write") };
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
+  // A queued callback or multi-step save may outlive its actor/table. Check
+  // current authority before every mutation and before promoting local state.
+  const requireCurrentAuthority = useCallback(() => {
+    const current = authority.current;
+    if (!active.current || !actorId || current.actorId !== actorId || current.handle !== handle || !current.canSave) {
+      throw new Error("Saved views require current settings write access.");
+    }
+  }, [actorId, handle]);
 
   const saveCurrentView = useCallback(async () => {
+    requireCurrentAuthority();
     const state = handle.get();
     if (!state.viewId) throw new Error("No active view to save.");
     const viewId = state.viewId as Id<"views">;
@@ -50,6 +70,7 @@ export function usePersistView({
     });
     // Persist column sizing + visibility.
     for (const col of state.columns) {
+      requireCurrentAuthority();
       await updateField({
         id: col.viewFieldId as Id<"viewFields">,
         patch: {
@@ -62,6 +83,7 @@ export function usePersistView({
       });
     }
     // Commit positional order.
+    requireCurrentAuthority();
     await reorderFields({
       viewId,
       orderedIds: state.columns
@@ -70,11 +92,13 @@ export function usePersistView({
         .map((c) => c.viewFieldId as Id<"viewFields">),
     });
     // Promote live state into `savedView` so isDirty flips back to false.
+    requireCurrentAuthority();
     handle.get().markSaved();
-  }, [updateField, updateView, reorderFields, handle]);
+  }, [updateField, updateView, reorderFields, handle, requireCurrentAuthority]);
 
   const saveAsNewView = useCallback(
     async (name: string) => {
+      requireCurrentAuthority();
       const state = handle.get();
       const viewId = await createView({
         societyId,
@@ -97,6 +121,7 @@ export function usePersistView({
       });
       const newColumns = [] as typeof state.columns;
       for (let i = 0; i < state.columns.length; i++) {
+        requireCurrentAuthority();
         const col = state.columns[i];
         const newViewFieldId = await addField({
           societyId,
@@ -115,11 +140,12 @@ export function usePersistView({
         });
       }
       // Future saves must target the newly-created view and its fields.
+      requireCurrentAuthority();
       handle.set({ viewId: String(viewId), columns: newColumns });
       handle.get().markSaved();
       return viewId;
     },
-    [createView, addField, societyId, objectMetadataId, handle],
+    [createView, addField, societyId, objectMetadataId, handle, requireCurrentAuthority],
   );
 
   return { saveCurrentView, saveAsNewView };

@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import type { Id } from "../../convex/_generated/dataModel";
+import { usePermissions } from "../hooks/usePermissions";
+import { useConfirm } from "../components/Modal";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { BookOpen, Pencil, Plus, Sparkles, Tag, Trash2, X } from "lucide-react";
@@ -37,6 +39,10 @@ function templateTags(t: any): string[] {
 export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } = {}) {
   const society = useSociety();
   const toast = useToast();
+  const confirm = useConfirm();
+  const { loaded, can } = usePermissions();
+  const canManage = loaded && can("motions:write");
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [editingId, setEditingId] = useState<Id<"motionTemplates"> | null>(
     null,
@@ -54,23 +60,35 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
   const remove = useMutation(api.motionTemplates.remove);
   const seed = useMutation(api.motionTemplates.seedDefaults);
 
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    (templates ?? []).forEach((t: any) => templateTags(t).forEach((tag) => set.add(tag)));
+    return Array.from(set).sort();
+  }, [templates]);
+
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const save = async () => {
+    if (!canManage || saving) return;
     if (!form.title.trim() || !form.body.trim()) {
       toast.info("Title and body are required.");
       return;
     }
-    if (editingId) {
-      await update({ templateId: editingId, ...form });
-      toast.success("Template updated");
-    } else {
-      await create({ societyId: society._id, ...form });
-      toast.success("Template added");
-    }
-    setForm(EMPTY_FORM);
-    setEditingId(null);
+    setSaving(true);
+    try {
+      if (editingId) {
+        await update({ templateId: editingId, ...form, title: form.title.trim(), body: form.body.trim() });
+        toast.success("Template updated");
+      } else {
+        await create({ societyId: society._id, ...form, title: form.title.trim(), body: form.body.trim() });
+        toast.success("Template added");
+      }
+      setForm(EMPTY_FORM);
+      setEditingId(null);
+    } catch (error) {
+      toast.error("Template could not be saved", error instanceof Error ? error.message : "Please try again.");
+    } finally { setSaving(false); }
   };
 
   const edit = (t: any) => {
@@ -96,11 +114,7 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
     setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }));
   };
 
-  const allTags = useMemo(() => {
-    const set = new Set<string>();
-    (templates ?? []).forEach((t: any) => templateTags(t).forEach((tag) => set.add(tag)));
-    return Array.from(set).sort();
-  }, [templates]);
+
 
   const filtered = (templates ?? []).filter((t: any) => {
     const tags = templateTags(t);
@@ -127,6 +141,7 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
             (templates?.length ?? 0) === 0 && (
               <button
                 className="btn-action"
+                disabled={!canManage}
                 onClick={async () => {
                   const res = await seed({ societyId: society._id });
                   toast.success(`Added ${res.inserted} starter motions`);
@@ -146,7 +161,7 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
               {editingId ? "Edit template" : "New template"}
             </h2>
           </div>
-          <div className="card__body motion-library__form">
+          <fieldset className="card__body motion-library__form" disabled={!canManage || saving} style={{ border: 0, margin: 0, minWidth: 0 }}>
             <Field label="Title">
               <input
                 className="input"
@@ -232,8 +247,8 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
               />
             </Field>
             <div className="motion-library__actions">
-              <button className="btn btn--accent" onClick={save}>
-                <Plus size={14} /> {editingId ? "Save changes" : "Add template"}
+              <button className="btn btn--accent" onClick={save} disabled={!canManage || saving || !form.title.trim() || !form.body.trim()}>
+                <Plus size={14} /> {saving ? "Saving…" : editingId ? "Save changes" : "Add template"}
               </button>
               {editingId && (
                 <button
@@ -247,7 +262,7 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
                 </button>
               )}
             </div>
-          </div>
+          </fieldset>
         </div>
 
         <div className="card motion-library__templates">
@@ -283,6 +298,7 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
                 <strong>No reusable templates yet.</strong>
                 <button
                   className="btn"
+                  disabled={!canManage}
                   onClick={async () => {
                     const res = await seed({ societyId: society._id });
                     toast.success(`Added ${res.inserted} starter motions`);
@@ -332,14 +348,21 @@ export function MotionLibraryPage({ embedded = false }: { embedded?: boolean } =
                         className="btn-action btn-action--icon"
                         onClick={() => edit(t)}
                         title="Edit template"
+                        disabled={!canManage}
                         aria-label={`Edit ${t.title}`}
                       >
                         <Pencil size={12} />
                       </button>
                       <button
                         className="btn-action btn-action--icon"
-                        onClick={() => remove({ templateId: t._id })}
+                        onClick={async () => {
+                          const ok = await confirm({ title: "Delete motion template?", message: `Delete “${t.title}” from the reusable library?`, confirmLabel: "Delete", tone: "danger" });
+                          if (!ok) return;
+                          try { await remove({ templateId: t._id }); toast.success("Template deleted"); }
+                          catch (error) { toast.error("Template could not be deleted", error instanceof Error ? error.message : "Please try again."); }
+                        }}
                         title="Delete template"
+                        disabled={!canManage}
                         aria-label={`Delete ${t.title}`}
                       >
                         <Trash2 size={12} />

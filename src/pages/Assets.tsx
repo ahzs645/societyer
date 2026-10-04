@@ -1,3 +1,4 @@
+import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { type SelectHTMLAttributes, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -79,6 +80,7 @@ import {
 } from "../features/assets/assetUtils";
 
 export function AssetsPage() {
+  const { canWrite, canExport } = useFinancePermissions();
   const society = useSociety();
   const navigate = useNavigate();
   const toast = useToast();
@@ -346,7 +348,7 @@ export function AssetsPage() {
         },
         ...(row.category === "Consumable"
           ? [
-              {
+              { disabled: !canWrite,
                 id: "stock",
                 label: "Add stock",
                 icon: <ClipboardList size={14} />,
@@ -354,13 +356,13 @@ export function AssetsPage() {
               },
             ]
           : []),
-        {
+        { disabled: !canWrite,
           id: "receipt",
           label: "Link receipt item",
           icon: <Link2 size={14} />,
           onSelect: () => openReceiptLineLink(row),
         },
-        {
+        { disabled: !canWrite,
           id: "edit",
           label: "Edit",
           icon: <Pencil size={14} />,
@@ -371,7 +373,7 @@ export function AssetsPage() {
     {
       id: "danger",
       items: [
-        {
+        { disabled: !canWrite,
           id: "delete",
           label: "Delete",
           icon: <Trash2 size={14} />,
@@ -391,15 +393,15 @@ export function AssetsPage() {
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <MoreActionsMenu
               items={[
-                { id: "export", label: "Export CSV", icon: <Download size={14} />, onSelect: () => downloadText(`societyer-assets-${todayDate()}.csv`, assetsToCsv(rows)) },
-                { id: "import", label: "Import CSV", icon: <Upload size={14} />, onSelect: () => setDrawer("import") },
-                { id: "verify", label: "Start verification", icon: <ClipboardCheck size={14} />, onSelect: () => setDrawer("verify") },
+                { disabled: !canExport, id: "export", label: "Export CSV", icon: <Download size={14} />, onSelect: () => downloadText(`societyer-assets-${todayDate()}.csv`, assetsToCsv(rows)) },
+                { disabled: !canWrite, id: "import", label: "Import CSV", icon: <Upload size={14} />, onSelect: () => setDrawer("import") },
+                { disabled: !canWrite, id: "verify", label: "Start verification", icon: <ClipboardCheck size={14} />, onSelect: () => setDrawer("verify") },
               ]}
             />
             <button className="btn-action" onClick={() => setScanOpen(true)}>
               <ScanLine size={12} /> Scan
             </button>
-            <button className="btn-action btn-action--primary" onClick={() => openGlobalAssetCreate()}>
+            <button className="btn-action btn-action--primary" onClick={() => openGlobalAssetCreate()} disabled={!canWrite}>
               <Plus size={12} /> New asset
             </button>
           </div>
@@ -507,7 +509,7 @@ export function AssetsPage() {
             <button
               className="btn btn--ghost btn--sm"
               style={{ marginRight: "auto" }}
-              disabled={saving}
+              disabled={!canWrite || (saving)}
               onClick={() => {
                 const row = rows.find((r) => r._id === editingId);
                 if (row) openReceiptLineLink(row);
@@ -516,7 +518,7 @@ export function AssetsPage() {
               <Link2 size={12} /> Link receipt item
             </button>
             <button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button>
-            <button className="btn btn--accent" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save asset"}</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canWrite || (saving)}>{saving ? "Saving…" : "Save asset"}</button>
           </>
         }
       >
@@ -537,7 +539,7 @@ export function AssetsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveStockIntake} disabled={saving}>{saving ? "Saving…" : "Update stock"}</button>
+            <button className="btn btn--accent" onClick={saveStockIntake} disabled={!canWrite || (saving)}>{saving ? "Saving…" : "Update stock"}</button>
           </>
         }
       >
@@ -573,7 +575,7 @@ export function AssetsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveReceiptLineLink} disabled={saving}>{saving ? "Saving…" : "Link item"}</button>
+            <button className="btn btn--accent" onClick={saveReceiptLineLink} disabled={!canWrite || (saving)}>{saving ? "Saving…" : "Link item"}</button>
           </>
         }
       >
@@ -593,7 +595,7 @@ export function AssetsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button>
-            <button className="btn btn--accent" onClick={importRows} disabled={saving}><FileSpreadsheet size={14} /> {saving ? "Importing…" : "Import"}</button>
+            <button className="btn btn--accent" onClick={importRows} disabled={!canWrite || (saving)}><FileSpreadsheet size={14} /> {saving ? "Importing…" : "Import"}</button>
           </>
         }
       >
@@ -609,7 +611,7 @@ export function AssetsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button>
-            <button className="btn btn--accent" onClick={startVerification} disabled={saving}><ClipboardCheck size={14} /> {saving ? "Starting…" : "Start"}</button>
+            <button className="btn btn--accent" onClick={startVerification} disabled={!canWrite || (saving)}><ClipboardCheck size={14} /> {saving ? "Starting…" : "Start"}</button>
           </>
         }
       >
@@ -633,6 +635,7 @@ export function AssetsPage() {
 type DetailTab = "overview" | "maintenance" | "custody" | "compliance" | "label";
 
 export function AssetDetailPage() {
+  const { canWrite, canExport } = useFinancePermissions();
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
@@ -748,15 +751,15 @@ export function AssetDetailPage() {
           editing ? (
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <button className="btn-action" onClick={() => setEditing(false)} disabled={saving}><ArrowLeft size={12} /> Cancel</button>
-              <button className="btn-action btn-action--primary" onClick={saveEdit} disabled={saving}><Pencil size={12} /> {saving ? "Saving…" : "Save"}</button>
+              <button className="btn-action btn-action--primary" onClick={saveEdit} disabled={!canWrite || (saving)}><Pencil size={12} /> {saving ? "Saving…" : "Save"}</button>
             </div>
           ) : (
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link>
-              <button className="btn-action" onClick={() => setDrawer("custody")}><Repeat2 size={12} /> Log custody change</button>
-              {serviceable && <button className="btn-action" onClick={() => setDrawer("maintenance")}><Wrench size={12} /> Schedule</button>}
-              <button className="btn-action" onClick={() => setDrawer("disposal")}><Trash2 size={12} /> Dispose</button>
-              <button className="btn-action btn-action--primary" onClick={openEdit}><Pencil size={12} /> Edit</button>
+              <button className="btn-action" onClick={() => setDrawer("custody")} disabled={!canWrite}><Repeat2 size={12} /> Log custody change</button>
+              {serviceable && <button className="btn-action" onClick={() => setDrawer("maintenance")} disabled={!canWrite}><Wrench size={12} /> Schedule</button>}
+              <button className="btn-action" onClick={() => setDrawer("disposal")} disabled={!canWrite}><Trash2 size={12} /> Dispose</button>
+              <button className="btn-action btn-action--primary" onClick={openEdit} disabled={!canWrite}><Pencil size={12} /> Edit</button>
             </div>
           )
         }
@@ -848,7 +851,7 @@ export function AssetDetailPage() {
                 { id: "status", header: "Status", accessor: (row) => row.status, render: (row) => <Badge tone={row.status === "Completed" ? "success" : "warn"}>{row.status}</Badge> },
               ]}
               renderRowActions={(row) => row.status !== "Completed" ? (
-                <button className="btn btn--ghost btn--sm" onClick={() => completeMaintenance({ id: row._id, completedAtISO: new Date().toISOString(), notes: row.notes })}>
+                <button className="btn btn--ghost btn--sm" onClick={() => completeMaintenance({ id: row._id, completedAtISO: new Date().toISOString(), notes: row.notes })} disabled={!canWrite}>
                   <CheckCircle2 size={12} /> Done
                 </button>
               ) : null}
@@ -937,19 +940,19 @@ export function AssetDetailPage() {
               />
             </Field>
             <AssetQrLabel assetTag={asset.assetTag} name={asset.name} url={assetUrl(asset._id)} labelType={labelType} />
-            <div><button className="btn btn--sm" onClick={() => window.print()}>Print label</button></div>
+            <div><button className="btn btn--sm" onClick={() => window.print()} disabled={!canExport}>Print label</button></div>
           </section>
         )}
       </div>
       )}
 
-      <Drawer open={drawer === "custody"} onClose={() => setDrawer(null)} title="Record custody event" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveEvent} disabled={saving}>{saving ? "Saving…" : "Record"}</button></>}>
+      <Drawer open={drawer === "custody"} onClose={() => setDrawer(null)} title="Record custody event" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveEvent} disabled={!canWrite || (saving)}>{saving ? "Saving…" : "Record"}</button></>}>
         <CustodyForm form={eventForm} setForm={setEventForm} />
       </Drawer>
-      <Drawer open={drawer === "maintenance"} onClose={() => setDrawer(null)} title="Schedule maintenance" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveMaintenance} disabled={saving}>{saving ? "Saving…" : "Schedule"}</button></>}>
+      <Drawer open={drawer === "maintenance"} onClose={() => setDrawer(null)} title="Schedule maintenance" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={saveMaintenance} disabled={!canWrite || (saving)}>{saving ? "Saving…" : "Schedule"}</button></>}>
         <MaintenanceForm form={maintenanceForm} setForm={setMaintenanceForm} />
       </Drawer>
-      <Drawer open={drawer === "disposal"} onClose={() => setDrawer(null)} title="Dispose asset" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--danger" onClick={saveDisposal} disabled={saving}>{saving ? "Disposing…" : "Dispose"}</button></>}>
+      <Drawer open={drawer === "disposal"} onClose={() => setDrawer(null)} title="Dispose asset" footer={<><button className="btn" onClick={() => setDrawer(null)} disabled={saving}>Cancel</button><button className="btn btn--danger" onClick={saveDisposal} disabled={!canWrite || (saving)}>{saving ? "Disposing…" : "Dispose"}</button></>}>
         <DisposalForm form={disposalForm} setForm={setDisposalForm} />
       </Drawer>
     </div>
@@ -957,17 +960,21 @@ export function AssetDetailPage() {
 }
 
 export function AssetVerificationPage() {
+  const { canWrite } = useFinancePermissions();
   const { runId } = useParams();
   const navigate = useNavigate();
   const society = useSociety();
   const currentUser = useCurrentUser();
-  const items = useQuery(api.assets.verificationItems, runId ? { runId: runId as any } : "skip");
+  const runs = useQuery(api.assets.verificationRuns, society ? { societyId: society._id } : "skip");
+  const run = (runs ?? []).find((candidate: any) => candidate._id === runId);
+  const items = useQuery(api.assets.verificationItems, run ? { runId: run._id } : "skip");
   const assets = useQuery(api.assets.list, society ? { societyId: society._id } : "skip");
   const verifyAsset = useMutation(api.assets.verifyAsset);
   const completeRun = useMutation(api.assets.completeVerificationRun);
   const verifierName = currentUser?.displayName || "Treasurer";
   const toast = useToast();
   const [scanOpen, setScanOpen] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [scanCode, setScanCode] = useState<string | null>(null);
   const scanResult = useQuery(
     api.assets.resolveScan,
@@ -1004,13 +1011,29 @@ export function AssetVerificationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanResult, scanCode]);
 
+  if (society === undefined || (society && (runs === undefined || assets === undefined))) return <PageLoading />;
+  if (society === null) return <SeedPrompt />;
+  if (!run) return <div className="page"><Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link><p>Physical inventory run not found.</p></div>;
+  if (items === undefined) return <PageLoading />;
+
+  const finishRun = async () => {
+    if (completing) return;
+    setCompleting(true);
+    try {
+      await completeRun({ id: run._id });
+      navigate("/app/assets");
+    } catch (error: any) {
+      toast.error("Could not complete the physical inventory", error?.message ?? "Try again.");
+    } finally { setCompleting(false); }
+  };
+
   return (
     <div className="page">
       <PageHeader
         title="Physical inventory"
         routeKey="/app/assets"
         subtitle={`${pending} asset${pending === 1 ? "" : "s"} still pending.`}
-        actions={<><Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link><button className="btn-action" onClick={() => setScanOpen(true)}><ScanLine size={12} /> Scan to verify</button><button className="btn-action btn-action--primary" onClick={async () => { await completeRun({ id: runId as any }); navigate("/app/assets"); }}><CheckCircle2 size={12} /> Complete run</button></>}
+        actions={<><Link className="btn-action" to="/app/assets"><ArrowLeft size={12} /> Assets</Link><button className="btn-action" onClick={() => setScanOpen(true)} disabled={!canWrite}><ScanLine size={12} /> Scan to verify</button><button className="btn-action btn-action--primary" disabled={!canWrite || (completing)} onClick={finishRun}><CheckCircle2 size={12} /> {completing ? "Completing…" : "Complete run"}</button></>}
       />
       <DataTable
         label="Verification checklist"
@@ -1021,16 +1044,16 @@ export function AssetVerificationPage() {
         columns={[
           { id: "assetTag", header: "Tag", accessor: (row) => row.asset?.assetTag, render: (row) => <span className="mono">{row.asset?.assetTag ?? row.assetId}</span> },
           { id: "name", header: "Asset", accessor: (row) => row.asset?.name },
+          { id: "status", header: "Status", accessor: (row) => row.status, render: (row) => <Badge tone={row.status === "verified" ? "success" : row.status === "pending" ? "neutral" : "warn"}>{row.status}</Badge> },
           { id: "location", header: "Expected location", accessor: (row) => row.asset?.location },
           { id: "condition", header: "Expected condition", accessor: (row) => row.asset?.condition },
-          { id: "status", header: "Status", accessor: (row) => row.status, render: (row) => <Badge tone={row.status === "verified" ? "success" : row.status === "pending" ? "neutral" : "warn"}>{row.status}</Badge> },
         ]}
         renderRowActions={(row) => (
           <>
-            <button className="btn btn--ghost btn--sm" onClick={() => verifyAsset({ itemId: row._id, status: "verified", verifiedByName: verifierName, observedLocation: row.asset?.location, observedCondition: row.asset?.condition })}>
+            <button className="btn btn--ghost btn--sm" onClick={() => verifyAsset({ itemId: row._id, status: "verified", verifiedByName: verifierName, observedLocation: row.asset?.location, observedCondition: row.asset?.condition })} disabled={!canWrite}>
               <CheckCircle2 size={12} /> Verified
             </button>
-            <button className="btn btn--ghost btn--sm" onClick={() => verifyAsset({ itemId: row._id, status: "missing", verifiedByName: verifierName })}>
+            <button className="btn btn--ghost btn--sm" onClick={() => verifyAsset({ itemId: row._id, status: "missing", verifiedByName: verifierName })} disabled={!canWrite}>
               Missing
             </button>
           </>
@@ -1192,6 +1215,7 @@ function AssetMobileCard({
   onEdit: () => void;
   onAddStock: () => void;
 }) {
+  const { canWrite } = useFinancePermissions();
   const hasPurchaseEvidence = Boolean(row.receiptDocumentId || row.purchaseTransactionId);
   return (
     <article className="asset-mobile-card">
@@ -1219,8 +1243,8 @@ function AssetMobileCard({
       )}
       <div className="asset-mobile-card__actions">
         <button className="btn btn--accent btn--sm" onClick={onOpen}>Open</button>
-        <button className="btn btn--sm" onClick={onEdit}><Pencil size={12} /> Edit</button>
-        {row.category === "Consumable" && <button className="btn btn--sm" onClick={onAddStock}><Plus size={12} /> Add stock</button>}
+        <button className="btn btn--sm" onClick={onEdit} disabled={!canWrite}><Pencil size={12} /> Edit</button>
+        {row.category === "Consumable" && <button className="btn btn--sm" onClick={onAddStock} disabled={!canWrite}><Plus size={12} /> Add stock</button>}
       </div>
     </article>
   );

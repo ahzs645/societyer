@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { usePermissions } from "../hooks/usePermissions";
+import { useToast } from "../components/Toast";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
@@ -16,6 +18,10 @@ import { Select } from "../components/Select";
  */
 export function PeopleDirectoryPage() {
   const society = useSociety();
+  const toast = useToast();
+  const { loaded, can } = usePermissions();
+  const canManage = loaded && can("members:write");
+  const [saving, setSaving] = useState(false);
   const [prefix, setPrefix] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
@@ -94,9 +100,12 @@ export function PeopleDirectoryPage() {
   };
 
   const save = async () => {
-    await upsert({
+    if (!canManage || saving || !form?.fullName.trim()) return;
+    setSaving(true);
+    try {
+      await upsert({
       id: (editingId ?? undefined) as any,
-      fullName: form.fullName,
+      fullName: form.fullName.trim(),
       firstName: form.firstName || undefined,
       lastName: form.lastName || undefined,
       dob: form.dob || undefined,
@@ -108,6 +117,9 @@ export function PeopleDirectoryPage() {
     });
     setOpen(false);
     setEditingId(null);
+    } catch (error) {
+      toast.error("Person could not be saved", error instanceof Error ? error.message : "Please try again.");
+    } finally { setSaving(false); }
   };
 
   return (
@@ -118,7 +130,7 @@ export function PeopleDirectoryPage() {
         iconColor="blue"
         subtitle="A global, cross-tenant directory of people. Search by name to find an existing person before creating a new one, and review possible duplicates."
         actions={
-          <button className="btn-action btn-action--primary" onClick={openNew}>
+          <button className="btn-action btn-action--primary" onClick={openNew} disabled={!canManage}>
             <Plus size={12} /> New person
           </button>
         }
@@ -150,12 +162,12 @@ export function PeopleDirectoryPage() {
                   <div
                     key={m.id}
                     className="row"
-                    style={{ gap: 8, justifyContent: "space-between", alignItems: "center" }}
+                    style={{ gap: 8, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}
                   >
                     <span>{m.fullName}</span>
                     <span className="row" style={{ gap: 8, alignItems: "center" }}>
                       {m.dob && <span style={{ opacity: 0.6 }}>{m.dob}</span>}
-                      <button className="btn btn--ghost" onClick={() => openEdit(m)}>
+                      <button className="btn btn--ghost" onClick={() => openEdit(m)} disabled={!canManage}>
                         Edit
                       </button>
                     </span>
@@ -182,7 +194,7 @@ export function PeopleDirectoryPage() {
                     className="row"
                     style={{ gap: 8, justifyContent: "space-between" }}
                   >
-                    <span>{p.fullName}</span>
+                    <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{p.fullName}</span>
                     {p.dob && <span style={{ opacity: 0.6 }}>{p.dob}</span>}
                   </div>
                 ))}
@@ -204,10 +216,10 @@ export function PeopleDirectoryPage() {
               <div
                 key={p._id}
                 className="row"
-                style={{ gap: 8, justifyContent: "space-between", alignItems: "center" }}
+                style={{ gap: 8, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}
               >
-                <span>{p.fullName}</span>
-                <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{p.fullName}</span>
+                <span style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   {p.dob && <span style={{ opacity: 0.6 }}>{p.dob}</span>}
                   {p.isIndividual === false && <span style={{ opacity: 0.6 }}>Organization</span>}
                   {addedId === p._id ? (
@@ -227,6 +239,7 @@ export function PeopleDirectoryPage() {
                         { value: "member", label: "as Member" },
                         { value: "controller", label: "as Significant individual" },
                       ]}
+                      disabled={!canManage}
                       aria-label="Add to current society as…"
                       style={{ width: 150 }}
                     />
@@ -247,8 +260,8 @@ export function PeopleDirectoryPage() {
             <button className="btn" onClick={() => setOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" onClick={save}>
-              Save
+            <button className="btn btn--accent" onClick={save} disabled={!canManage || saving || !form?.fullName.trim()}>
+              {saving ? "Saving…" : "Save"}
             </button>
           </>
         }
