@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -12,13 +13,13 @@ import {
 } from "../shared/functions/organizationHistory";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("organizationHistory:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const saveSource = mutation({
+export const saveSource = authorizedMutation("organizationHistory:saveSource", mutation)({
   args: {
     societyId: v.id("societies"),
     id: v.optional(v.id("documents")),
@@ -28,13 +29,13 @@ export const saveSource = mutation({
   handler: async (ctx, args) => saveSourcePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeSource = mutation({
+export const removeSource = authorizedMutation("organizationHistory:removeSource", mutation)({
   args: { id: v.id("documents") },
   returns: v.any(),
   handler: async (ctx, args) => removeSourcePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const saveItem = mutation({
+export const saveItem = authorizedMutation("organizationHistory:saveItem", mutation)({
   args: {
     societyId: v.id("societies"),
     id: v.optional(v.id("documents")),
@@ -45,7 +46,7 @@ export const saveItem = mutation({
   handler: async (ctx, args) => saveItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const bulkSetItemReviewStatus = mutation({
+export const bulkSetItemReviewStatus = authorizedMutation("organizationHistory:bulkSetItemReviewStatus", mutation)({
   args: {
     updates: v.array(
       v.object({
@@ -61,7 +62,7 @@ export const bulkSetItemReviewStatus = mutation({
   handler: async (ctx, args) => bulkSetItemReviewStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const extractBudgetSourceDetails = mutation({
+export const extractBudgetSourceDetails = authorizedMutation("organizationHistory:extractBudgetSourceDetails", mutation)({
   args: {
     societyId: v.id("societies"),
     budgetId: v.id("documents"),
@@ -70,13 +71,13 @@ export const extractBudgetSourceDetails = mutation({
   handler: async (ctx, args) => extractBudgetSourceDetailsPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeItem = mutation({
+export const removeItem = authorizedMutation("organizationHistory:removeItem", mutation)({
   args: { id: v.id("documents"), kind: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => removeItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const bulkImport = mutation({
+export const bulkImport = authorizedMutation("organizationHistory:bulkImport", mutation)({
   args: {
     societyId: v.id("societies"),
     sources: v.array(v.any()),

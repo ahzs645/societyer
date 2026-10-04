@@ -1,3 +1,4 @@
+import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import {
   query,
@@ -36,7 +37,8 @@ import {
   removeNodePortable,
   listNodeTypesPortable,
 } from "../shared/functions/workflows";
-import { getOwned, principalUserId, requireSocietyMembership } from "../shared/functions/access";
+import { hasPermission } from "../shared/functions/permissions";
+import { getOwned, isActiveMembership, principalUserId, requireSocietyMembership } from "../shared/functions/access";
 
 import {
   UNBC_AFFILIATE_FIELDS,
@@ -118,7 +120,7 @@ import type {
 } from "./workflowCatalog";
 import { assertConvexOutboundUrl, fetchConvexOutbound } from "./lib/outboundUrlPolicy";
 
-export const listCatalog = query({
+export const listCatalog = authorizedQuery("workflows:listCatalog", query)({
   args: {},
   returns: v.any(),
   handler: async () =>
@@ -131,14 +133,14 @@ export const listCatalog = query({
 });
 
 
-export const listNodeTypes = query({
+export const listNodeTypes = authorizedQuery("workflows:listNodeTypes", query)({
   args: {},
   returns: v.any(),
   handler: () => listNodeTypesPortable(),
 });
 
 
-export const inspectPdfTemplate = action({
+export const inspectPdfTemplate = authorizedAction("workflows:inspectPdfTemplate", action)({
   args: {
     documentId: v.id("documents"),
     versionId: v.optional(v.id("documentVersions")),
@@ -187,7 +189,7 @@ export const inspectPdfTemplate = action({
 });
 
 
-export const createPdfTemplateImportSession = action({
+export const createPdfTemplateImportSession = authorizedAction("workflows:createPdfTemplateImportSession", action)({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -255,35 +257,35 @@ export const createPdfTemplateImportSession = action({
 });
 
 
-export const list = query({
+export const list = authorizedQuery("workflows:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
-export const listRuns = query({
+export const listRuns = authorizedQuery("workflows:listRuns", query)({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, args) => listRunsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
-export const runsForWorkflow = query({
+export const runsForWorkflow = authorizedQuery("workflows:runsForWorkflow", query)({
   args: { workflowId: v.id("workflows") },
   returns: v.any(),
   handler: async (ctx, args) => runsForWorkflowPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
-export const getRun = query({
+export const getRun = authorizedQuery("workflows:getRun", query)({
   args: { id: v.id("workflowRuns") },
   returns: v.any(),
   handler: async (ctx, args) => getRunPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
-export const get = query({
+export const get = authorizedQuery("workflows:get", query)({
   args: { id: v.id("workflows") },
   returns: v.any(),
   handler: async (ctx, { id }) => {
@@ -299,7 +301,7 @@ export const get = query({
 // ---- mutations ---------------------------------------------------------
 
 
-export const create = mutation({
+export const create = authorizedMutation("workflows:create", mutation)({
   args: {
     societyId: v.id("societies"),
     recipe: v.string(),
@@ -374,7 +376,7 @@ export const create = mutation({
 });
 
 
-export const setupGovernanceN8nRecipes = mutation({
+export const setupGovernanceN8nRecipes = authorizedMutation("workflows:setupGovernanceN8nRecipes", mutation)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -448,7 +450,7 @@ export const setupGovernanceN8nRecipes = mutation({
 });
 
 
-export const setStatus = mutation({
+export const setStatus = authorizedMutation("workflows:setStatus", mutation)({
   args: {
     id: v.id("workflows"),
     status: v.string(), // active | paused | archived
@@ -464,7 +466,7 @@ export const setStatus = mutation({
 // status. For status parity with the dedicated `setStatus` mutation,
 // this also enforces Director role.
 
-export const update = mutation({
+export const update = authorizedMutation("workflows:update", mutation)({
   args: {
     id: v.id("workflows"),
     patch: v.object({
@@ -478,7 +480,7 @@ export const update = mutation({
 });
 
 
-export const configure = mutation({
+export const configure = authorizedMutation("workflows:configure", mutation)({
   args: {
     id: v.id("workflows"),
     patch: v.object({
@@ -542,7 +544,7 @@ export const configure = mutation({
 });
 
 
-export const updateProviderLink = mutation({
+export const updateProviderLink = authorizedMutation("workflows:updateProviderLink", mutation)({
   args: {
     id: v.id("workflows"),
     provider: v.optional(v.string()),
@@ -579,7 +581,7 @@ export const updateProviderLink = mutation({
 });
 
 
-export const remove = mutation({
+export const remove = authorizedMutation("workflows:remove", mutation)({
   args: { id: v.id("workflows"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
@@ -591,7 +593,7 @@ export const remove = mutation({
 // and are marked skipped if the workflow runs. Clarifying the execution
 // contract is tracked for the full bridge MVP.
 
-export const addNode = mutation({
+export const addNode = authorizedMutation("workflows:addNode", mutation)({
   args: {
     id: v.id("workflows"),
     node: v.object({
@@ -607,7 +609,7 @@ export const addNode = mutation({
 });
 
 
-export const updateNodeConfig = mutation({
+export const updateNodeConfig = authorizedMutation("workflows:updateNodeConfig", mutation)({
   args: {
     id: v.id("workflows"),
     key: v.string(),
@@ -621,7 +623,7 @@ export const updateNodeConfig = mutation({
 });
 
 
-export const removeNode = mutation({
+export const removeNode = authorizedMutation("workflows:removeNode", mutation)({
   args: {
     id: v.id("workflows"),
     key: v.string(),
@@ -632,7 +634,7 @@ export const removeNode = mutation({
 });
 
 
-export const receiveExternalCallback = mutation({
+export const receiveExternalCallback = authorizedMutation("workflows:receiveExternalCallback", mutation)({
   args: {
     workflowId: v.id("workflows"),
     runId: v.id("workflowRuns"),
@@ -657,6 +659,12 @@ export const receiveExternalCallback = mutation({
       throw new Error("Workflow run not found.");
     }
 
+    const portable = await toPortableQueryCtx(ctx);
+    const actor = await requireSocietyMembership(portable, run.societyId);
+    if (run.triggeredByUserId !== actor._id) throw new Error("Workflow callback principal does not match this run.");
+    if (!["queued", "running"].includes(run.status)) throw new Error("Workflow run is already complete.");
+    const workflow = await getOwned(portable, "workflows", args.workflowId, run.societyId);
+    if (workflow.status !== "active") throw new Error("Workflow execution authority has been revoked.");
     const now = new Date().toISOString();
     const isFailure = args.event === "run.failed" || args.event === "step.failed";
     let steps = run.steps ?? [];
@@ -733,7 +741,7 @@ export const receiveExternalCallback = mutation({
 // effective `to` address, and we skip ones already enqueued for this run so
 // retries don't duplicate drafts.
 
-export const recordGeneratedDocument = mutation({
+export const recordGeneratedDocument = authorizedMutation("workflows:recordGeneratedDocument", mutation)({
   args: {
     societyId: v.id("societies"),
     workflowId: v.id("workflows"),
@@ -829,12 +837,9 @@ export const _createRun = internalMutation({
   handler: async (ctx, args) => {
     const portableCtx = await toPortableMutationCtx(ctx);
     await getOwned(portableCtx, "workflows", args.workflowId, args.societyId);
-    let triggeredByUserId: string | undefined;
-    if (args.triggeredByUserId) {
-      triggeredByUserId = await principalUserId(portableCtx, args.societyId);
-      if (triggeredByUserId !== String(args.triggeredByUserId)) {
-        throw new Error("Authenticated actor does not match the current principal.");
-      }
+    const triggeredByUserId = await principalUserId(portableCtx, args.societyId);
+    if (args.triggeredByUserId && triggeredByUserId !== String(args.triggeredByUserId)) {
+      throw new Error("Authenticated actor does not match the current principal.");
     }
     const steps = stepsForRun(args.recipe, args.nodePreview);
     return await ctx.db.insert("workflowRuns", {
@@ -852,6 +857,25 @@ export const _createRun = internalMutation({
   },
 });
 
+
+export const _requireRunAuthority = internalQuery({
+  args: { id: v.id("workflowRuns") }, returns: v.null(),
+  handler: async (ctx, { id }) => {
+    const run = await ctx.db.get(id);
+    const workflow = run ? await ctx.db.get(run.workflowId) : null;
+    const actorId = run?.triggeredByUserId ?? workflow?.createdByUserId;
+    const actor = actorId ? await ctx.db.get(actorId) : null;
+    if (!run || !workflow || run.societyId !== workflow.societyId || workflow.status !== "active" ||
+        !actor || actor.societyId !== run.societyId || !isActiveMembership(actor) || !hasPermission(actor.role, "tasks:write")) {
+      throw new Error("Workflow execution authority has been revoked.");
+    }
+    if (actor.externalIdentityId) {
+      const identity = await ctx.db.get(actor.externalIdentityId);
+      if (!identity || identity.status !== "Active") throw new Error("Workflow execution authority has been revoked.");
+    }
+    return null;
+  },
+});
 
 export const _updateStep = internalMutation({
   args: {
@@ -945,7 +969,7 @@ export const _touchSchedule = internalMutation({
 });
 
 
-export const recordConnectorRun = mutation({
+export const recordConnectorRun = authorizedMutation("workflows:recordConnectorRun", mutation)({
   args: {
     societyId: v.id("societies"),
     connectorId: v.string(),
@@ -1112,7 +1136,7 @@ export const scan = internalAction({
 });
 
 
-export const _listDue = query({
+export const _listDue = internalQuery({
   args: { dueBefore: v.string() },
   returns: v.any(),
   handler: async (ctx, { dueBefore }) => {
@@ -1130,7 +1154,7 @@ export const _listDue = query({
 // ---- the runner --------------------------------------------------------
 
 
-export const run = action({
+export const run = authorizedAction("workflows:run", action)({
   args: {
     societyId: v.id("societies"),
     workflowId: v.id("workflows"),
@@ -1159,6 +1183,7 @@ export const run = action({
       triggeredByUserId: args.actingUserId,
     });
 
+    await ctx.runQuery(internal.workflows._requireRunAuthority, { id: runId });
     if (provider === "n8n") {
       return await runExternalWorkflow(ctx, wf, runId, args);
     }
@@ -1174,12 +1199,14 @@ export const run = action({
       // "skip" and the run ends "manual_required" rather than a false "success".
       const manualSteps: string[] = [];
       for (let i = 0; i < steps.length; i++) {
+        await ctx.runQuery(internal.workflows._requireRunAuthority, { id: runId });
         await ctx.runMutation(internal.workflows._updateStep, {
           id: runId,
           stepIndex: i,
           status: "running",
         });
         await sleep(400);
+        await ctx.runQuery(internal.workflows._requireRunAuthority, { id: runId });
         const result = await handleStep(ctx, wf, i, rawIntake, nodes[i], args.actingUserId);
         const manualRequired = typeof result === "object" && result?.manualRequired === true;
         const note = typeof result === "string" ? result : result?.note;

@@ -9,13 +9,14 @@ import {
   CORPORATION_DOCUMENT_PACKETS,
   corporationPacketForComplianceObligation,
 } from "../shared/corporationDocumentPackets";
+import { SOCIETY_DOCUMENT_PACKETS } from "../shared/societyDocumentPackets";
 import { filingKindDefinitions } from "../shared/jurisdictionWorkspace";
 
 // Validates the post-incorporation guided flow: ordering is sane, every step links to a real
 // document packet and a real filing kind, the packet/obligation mappings agree, and the
 // accessors return the right steps per organization. See shared/postIncorporationSteps.ts.
 
-const packetKeys = new Set(CORPORATION_DOCUMENT_PACKETS.map((packet) => packet.key));
+const packetKeys = new Set([...CORPORATION_DOCUMENT_PACKETS, ...SOCIETY_DOCUMENT_PACKETS].map((packet) => packet.key));
 const problems: string[] = [];
 const summary: string[] = [];
 
@@ -62,7 +63,7 @@ for (const flow of POST_INCORPORATION_FLOWS) {
     }
 
     // Where the obligation→packet mapper resolves a packet, it must agree with packetKey (catch drift).
-    if (filingKind && step.packetKey) {
+    if (filingKind && step.packetKey && flow.entityTypes.includes("corporation__business_")) {
       const mapped = corporationPacketForComplianceObligation({ filingKind });
       if (mapped && mapped.key !== step.packetKey) {
         problems.push(`${where}: packetKey "${step.packetKey}" disagrees with obligation mapper "${mapped.key}" for filingKind ${filingKind}`);
@@ -103,7 +104,10 @@ for (let i = 1; i < federalSteps.length; i += 1) {
   assert.ok(federalSteps[i].order > federalSteps[i - 1].order, "steps must come back in ascending order");
 }
 const bcSocietySteps = postIncorporationStepsForOrganization({ jurisdictionCode: "CA-BC", entityType: "society" });
-assert.equal(bcSocietySteps.length, 0, "BC society should have no federal post-incorporation steps");
+assert.ok(bcSocietySteps.length > 0, "BC society should have its own preparation flow");
+assert.ok(bcSocietySteps.every((step) => step.key.startsWith("society-")));
+assert.ok(postIncorporationStepsForOrganization({ jurisdictionCode: "CA-BC", entityType: "corporation__business_" }).length > 0);
+assert.equal(postIncorporationStepsForOrganization({ jurisdictionCode: "CA-BC", entityType: "corporation__business_", legalSubtype: "benefit_company" } as any).length, 0, "Special company routes require review");
 
 const grouped = postIncorporationStepsByCategory({
   homeJurisdictionCode: "CA-FED-CBCA",

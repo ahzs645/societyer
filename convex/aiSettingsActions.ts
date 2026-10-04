@@ -1,5 +1,6 @@
 "use node";
 
+import { authorizedAction } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { action } from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
@@ -16,7 +17,7 @@ const RECOMMENDED_OPENROUTER_MODELS = [
   "meta-llama/llama-3.1-70b-instruct",
 ];
 
-export const validateProviderKey = action({
+export const validateProviderKey = authorizedAction("aiSettingsActions:validateProviderKey", action)({
   args: {
     provider: v.string(),
     apiKey: v.string(),
@@ -64,7 +65,7 @@ export const validateProviderKey = action({
   },
 });
 
-export const listProviderModels = action({
+export const listProviderModels = authorizedAction("aiSettingsActions:listProviderModels", action)({
   args: {
     provider: v.string(),
     apiKey: v.optional(v.string()),

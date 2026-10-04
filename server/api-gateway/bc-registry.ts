@@ -69,7 +69,7 @@ async function importGovernanceDocumentsFromBcRegistry(
   const candidates = pickGovernanceImportCandidates(records, exportInfo.directory);
   const importQueue: GovernanceImportCandidate[] = [];
 
-  if (needs.constitution && needs.bylaws && candidates.constitution?.fileName === candidates.bylaws?.fileName) {
+  if (needs.constitution && needs.bylaws && candidates.constitution && candidates.bylaws && candidates.constitution.fileName === candidates.bylaws.fileName) {
     importQueue.push({ ...candidates.constitution, kind: "constitutionAndBylaws", category: "Bylaws" });
   } else {
     if (needs.constitution && candidates.constitution) importQueue.push(candidates.constitution);

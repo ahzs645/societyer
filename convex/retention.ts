@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { authorizedQuery } from "./lib/authorizedServer";
 import { internalMutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
@@ -82,7 +83,7 @@ export const openAttestationYear = internalMutation({
 });
 
 /** Browse-time query: documents past retention (for the UI page). */
-export const expiredForSociety = query({
+export const expiredForSociety = authorizedQuery("retention:expiredForSociety", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => expiredForSocietyPortable(await toPortableQueryCtx(ctx), args),

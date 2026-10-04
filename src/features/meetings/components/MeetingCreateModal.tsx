@@ -5,7 +5,7 @@ import { api } from "@/lib/convexApi";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
-import { daysUntil, isGeneralMeeting, meetingScheduleConflicts } from "../lib/noticeWindow";
+import { noticeDaysUntil, isGeneralMeeting, meetingScheduleConflicts } from "../lib/noticeWindow";
 import { normalizedMeetingTitle } from "../lib/meetingDetailHelpers";
 import {
   MeetingFormFields,
@@ -69,7 +69,7 @@ export function MeetingCreateModal({
       return;
     }
     if (isGeneralMeeting(form.type)) {
-      const days = daysUntil(form.scheduledAt);
+      const days = noticeDaysUntil(form.scheduledAt, data.effectiveRules);
       if (days == null || days < data.effectiveNoticeMinDays) {
         toast.error(`General meetings need at least ${data.effectiveNoticeMinDays} days of notice.`);
         return;

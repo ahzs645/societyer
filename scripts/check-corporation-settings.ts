@@ -70,25 +70,27 @@ import {
 {
   const withAnniv: ComplianceSettings = {
     anniversaryDate: "2020-03-10",
+    entityType: "corporation__business_",
+    jurisdictionCode: "CA-BC",
     agmMonth: 6,
     agmDay: 15,
   };
   assert.equal(
     nextAnnualReportDueDate(withAnniv, "2026-01-01"),
-    "2026-03-10",
+    "2026-05-10",
     "uses anniversary month-day when present",
   );
   assert.equal(
     nextAnnualReportDueDate(withAnniv, "2026-04-01"),
-    "2027-03-10",
+    "2027-05-10",
     "anniversary rolls over",
   );
 
   const noAnniv: ComplianceSettings = { agmMonth: 6, agmDay: 15 };
   assert.equal(
     nextAnnualReportDueDate(noAnniv, "2026-01-01"),
-    "2026-06-15",
-    "falls back to nextAgmDate when no anniversary",
+    null,
+    "planned AGM cannot substitute for actual meeting",
   );
 
   assert.equal(nextAnnualReportDueDate({}, "2026-01-01"), null, "no anniversary or AGM -> null");
@@ -105,6 +107,8 @@ function isValidISODate(s: string): boolean {
     agmDay: 15,
     fiscalYearEnd: "12-31",
     anniversaryDate: "2020-03-10",
+    entityType: "corporation__business_",
+    jurisdictionCode: "CA-BC",
   };
   const deadlines = deriveComplianceDeadlines(full, "2026-01-01");
   const byKey = new Map(deadlines.map((d: DerivedDeadline) => [d.key, d]));
@@ -119,7 +123,7 @@ function isValidISODate(s: string): boolean {
 
   assert.equal(byKey.get("agm")!.dueDate, "2026-06-15");
   assert.equal(byKey.get("fiscal-year-end")!.dueDate, "2026-12-31");
-  assert.equal(byKey.get("annual-report")!.dueDate, "2026-03-10");
+  assert.equal(byKey.get("annual-report")!.dueDate, "2026-05-10");
 
   for (const d of deadlines) {
     assert.ok(isValidISODate(d.dueDate), `valid ISO date for ${d.key}: ${d.dueDate}`);
@@ -143,12 +147,14 @@ function isValidISODate(s: string): boolean {
     agmDay: 15,
     fiscalYearEnd: "12-31",
     anniversaryDate: "2020-03-10",
+    entityType: "corporation__business_",
+    jurisdictionCode: "CA-BC",
   };
   const waived = deriveComplianceDeadlines({ ...base, waivePrepFinancials: true }, "2026-01-01");
   const waivedKeys = waived.map((d) => d.key);
   assert.ok(waivedKeys.includes("agm"), "AGM still present when waived");
   assert.ok(waivedKeys.includes("fiscal-year-end"), "financial still present when waived");
-  assert.ok(!waivedKeys.includes("annual-report"), "annual-report skipped when waivePrepFinancials");
+  assert.ok(waivedKeys.includes("annual-report"), "financial waiver does not remove registry filing");
 
   const notWaived = deriveComplianceDeadlines({ ...base, waivePrepFinancials: false }, "2026-01-01");
   assert.ok(

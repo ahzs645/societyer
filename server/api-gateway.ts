@@ -19,7 +19,7 @@ import {
   buildPdfTableImportBundle,
   normalizePdfTableStructures,
 } from "../convex/lib/pdfTableNormalization";
-import { auth, getAuthMode } from "./auth-config";
+import { authIssuer, auth, getAuthMode } from "./auth-config";
 import {
   importGcosProjectSnapshotViaConvex,
   normalizeGcosExportedSnapshot,
@@ -1345,7 +1345,7 @@ function mountWorkflowBridgeRoutes(router: Router, client: ConvexHttpClient) {
         runId: body.runId,
         serviceToken: apiPlatformServiceToken(),
       });
-      if (!binding?.authSubject) {
+      if (!binding?.authSubject || binding.authIssuer !== authIssuer || getAuthMode() !== "better-auth") {
         throw httpError(404, "workflow_run_not_found", "Workflow run not found.");
       }
       const signed = await auth.api.signJWT({
@@ -1508,6 +1508,7 @@ async function assertResourceTenant(
   req: Request,
   resourceName: string,
 ) {
+  if (typeof req.params.id !== "string") throw httpError(400, "invalid_record_id", "A single record ID is required.");
   await assertTenantId(client, req, req.params.id, `${resourceName} record`);
 }
 
@@ -1584,7 +1585,7 @@ async function resolveActor(client: ConvexHttpClient, req: Request, requiredScop
       userId: result.userId,
       serviceToken: apiPlatformServiceToken(),
     });
-    if (!principal?.authSubject) {
+    if (!principal?.authSubject || principal.authIssuer !== authIssuer || getAuthMode() !== "better-auth") {
       throw httpError(401, "api_principal_unbound", "API token creator is no longer an active workspace user.");
     }
     const signed = await auth.api.signJWT({
@@ -1661,7 +1662,7 @@ async function resolveBetterAuthActor(client: ConvexHttpClient, req: Request): P
     query("http.currentPrincipalMemberships"),
     {},
   );
-  if (lookup?.authSubject && lookup.authSubject !== authSubject) {
+  if ((lookup?.authSubject && lookup.authSubject !== authSubject) || (lookup?.authIssuer && lookup.authIssuer !== authIssuer)) {
     throw httpError(401, "principal_mismatch", "The session and workspace token identify different users.");
   }
   if (lookup?.status === "membership-disabled") {

@@ -1,3 +1,4 @@
+import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
 /**
  * PORTABLE FUNCTIONS: the meetings domain
  * (list / get / create / applyTemplate / update / markSourceReview /
@@ -29,46 +30,9 @@ type QuorumSnapshot = {
   quorumComputedAtISO: string;
 };
 
-const DEFAULT_BYLAW_RULES: Record<string, any> = {
-  societyId: "placeholder",
-  version: 1,
-  status: "Active",
-  generalNoticeMinDays: 14,
-  generalNoticeMaxDays: 60,
-  allowElectronicMeetings: true,
-  allowHybridMeetings: true,
-  allowElectronicVoting: false,
-  allowProxyVoting: false,
-  proxyHolderMustBeMember: false,
-  proxyLimitPerGrantorPerMeeting: 1,
-  quorumType: "percentage",
-  quorumValue: 10,
-  quorumMinimumCount: 3,
-  memberProposalThresholdPct: 5,
-  memberProposalMinSignatures: 1,
-  memberProposalLeadDays: 7,
-  requisitionMeetingThresholdPct: 10,
-  annualReportDueDaysAfterMeeting: 30,
-  requireAgmFinancialStatements: true,
-  requireAgmElections: true,
-  ballotIsAnonymous: true,
-  voterMustBeMemberAtRecordDate: true,
-  inspectionMemberRegisterByMembers: true,
-  inspectionMemberRegisterByPublic: false,
-  inspectionDirectorRegisterByMembers: true,
-  inspectionCopiesAllowed: true,
-  ordinaryResolutionThresholdPct: 50,
-  specialResolutionThresholdPct: 66.67,
-  unanimousWrittenSpecialResolution: true,
-  updatedAtISO: new Date(0).toISOString(),
-};
 
-function getDefaultBylawRules(societyId: string): Record<string, any> {
-  return {
-    ...DEFAULT_BYLAW_RULES,
-    societyId,
-    updatedAtISO: new Date().toISOString(),
-  };
+export function getDefaultBylawRules(societyId: string, organization?: any) {
+  return bylawBaselineForOrganization(organization, societyId);
 }
 
 async function getBylawRuleSetForDate(
@@ -85,11 +49,8 @@ async function getBylawRuleSetForDate(
     .filter((row) => row.status !== "Draft")
     .filter((row) => effectiveTimestamp(row) <= targetTs);
   const selected = eligible.sort(compareRuleSetsDesc)[0];
-  if (selected) return selected;
-  return {
-    ...getDefaultBylawRules(societyId),
-    isFallback: true,
-  };
+  const organization = await ctx.db.get(societyId);
+  return contextualBylawRules(organization, societyId, selected);
 }
 
 async function buildQuorumSnapshot(
@@ -136,6 +97,7 @@ async function computeRequiredQuorum(
     meetingType?: string;
   },
 ) {
+  if ((rules as any).quorumRequiresLegalRegister || (rules as any).governanceAutomationBlocked) return undefined;
   if (rules.quorumType === "fixed") {
     return rules.quorumValue;
   }
@@ -159,7 +121,7 @@ function quorumSourceLabel(
 ) {
   const prefix = hasManualOverride ? "Manual quorum override; " : "";
   if (rules.isFallback || !rules._id) {
-    return `${prefix}BC Model Bylaw baseline assumptions`;
+    return `${prefix}${(rules as any).baselineLabel ?? "Statutory draft baseline; governing instrument review required"}`;
   }
   const effective = rules.effectiveFromISO
     ? `, effective ${rules.effectiveFromISO.slice(0, 10)}`

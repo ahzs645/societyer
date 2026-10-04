@@ -1,3 +1,4 @@
+import { authorizedMutation } from "./lib/authorizedServer";
 /**
  * Backfill tenant ownership for every native Convex storage reference.
  *
@@ -30,7 +31,7 @@ const resultValidator = v.object({
   })),
 });
 
-export const run = mutation({
+export const run = authorizedMutation("storageOwnershipBackfill:run", mutation)({
   args: { serviceToken: serviceTokenValidator },
   returns: resultValidator,
   handler: async (ctx, { serviceToken }) => {

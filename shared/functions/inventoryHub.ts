@@ -1,3 +1,4 @@
+import { getPortable as getAccessibleDocument } from "./documents";
 /**
  * PORTABLE FUNCTIONS: the inventory hub domain — connections, items, locations,
  * lots, balances, stock movements, counts, candidates, and receipt links.
@@ -282,7 +283,7 @@ export async function receiptLinksPortable(
   const scoped = rows.filter((row: any) => row.societyId === societyId);
   const documents = await Promise.all(scoped.map((row) =>
     row.receiptDocumentId
-      ? getOwned(ctx, "documents", row.receiptDocumentId, societyId)
+      ? getAccessibleDocument(ctx, { id: String(row.receiptDocumentId) })
       : null));
   const assets = await Promise.all(scoped.map((row) =>
     row.assetId ? getOwned(ctx, "assets", row.assetId, societyId) : null));

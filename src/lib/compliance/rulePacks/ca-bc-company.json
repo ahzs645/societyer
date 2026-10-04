@@ -2,10 +2,12 @@
   "schemaVersion": "1.0.0",
   "packId": "compliance-ca-bc-company",
   "status": "draft",
-  "version": "2026.06.05",
+  "version": "2026.10.04-research-draft",
   "reviewedAt": "2026-06-05",
   "jurisdictionCode": "CA-BC",
-  "entityTypes": ["corporation__business_"],
+  "entityTypes": [
+    "corporation__business_"
+  ],
   "title": "BC Business Corporations Act company compliance obligation pack",
   "description": "Draft operational schedules for BC company annual maintenance, records, and securities-register evidence.",
   "sourceGuidePackId": "ca-bc-bca",
@@ -35,31 +37,52 @@
       "summary": "Track a BC company annual report from the incorporation or recognition anniversary.",
       "obligationKey": "registry.company_annual_report",
       "appliesTo": {
-        "entityTypes": ["corporation__business_"],
-        "contextKinds": ["home"],
-        "homeJurisdictionCodes": ["CA-BC"]
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-BC"
+        ]
       },
       "schedule": {
         "kind": "window",
         "recurrence": "annual",
         "opens": {
           "anchorFact": "anniversaryDate",
-          "offset": { "days": 0 }
+          "offset": {
+            "days": 0,
+            "years": 1
+          }
         },
         "closes": {
           "anchorFact": "anniversaryDate",
-          "offset": { "months": 2 }
+          "offset": {
+            "months": 2,
+            "years": 1
+          }
         }
       },
       "authority": {
         "guidePackId": "ca-bc-bca",
-        "guideRuleIds": ["ca-bc-bca-annual-report"],
-        "sourceIds": ["bc-business-corporations-act", "bc-registry-annual-report-company"],
+        "guideRuleIds": [
+          "ca-bc-bca-annual-report"
+        ],
+        "sourceIds": [
+          "bc-business-corporations-act",
+          "bc-registry-annual-report-company"
+        ],
         "displayCitation": "BC Business Corporations Act s.51"
       },
       "creates": {
         "filingKind": "BCCompanyAnnualReport",
-        "requiredEvidence": ["confirmationNumber", "receiptOrAcknowledgement", "profileReportEvidence"],
+        "requiredEvidence": [
+          "confirmationNumber",
+          "receiptOrAcknowledgement",
+          "profileReportEvidence"
+        ],
         "checklist": [
           "Review the BC company registry profile as of the anniversary date.",
           "Confirm directors, registered office, records office, and company status.",
@@ -76,23 +99,38 @@
       "summary": "Review director count and eligibility for a BC company.",
       "obligationKey": "directors.company_minimum_review",
       "appliesTo": {
-        "entityTypes": ["corporation__business_"],
-        "contextKinds": ["home"],
-        "homeJurisdictionCodes": ["CA-BC"]
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-BC"
+        ]
       },
       "schedule": {
         "kind": "annual",
         "anchorFact": "fiscalYearEnd",
-        "dueOffset": { "months": 1 }
+        "dueOffset": {
+          "months": 1
+        }
       },
       "authority": {
         "guidePackId": "ca-bc-bca",
-        "guideRuleIds": ["ca-bc-bca-records"],
-        "sourceIds": ["bc-business-corporations-act"],
+        "guideRuleIds": [
+          "ca-bc-bca-records"
+        ],
+        "sourceIds": [
+          "bc-business-corporations-act"
+        ],
         "displayCitation": "BC Business Corporations Act director and records guidance"
       },
       "creates": {
-        "requiredEvidence": ["directorRegister", "directorConsent"],
+        "requiredEvidence": [
+          "directorRegister",
+          "directorConsent"
+        ],
         "checklist": [
           "Confirm the company has at least one director, or three if public-company rules apply.",
           "Confirm directors are individuals and eligibility evidence is archived.",
@@ -109,23 +147,40 @@
       "summary": "Review BC company records, articles, incorporation agreement, resolutions, and central securities register annually.",
       "obligationKey": "records.company_records_review",
       "appliesTo": {
-        "entityTypes": ["corporation__business_"],
-        "contextKinds": ["home"],
-        "homeJurisdictionCodes": ["CA-BC"]
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-BC"
+        ]
       },
       "schedule": {
         "kind": "annual",
         "anchorFact": "fiscalYearEnd",
-        "dueOffset": { "months": 3 }
+        "dueOffset": {
+          "months": 3
+        }
       },
       "authority": {
         "guidePackId": "ca-bc-bca",
-        "guideRuleIds": ["ca-bc-bca-records"],
-        "sourceIds": ["bc-business-corporations-act"],
+        "guideRuleIds": [
+          "ca-bc-bca-records"
+        ],
+        "sourceIds": [
+          "bc-business-corporations-act"
+        ],
         "displayCitation": "BC Business Corporations Act ss.42-49"
       },
       "creates": {
-        "requiredEvidence": ["centralSecuritiesRegister", "articles", "incorporationAgreement", "minutesAndResolutions"],
+        "requiredEvidence": [
+          "centralSecuritiesRegister",
+          "articles",
+          "incorporationAgreement",
+          "minutesAndResolutions"
+        ],
         "checklist": [
           "Confirm certificates, orders, notice of articles, articles, and incorporation agreement are archived.",
           "Review the central securities register against share transactions.",
@@ -134,6 +189,369 @@
         ]
       },
       "caveat": "Operational review cadence only; inspection and retention duties depend on record type and company subtype."
+    },
+    {
+      "ruleId": "compliance-ca-bc-company-first-agm",
+      "status": "draft",
+      "title": "First BC company AGM deadline",
+      "summary": "Hold the first AGM within 18 months after recognition.",
+      "obligationKey": "agm.first_meeting",
+      "appliesTo": {
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-BC"
+        ]
+      },
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "incorporationDate",
+        "dueOffset": {
+          "months": 18
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-bca",
+        "guideRuleIds": [
+          "ca-bc-bca-agm-timing"
+        ],
+        "sourceIds": [
+          "bc-business-corporations-act"
+        ],
+        "displayCitation": "BC BCA s.182"
+      },
+      "creates": {
+        "requiredEvidence": [
+          "meetingNotice",
+          "meetingMinutes",
+          "annualReferenceDateEvidence"
+        ],
+        "checklist": [
+          "Confirm first AGM timing from recognition and any supported waiver or extension.",
+          "Prepare shareholder notice and the annual business package.",
+          "Preserve minutes or executed unanimous annual resolutions and annual reference date evidence."
+        ]
+      },
+      "caveat": "A supported unanimous waiver or deferral must establish the annual reference date.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
+    },
+    {
+      "ruleId": "compliance-ca-bc-company-subsequent-agm",
+      "status": "draft",
+      "title": "Subsequent BC company AGM deadline",
+      "summary": "Hold an AGM in the next calendar year and within 15 months after the preceding annual reference date.",
+      "obligationKey": "agm.subsequent_meeting",
+      "appliesTo": {
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-BC"
+        ]
+      },
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "annualReferenceDate",
+        "dueOffset": {
+          "months": 15
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-bca",
+        "guideRuleIds": [
+          "ca-bc-bca-agm-timing"
+        ],
+        "sourceIds": [
+          "bc-business-corporations-act"
+        ],
+        "displayCitation": "BC BCA ss.182-185"
+      },
+      "creates": {
+        "requiredEvidence": [
+          "meetingNotice",
+          "meetingMinutes",
+          "annualReferenceDateEvidence"
+        ],
+        "checklist": [
+          "Confirm next calendar-year and 15-month annual reference date limits.",
+          "Prepare notice, annual financials and shareholder business.",
+          "Retain minutes or valid waiver/deferral and its selected annual reference date."
+        ]
+      },
+      "caveat": "A supported unanimous waiver or deferral must establish the annual reference date.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
+    },
+    {
+      "ruleId": "compliance-ca-bc-company-director-change-filing",
+      "status": "draft",
+      "title": "Director change filing deadline",
+      "summary": "File a director or prescribed director-address change within 15 days.",
+      "obligationKey": "directors.change_filing",
+      "appliesTo": {
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-BC"
+        ]
+      },
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "directorChangeDate",
+        "dueOffset": {
+          "days": 15
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-bca",
+        "guideRuleIds": [
+          "ca-bc-bca-records"
+        ],
+        "sourceIds": [
+          "bc-business-corporations-act"
+        ],
+        "displayCitation": "BC BCA s.127"
+      },
+      "creates": {
+        "requiredEvidence": [
+          "directorRegister",
+          "changeEvidence",
+          "registryConfirmation"
+        ],
+        "checklist": [
+          "Record the actual director or prescribed-address change date.",
+          "Prepare the required director-change notice with the applicable registry service.",
+          "File and preserve the registry confirmation and updated register."
+        ]
+      },
+      "caveat": "Requires dated event evidence and applicable entity screening; legal review remains required.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
+    },
+    {
+      "ruleId": "compliance-ca-bc-company-transparency-update",
+      "status": "draft",
+      "title": "Transparency register update deadline",
+      "summary": "Enter new or changed transparency information within 30 days after awareness.",
+      "obligationKey": "transparency.register_update",
+      "appliesTo": {
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-BC"
+        ]
+      },
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "transparencyAwarenessDate",
+        "dueOffset": {
+          "days": 30
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-bca",
+        "guideRuleIds": [
+          "ca-bc-bca-transparency"
+        ],
+        "sourceIds": [
+          "bc-business-corporations-act"
+        ],
+        "displayCitation": "BC BCA s.119.31"
+      },
+      "creates": {
+        "requiredEvidence": [
+          "awarenessDateEvidence",
+          "restrictedTransparencyRegister",
+          "controlEvidence"
+        ],
+        "checklist": [
+          "Record when the company became aware of new or different information.",
+          "Assess indirect control, joint arrangements and applicable exemption evidence.",
+          "Update the restricted register within 30 days; preserve reasonable steps and unsuccessful inquiries."
+        ]
+      },
+      "caveat": "Requires dated event evidence and applicable entity screening; legal review remains required.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
+    },
+    {
+      "ruleId": "compliance-ca-bc-company-transparency-notice",
+      "status": "draft",
+      "title": "Significant individual status-entry notice",
+      "summary": "Notify the significant individual within ten days after the status entry.",
+      "obligationKey": "transparency.status_notice",
+      "appliesTo": {
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-BC"
+        ]
+      },
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "transparencyEntryDate",
+        "dueOffset": {
+          "days": 10
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-bca",
+        "guideRuleIds": [
+          "ca-bc-bca-transparency"
+        ],
+        "sourceIds": [
+          "bc-business-corporations-act"
+        ],
+        "displayCitation": "BC BCA s.119.41"
+      },
+      "creates": {
+        "requiredEvidence": [
+          "statusEntryEvidence",
+          "deliveryEvidence"
+        ],
+        "checklist": [
+          "Confirm significant or ceased-significant status entry date.",
+          "Notify the affected individual within ten days.",
+          "Preserve delivery evidence in restricted records."
+        ]
+      },
+      "caveat": "Requires dated event evidence and applicable entity screening; legal review remains required.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
+    },
+    {
+      "ruleId": "compliance-ca-bc-company-transparency-annual-review",
+      "status": "draft",
+      "title": "Transparency register annual confirmation",
+      "summary": "For applicable private companies, take annual confirmation steps between the recognition anniversary and two months later.",
+      "obligationKey": "transparency.annual_review",
+      "appliesTo": {
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-BC"
+        ]
+      },
+      "schedule": {
+        "kind": "window",
+        "recurrence": "annual",
+        "opens": {
+          "anchorFact": "anniversaryDate",
+          "offset": {
+            "days": 0,
+            "years": 1
+          }
+        },
+        "closes": {
+          "anchorFact": "anniversaryDate",
+          "offset": {
+            "months": 2,
+            "years": 1
+          }
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-bca",
+        "guideRuleIds": [
+          "ca-bc-bca-transparency"
+        ],
+        "sourceIds": [
+          "bc-business-corporations-act"
+        ],
+        "displayCitation": "BC BCA s.119.3"
+      },
+      "creates": {
+        "requiredEvidence": [
+          "exemptionAssessment",
+          "restrictedTransparencyRegister",
+          "reasonableStepsEvidence"
+        ],
+        "checklist": [
+          "Confirm applicability and exemption evidence.",
+          "Take reasonable confirmation steps during the anniversary-to-two-month window.",
+          "Update the restricted internal register and preserve unsuccessful inquiry evidence."
+        ]
+      },
+      "caveat": "Screen reporting issuer, listed and prescribed-class exemptions with evidence; there is no verified operational public BC filing duty.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
+    },
+    {
+      "ruleId": "compliance-ca-bc-company-transparency-destruction",
+      "status": "draft",
+      "title": "Former significant individual destruction window",
+      "summary": "Delete former significant-individual information within one year after the sixth anniversary of the cessation entry.",
+      "obligationKey": "transparency.destruction",
+      "appliesTo": {
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-BC"
+        ]
+      },
+      "schedule": {
+        "kind": "window",
+        "recurrence": "once",
+        "opens": {
+          "anchorFact": "transparencyCessationEntryDate",
+          "offset": {
+            "years": 6
+          }
+        },
+        "closes": {
+          "anchorFact": "transparencyCessationEntryDate",
+          "offset": {
+            "years": 7
+          }
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-bc-bca",
+        "guideRuleIds": [
+          "ca-bc-bca-transparency"
+        ],
+        "sourceIds": [
+          "bc-business-corporations-act"
+        ],
+        "displayCitation": "BC BCA s.119.4"
+      },
+      "creates": {
+        "requiredEvidence": [
+          "cessationEntryEvidence",
+          "recordInventory",
+          "reviewedHoldAssessment",
+          "destructionEvidence"
+        ],
+        "checklist": [
+          "Confirm cessation entry date and identify all associated register and maintenance records.",
+          "Review conflicting holds and other applicable duties before destruction.",
+          "Complete and document lawful destruction inside the sixth-to-seventh-anniversary window."
+        ]
+      },
+      "caveat": "Plan record-specific destruction; legal holds and applicable exceptions require reviewed handling.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
     }
   ]
 }

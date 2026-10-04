@@ -20,6 +20,8 @@ import type {
   TransactionalDb,
 } from "./ctx";
 
+import { requireFunctionAction } from "../functions/actionPolicy";
+
 export type PortableAccess =
   | { audience: "public" }
   | { audience: "authenticated" }
@@ -38,7 +40,7 @@ type PortableAccessDecisionResult = Omit<PortableAccessDecision, "mode">;
 
 const DEFAULT_PORTABLE_ACCESS: PortableAccess = { audience: "authenticated" };
 
-const DEFAULT_PORTABLE_ACCESS_ENFORCEMENT = false;
+const DEFAULT_PORTABLE_ACCESS_ENFORCEMENT = true;
 const PORTABLE_ACCESS_ENFORCEMENT_ENV = "SOCIETYER_PORTABLE_ACCESS_ENFORCEMENT";
 const VITE_PORTABLE_ACCESS_ENFORCEMENT_ENV = "VITE_SOCIETYER_PORTABLE_ACCESS_ENFORCEMENT";
 
@@ -78,6 +80,8 @@ export interface PortableQueryDef<Args = any, Result = any> {
   kind: "query";
   name: string;
   access?: PortableAccess;
+  /** True for Societyer application functions; generic runtime tests need no app policy. */
+  applicationPolicy?: boolean;
   handler: (ctx: PortableQueryCtx, args: Args) => Promise<Result>;
 }
 
@@ -85,6 +89,8 @@ export interface PortableMutationDef<Args = any, Result = any> {
   kind: "mutation";
   name: string;
   access?: PortableAccess;
+  /** True for Societyer application functions; generic runtime tests need no app policy. */
+  applicationPolicy?: boolean;
   handler: (ctx: PortableMutationCtx, args: Args) => Promise<Result>;
 }
 
@@ -288,7 +294,9 @@ export class PortableRuntime {
     if (!def) throw new Error(`Portable function not registered locally: ${name}`);
     if (def.kind !== "query") throw new Error(`${name} is a ${def.kind}, not a query`);
     this.accessHook(def, principal);
-    return def.handler(this.queryCtx(principal), args) as Promise<Result>;
+    const ctx = this.queryCtx(principal);
+    if (def.applicationPolicy) await requireFunctionAction(ctx, def.name, def.kind, args);
+    return def.handler(ctx, args) as Promise<Result>;
   }
 
   private async runMutationNested<Result = unknown>(
@@ -300,7 +308,15 @@ export class PortableRuntime {
     if (!def) throw new Error(`Portable function not registered locally: ${name}`);
     if (def.kind !== "mutation") throw new Error(`${name} is a ${def.kind}, not a mutation`);
     this.accessHook(def, principal);
-    return def.handler(this.mutationCtx(principal), args) as Promise<Result>;
+    const ctx = this.mutationCtx(principal);
+    if (def.applicationPolicy) await requireFunctionAction(ctx, def.name, def.kind, args);
+    return def.handler(ctx, args) as Promise<Result>;
+  }
+
+  /** Apply application policy to compatibility dispatchers before executing them. */
+  async authorizeFunction(name: string, kind: "query" | "mutation" | "action", args: Record<string, any> = {}): Promise<void> {
+    const principal = await this.principalProvider();
+    await requireFunctionAction(this.queryCtx(principal), name, kind, args);
   }
 
   async runQuery<Result = unknown>(name: string, args: Record<string, any> = {}): Promise<Result> {
@@ -314,6 +330,10 @@ export class PortableRuntime {
     if (def.kind !== "mutation") throw new Error(`${name} is a ${def.kind}, not a mutation`);
     const principal = await this.principalProvider();
     this.accessHook(def, principal);
-    return this.db.transaction(() => def.handler(this.mutationCtx(principal), args)) as Promise<Result>;
+    return this.db.transaction(async () => {
+      const ctx = this.mutationCtx(principal);
+      if (def.applicationPolicy) await requireFunctionAction(ctx, def.name, def.kind, args);
+      return def.handler(ctx, args);
+    }) as Promise<Result>;
   }
 }

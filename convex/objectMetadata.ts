@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -22,19 +23,19 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
  * table definition.
  */
 
-export const list = query({
+export const list = authorizedQuery("objectMetadata:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("objectMetadata:get", query)({
   args: { id: v.id("objectMetadata") },
   returns: v.any(),
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const getByNameSingular = query({
+export const getByNameSingular = authorizedQuery("objectMetadata:getByNameSingular", query)({
   args: {
     societyId: v.id("societies"),
     nameSingular: v.string(),
@@ -43,7 +44,7 @@ export const getByNameSingular = query({
   handler: async (ctx, args) => getByNameSingularPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const getByNamePlural = query({
+export const getByNamePlural = authorizedQuery("objectMetadata:getByNamePlural", query)({
   args: {
     societyId: v.id("societies"),
     namePlural: v.string(),
@@ -56,7 +57,7 @@ export const getByNamePlural = query({
  * Returns the object metadata + every field defined on it, sorted by
  * field position. This is the shape the RecordTable wants.
  */
-export const getWithFields = query({
+export const getWithFields = authorizedQuery("objectMetadata:getWithFields", query)({
   args: { objectMetadataId: v.id("objectMetadata") },
   returns: v.any(),
   handler: async (ctx, args) => getWithFieldsPortable(await toPortableQueryCtx(ctx), args),
@@ -74,7 +75,7 @@ export const getWithFields = query({
  * object hasn't been seeded — callers branch on `object` to show a
  * "metadata not seeded" empty state instead of spinning forever.
  */
-export const getFullTableSetup = query({
+export const getFullTableSetup = authorizedQuery("objectMetadata:getFullTableSetup", query)({
   args: {
     societyId: v.id("societies"),
     nameSingular: v.string(),
@@ -84,7 +85,7 @@ export const getFullTableSetup = query({
   handler: async (ctx, args) => getFullTableSetupPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("objectMetadata:create", mutation)({
   args: {
     societyId: v.id("societies"),
     nameSingular: v.string(),
@@ -104,7 +105,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("objectMetadata:update", mutation)({
   args: {
     id: v.id("objectMetadata"),
     patch: v.object({
@@ -123,7 +124,7 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("objectMetadata:remove", mutation)({
   args: { id: v.id("objectMetadata") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

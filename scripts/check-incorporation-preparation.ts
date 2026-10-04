@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import { StaticConvexClient } from "../src/lib/staticConvex";
+import { SOCIETY_DOCUMENT_PACKETS } from "../shared/societyDocumentPackets";
+import { CORPORATION_DOCUMENT_PACKETS } from "../shared/corporationDocumentPackets";
+import { corporationPacketDocxBytes } from "../shared/corporationPacketDocx";
+import { buildRenderContext } from "../shared/renderContext";
+import { entitySetupFields, validateEntitySetup } from "../shared/entitySetup";
+
+const client = new StaticConvexClient({ databaseName: `societyer-preparation-${Date.now()}`, seed: { societies: [] } });
+const society = await client.mutation("society:createWorkspace", { name: "Cedar Learning Society", purposes: "To advance education through public workshops.", jurisdictionCode: "CA-BC", entityType: "society", actFormedUnder: "societies_act", legalSubtype: "ordinary_society", charityStatus: "application_pending", annualMeetingDate: "2026-04-10", annualMeetingYear: 2026, agmExtensionDate: "2026-06-30", agmExtensionEvidence: "Registrar approval EXT-1" });
+const constitution = SOCIETY_DOCUMENT_PACKETS.find((packet) => packet.key === "society-incorporation-constitution")!;
+const context = buildRenderContext({ org: { name: "Cedar Learning Society", entityType: "society", actFormedUnder: "societies_act", purposes: "To advance education through public workshops." }, asOf: "2026-10-03" });
+const docx = new TextDecoder().decode(corporationPacketDocxBytes(constitution, { ...context, execution: { adoptionClause: "FAKE ADOPTION MUST NOT APPEAR", lines: ["FAKE SIGNATURE"] } } as any));
+assert.ok(docx.includes("To advance education through public workshops."));
+assert.ok(!docx.includes("FAKE ADOPTION"));
+assert.ok(!docx.includes("FAKE SIGNATURE"));
+const generation = await client.mutation("legalOperations:generateDocumentFromCatalog", { societyId: society.societyId, packetKey: constitution.key });
+const doc = (await client.query("documents:list", { societyId: society.societyId })).find((row: any) => row._id === generation.draftDocumentId);
+const snapshot = JSON.parse(doc.sourcePayloadJson).templateProvenance;
+assert.equal(snapshot.templateSnapshot.preparationOnly, true);
+assert.equal(snapshot.documentState, "draft");
+assert.ok(snapshot.templateSnapshot.sourceUrls.length > 0);
+assert.equal(snapshot.filingEvidence, null);
+const profile = await client.query("society:getById", { id: society.societyId });
+assert.equal(profile.charityStatus, "application_pending");
+assert.equal(profile.isCharity, false);
+assert.equal(profile.annualMeetingYear, 2026);
+assert.equal(profile.agmExtensionEvidence, "Registrar approval EXT-1");
+const bc = await client.mutation("society:createWorkspace", { name: "Cedar Holdings Ltd.", jurisdictionCode: "CA-BC", entityType: "corporation__business_", actFormedUnder: "business_corporations_act", legalSubtype: "ordinary_private_company", incorporationDate: "2026-01-15", annualReferenceDate: "2026-06-30", craBnStatus: "confirmed", craRcStatus: "confirmed", gstHstStatus: "pending", taxStatusEvidence: "CRA receipt BN-1" });
+for (const packetKey of ["bc-incorporation-agreement", "bc-articles-preparation"]) {
+  const generated = await client.mutation("legalOperations:generateDocumentFromCatalog", { societyId: bc.societyId, packetKey });
+  assert.ok(generated.draftDocumentId);
+}
+const bcProfile = await client.query("society:getById", { id: bc.societyId });
+assert.equal(bcProfile.annualReferenceDate, "2026-06-30");
+assert.equal(bcProfile.incorporationDate, "2026-01-15");
+assert.equal(bcProfile.gstHstStatus, "pending");
+const federated = await client.mutation("society:createWorkspace", { name: "Cedar Federal Inc.", jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__business_", actFormedUnder: "canada_business_corporations_act" });
+assert.ok((await client.mutation("legalOperations:generateDocumentFromCatalog", { societyId: federated.societyId, packetKey: "federal-articles-preparation" })).draftDocumentId);
+const registration = await client.mutation("organizationDetails:upsertRegistration", { societyId: federated.societyId, jurisdiction: "CA-BC", registrationType: "extra_provincial", registrationDate: "2026-05-01", activityCommencementDate: "2026-03-01", status: "active" });
+const registrations = (await client.query("organizationDetails:overview", { societyId: federated.societyId })).registrations;
+assert.equal(registrations.find((row: any) => row._id === registration).activityCommencementDate, "2026-03-01");
+await assert.rejects(client.mutation("organizationDetails:upsertRegistration", { societyId: federated.societyId, jurisdiction: "CA-ON-OBCA", registrationType: "extra_provincial", corporationClass: "foreign_epca_licensed", status: "active" }), /licence evidence/);
+assert.throws(() => validateEntitySetup({ legalSubtype: "member_funded_society", isCharity: true }), /cannot be a registered charity/);
+assert.throws(() => validateEntitySetup({ annualMeetingDate: "2026-02-30" }), /valid YYYY-MM-DD/);
+assert.equal(entitySetupFields({ craRcStatus: "pending" }).craRcStatus, "pending");
+assert.equal(CORPORATION_DOCUMENT_PACKETS.find((packet) => packet.key === "federal-articles-preparation")?.preparationOnly, true);
+console.log("Incorporation preparation, evidence provenance and separate entity anchors passed.");

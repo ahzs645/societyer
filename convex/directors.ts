@@ -1,15 +1,16 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { directorsList, directorCreate, directorUpdate, directorRemove } from "../shared/functions/directors";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("directors:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => directorsList(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("directors:create", mutation)({
   args: {
     societyId: v.id("societies"),
     memberId: v.optional(v.id("members")),
@@ -29,7 +30,7 @@ export const create = mutation({
   handler: async (ctx, args) => directorCreate(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("directors:update", mutation)({
   args: {
     id: v.id("directors"),
     patch: v.object({
@@ -52,7 +53,7 @@ export const update = mutation({
   handler: async (ctx, args) => directorUpdate(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("directors:remove", mutation)({
   args: { id: v.id("directors") },
   returns: v.any(),
   handler: async (ctx, args) => directorRemove(await toPortableMutationCtx(ctx), args),

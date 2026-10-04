@@ -22,7 +22,7 @@ import type { ToneVariant } from "../components/ui";
 import { type MenuSection } from "../components/Menu";
 import { useConfirm } from "../components/Modal";
 import { hasStartedMinutesDraft, normalizedMeetingTitle } from "../features/meetings/lib/meetingDetailHelpers";
-import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, OVERLAP_WINDOW_MS } from "../features/meetings/lib/noticeWindow";
+import { noticeDaysUntil, isGeneralMeeting, meetingScheduleConflicts, OVERLAP_WINDOW_MS } from "../features/meetings/lib/noticeWindow";
 import {
   MeetingFormFields,
   makeMeetingDraft,
@@ -191,7 +191,7 @@ export function MeetingsPage() {
     // scheduled, and edits to past/held meetings must stay possible. Scheduling
     // beyond the max is allowed; the drawer shows an advisory warning instead.
     if (!editingId && isGeneralMeeting(form.type)) {
-      const days = daysUntil(form.scheduledAt);
+      const days = noticeDaysUntil(form.scheduledAt, data.effectiveRules);
       if (days == null || days < effectiveNoticeMinDays) {
         toast.error(`General meetings need at least ${effectiveNoticeMinDays} days of notice.`);
         return;

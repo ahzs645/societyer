@@ -1,3 +1,4 @@
+import { authorizedQuery } from "./lib/authorizedServer";
 import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -7,7 +8,7 @@ import {
 } from "../shared/functions/treasury";
 import { toPortableQueryCtx } from "./lib/portable";
 
-export const profitAndLoss = query({
+export const profitAndLoss = authorizedQuery("treasury:profitAndLoss", query)({
   args: {
     societyId: v.id("societies"),
     from: v.string(),
@@ -17,7 +18,7 @@ export const profitAndLoss = query({
   handler: async (ctx, args) => profitAndLossPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const budgetVariance = query({
+export const budgetVariance = authorizedQuery("treasury:budgetVariance", query)({
   args: {
     societyId: v.id("societies"),
     fiscalYear: v.string(),
@@ -26,7 +27,7 @@ export const budgetVariance = query({
   handler: async (ctx, args) => budgetVariancePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const restrictedFunds = query({
+export const restrictedFunds = authorizedQuery("treasury:restrictedFunds", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => restrictedFundsPortable(await toPortableQueryCtx(ctx), args),

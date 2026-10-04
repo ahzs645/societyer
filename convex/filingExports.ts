@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { authorizedQuery } from "./lib/authorizedServer";
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -12,7 +13,7 @@ import { toPortableQueryCtx } from "./lib/portable";
  * forms, derived from current data. The user copies values into the online
  * form; a future "FilingBot" can submit them directly.
  */
-export const societiesOnlinePreFill = query({
+export const societiesOnlinePreFill = authorizedQuery("filingExports:societiesOnlinePreFill", query)({
   args: { societyId: v.id("societies"), kind: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => societiesOnlinePreFillPortable(await toPortableQueryCtx(ctx), args),
@@ -20,7 +21,7 @@ export const societiesOnlinePreFill = query({
 
 /** CRA form pre-fill summary. We surface the line numbers + totals we can
  * compute; the PDF form itself is filed by the user. */
-export const craPreFill = query({
+export const craPreFill = authorizedQuery("filingExports:craPreFill", query)({
   args: { societyId: v.id("societies"), kind: v.string(), fiscalYear: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => craPreFillPortable(await toPortableQueryCtx(ctx), args),

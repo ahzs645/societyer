@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -11,19 +12,19 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const remItem = v.object({ role: v.string(), amountCents: v.number() });
 
-export const list = query({
+export const list = authorizedQuery("financials:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => financialsList(await toPortableQueryCtx(ctx), args),
 });
 
-export const detailByFiscalYear = query({
+export const detailByFiscalYear = authorizedQuery("financials:detailByFiscalYear", query)({
   args: { societyId: v.id("societies"), fiscalYear: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => detailByFiscalYearPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("financials:create", mutation)({
   args: {
     societyId: v.id("societies"),
     fiscalYear: v.string(),
@@ -40,7 +41,7 @@ export const create = mutation({
   handler: async (ctx, args) => financialCreate(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("financials:update", mutation)({
   args: {
     id: v.id("financials"),
     patch: v.object({
@@ -61,7 +62,7 @@ export const update = mutation({
   handler: async (ctx, args) => financialUpdate(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("financials:remove", mutation)({
   args: { id: v.id("financials") },
   returns: v.any(),
   handler: async (ctx, args) => financialRemove(await toPortableMutationCtx(ctx), args),

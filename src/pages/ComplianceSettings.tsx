@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { CalendarClock } from "lucide-react";
@@ -6,6 +6,7 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Field } from "../components/ui";
 import { Select } from "../components/Select";
+import { useToast } from "../components/Toast";
 import {
   deriveComplianceDeadlines,
   type ComplianceSettings,
@@ -23,6 +24,9 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 export function ComplianceSettingsPage() {
   const society = useSociety();
+  const toast = useToast();
+  const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const save = useMutation(api.society.updateComplianceSettings);
   const createDeadline = useMutation(api.deadlines.create);
   const cloneSociety = useMutation(api.society.cloneSociety);
@@ -58,6 +62,21 @@ export function ComplianceSettingsPage() {
   const [saved, setSaved] = useState(false);
   const setC = (k: string, v: string) => setContacts((c) => ({ ...c, [k]: v }));
 
+  useEffect(() => {
+    if (!society) return;
+    setAgmMonth(society.agmMonth ?? "");
+    setAgmDay(society.agmDay ?? "");
+    setWaive(Boolean(society.waivePrepFinancials));
+    setRestrictPeople(Boolean(society.restrictPeoplePicker));
+    setDocIdHeader(Boolean(society.includeDocumentIdHeader));
+    setDocLanguage(society.docPrepLanguage ?? "");
+    setContacts({ shortName: society.shortName ?? "", primaryContactName: society.primaryContactName ?? "",
+      primaryContactEmail: society.primaryContactEmail ?? "", minuteBookLocation: society.minuteBookLocation ?? "",
+      sealLocation: society.sealLocation ?? "", responsibleLawyer: society.responsibleLawyer ?? "" });
+    setSaved(false);
+    setCloneResult(null);
+  }, [society?._id]);
+
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
@@ -68,11 +87,16 @@ export function ComplianceSettingsPage() {
     incorporationDate: society.incorporationDate ?? undefined,
     anniversaryDate: society.anniversaryDate ?? undefined,
     waivePrepFinancials: waive,
+    jurisdictionCode: society.jurisdictionCode,
+    entityType: society.entityType,
+    annualMeetingDate: society.annualMeetingDate,
   };
   const today = new Date().toISOString().slice(0, 10);
   const derived: DerivedDeadline[] = deriveComplianceDeadlines(settings, today);
 
   const onSave = async () => {
+    setSaving(true);
+    try {
     await save({
       societyId: society._id,
       agmMonth: settings.agmMonth,
@@ -90,19 +114,24 @@ export function ComplianceSettingsPage() {
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+    } catch (error) { toast.error("Could not save settings", error instanceof Error ? error.message : String(error)); }
+    finally { setSaving(false); }
   };
 
-  const existingTitles = new Set((existing ?? []).map((d) => d.title));
+  const deadlineKey = (d: { title?: string; dueDate?: string }) => `${d.title}::${d.dueDate}`;
+  const existingKeys = new Set((existing ?? []).map(deadlineKey));
   const generate = async () => {
-    for (const d of derived) {
-      if (existingTitles.has(d.title)) continue;
-      await createDeadline({
-        societyId: society._id,
-        title: d.title,
-        dueDate: d.dueDate,
-        category: d.category,
-      });
-    }
+    setGenerating(true);
+    try {
+      let added = 0;
+      for (const d of derived) {
+        if (existingKeys.has(deadlineKey(d))) continue;
+        await createDeadline({ societyId: society._id, title: d.title, dueDate: d.dueDate, category: d.category });
+        added += 1;
+      }
+      toast.success("Deadlines generated", `${added} new dates added.`);
+    } catch (error) { toast.error("Could not generate deadlines", error instanceof Error ? error.message : String(error)); }
+    finally { setGenerating(false); }
   };
 
   return (
@@ -113,8 +142,8 @@ export function ComplianceSettingsPage() {
         iconColor="orange"
         subtitle="AGM date and fiscal year-end drive your annual compliance deadlines. Set them once, then generate the deadlines."
         actions={
-          <button className="btn-action btn-action--primary" onClick={onSave}>
-            {saved ? "Saved ✓" : "Save settings"}
+          <button className="btn-action btn-action--primary" onClick={onSave} disabled={saving}>
+            {saving ? "Saving…" : saved ? "Saved ✓" : "Save settings"}
           </button>
         }
       />
@@ -151,7 +180,7 @@ export function ComplianceSettingsPage() {
         </Field>
         <label className="checkbox">
           <input type="checkbox" checked={waive} onChange={(e) => setWaive(e.target.checked)} />
-          {" "}Waive preparation of financial statements (skips the annual-report deadline)
+          {" "}Record a financial-statement preparation waiver for review (does not waive registry filings)
         </label>
         <label className="checkbox">
           <input type="checkbox" checked={restrictPeople} onChange={(e) => setRestrictPeople(e.target.checked)} />
@@ -227,7 +256,7 @@ export function ComplianceSettingsPage() {
       <div className="card" style={{ maxWidth: 520 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <h3 style={{ margin: 0 }}>Derived deadlines</h3>
-          <button className="btn btn--accent" onClick={generate} disabled={derived.length === 0}>
+          <button className="btn btn--accent" onClick={generate} disabled={generating || derived.length === 0}>
             Generate {derived.length || ""}
           </button>
         </div>
@@ -239,7 +268,7 @@ export function ComplianceSettingsPage() {
               <li key={d.key}>
                 <strong>{d.dueDate}</strong> — {d.title}{" "}
                 <span style={{ color: "var(--text-tertiary)" }}>({d.category})</span>
-                {existingTitles.has(d.title) ? <span style={{ color: "var(--text-tertiary)" }}> · already added</span> : null}
+                {existingKeys.has(deadlineKey(d)) ? <span style={{ color: "var(--text-tertiary)" }}> · already added</span> : null}
               </li>
             ))}
           </ul>

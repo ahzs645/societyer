@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -11,19 +12,19 @@ import {
 } from "../shared/functions/policies";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("policies:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const adoptionOptions = query({
+export const adoptionOptions = authorizedQuery("policies:adoptionOptions", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => adoptionOptionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsert = mutation({
+export const upsert = authorizedMutation("policies:upsert", mutation)({
   args: {
     id: v.optional(v.id("policies")),
     societyId: v.id("societies"),
@@ -50,13 +51,13 @@ export const upsert = mutation({
   handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("policies:remove", mutation)({
   args: { id: v.id("policies") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createReviewTask = mutation({
+export const createReviewTask = authorizedMutation("policies:createReviewTask", mutation)({
   args: {
     policyId: v.id("policies"),
     dueDate: v.optional(v.string()),
@@ -65,13 +66,13 @@ export const createReviewTask = mutation({
   handler: async (ctx, args) => createReviewTaskPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createRequiredSignerTask = mutation({
+export const createRequiredSignerTask = authorizedMutation("policies:createRequiredSignerTask", mutation)({
   args: { policyId: v.id("policies") },
   returns: v.any(),
   handler: async (ctx, args) => createRequiredSignerTaskPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createTransparencyDraft = mutation({
+export const createTransparencyDraft = authorizedMutation("policies:createTransparencyDraft", mutation)({
   args: { policyId: v.id("policies") },
   returns: v.any(),
   handler: async (ctx, args) => createTransparencyDraftPortable(await toPortableMutationCtx(ctx), args),

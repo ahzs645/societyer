@@ -1,3 +1,4 @@
+import { authorizedQuery } from "./lib/authorizedServer";
 import { httpRouter } from "convex/server";
 import { httpAction, query } from "./_generated/server";
 import { api, internal } from "./_generated/api";
@@ -6,6 +7,11 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, streamText } from "ai";
 import { buildICalendar } from "../shared/icalendar";
 import { assertApiPlatformServiceToken, serviceTokenValidator } from "./lib/serviceAuth";
+import { resolveAuthIssuer } from "../shared/authConfiguration";
+import { hasPermission } from "../shared/functions/permissions";
+import { requireDocumentAccess } from "../shared/functions/documents";
+import { requireSocietyMembership } from "../shared/functions/access";
+import { toPortableQueryCtx } from "./lib/portable";
 import type { Doc, Id } from "./_generated/dataModel";
 
 const http = httpRouter();
@@ -14,14 +20,14 @@ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 /**
  * Bootstrap the authenticated workspace picker without trusting a society id
- * from browser storage. The verified JWT subject is the only lookup key.
+ * from browser storage. The exact verified issuer/subject pair is the lookup key.
  */
-export const currentPrincipalMemberships = query({
+export const currentPrincipalMemberships = authorizedQuery("http:currentPrincipalMemberships", query)({
   args: {},
   returns: v.any(),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.subject) {
+    if (!identity?.subject || identity.issuer !== resolveAuthIssuer(process.env)) {
       return { status: "unauthenticated", memberships: [] };
     }
 
@@ -29,14 +35,15 @@ export const currentPrincipalMemberships = query({
       .query("users")
       .withIndex("by_auth_subject", (q) => q.eq("authSubject", identity.subject))
       .collect();
-    const activeRows = rows.filter((row) => !row.status || row.status === "Active");
+    const issuerRows = rows.filter((row) => row.authIssuer === identity.issuer);
+    const activeRows = issuerRows.filter((row) => !row.status || row.status === "Active");
     const activeSocietyIds = new Set(activeRows.map((row) => String(row.societyId)));
     if (activeSocietyIds.size !== activeRows.length) {
       return { status: "ambiguous-binding", memberships: [] };
     }
     if (activeRows.length === 0) {
       return {
-        status: rows.some((row) => row.status === "Disabled")
+        status: issuerRows.some((row) => row.status === "Disabled")
           ? "membership-disabled"
           : "needs-invitation",
         memberships: [],
@@ -53,7 +60,10 @@ export const currentPrincipalMemberships = query({
         letterheadUrl?: string;
       };
     }> = [];
+    const portableCtx = await toPortableQueryCtx(ctx);
     for (const user of activeRows) {
+      // Membership/lifecycle checks also apply to the picker and direct HTTP endpoints.
+      await requireSocietyMembership(portableCtx, String(user.societyId));
       const society = await ctx.db.get(user.societyId);
       if (!society) continue;
       const [logoUrl, logoDarkUrl, letterheadUrl] = await Promise.all([
@@ -76,13 +86,14 @@ export const currentPrincipalMemberships = query({
     return {
       status: memberships.length > 0 ? "bound" : "needs-invitation",
       authSubject: identity.subject,
+      authIssuer: identity.issuer,
       memberships,
     };
   },
 });
 
 /** Resolve an API token's server-derived creator to a JWT subject for Convex. */
-export const gatewayApiPrincipal = query({
+export const gatewayApiPrincipal = authorizedQuery("http:gatewayApiPrincipal", query)({
   args: {
     societyId: v.id("societies"),
     userId: v.id("users"),
@@ -90,7 +101,7 @@ export const gatewayApiPrincipal = query({
   },
   returns: v.union(
     v.null(),
-    v.object({ authSubject: v.string() }),
+    v.object({ authSubject: v.string(), authIssuer: v.string() }),
   ),
   handler: async (ctx, { societyId, userId, serviceToken }) => {
     await assertApiPlatformServiceToken(serviceToken);
@@ -98,16 +109,21 @@ export const gatewayApiPrincipal = query({
     if (
       !user ||
       user.societyId !== societyId ||
-      user.status === "Disabled" ||
+      user.status !== "Active" ||
+      user.authIssuer !== resolveAuthIssuer(process.env) ||
       !user.authSubject
     ) {
       return null;
     }
-    return { authSubject: user.authSubject };
+    if (user.externalIdentityId) {
+      const external = await ctx.db.get(user.externalIdentityId);
+      if (!external || external.status !== "Active" || external.issuer !== user.authIssuer || external.subject !== user.authSubject) return null;
+    }
+    return { authSubject: user.authSubject, authIssuer: user.authIssuer! };
   },
 });
 
-export const gatewayWorkflowBinding = query({
+export const gatewayWorkflowBinding = authorizedQuery("http:gatewayWorkflowBinding", query)({
   args: {
     workflowId: v.id("workflows"),
     runId: v.id("workflowRuns"),
@@ -115,7 +131,7 @@ export const gatewayWorkflowBinding = query({
   },
   returns: v.union(
     v.null(),
-    v.object({ societyId: v.id("societies"), authSubject: v.string() }),
+    v.object({ societyId: v.id("societies"), authSubject: v.string(), authIssuer: v.string() }),
   ),
   handler: async (ctx, { workflowId, runId, serviceToken }) => {
     await assertApiPlatformServiceToken(serviceToken);
@@ -137,16 +153,22 @@ export const gatewayWorkflowBinding = query({
     if (
       !user ||
       user.societyId !== run.societyId ||
-      user.status === "Disabled" ||
+      !hasPermission(user.role, "tasks:write") ||
+      user.status !== "Active" ||
+      user.authIssuer !== resolveAuthIssuer(process.env) ||
       !user.authSubject
     ) {
       return null;
     }
-    return { societyId: run.societyId, authSubject: user.authSubject };
+    if (user.externalIdentityId) {
+      const external = await ctx.db.get(user.externalIdentityId);
+      if (!external || external.status !== "Active" || external.issuer !== user.authIssuer || external.subject !== user.authSubject) return null;
+    }
+    return { societyId: run.societyId, authSubject: user.authSubject, authIssuer: user.authIssuer! };
   },
 });
 
-export const gatewayGeneratedDocumentAccess = query({
+export const gatewayGeneratedDocumentAccess = authorizedQuery("http:gatewayGeneratedDocumentAccess", query)({
   args: {
     societyId: v.id("societies"),
     storageKey: v.string(),
@@ -159,7 +181,15 @@ export const gatewayGeneratedDocumentAccess = query({
       .query("documentVersions")
       .withIndex("by_storage_key", (q) => q.eq("storageKey", storageKey))
       .collect();
-    return versions.some((version) => version.societyId === societyId);
+    const portable = await toPortableQueryCtx(ctx);
+    for (const version of versions) {
+      if (version.societyId !== societyId || version.storageProvider !== "local") continue;
+      try {
+        const document = await requireDocumentAccess(portable, String(version.documentId));
+        if (document.societyId === String(societyId)) return true;
+      } catch { /* Deny without disclosing a hidden document's existence. */ }
+    }
+    return false;
   },
 });
 

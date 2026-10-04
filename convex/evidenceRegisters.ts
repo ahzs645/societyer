@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -10,13 +11,13 @@ import {
 } from "../shared/functions/evidenceRegisters";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const overview = query({
+export const overview = authorizedQuery("evidenceRegisters:overview", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => overviewPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const updateReview = mutation({
+export const updateReview = authorizedMutation("evidenceRegisters:updateReview", mutation)({
   args: {
     table: v.string(),
     id: v.string(),
@@ -27,7 +28,7 @@ export const updateReview = mutation({
   handler: async (ctx, args) => updateReviewPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const promoteBoardRoleToDirector = mutation({
+export const promoteBoardRoleToDirector = authorizedMutation("evidenceRegisters:promoteBoardRoleToDirector", mutation)({
   args: {
     assignmentId: v.id("boardRoleAssignments"),
     position: v.optional(v.string()),
@@ -40,19 +41,19 @@ export const promoteBoardRoleToDirector = mutation({
   handler: async (ctx, args) => promoteBoardRoleToDirectorPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const finishFinancePaperlessReview = mutation({
+export const finishFinancePaperlessReview = authorizedMutation("evidenceRegisters:finishFinancePaperlessReview", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => finishFinancePaperlessReviewPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const finishSafePaperlessReview = mutation({
+export const finishSafePaperlessReview = authorizedMutation("evidenceRegisters:finishSafePaperlessReview", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => finishSafePaperlessReviewPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createManual = mutation({
+export const createManual = authorizedMutation("evidenceRegisters:createManual", mutation)({
   args: {
     societyId: v.id("societies"),
     kind: v.string(),

@@ -20,6 +20,9 @@ export interface ComplianceSettings {
   incorporationDate?: string; /* ISO */
   anniversaryDate?: string; /* ISO */
   waivePrepFinancials?: boolean;
+  jurisdictionCode?: string;
+  entityType?: string;
+  annualMeetingDate?: string;
 }
 
 export interface DerivedDeadline {
@@ -147,26 +150,30 @@ export function nextFiscalYearEnd(settings: ComplianceSettings, fromISO: string)
   return nextMonthDayOnOrAfter(md.month, md.day, from);
 }
 
-/**
- * Next annual-report due date on/after `fromISO`.
- *
- * RULE (BC societies): the annual report is tied to the society's anniversary
- * (the AGM must be held within the period anchored to the anniversary). We
- * implement this as: if `anniversaryDate` is present, the next occurrence of
- * that anniversary's month-day on/after `fromISO`; otherwise we fall back to
- * `nextAgmDate` (the configured AGM month/day). Returns null when neither an
- * anniversary nor an AGM month/day is available.
- */
+/** Registry deadlines use their own statutory anchor. A planned AGM is
+ * not evidence an AGM occurred. Financial preparation waivers do not affect filing. */
 export function nextAnnualReportDueDate(settings: ComplianceSettings, fromISO: string): string | null {
-  const from = parseISODate(fromISO);
-  if (!from) return null;
-  if (settings.anniversaryDate) {
-    const anniv = parseISODate(settings.anniversaryDate);
-    if (anniv) {
-      return nextMonthDayOnOrAfter(anniv.month, anniv.day, from);
-    }
+  const jurisdiction = settings.jurisdictionCode ?? "CA-BC";
+  const company = settings.entityType === "corporation__business_";
+  if (!company) return settings.annualMeetingDate ? offsetDate(settings.annualMeetingDate, 0, 30) : null;
+  if (jurisdiction === "CA-ON-OBCA") {
+    const yearEnd = nextFiscalYearEnd(settings, fromISO);
+    return yearEnd ? offsetDate(yearEnd, 6, 0) : null;
   }
-  return nextAgmDate(settings, fromISO);
+  const anchor = settings.anniversaryDate ?? settings.incorporationDate;
+  if (!anchor) return null;
+  const parsed = parseISODate(anchor);
+  const from = parseISODate(fromISO);
+  if (!parsed || !from) return null;
+  const anniversary = nextMonthDayOnOrAfter(parsed.month, parsed.day, from);
+  return jurisdiction === "CA-FED-CBCA" ? offsetDate(anniversary, 0, 60) : jurisdiction === "CA-BC" ? offsetDate(anniversary, 2, 0) : null;
+}
+function offsetDate(value: string, months: number, days: number): string {
+  const p = parseISODate(value)!;
+  const date = new Date(Date.UTC(p.year, p.month - 1 + months, 1));
+  date.setUTCDate(Math.min(p.day, daysInMonth(date.getUTCFullYear(), date.getUTCMonth() + 1)));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 /**
@@ -176,10 +183,7 @@ export function nextAnnualReportDueDate(settings: ComplianceSettings, fromISO: s
  * carries a stable `key` and a `category` of 'agm' | 'financial' |
  * 'annual-report'.
  *
- * When `waivePrepFinancials` is true the entity has waived the requirement to
- * prepare financial statements, so the annual-report deadline is SKIPPED (the
- * annual report would otherwise carry the financials-prep obligation). The
- * fiscal-year-end and AGM deadlines are still emitted.
+ * A financial preparation waiver never removes the separate registry filing deadline.
  */
 export function deriveComplianceDeadlines(
   settings: ComplianceSettings,
@@ -207,9 +211,7 @@ export function deriveComplianceDeadlines(
     });
   }
 
-  // Annual report carries the prep-financials obligation; when the entity has
-  // waived preparing financial statements we skip the annual-report deadline.
-  if (!settings.waivePrepFinancials) {
+  {
     const annualReport = nextAnnualReportDueDate(settings, fromISO);
     if (annualReport) {
       deadlines.push({

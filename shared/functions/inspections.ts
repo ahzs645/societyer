@@ -1,3 +1,4 @@
+import { requireDocumentAccess } from "./documents";
 /**
  * PORTABLE FUNCTIONS: the inspections domain (list / forDocument / create / remove).
  *
@@ -34,7 +35,7 @@ export async function inspectionsForDocument(ctx: PortableQueryCtx, { documentId
   const candidate = await ctx.db.get(documentId, "documents");
   if (!candidate) throw new Error("documents not found.");
   await requireSocietyMembership(ctx, String(candidate.societyId));
-  await getOwned(ctx, "documents", documentId, String(candidate.societyId));
+  await requireDocumentAccess(ctx, documentId);
   return ctx.db
     .query("inspections")
     .withIndex("by_document", (q) => q.eq("documentId", documentId))

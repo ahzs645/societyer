@@ -30,6 +30,7 @@ import type {
   PortableQueryCtx,
   TableName,
 } from "../portable/ctx";
+import { matchesVerifiedIdentity, assertExternalIdentityActive } from "./identity";
 import { PORTABLE_ACCESS_ENFORCEMENT } from "../portable/define";
 
 export const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"] as const;
@@ -55,6 +56,8 @@ export type PortableUserRow = PortableDoc & {
   role?: string;
   status?: string;
   authSubject?: string;
+  authIssuer?: string;
+  externalIdentityId?: string;
 };
 
 export type OwnedPortableRow = PortableDoc & { societyId: string };
@@ -81,9 +84,11 @@ export async function resolvePrincipalUser(
   }
 
   const directUserId = principal.kind === "user" ? principal.userId : principal.actorUserId;
-  if (directUserId) {
+  if (directUserId && !(principal.kind === "user" && principal.assurance === "verified-jwt")) {
     const direct = await ctx.db.get<PortableUserRow>(directUserId, "users");
-    return direct?.societyId === societyId ? direct : null;
+    if (direct?.societyId !== societyId) return null;
+    if (principal.assurance !== "trusted-workspace") await assertExternalIdentityActive(ctx.db, direct);
+    return direct;
   }
 
   if (principal.kind !== "user") return null;
@@ -91,10 +96,17 @@ export async function resolvePrincipalUser(
     .query<PortableUserRow>("users")
     .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
     .collect();
-  return matches.find((user) => user.societyId === societyId) ?? null;
+  const bindings = matches.filter((user) => user.societyId === societyId && (principal.assurance === "trusted-workspace" || matchesVerifiedIdentity(user, principal)));
+  if (bindings.length !== 1 || (principal.userId && principal.userId !== bindings[0]._id)) return null;
+  if (principal.assurance !== "trusted-workspace") await assertExternalIdentityActive(ctx.db, bindings[0]);
+  return bindings[0];
 }
 
-function assertMembershipStatus(user: PortableUserRow): void {
+export function isActiveMembership(user: Record<string, any> & { status?: string }): boolean {
+  return !user.status || user.status === "Active";
+}
+
+export function assertMembershipStatus(user: PortableUserRow): void {
   // Older local/demo rows predate the status field and remain active for
   // compatibility. New rows must be explicitly Active.
   if (user.status && user.status !== "Active") {
@@ -250,13 +262,6 @@ async function authorizeUserRole(
 ): Promise<{ user: PortableUserRow }> {
   if (user.societyId !== societyId) throw new Error("User is not part of this society.");
   if (!canActAs(user.role as Role, required)) {
-    // Preserve the existing stranded-society recovery behavior during Stage 1.
-    const peers = await ctx.db
-      .query<PortableUserRow>("users")
-      .withIndex("by_society", (q) => q.eq("societyId", societyId))
-      .collect();
-    const hasQualifiedActor = peers.some((peer) => canActAs(peer.role as Role, required));
-    if (!hasQualifiedActor) return { user };
     throw new Error(`Role ${required} required — you have ${user.role}.`);
   }
   return { user };
@@ -283,7 +288,9 @@ export async function requirePrincipalRole(
   ctx: PortableQueryCtx,
   args: { actingUserId?: string | null; societyId: string; required: Role },
 ): Promise<{ user: PortableUserRow | null }> {
-  const principalUser = await resolvePrincipalUser(ctx, args.societyId);
+  const principalUser = ctx.principal.kind !== "anonymous" && ctx.principal.assurance === "trusted-workspace"
+    ? await requireSocietyMembership(ctx, args.societyId)
+    : await resolvePrincipalUser(ctx, args.societyId);
   if (principalUser) {
     assertMembershipStatus(principalUser);
     if (args.actingUserId && args.actingUserId !== principalUser._id) {

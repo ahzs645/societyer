@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -22,13 +23,13 @@ const templateItem = v.object({
   adoptsPreviousMinutes: v.optional(v.boolean()),
 });
 
-export const list = query({
+export const list = authorizedQuery("meetingTemplates:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("meetingTemplates:create", mutation)({
   args: {
     societyId: v.id("societies"),
     name: v.string(),
@@ -41,7 +42,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("meetingTemplates:update", mutation)({
   args: {
     templateId: v.id("meetingTemplates"),
     name: v.optional(v.string()),
@@ -54,19 +55,19 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("meetingTemplates:remove", mutation)({
   args: { templateId: v.id("meetingTemplates") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const duplicate = mutation({
+export const duplicate = authorizedMutation("meetingTemplates:duplicate", mutation)({
   args: { templateId: v.id("meetingTemplates"), name: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => duplicatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createFromMeeting = mutation({
+export const createFromMeeting = authorizedMutation("meetingTemplates:createFromMeeting", mutation)({
   args: {
     meetingId: v.id("meetings"),
     name: v.string(),
@@ -77,7 +78,7 @@ export const createFromMeeting = mutation({
   handler: async (ctx, args) => createFromMeetingPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const seedDefaults = mutation({
+export const seedDefaults = authorizedMutation("meetingTemplates:seedDefaults", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => seedDefaultsPortable(await toPortableMutationCtx(ctx), args),

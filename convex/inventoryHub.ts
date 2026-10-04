@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import {
@@ -37,56 +38,56 @@ import {
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import { buildConvexCapabilities } from "./providers/capabilities";
 
-export const connections = query({
+export const connections = authorizedQuery("inventoryHub:connections", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => connectionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 // Resolves item image blob URLs through the injected storage capability.
-export const items = query({
+export const items = authorizedQuery("inventoryHub:items", query)({
   args: { societyId: v.id("societies"), itemType: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => itemsPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
-export const locations = query({
+export const locations = authorizedQuery("inventoryHub:locations", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => locationsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const balances = query({
+export const balances = authorizedQuery("inventoryHub:balances", query)({
   args: { societyId: v.id("societies"), inventoryItemId: v.optional(v.id("inventoryItems")) },
   returns: v.any(),
   handler: async (ctx, args) => balancesPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const lots = query({
+export const lots = authorizedQuery("inventoryHub:lots", query)({
   args: { societyId: v.id("societies"), inventoryItemId: v.optional(v.id("inventoryItems")) },
   returns: v.any(),
   handler: async (ctx, args) => lotsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const stockMovements = query({
+export const stockMovements = authorizedQuery("inventoryHub:stockMovements", query)({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, args) => stockMovementsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const receiptLinks = query({
+export const receiptLinks = authorizedQuery("inventoryHub:receiptLinks", query)({
   args: { societyId: v.id("societies"), inventoryItemId: v.optional(v.id("inventoryItems")) },
   returns: v.any(),
   handler: async (ctx, args) => receiptLinksPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const counts = query({
+export const counts = authorizedQuery("inventoryHub:counts", query)({
   args: { societyId: v.id("societies"), status: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => countsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsertConnection = mutation({
+export const upsertConnection = authorizedMutation("inventoryHub:upsertConnection", mutation)({
   args: {
     id: v.optional(v.id("inventoryConnections")),
     societyId: v.id("societies"),
@@ -101,13 +102,13 @@ export const upsertConnection = mutation({
   handler: async (ctx, args) => upsertConnectionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const deleteConnection = mutation({
+export const deleteConnection = authorizedMutation("inventoryHub:deleteConnection", mutation)({
   args: { id: v.id("inventoryConnections") },
   returns: v.any(),
   handler: async (ctx, args) => deleteConnectionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertItem = mutation({
+export const upsertItem = authorizedMutation("inventoryHub:upsertItem", mutation)({
   args: {
     id: v.optional(v.id("inventoryItems")),
     societyId: v.id("societies"),
@@ -137,7 +138,7 @@ export const upsertItem = mutation({
   handler: async (ctx, args) => upsertItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertLocation = mutation({
+export const upsertLocation = authorizedMutation("inventoryHub:upsertLocation", mutation)({
   args: {
     id: v.optional(v.id("inventoryLocations")),
     societyId: v.id("societies"),
@@ -159,19 +160,19 @@ export const upsertLocation = mutation({
   handler: async (ctx, args) => upsertLocationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const deleteLocation = mutation({
+export const deleteLocation = authorizedMutation("inventoryHub:deleteLocation", mutation)({
   args: { id: v.id("inventoryLocations") },
   returns: v.any(),
   handler: async (ctx, args) => deleteLocationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const deleteItem = mutation({
+export const deleteItem = authorizedMutation("inventoryHub:deleteItem", mutation)({
   args: { id: v.id("inventoryItems") },
   returns: v.any(),
   handler: async (ctx, args) => deleteItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertLot = mutation({
+export const upsertLot = authorizedMutation("inventoryHub:upsertLot", mutation)({
   args: {
     id: v.optional(v.id("inventoryLots")),
     societyId: v.id("societies"),
@@ -192,7 +193,7 @@ export const upsertLot = mutation({
   handler: async (ctx, args) => upsertLotPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const deleteLot = mutation({
+export const deleteLot = authorizedMutation("inventoryHub:deleteLot", mutation)({
   args: { id: v.id("inventoryLots") },
   returns: v.any(),
   handler: async (ctx, args) => deleteLotPortable(await toPortableMutationCtx(ctx), args),
@@ -201,7 +202,7 @@ export const deleteLot = mutation({
 // Start an in-app physical count. Seeds count lines from the current posted
 // balances for the chosen scope so a counter can walk a location (or the whole
 // catalog) and record what they actually find.
-export const createCount = mutation({
+export const createCount = authorizedMutation("inventoryHub:createCount", mutation)({
   args: {
     societyId: v.id("societies"),
     title: v.string(),
@@ -215,7 +216,7 @@ export const createCount = mutation({
 });
 
 // Add an item/location pair that wasn't expected (found stock not on the sheet).
-export const addCountLine = mutation({
+export const addCountLine = authorizedMutation("inventoryHub:addCountLine", mutation)({
   args: {
     inventoryCountId: v.id("inventoryCounts"),
     inventoryItemId: v.id("inventoryItems"),
@@ -229,7 +230,7 @@ export const addCountLine = mutation({
   handler: async (ctx, args) => addCountLinePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const setCountLine = mutation({
+export const setCountLine = authorizedMutation("inventoryHub:setCountLine", mutation)({
   args: {
     id: v.id("inventoryCountLines"),
     countedQuantity: v.optional(v.number()),
@@ -241,13 +242,13 @@ export const setCountLine = mutation({
   handler: async (ctx, args) => setCountLinePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const voidCount = mutation({
+export const voidCount = authorizedMutation("inventoryHub:voidCount", mutation)({
   args: { inventoryCountId: v.id("inventoryCounts") },
   returns: v.any(),
   handler: async (ctx, args) => voidCountPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertCandidate = mutation({
+export const upsertCandidate = authorizedMutation("inventoryHub:upsertCandidate", mutation)({
   args: {
     societyId: v.id("societies"),
     connectionId: v.optional(v.id("inventoryConnections")),
@@ -272,14 +273,14 @@ export const upsertCandidate = mutation({
 
 // Review queue for imported inventory candidates (the gate before a candidate
 // becomes a real stock movement). Optionally filtered by status.
-export const candidates = query({
+export const candidates = authorizedQuery("inventoryHub:candidates", query)({
   args: { societyId: v.id("societies"), status: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => candidatesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 // Mark a candidate ignored / needs_review / matched without posting it.
-export const setCandidateStatus = mutation({
+export const setCandidateStatus = authorizedMutation("inventoryHub:setCandidateStatus", mutation)({
   args: { candidateId: v.id("inventoryCandidates"), status: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => setCandidateStatusPortable(await toPortableMutationCtx(ctx), args),
@@ -289,7 +290,7 @@ export const setCandidateStatus = mutation({
 // mark the candidate posted (linking the movement). The destination item must
 // be resolved (suggested or overridden); a destination location is required for
 // the default "receive".
-export const promoteCandidateToMovement = mutation({
+export const promoteCandidateToMovement = authorizedMutation("inventoryHub:promoteCandidateToMovement", mutation)({
   args: {
     candidateId: v.id("inventoryCandidates"),
     inventoryItemId: v.optional(v.id("inventoryItems")),
@@ -301,7 +302,7 @@ export const promoteCandidateToMovement = mutation({
   handler: async (ctx, args) => promoteCandidateToMovementPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const linkReceipt = mutation({
+export const linkReceipt = authorizedMutation("inventoryHub:linkReceipt", mutation)({
   args: {
     id: v.optional(v.id("assetReceiptLinks")),
     societyId: v.id("societies"),
@@ -323,13 +324,13 @@ export const linkReceipt = mutation({
   handler: async (ctx, args) => linkReceiptPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const unlinkReceipt = mutation({
+export const unlinkReceipt = authorizedMutation("inventoryHub:unlinkReceipt", mutation)({
   args: { id: v.id("assetReceiptLinks") },
   returns: v.any(),
   handler: async (ctx, args) => unlinkReceiptPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const postStockMovement = mutation({
+export const postStockMovement = authorizedMutation("inventoryHub:postStockMovement", mutation)({
   args: {
     societyId: v.id("societies"),
     connectionId: v.optional(v.id("inventoryConnections")),
@@ -360,7 +361,7 @@ export const postStockMovement = mutation({
   handler: async (ctx, args) => postStockMovementPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const postCountVarianceAdjustments = mutation({
+export const postCountVarianceAdjustments = authorizedMutation("inventoryHub:postCountVarianceAdjustments", mutation)({
   args: {
     inventoryCountId: v.id("inventoryCounts"),
     reason: v.optional(v.string()),
@@ -369,7 +370,7 @@ export const postCountVarianceAdjustments = mutation({
   handler: async (ctx, args) => postCountVarianceAdjustmentsPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const importOpenBoxesSnapshot = mutation({
+export const importOpenBoxesSnapshot = authorizedMutation("inventoryHub:importOpenBoxesSnapshot", mutation)({
   args: {
     societyId: v.id("societies"),
     connectionId: v.optional(v.id("inventoryConnections")),
@@ -406,13 +407,13 @@ export const importOpenBoxesSnapshot = mutation({
   handler: async (ctx, args) => importOpenBoxesSnapshotPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createItemFromAsset = mutation({
+export const createItemFromAsset = authorizedMutation("inventoryHub:createItemFromAsset", mutation)({
   args: { assetId: v.id("assets") },
   returns: v.any(),
   handler: async (ctx, args) => createItemFromAssetPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const recordAssetStockIntake = mutation({
+export const recordAssetStockIntake = authorizedMutation("inventoryHub:recordAssetStockIntake", mutation)({
   args: {
     assetId: v.id("assets"),
     assetEventId: v.id("assetEvents"),
@@ -423,7 +424,7 @@ export const recordAssetStockIntake = mutation({
   handler: async (ctx, args) => recordAssetStockIntakePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const backfillAssets = mutation({
+export const backfillAssets = authorizedMutation("inventoryHub:backfillAssets", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => backfillAssetsPortable(await toPortableMutationCtx(ctx), args),

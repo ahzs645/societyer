@@ -1,3 +1,4 @@
+import { filterDocumentLinkedRows } from "./documents";
 /**
  * PORTABLE FUNCTIONS: the document/template GENERATION surface of
  * legalOperations.
@@ -45,6 +46,7 @@ import {
 import { buildSubscriptionAgreementBlocks } from "../subscriptionAgreement";
 import { SOCIETY_DOCUMENT_PACKETS, societyPacketEntityTypes } from "../societyDocumentPackets";
 import { isCorporation } from "../organizationDomain";
+import { assertPacketCompatible, packetDataWithProvenance } from "../templateProvenance";
 import { materializeRightsHoldings } from "../equityLedger";
 import { planShareSplit, validateRatio, type HoldingPosition, type SplitRatio } from "../shareSplit";
 import { buildSocietyRenderContext } from "../societyRenderContext";
@@ -77,9 +79,9 @@ export async function templateEnginePortable(ctx: PortableQueryCtx, { societyId 
     dataFields: dataFields.sort((a, b) => String(a.name).localeCompare(String(b.name))),
     templates: templates.sort((a, b) => String(a.name).localeCompare(String(b.name))),
     precedents: precedents.sort((a, b) => String(a.packageName).localeCompare(String(b.packageName))),
-    runs: runs.sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO))),
-    generatedDocuments: generatedDocuments.sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO))),
-    signers: signers.sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))),
+    runs: (await filterDocumentLinkedRows(ctx, societyId, runs, "legalPrecedentRuns")).sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO))),
+    generatedDocuments: (await filterDocumentLinkedRows(ctx, societyId, generatedDocuments, "generatedLegalDocuments")).sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO))),
+    signers: (await filterDocumentLinkedRows(ctx, societyId, signers, "legalSigners")).sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))),
   };
 }
 
@@ -172,6 +174,7 @@ export async function generatePacketForSocietyPortable(
     const socPacket = SOCIETY_DOCUMENT_PACKETS.find((p) => p.key === args.packetKey);
     const packet = corpPacket ?? socPacket;
     if (!packet) throw new Error(`No document packet matches key: ${args.packetKey}`);
+    assertPacketCompatible(await ctx.db.get(args.societyId), packet);
     const markerKind = corpPacket ? "corporation" : "society";
     if (markerKind === "corporation") await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
     else await seedSocietyDocumentPacketsForSociety(ctx, args.societyId);
@@ -265,7 +268,6 @@ export async function stageCorporationDocumentPacketPortable(
 ): Promise<any> {
   await requireSocietyMembership(ctx, args.societyId);
   if (args.filingId) await getOwned(ctx, "filings", args.filingId, args.societyId);
-  await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
   const packet = args.packetKey
     ? CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.key === args.packetKey)
     : corporationPacketForComplianceObligation({
@@ -274,6 +276,8 @@ export async function stageCorporationDocumentPacketPortable(
         ruleId: args.obligationRuleId,
       });
   if (!packet) throw new Error("No corporation document packet matches this obligation.");
+  assertPacketCompatible(await ctx.db.get(args.societyId), packet);
+  await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
 
   const precedent = await corporationPacketPrecedentForSociety(ctx, args.societyId, packet);
 
@@ -345,6 +349,7 @@ export async function stageShareIssuancePacketPortable(
   }
   const packet = CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.key === "issue-shares");
   if (!packet) throw new Error("Share issuance packet is not configured.");
+  assertPacketCompatible(await ctx.db.get(args.societyId), packet);
 
   await seedCorporationDocumentPacketsForSociety(ctx, args.societyId);
   const precedent = await corporationPacketPrecedentForSociety(ctx, args.societyId, packet);
@@ -810,6 +815,8 @@ async function createPacketRunArtifacts(ctx: any, args: {
   // {#each} markup (token-free packets are unaffected). Logic in the tested
   // shared/societyRenderContext.ts.
   const society = await ctx.db.get(args.societyId);
+  assertPacketCompatible(society, args.packet);
+  const provenanceData = packetDataWithProvenance(args.dataJson, society, args.packet);
   const roleHolders = await ctx.db
     .query("roleHolders")
     .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))
@@ -890,7 +897,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
     librarySection: "governance",
     flaggedForDeletion: false,
     sourceExternalIds,
-    sourcePayloadJson: args.dataJson,
+    sourcePayloadJson: provenanceData,
     tags: ["corporation-packet", args.packet.key, "editable-docx"],
   });
   const draftDocumentVersionId = await ctx.db.insert("documentVersions", {
@@ -917,7 +924,7 @@ async function createPacketRunArtifacts(ctx: any, args: {
     eventId: args.eventId,
     effectiveDate: args.effectiveDate,
     documentTag: args.packet.documentTag,
-    dataJson: args.dataJson,
+    dataJson: provenanceData,
     subloopJsonList: [],
     signersRequiredRoleHolderIds: signerRoleHolderIds,
     signersWhoSignedIds: [],

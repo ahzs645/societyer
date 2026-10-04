@@ -1,7 +1,8 @@
 import type { AuthConfig } from "convex/server";
+import { resolveAuthIssuer, resolveSessionBroker } from "../shared/authConfiguration";
 
-const issuer =
-  process.env.BETTER_AUTH_BASE_URL ?? "http://127.0.0.1:5173";
+resolveSessionBroker(process.env);
+const issuer = resolveAuthIssuer(process.env);
 const jwks =
   process.env.BETTER_AUTH_JWKS_URL ??
   `${issuer.replace(/\/$/, "")}/api/auth/jwks`;

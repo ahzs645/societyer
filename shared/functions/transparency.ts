@@ -1,3 +1,4 @@
+import { publicDocumentAccessPredicate } from "./documents";
 /**
  * PORTABLE FUNCTIONS: the transparency domain
  * (listPublications / upsertPublication / removePublication).
@@ -148,10 +149,12 @@ export async function publicCenterPortable(
   const documentById = new Map(
     documents.map((document: any) => [String(document._id), document]),
   );
+  const allowsDocument = await publicDocumentAccessPredicate(ctx, String(society._id));
   const publishedRows = await Promise.all(
     publications
       .filter((publication: any) => {
-        if (publication.status !== "Published") return false;
+        if (publication.status !== "Published" || publication.reviewStatus !== "Approved") return false;
+        if (publication.documentId && !allowsDocument(documentById.get(String(publication.documentId)))) return false;
         if (!society.publicShowBylaws && publication.category === "Bylaws") {
           return false;
         }
@@ -234,7 +237,7 @@ async function publicDocumentDownloadUrl(ctx: PortableQueryCtx, document: any) {
     .filter((version: any) => version.isCurrent)
     .sort((a: any, b: any) => b.version - a.version)[0] ?? null;
   if (current) {
-    if (current.storageProvider !== "demo" && current.storageProvider !== "rustfs") {
+    if (current.storageProvider !== "demo" && current.storageProvider !== "rustfs" && current.storageProvider !== "r2") {
       return undefined;
     }
     return await createDownloadUrl({

@@ -1,3 +1,4 @@
+import { entityPreparationDecision } from "./entitySetup";
 import {
   canonicalizeJurisdictionCode,
   homeJurisdictionCode,
@@ -190,11 +191,11 @@ const FEDERAL_CBCA_FLOW: PostIncorporationFlow = {
     {
       key: "get-business-number-cra-accounts",
       order: 8,
-      title: "Get a business number and CRA accounts",
+      title: "Verify BN and RC receipt; assess other CRA accounts",
       category: "registration",
       cadence: "one_time",
       summary:
-        "Register for a business number (BN) and the CRA program accounts you need: corporate income tax, GST/HST, and payroll. The annual return is not your tax return — corporate tax is filed with the CRA.",
+        "Participating federal business incorporations receive a business number (BN) and corporation income tax (RC) account automatically. Verify the receipt and identifiers before requesting a new account. Assess GST/HST and payroll separately. The registry annual return and CRA tax return are separate filings.",
       timing: "Before you charge tax, remit payroll, or file your first T2.",
       authority: {
         body: "Canada Revenue Agency",
@@ -212,8 +213,8 @@ const FEDERAL_CBCA_FLOW: PostIncorporationFlow = {
       category: "registration",
       cadence: "event_driven",
       summary:
-        "Provincial/territorial law requires a federal corporation to register extra-provincially in each jurisdiction where it carries on business (an address, phone, or offering products/services there). Most jurisdictions require an attorney/agent for service.",
-      timing: "Before carrying on business in the province or territory.",
+        "Assess whether the corporation carries on business in each province or territory under that jurisdiction's law. Record business commencement separately from registration, and confirm any agent-for-service requirement.",
+      timing: "Check the destination jurisdiction's trigger and deadline; BC company registration is due within two months of beginning to carry on business.",
       authority: {
         body: "Provincial and territorial registries",
         citation: "Provincial/territorial extra-provincial registration legislation",
@@ -293,19 +294,52 @@ const FEDERAL_CBCA_FLOW: PostIncorporationFlow = {
   ],
 };
 
-export const POST_INCORPORATION_FLOWS: PostIncorporationFlow[] = [FEDERAL_CBCA_FLOW];
+const BC_SOCIETY_FLOW: PostIncorporationFlow = {
+  jurisdictionCode: "CA-BC", entityTypes: ["society"], status: "draft",
+  title: "BC society preparation and organization", sourceUrl: "https://www2.gov.bc.ca/gov/content/employment-business/business/not-for-profit-organizations/societies/incorporate",
+  steps: [
+    { key: "society-constitution-bylaws", title: "Confirm constitution, bylaws and society classification", summary: "Prepare a constitution with the name and lawful purposes, plus bylaws. A member-funded society needs the prescribed constitution statement and an eligibility assessment; charity status is separate.", timing: "Before submitting the incorporation application.", category: "organize", cadence: "one_time", citation: "Societies Act ss. 10–11; member-funded societies Part 12", packetKey: "society-incorporation-constitution" },
+    { key: "society-prepare-bylaws", title: "Prepare and review society bylaws", summary: "Draft membership, meeting, director, financial and records rules for the intended society. This worksheet is original guidance; use official originals when choosing prescribed model wording.", timing: "Before incorporation submission and adoption of the complete bylaws.", category: "organize", cadence: "one_time", citation: "Societies Act ss. 11–12", packetKey: "society-incorporation-bylaws" },
+    { key: "society-confirm-directors", title: "Confirm eligible directors and registered office", summary: "An ordinary society needs at least three directors, including at least one ordinarily resident in BC. A member-funded society needs at least one director and is exempt from that residency requirement. Confirm director eligibility and consent.", timing: "Before incorporation; maintain current information thereafter.", category: "organize", cadence: "one_time", citation: "Societies Act ss. 40–44 and Part 12", packetKey: "society-appoint-directors" },
+    { key: "society-official-incorporation-evidence", title: "File through the official registry and retain evidence", summary: "Review the application and submit through Societies Online. Retain the registry certificate, certified constitution and bylaws, statement of directors and registered office, and confirmation. A prepared application is not accepted incorporation evidence.", timing: "On acceptance by the registrar.", category: "registration", cadence: "one_time", citation: "Societies Act incorporation provisions" },
+    { key: "society-records", title: "Set up the society records and access controls", summary: "Keep constitution, bylaws, member and director registers, minutes, resolutions, financial records and registry evidence. Confirm the records location and appropriate access restrictions.", timing: "From incorporation, with ongoing updates.", category: "organize", cadence: "one_time", citation: "Societies Act ss. 20–24", packetKey: "society-directors-resolution" },
+    { key: "society-tax-assessment", title: "Assess CRA accounts and charitable registration separately", summary: "Assess business number, GST/HST, payroll and any information or income-tax filing obligations for the society's activities. CRA charitable registration requires its own application and approval; incorporation does not establish it.", timing: "Before the relevant tax or payroll activity.", category: "registration", cadence: "one_time", citation: "CRA business registration and charities guidance" },
+    { key: "society-agm-annual-report", title: "Hold the AGM and file the annual report", summary: "Track the AGM reporting year, any registrar-approved extension and its evidence. File the annual report within 30 days after the AGM; incorporation-year and extension rules need their own assessment.", timing: "AGM each calendar year after the incorporation year, subject to applicable extension; report within 30 days after AGM.", category: "good_standing", cadence: "recurring", citation: "Societies Act ss. 71 and 73", packetKey: "society-annual-general-meeting", filingKind: "BCSocietyAnnualReport" },
+  ].map((step, index) => ({ ...step, order: index + 1, category: step.category as PostIncorporationStepCategory, cadence: step.cadence as PostIncorporationStepCadence, authority: { body: "BC Registries", citation: step.citation, officialUrl: "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01" }, appliesTo: { entityTypes: ["society"], homeJurisdictionCodes: ["CA-BC"], contextKinds: ["home"] }, obligation: step.filingKind ? { filingKind: step.filingKind } : undefined })),
+};
+const BC_COMPANY_FLOW: PostIncorporationFlow = {
+  jurisdictionCode: "CA-BC", entityTypes: ["corporation__business_"], status: "draft",
+  title: "BC ordinary private company preparation and organization", sourceUrl: "https://www2.gov.bc.ca/gov/content/employment-business/business/managing-a-business/permits-licences/businesses-incorporated-companies/incorporated-companies",
+  steps: [
+    { key: "bc-incorporation-agreement-articles", title: "Prepare the incorporation agreement and articles", summary: "Each incorporator signs an incorporation agreement and takes at least one share. Prepare articles and the notice of articles, confirm the share structure and keep the signed agreement and articles in the records office. ULC, CCC and benefit companies require specialist review.", timing: "Before submitting the incorporation application.", category: "organize", cadence: "one_time", citation: "Business Corporations Act ss. 10–12", packetKey: "bc-incorporation-agreement" },
+    { key: "bc-prepare-articles", title: "Draft and review articles and the notice of articles", summary: "Complete the share-rights schedule and governance clauses, reconcile them with the incorporation agreement and notice of articles, and resolve all drafting prompts before execution.", timing: "Before submitting the application.", category: "organize", cadence: "one_time", citation: "Business Corporations Act ss. 10–12", packetKey: "bc-articles-preparation" },
+    { key: "bc-confirm-directors-offices", title: "Confirm eligible directors and BC offices", summary: "An ordinary private BC company needs at least one director; there is no general director residency requirement. Confirm eligibility, written consent, and registered and records office addresses in BC.", timing: "Before incorporation and whenever details change.", category: "organize", cadence: "one_time", citation: "Business Corporations Act ss. 34–35, 120–123", packetKey: "appoint-director" },
+    { key: "bc-official-incorporation-evidence", title: "Submit the application and retain official incorporation evidence", summary: "Use the official BC registry workflow. Keep the certificate, certified notice of articles and filing confirmation. Drafts and signed internal documents do not establish registry acceptance.", timing: "Upon registrar acceptance.", category: "registration", cadence: "one_time", citation: "Business Corporations Act incorporation provisions" },
+    { key: "bc-organize-records", title: "Organize directors, officers, share issues and records", summary: "Adopt initial resolutions, appoint officers, authorize share issues and record the consideration. Set up corporate registers, accounting records and the transparency register where applicable.", timing: "After incorporation; update records as events occur.", category: "organize", cadence: "one_time", citation: "Business Corporations Act ss. 42, 54 and Part 4.1", packetKey: "organize-corporation" },
+    { key: "bc-confirm-cra-accounts", title: "Verify BN and RC receipt and assess GST/HST and payroll", summary: "Participating BC business incorporations receive BN and RC accounts automatically. Confirm receipt and record identifiers before seeking another account. Assess GST/HST and payroll registration independently.", timing: "After incorporation and before relevant business activity.", category: "registration", cadence: "one_time", citation: "CRA corporation income tax program account guidance" },
+    { key: "bc-company-annual-report", title: "Track the annual report separately from the AGM", summary: "The company annual report uses the incorporation anniversary. AGM or unanimous-resolution obligations use the annual reference date and prior meeting history; the two dates are separate.", timing: "Annual report within two months after the incorporation anniversary; first AGM within 18 months, then assess annual reference date and 15-month limits.", category: "good_standing", cadence: "recurring", citation: "Business Corporations Act ss. 182 and 230", filingKind: "BCCompanyAnnualReport" },
+  ].map((step, index) => ({ ...step, order: index + 1, category: step.category as PostIncorporationStepCategory, cadence: step.cadence as PostIncorporationStepCadence, authority: { body: "BC Registries", citation: step.citation, officialUrl: "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00" }, appliesTo: { entityTypes: ["corporation__business_"], homeJurisdictionCodes: ["CA-BC"], contextKinds: ["home"] }, obligation: step.filingKind ? { filingKind: step.filingKind } : undefined })),
+};
+FEDERAL_CBCA_FLOW.steps = [{
+  key: "prepare-federal-articles", order: 1, title: "Prepare and review federal incorporation articles", category: "organize", cadence: "one_time",
+  summary: "Complete the proposed name, office province, share classes and rights, transfer restrictions, director number and other provisions in an original worksheet. Review the articles and enter them into the official federal application; a worksheet does not establish incorporation.",
+  timing: "Before submitting the incorporation application.", authority: { body: CORPORATIONS_CANADA, citation: `${CBCA} ss. 5–8`, officialUrl: `${ISED}/business-corporations/how-incorporate-business` },
+  appliesTo: { entityTypes: ["corporation__business_"], homeJurisdictionCodes: ["CA-FED-CBCA"], contextKinds: ["home"] }, packetKey: "federal-articles-preparation",
+}, ...FEDERAL_CBCA_FLOW.steps.map((step) => ({ ...step, order: step.order + 1 }))];
+export const POST_INCORPORATION_FLOWS: PostIncorporationFlow[] = [FEDERAL_CBCA_FLOW, BC_SOCIETY_FLOW, BC_COMPANY_FLOW];
 
 /** Find the post-incorporation flow for a jurisdiction code (canonicalized). */
-export function findPostIncorporationFlow(jurisdictionCode?: string | null): PostIncorporationFlow | undefined {
+export function findPostIncorporationFlow(jurisdictionCode?: string | null, entityType?: string): PostIncorporationFlow | undefined {
   const code = canonicalizeJurisdictionCode(jurisdictionCode);
-  return POST_INCORPORATION_FLOWS.find((flow) => flow.jurisdictionCode === code);
+  return POST_INCORPORATION_FLOWS.find((flow) => flow.jurisdictionCode === code && (!entityType || flow.entityTypes.includes(entityType)));
 }
 
 /** The ordered steps for an organization, filtered by its entity type. Empty if unsupported. */
 export function postIncorporationStepsForOrganization(organization?: LegalEntityLike | null): PostIncorporationStep[] {
-  const flow = findPostIncorporationFlow(homeJurisdictionCode(organization));
-  if (!flow) return [];
+  if (!entityPreparationDecision(organization).allowed) return [];
   const entityType = organizationEntityType(organization);
+  const flow = findPostIncorporationFlow(homeJurisdictionCode(organization), entityType);
+  if (!flow) return [];
   return flow.steps
     .filter((step) => step.appliesTo.entityTypes.includes(entityType))
     .slice()

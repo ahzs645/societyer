@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -10,19 +11,19 @@ import {
 } from "../shared/functions/agm";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const runForMeeting = query({
+export const runForMeeting = authorizedQuery("agm:runForMeeting", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => runForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const init = mutation({
+export const init = authorizedMutation("agm:init", mutation)({
   args: { societyId: v.id("societies"), meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => agmInit(await toPortableMutationCtx(ctx), args),
 });
 
-export const markStep = mutation({
+export const markStep = authorizedMutation("agm:markStep", mutation)({
   args: {
     id: v.id("agmRuns"),
     step: v.string(),
@@ -43,7 +44,7 @@ export const markStep = mutation({
   handler: async (ctx, args) => agmMarkStep(await toPortableMutationCtx(ctx), args),
 });
 
-export const logNoticeDelivery = mutation({
+export const logNoticeDelivery = authorizedMutation("agm:logNoticeDelivery", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
@@ -64,7 +65,7 @@ export const logNoticeDelivery = mutation({
   handler: async (ctx, args) => logNoticeDeliveryPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const noticeDeliveries = query({
+export const noticeDeliveries = authorizedQuery("agm:noticeDeliveries", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => noticeDeliveriesPortable(await toPortableQueryCtx(ctx), args),
@@ -77,7 +78,7 @@ export const noticeDeliveries = query({
  *  an actual delivery. Mail / in-person notices are human-actioned (the
  *  secretary confirmed sending via that channel), so they are recorded as
  *  delivered with a manual proof string. */
-export const queueNoticeToAllVotingMembers = mutation({
+export const queueNoticeToAllVotingMembers = authorizedMutation("agm:queueNoticeToAllVotingMembers", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),

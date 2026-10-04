@@ -372,6 +372,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       navItem("/app/filings"),
       navItem("/app/compliance-obligations"),
+      navItem("/app/research-library"),
       navItem("/app/filings/prefill"),
       navItem("/app/annual-cycle"),
       navItem("/app/formation-maintenance"),

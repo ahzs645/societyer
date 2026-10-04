@@ -1,3 +1,9 @@
+import { CORPORATION_DOCUMENT_PACKETS } from "../../shared/corporationDocumentPackets";
+import { SOCIETY_DOCUMENT_PACKETS } from "../../shared/societyDocumentPackets";
+import { canonicalizeJurisdictionCode, homeJurisdictionCode, isSociety } from "../../shared/organizationDomain";
+import { entityPreparationDecision } from "../../shared/entitySetup";
+import { Badge } from "../components/ui";
+import { useToast } from "../components/Toast";
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -15,12 +21,11 @@ function packetKeyOf(t: { sourceExternalIds?: string[]; notes?: string }): strin
 }
 
 /**
- * Document catalog — the read-only list of documents the current entity can
+ * Document catalog — the list of draft documents the current entity can
  * generate, sourced from its seeded legalTemplates/precedents. Entities
  * auto-seed their packet catalog on creation, so both societies and
- * corporations have their own catalog here. This page is a catalog *viewer*:
- * it never generates documents or mutates anything (generation is a separate
- * corp-specific flow).
+ * corporations have their own catalog here. Templates prepare editable drafts; the authoritative registry originals and
+ * evidence stages are tracked separately.
  */
 
 type CatalogTemplate = {
@@ -37,6 +42,8 @@ type CatalogTemplate = {
   terms?: string;
   notes?: string;
   sourceExternalIds?: string[];
+  jurisdictions?: string[];
+  entityTypes?: string[];
 };
 
 type CatalogPrecedent = {
@@ -77,11 +84,14 @@ export function DocumentCatalogPage() {
     society ? { societyId: society._id } : "skip",
   ) as CatalogData | undefined;
   const generate = useMutation(api.legalOperations.generateDocumentFromCatalog);
+  const toast = useToast();
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [doneKey, setDoneKey] = useState<string | null>(null);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
+
+  const preparation = entityPreparationDecision(society);
 
   const onGenerate = async (t: CatalogTemplate) => {
     const key = packetKeyOf(t);
@@ -91,6 +101,8 @@ export function DocumentCatalogPage() {
       await generate({ societyId: society._id, packetKey: key, effectiveDate: new Date().toISOString().slice(0, 10) });
       setDoneKey(t._id);
       setTimeout(() => setDoneKey(null), 4000);
+    } catch (error: any) {
+      toast.error("Could not prepare draft", error?.message ?? String(error));
     } finally {
       setBusyKey(null);
     }
@@ -118,10 +130,16 @@ export function DocumentCatalogPage() {
         title="Document catalog"
         icon={<FileText size={16} />}
         iconColor="blue"
-        subtitle="The documents available to generate for this entity — its seeded template and precedent catalog. Read-only viewer."
+        subtitle="Prepare editable drafts from this entity’s template and precedent catalog."
       />
 
       <RelatedDocumentViews current="/app/document-catalog" />
+      <div className="card" style={{ padding: 14, marginBottom: 16 }}>
+        <Badge tone={preparation.allowed ? "info" : "warn"}>{preparation.allowed ? "Draft preparation" : "Route review required"}</Badge>
+        <p style={{ margin: "8px 0" }}>{preparation.message}</p>
+        <p className="muted" style={{ margin: 0 }}>These are application-authored working drafts. A signature, filing receipt and certified registry document are separate evidence stages. Official government forms and model layouts remain linked originals unless their reuse rights are confirmed.</p>
+        <Link to="/app/post-incorporation">Track preparation and evidence</Link>{" · "}<Link to="/app/research-library">Research and source review</Link>
+      </div>
 
       {templates === undefined ? (
         <div className="card">
@@ -147,6 +165,11 @@ export function DocumentCatalogPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {items.map((t) => {
                   const desc = firstLine(t.notes);
+                  const key = packetKeyOf(t);
+                  const packet = [...CORPORATION_DOCUMENT_PACKETS, ...SOCIETY_DOCUMENT_PACKETS].find((candidate) => candidate.key === key);
+                  const compatibleJurisdiction = !packet || packet.jurisdictions.some((code) => canonicalizeJurisdictionCode(code) === canonicalizeJurisdictionCode(homeJurisdictionCode(society)));
+                  const compatibleEntity = !packet || (key?.startsWith("society-") ? isSociety(society) : !isSociety(society));
+                  const canPrepare = preparation.allowed && compatibleJurisdiction && compatibleEntity;
                   return (
                     <div
                       key={t._id}
@@ -179,20 +202,24 @@ export function DocumentCatalogPage() {
                         <span style={{ marginLeft: "auto" }}>
                           {doneKey === t._id ? (
                             <span style={{ color: "var(--green-11)", fontSize: 13 }}>
-                              Generated ✓ — see Documents
+                              Draft staged ✓ — open Template Engine
                             </span>
                           ) : (
                             <button
                               className="btn btn--accent"
-                              disabled={busyKey === t._id || !packetKeyOf(t)}
+                              disabled={busyKey === t._id || !packetKeyOf(t) || !canPrepare}
                               onClick={() => onGenerate(t)}
-                              title={packetKeyOf(t) ? "Generate a draft document" : "No packet key on this template"}
+                              title={!preparation.allowed ? preparation.message : !compatibleJurisdiction || !compatibleEntity ? "Choose a template for this entity and home jurisdiction" : packetKeyOf(t) ? "Prepare an editable draft" : "No packet key on this template"}
                             >
-                              {busyKey === t._id ? "Generating…" : "Generate"}
+                              {busyKey === t._id ? "Preparing…" : "Prepare draft"}
                             </button>
                           )}
                         </span>
                       </div>
+                      {packet?.preparationOnly && <p className="muted" style={{ margin: "6px 0" }}>Original preparation worksheet — unresolved drafting prompts require tailored legal review before execution or registry submission.</p>}
+                      {!compatibleJurisdiction && <Badge tone="warn">Different home jurisdiction</Badge>}
+                      {!compatibleEntity && <Badge tone="warn">Different entity type</Badge>}
+                      {packet?.sourceUrls && <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 6 }}>{packet.sourceUrls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer">Official source {index + 1}</a>)}</div>}
                       {desc && (
                         <p
                           style={{

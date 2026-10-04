@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -19,25 +20,25 @@ const accessGrantValidator = v.object({
   note: v.optional(v.string()),
 });
 
-export const listForMeeting = query({
+export const listForMeeting = authorizedQuery("meetingMaterials:listForMeeting", query)({
   args: { meetingId: v.id("meetings"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => listForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const packageForMeeting = query({
+export const packageForMeeting = authorizedQuery("meetingMaterials:packageForMeeting", query)({
   args: { meetingId: v.id("meetings"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => packageForMeetingPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
-export const listForSociety = query({
+export const listForSociety = authorizedQuery("meetingMaterials:listForSociety", query)({
   args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => listForSocietyPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const attach = mutation({
+export const attach = authorizedMutation("meetingMaterials:attach", mutation)({
   args: {
     id: v.optional(v.id("meetingMaterials")),
     societyId: v.id("societies"),
@@ -58,7 +59,7 @@ export const attach = mutation({
   handler: async (ctx, args) => attachPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const setAvailability = mutation({
+export const setAvailability = authorizedMutation("meetingMaterials:setAvailability", mutation)({
   args: {
     id: v.id("meetingMaterials"),
     availabilityStatus: v.string(),
@@ -69,7 +70,7 @@ export const setAvailability = mutation({
   handler: async (ctx, args) => setAvailabilityPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("meetingMaterials:remove", mutation)({
   args: { id: v.id("meetingMaterials") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

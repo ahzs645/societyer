@@ -22,11 +22,14 @@ export function computedQuorumMet({
   presentCount,
   activeProxyCount = 0,
   required,
+  requiresLegalRegister = false,
 }: {
   presentCount: number;
   activeProxyCount?: number;
   required?: number | null;
+  requiresLegalRegister?: boolean;
 }): boolean | null {
+  if (requiresLegalRegister) return null;
   if (required == null || !Number.isFinite(required)) return null;
   return presentCount + activeProxyCount >= required;
 }

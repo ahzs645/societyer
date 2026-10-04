@@ -1,16 +1,17 @@
 // @ts-nocheck
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { pipaTrainingList, pipaTrainingCreate, pipaTrainingUpdate, pipaTrainingRemove } from "../shared/functions/pipaTraining";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("pipaTraining:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => pipaTrainingList(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("pipaTraining:create", mutation)({
   args: {
     societyId: v.id("societies"),
     participantName: v.string(),
@@ -26,7 +27,7 @@ export const create = mutation({
   handler: async (ctx, args) => pipaTrainingCreate(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("pipaTraining:update", mutation)({
   args: {
     id: v.id("pipaTrainings"),
     patch: v.object({
@@ -44,7 +45,7 @@ export const update = mutation({
   handler: async (ctx, args) => pipaTrainingUpdate(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("pipaTraining:remove", mutation)({
   args: { id: v.id("pipaTrainings") },
   returns: v.any(),
   handler: async (ctx, args) => pipaTrainingRemove(await toPortableMutationCtx(ctx), args),

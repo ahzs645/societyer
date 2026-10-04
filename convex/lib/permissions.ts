@@ -1,7 +1,9 @@
 import { ConvexError } from "convex/values";
 import type { QueryCtx, MutationCtx } from "../_generated/server";
 import type { Id, Doc } from "../_generated/dataModel";
-import { hasPermission, type Permission } from "../../shared/functions/permissions";
+import { hasPermission, requirePermissionPortable, type Permission } from "../../shared/functions/permissions";
+import { toPortableQueryCtx } from "./portable";
+import { requireSocietyMembership } from "../../shared/functions/access";
 import type { Role } from "../../shared/functions/access";
 
 export {
@@ -17,11 +19,8 @@ export async function resolveUserRole(
   societyId: Id<"societies">,
   userId: Id<"users">,
 ): Promise<Role> {
-  const user = await ctx.db.get(userId);
-  if (!user) throw new ConvexError({ code: "NOT_FOUND", message: "User not found." });
-  if (user.societyId !== societyId) {
-    throw new ConvexError({ code: "FORBIDDEN", message: "User does not belong to this society." });
-  }
+  const user = await requireSocietyMembership(await toPortableQueryCtx(ctx), societyId);
+  if (user._id !== userId) throw new ConvexError({ code: "FORBIDDEN", message: "Actor does not match the current principal." });
   return user.role as Role;
 }
 
@@ -31,16 +30,7 @@ export async function requirePermission(
   userId: Id<"users">,
   permission: Permission,
 ): Promise<Doc<"users">> {
-  const user = await ctx.db.get(userId);
-  if (!user) throw new ConvexError({ code: "NOT_FOUND", message: "User not found." });
-  if (user.societyId !== societyId) {
-    throw new ConvexError({ code: "FORBIDDEN", message: "User does not belong to this society." });
-  }
-  if (!hasPermission(user.role, permission)) {
-    throw new ConvexError({
-      code: "FORBIDDEN",
-      message: `Your role (${user.role}) does not have "${permission}" permission.`,
-    });
-  }
-  return user;
+  const user = await requirePermissionPortable(await toPortableQueryCtx(ctx), societyId, permission);
+  if (user._id !== userId) throw new ConvexError({ code: "FORBIDDEN", message: "Actor does not match the current principal." });
+  return user as Doc<"users">;
 }

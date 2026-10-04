@@ -1,15 +1,16 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { recordsLocationGet, recordsLocationUpsert } from "../shared/functions/recordsLocation";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const get = query({
+export const get = authorizedQuery("recordsLocation:get", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => recordsLocationGet(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsert = mutation({
+export const upsert = authorizedMutation("recordsLocation:upsert", mutation)({
   args: {
     societyId: v.id("societies"),
     address: v.string(),

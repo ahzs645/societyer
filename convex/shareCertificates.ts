@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -19,27 +20,27 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
  * objects before being passed to the shared reconstruction functions.
  */
 
-export const list = query({
+export const list = authorizedQuery("shareCertificates:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Active certificates and shares-outstanding-by-class as of an ISO date. */
-export const register = query({
+export const register = authorizedQuery("shareCertificates:register", query)({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => registerPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** The lineage of a certificate, original → latest. */
-export const chain = query({
+export const chain = authorizedQuery("shareCertificates:chain", query)({
   args: { societyId: v.id("societies"), certificateNumber: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => chainPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("shareCertificates:create", mutation)({
   args: {
     societyId: v.id("societies"),
     certificateNumber: v.string(),
@@ -54,7 +55,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("shareCertificates:update", mutation)({
   args: {
     id: v.id("shareCertificates"),
     patch: v.object({
@@ -71,7 +72,7 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("shareCertificates:remove", mutation)({
   args: { id: v.id("shareCertificates") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

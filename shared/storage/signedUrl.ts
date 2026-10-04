@@ -8,7 +8,7 @@
 // (convex/providers/storage.ts) re-exports `createDownloadUrl` from here so
 // there is a single signing implementation.
 
-export type StorageProviderId = "rustfs" | "demo";
+export type StorageProviderId = "rustfs" | "r2" | "demo";
 
 function env(name: string) {
   return (globalThis as any)?.process?.env?.[name] as string | undefined;
@@ -67,26 +67,35 @@ async function signingKey(secret: string, dateStamp: string, region: string, ser
   return await hmacSha256Raw(kService, "aws4_request");
 }
 
-function baseUrl() {
-  const endpoint = env("RUSTFS_ENDPOINT") ?? "";
-  if (!endpoint) throw new Error("Live storage requires RUSTFS_ENDPOINT.");
+function baseUrl(provider: "rustfs" | "r2") {
+  const accountId = env("R2_ACCOUNT_ID");
+  const endpoint = provider === "r2"
+    ? env("R2_ENDPOINT") ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : "")
+    : env("RUSTFS_ENDPOINT") ?? "";
+  if (!endpoint) throw new Error(`Live ${provider} storage requires its endpoint configuration.`);
   return new URL(endpoint.endsWith("/") ? endpoint : `${endpoint}/`);
 }
 
-function storageConfig() {
-  const accessKey = env("RUSTFS_ACCESS_KEY");
-  const secretKey = env("RUSTFS_SECRET_KEY");
+function storageConfig(provider: "rustfs" | "r2") {
+  const accessKey = env(provider === "r2" ? "R2_ACCESS_KEY_ID" : "RUSTFS_ACCESS_KEY");
+  const secretKey = env(provider === "r2" ? "R2_SECRET_ACCESS_KEY" : "RUSTFS_SECRET_KEY");
   if (!accessKey || !secretKey) {
-    throw new Error("Live storage requires RUSTFS_ACCESS_KEY and RUSTFS_SECRET_KEY.");
+    throw new Error(`Live ${provider} storage requires access and secret credentials.`);
   }
   return {
-    bucket: env("RUSTFS_BUCKET") ?? "societyer",
-    region: env("RUSTFS_REGION") ?? "us-east-1",
-    sessionToken: env("RUSTFS_SESSION_TOKEN"),
-    service: env("RUSTFS_SERVICE") ?? "s3",
+    bucket: provider === "r2" ? requiredR2Bucket() : env("RUSTFS_BUCKET") ?? "societyer",
+    region: provider === "r2" ? "auto" : env("RUSTFS_REGION") ?? "us-east-1",
+    sessionToken: provider === "r2" ? undefined : env("RUSTFS_SESSION_TOKEN"),
+    service: provider === "r2" ? "s3" : env("RUSTFS_SERVICE") ?? "s3",
     accessKey,
     secretKey,
   };
+}
+
+function requiredR2Bucket() {
+  const bucket = env("R2_BUCKET");
+  if (!bucket) throw new Error("Live R2 storage requires R2_BUCKET.");
+  return bucket;
 }
 
 function keyToPath(key: string) {
@@ -97,12 +106,14 @@ function keyToPath(key: string) {
 }
 
 export async function presignUrl(args: {
+  provider?: "rustfs" | "r2";
   method: "PUT" | "GET";
   key: string;
   expiresSeconds: number;
 }) {
-  const config = storageConfig();
-  const url = baseUrl();
+  const provider = args.provider ?? "rustfs";
+  const config = storageConfig(provider);
+  const url = baseUrl(provider);
   const now = new Date();
   const amzDate = formatAmzDate(now);
   const dateStamp = amzDate.slice(0, 8);
@@ -158,5 +169,5 @@ export async function createDownloadUrl(args: {
   key: string;
 }): Promise<string> {
   if (args.provider === "demo") return `demo://download/${encodeURIComponent(args.key)}`;
-  return await presignUrl({ method: "GET", key: args.key, expiresSeconds: 900 });
+  return await presignUrl({ provider: args.provider, method: "GET", key: args.key, expiresSeconds: 900 });
 }

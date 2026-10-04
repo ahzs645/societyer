@@ -140,7 +140,7 @@
       "content": {
         "summary": "CBCA corporations must maintain core corporate records, including articles, by-laws, minutes/resolutions, filed notices, securities records, and ISC records.",
         "tooltip": "Use this citation track for minute-book completeness, securities register, filed director/registered-office notices, and individuals-with-significant-control records.",
-        "caveat": "Access rights, privacy treatment, and retention details vary by record type and requester.",
+        "caveat": "ISC information is required at incorporation; certificate of amalgamation/continuance starts a separate 30-day clock. Record changes within 15 days of awareness, then file within 15 days of register entry. Public and internal fields differ.",
         "displayCitation": "CBCA ss.20-21"
       },
       "priority": 60

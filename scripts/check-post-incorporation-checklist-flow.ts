@@ -26,8 +26,8 @@ const created = await client.mutation("society:createWorkspace", {
 const result = await client.query("postIncorporation:checklist", { societyId: created.societyId });
 const steps = result.steps as any[];
 
-if (steps.length !== 13) throw new Error(`expected 13 CBCA steps, got ${steps.length}`);
-expectEqual("first step", steps[0].key, "appoint-first-directors");
+if (steps.length !== 14) throw new Error(`expected 14 CBCA steps, got ${steps.length}`);
+expectEqual("first step", steps[0].key, "prepare-federal-articles");
 expectEqual("steps are ordered", steps.map((s) => s.order), steps.map((_, i) => i + 1));
 // Every step in each category appears; categories are the three known buckets.
 const cats = new Set(steps.map((s) => s.category));
@@ -43,6 +43,42 @@ expectEqual("no packets generated initially", result.generatedPacketKeys, []);
 // A non-corporation society has no CBCA flow.
 const society = await client.mutation("society:createWorkspace", { name: "A Society", entityType: "society" });
 const none = await client.query("postIncorporation:checklist", { societyId: society.societyId });
-expectEqual("society has no post-incorporation flow", none.steps.length, 0);
+if (!none.steps.some((step: any) => step.key === "society-agm-annual-report")) throw new Error("BC society flow missing annual report step.");
 
 console.log("Post-incorporation checklist flow checks passed.");
+
+// Staging a draft is preparation, never registry or execution evidence.
+await client.mutation("postIncorporation:recordEvidence", {
+  societyId: society.societyId, stepKey: "society-official-incorporation-evidence", stage: "preparing",
+});
+await (async () => {
+  try {
+    await client.mutation("postIncorporation:recordEvidence", {
+      societyId: society.societyId, stepKey: "society-official-incorporation-evidence", stage: "certified",
+    });
+    throw new Error("Certified stage accepted without evidence");
+  } catch (error: any) {
+    if (!error.message.includes("Attach the executed document")) throw error;
+  }
+})();
+const evidenceDocument = await client.mutation("documents:create", {
+  societyId: society.societyId, title: "Registry certificate", category: "governance", content: "Certificate fixture", tags: [],
+});
+await client.mutation("postIncorporation:recordEvidence", {
+  societyId: society.societyId, stepKey: "society-official-incorporation-evidence", stage: "certified",
+  documentId: evidenceDocument, confirmationNumber: "CERT-123",
+});
+const certified = await client.query("postIncorporation:checklist", { societyId: society.societyId });
+expectEqual("one evidence entry after update", certified.evidence.length, 1);
+expectEqual("certificate evidence stage retained", certified.evidence[0].stage, "certified");
+expectEqual("receipt reference retained", certified.evidence[0].confirmationNumber, "CERT-123");
+expectEqual("certificate does not imply generated packet", certified.generatedPacketKeys, []);
+try {
+  await client.mutation("postIncorporation:recordEvidence", {
+    societyId: created.societyId, stepKey: "appoint-first-directors", stage: "executed", documentId: evidenceDocument,
+  });
+  throw new Error("Cross-organization evidence was accepted");
+} catch (error: any) {
+  if (!error.message.includes("not found")) throw error;
+}
+console.log("Checklist evidence stages and document ownership checks passed.");

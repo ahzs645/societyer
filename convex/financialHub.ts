@@ -1,3 +1,4 @@
+import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { query, internalMutation, mutation, action } from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
@@ -32,25 +33,25 @@ import {
   requireSocietyMembership,
 } from "../shared/functions/access";
 
-export const connections = query({
+export const connections = authorizedQuery("financialHub:connections", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => connectionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const accounts = query({
+export const accounts = authorizedQuery("financialHub:accounts", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => accountsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const transactions = query({
+export const transactions = authorizedQuery("financialHub:transactions", query)({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, args) => transactionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const transactionsForAccountExternalId = query({
+export const transactionsForAccountExternalId = authorizedQuery("financialHub:transactionsForAccountExternalId", query)({
   args: {
     societyId: v.id("societies"),
     externalId: v.string(),
@@ -60,7 +61,7 @@ export const transactionsForAccountExternalId = query({
   handler: async (ctx, args) => transactionsForAccountExternalIdPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const transactionsForCounterpartyExternalId = query({
+export const transactionsForCounterpartyExternalId = authorizedQuery("financialHub:transactionsForCounterpartyExternalId", query)({
   args: {
     societyId: v.id("societies"),
     externalId: v.string(),
@@ -71,7 +72,7 @@ export const transactionsForCounterpartyExternalId = query({
   handler: async (ctx, args) => transactionsForCounterpartyExternalIdPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const transactionsForCategoryAccountExternalId = query({
+export const transactionsForCategoryAccountExternalId = authorizedQuery("financialHub:transactionsForCategoryAccountExternalId", query)({
   args: {
     societyId: v.id("societies"),
     externalId: v.string(),
@@ -82,19 +83,19 @@ export const transactionsForCategoryAccountExternalId = query({
   handler: async (ctx, args) => transactionsForCategoryAccountExternalIdPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const budgets = query({
+export const budgets = authorizedQuery("financialHub:budgets", query)({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => budgetsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const operatingSubscriptions = query({
+export const operatingSubscriptions = authorizedQuery("financialHub:operatingSubscriptions", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => operatingSubscriptionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsertBudget = mutation({
+export const upsertBudget = authorizedMutation("financialHub:upsertBudget", mutation)({
   args: {
     id: v.optional(v.id("budgets")),
     societyId: v.id("societies"),
@@ -108,7 +109,7 @@ export const upsertBudget = mutation({
   handler: async (ctx, args) => upsertBudgetPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertOperatingSubscription = mutation({
+export const upsertOperatingSubscription = authorizedMutation("financialHub:upsertOperatingSubscription", mutation)({
   args: {
     id: v.optional(v.id("operatingSubscriptions")),
     societyId: v.id("societies"),
@@ -127,13 +128,13 @@ export const upsertOperatingSubscription = mutation({
   handler: async (ctx, args) => upsertOperatingSubscriptionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeOperatingSubscription = mutation({
+export const removeOperatingSubscription = authorizedMutation("financialHub:removeOperatingSubscription", mutation)({
   args: { id: v.id("operatingSubscriptions"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => removeOperatingSubscriptionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeBudget = mutation({
+export const removeBudget = authorizedMutation("financialHub:removeBudget", mutation)({
   args: { id: v.id("budgets"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => removeBudgetPortable(await toPortableMutationCtx(ctx), args),
@@ -142,7 +143,7 @@ export const removeBudget = mutation({
 // Edit a single imported/synced transaction. Only the user-correctable fields
 // (date, description, category, counterparty, amount) are patchable; the
 // account binding and external/source identifiers stay immutable.
-export const updateTransaction = mutation({
+export const updateTransaction = authorizedMutation("financialHub:updateTransaction", mutation)({
   args: {
     id: v.id("financialTransactions"),
     patch: v.object({
@@ -158,7 +159,7 @@ export const updateTransaction = mutation({
   handler: async (ctx, args) => updateTransactionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const oauthUrl = query({
+export const oauthUrl = authorizedQuery("financialHub:oauthUrl", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
@@ -173,7 +174,7 @@ export const oauthUrl = query({
   },
 });
 
-export const markConnectionConnected = mutation({
+export const markConnectionConnected = authorizedMutation("financialHub:markConnectionConnected", mutation)({
   args: {
     societyId: v.id("societies"),
     provider: v.string(),
@@ -216,7 +217,7 @@ export const markConnectionConnected = mutation({
   },
 });
 
-export const disconnect = mutation({
+export const disconnect = authorizedMutation("financialHub:disconnect", mutation)({
   args: { connectionId: v.id("financialConnections"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, { connectionId, actingUserId }) => {
@@ -234,7 +235,7 @@ export const disconnect = mutation({
   },
 });
 
-export const removeDemoData = mutation({
+export const removeDemoData = authorizedMutation("financialHub:removeDemoData", mutation)({
   args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, { societyId, actingUserId }) => {
@@ -419,7 +420,7 @@ export const _replaceSyncedData = internalMutation({
   },
 });
 
-export const importBrowserWaveTransactions = mutation({
+export const importBrowserWaveTransactions = authorizedMutation("financialHub:importBrowserWaveTransactions", mutation)({
   args: {
     societyId: v.id("societies"),
     businessId: v.string(),
@@ -589,7 +590,7 @@ export const importBrowserWaveTransactions = mutation({
   },
 });
 
-export const sync = action({
+export const sync = authorizedAction("financialHub:sync", action)({
   args: { connectionId: v.id("financialConnections") },
   returns: v.any(),
   handler: async (ctx, { connectionId }) => {
@@ -634,7 +635,7 @@ export const sync = action({
   },
 });
 
-export const getConnection = query({
+export const getConnection = authorizedQuery("financialHub:getConnection", query)({
   args: { id: v.id("financialConnections") },
   returns: v.any(),
   handler: async (ctx, args) => getConnectionPortable(await toPortableQueryCtx(ctx), args),
@@ -661,7 +662,7 @@ export const _markSyncError = internalMutation({
 // A small derived query for the dashboard — balances by purpose/category.
 // Prefers balances computed from posted journal lines (the durable double-entry
 // ledger) where an account has any, falling back to the imported balanceCents.
-export const summary = query({
+export const summary = authorizedQuery("financialHub:summary", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => summaryPortable(await toPortableQueryCtx(ctx), args),
@@ -672,7 +673,7 @@ export const summary = query({
 // the documented way to get real history in. Deduped per account by externalId
 // (falling back to a deterministic date+amount+index key) so re-importing the
 // same statement doesn't double-post.
-export const importBankCsvTransactions = mutation({
+export const importBankCsvTransactions = authorizedMutation("financialHub:importBankCsvTransactions", mutation)({
   args: {
     societyId: v.id("societies"),
     accountId: v.id("financialAccounts"),

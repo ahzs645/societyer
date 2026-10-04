@@ -14,12 +14,16 @@ function env(name: string): string | undefined {
 }
 
 export const providers = {
-  storage(): Provider<"rustfs" | "demo"> {
-    const live =
-      !!env("RUSTFS_ENDPOINT") &&
-      !!env("RUSTFS_ACCESS_KEY") &&
-      !!env("RUSTFS_SECRET_KEY");
-    return { id: live ? "rustfs" : "demo", live };
+  storage(): Provider<"rustfs" | "r2" | "demo"> {
+    const selected = env("SOCIETYER_STORAGE_PROVIDER");
+    if (selected && !["rustfs", "r2", "demo"].includes(selected)) throw new Error("Unsupported deployment storage provider.");
+    if (selected === "r2") {
+      const live = !!(env("R2_ENDPOINT") || env("R2_ACCOUNT_ID")) && !!env("R2_BUCKET") && !!env("R2_ACCESS_KEY_ID") && !!env("R2_SECRET_ACCESS_KEY");
+      return { id: "r2", live };
+    }
+    if (selected === "demo") return { id: "demo", live: false };
+    const live = !!env("RUSTFS_ENDPOINT") && !!env("RUSTFS_ACCESS_KEY") && !!env("RUSTFS_SECRET_KEY");
+    return { id: selected === "rustfs" || live ? "rustfs" : "demo", live };
   },
   paperless(): Provider<"paperlessngx" | "demo"> {
     const live = !!env("PAPERLESS_NGX_URL") && !!env("PAPERLESS_NGX_TOKEN");

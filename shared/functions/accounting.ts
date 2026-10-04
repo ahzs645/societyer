@@ -1,3 +1,4 @@
+import { getPortable as getAccessibleDocument } from "./documents";
 /**
  * PORTABLE FUNCTIONS: the accounting domain (chart of accounts, fiscal periods,
  * counterparties, fund restrictions, account mappings, journal entries, trial
@@ -383,7 +384,7 @@ export async function boardAuditorPackagePortable(
   for (const line of ledger) for (const id of line.documentIds ?? []) documentIds.add(String(id));
   for (const restriction of restrictions) for (const id of restriction.sourceDocumentIds ?? []) documentIds.add(String(id));
   for (const run of reconciliations) for (const id of run.sourceDocumentIds ?? []) documentIds.add(String(id));
-  const documents = await Promise.all(Array.from(documentIds).map((id) => getOwned(ctx, "documents", id, societyId)));
+  const documents = await Promise.all(Array.from(documentIds).map((id) => getAccessibleDocument(ctx, { id })));
   const attachments = documents
     .filter(Boolean)
     .map((document: any) => ({

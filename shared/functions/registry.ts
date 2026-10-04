@@ -296,6 +296,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
 
   // postIncorporation
   definePortableQuery({ name: "postIncorporation:checklist", handler: postIncorporationFns.checklistPortable }),
+  definePortableMutation({ name: "postIncorporation:recordEvidence", handler: postIncorporationFns.recordEvidencePortable }),
 
   // recordsLocation
   definePortableQuery({ name: "recordsLocation:get", handler: recordsLocationFns.recordsLocationGet }),
@@ -838,6 +839,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "society:updateComplianceSettings", handler: societyFns.updateComplianceSettingsPortable }),
   definePortableMutation({ name: "society:updateInventorySettings", handler: societyFns.updateInventorySettingsPortable }),
   definePortableMutation({ name: "society:updateNotificationSettings", handler: societyFns.updateNotificationSettingsPortable }),
+  definePortableMutation({ name: "society:updateIntegrationSettings", handler: societyFns.updateIntegrationSettingsPortable }),
 
   // subscriptions
   definePortableQuery({ name: "subscriptions:plans", handler: subscriptionsFns.plansPortable }),
@@ -870,6 +872,9 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "users:getByAuthSubject", handler: usersFns.userGetByAuthSubject }),
   definePortableMutation({ name: "users:ensureCurrentMembership", handler: usersFns.ensureCurrentMembershipPortable }),
   definePortableMutation({ name: "users:recordLogin", handler: usersFns.recordLoginPortable }),
+  definePortableMutation({ name: "users:upsert", handler: usersFns.upsertUserPortable }),
+  definePortableMutation({ name: "users:remove", handler: usersFns.removeUserPortable }),
+  definePortableMutation({ name: "users:securityDisable", handler: usersFns.securityDisableUserPortable }),
   definePortableMutation({ name: "users:setRole", handler: usersFns.setRolePortable }),
 
   // notifications
@@ -1237,7 +1242,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   // exports
   definePortableQuery({ name: "exports:exportAttachmentPage", handler: exportsFns.exportAttachmentPagePortable }),
 
-];
+].map((definition) => ({ ...definition, applicationPolicy: true }));
 
 /** Names of every ported function, for diagnostics / the conformance harness. */
 export const PORTABLE_FUNCTION_NAMES: string[] = PORTABLE_FUNCTIONS.map((def) => def.name);

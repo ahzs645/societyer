@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -17,13 +18,13 @@ const statusValidator = v.union(
   v.literal("closed"),
 );
 
-export const list = query({
+export const list = authorizedQuery("deadlines:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("deadlines:create", mutation)({
   args: {
     societyId: v.id("societies"),
     title: v.string(),
@@ -39,19 +40,19 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const setStatus = mutation({
+export const setStatus = authorizedMutation("deadlines:setStatus", mutation)({
   args: { id: v.id("deadlines"), status: statusValidator },
   returns: v.any(),
   handler: async (ctx, args) => setStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const toggleDone = mutation({
+export const toggleDone = authorizedMutation("deadlines:toggleDone", mutation)({
   args: { id: v.id("deadlines"), done: v.boolean() },
   returns: v.any(),
   handler: async (ctx, args) => toggleDonePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("deadlines:update", mutation)({
   args: {
     id: v.id("deadlines"),
     patch: v.object({
@@ -70,13 +71,13 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("deadlines:remove", mutation)({
   args: { id: v.id("deadlines") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const backfillStatus = mutation({
+export const backfillStatus = authorizedMutation("deadlines:backfillStatus", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => backfillStatusPortable(await toPortableMutationCtx(ctx), args),

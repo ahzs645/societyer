@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -19,28 +20,28 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
  */
 
 /** All ledger rows for a society. */
-export const list = query({
+export const list = authorizedQuery("annualFilings:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Distinct jurisdictions tracked for a society, in first-seen order. */
-export const jurisdictions = query({
+export const jurisdictions = authorizedQuery("annualFilings:jurisdictions", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => jurisdictionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Filing history for a jurisdiction, ascending by year. */
-export const history = query({
+export const history = authorizedQuery("annualFilings:history", query)({
   args: { societyId: v.id("societies"), jurisdiction: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => historyPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Years in [fromYear, toYear] with no filed=true record for the jurisdiction. */
-export const outstanding = query({
+export const outstanding = authorizedQuery("annualFilings:outstanding", query)({
   args: {
     societyId: v.id("societies"),
     jurisdiction: v.string(),
@@ -52,7 +53,7 @@ export const outstanding = query({
 });
 
 /** Create or patch a ledger row. Returns the row id. */
-export const upsert = mutation({
+export const upsert = authorizedMutation("annualFilings:upsert", mutation)({
   args: {
     id: v.optional(v.id("annualFilingLedger")),
     societyId: v.id("societies"),
@@ -69,7 +70,7 @@ export const upsert = mutation({
 });
 
 /** Delete a ledger row. */
-export const remove = mutation({
+export const remove = authorizedMutation("annualFilings:remove", mutation)({
   args: { id: v.id("annualFilingLedger") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

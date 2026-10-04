@@ -9,6 +9,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { documentAccessPredicate } from "./documents";
 import { requireSocietyMembership } from "./access";
 
 export async function getUrlPortable(ctx: PortableQueryCtx, { storageId }: { storageId: string }) {
@@ -23,6 +24,19 @@ export async function getUrlPortable(ctx: PortableQueryCtx, { storageId }: { sto
     }
     try {
       await requireSocietyMembership(ctx, societyId);
+      const documents = await ctx.db.query("documents").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+      const linked = documents.filter((document) => String(document.storageId ?? "") === storageId);
+      if (linked.length) {
+        const allows = await documentAccessPredicate(ctx, societyId);
+        if (!linked.some((document) => allows(document))) throw new Error("storageOwnership not found.");
+      }
+      // Unattached document blobs are not downloadable. Branding is a separate,
+      // society-wide presentation resource and has an explicit parent reference.
+      if (!linked.length) {
+        const society = await ctx.db.get(societyId, "societies");
+        const brandingIds = [society?.logoStorageId, society?.logoDarkStorageId, society?.letterheadStorageId];
+        if (!brandingIds.some((id) => String(id ?? "") === storageId)) throw new Error("storageOwnership not found.");
+      }
     } catch {
       throw new Error("storageOwnership not found.");
     }

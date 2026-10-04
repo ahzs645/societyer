@@ -8,7 +8,10 @@
  */
 
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { requireOwnedRow, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
+import { getOwned, isActiveMembership, requireOwnedRow, ROLES, requireRolePortable, requireSocietyMembership, type Role } from "./access";
+import { requirePermissionPortable } from "./permissions";
+import { findInvitation, invitationAvailability, invitationIssuerAuthorized } from "./invitationTokens";
+import { matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive } from "./identity";
 
 export type MembershipResolution =
   | { status: "bound"; societyId: string; userId: string }
@@ -21,7 +24,10 @@ export type MembershipResolution =
   | { status: "invitation-society-mismatch" }
   | { status: "invitation-revoked" }
   | { status: "invitation-already-accepted" }
-  | { status: "invitation-email-mismatch" };
+  | { status: "invitation-email-mismatch" }
+  | { status: "invitation-email-unverified" }
+  | { status: "invitation-expired" }
+  | { status: "invitation-issuer-unavailable" };
 
 type UserRow = PortableDoc & {
   societyId: string;
@@ -30,38 +36,91 @@ type UserRow = PortableDoc & {
   status: string;
   authProvider?: string;
   authSubject?: string;
+  authIssuer?: string;
+  externalIdentityId?: string;
 };
 
-type InvitationRow = PortableDoc & {
-  societyId: string;
-  email: string;
-  role: string;
-  acceptedAtISO?: string;
-  revokedAtISO?: string;
-};
+export const MEMBERSHIP_STATUSES = ["Active", "Invited", "Disabled", "Suspended", "Pending"] as const;
 
-/** Refuse to demote the society's last Owner (FilterBuilder rewritten as a JS predicate). */
-async function assertNotLastOwnerPortable(ctx: PortableMutationCtx, target: any) {
-  if (target.role !== "Owner") return;
-  const otherOwner = await ctx.db
-    .query("users")
-    .withIndex("by_society", (q) => q.eq("societyId", target.societyId))
-    .filter((row) => String(row._id) !== String(target._id) && row.role === "Owner")
-    .first();
-  if (!otherOwner) {
-    throw new Error("Can't remove the last Owner — promote another user to Owner first.");
+export function assertRoleAndStatus(role: string, status: string) {
+  if (!ROLES.includes(role as Role)) throw new Error("Invalid workspace role.");
+  if (!(MEMBERSHIP_STATUSES as readonly string[]).includes(status)) throw new Error("Invalid membership status.");
+}
+
+/** Ordinary transitions preserve an active Owner; security disabling bypasses only this invariant. */
+export async function assertActiveOwnerRemains(ctx: PortableMutationCtx, target: any, nextRole?: string, nextStatus?: string) {
+  if (target.role !== "Owner" || !isActiveMembership(target)) return;
+  if (nextRole === "Owner" && nextStatus === "Active") return;
+  const peers = await ctx.db.query("users")
+    .withIndex("by_society", (q) => q.eq("societyId", target.societyId)).collect();
+  if (!peers.some((peer) => peer._id !== target._id && peer.role === "Owner" && isActiveMembership(peer))) {
+    throw new Error("Can't remove the last Active Owner — promote another active user to Owner first.");
   }
 }
 
-export async function setRolePortable(
-  ctx: PortableMutationCtx,
-  { id, role, actingUserId }: { id: string; role: string; actingUserId?: string },
-) {
+export async function requireMembershipManager(ctx: PortableQueryCtx, societyId: string, targetRole: string | undefined, nextRole: string | undefined, actingUserId?: string) {
+  const { user } = await requireRolePortable(ctx, { societyId, required: "Admin", actingUserId });
+  if (!user) throw new Error("Society membership not found.");
+  if (user.role !== "Owner" && [targetRole, nextRole].some((role) => role === "Owner" || role === "Admin")) {
+    throw new Error("Only an Owner can manage Owner or Admin authority.");
+  }
+  return user;
+}
+
+async function recordMembershipChange(ctx: PortableMutationCtx, societyId: string, actorId: string, targetId: string, action: string, detail?: string) {
+  await ctx.db.insert("activity", { societyId, actor: actorId, entityType: "user", subjectId: targetId,
+    entityId: targetId, action, summary: detail || `Workspace membership ${action}`, createdAtISO: new Date().toISOString() });
+}
+
+export async function setRolePortable(ctx: PortableMutationCtx, { id, role, actingUserId }: { id: string; role: string; actingUserId?: string }) {
+  if (!ROLES.includes(role as Role)) throw new Error("Invalid workspace role.");
   const target = await requireOwnedRow(ctx, "users", id);
-  const societyId = String(target.societyId);
-  await requireRolePortable(ctx, { actingUserId, societyId, required: "Admin" });
-  if (role !== "Owner") await assertNotLastOwnerPortable(ctx, target);
+  const actor = await requireMembershipManager(ctx, target.societyId, target.role, role, actingUserId);
+  await assertActiveOwnerRemains(ctx, target, role, target.status || "Active");
   await ctx.db.patch(id, { role });
+  await recordMembershipChange(ctx, target.societyId, actor._id, id, "role-changed");
+}
+
+export async function upsertUserPortable(ctx: PortableMutationCtx, args: {
+  id?: string; societyId: string; email: string; displayName: string; role: string; status: string;
+  memberId?: string; directorId?: string; avatarColor?: string; actingUserId?: string;
+}) {
+  assertRoleAndStatus(args.role, args.status);
+  const target = args.id ? await getOwned(ctx, "users", args.id, args.societyId) : undefined;
+  const actor = await requireMembershipManager(ctx, args.societyId, target?.role, args.role, args.actingUserId);
+  if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
+  if (args.directorId) await getOwned(ctx, "directors", args.directorId, args.societyId);
+  const { id, actingUserId: _actingUserId, ...fields } = args;
+  if (target) {
+    await assertActiveOwnerRemains(ctx, target, args.role, args.status);
+    await ctx.db.patch(target._id, fields);
+    await recordMembershipChange(ctx, args.societyId, actor._id, target._id, "updated");
+    return target._id;
+  }
+  const userId = await ctx.db.insert("users", { ...fields, createdAtISO: new Date().toISOString() });
+  await recordMembershipChange(ctx, args.societyId, actor._id, userId, "created");
+  return userId;
+}
+
+export async function removeUserPortable(ctx: PortableMutationCtx, { id, actingUserId }: { id: string; actingUserId?: string }) {
+  const target = await requireOwnedRow(ctx, "users", id);
+  const actor = await requireMembershipManager(ctx, target.societyId, target.role, undefined, actingUserId);
+  await assertActiveOwnerRemains(ctx, target);
+  await ctx.db.delete(id);
+  await recordMembershipChange(ctx, target.societyId, actor._id, id, "removed");
+}
+
+/** Explicit incident action: disabling a compromised sole Owner must take effect immediately. */
+export async function securityDisableUserPortable(ctx: PortableMutationCtx, { id, reason }: { id: string; reason: string }) {
+  if (!reason.trim()) throw new Error("A security incident reason is required.");
+  const target = await requireOwnedRow(ctx, "users", id);
+  const actor = await requireMembershipManager(ctx, target.societyId, target.role, undefined);
+  await ctx.db.patch(id, { status: "Disabled" });
+  const peers = await ctx.db.query("users").withIndex("by_society", (q) => q.eq("societyId", target.societyId)).collect();
+  if (!peers.some((peer) => peer.role === "Owner" && isActiveMembership(peer))) {
+    await ctx.db.patch(target.societyId, { accessRecoveryRequired: true });
+  }
+  await recordMembershipChange(ctx, target.societyId, actor._id, id, "security-disabled", `Security incident: ${reason.trim().slice(0, 1000)}`);
 }
 
 export async function usersList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
@@ -73,7 +132,10 @@ export async function usersList(ctx: PortableQueryCtx, { societyId }: { societyI
 }
 
 export async function userGet(ctx: PortableQueryCtx, { id }: { id: string }) {
-  return requireOwnedRow(ctx, "users", id);
+  const target = await requireOwnedRow(ctx, "users", id);
+  const actor = await requireSocietyMembership(ctx, target.societyId);
+  if (actor._id !== target._id) await requirePermissionPortable(ctx, target.societyId, "users:read");
+  return target;
 }
 
 export async function userGetByEmail(ctx: PortableQueryCtx, { email }: { email: string }) {
@@ -83,7 +145,7 @@ export async function userGetByEmail(ctx: PortableQueryCtx, { email }: { email: 
     .collect();
   for (const row of rows) {
     try {
-      return await requireOwnedRow(ctx, "users", row._id);
+      return await userGet(ctx, { id: row._id });
     } catch {
       // The same email may have memberships in societies the caller cannot access.
     }
@@ -97,8 +159,9 @@ export async function userGetByAuthSubject(ctx: PortableQueryCtx, { authSubject 
     .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
     .collect();
   for (const row of rows) {
+    if (!matchesVerifiedIdentity(row, ctx.principal)) continue;
     try {
-      return await requireOwnedRow(ctx, "users", row._id);
+      return await userGet(ctx, { id: row._id });
     } catch {
       // One auth subject can have memberships in more than one society.
     }
@@ -128,14 +191,15 @@ export async function ensureCurrentMembershipPortable(
     .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
     .collect();
   const matchingBindings = existingByAuth.filter(
-    (row) => row.societyId === args.societyId,
+    (row) => row.societyId === args.societyId && matchesVerifiedIdentity(row, principal),
   );
   if (matchingBindings.length > 1) return { status: "ambiguous-binding" };
 
   const existing = matchingBindings[0];
   const now = new Date().toISOString();
   if (existing) {
-    if (existing.status === "Disabled") return { status: "membership-disabled" };
+    await assertExternalIdentityActive(ctx.db, existing);
+    if (!isActiveMembership(existing)) return { status: "membership-disabled" };
     const profilePatch: Record<string, string> = { lastLoginAtISO: now };
     if (principal.email) profilePatch.email = principal.email;
     if (principal.name?.trim()) profilePatch.displayName = principal.name.trim();
@@ -145,13 +209,12 @@ export async function ensureCurrentMembershipPortable(
   }
 
   if (!args.invitationToken) return { status: "needs-invitation" };
-  const invitations = await ctx.db
-    .query<InvitationRow>("invitations")
-    .withIndex("by_token", (q) => q.eq("token", args.invitationToken))
-    .collect();
-  if (invitations.length !== 1) return { status: "invalid-invitation" };
-
-  const invitation = invitations[0];
+  const invitation = await findInvitation(ctx, args.invitationToken);
+  if (!invitation) return { status: "invalid-invitation" };
+  const unavailable = invitationAvailability(invitation);
+  if (unavailable) return { status: unavailable } as MembershipResolution;
+  if (!principal.emailVerified) return { status: "invitation-email-unverified" };
+  if (!await invitationIssuerAuthorized(ctx, invitation)) return { status: "invitation-issuer-unavailable" };
   if (invitation.societyId !== args.societyId) {
     return { status: "invitation-society-mismatch" };
   }
@@ -165,6 +228,7 @@ export async function ensureCurrentMembershipPortable(
     return { status: "invitation-email-mismatch" };
   }
 
+  const externalIdentityId = await ensureExternalIdentityPortable(ctx, principal.issuer, principal.subject);
   const userId = await ctx.db.insert("users", {
     societyId: invitation.societyId,
     email: principal.email,
@@ -172,6 +236,8 @@ export async function ensureCurrentMembershipPortable(
     role: invitation.role,
     authProvider: principal.authProvider || principal.issuer,
     authSubject: principal.subject,
+    authIssuer: principal.issuer,
+    externalIdentityId,
     status: "Active",
     createdAtISO: now,
     emailVerifiedAtISO: principal.emailVerified ? now : undefined,
@@ -195,9 +261,11 @@ export async function ensureCurrentMembershipPortable(
  */
 export async function bootstrapUserIdentityPortable(
   ctx: PortableMutationCtx,
-  args: { userId: string; authSubject: string; authProvider: string },
+  args: { userId: string; authSubject: string; authProvider: string; authIssuer: string },
 ): Promise<string> {
-  const authSubject = args.authSubject.trim();
+  const authSubject = args.authSubject;
+  const authIssuer = args.authIssuer;
+  if (!authIssuer?.trim()) throw new Error("Auth issuer is required.");
   if (!authSubject) throw new Error("Auth subject is required.");
 
   const target = await ctx.db.get<UserRow>(args.userId, "users");
@@ -205,6 +273,7 @@ export async function bootstrapUserIdentityPortable(
   if (target.authSubject && target.authSubject !== authSubject) {
     throw new Error("User is already bound to a different auth subject.");
   }
+  if (target.authIssuer && target.authIssuer !== authIssuer) throw new Error("User is already bound to a different auth issuer.");
   if (target.authProvider && target.authProvider !== args.authProvider) {
     throw new Error("User is already bound to a different auth provider.");
   }
@@ -213,17 +282,20 @@ export async function bootstrapUserIdentityPortable(
     .query<UserRow>("users")
     .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
     .collect();
-  if (subjectBindings.some((row) => row._id !== target._id)) {
+  if (subjectBindings.some((row) => row._id !== target._id && row.societyId === target.societyId && row.authIssuer === authIssuer)) {
     throw new Error("Auth subject is already bound to another user.");
   }
-  if (target.authSubject === authSubject && target.authProvider === args.authProvider) {
+  if (target.authSubject === authSubject && target.authIssuer === authIssuer && target.authProvider === args.authProvider && target.externalIdentityId) {
     return target._id;
   }
 
   const now = new Date().toISOString();
+  const externalIdentityId = await ensureExternalIdentityPortable(ctx, authIssuer, authSubject);
   await ctx.db.patch(target._id, {
     authProvider: args.authProvider,
     authSubject,
+    authIssuer,
+    externalIdentityId,
   });
   await ctx.db.insert("activity", {
     societyId: target.societyId,
@@ -232,13 +304,15 @@ export async function bootstrapUserIdentityPortable(
     subjectId: target._id,
     entityId: target._id,
     action: "identity-bound",
-    summary: `Bound ${args.authProvider} subject ${authSubject} to ${target.displayName}`,
+    summary: `Bound ${args.authProvider} issuer ${authIssuer} subject ${authSubject} to ${target.displayName}`,
     createdAtISO: now,
   });
   return target._id;
 }
 
 export async function recordLoginPortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  await requireOwnedRow(ctx, "users", id);
+  const target = await requireOwnedRow(ctx, "users", id);
+  const actor = await requireSocietyMembership(ctx, target.societyId);
+  if (actor._id !== id) throw new Error("Authenticated actor does not match the current principal.");
   await ctx.db.patch(id, { lastLoginAtISO: new Date().toISOString() });
 }

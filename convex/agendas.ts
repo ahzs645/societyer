@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -17,31 +18,31 @@ import {
 } from "../shared/functions/agendas";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const listForMeeting = query({
+export const listForMeeting = authorizedQuery("agendas:listForMeeting", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => listForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const getForMeeting = query({
+export const getForMeeting = authorizedQuery("agendas:getForMeeting", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => getForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("agendas:get", query)({
   args: { agendaId: v.id("agendas") },
   returns: v.any(),
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listForSociety = query({
+export const listForSociety = authorizedQuery("agendas:listForSociety", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listForSocietyPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("agendas:create", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
@@ -52,7 +53,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateAgenda = mutation({
+export const updateAgenda = authorizedMutation("agendas:updateAgenda", mutation)({
   args: {
     agendaId: v.id("agendas"),
     title: v.optional(v.string()),
@@ -63,13 +64,13 @@ export const updateAgenda = mutation({
   handler: async (ctx, args) => updateAgendaPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("agendas:remove", mutation)({
   args: { agendaId: v.id("agendas") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const addItem = mutation({
+export const addItem = authorizedMutation("agendas:addItem", mutation)({
   args: {
     agendaId: v.id("agendas"),
     type: v.string(),
@@ -86,7 +87,7 @@ export const addItem = mutation({
   handler: async (ctx, args) => addItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateItem = mutation({
+export const updateItem = authorizedMutation("agendas:updateItem", mutation)({
   args: {
     itemId: v.id("agendaItems"),
     title: v.optional(v.string()),
@@ -101,7 +102,7 @@ export const updateItem = mutation({
   handler: async (ctx, args) => updateItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const syncForMeeting = mutation({
+export const syncForMeeting = authorizedMutation("agendas:syncForMeeting", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
@@ -123,19 +124,19 @@ export const syncForMeeting = mutation({
   handler: async (ctx, args) => syncForMeetingPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const startMinutesFromAgenda = mutation({
+export const startMinutesFromAgenda = authorizedMutation("agendas:startMinutesFromAgenda", mutation)({
   args: { agendaId: v.id("agendas") },
   returns: v.any(),
   handler: async (ctx, args) => startMinutesFromAgendaPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeItem = mutation({
+export const removeItem = authorizedMutation("agendas:removeItem", mutation)({
   args: { itemId: v.id("agendaItems") },
   returns: v.any(),
   handler: async (ctx, args) => removeItemPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const reorderItems = mutation({
+export const reorderItems = authorizedMutation("agendas:reorderItems", mutation)({
   args: {
     agendaId: v.id("agendas"),
     orderedItemIds: v.array(v.id("agendaItems")),

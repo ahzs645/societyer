@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -8,13 +9,13 @@ import {
 } from "../shared/functions/documentComments";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const listForDocument = query({
+export const listForDocument = authorizedQuery("documentComments:listForDocument", query)({
   args: { documentId: v.id("documents") },
   returns: v.any(),
   handler: async (ctx, args) => listForDocumentPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("documentComments:create", mutation)({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -28,7 +29,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const setStatus = mutation({
+export const setStatus = authorizedMutation("documentComments:setStatus", mutation)({
   args: {
     id: v.id("documentComments"),
     status: v.string(),
@@ -38,7 +39,7 @@ export const setStatus = mutation({
   handler: async (ctx, args) => setStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("documentComments:remove", mutation)({
   args: { id: v.id("documentComments") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

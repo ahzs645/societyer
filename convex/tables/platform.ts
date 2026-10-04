@@ -6,6 +6,12 @@ import { v } from "convex/values";
  * Extracted from convex/schema.ts (modularization); spread back into defineSchema.
  */
 export const platformTables = {
+  externalIdentities: defineTable({
+    issuer: v.string(),
+    subject: v.string(),
+    status: v.string(), // Active | Disabled; operator-controlled, not profile input
+    createdAtISO: v.string(),
+  }).index("by_issuer_subject", ["issuer", "subject"]),
   users: defineTable({
     societyId: v.id("societies"),
     email: v.string(),
@@ -14,6 +20,8 @@ export const platformTables = {
     role: v.string(), // Owner | Admin | Director | Member | Viewer
     authProvider: v.optional(v.string()),
     authSubject: v.optional(v.string()),
+    authIssuer: v.optional(v.string()),
+    externalIdentityId: v.optional(v.id("externalIdentities")),
     memberId: v.optional(v.id("members")),
     directorId: v.optional(v.id("directors")),
     status: v.string(), // Active | Invited | Disabled
@@ -24,7 +32,8 @@ export const platformTables = {
   })
     .index("by_society", ["societyId"])
     .index("by_email", ["email"])
-    .index("by_auth_subject", ["authSubject"]),
+    .index("by_auth_subject", ["authSubject"])
+    .index("by_auth_identity", ["authIssuer", "authSubject"]),
 
   apiClients: defineTable({
     societyId: v.id("societies"),

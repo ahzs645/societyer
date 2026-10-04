@@ -25,7 +25,10 @@ if (!exportList) {
 }
 
 const exportTables = Array.from(exportList[1].matchAll(/"([^"]+)"/g)).map((match) => match[1]);
-const missing = schemaTables.filter((table) => !exportTables.includes(table));
+// Server-issued upload capabilities and global external identities must never
+// be restored from a workspace backup; identity mappings require reconciliation.
+const NON_WORKSPACE_AUTHORIZATION_TABLES = new Set(["documentUploadHandles", "externalIdentities"]);
+const missing = schemaTables.filter((table) => !exportTables.includes(table) && !NON_WORKSPACE_AUTHORIZATION_TABLES.has(table));
 const extra = exportTables.filter((table) => !schemaTables.includes(table));
 const duplicates = exportTables.filter((table, index) => exportTables.indexOf(table) !== index);
 

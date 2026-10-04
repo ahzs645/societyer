@@ -10,6 +10,7 @@
  * part of the portable query/mutation surface.
  */
 
+import { documentAccessPredicate } from "./documents";
 import type { PortableQueryCtx } from "../portable/ctx";
 
 /** Browse-time query: documents past retention (for the UI page). */
@@ -21,8 +22,9 @@ export async function expiredForSocietyPortable(
     .query("documents")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
+  const allows = await documentAccessPredicate(ctx, societyId);
   const now = Date.now();
-  return docs
+  return docs.filter((doc) => allows(doc))
     .map((d) => {
       const createdMs = new Date(d.createdAtISO).getTime();
       const years = d.retentionYears ?? 0;

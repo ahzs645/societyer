@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -10,7 +11,7 @@ import {
 } from "../shared/functions/workflowPackages";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("workflowPackages:list", query)({
   args: {
     societyId: v.id("societies"),
     workflowId: v.optional(v.id("workflows")),
@@ -19,7 +20,7 @@ export const list = query({
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsert = mutation({
+export const upsert = authorizedMutation("workflowPackages:upsert", mutation)({
   args: {
     id: v.optional(v.id("workflowPackages")),
     societyId: v.id("societies"),
@@ -43,13 +44,13 @@ export const upsert = mutation({
   handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("workflowPackages:remove", mutation)({
   args: { id: v.id("workflowPackages") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createFollowUpTask = mutation({
+export const createFollowUpTask = authorizedMutation("workflowPackages:createFollowUpTask", mutation)({
   args: {
     packageId: v.id("workflowPackages"),
     title: v.optional(v.string()),
@@ -59,7 +60,7 @@ export const createFollowUpTask = mutation({
   handler: async (ctx, args) => createFollowUpTaskPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const markFiled = mutation({
+export const markFiled = authorizedMutation("workflowPackages:markFiled", mutation)({
   args: {
     packageId: v.id("workflowPackages"),
     transactionId: v.optional(v.string()),
@@ -69,7 +70,7 @@ export const markFiled = mutation({
   handler: async (ctx, args) => markFiledPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createBoardPack = mutation({
+export const createBoardPack = authorizedMutation("workflowPackages:createBoardPack", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),

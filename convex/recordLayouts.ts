@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -7,7 +8,7 @@ import {
 } from "../shared/functions/recordLayouts";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const get = query({
+export const get = authorizedQuery("recordLayouts:get", query)({
   args: {
     societyId: v.id("societies"),
     scopeKey: v.string(),
@@ -17,7 +18,7 @@ export const get = query({
   handler: async (ctx, args) => recordLayoutGet(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsert = mutation({
+export const upsert = authorizedMutation("recordLayouts:upsert", mutation)({
   args: {
     societyId: v.id("societies"),
     scopeKey: v.string(),
@@ -28,7 +29,7 @@ export const upsert = mutation({
   handler: async (ctx, args) => recordLayoutUpsert(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("recordLayouts:remove", mutation)({
   args: {
     societyId: v.id("societies"),
     scopeKey: v.string(),

@@ -1,3 +1,4 @@
+import { authorizedQuery } from "./lib/authorizedServer";
 import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { complianceDeadlinesPortable } from "../shared/functions/corporationSettings";
@@ -12,7 +13,7 @@ import { toPortableQueryCtx } from "./lib/portable";
  * those columns are added. All date math lives in the pure, unit-tested
  * shared/corporationSettings.ts.
  */
-export const complianceDeadlines = query({
+export const complianceDeadlines = authorizedQuery("corporationSettings:complianceDeadlines", query)({
   args: { societyId: v.id("societies"), fromISO: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => complianceDeadlinesPortable(await toPortableQueryCtx(ctx), args),

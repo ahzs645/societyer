@@ -1,3 +1,4 @@
+import { authorizedQuery } from "./lib/authorizedServer";
 import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -15,21 +16,21 @@ import { toPortableQueryCtx } from "./lib/portable";
  */
 
 /** The full edit timeline for one role holder, with per-edit field changes. */
-export const revisionHistory = query({
+export const revisionHistory = authorizedQuery("roleHolderHistory:revisionHistory", query)({
   args: { roleHolderId: v.id("roleHolders") },
   returns: v.any(),
   handler: async (ctx, args) => revisionHistoryPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** The whole register reconstructed as it stood at a past instant. */
-export const registerAsOf = query({
+export const registerAsOf = authorizedQuery("roleHolderHistory:registerAsOf", query)({
   args: { societyId: v.id("societies"), asOfISO: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => registerAsOfPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** What changed in the register between two instants (new/update/delete). */
-export const changesBetween = query({
+export const changesBetween = authorizedQuery("roleHolderHistory:changesBetween", query)({
   args: { societyId: v.id("societies"), fromISO: v.string(), toISO: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => changesBetweenPortable(await toPortableQueryCtx(ctx), args),

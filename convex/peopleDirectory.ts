@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -9,19 +10,19 @@ import {
 } from "../shared/functions/peopleDirectory";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("peopleDirectory:list", query)({
   args: {},
   returns: v.any(),
   handler: async (ctx) => listPortable(await toPortableQueryCtx(ctx)),
 });
 
-export const searchByPrefix = query({
+export const searchByPrefix = authorizedQuery("peopleDirectory:searchByPrefix", query)({
   args: { prefix: v.string(), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, args) => searchByPrefixPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsert = mutation({
+export const upsert = authorizedMutation("peopleDirectory:upsert", mutation)({
   args: {
     id: v.optional(v.id("peopleDirectory")),
     fullName: v.string(),
@@ -44,7 +45,7 @@ export const upsert = mutation({
 // Materialize a directory person onto a society as a role holder (YCN
 // Name_Add_From_GLOB_PEOPLE_DIRECTORY): copies identity fields and links back to
 // the directory record via roleHolders.directoryPersonId.
-export const addToSociety = mutation({
+export const addToSociety = authorizedMutation("peopleDirectory:addToSociety", mutation)({
   args: {
     directoryPersonId: v.id("peopleDirectory"),
     societyId: v.id("societies"),
@@ -56,7 +57,7 @@ export const addToSociety = mutation({
   handler: async (ctx, args) => addToSocietyPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const duplicates = query({
+export const duplicates = authorizedQuery("peopleDirectory:duplicates", query)({
   args: {},
   returns: v.any(),
   handler: async (ctx) => duplicatesPortable(await toPortableQueryCtx(ctx)),

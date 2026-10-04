@@ -64,10 +64,10 @@ export function canAccessMeetingMaterial(
   context: AccessSubjectContext,
   requiredAccess = "view",
 ) {
-  if (!material || materialEffectiveStatus(material) === "withdrawn") return false;
+  if (!material || ["withdrawn", "expired", "pending"].includes(materialEffectiveStatus(material))) return false;
   if (roleCanBypass(context.userRole)) return true;
   if (hasExplicitGrant(material, context, requiredAccess)) return true;
-  return broadAccessAllows(material.accessLevel, context);
+  return (requiredAccess === "view" || roleAtLeast(context.userRole, "Director")) && broadAccessAllows(material.accessLevel, context);
 }
 
 export function hasExplicitGrant(

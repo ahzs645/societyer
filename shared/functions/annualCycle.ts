@@ -1,3 +1,4 @@
+import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
 /**
  * PORTABLE FUNCTIONS: the annual-cycle domain (summary).
  *
@@ -509,46 +510,9 @@ function daysBetween(start: string, end: string) {
 
 // --- Portable copy of convex/lib/bylawRules.ts rule resolution (ctx.db-only) ---
 
-const DEFAULT_BYLAW_RULES: Record<string, any> = {
-  societyId: "placeholder",
-  version: 1,
-  status: "Active",
-  generalNoticeMinDays: 14,
-  generalNoticeMaxDays: 60,
-  allowElectronicMeetings: true,
-  allowHybridMeetings: true,
-  allowElectronicVoting: false,
-  allowProxyVoting: false,
-  proxyHolderMustBeMember: false,
-  proxyLimitPerGrantorPerMeeting: 1,
-  quorumType: "percentage",
-  quorumValue: 10,
-  quorumMinimumCount: 3,
-  memberProposalThresholdPct: 5,
-  memberProposalMinSignatures: 1,
-  memberProposalLeadDays: 7,
-  requisitionMeetingThresholdPct: 10,
-  annualReportDueDaysAfterMeeting: 30,
-  requireAgmFinancialStatements: true,
-  requireAgmElections: true,
-  ballotIsAnonymous: true,
-  voterMustBeMemberAtRecordDate: true,
-  inspectionMemberRegisterByMembers: true,
-  inspectionMemberRegisterByPublic: false,
-  inspectionDirectorRegisterByMembers: true,
-  inspectionCopiesAllowed: true,
-  ordinaryResolutionThresholdPct: 50,
-  specialResolutionThresholdPct: 66.67,
-  unanimousWrittenSpecialResolution: true,
-  updatedAtISO: new Date(0).toISOString(),
-};
 
-function getDefaultBylawRules(societyId: string): Record<string, any> {
-  return {
-    ...DEFAULT_BYLAW_RULES,
-    societyId,
-    updatedAtISO: new Date().toISOString(),
-  };
+export function getDefaultBylawRules(societyId: string, organization?: any) {
+  return bylawBaselineForOrganization(organization, societyId);
 }
 
 async function getActiveBylawRuleSet(ctx: PortableQueryCtx, societyId: string) {
@@ -569,11 +533,8 @@ async function getBylawRuleSetForDate(
     .filter((row) => row.status !== "Draft")
     .filter((row) => effectiveTimestamp(row) <= targetTs);
   const selected = eligible.sort(compareRuleSetsDesc)[0];
-  if (selected) return selected;
-  return {
-    ...getDefaultBylawRules(societyId),
-    isFallback: true,
-  };
+  const organization = await ctx.db.get(societyId);
+  return contextualBylawRules(organization, societyId, selected);
 }
 
 function compareRuleSetsDesc(a: any, b: any) {

@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -10,19 +11,19 @@ import {
 } from "../shared/functions/proxies";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("proxies:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => proxiesList(await toPortableQueryCtx(ctx), args),
 });
 
-export const forMeeting = query({
+export const forMeeting = authorizedQuery("proxies:forMeeting", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => proxiesForMeeting(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("proxies:create", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
@@ -37,7 +38,7 @@ export const create = mutation({
   handler: async (ctx, args) => proxyCreate(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("proxies:update", mutation)({
   args: {
     id: v.id("proxies"),
     patch: v.object({
@@ -51,13 +52,13 @@ export const update = mutation({
   handler: async (ctx, args) => proxyUpdate(await toPortableMutationCtx(ctx), args),
 });
 
-export const revoke = mutation({
+export const revoke = authorizedMutation("proxies:revoke", mutation)({
   args: { id: v.id("proxies") },
   returns: v.any(),
   handler: async (ctx, args) => proxyRevoke(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("proxies:remove", mutation)({
   args: { id: v.id("proxies") },
   returns: v.any(),
   handler: async (ctx, args) => proxyRemove(await toPortableMutationCtx(ctx), args),

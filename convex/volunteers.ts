@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import {
@@ -16,31 +17,31 @@ import {
 } from "../shared/functions/volunteers";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("volunteers:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const applications = query({
+export const applications = authorizedQuery("volunteers:applications", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => applicationsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const screenings = query({
+export const screenings = authorizedQuery("volunteers:screenings", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => screeningsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const summary = query({
+export const summary = authorizedQuery("volunteers:summary", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => summaryPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const submitApplication = mutation({
+export const submitApplication = authorizedMutation("volunteers:submitApplication", mutation)({
   args: {
     societyId: v.id("societies"),
     memberId: v.optional(v.id("members")),
@@ -58,7 +59,7 @@ export const submitApplication = mutation({
   handler: async (ctx, args) => submitApplicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const reviewApplication = mutation({
+export const reviewApplication = authorizedMutation("volunteers:reviewApplication", mutation)({
   args: {
     id: v.id("volunteerApplications"),
     status: v.string(),
@@ -68,7 +69,7 @@ export const reviewApplication = mutation({
   handler: async (ctx, args) => reviewApplicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const convertApplication = mutation({
+export const convertApplication = authorizedMutation("volunteers:convertApplication", mutation)({
   args: {
     id: v.id("volunteerApplications"),
     committeeId: v.optional(v.id("committees")),
@@ -79,7 +80,7 @@ export const convertApplication = mutation({
   handler: async (ctx, args) => convertApplicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertVolunteer = mutation({
+export const upsertVolunteer = authorizedMutation("volunteers:upsertVolunteer", mutation)({
   args: {
     id: v.optional(v.id("volunteers")),
     societyId: v.id("societies"),
@@ -108,7 +109,7 @@ export const upsertVolunteer = mutation({
   handler: async (ctx, args) => upsertVolunteerPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeVolunteer = mutation({
+export const removeVolunteer = authorizedMutation("volunteers:removeVolunteer", mutation)({
   args: {
     id: v.id("volunteers"),
     actingUserId: v.optional(v.id("users")),
@@ -117,7 +118,7 @@ export const removeVolunteer = mutation({
   handler: async (ctx, args) => removeVolunteerPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertScreening = mutation({
+export const upsertScreening = authorizedMutation("volunteers:upsertScreening", mutation)({
   args: {
     id: v.optional(v.id("volunteerScreenings")),
     societyId: v.id("societies"),
@@ -140,7 +141,7 @@ export const upsertScreening = mutation({
   handler: async (ctx, args) => upsertScreeningPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeScreening = mutation({
+export const removeScreening = authorizedMutation("volunteers:removeScreening", mutation)({
   args: {
     id: v.id("volunteerScreenings"),
     actingUserId: v.optional(v.id("users")),
@@ -149,7 +150,7 @@ export const removeScreening = mutation({
   handler: async (ctx, args) => removeScreeningPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const buildCrrpDraft = query({
+export const buildCrrpDraft = authorizedQuery("volunteers:buildCrrpDraft", query)({
   args: { volunteerId: v.id("volunteers") },
   returns: v.any(),
   handler: async (ctx, args) => buildCrrpDraftPortable(await toPortableQueryCtx(ctx), args),

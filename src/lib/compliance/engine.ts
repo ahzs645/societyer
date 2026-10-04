@@ -24,10 +24,17 @@ export type ComplianceFacts = {
   registrationDate?: string;
   commencedBusinessDate?: string;
   annualMeetingDate?: string;
+  annualMeetingYear?: number;
+  agmExtensionDate?: string;
+  agmExtensionEvidence?: string;
+  annualReferenceDate?: string;
+  completedOccurrenceKeys?: string[];
   eventDates?: Record<string, string | undefined>;
   contextKey?: string;
   contextLabel?: string;
   sourceRegistrationId?: string;
+  legalSubtype?: string;
+  formationStatus?: string;
 };
 
 export type ComplianceObligationStatus = "upcoming" | "due_today" | "overdue";
@@ -40,6 +47,7 @@ export type ComplianceObligation = {
   title: string;
   scheduleKind: ComplianceObligationSchedule["kind"];
   dueDate: string;
+  occurrenceKey: string;
   status: ComplianceObligationStatus;
   windowStartDate?: string;
   authority: ComplianceRule["authority"];
@@ -55,7 +63,9 @@ export type ComplianceObligation = {
 
 function parseDate(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || formatDate(date) !== value) throw new Error(`Invalid calendar date: ${value}`);
+  return date;
 }
 
 function formatDate(date: Date): string {
@@ -66,10 +76,14 @@ function daysInMonth(year: number, monthIndex: number): number {
   return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
 }
 
-function addOffset(value: string, offset: ComplianceDateOffset): string {
+export function addComplianceDateOffset(value: string, offset: ComplianceDateOffset): string {
   const date = parseDate(value);
   if (offset.years) {
+    const day = date.getUTCDate();
+    const month = date.getUTCMonth();
+    date.setUTCDate(1);
     date.setUTCFullYear(date.getUTCFullYear() + offset.years);
+    date.setUTCDate(Math.min(day, daysInMonth(date.getUTCFullYear(), month)));
   }
   if (offset.months) {
     const day = date.getUTCDate();
@@ -89,13 +103,18 @@ function compareDate(left: string, right: string): number {
 }
 
 function getFactDate(facts: ComplianceFacts, factKey: string): string | undefined {
-  if (factKey === "incorporationDate") return facts.incorporationDate;
-  if (factKey === "anniversaryDate") return facts.anniversaryDate;
-  if (factKey === "fiscalYearEnd") return facts.fiscalYearEnd;
-  if (factKey === "registrationDate") return facts.registrationDate;
-  if (factKey === "commencedBusinessDate") return facts.commencedBusinessDate;
-  if (factKey === "annualMeetingDate") return facts.annualMeetingDate;
-  return facts.eventDates?.[factKey];
+  const dates: Record<string, string | undefined> = {
+    incorporationDate: facts.incorporationDate,
+    anniversaryDate: facts.anniversaryDate,
+    fiscalYearEnd: facts.fiscalYearEnd,
+    registrationDate: facts.registrationDate,
+    commencedBusinessDate: facts.commencedBusinessDate,
+    annualMeetingDate: facts.annualMeetingDate,
+    annualReferenceDate: facts.annualReferenceDate,
+  };
+  const value = factKey in dates ? dates[factKey] : facts.eventDates?.[factKey];
+  if (!value) return undefined;
+  try { parseDate(value); return value; } catch { return undefined; }
 }
 
 function statusFor(dueDate: string, asOfDate: string): ComplianceObligationStatus {
@@ -105,18 +124,17 @@ function statusFor(dueDate: string, asOfDate: string): ComplianceObligationStatu
 }
 
 function addYears(value: string, years: number): string {
-  return addOffset(value, { years });
+  return addComplianceDateOffset(value, { years });
 }
 
 function computeAnnualDueDate(schedule: Extract<ComplianceObligationSchedule, { kind: "annual" }>, facts: ComplianceFacts, asOfDate: string): string | undefined {
   const anchor = getFactDate(facts, schedule.anchorFact);
   if (!anchor) return undefined;
-  let yearsFromAnchor = 0;
-  let dueDate = addOffset(anchor, schedule.dueOffset);
-  while (compareDate(dueDate, asOfDate) < 0) {
-    yearsFromAnchor += 1;
-    dueDate = addOffset(addYears(anchor, yearsFromAnchor), schedule.dueOffset);
-  }
+  // Select the latest commenced cycle, preserving its overdue status. A
+  // calendar tick is never evidence that last year's obligation was completed.
+  let yearsFromAnchor = Math.max(0, Number(asOfDate.slice(0, 4)) - Number(anchor.slice(0, 4)));
+  while (yearsFromAnchor > 0 && addYears(anchor, yearsFromAnchor) > asOfDate) yearsFromAnchor -= 1;
+  const dueDate = addComplianceDateOffset(addYears(anchor, yearsFromAnchor), schedule.dueOffset);
   return dueDate;
 }
 
@@ -127,33 +145,83 @@ function computeWindowDates(schedule: Extract<ComplianceObligationSchedule, { ki
 
   if (schedule.recurrence === "once") {
     return {
-      windowStartDate: addOffset(openAnchor, schedule.opens.offset),
-      dueDate: addOffset(closeAnchor, schedule.closes.offset),
+      windowStartDate: addComplianceDateOffset(openAnchor, schedule.opens.offset),
+      dueDate: addComplianceDateOffset(closeAnchor, schedule.closes.offset),
     };
   }
 
-  let yearsFromAnchor = 0;
-  let windowStartDate = addOffset(openAnchor, schedule.opens.offset);
-  let dueDate = addOffset(closeAnchor, schedule.closes.offset);
-  while (compareDate(dueDate, asOfDate) < 0) {
-    yearsFromAnchor += 1;
-    windowStartDate = addOffset(addYears(openAnchor, yearsFromAnchor), schedule.opens.offset);
-    dueDate = addOffset(addYears(closeAnchor, yearsFromAnchor), schedule.closes.offset);
-  }
+  let yearsFromAnchor = Math.max(0, Number(asOfDate.slice(0, 4)) - Number(openAnchor.slice(0, 4)));
+  while (yearsFromAnchor > 0 && addComplianceDateOffset(addYears(openAnchor, yearsFromAnchor), schedule.opens.offset) > asOfDate) yearsFromAnchor -= 1;
+  const windowStartDate = addComplianceDateOffset(addYears(openAnchor, yearsFromAnchor), schedule.opens.offset);
+  const dueDate = addComplianceDateOffset(addYears(closeAnchor, yearsFromAnchor), schedule.closes.offset);
   return { windowStartDate, dueDate };
 }
 
 function computeRuleDates(rule: ComplianceRule, facts: ComplianceFacts, asOfDate: string): { dueDate: string; windowStartDate?: string } | undefined {
   const schedule = rule.schedule;
+  if (rule.ruleId === "compliance-ca-bc-societies-agm-planning") {
+    const year = Number(asOfDate.slice(0, 4));
+    if (!facts.incorporationDate || Number(facts.incorporationDate.slice(0, 4)) >= year) return undefined;
+    const fulfilledYear = facts.annualMeetingYear ?? Number(facts.annualMeetingDate?.slice(0, 4));
+    if (fulfilledYear === year) return undefined;
+    return { dueDate: facts.agmExtensionDate && facts.agmExtensionEvidence && Number(facts.agmExtensionDate.slice(0, 4)) - 1 === year ? facts.agmExtensionDate : `${year}-12-31` };
+  }
+  if (rule.ruleId === "compliance-ca-bc-societies-no-agm-annual-report") {
+    const suppliedYearEnd = facts.eventDates?.noAgmCalendarYearEnd;
+    const year = suppliedYearEnd ? Number(suppliedYearEnd.slice(0, 4)) : Number(asOfDate.slice(0, 4)) - 1;
+    if (!facts.incorporationDate || Number(facts.incorporationDate.slice(0, 4)) >= year) return undefined;
+    const fulfilledYear = facts.annualMeetingYear ?? Number(facts.annualMeetingDate?.slice(0, 4));
+    if (fulfilledYear === year) return undefined;
+    if (facts.agmExtensionDate && facts.agmExtensionEvidence && Number(facts.agmExtensionDate.slice(0, 4)) - 1 === year) {
+      return { dueDate: addComplianceDateOffset(facts.agmExtensionDate, { days: 30 }) };
+    }
+    return { dueDate: `${year + 1}-01-31` };
+  }
+  if (rule.obligationKey === "agm.subsequent_meeting") {
+    if (!facts.annualReferenceDate) return undefined;
+    const gapDate = addComplianceDateOffset(facts.annualReferenceDate, { months: 15 });
+    if (facts.jurisdictionCode !== "CA-BC") return { dueDate: gapDate };
+    const calendarDeadline = `${Number(facts.annualReferenceDate.slice(0, 4)) + 1}-12-31`;
+    return { dueDate: gapDate < calendarDeadline ? gapDate : calendarDeadline };
+  }
+  if (rule.obligationKey === "agm.first_meeting" && facts.annualReferenceDate) return undefined;
   if (schedule.kind === "annual") {
     const dueDate = computeAnnualDueDate(schedule, facts, asOfDate);
     return dueDate ? { dueDate } : undefined;
   }
   if (schedule.kind === "offset") {
     const anchor = getFactDate(facts, schedule.anchorFact);
-    return anchor ? { dueDate: addOffset(anchor, schedule.dueOffset) } : undefined;
+    return anchor ? { dueDate: addComplianceDateOffset(anchor, schedule.dueOffset) } : undefined;
   }
   return computeWindowDates(schedule, facts, asOfDate);
+}
+
+function computeRuleOccurrences(rule: ComplianceRule, facts: ComplianceFacts, asOfDate: string): { dueDate: string; windowStartDate?: string }[] {
+  const schedule = rule.schedule;
+  const recurring = schedule.kind === "annual" || (schedule.kind === "window" && schedule.recurrence === "annual");
+  if (!recurring) {
+    const dates = computeRuleDates(rule, facts, asOfDate);
+    return dates ? [dates] : [];
+  }
+  const anchorKey = schedule.kind === "annual" ? schedule.anchorFact : schedule.opens.anchorFact;
+  const anchor = getFactDate(facts, anchorKey);
+  if (!anchor) return [];
+  const results: { dueDate: string; windowStartDate?: string }[] = [];
+  const lastYear = Math.max(0, Number(asOfDate.slice(0, 4)) - Number(anchor.slice(0, 4)));
+  for (let year = 0; year <= lastYear; year += 1) {
+    if (schedule.kind === "annual") {
+      const shifted = addYears(anchor, year);
+      if (shifted > asOfDate && results.length) break;
+      results.push({ dueDate: addComplianceDateOffset(shifted, schedule.dueOffset) });
+    } else {
+      const closeAnchor = getFactDate(facts, schedule.closes.anchorFact);
+      if (!closeAnchor) return [];
+      const windowStartDate = addComplianceDateOffset(addYears(anchor, year), schedule.opens.offset);
+      if (windowStartDate > asOfDate && results.length) break;
+      results.push({ windowStartDate, dueDate: addComplianceDateOffset(addYears(closeAnchor, year), schedule.closes.offset) });
+    }
+  }
+  return results;
 }
 
 export function filterApplicableCompliancePacks(facts: Pick<ComplianceFacts, "jurisdictionCode" | "entityType">, packs: ComplianceRulePack[] = loadComplianceRulePacks()): ComplianceRulePack[] {
@@ -194,6 +262,7 @@ function sourcesForRule(rule: ComplianceRule, pack: ComplianceRulePack): Complia
 }
 
 export function computeComplianceObligations(facts: ComplianceFacts, packs: ComplianceRulePack[] = loadComplianceRulePacks()): ComplianceObligation[] {
+  if (facts.formationStatus === "preparing" || facts.formationStatus === "submitted") return [];
   const asOfDate = facts.asOfDate ?? formatDate(new Date());
   const contextKind = facts.contextKind ?? "home";
   const applicablePacks = filterApplicableCompliancePacks(facts, packs);
@@ -203,28 +272,32 @@ export function computeComplianceObligations(facts: ComplianceFacts, packs: Comp
     for (const rule of pack.rules) {
       if (rule.status === "deprecated") continue;
       if (!ruleAppliesToFacts(rule, pack, facts)) continue;
-      const dates = computeRuleDates(rule, facts, asOfDate);
-      if (!dates) continue;
-      obligations.push({
-        packId: pack.packId,
-        ruleId: rule.ruleId,
-        ruleStatus: rule.status,
-        obligationKey: rule.obligationKey,
-        title: rule.title,
-        scheduleKind: rule.schedule.kind,
-        dueDate: dates.dueDate,
-        windowStartDate: dates.windowStartDate,
-        status: statusFor(dates.dueDate, asOfDate),
-        authority: rule.authority,
-        sources: sourcesForRule(rule, pack),
-        creates: rule.creates,
-        caveat: rule.caveat,
-        jurisdictionCode: facts.jurisdictionCode,
-        contextKind,
-        contextKey: facts.contextKey ? `${facts.contextKey}:${rule.ruleId}` : rule.ruleId,
-        contextLabel: facts.contextLabel,
-        sourceRegistrationId: facts.sourceRegistrationId,
-      });
+      if (facts.legalSubtype && ["unlimited_liability_company", "community_contribution_company", "benefit_company", "other"].includes(facts.legalSubtype)) continue;
+      for (const dates of computeRuleOccurrences(rule, facts, asOfDate)) {
+        const occurrenceKey = `${facts.contextKey ?? "home"}:${rule.ruleId}:${dates.dueDate}`;
+        if (facts.completedOccurrenceKeys?.includes(occurrenceKey)) continue;
+        obligations.push({
+          packId: pack.packId,
+          ruleId: rule.ruleId,
+          ruleStatus: rule.status,
+          obligationKey: rule.obligationKey,
+          title: rule.title,
+          scheduleKind: rule.schedule.kind,
+          dueDate: dates.dueDate,
+          occurrenceKey,
+          windowStartDate: dates.windowStartDate,
+          status: statusFor(dates.dueDate, asOfDate),
+          authority: rule.authority,
+          sources: sourcesForRule(rule, pack),
+          creates: rule.creates,
+          caveat: [rule.caveat, facts.formationStatus === "unverified" ? "Formation status is unverified; confirm the certificate before relying on this legacy deadline." : undefined].filter(Boolean).join(" ") || undefined,
+          jurisdictionCode: facts.jurisdictionCode,
+          contextKind,
+          contextKey: facts.contextKey ? `${facts.contextKey}:${rule.ruleId}` : rule.ruleId,
+          contextLabel: facts.contextLabel,
+          sourceRegistrationId: facts.sourceRegistrationId,
+        });
+      }
     }
   }
 

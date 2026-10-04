@@ -1,3 +1,4 @@
+import { canonicalizeJurisdictionCode } from "../organizationDomain";
 /**
  * PORTABLE FUNCTIONS: the organization-details domain
  * (overview / upsertAddress / removeAddress / upsertRegistration /
@@ -99,6 +100,8 @@ export async function upsertRegistrationPortable(
     id?: string;
     societyId: string;
     registrationType?: string;
+    corporationClass?: string;
+    licenceEvidenceDocumentId?: string;
     jurisdiction: string;
     homeJurisdiction?: string;
     assumedName?: string;
@@ -125,6 +128,10 @@ export async function upsertRegistrationPortable(
 ) {
   await requireSocietyMembership(ctx, args.societyId);
   if (id) await getOwned(ctx, "organizationRegistrations", id, args.societyId);
+  if (args.corporationClass && !["federal_corporation", "foreign_epca_licensed", "other"].includes(args.corporationClass)) throw new Error("Choose a supported corporation registration class.");
+  if (args.corporationClass === "foreign_epca_licensed" && (canonicalizeJurisdictionCode(args.jurisdiction) !== "CA-ON-OBCA" || !args.licenceEvidenceDocumentId)) throw new Error("Ontario foreign EPCA licence classification requires an Ontario registration and licence evidence.");
+  if (args.licenceEvidenceDocumentId) await getOwned(ctx, "documents", args.licenceEvidenceDocumentId, args.societyId);
+
   await Promise.all([
     args.profileReportDocumentId
       ? getOwned(ctx, "documents", args.profileReportDocumentId, args.societyId)

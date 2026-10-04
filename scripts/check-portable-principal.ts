@@ -351,7 +351,7 @@ const hostedPrincipalRuntime = new PortableRuntime({
   db: new MemoryDb({
     seed: {
       users: [
-        { _id: "hosted-owner", societyId: "hosted-society", role: "Owner", status: "Active", authSubject: "hosted:owner" },
+        { _id: "hosted-owner", societyId: "hosted-society", role: "Owner", status: "Active", authSubject: "hosted:owner", authIssuer: "https://hosted.test" },
       ],
       documents: [
         { _id: "hosted-document", societyId: "hosted-society", title: "Hosted" },

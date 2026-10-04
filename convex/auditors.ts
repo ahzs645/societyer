@@ -1,15 +1,16 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { auditorsListPortable, auditorCreatePortable, auditorUpdatePortable, auditorRemovePortable } from "../shared/functions/auditors";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("auditors:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => auditorsListPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("auditors:create", mutation)({
   args: {
     societyId: v.id("societies"),
     firmName: v.string(),
@@ -26,7 +27,7 @@ export const create = mutation({
   handler: async (ctx, args) => auditorCreatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("auditors:update", mutation)({
   args: {
     id: v.id("auditorAppointments"),
     patch: v.object({
@@ -45,7 +46,7 @@ export const update = mutation({
   handler: async (ctx, args) => auditorUpdatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("auditors:remove", mutation)({
   args: { id: v.id("auditorAppointments") },
   returns: v.any(),
   handler: async (ctx, args) => auditorRemovePortable(await toPortableMutationCtx(ctx), args),

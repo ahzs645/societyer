@@ -22,6 +22,34 @@ export function societyPacketEntityTypes() {
 
 export const SOCIETY_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
   {
+    key: "society-incorporation-constitution", templateName: "BC society constitution — preparation draft", packageName: "BC society constitution preparation",
+    preparationOnly: true, summary: "Original constitution drafting worksheet with the proposed name, lawful purposes and a separate member-funded eligibility review.",
+    documentTag: "incorporation_preparation", partType: "document", signatureRequired: false, requiredSigners: [],
+    requiredDataFields: ["SocietyName", "Purposes", "SocietyClassification"], optionalDataFields: ["NameApproval", "CharitablePurposesReview"],
+    reviewDataFields: ["LawfulPurposes", "MemberFundedEligibility", "PrescribedStatement", "CRACharityApplication"], jurisdictions: SOCIETY_JURISDICTIONS,
+    sourceUrls: ["https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01", "https://www2.gov.bc.ca/gov/content/employment-business/business/not-for-profit-organizations/societies/incorporate"],
+    timeline: "Complete the constitution before submitting the society incorporation application.", deliverable: "Editable original constitution draft and classification review worksheet.",
+    terms: "Requires tailored legal review. The constitution contains the name and purposes. A member-funded society must meet statutory eligibility and include the exact prescribed statement from the official regulation. That statement is linked, not reproduced in this draft. Incorporation does not confer CRA charitable status.",
+    sections: [
+      { heading: "Draft constitution", body: ["1. Name: The name of the society is {org.name}.", "2. Purposes: {org.purposes}", "[Review that every purpose is lawful and that operating a business for profit or gain is not a purpose; incidental business activities require separate assessment.]" ] },
+      { heading: "Classification review before submission", body: ["[Confirm ordinary or member-funded society status. For a member-funded society, document eligibility, exclusions, public funding/donation limits and the exact prescribed constitution statement from the official regulation.]", "[Assess charitable purposes separately if a CRA application is intended. Obtain organization-specific review before adopting the constitution.]", "Official Act: https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01. Official incorporation guidance: https://www2.gov.bc.ca/gov/content/employment-business/business/not-for-profit-organizations/societies/incorporate." ] },
+    ],
+  },
+  {
+    key: "society-incorporation-bylaws", templateName: "BC society bylaws — preparation draft", packageName: "BC society bylaws preparation",
+    preparationOnly: true, summary: "Original bylaw drafting worksheet for membership, meetings, directors, finance and records; does not reproduce prescribed model bylaws.",
+    documentTag: "incorporation_preparation", partType: "document", signatureRequired: false, requiredSigners: [],
+    requiredDataFields: ["SocietyName", "MembershipRules", "MeetingRules", "DirectorRules"], optionalDataFields: ["MemberClasses", "Dues", "Auditor", "Officers"],
+    reviewDataFields: COMMON_REVIEW_FIELDS, jurisdictions: SOCIETY_JURISDICTIONS,
+    sourceUrls: ["https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/15018_01", "https://www2.gov.bc.ca/gov/content/employment-business/business/not-for-profit-organizations/societies/incorporate"],
+    timeline: "Review and adopt a complete bylaw instrument before submitting incorporation.", deliverable: "Editable bylaw drafting worksheet with unresolved clause decisions clearly marked.",
+    terms: "Requires tailored legal review. These are original drafting prompts, not the prescribed Schedule 1 model bylaws. Use the official regulation for model wording and verify any legislation reproduction terms before embedding it.",
+    sections: [
+      { heading: "Bylaws drafting worksheet for {org.name}", body: ["Membership: [draft admission criteria, membership classes and voting rights, dues, termination, discipline and appeals].", "General meetings: [draft notices, AGM timing, member requisitions, participation methods, quorum, chair, voting, proxies if allowed, minutes and adjournments].", "Directors: [draft number, eligibility, election or appointment, term, vacancies, removal and board procedure; confirm ordinary/member-funded statutory minima].", "Officers and authority: [draft appointment, duties, delegated powers and signing authority].", "Finance: [draft fiscal year, financial reporting, auditor appointment or applicable waiver, borrowing and spending controls].", "Records and amendments: [draft custody and inspection arrangements, access safeguards and amendment procedures consistent with the Act]." ] },
+      { heading: "Review and adoption evidence", body: ["[Check every clause against the governing Act, current regulation and intended society classification. Remove unresolved prompts after approval of the complete instrument.]", "Retain the approved bylaws and the certified registry version as separate records. Official originals: https://www2.gov.bc.ca/gov/content/employment-business/business/not-for-profit-organizations/societies/incorporate." ] },
+    ],
+  },
+  {
     key: "society-annual-general-meeting",
     templateName: "Annual general meeting resolutions",
     packageName: "Society AGM resolutions packet",

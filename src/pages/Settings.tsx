@@ -13,7 +13,8 @@ import { Settings as SettingsIcon, AlertTriangle } from "lucide-react";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
 import { DesktopDiagnosticsPanel } from "../components/DesktopDiagnosticsPanel";
 import { WorkspaceStorageCard } from "../components/WorkspaceStorageCard";
-import { getAuthMode } from "../lib/authMode";
+import { DocumentStorageSettingsCard } from "../components/DocumentStorageSettingsCard";
+import { IdentitySessionSettingsCard } from "../components/IdentitySessionSettingsCard";
 import { resolveAppRuntime } from "../lib/appRuntime";
 import { setStoredSocietyId, useSociety } from "../hooks/useSociety";
 import { maintenanceErrorMessage, resetDemoData, seedDemoSociety } from "../lib/maintenanceApi";
@@ -38,7 +39,6 @@ export function SettingsPage() {
   const society = useSociety();
   const [activeTab, setActiveTab] = useState<SettingsTab>("workspace");
   const [demo, setDemo] = useState(isDemoMode());
-  const authMode = getAuthMode();
   const appRuntime = resolveAppRuntime();
   const updateModules = useMutation(api.society.updateModules);
   const updateInventorySettings = useMutation(api.society.updateInventorySettings);
@@ -641,36 +641,16 @@ export function SettingsPage() {
       {activeTab === "runtime" && (
       <>
       <WorkspaceStorageCard />
+      <DocumentStorageSettingsCard />
 
       <div className="settings-pair" style={{ marginBottom: 16 }}>
-        <div className="card">
-          <div className="card__head">
-            <h2 className="card__title">Authentication</h2>
-            <Badge tone={authMode === "better-auth" ? "success" : "neutral"}>
-              {authMode === "better-auth" ? "Sign-in required" : "No sign-in"}
-            </Badge>
-          </div>
-          <div className="card__body col">
-            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-              {authMode === "better-auth"
-                ? "People sign in before reaching the workspace, and every request carries their identity."
-                : "Anyone who can open this app reaches the workspace. Suitable for a single-operator or local install."}
-            </div>
-            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-              Set <code className="mono">VITE_AUTH_MODE</code> and <code className="mono">AUTH_MODE</code> to{" "}
-              <code className="mono">better-auth</code> to require sign-in.
-            </div>
-            <Link to="/app/settings/api-keys" className="btn-action" style={{ alignSelf: "flex-start" }}>
-              Manage API access tokens
-            </Link>
-          </div>
-        </div>
+        <IdentitySessionSettingsCard />
 
         <div className="card">
           <div className="card__head">
             <h2 className="card__title">Backend connection</h2>
             <Badge tone={appRuntime.kind === "server" ? "info" : "neutral"}>
-              {appRuntime.kind === "server" ? "Connected" : "Not used"}
+              {appRuntime.kind === "server" ? "Configured" : "Not used"}
             </Badge>
           </div>
           <div className="card__body col">

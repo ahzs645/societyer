@@ -1,3 +1,4 @@
+import { authorizedQuery } from "./lib/authorizedServer";
 import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -18,7 +19,7 @@ import { toPortableQueryCtx } from "./lib/portable";
  */
 
 /** Role-holders of a given type that were active on a specific ISO date. */
-export const roleHoldersAsOfDate = query({
+export const roleHoldersAsOfDate = authorizedQuery("registerHistory:roleHoldersAsOfDate", query)({
   args: {
     societyId: v.id("societies"),
     asOf: v.string(),
@@ -33,14 +34,14 @@ export const roleHoldersAsOfDate = query({
  * organizationAddresses effectiveFrom/effectiveTo intervals (YCN REG_OFFICE /
  * REC_OFFICE / BUS_ADDRESS START_DT_TM point-in-time resolution).
  */
-export const addressesAsOf = query({
+export const addressesAsOf = authorizedQuery("registerHistory:addressesAsOf", query)({
   args: { societyId: v.id("societies"), asOf: v.string(), type: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => addressesAsOfPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Directors who held office on a specific ISO date ("who were the directors on X?"). */
-export const directorsAsOf = query({
+export const directorsAsOf = authorizedQuery("registerHistory:directorsAsOf", query)({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => directorsAsOfPortable(await toPortableQueryCtx(ctx), args),
@@ -52,7 +53,7 @@ export const directorsAsOf = query({
  * shape; richer fields (reason, tax residency) populate once those columns are
  * added to roleHolders.
  */
-export const significantIndividualsAsOf = query({
+export const significantIndividualsAsOf = authorizedQuery("registerHistory:significantIndividualsAsOf", query)({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => significantIndividualsAsOfPortable(await toPortableQueryCtx(ctx), args),

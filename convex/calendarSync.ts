@@ -1,3 +1,4 @@
+import { authorizedMutation } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation } from "./lib/untypedServer";
 import { toPortableMutationCtx } from "./lib/portable";
@@ -8,7 +9,7 @@ import {
   stageCalendarEventsPortable,
 } from "../shared/functions/calendarSync";
 
-export const stageCalendarEvents = mutation({
+export const stageCalendarEvents = authorizedMutation("calendarSync:stageCalendarEvents", mutation)({
   args: {
     societyId: v.id("societies"),
     provider: v.string(),
@@ -20,7 +21,7 @@ export const stageCalendarEvents = mutation({
   handler: async (ctx, args) => stageCalendarEventsPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertExternalCalendarEventMapping = mutation({
+export const upsertExternalCalendarEventMapping = authorizedMutation("calendarSync:upsertExternalCalendarEventMapping", mutation)({
   args: {
     societyId: v.id("societies"),
     provider: v.string(),
@@ -37,7 +38,7 @@ export const upsertExternalCalendarEventMapping = mutation({
   handler: async (ctx, args) => upsertExternalCalendarEventMappingPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const recordCalendarWebhook = mutation({
+export const recordCalendarWebhook = authorizedMutation("calendarSync:recordCalendarWebhook", mutation)({
   args: {
     societyId: v.id("societies"),
     provider: v.string(),
@@ -52,7 +53,7 @@ export const recordCalendarWebhook = mutation({
   handler: async (ctx, args) => recordCalendarWebhookPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const recordCalendarIncrementalCursor = mutation({
+export const recordCalendarIncrementalCursor = authorizedMutation("calendarSync:recordCalendarIncrementalCursor", mutation)({
   args: {
     societyId: v.id("societies"),
     provider: v.string(),

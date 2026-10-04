@@ -2,7 +2,7 @@
   "schemaVersion": "2.0.0",
   "packId": "ca-bc-bca",
   "status": "draft",
-  "version": "2026.06.05",
+  "version": "2026.10.04-research-draft",
   "reviewedAt": "2026-06-05",
   "maintainers": [
     {
@@ -82,9 +82,9 @@
         "confidence": "medium"
       },
       "content": {
-        "summary": "BC companies file an annual report after each anniversary of incorporation or recognition.",
+        "summary": "Home BC companies file within two calendar months after each recognition anniversary. BC extra-provincial companies use their BC registration anniversary.",
         "tooltip": "Use this guide for BC company and extra-provincial company annual-report tracking.",
-        "caveat": "Confirm the current registry profile and company subtype before relying on a filing due date.",
+        "caveat": "Annual report and AGM clocks differ. Registration, recognition and annual reference dates must be recorded independently.",
         "displayCitation": "BC Business Corporations Act s.51"
       },
       "priority": 30
@@ -129,6 +129,182 @@
         "tooltip": "Use this guide for BC company records and evidence checklists.",
         "caveat": "Inspection rights and subtype-specific records can vary.",
         "displayCitation": "BC Business Corporations Act ss.42-49"
+      },
+      "priority": 60
+    },
+    {
+      "ruleId": "ca-bc-bca-agm-timing",
+      "stableKey": "agm_timing.company",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "agm_timing"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2004-03-29"
+      },
+      "authority": {
+        "sourceId": "bc-business-corporations-act-current",
+        "instrument": "Business Corporations Act",
+        "sections": [
+          {
+            "label": "ss.182-185",
+            "citation": "BC Business Corporations Act ss.182-185",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00"
+          }
+        ]
+      },
+      "provenance": {
+        "retrievedAt": "2026-06-05",
+        "verifiedAt": "2026-06-05",
+        "verificationMethod": "manual_review",
+        "confidence": "medium",
+        "changeNote": "Reconciled with supplied research register (retrieved 2026-10-04); retained source review metadata; legal approval remains outstanding."
+      },
+      "content": {
+        "summary": "First AGM within 18 months after recognition; later AGMs each calendar year and within 15 months of the preceding annual reference date.",
+        "tooltip": "First AGM within 18 months after recognition; later AGMs each calendar year and within 15 months of the preceding annual reference date.",
+        "caveat": "Supported unanimous waiver/deferral must establish the annual reference date; it does not remove annual filing.",
+        "displayCitation": "BC Business Corporations Act ss.182-185"
+      },
+      "priority": 60
+    },
+    {
+      "ruleId": "ca-bc-bca-resolutions",
+      "stableKey": "special_resolution.company",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "special_resolution"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2004-03-29"
+      },
+      "authority": {
+        "sourceId": "bc-business-corporations-act-current",
+        "instrument": "Business Corporations Act",
+        "sections": [
+          {
+            "label": "s.1, ss.167-175",
+            "citation": "BC Business Corporations Act s.1, ss.167-175",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00"
+          }
+        ]
+      },
+      "provenance": {
+        "retrievedAt": "2026-06-05",
+        "verifiedAt": "2026-06-05",
+        "verificationMethod": "manual_review",
+        "confidence": "medium",
+        "changeNote": "Reconciled with supplied research register (retrieved 2026-10-04); retained source review metadata; legal approval remains outstanding."
+      },
+      "content": {
+        "summary": "Meeting ordinary resolutions use a majority of votes cast; written ordinary resolutions use the applicable special majority of eligible votes after circulation to all. Written special resolutions require every entitled holder.",
+        "tooltip": "Meeting ordinary resolutions use a majority of votes cast; written ordinary resolutions use the applicable special majority of eligible votes after circulation to all. Written special resolutions require every entitled holder.",
+        "caveat": "Articles may require a special majority between two-thirds and three-quarters. Pre-existing company rules, class rights, proxies, conflicts and all-shareholder matters need separate assessment.",
+        "displayCitation": "BC Business Corporations Act s.1, ss.167-175"
+      },
+      "priority": 60
+    },
+    {
+      "ruleId": "ca-bc-bca-quorum",
+      "stableKey": "quorum.company",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "quorum"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2004-03-29"
+      },
+      "authority": {
+        "sourceId": "bc-business-corporations-act-current",
+        "instrument": "Business Corporations Act",
+        "sections": [
+          {
+            "label": "s.172",
+            "citation": "BC Business Corporations Act s.172",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00"
+          }
+        ]
+      },
+      "provenance": {
+        "retrievedAt": "2026-06-05",
+        "verifiedAt": "2026-06-05",
+        "verificationMethod": "manual_review",
+        "confidence": "medium",
+        "changeNote": "Reconciled with supplied research register (retrieved 2026-10-04); retained source review metadata; legal approval remains outstanding."
+      },
+      "content": {
+        "summary": "Articles govern quorum; statutory default is two eligible shareholders personally or by proxy, reduced to all when fewer exist.",
+        "tooltip": "Articles govern quorum; statutory default is two eligible shareholders personally or by proxy, reduced to all when fewer exist.",
+        "caveat": "Adopted Table 1 article 8.2 separately requires qualifying persons representing at least 5% of issued voting shares; sole-holder and adjournment rules require evidence.",
+        "displayCitation": "BC Business Corporations Act s.172"
+      },
+      "priority": 60
+    },
+    {
+      "ruleId": "ca-bc-bca-transparency",
+      "stableKey": "records.transparency",
+      "status": "draft",
+      "ruleType": "statutory_minimum",
+      "topics": [
+        "records"
+      ],
+      "applicability": {
+        "jurisdictionCode": "CA-BC",
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "conditions": []
+      },
+      "validity": {
+        "effectiveFrom": "2004-03-29"
+      },
+      "authority": {
+        "sourceId": "bc-business-corporations-act-current",
+        "instrument": "Business Corporations Act",
+        "sections": [
+          {
+            "label": "ss.119.1-119.21",
+            "citation": "BC Business Corporations Act ss.119.1-119.21",
+            "url": "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00"
+          }
+        ]
+      },
+      "provenance": {
+        "retrievedAt": "2026-06-05",
+        "verifiedAt": "2026-06-05",
+        "verificationMethod": "manual_review",
+        "confidence": "medium",
+        "changeNote": "Reconciled with supplied research register (retrieved 2026-10-04); retained source review metadata; legal approval remains outstanding."
+      },
+      "content": {
+        "summary": "Applicable private BC companies maintain a restricted internal transparency register, confirm annually in the anniversary-to-two-month window, enter awareness changes within 30 days and notify status entries within ten days.",
+        "tooltip": "Applicable private BC companies maintain a restricted internal transparency register, confirm annually in the anniversary-to-two-month window, enter awareness changes within 30 days and notify status entries within ten days.",
+        "caveat": "Prescribed exemptions require evidence. Destroy former-individual records within one year after the sixth anniversary of cessation entry. A future public registry announcement does not establish an active filing duty.",
+        "displayCitation": "BC Business Corporations Act ss.119.1-119.21"
       },
       "priority": 60
     }

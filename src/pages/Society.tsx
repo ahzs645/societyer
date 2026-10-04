@@ -1,3 +1,5 @@
+import { EntitySetupFields } from "../components/EntitySetupFields";
+import { entitySetupFields, validateEntitySetup } from "../../shared/entitySetup";
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -19,7 +21,7 @@ import { formatDate } from "../lib/format";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 import { optionChoices, optionLabel } from "../lib/orgHubOptions";
 import { defaultsForJurisdiction, jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
-import { homeJurisdictionCode } from "../../shared/organizationDomain";
+import { homeJurisdictionCode, isSociety } from "../../shared/organizationDomain";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { useAuth } from "../auth/AuthProvider";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
@@ -76,6 +78,7 @@ export function SocietyNewPage() {
     actFormedUnder: "societies_act",
     officialEmail: "",
     organizationStatus: "active",
+    formationStatus: "preparing",
     registeredOfficeAddress: "",
     mailingAddress: "",
     purposes: "",
@@ -84,14 +87,17 @@ export function SocietyNewPage() {
     isCharity: false,
     isMemberFunded: false,
     distributing: false,
+    legalSubtype: "ordinary_society",
+    craBnStatus: "unknown", craRcStatus: "unknown", gstHstStatus: "unknown", payrollStatus: "unknown", charityStatus: "unknown", taxStatusEvidence: "",
   });
 
-  const set = (k: string, v: any) => setForm((current) => ({ ...current, [k]: v }));
+  const set = (k: string, v: any) => setForm((current) => ({ ...current, [k]: v, ...(k === "isCharity" ? { charityStatus: v ? "registered" : "not_applied" } : k === "isMemberFunded" ? { legalSubtype: v ? "member_funded_society" : "ordinary_society" } : k === "legalSubtype" ? { isMemberFunded: v === "member_funded_society" } : {}) }));
   const setJurisdiction = (jurisdictionCode: string) => {
     setForm((current) => ({
       ...current,
       jurisdictionCode,
       ...defaultsForJurisdiction(jurisdictionCode),
+      legalSubtype: jurisdictionCode === "CA-BC" ? "ordinary_society" : jurisdictionCode === "CA-FED-CBCA" ? "federal_private_corporation" : "other",
     }));
   };
   const canSave = form.name.trim().length > 0 && !saving;
@@ -100,6 +106,7 @@ export function SocietyNewPage() {
     if (!canSave) return;
     setSaving(true);
     try {
+      validateEntitySetup(form);
       const result = await createWorkspace({ ...form });
       auth.refreshMembership(result.societyId);
       setStoredSocietyId(result.societyId);
@@ -198,7 +205,7 @@ export function SocietyNewPage() {
                   <Select value={form.jurisdictionCode} onChange={setJurisdiction} options={JURISDICTION_OPTIONS} />
                 </Field>
                 <Field label="Entity type">
-                  <Select value={form.entityType} onChange={(v) => set("entityType", v)} options={optionChoices("entityTypes")} />
+                  <Select value={form.entityType} onChange={(v) => { set("entityType", v); set("actFormedUnder", v === "corporation__nfp_" ? form.jurisdictionCode === "CA-FED-CBCA" ? "canada_not_for_profit_corporations_act" : "" : v.includes("corporation") ? form.jurisdictionCode === "CA-BC" ? "business_corporations_act" : form.jurisdictionCode === "CA-FED-CBCA" ? "canada_business_corporations_act" : "business_corporations_act__ontario_" : "societies_act"); set("legalSubtype", v === "corporation__nfp_" ? "other" : v.includes("corporation") ? form.jurisdictionCode === "CA-BC" ? "ordinary_private_company" : form.jurisdictionCode === "CA-FED-CBCA" ? "federal_private_corporation" : "other" : "ordinary_society"); }} options={optionChoices("entityTypes")} />
                 </Field>
               </div>
               <div className="society-field-grid">
@@ -212,10 +219,11 @@ export function SocietyNewPage() {
               <Field label="Purposes (from constitution)">
                 <MarkdownEditor rows={4} value={form.purposes} onChange={(markdown) => set("purposes", markdown)} />
               </Field>
+              <EntitySetupFields form={form} set={set} />
               <div className="society-toggle-stack">
                 <Toggle checked={form.isCharity} onChange={(v) => set("isCharity", v)} label="Registered CRA charity" />
-                <Toggle checked={form.isMemberFunded} onChange={(v) => set("isMemberFunded", v)} label="Member-funded society" />
-                <Toggle checked={form.distributing} onChange={(v) => set("distributing", v)} label="Distributing corporation" />
+                {isSociety(form) && <Toggle checked={form.isMemberFunded} onChange={(v) => set("isMemberFunded", v)} label="Member-funded society" />}
+                {!isSociety(form) && <Toggle checked={form.distributing} onChange={(v) => set("distributing", v)} label="Distributing corporation" />}
               </div>
             </div>
           </section>
@@ -336,6 +344,7 @@ function RestoreBackupCard({
 export function SocietyPage() {
   const society = useSociety();
   const detail = useQuery(api.organizationDetails.overview, society ? { societyId: society._id } : "skip");
+  const evidenceDocuments = useQuery(api.documents.list, society ? { societyId: society._id } : "skip") as any[] | undefined;
   const toast = useToast();
   const confirm = useConfirm();
   const upsert = useMutation(api.society.upsert);
@@ -396,7 +405,7 @@ export function SocietyPage() {
   if (!form) return null;
 
   const jurisdictionCopy = jurisdictionDisplayCopy(form.jurisdictionCode ?? society.jurisdictionCode);
-  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v, ...(k === "isCharity" ? { charityStatus: v ? "registered" : "not_applied" } : k === "isMemberFunded" ? { legalSubtype: v ? "member_funded_society" : "ordinary_society" } : k === "legalSubtype" ? { isMemberFunded: v === "member_funded_society" } : {}) }));
   const missingGovernanceCount = [
     society.constitutionDocId,
     society.bylawsDocId,
@@ -436,6 +445,7 @@ export function SocietyPage() {
   const save = async () => {
     setSaving(true);
     try {
+      validateEntitySetup(form);
       await upsert({
         id: form._id,
         name: form.name,
@@ -443,6 +453,8 @@ export function SocietyPage() {
         incorporationDate: form.incorporationDate,
         fiscalYearEnd: form.fiscalYearEnd,
         jurisdictionCode: form.jurisdictionCode || undefined,
+        ...entitySetupFields(form),
+        anniversaryDate: form.anniversaryDate || undefined,
         entityType: form.entityType,
         actFormedUnder: form.actFormedUnder,
         officialEmail: form.officialEmail,
@@ -533,6 +545,7 @@ export function SocietyPage() {
 
   const saveDetailDrawer = async () => {
     if (!drawerKind || !draft) return;
+    try {
     if (drawerKind === "address") {
       await upsertAddress({
         id: draft._id,
@@ -555,6 +568,8 @@ export function SocietyPage() {
         id: draft._id,
         societyId: society._id,
         registrationType: draft.registrationType || "extra_provincial",
+        corporationClass: draft.corporationClass || undefined,
+        licenceEvidenceDocumentId: draft.licenceEvidenceDocumentId || undefined,
         jurisdiction: draft.jurisdiction || "Needs review",
         homeJurisdiction: draft.homeJurisdiction || undefined,
         assumedName: draft.assumedName || undefined,
@@ -593,6 +608,7 @@ export function SocietyPage() {
     toast.success("Saved");
     setDrawerKind(null);
     setDraft(null);
+    } catch (error: any) { toast.error("Could not save record", error?.message ?? String(error)); }
   };
 
   const removeDetailRow = async (kind: DrawerKind, row: any) => {
@@ -761,12 +777,12 @@ export function SocietyPage() {
                         disabled={locked}
                         label="Registered CRA charity"
                       />
-                      <Toggle
+                      {isSociety(form) && <Toggle
                         checked={!!form.isMemberFunded}
                         onChange={(v) => set("isMemberFunded", v)}
                         disabled={locked}
                         label="Member-funded society"
-                      />
+                      />}
                     </div>
                   )}
                 </LockedField>
@@ -899,6 +915,8 @@ export function SocietyPage() {
               </div>
               <div className="card__body">
                 <div className="org-details-field-grid">
+                  <OptionSelect label="Entity type" setName="entityTypes" value={form.entityType ?? ""} onChange={(value) => { set("entityType", value); set("legalSubtype", "other"); }} emptyLabel="Needs classification" />
+                  <OptionSelect label="Act formed under" setName="actsFormedUnder" value={form.actFormedUnder ?? ""} onChange={(value) => set("actFormedUnder", value)} emptyLabel="Review governing Act" />
                   <OptionSelect label="Organization status" setName="organizationStatuses" value={form.organizationStatus ?? ""} onChange={(value) => set("organizationStatus", value)} emptyLabel="No status" />
                 </div>
               </div>
@@ -974,6 +992,7 @@ export function SocietyPage() {
                     <input className="input" value={form.niceClassification ?? ""} onChange={(e) => set("niceClassification", e.target.value)} />
                   </Field>
                 </div>
+                <EntitySetupFields form={form} set={set} includeDates documents={evidenceDocuments ?? []} />
                 <div className="org-details-toggle-row">
                   <Toggle checked={!!form.numbered} onChange={(value) => set("numbered", value)} label="Numbered entity" />
                   <Toggle checked={!!form.distributing} onChange={(value) => set("distributing", value)} label="Distributing" />
@@ -1022,7 +1041,7 @@ export function SocietyPage() {
                       <div className="muted">{optionLabel("registrationTypes", row.registrationType ?? "extra_provincial")}</div>
                     </div>,
                     <div key="r"><strong>{row.assumedName || "Legal name"}</strong><div className="mono muted">{row.registrationNumber ?? "No number"}{row.nuansNumber ? ` · NUANS ${row.nuansNumber}` : ""}</div></div>,
-                    dateRange(row.registrationDate, row.deRegistrationDate || row.activityCommencementDate),
+                    <div key="dates"><div>Registered: {row.registrationDate ? formatDate(row.registrationDate) : "Unknown"}</div><div>Business started: {row.activityCommencementDate ? formatDate(row.activityCommencementDate) : "Unknown"}</div>{row.deRegistrationDate && <div>Ended: {formatDate(row.deRegistrationDate)}</div>}</div>,
                     <Badge key="s" tone={row.status === "active" ? "success" : "warn"}>{optionLabel("registrationStatuses", row.status)}</Badge>,
                     <RowActions key="a" onEdit={() => { setDrawerKind("registration"); setDraft({ ...row, representativeIdsText: (row.representativeIds ?? []).join(", ") }); }} onRemove={() => removeDetailRow("registration", row)} />,
                   ]}
@@ -1065,7 +1084,7 @@ export function SocietyPage() {
         }
       >
         {drawerKind === "address" && draft && <AddressFields draft={draft} setDraft={setDraft} />}
-        {drawerKind === "registration" && draft && <RegistrationFields draft={draft} setDraft={setDraft} />}
+        {drawerKind === "registration" && draft && <RegistrationFields draft={draft} setDraft={setDraft} documents={evidenceDocuments ?? []} />}
         {drawerKind === "identifier" && draft && <IdentifierFields draft={draft} setDraft={setDraft} />}
       </Drawer>
     </div>
@@ -1187,7 +1206,7 @@ function AddressFields({ draft, setDraft }: any) {
   );
 }
 
-function RegistrationFields({ draft, setDraft }: any) {
+function RegistrationFields({ draft, setDraft, documents }: any) {
   return (
     <>
       <div className="row" style={{ gap: 12 }}>
@@ -1197,6 +1216,8 @@ function RegistrationFields({ draft, setDraft }: any) {
       <div className="row" style={{ gap: 12 }}>
         <OptionSelect label="Home jurisdiction" setName="entityJurisdictions" value={draft.homeJurisdiction ?? ""} onChange={(value) => setDraft({ ...draft, homeJurisdiction: value })} emptyLabel="No home jurisdiction" />
       </div>
+      <Field label="Corporation registration class" hint="Ontario EPCA licence obligations apply to the licensed foreign class; ordinary federal corporations need a separate assessment."><Select value={draft.corporationClass ?? ""} onChange={(value) => setDraft({ ...draft, corporationClass: value })} options={[{ value: "", label: "Unclassified / needs review" }, { value: "federal_corporation", label: "Federal corporation" }, { value: "foreign_epca_licensed", label: "Ontario licensed foreign corporation (EPCA)" }, { value: "other", label: "Other — assess registry obligations" }]} /></Field>
+      <Field label="Licence evidence document" hint="Required before selecting Ontario licensed foreign corporation."><Select value={draft.licenceEvidenceDocumentId ?? ""} onChange={(value) => setDraft({ ...draft, licenceEvidenceDocumentId: value })} options={[{ value: "", label: "Select an evidence document" }, ...documents.map((document: any) => ({ value: document._id, label: document.title }))]} /></Field>
       <Field label="Assumed name"><input className="input" value={draft.assumedName ?? ""} onChange={(e) => setDraft({ ...draft, assumedName: e.target.value })} /></Field>
       <div className="row" style={{ gap: 12 }}>
         <Field label="Registration number"><input className="input" value={draft.registrationNumber ?? ""} onChange={(e) => setDraft({ ...draft, registrationNumber: e.target.value })} /></Field>

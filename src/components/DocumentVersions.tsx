@@ -30,6 +30,7 @@ export function DocumentVersionsDrawer({
   );
   const createDemoVersion = useMutation(api.documentVersions.createDemoVersion);
   const beginUpload = useAction(api.documentVersions.beginUpload);
+  const completeUpload = useAction(api.documentVersions.completeUpload);
   const recordUpload = useMutation(api.documentVersions.recordUploadedVersion);
   const rollback = useMutation(api.documentVersions.rollback);
   const getDownloadTarget = useAction(api.documentVersions.getDownloadTarget);
@@ -66,6 +67,7 @@ export function DocumentVersionsDrawer({
         createDemoVersion,
         beginUpload,
         recordUploadedVersion: recordUpload,
+        completeUpload,
       });
       if (result.provider === "local-filesystem") {
         if (paperlessConnection?.autoUpload) toast.info("Paperless sync is skipped for local filesystem versions.");

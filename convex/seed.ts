@@ -1,3 +1,4 @@
+import { authorizedMutation } from "./lib/authorizedServer";
 import { mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { assertMaintenanceToken, serviceTokenValidator } from "./lib/serviceAuth";
@@ -6,7 +7,7 @@ import { toPortableMutationCtx } from "./lib/portable";
 
 // Seed the demo society "Riverside Community Society".
 // Idempotent-ish: if a society already exists, it wipes everything first.
-export const run = mutation({
+export const run = authorizedMutation("seed:run", mutation)({
   args: { serviceToken: serviceTokenValidator },
   returns: v.object({ societyId: v.id("societies") }),
   handler: async (ctx, { serviceToken }) => {
@@ -15,7 +16,7 @@ export const run = mutation({
   },
 });
 
-export const reset = mutation({
+export const reset = authorizedMutation("seed:reset", mutation)({
   args: { serviceToken: serviceTokenValidator },
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, { serviceToken }) => {

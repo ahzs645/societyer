@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -17,25 +18,25 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
  * config (options, currency code, target object, etc.) lives in `configJson`.
  */
 
-export const listForObject = query({
+export const listForObject = authorizedQuery("fieldMetadata:listForObject", query)({
   args: { objectMetadataId: v.id("objectMetadata") },
   returns: v.any(),
   handler: async (ctx, args) => listForObjectPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listForSociety = query({
+export const listForSociety = authorizedQuery("fieldMetadata:listForSociety", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listForSocietyPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("fieldMetadata:get", query)({
   args: { id: v.id("fieldMetadata") },
   returns: v.any(),
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const getByName = query({
+export const getByName = authorizedQuery("fieldMetadata:getByName", query)({
   args: {
     objectMetadataId: v.id("objectMetadata"),
     name: v.string(),
@@ -44,7 +45,7 @@ export const getByName = query({
   handler: async (ctx, args) => getByNamePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("fieldMetadata:create", mutation)({
   args: {
     societyId: v.id("societies"),
     objectMetadataId: v.id("objectMetadata"),
@@ -65,7 +66,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("fieldMetadata:update", mutation)({
   args: {
     id: v.id("fieldMetadata"),
     patch: v.object({
@@ -85,7 +86,7 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("fieldMetadata:remove", mutation)({
   args: { id: v.id("fieldMetadata") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

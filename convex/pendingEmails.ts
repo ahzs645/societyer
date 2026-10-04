@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import {
@@ -18,7 +19,7 @@ const ATTACHMENT_SHAPE = v.array(
   }),
 );
 
-export const list = query({
+export const list = authorizedQuery("pendingEmails:list", query)({
   args: {
     societyId: v.id("societies"),
     status: v.optional(v.string()),
@@ -27,13 +28,13 @@ export const list = query({
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("pendingEmails:get", query)({
   args: { id: v.id("pendingEmails") },
   returns: v.any(),
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("pendingEmails:create", mutation)({
   args: {
     societyId: v.id("societies"),
     workflowId: v.optional(v.id("workflows")),
@@ -56,7 +57,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("pendingEmails:update", mutation)({
   args: {
     id: v.id("pendingEmails"),
     patch: v.object({
@@ -78,7 +79,7 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const markSent = mutation({
+export const markSent = authorizedMutation("pendingEmails:markSent", mutation)({
   args: {
     id: v.id("pendingEmails"),
     sentChannel: v.optional(v.string()),
@@ -89,7 +90,7 @@ export const markSent = mutation({
   handler: async (ctx, args) => markSentPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const cancel = mutation({
+export const cancel = authorizedMutation("pendingEmails:cancel", mutation)({
   args: {
     id: v.id("pendingEmails"),
     reason: v.optional(v.string()),
@@ -99,7 +100,7 @@ export const cancel = mutation({
   handler: async (ctx, args) => cancelPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("pendingEmails:remove", mutation)({
   args: {
     id: v.id("pendingEmails"),
     actingUserId: v.optional(v.id("users")),

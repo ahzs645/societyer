@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import {
@@ -10,7 +11,7 @@ import {
 } from "../shared/functions/signatures";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const listForEntity = query({
+export const listForEntity = authorizedQuery("signatures:listForEntity", query)({
   args: {
     entityType: v.string(),
     subjectId: v.optional(v.string()),
@@ -20,13 +21,13 @@ export const listForEntity = query({
   handler: async (ctx, args) => listForEntityPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listProfilesForSociety = query({
+export const listProfilesForSociety = authorizedQuery("signatures:listProfilesForSociety", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listProfilesForSocietyPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const saveProfile = mutation({
+export const saveProfile = authorizedMutation("signatures:saveProfile", mutation)({
   args: {
     societyId: v.id("societies"),
     userId: v.optional(v.id("users")),
@@ -44,7 +45,7 @@ export const saveProfile = mutation({
   handler: async (ctx, args) => saveProfilePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const sign = mutation({
+export const sign = authorizedMutation("signatures:sign", mutation)({
   args: {
     societyId: v.id("societies"),
     entityType: v.string(),
@@ -68,13 +69,13 @@ export const sign = mutation({
   handler: async (ctx, args) => signPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const revoke = mutation({
+export const revoke = authorizedMutation("signatures:revoke", mutation)({
   args: { id: v.id("signatures"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => revokePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const deleteProfile = mutation({
+export const deleteProfile = authorizedMutation("signatures:deleteProfile", mutation)({
   args: { id: v.id("signatureProfiles"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => deleteProfilePortable(await toPortableMutationCtx(ctx), args),

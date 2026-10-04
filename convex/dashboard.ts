@@ -1,3 +1,4 @@
+import { authorizedQuery } from "./lib/authorizedServer";
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { navCountsPortable, summaryPortable } from "../shared/functions/dashboard";
@@ -129,7 +130,7 @@ const dashboardSummaryValidator = validator.object({
   evidenceChains: validator.array(evidenceChainValidator),
 });
 
-export const navCounts = query({
+export const navCounts = authorizedQuery("dashboard:navCounts", query)({
   args: { societyId: v.id("societies") },
   returns: v.object({
     members: v.number(),

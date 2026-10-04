@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -23,25 +24,25 @@ const keyResult = v.object({
   unit: v.string(),
 });
 
-export const list = query({
+export const list = authorizedQuery("goals:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("goals:get", query)({
   args: { id: v.id("goals") },
   returns: v.any(),
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const byCommittee = query({
+export const byCommittee = authorizedQuery("goals:byCommittee", query)({
   args: { committeeId: v.id("committees") },
   returns: v.any(),
   handler: async (ctx, args) => byCommitteePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("goals:create", mutation)({
   args: {
     societyId: v.id("societies"),
     committeeId: v.optional(v.id("committees")),
@@ -60,7 +61,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("goals:update", mutation)({
   args: {
     id: v.id("goals"),
     patch: v.object({
@@ -81,13 +82,13 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const toggleMilestone = mutation({
+export const toggleMilestone = authorizedMutation("goals:toggleMilestone", mutation)({
   args: { id: v.id("goals"), index: v.number() },
   returns: v.any(),
   handler: async (ctx, args) => toggleMilestonePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("goals:remove", mutation)({
   args: { id: v.id("goals") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

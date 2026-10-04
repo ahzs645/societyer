@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -16,13 +17,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
  * could match each unreconciled line. Matching is heuristic — exact amount
  * within ±7 days for cash records, then string-similarity on counterparty.
  */
-export const overview = query({
+export const overview = authorizedQuery("reconciliation:overview", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => overviewPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const match = mutation({
+export const match = authorizedMutation("reconciliation:match", mutation)({
   args: {
     txnId: v.id("financialTransactions"),
     matchedKind: v.string(),
@@ -34,7 +35,7 @@ export const match = mutation({
   handler: async (ctx, args) => matchPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const markManual = mutation({
+export const markManual = authorizedMutation("reconciliation:markManual", mutation)({
   args: {
     txnId: v.id("financialTransactions"),
     note: v.string(),
@@ -47,7 +48,7 @@ export const markManual = mutation({
 // Manually add a bank transaction so reconciliation is usable without a Wave/
 // browser-connector sync. Ensures a "manual" connection + bank account exist
 // (created once) so the financialTransactions row has the required references.
-export const addManualTransaction = mutation({
+export const addManualTransaction = authorizedMutation("reconciliation:addManualTransaction", mutation)({
   args: {
     societyId: v.id("societies"),
     date: v.string(),
@@ -61,7 +62,7 @@ export const addManualTransaction = mutation({
   handler: async (ctx, args) => addManualTransactionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const unmatch = mutation({
+export const unmatch = authorizedMutation("reconciliation:unmatch", mutation)({
   args: { txnId: v.id("financialTransactions") },
   returns: v.any(),
   handler: async (ctx, args) => unmatchPortable(await toPortableMutationCtx(ctx), args),

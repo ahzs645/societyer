@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -7,7 +8,7 @@ import {
 } from "../shared/functions/commandMenuItems";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const listForScope = query({
+export const listForScope = authorizedQuery("commandMenuItems:listForScope", query)({
   args: {
     societyId: v.id("societies"),
     scopeType: v.optional(v.string()),
@@ -18,7 +19,7 @@ export const listForScope = query({
   handler: async (ctx, args) => commandMenuItemsListForScope(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsert = mutation({
+export const upsert = authorizedMutation("commandMenuItems:upsert", mutation)({
   args: {
     societyId: v.id("societies"),
     id: v.optional(v.id("commandMenuItems")),
@@ -39,7 +40,7 @@ export const upsert = mutation({
   handler: async (ctx, args) => commandMenuItemUpsert(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("commandMenuItems:remove", mutation)({
   args: { id: v.id("commandMenuItems") },
   returns: v.any(),
   handler: async (ctx, args) => commandMenuItemRemove(await toPortableMutationCtx(ctx), args),

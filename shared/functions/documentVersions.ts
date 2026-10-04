@@ -11,31 +11,32 @@
  * convex-test oracle.
  */
 
+import { requireDocumentAccess } from "./documents";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { getOwned, getOwnedChild, requireRolePortable, requireSocietyMembership } from "./access";
+import { getOwnedChild, requireRolePortable, requireSocietyMembership } from "./access";
 
 export async function listForDocumentPortable(ctx: PortableQueryCtx, { documentId }: { documentId: string }) {
   const document = await ctx.db.get(documentId, "documents");
   if (!document || typeof document.societyId !== "string") throw new Error("documents not found.");
   await requireSocietyMembership(ctx, document.societyId);
-  await getOwned(ctx, "documents", documentId, document.societyId);
+  await requireDocumentAccess(ctx, documentId);
   const rows = await ctx.db
     .query("documentVersions")
     .withIndex("by_document", (q) => q.eq("documentId", documentId))
     .collect();
-  return rows.sort((a: any, b: any) => b.version - a.version);
+  return rows.filter((row) => row.societyId === document.societyId).sort((a: any, b: any) => b.version - a.version);
 }
 
 export async function latestPortable(ctx: PortableQueryCtx, { documentId }: { documentId: string }) {
   const document = await ctx.db.get(documentId, "documents");
   if (!document || typeof document.societyId !== "string") throw new Error("documents not found.");
   await requireSocietyMembership(ctx, document.societyId);
-  await getOwned(ctx, "documents", documentId, document.societyId);
+  await requireDocumentAccess(ctx, documentId);
   const rows = await ctx.db
     .query("documentVersions")
     .withIndex("by_document", (q) => q.eq("documentId", documentId))
     .collect();
-  return rows.sort((a: any, b: any) => b.version - a.version)[0] ?? null;
+  return rows.filter((row) => row.societyId === document.societyId).sort((a: any, b: any) => Number(b.isCurrent) - Number(a.isCurrent) || b.version - a.version)[0] ?? null;
 }
 
 export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string }) {
@@ -44,6 +45,7 @@ export async function getPortable(ctx: PortableQueryCtx, { id }: { id: string })
   const document = await ctx.db.get(version.documentId, "documents");
   if (!document || typeof document.societyId !== "string") throw new Error("documentVersions not found.");
   await requireSocietyMembership(ctx, document.societyId);
+  await requireDocumentAccess(ctx, version.documentId);
   return getOwnedChild(ctx, "documentVersions", id, "documents", "documentId", document.societyId);
 }
 
@@ -62,7 +64,7 @@ export async function rollbackPortable(
     societyId: document.societyId,
     required: "Admin",
   });
-  await getOwned(ctx, "documents", String(v.documentId), document.societyId);
+  await requireDocumentAccess(ctx, String(v.documentId), "manage");
   const siblings = await ctx.db
     .query("documentVersions")
     .withIndex("by_document", (q) => q.eq("documentId", v.documentId))

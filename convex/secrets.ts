@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { internalQuery, query, mutation } from "./lib/untypedServer";
 import { v, ConvexError } from "convex/values";
 import { requireRole, canActAs } from "./users";
@@ -119,13 +120,13 @@ async function logActivity(ctx: any, row: any, actorName: string, action: string
   });
 }
 
-export const list = query({
+export const list = authorizedQuery("secrets:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("secrets:create", mutation)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -193,7 +194,7 @@ export const create = mutation({
   },
 });
 
-export const update = mutation({
+export const update = authorizedMutation("secrets:update", mutation)({
   args: {
     id: v.id("secretVaultItems"),
     actingUserId: v.optional(v.id("users")),
@@ -258,7 +259,7 @@ export const update = mutation({
   },
 });
 
-export const revealSecret = mutation({
+export const revealSecret = authorizedMutation("secrets:revealSecret", mutation)({
   args: {
     id: v.id("secretVaultItems"),
     actingUserId: v.id("users"),
@@ -310,7 +311,7 @@ export const _revealForServer = internalQuery({
   },
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("secrets:remove", mutation)({
   args: { id: v.id("secretVaultItems"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

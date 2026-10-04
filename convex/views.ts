@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -25,13 +26,13 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
  * `viewFields` which are the actual columns.
  */
 
-export const listForObject = query({
+export const listForObject = authorizedQuery("views:listForObject", query)({
   args: { objectMetadataId: v.id("objectMetadata") },
   returns: v.any(),
   handler: async (ctx, args) => listForObjectPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("views:get", query)({
   args: { id: v.id("views") },
   returns: v.any(),
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
@@ -41,13 +42,13 @@ export const get = query({
  * Returns the view plus its ordered viewFields with the underlying
  * fieldMetadata joined in — the exact shape the RecordTable consumes.
  */
-export const getHydrated = query({
+export const getHydrated = authorizedQuery("views:getHydrated", query)({
   args: { id: v.id("views") },
   returns: v.any(),
   handler: async (ctx, args) => getHydratedPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("views:create", mutation)({
   args: {
     societyId: v.id("societies"),
     objectMetadataId: v.id("objectMetadata"),
@@ -78,7 +79,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("views:update", mutation)({
   args: {
     id: v.id("views"),
     patch: v.object({
@@ -109,7 +110,7 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const listSharedForDataTable = query({
+export const listSharedForDataTable = authorizedQuery("views:listSharedForDataTable", query)({
   args: {
     societyId: v.id("societies"),
     objectMetadataId: v.optional(v.id("objectMetadata")),
@@ -119,7 +120,7 @@ export const listSharedForDataTable = query({
   handler: async (ctx, args) => listSharedForDataTablePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const createSharedDataTableView = mutation({
+export const createSharedDataTableView = authorizedMutation("views:createSharedDataTableView", mutation)({
   args: {
     societyId: v.id("societies"),
     objectMetadataId: v.optional(v.id("objectMetadata")),
@@ -141,7 +142,7 @@ export const createSharedDataTableView = mutation({
   handler: async (ctx, args) => createSharedDataTableViewPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const deleteSharedDataTableView = mutation({
+export const deleteSharedDataTableView = authorizedMutation("views:deleteSharedDataTableView", mutation)({
   args: {
     societyId: v.id("societies"),
     id: v.id("views"),
@@ -150,13 +151,13 @@ export const deleteSharedDataTableView = mutation({
   handler: async (ctx, args) => deleteSharedDataTableViewPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const seedGovernanceDataTableViews = mutation({
+export const seedGovernanceDataTableViews = authorizedMutation("views:seedGovernanceDataTableViews", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => seedGovernanceDataTableViewsPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("views:remove", mutation)({
   args: { id: v.id("views") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
@@ -164,13 +165,13 @@ export const remove = mutation({
 
 /* ----------------------------- View fields ----------------------------- */
 
-export const listFieldsForView = query({
+export const listFieldsForView = authorizedQuery("views:listFieldsForView", query)({
   args: { viewId: v.id("views") },
   returns: v.any(),
   handler: async (ctx, args) => listFieldsForViewPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const addField = mutation({
+export const addField = authorizedMutation("views:addField", mutation)({
   args: {
     societyId: v.id("societies"),
     viewId: v.id("views"),
@@ -185,7 +186,7 @@ export const addField = mutation({
   handler: async (ctx, args) => addFieldPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateField = mutation({
+export const updateField = authorizedMutation("views:updateField", mutation)({
   args: {
     id: v.id("viewFields"),
     patch: v.object({
@@ -200,7 +201,7 @@ export const updateField = mutation({
   handler: async (ctx, args) => updateFieldPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeField = mutation({
+export const removeField = authorizedMutation("views:removeField", mutation)({
   args: { id: v.id("viewFields") },
   returns: v.any(),
   handler: async (ctx, args) => removeFieldPortable(await toPortableMutationCtx(ctx), args),
@@ -211,7 +212,7 @@ export const removeField = mutation({
  * display order. Uses `patch` per row so we remain idempotent if some
  * viewFields are missing.
  */
-export const reorderFields = mutation({
+export const reorderFields = authorizedMutation("views:reorderFields", mutation)({
   args: {
     viewId: v.id("views"),
     orderedIds: v.array(v.id("viewFields")),

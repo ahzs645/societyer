@@ -51,7 +51,25 @@ export function daysUntil(value: string, now: string | Date = new Date()) {
   return calendarDaysBetween(scheduled, now);
 }
 
-export function meetsNoticeWindow(value: string, minDays: number, maxDays: number) {
-  const days = daysUntil(value);
-  return days != null && days >= minDays && days <= maxDays;
+export type NoticeRules = { noticeRequiresClearDays?: boolean; noticeUsesCalendarMonthsMaximum?: boolean; governanceAutomationBlocked?: boolean };
+
+export function noticeDaysUntil(value: string, rules?: NoticeRules, now: string | Date = new Date()) {
+  const days = daysUntil(value, now);
+  return days == null ? null : days - (rules?.noticeRequiresClearDays ? 1 : 0);
+}
+
+export function noticeWindowSatisfied(notice: string | Date, meeting: string, minDays: number, maxDays: number, rules?: NoticeRules) {
+  if (rules?.governanceAutomationBlocked) return false;
+  const calendarDays = calendarDaysBetween(meeting, notice);
+  if (calendarDays == null || calendarDays - (rules?.noticeRequiresClearDays ? 1 : 0) < minDays) return false;
+  if (!rules?.noticeUsesCalendarMonthsMaximum) return calendarDays <= maxDays;
+  const source = notice instanceof Date ? notice : new Date(notice);
+  const limit = new Date(source.getFullYear(), source.getMonth() + 2, 1);
+  const last = new Date(limit.getFullYear(), limit.getMonth() + 1, 0).getDate();
+  limit.setDate(Math.min(source.getDate(), last));
+  return (localDayNumber(meeting) ?? Infinity) <= (localDayNumber(limit) ?? -Infinity);
+}
+
+export function meetsNoticeWindow(value: string, minDays: number, maxDays: number, rules?: NoticeRules) {
+  return noticeWindowSatisfied(new Date(), value, minDays, maxDays, rules);
 }

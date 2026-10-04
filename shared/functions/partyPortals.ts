@@ -1,3 +1,4 @@
+import { publicDocumentAccessPredicate } from "./documents";
 /**
  * PORTABLE FUNCTIONS: external stakeholder portals (list / create / revoke).
  *
@@ -75,6 +76,7 @@ export async function centerPortable(ctx: PortableQueryCtx, { token }: { token: 
 
   const scopes: string[] = portal.scopes ?? [];
   const allowDownload: boolean = Boolean(portal.allowDownload);
+  const allowsDocument = await publicDocumentAccessPredicate(ctx, String(society._id));
 
   let board: any[] = [];
   if (scopes.includes("board")) {
@@ -100,7 +102,7 @@ export async function centerPortable(ctx: PortableQueryCtx, { token }: { token: 
     const docById = new Map(docs.map((d: any) => [String(d._id), d]));
     publications = await Promise.all(
       rows
-        .filter((p: any) => p.status === "Published")
+        .filter((p: any) => p.status === "Published" && p.reviewStatus === "Approved" && (!p.documentId || allowsDocument(docById.get(String(p.documentId)))))
         .map(async (p: any) => {
           const doc: any = p.documentId ? docById.get(String(p.documentId)) : null;
           return {
@@ -123,7 +125,7 @@ export async function centerPortable(ctx: PortableQueryCtx, { token }: { token: 
       .withIndex("by_society", (q) => q.eq("societyId", society._id))
       .collect();
     documents = await Promise.all(
-      docs.map(async (d: any) => ({
+      docs.filter((document) => allowsDocument(document)).map(async (d: any) => ({
         _id: d._id,
         title: d.title,
         category: d.category,
@@ -155,7 +157,7 @@ async function documentDownloadUrl(ctx: PortableQueryCtx, document: any) {
     .filter((vrow: any) => vrow.isCurrent)
     .sort((a: any, b: any) => b.version - a.version)[0] ?? null;
   if (current) {
-    if (current.storageProvider !== "demo" && current.storageProvider !== "rustfs") return undefined;
+    if (current.storageProvider !== "demo" && current.storageProvider !== "rustfs" && current.storageProvider !== "r2") return undefined;
     return await createDownloadUrl({ provider: current.storageProvider, key: current.storageKey });
   }
   return document.storageId

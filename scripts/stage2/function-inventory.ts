@@ -67,6 +67,9 @@ function isExported(node: ts.Node): boolean {
 
 function callName(expression: ts.Expression): string | undefined {
   if (ts.isAsExpression(expression) || ts.isParenthesizedExpression(expression)) return callName(expression.expression);
+  if (ts.isCallExpression(expression) && ts.isIdentifier(expression.expression) && ["authorizedQuery", "authorizedMutation", "authorizedAction"].includes(expression.expression.text)) {
+    return expression.arguments[1] ? callName(expression.arguments[1]) : undefined;
+  }
   if (ts.isIdentifier(expression)) return expression.text;
   if (ts.isPropertyAccessExpression(expression)) {
     const parent = callName(expression.expression);
@@ -237,6 +240,9 @@ function portableMetadata(): Map<string, PortableMetadata> {
 function classifyConvex(initializerText: string, isService: boolean): AccessClassification {
   if (isService) return "service";
   const authenticatedSignals = [
+    "authorizedQuery(",
+    "authorizedMutation(",
+    "authorizedAction(",
     "requireRole(",
     "requireRolePortable(",
     "requirePrincipalRole(",

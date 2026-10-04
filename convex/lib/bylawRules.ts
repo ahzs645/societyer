@@ -1,3 +1,4 @@
+import { DEFAULT_BYLAW_RULES, bylawBaselineForOrganization, contextualBylawRules } from "../../shared/bylawBaselines";
 import { QueryCtx, MutationCtx } from "../_generated/server";
 import { Id, Doc } from "../_generated/dataModel";
 
@@ -20,48 +21,9 @@ export type QuorumSnapshot = {
   quorumComputedAtISO: string;
 };
 
-export const DEFAULT_BYLAW_RULES: BylawRuleSetLike = {
-  societyId: "placeholder" as Id<"societies">,
-  version: 1,
-  status: "Active",
-  generalNoticeMinDays: 14,
-  generalNoticeMaxDays: 60,
-  allowElectronicMeetings: true,
-  allowHybridMeetings: true,
-  allowElectronicVoting: false,
-  allowProxyVoting: false,
-  proxyHolderMustBeMember: false,
-  proxyLimitPerGrantorPerMeeting: 1,
-  quorumType: "percentage",
-  quorumValue: 10,
-  quorumMinimumCount: 3,
-  memberProposalThresholdPct: 5,
-  memberProposalMinSignatures: 1,
-  memberProposalLeadDays: 7,
-  requisitionMeetingThresholdPct: 10,
-  annualReportDueDaysAfterMeeting: 30,
-  requireAgmFinancialStatements: true,
-  requireAgmElections: true,
-  ballotIsAnonymous: true,
-  voterMustBeMemberAtRecordDate: true,
-  inspectionMemberRegisterByMembers: true,
-  inspectionMemberRegisterByPublic: false,
-  inspectionDirectorRegisterByMembers: true,
-  inspectionCopiesAllowed: true,
-  ordinaryResolutionThresholdPct: 50,
-  specialResolutionThresholdPct: 66.67,
-  unanimousWrittenSpecialResolution: true,
-  updatedAtISO: new Date(0).toISOString(),
-};
 
-export function getDefaultBylawRules(
-  societyId: Id<"societies">,
-): BylawRuleSetLike {
-  return {
-    ...DEFAULT_BYLAW_RULES,
-    societyId,
-    updatedAtISO: new Date().toISOString(),
-  };
+export function getDefaultBylawRules(societyId: Id<"societies">, organization?: any) {
+  return bylawBaselineForOrganization(organization, societyId);
 }
 
 export async function getActiveBylawRuleSet(
@@ -85,11 +47,8 @@ export async function getBylawRuleSetForDate(
     .filter((row) => row.status !== "Draft")
     .filter((row) => effectiveTimestamp(row) <= targetTs);
   const selected = eligible.sort(compareRuleSetsDesc)[0];
-  if (selected) return selected;
-  return {
-    ...getDefaultBylawRules(societyId),
-    isFallback: true,
-  };
+  const organization = await ctx.db.get(societyId);
+  return contextualBylawRules(organization, societyId, selected) as ResolvedBylawRuleSet;
 }
 
 export async function buildQuorumSnapshot(
@@ -146,6 +105,7 @@ async function computeRequiredQuorum(
     meetingType?: string;
   },
 ) {
+  if ((rules as any).quorumRequiresLegalRegister || (rules as any).governanceAutomationBlocked) return undefined;
   if (rules.quorumType === "fixed") {
     return rules.quorumValue;
   }
@@ -169,7 +129,7 @@ function quorumSourceLabel(
 ) {
   const prefix = hasManualOverride ? "Manual quorum override; " : "";
   if (rules.isFallback || !rules._id) {
-    return `${prefix}BC Model Bylaw baseline assumptions`;
+    return `${prefix}${(rules as any).baselineLabel ?? "Statutory draft baseline; governing instrument review required"}`;
   }
   const effective = rules.effectiveFromISO
     ? `, effective ${rules.effectiveFromISO.slice(0, 10)}`
@@ -204,3 +164,5 @@ function timestampOrNegativeInfinity(value?: string) {
 function isGeneralMeeting(type?: string) {
   return type === "AGM" || type === "SGM";
 }
+
+export { DEFAULT_BYLAW_RULES };

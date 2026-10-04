@@ -70,6 +70,7 @@ export const SOURCE_OPTION_VALUES: Record<OptionSetName, string[]> = {
     "CA-ON-OBCA",
   ],
   actsFormedUnder: [
+    "business_corporations_act",
     "canada_business_corporations_act",
     "canada_not_for_profit_corporations_act",
     "business_corporations_act__ontario_",

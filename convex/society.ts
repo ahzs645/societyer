@@ -1,6 +1,9 @@
 // @ts-nocheck
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
+import { entitySetupFields, validateEntitySetup, validateFormationEvidence } from "../shared/entitySetup";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { integrationSettingsValidator } from "./lib/integrationSettings";
 import { disabledModulesValidator } from "./lib/moduleSettings";
 import { assertAllowedOption } from "./lib/orgHubOptions";
 import { seedSociety } from "./seedRecordTableMetadata";
@@ -18,6 +21,7 @@ import {
   updateComplianceSettingsPortable,
   updateInventorySettingsPortable,
   updateNotificationSettingsPortable,
+  updateIntegrationSettingsPortable,
   getPortable,
   listPortable,
   getByIdPortable,
@@ -33,19 +37,19 @@ import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { buildConvexCapabilities } from "./providers/capabilities";
 import { getOwned, requireSocietyMembership } from "../shared/functions/access";
 
-export const get = query({
+export const get = authorizedQuery("society:get", query)({
   args: {},
   returns: v.any(),
   handler: async (ctx) => getPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), {}),
 });
 
-export const list = query({
+export const list = authorizedQuery("society:list", query)({
   args: {},
   returns: v.any(),
   handler: async (ctx) => listPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx))),
 });
 
-export const getById = query({
+export const getById = authorizedQuery("society:getById", query)({
   args: { id: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => getByIdPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
@@ -53,43 +57,43 @@ export const getById = query({
 
 const withStorageCaps = async (ctx) => await toPortableMutationCtx(ctx, buildConvexCapabilities(ctx));
 
-export const setLogo = mutation({
+export const setLogo = authorizedMutation("society:setLogo", mutation)({
   args: { societyId: v.id("societies"), storageId: v.id("_storage") },
   returns: v.id("societies"),
   handler: async (ctx, args) => setLogoPortable(await withStorageCaps(ctx), args),
 });
 
-export const clearLogo = mutation({
+export const clearLogo = authorizedMutation("society:clearLogo", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.id("societies"),
   handler: async (ctx, args) => clearLogoPortable(await withStorageCaps(ctx), args),
 });
 
-export const setDarkLogo = mutation({
+export const setDarkLogo = authorizedMutation("society:setDarkLogo", mutation)({
   args: { societyId: v.id("societies"), storageId: v.id("_storage") },
   returns: v.id("societies"),
   handler: async (ctx, args) => setDarkLogoPortable(await withStorageCaps(ctx), args),
 });
 
-export const clearDarkLogo = mutation({
+export const clearDarkLogo = authorizedMutation("society:clearDarkLogo", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.id("societies"),
   handler: async (ctx, args) => clearDarkLogoPortable(await withStorageCaps(ctx), args),
 });
 
-export const setLetterhead = mutation({
+export const setLetterhead = authorizedMutation("society:setLetterhead", mutation)({
   args: { societyId: v.id("societies"), storageId: v.id("_storage") },
   returns: v.id("societies"),
   handler: async (ctx, args) => setLetterheadPortable(await withStorageCaps(ctx), args),
 });
 
-export const clearLetterhead = mutation({
+export const clearLetterhead = authorizedMutation("society:clearLetterhead", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.id("societies"),
   handler: async (ctx, args) => clearLetterheadPortable(await withStorageCaps(ctx), args),
 });
 
-export const setLogoInvertInDarkMode = mutation({
+export const setLogoInvertInDarkMode = authorizedMutation("society:setLogoInvertInDarkMode", mutation)({
   args: {
     societyId: v.id("societies"),
     invert: v.boolean(),
@@ -98,7 +102,7 @@ export const setLogoInvertInDarkMode = mutation({
   handler: async (ctx, args) => setLogoInvertInDarkModePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsert = mutation({
+export const upsert = authorizedMutation("society:upsert", mutation)({
   args: {
     id: v.optional(v.id("societies")),
     name: v.string(),
@@ -111,6 +115,27 @@ export const upsert = mutation({
     anniversaryDate: v.optional(v.string()),
     corporationKeyVaultItemId: v.optional(v.id("secretVaultItems")),
     entityType: v.optional(v.string()),
+    legalSubtype: v.optional(v.string()),
+    formationStatus: v.optional(v.string()),
+    certificateEvidenceDocumentId: v.optional(v.id("documents")),
+    certificateReference: v.optional(v.string()),
+    certificateDate: v.optional(v.string()),
+    craBnStatus: v.optional(v.string()),
+    craRcStatus: v.optional(v.string()),
+    gstHstStatus: v.optional(v.string()),
+    payrollStatus: v.optional(v.string()),
+    charityStatus: v.optional(v.string()),
+    taxStatusEvidence: v.optional(v.string()),
+    annualReferenceDate: v.optional(v.string()),
+    annualMeetingDate: v.optional(v.string()),
+    agmExtensionDate: v.optional(v.string()),
+    agmExtensionEvidence: v.optional(v.string()),
+    iscAwarenessDate: v.optional(v.string()),
+    iscRegisterEntryDate: v.optional(v.string()),
+    transparencyAwarenessDate: v.optional(v.string()),
+    transparencyEntryDate: v.optional(v.string()),
+    transparencyCessationEntryDate: v.optional(v.string()),
+    annualMeetingYear: v.optional(v.number()),
     actFormedUnder: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
     numbered: v.optional(v.boolean()),
@@ -175,6 +200,11 @@ export const upsert = mutation({
         );
       }
     }
+    const formation = { ...(id ? await ctx.db.get(id) : {}), ...rest };
+    validateEntitySetup(formation);
+    const certificate = formation.certificateEvidenceDocumentId ? await getOwned(portable, "documents", formation.certificateEvidenceDocumentId, id ?? "") : undefined;
+    const certificateVersions = certificate ? await ctx.db.query("documentVersions").withIndex("by_document", (q) => q.eq("documentId", certificate._id)).collect() : [];
+    validateFormationEvidence(formation, id, certificate, certificateVersions);
     assertAllowedOption("entityTypes", rest.entityType, "Entity type");
     assertAllowedOption("actsFormedUnder", rest.actFormedUnder, "Act formed under");
     assertAllowedOption("organizationStatuses", rest.organizationStatus, "Organization status");
@@ -189,6 +219,7 @@ export const upsert = mutation({
     }
     const payload = {
       ...rest,
+      incorporationDate: formation.formationStatus === "incorporated" ? formation.certificateDate : rest.incorporationDate,
       homeJurisdictionCode: rest.homeJurisdictionCode ?? rest.jurisdictionCode,
       anniversaryDate: rest.anniversaryDate ?? rest.incorporationDate,
       updatedAt: Date.now(),
@@ -231,7 +262,7 @@ export const upsert = mutation({
   },
 });
 
-export const createWorkspace = mutation({
+export const createWorkspace = authorizedMutation("society:createWorkspace", mutation)({
   args: {
     name: v.string(),
     incorporationNumber: v.optional(v.string()),
@@ -242,6 +273,27 @@ export const createWorkspace = mutation({
     anniversaryDate: v.optional(v.string()),
     corporationKeyVaultItemId: v.optional(v.id("secretVaultItems")),
     entityType: v.optional(v.string()),
+    legalSubtype: v.optional(v.string()),
+    formationStatus: v.optional(v.string()),
+    certificateEvidenceDocumentId: v.optional(v.id("documents")),
+    certificateReference: v.optional(v.string()),
+    certificateDate: v.optional(v.string()),
+    craBnStatus: v.optional(v.string()),
+    craRcStatus: v.optional(v.string()),
+    gstHstStatus: v.optional(v.string()),
+    payrollStatus: v.optional(v.string()),
+    charityStatus: v.optional(v.string()),
+    taxStatusEvidence: v.optional(v.string()),
+    annualReferenceDate: v.optional(v.string()),
+    annualMeetingDate: v.optional(v.string()),
+    agmExtensionDate: v.optional(v.string()),
+    agmExtensionEvidence: v.optional(v.string()),
+    iscAwarenessDate: v.optional(v.string()),
+    iscRegisterEntryDate: v.optional(v.string()),
+    transparencyAwarenessDate: v.optional(v.string()),
+    transparencyEntryDate: v.optional(v.string()),
+    transparencyCessationEntryDate: v.optional(v.string()),
+    annualMeetingYear: v.optional(v.number()),
     actFormedUnder: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
     numbered: v.optional(v.boolean()),
@@ -256,6 +308,8 @@ export const createWorkspace = mutation({
     isCharity: v.optional(v.boolean()),
     isMemberFunded: v.optional(v.boolean()),
     actingUserId: v.optional(v.id("users")),
+    continuanceDate: v.optional(v.string()),
+    amalgamationDate: v.optional(v.string()),
     // Auto-seed the entity's document packet catalog on creation (default true).
     seedDocumentPackets: v.optional(v.boolean()),
   },
@@ -270,6 +324,8 @@ export const createWorkspace = mutation({
     if (args.fiscalYearEnd && !/^\d{2}-\d{2}$/.test(args.fiscalYearEnd)) {
       throw new Error("Fiscal year end must use MM-DD format.");
     }
+    validateEntitySetup(args);
+    validateFormationEvidence(args);
     assertAllowedOption("entityTypes", args.entityType, "Entity type");
     assertAllowedOption("actsFormedUnder", args.actFormedUnder, "Act formed under");
     assertAllowedOption("organizationStatuses", args.organizationStatus, "Organization status");
@@ -288,6 +344,10 @@ export const createWorkspace = mutation({
       homeJurisdictionCode,
       anniversaryDate,
       corporationKeyVaultItemId: args.corporationKeyVaultItemId,
+      continuanceDate: blankToUndefined(args.continuanceDate),
+      amalgamationDate: blankToUndefined(args.amalgamationDate),
+      ...entitySetupFields(args),
+      formationStatus: args.formationStatus || "preparing",
       entityType: blankToUndefined(args.entityType),
       actFormedUnder: blankToUndefined(args.actFormedUnder),
       officialEmail: blankToUndefined(args.officialEmail),
@@ -396,7 +456,7 @@ export const createWorkspace = mutation({
   },
 });
 
-export const updateModules = mutation({
+export const updateModules = authorizedMutation("society:updateModules", mutation)({
   args: {
     societyId: v.id("societies"),
     disabledModules: disabledModulesValidator,
@@ -405,7 +465,7 @@ export const updateModules = mutation({
   handler: async (ctx, args) => updateModulesPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const cloneSociety = mutation({
+export const cloneSociety = authorizedMutation("society:cloneSociety", mutation)({
   args: { sourceSocietyId: v.id("societies"), newName: v.string(), nowISO: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => cloneSocietyPortable(await toPortableMutationCtx(ctx), args),
@@ -413,7 +473,7 @@ export const cloneSociety = mutation({
 
 // YCN-style compliance settings (AGM date + financials-prep waiver). Consumed by
 // shared/corporationSettings.ts to derive AGM / annual-report deadlines.
-export const updateComplianceSettings = mutation({
+export const updateComplianceSettings = authorizedMutation("society:updateComplianceSettings", mutation)({
   args: {
     societyId: v.id("societies"),
     agmMonth: v.optional(v.number()),
@@ -437,7 +497,7 @@ export const updateComplianceSettings = mutation({
   handler: async (ctx, args) => updateComplianceSettingsPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateInventorySettings = mutation({
+export const updateInventorySettings = authorizedMutation("society:updateInventorySettings", mutation)({
   args: {
     societyId: v.id("societies"),
     consumableIntakeCountPromptEnabled: v.boolean(),
@@ -446,7 +506,7 @@ export const updateInventorySettings = mutation({
   handler: async (ctx, args) => updateInventorySettingsPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateNotificationSettings = mutation({
+export const updateNotificationSettings = authorizedMutation("society:updateNotificationSettings", mutation)({
   args: {
     societyId: v.id("societies"),
     // Days dismissed notifications are retained before purge. 0 = keep forever.
@@ -505,3 +565,9 @@ export function buildWorkspaceOnboardingTasks(args: any) {
     },
   ];
 }
+
+export const updateIntegrationSettings = authorizedMutation("society:updateIntegrationSettings", mutation)({
+  args: { societyId: v.id("societies"), integrationSettings: integrationSettingsValidator },
+  returns: v.id("societies"),
+  handler: async (ctx, args) => updateIntegrationSettingsPortable(await toPortableMutationCtx(ctx), args),
+});

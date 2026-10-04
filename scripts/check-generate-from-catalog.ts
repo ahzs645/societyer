@@ -52,6 +52,31 @@ const corpGen = await client.mutation("legalOperations:generateDocumentFromCatal
 });
 assert.ok(corpGen.runId && corpGen.draftDocumentId, "corporation generate produced a draft document");
 
+// Entity mismatch must fail before creating a run or draft, including manual keys.
+const socRunsBefore = (await client.query("legalOperations:templateEngine", { societyId: soc.societyId })).runs.length;
+await assert.rejects(client.mutation("legalOperations:generateDocumentFromCatalog", {
+  societyId: soc.societyId, packetKey: "organize-corporation",
+}), /entity type/);
+await assert.rejects(client.mutation("legalOperations:generateDocumentFromCatalog", {
+  societyId: corp.societyId, packetKey: "society-directors-resolution",
+}), /entity type/);
+assert.equal((await client.query("legalOperations:templateEngine", { societyId: soc.societyId })).runs.length, socRunsBefore);
+const generated = (await client.query("documents:list", { societyId: corp.societyId })).find((row: any) => row._id === corpGen.draftDocumentId);
+const provenance = JSON.parse(generated.sourcePayloadJson).templateProvenance;
+assert.equal(provenance.templateId, "organize-corporation");
+assert.equal(provenance.documentState, "draft");
+assert.equal(provenance.signatureEvidence, null);
+assert.ok(provenance.templateSnapshot.sections.length > 0);
+
+// Ontario and specialist routes remain gated until their legal review is complete.
+const ontario = await client.mutation("society:createWorkspace", {
+  name: "Ontario review fixture", jurisdictionCode: "CA-ON-OBCA", entityType: "corporation__business_",
+  actFormedUnder: "business_corporations_act__ontario_",
+});
+await assert.rejects(client.mutation("legalOperations:generateDocumentFromCatalog", {
+  societyId: ontario.societyId, packetKey: "organize-corporation",
+}), /Ontario preparation remains under review/);
+
 // --- Unknown key throws ------------------------------------------------------
 let threw = false;
 try {

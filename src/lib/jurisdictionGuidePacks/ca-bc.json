@@ -263,9 +263,9 @@
         "confidence": "medium"
       },
       "content": {
-        "summary": "An AGM is generally held each calendar year, and the annual report is filed after the AGM.",
+        "summary": "AGM by December 31 each calendar year after the incorporation year. Report within 30 days after an actual or valid deemed AGM; without AGM, report by January 31 next year.",
         "tooltip": "For BC annual workflows, check the AGM date, any registrar extension, and the annual report timing against the Act for the meeting year.",
-        "caveat": "Registrar extensions and deemed AGMs can change the ordinary workflow.",
+        "caveat": "A registrar-authorized next-year AGM counts for the prior year. If its deadline is missed, report within 30 days of that deadline. Deemed AGM requires unanimous annual business and required financial statements.",
         "displayCitation": "BC Societies Act ss.71-73"
       },
       "priority": 30
@@ -781,9 +781,9 @@
         "confidence": "medium"
       },
       "content": {
-        "summary": "Special resolutions generally use a 2/3 voting threshold unless the Act or valid bylaws require more.",
+        "summary": "Meeting ordinary resolutions use a simple majority of votes cast; meeting special resolutions at least two-thirds. Written ordinary resolutions need two-thirds of all voting members after distribution to all; written special resolutions need every voting member.",
         "tooltip": "Use the meeting date's bylaw rule version for any higher threshold, especially bylaw or constitution amendments.",
-        "caveat": "Some actions have special statutory rules or limits on higher thresholds.",
+        "caveat": "Director decisions and authorized non-meeting electronic ballots require their own rules and legal electorate. Higher valid special thresholds may apply except statutory director removal.",
         "displayCitation": "BC Societies Act s.1"
       },
       "priority": 50

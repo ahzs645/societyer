@@ -90,6 +90,11 @@ export function LegalGuideTrackList({
 
   return (
     <div className="legal-guide-track-list">
+      {pack.metadata && <div className="muted" style={{ fontSize: "var(--fs-sm)", marginBottom: 8 }}>
+        <Badge tone={pack.metadata.status === "accepted" ? "success" : "warn"}>{pack.metadata.status === "draft" ? "Draft guide — review required" : `Guide status: ${pack.metadata.status}`}</Badge>
+        <div style={{ marginTop: 4 }}>Guide version {pack.metadata.version}; review recorded {formatDate(pack.metadata.reviewedAt)}. Effective dates and source consolidation dates are shown separately on each citation.</div>
+        <div>{pack.metadata.legalDisclaimer}</div>
+      </div>}
       {rules.map((rule) => (
         <div className="legal-guide-track" key={rule.id}>
           <div className="legal-guide-track__top">

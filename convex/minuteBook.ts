@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -7,13 +8,13 @@ import {
 } from "../shared/functions/minuteBook";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const overview = query({
+export const overview = authorizedQuery("minuteBook:overview", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => overviewPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsert = mutation({
+export const upsert = authorizedMutation("minuteBook:upsert", mutation)({
   args: {
     id: v.optional(v.id("minuteBookItems")),
     societyId: v.id("societies"),
@@ -37,7 +38,7 @@ export const upsert = mutation({
   handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("minuteBook:remove", mutation)({
   args: { id: v.id("minuteBookItems") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

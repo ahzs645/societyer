@@ -12,6 +12,7 @@ import {
   ensureCurrentMembershipPortable,
   type MembershipResolution,
 } from "../shared/functions/users";
+import { hashInvitationToken } from "../shared/functions/invitationTokens";
 import { seedNewSocietyOwnerPortable } from "../shared/functions/society";
 import {
   MemoryDb,
@@ -29,6 +30,7 @@ type IdentityRow = PortableDoc & {
   displayName?: string;
   authProvider?: string;
   authSubject?: string;
+  authIssuer?: string;
   status?: string;
 };
 
@@ -46,9 +48,10 @@ function reconcile(rows: IdentityRow[], source: string): ReconciliationReport {
   const emailGroups = new Map<string, IdentityRow[]>();
   for (const row of rows) {
     if (row.authSubject) {
-      const group = subjectGroups.get(row.authSubject) ?? [];
+      const identityKey = JSON.stringify([row.authIssuer ?? "<unresolved-issuer>", row.authSubject]);
+      const group = subjectGroups.get(identityKey) ?? [];
       group.push(row);
-      subjectGroups.set(row.authSubject, group);
+      subjectGroups.set(identityKey, group);
     }
     if (row.societyId && row.email) {
       const key = `${row.societyId}:${row.email.trim().toLowerCase()}`;
@@ -59,13 +62,13 @@ function reconcile(rows: IdentityRow[], source: string): ReconciliationReport {
   }
 
   const duplicateSubjects = [...subjectGroups]
-    .filter(([, group]) => group.length > 1)
+    .filter(([, group]) => new Set(group.map((row) => row.societyId)).size < group.length)
     .map(([subject, group]) => ({ subject, userIds: group.map((row) => row._id) }));
   const ambiguities = [
     ...[...subjectGroups]
       .filter(([, group]) => new Set(group.map((row) => row.societyId)).size < group.length)
       .map(([subject, group]) => ({
-        kind: "subject-reused-within-society",
+        kind: "issuer-subject-reused-within-society",
         key: subject,
         userIds: group.map((row) => row._id),
       })),
@@ -77,6 +80,9 @@ function reconcile(rows: IdentityRow[], source: string): ReconciliationReport {
         userIds: group.map((row) => row._id),
       })),
   ];
+  for (const row of rows) {
+    if (row.authSubject && !row.authIssuer) ambiguities.push({ kind: "missing-auth-issuer", key: row._id, userIds: [row._id] });
+  }
   const rowsWithoutSubject = rows
     .filter((row) => !row.authSubject)
     .map((row) => ({ userId: row._id, societyId: row.societyId, email: row.email }));
@@ -134,6 +140,7 @@ async function checkBindingBehavior() {
           role: "Member",
           status: "Active",
           authProvider: "better-auth",
+          authIssuer: "https://auth.example.test",
           authSubject: "bound-subject",
           createdAtISO: "2025-01-01T00:00:00.000Z",
         },
@@ -145,6 +152,7 @@ async function checkBindingBehavior() {
           role: "Admin",
           status: "Active",
           authProvider: "better-auth",
+          authIssuer: "https://auth.example.test",
           authSubject: "admin-subject",
           createdAtISO: "2025-01-01T00:00:00.000Z",
         },
@@ -180,13 +188,21 @@ async function checkBindingBehavior() {
           _id: "bound-invite",
           societyId: "society-b",
           email: "new@example.org",
-          role: "Owner",
+          role: "Member",
           token: "inv_bound",
           createdAtISO: "2026-01-01T00:00:00.000Z",
         },
       ],
     },
   });
+  for (const invitation of db.dump("invitations")) {
+    await db.patch(invitation._id, {
+      token: undefined,
+      tokenHash: await hashInvitationToken(String(invitation.token)),
+      expiresAtISO: new Date(Date.now() + 86400000).toISOString(),
+      invitedByUserId: invitation.societyId === "society-a" ? "admin-user" : "bound-user",
+    });
+  }
   let principal: PortablePrincipal = {
     kind: "user",
     runtime: "test",
@@ -220,7 +236,7 @@ async function checkBindingBehavior() {
       handler: revokePortable,
     }))
     .register(definePortableMutation({
-      name: "society:createForIdentityCheck",
+      name: "society:create",
       handler: async (ctx, args: { name: string; officialEmail?: string }) => {
         const societyId = await ctx.db.insert("societies", {
           name: args.name,
@@ -238,7 +254,7 @@ async function checkBindingBehavior() {
       },
     }))
     .register(definePortableMutation({
-      name: "apiPlatform:bootstrapUserIdentityForCheck",
+      name: "apiPlatform:bootstrapUserIdentity",
       handler: bootstrapUserIdentityPortable,
     }));
 
@@ -254,7 +270,7 @@ async function checkBindingBehavior() {
     name: "Verified Creator",
   };
   const createdSocietyId = await runtime.runMutation<string>(
-    "society:createForIdentityCheck",
+    "society:create",
     { name: "Creator Society", officialEmail: "placeholder@example.org" },
   );
   const creatorOwner = db.dump("users").find(
@@ -265,12 +281,12 @@ async function checkBindingBehavior() {
   assert.equal(creatorOwner?.authProvider, "better-auth");
   assert.equal(creatorOwner?.email, "creator@example.org");
   assert.equal(creatorOwner?.displayName, "Verified Creator");
-  const creatorInvitationId = await runtime.runMutation<string>("invitations:create", {
+  const creatorInvitation = await runtime.runMutation<{ id: string; token: string }>("invitations:create", {
     societyId: createdSocietyId,
     email: "invitee@example.org",
     role: "Member",
   });
-  assert.equal((await db.get(creatorInvitationId))?.invitedByUserId, creatorOwner?._id);
+  assert.equal((await db.get(creatorInvitation.id))?.invitedByUserId, creatorOwner?._id);
 
   principal = {
     kind: "user",
@@ -281,7 +297,7 @@ async function checkBindingBehavior() {
     name: "Local User",
   };
   const localSocietyId = await runtime.runMutation<string>(
-    "society:createForIdentityCheck",
+    "society:create",
     { name: "Local Society", officialEmail: "local-placeholder@example.org" },
   );
   const localOwner = db.dump("users").find((row) => row.societyId === localSocietyId);
@@ -314,7 +330,7 @@ async function checkBindingBehavior() {
       email: "attacker@example.org",
       role: "Owner",
     }),
-    /Authentication required/,
+    /Authentication required|Society membership not found/,
   );
 
   principal = {
@@ -322,12 +338,12 @@ async function checkBindingBehavior() {
     subject: "admin-subject",
     email: "admin@example.org",
   };
-  const managedInvitationId = await runtime.runMutation<string>("invitations:create", {
+  const managedInvitation = await runtime.runMutation<{ id: string; token: string }>("invitations:create", {
     societyId: "society-a",
     email: "managed@example.org",
     role: "Member",
   });
-  assert.equal((await db.get(managedInvitationId))?.invitedByUserId, "admin-user");
+  assert.equal((await db.get(managedInvitation.id))?.invitedByUserId, "admin-user");
 
   principal = {
     ...principal,
@@ -385,21 +401,23 @@ async function checkBindingBehavior() {
   assert.equal((await db.get("bound-user"))?.role, "Member");
 
   await assert.rejects(
-    () => runtime.runMutation("apiPlatform:bootstrapUserIdentityForCheck", {
+    () => runtime.runMutation("apiPlatform:bootstrapUserIdentity", {
       userId: "bound-user",
       authSubject: "replacement-subject",
       authProvider: "better-auth",
+      authIssuer: "https://auth.example.test",
     }),
     /already bound to a different auth subject/,
   );
   assert.equal((await db.get("bound-user"))?.authSubject, "bound-subject");
 
   const bootstrappedId = await runtime.runMutation<string>(
-    "apiPlatform:bootstrapUserIdentityForCheck",
+    "apiPlatform:bootstrapUserIdentity",
     {
       userId: "operator-placeholder",
       authSubject: "operator-bound-subject",
       authProvider: "better-auth",
+      authIssuer: "https://auth.example.test",
     },
   );
   assert.equal(bootstrappedId, "operator-placeholder");

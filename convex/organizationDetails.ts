@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -13,25 +14,25 @@ import {
 } from "../shared/functions/organizationDetails";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const overview = query({
+export const overview = authorizedQuery("organizationDetails:overview", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => overviewPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const seedFromSocietyAddresses = mutation({
+export const seedFromSocietyAddresses = authorizedMutation("organizationDetails:seedFromSocietyAddresses", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => seedFromSocietyAddressesPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const backfillFromExistingRecords = mutation({
+export const backfillFromExistingRecords = authorizedMutation("organizationDetails:backfillFromExistingRecords", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => backfillFromExistingRecordsPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertAddress = mutation({
+export const upsertAddress = authorizedMutation("organizationDetails:upsertAddress", mutation)({
   args: {
     id: v.optional(v.id("organizationAddresses")),
     societyId: v.id("societies"),
@@ -52,16 +53,18 @@ export const upsertAddress = mutation({
   handler: async (ctx, args) => upsertAddressPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeAddress = mutation({
+export const removeAddress = authorizedMutation("organizationDetails:removeAddress", mutation)({
   args: { id: v.id("organizationAddresses") },
   returns: v.any(),
   handler: async (ctx, args) => removeAddressPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertRegistration = mutation({
+export const upsertRegistration = authorizedMutation("organizationDetails:upsertRegistration", mutation)({
   args: {
     id: v.optional(v.id("organizationRegistrations")),
     societyId: v.id("societies"),
+    corporationClass: v.optional(v.string()),
+    licenceEvidenceDocumentId: v.optional(v.id("documents")),
     registrationType: v.optional(v.string()),
     jurisdiction: v.string(),
     homeJurisdiction: v.optional(v.string()),
@@ -90,13 +93,13 @@ export const upsertRegistration = mutation({
   handler: async (ctx, args) => upsertRegistrationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeRegistration = mutation({
+export const removeRegistration = authorizedMutation("organizationDetails:removeRegistration", mutation)({
   args: { id: v.id("organizationRegistrations") },
   returns: v.any(),
   handler: async (ctx, args) => removeRegistrationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertIdentifier = mutation({
+export const upsertIdentifier = authorizedMutation("organizationDetails:upsertIdentifier", mutation)({
   args: {
     id: v.optional(v.id("organizationIdentifiers")),
     societyId: v.id("societies"),
@@ -114,7 +117,7 @@ export const upsertIdentifier = mutation({
   handler: async (ctx, args) => upsertIdentifierPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeIdentifier = mutation({
+export const removeIdentifier = authorizedMutation("organizationDetails:removeIdentifier", mutation)({
   args: { id: v.id("organizationIdentifiers") },
   returns: v.any(),
   handler: async (ctx, args) => removeIdentifierPortable(await toPortableMutationCtx(ctx), args),

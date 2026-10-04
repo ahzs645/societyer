@@ -11,6 +11,7 @@
  * generation) stays in convex/firm.ts.
  */
 
+import { documentAccessPredicate } from "./documents";
 import type { PortableQueryCtx } from "../portable/ctx";
 import { organizationKind, organizationLabel } from "../organizationDomain";
 import { postIncorporationStepsForOrganization } from "../postIncorporationSteps";
@@ -101,7 +102,14 @@ export async function searchPortable(ctx: PortableQueryCtx, { query: term }: { q
   for (const d of deadlines) {
     results.push({ kind: "deadline", id: String(d._id), title: d.title, societyId: String(d.societyId), societyName: nameOf(String(d.societyId)), to: "/app/deadlines" });
   }
-  for (const d of documents) {
+  const allowedDocuments = new Set<string>();
+  for (const societyId of new Set(documents.map((document) => String(document.societyId)))) {
+    try {
+      const allows = await documentAccessPredicate(ctx, societyId);
+      for (const document of documents) if (allows(document)) allowedDocuments.add(String(document._id));
+    } catch { /* Foreign societies produce no document search results. */ }
+  }
+  for (const d of documents.filter((document) => allowedDocuments.has(String(document._id)))) {
     results.push({ kind: "document", id: String(d._id), title: d.title, societyId: String(d.societyId), societyName: nameOf(String(d.societyId)), to: "/app/documents" });
   }
   for (const p of people) {

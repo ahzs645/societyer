@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -8,13 +9,13 @@ import {
 } from "../shared/functions/memberProposals";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("memberProposals:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => memberProposalsList(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("memberProposals:create", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.optional(v.id("meetings")),
@@ -31,7 +32,7 @@ export const create = mutation({
   handler: async (ctx, args) => memberProposalCreate(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("memberProposals:update", mutation)({
   args: {
     id: v.id("memberProposals"),
     patch: v.object({
@@ -50,7 +51,7 @@ export const update = mutation({
   handler: async (ctx, args) => memberProposalUpdate(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("memberProposals:remove", mutation)({
   args: { id: v.id("memberProposals") },
   returns: v.any(),
   handler: async (ctx, args) => memberProposalRemove(await toPortableMutationCtx(ctx), args),

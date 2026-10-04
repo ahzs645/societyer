@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import {
@@ -31,67 +32,67 @@ import {
 } from "../shared/functions/accounting";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const chartAccounts = query({
+export const chartAccounts = authorizedQuery("accounting:chartAccounts", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => chartAccountsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const fiscalPeriods = query({
+export const fiscalPeriods = authorizedQuery("accounting:fiscalPeriods", query)({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => fiscalPeriodsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const counterparties = query({
+export const counterparties = authorizedQuery("accounting:counterparties", query)({
   args: { societyId: v.id("societies"), kind: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => counterpartiesPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const fundRestrictions = query({
+export const fundRestrictions = authorizedQuery("accounting:fundRestrictions", query)({
   args: { societyId: v.id("societies"), status: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => fundRestrictionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const restrictedFundBalances = query({
+export const restrictedFundBalances = authorizedQuery("accounting:restrictedFundBalances", query)({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => restrictedFundBalancesPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const accountMappings = query({
+export const accountMappings = authorizedQuery("accounting:accountMappings", query)({
   args: { societyId: v.id("societies"), provider: v.optional(v.string()), status: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => accountMappingsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const journalEntries = query({
+export const journalEntries = authorizedQuery("accounting:journalEntries", query)({
   args: { societyId: v.id("societies"), status: v.optional(v.string()), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, args) => journalEntriesPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const journalEntry = query({
+export const journalEntry = authorizedQuery("accounting:journalEntry", query)({
   args: { id: v.id("journalEntries") },
   returns: v.any(),
   handler: async (ctx, args) => journalEntryPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const trialBalance = query({
+export const trialBalance = authorizedQuery("accounting:trialBalance", query)({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => trialBalancePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const generalLedger = query({
+export const generalLedger = authorizedQuery("accounting:generalLedger", query)({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()), accountId: v.optional(v.id("financialAccounts")) },
   returns: v.any(),
   handler: async (ctx, args) => generalLedgerPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const exportCsv = query({
+export const exportCsv = authorizedQuery("accounting:exportCsv", query)({
   args: {
     societyId: v.id("societies"),
     kind: v.string(),
@@ -101,7 +102,7 @@ export const exportCsv = query({
   handler: async (ctx, args) => exportCsvPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const boardAuditorPackage = query({
+export const boardAuditorPackage = authorizedQuery("accounting:boardAuditorPackage", query)({
   args: {
     societyId: v.id("societies"),
     fiscalYear: v.optional(v.string()),
@@ -111,19 +112,19 @@ export const boardAuditorPackage = query({
   handler: async (ctx, args) => boardAuditorPackagePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const ensureSocietyerConnection = mutation({
+export const ensureSocietyerConnection = authorizedMutation("accounting:ensureSocietyerConnection", mutation)({
   args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => ensureSocietyerConnectionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const seedSocietyChartOfAccounts = mutation({
+export const seedSocietyChartOfAccounts = authorizedMutation("accounting:seedSocietyChartOfAccounts", mutation)({
   args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => seedSocietyChartOfAccountsPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertFiscalPeriod = mutation({
+export const upsertFiscalPeriod = authorizedMutation("accounting:upsertFiscalPeriod", mutation)({
   args: {
     id: v.optional(v.id("accountingFiscalPeriods")),
     societyId: v.id("societies"),
@@ -139,19 +140,19 @@ export const upsertFiscalPeriod = mutation({
   handler: async (ctx, args) => upsertFiscalPeriodPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const closeFiscalPeriod = mutation({
+export const closeFiscalPeriod = authorizedMutation("accounting:closeFiscalPeriod", mutation)({
   args: { id: v.id("accountingFiscalPeriods"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => closeFiscalPeriodPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const reopenFiscalPeriod = mutation({
+export const reopenFiscalPeriod = authorizedMutation("accounting:reopenFiscalPeriod", mutation)({
   args: { id: v.id("accountingFiscalPeriods"), notes: v.optional(v.string()), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => reopenFiscalPeriodPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertCounterparty = mutation({
+export const upsertCounterparty = authorizedMutation("accounting:upsertCounterparty", mutation)({
   args: {
     id: v.optional(v.id("accountingCounterparties")),
     societyId: v.id("societies"),
@@ -168,7 +169,7 @@ export const upsertCounterparty = mutation({
   handler: async (ctx, args) => upsertCounterpartyPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertFundRestriction = mutation({
+export const upsertFundRestriction = authorizedMutation("accounting:upsertFundRestriction", mutation)({
   args: {
     id: v.optional(v.id("fundRestrictions")),
     societyId: v.id("societies"),
@@ -187,7 +188,7 @@ export const upsertFundRestriction = mutation({
   handler: async (ctx, args) => upsertFundRestrictionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertAccountMapping = mutation({
+export const upsertAccountMapping = authorizedMutation("accounting:upsertAccountMapping", mutation)({
   args: {
     id: v.optional(v.id("accountingAccountMappings")),
     societyId: v.id("societies"),
@@ -206,7 +207,7 @@ export const upsertAccountMapping = mutation({
   handler: async (ctx, args) => upsertAccountMappingPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertJournalEntry = mutation({
+export const upsertJournalEntry = authorizedMutation("accounting:upsertJournalEntry", mutation)({
   args: {
     id: v.optional(v.id("journalEntries")),
     societyId: v.id("societies"),
@@ -246,7 +247,7 @@ export const upsertJournalEntry = mutation({
   handler: async (ctx, args) => upsertJournalEntryPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const postTransactionCandidate = mutation({
+export const postTransactionCandidate = authorizedMutation("accounting:postTransactionCandidate", mutation)({
   args: {
     transactionCandidateId: v.id("transactionCandidates"),
     cashAccountId: v.id("financialAccounts"),
@@ -264,7 +265,7 @@ export const postTransactionCandidate = mutation({
   handler: async (ctx, args) => postTransactionCandidatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const postTransactionCandidateAllocation = mutation({
+export const postTransactionCandidateAllocation = authorizedMutation("accounting:postTransactionCandidateAllocation", mutation)({
   args: {
     transactionCandidateId: v.id("transactionCandidates"),
     cashAccountId: v.id("financialAccounts"),
@@ -289,7 +290,7 @@ export const postTransactionCandidateAllocation = mutation({
   handler: async (ctx, args) => postTransactionCandidateAllocationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const backfillFinancialTransactionsToJournal = mutation({
+export const backfillFinancialTransactionsToJournal = authorizedMutation("accounting:backfillFinancialTransactionsToJournal", mutation)({
   args: {
     societyId: v.id("societies"),
     fiscalYear: v.optional(v.string()),
@@ -300,7 +301,7 @@ export const backfillFinancialTransactionsToJournal = mutation({
   handler: async (ctx, args) => backfillFinancialTransactionsToJournalPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const postOpeningBalances = mutation({
+export const postOpeningBalances = authorizedMutation("accounting:postOpeningBalances", mutation)({
   args: {
     societyId: v.id("societies"),
     date: v.string(),
@@ -323,7 +324,7 @@ export const postOpeningBalances = mutation({
   handler: async (ctx, args) => postOpeningBalancesPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createReconciliationRun = mutation({
+export const createReconciliationRun = authorizedMutation("accounting:createReconciliationRun", mutation)({
   args: {
     societyId: v.id("societies"),
     financialAccountId: v.id("financialAccounts"),
@@ -337,7 +338,7 @@ export const createReconciliationRun = mutation({
   handler: async (ctx, args) => createReconciliationRunPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const setReconciliationRunStatus = mutation({
+export const setReconciliationRunStatus = authorizedMutation("accounting:setReconciliationRunStatus", mutation)({
   args: { id: v.id("reconciliationRuns"), status: v.string(), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => setReconciliationRunStatusPortable(await toPortableMutationCtx(ctx), args),

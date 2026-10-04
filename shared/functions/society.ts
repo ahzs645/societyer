@@ -15,6 +15,9 @@ import type {
   PortablePrincipal,
   PortableQueryCtx,
 } from "../portable/ctx";
+import { validateIntegrationSettings, type IntegrationSettings } from "../integrationSettings";
+import { requirePermissionPortable } from "./permissions";
+import { matchesVerifiedIdentity, ensureExternalIdentityPortable } from "./identity";
 import { claimStorageId, requireAuthenticated, requireSocietyMembership } from "./access";
 
 export type NewSocietyOwnerInput = {
@@ -33,6 +36,7 @@ type NewSocietyOwnerFields = {
   createdAtISO: string;
   authProvider?: string;
   authSubject?: string;
+  authIssuer?: string;
   emailVerifiedAtISO?: string;
   lastLoginAtISO?: string;
 };
@@ -73,6 +77,7 @@ export function newSocietyOwnerFields(
     createdAtISO: input.createdAtISO,
     authProvider: principal.authProvider || principal.issuer,
     authSubject: principal.subject,
+    authIssuer: principal.issuer,
     emailVerifiedAtISO: principal.emailVerified ? input.createdAtISO : undefined,
     lastLoginAtISO: input.createdAtISO,
   };
@@ -82,7 +87,10 @@ export async function seedNewSocietyOwnerPortable(
   ctx: PortableMutationCtx,
   input: NewSocietyOwnerInput,
 ): Promise<string> {
-  return ctx.db.insert("users", newSocietyOwnerFields(ctx.principal, input));
+  const fields = newSocietyOwnerFields(ctx.principal, input);
+  const externalIdentityId = fields.authIssuer && fields.authSubject
+    ? await ensureExternalIdentityPortable(ctx, fields.authIssuer, fields.authSubject) : undefined;
+  return ctx.db.insert("users", { ...fields, ...(externalIdentityId ? { externalIdentityId } : {}) });
 }
 
 /** Resolve a society's logo/letterhead blob ids to URLs via the storage capability. */
@@ -128,10 +136,10 @@ async function principalMemberships(ctx: PortableQueryCtx): Promise<PortableDoc[
     .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
     .collect();
   const activeMemberships = memberships.filter(
-    (membership) => !membership.status || membership.status === "Active",
+    (membership) => matchesVerifiedIdentity(membership, principal) && (!membership.status || membership.status === "Active"),
   );
   if (!activeMemberships.length) throw new Error("Society membership not found.");
-  return activeMemberships;
+  return Promise.all(activeMemberships.map((membership) => requireSocietyMembership(ctx, String(membership.societyId))));
 }
 
 export async function getPortable(ctx: PortableQueryCtx, _args: Record<string, never>) {
@@ -372,5 +380,16 @@ export async function updateNotificationSettingsPortable(
     notificationRetentionDays: Math.max(0, Math.round(notificationRetentionDays)),
     updatedAt: Date.now(),
   });
+  return societyId;
+}
+
+/** Storage policy/evidence changes are privileged; neither tokens nor connections are minted here. */
+export async function updateIntegrationSettingsPortable(
+  ctx: PortableMutationCtx,
+  { societyId, integrationSettings }: { societyId: string; integrationSettings: IntegrationSettings },
+) {
+  await requirePermissionPortable(ctx, societyId, "settings:manage");
+  const settings = validateIntegrationSettings(integrationSettings);
+  await ctx.db.patch(societyId, { integrationSettings: settings, updatedAt: Date.now() });
   return societyId;
 }

@@ -1,3 +1,4 @@
+import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { action, internalMutation, mutation, query } from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
@@ -24,19 +25,19 @@ const transcriptSegment = v.object({
   endSec: v.number(),
 });
 
-export const getByMeeting = query({
+export const getByMeeting = authorizedQuery("transcripts:getByMeeting", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => getByMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const jobForMeeting = query({
+export const jobForMeeting = authorizedQuery("transcripts:jobForMeeting", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => jobForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const createJob = mutation({
+export const createJob = authorizedMutation("transcripts:createJob", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
@@ -46,7 +47,7 @@ export const createJob = mutation({
   handler: async (ctx, args) => createJobPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateJob = mutation({
+export const updateJob = authorizedMutation("transcripts:updateJob", mutation)({
   args: {
     id: v.id("transcriptionJobs"),
     patch: v.object({
@@ -60,7 +61,7 @@ export const updateJob = mutation({
   handler: async (ctx, args) => updateJobPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const saveTranscript = mutation({
+export const saveTranscript = authorizedMutation("transcripts:saveTranscript", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
@@ -77,7 +78,7 @@ export const saveTranscript = mutation({
     saveTranscriptPortable(await toPortableMutationCtx(ctx), args) as Promise<Id<"transcripts">>,
 });
 
-export const saveText = mutation({
+export const saveText = authorizedMutation("transcripts:saveText", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
@@ -93,7 +94,7 @@ export const saveText = mutation({
     saveTextPortable(await toPortableMutationCtx(ctx), args) as Promise<Id<"transcripts">>,
 });
 
-export const importVtt = mutation({
+export const importVtt = authorizedMutation("transcripts:importVtt", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
@@ -120,7 +121,7 @@ export const _claimPipelineStorage = internalMutation({
 
 // End-to-end action: kick off transcription, then summarize into a minute
 // draft that's saved in the `minutes` table.
-export const runPipeline = action({
+export const runPipeline = authorizedAction("transcripts:runPipeline", action)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),

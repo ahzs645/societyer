@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./lib/untypedServer";
 import {
@@ -12,7 +13,7 @@ import {
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import { getOwned, principalUserId, requireSocietyMembership } from "../shared/functions/access";
 
-export const listThreads = query({
+export const listThreads = authorizedQuery("aiChat:listThreads", query)({
   args: {
     societyId: v.id("societies"),
     limit: v.optional(v.number()),
@@ -21,7 +22,7 @@ export const listThreads = query({
   handler: async (ctx, args) => listThreadsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const messagesForThread = query({
+export const messagesForThread = authorizedQuery("aiChat:messagesForThread", query)({
   args: {
     threadId: v.id("aiChatThreads"),
   },
@@ -29,7 +30,7 @@ export const messagesForThread = query({
   handler: async (ctx, args) => messagesForThreadPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const getThread = query({
+export const getThread = authorizedQuery("aiChat:getThread", query)({
   args: {
     threadId: v.id("aiChatThreads"),
   },
@@ -37,7 +38,7 @@ export const getThread = query({
   handler: async (ctx, args) => getThreadPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const createThread = mutation({
+export const createThread = authorizedMutation("aiChat:createThread", mutation)({
   args: {
     societyId: v.id("societies"),
     title: v.optional(v.string()),
@@ -50,7 +51,7 @@ export const createThread = mutation({
   handler: async (ctx, args) => createThreadPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const archiveThread = mutation({
+export const archiveThread = authorizedMutation("aiChat:archiveThread", mutation)({
   args: {
     threadId: v.id("aiChatThreads"),
   },
@@ -58,7 +59,7 @@ export const archiveThread = mutation({
   handler: async (ctx, args) => archiveThreadPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const renameThread = mutation({
+export const renameThread = authorizedMutation("aiChat:renameThread", mutation)({
   args: {
     threadId: v.id("aiChatThreads"),
     title: v.string(),
@@ -67,7 +68,7 @@ export const renameThread = mutation({
   handler: async (ctx, args) => renameThreadPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const deleteThread = mutation({
+export const deleteThread = authorizedMutation("aiChat:deleteThread", mutation)({
   args: {
     threadId: v.id("aiChatThreads"),
   },

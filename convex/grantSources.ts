@@ -1,3 +1,4 @@
+import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { BUILT_IN_GRANT_SOURCE_PROFILES, BUILT_IN_GRANT_SOURCES } from "../shared/grantSourceLibrary";
 import { action, internalMutation, mutation, query } from "./lib/untypedServer";
@@ -47,25 +48,25 @@ const sourcePatchValidator = v.object({
   notes: v.optional(v.string()),
 });
 
-export const library = query({
+export const library = authorizedQuery("grantSources:library", query)({
   args: {},
   returns: v.any(),
   handler: async (ctx, args) => libraryPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const list = query({
+export const list = authorizedQuery("grantSources:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listWithLibrary = query({
+export const listWithLibrary = authorizedQuery("grantSources:listWithLibrary", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listWithLibraryPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsert = mutation({
+export const upsert = authorizedMutation("grantSources:upsert", mutation)({
   args: {
     id: v.optional(v.id("grantSources")),
     societyId: v.id("societies"),
@@ -112,7 +113,7 @@ export const upsert = mutation({
   },
 });
 
-export const addFromLibrary = mutation({
+export const addFromLibrary = authorizedMutation("grantSources:addFromLibrary", mutation)({
   args: {
     societyId: v.id("societies"),
     libraryKey: v.string(),
@@ -122,13 +123,13 @@ export const addFromLibrary = mutation({
   handler: async (ctx, args) => addFromLibraryPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const getSource = query({
+export const getSource = authorizedQuery("grantSources:getSource", query)({
   args: { sourceId: v.id("grantSources") },
   returns: v.any(),
   handler: async (ctx, args) => getSourcePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const candidates = query({
+export const candidates = authorizedQuery("grantSources:candidates", query)({
   args: { societyId: v.id("societies"), sourceId: v.optional(v.id("grantSources")) },
   returns: v.any(),
   handler: async (ctx, args) => candidatesPortable(await toPortableQueryCtx(ctx), args),
@@ -137,7 +138,7 @@ export const candidates = query({
 // Manually add a grant opportunity to the review queue. The automated scraping
 // engine (grantSourceProfiles) is a separate, larger effort; this lets a user
 // populate and triage candidates by hand so the queue is functional today.
-export const createCandidate = mutation({
+export const createCandidate = authorizedMutation("grantSources:createCandidate", mutation)({
   args: {
     societyId: v.id("societies"),
     sourceId: v.optional(v.id("grantSources")),
@@ -154,7 +155,7 @@ export const createCandidate = mutation({
   handler: async (ctx, args) => createCandidatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const setCandidateStatus = mutation({
+export const setCandidateStatus = authorizedMutation("grantSources:setCandidateStatus", mutation)({
   args: { candidateId: v.id("grantOpportunityCandidates"), status: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => setCandidateStatusPortable(await toPortableMutationCtx(ctx), args),
@@ -217,7 +218,7 @@ export const _recordDiscoveredCandidates = internalMutation({
 // ones. HTML-selector scraping needs a DOM engine that isn't available
 // server-side — those sources report clearly and should use a feed or manual
 // entry instead.
-export const discoverFromSource = action({
+export const discoverFromSource = authorizedAction("grantSources:discoverFromSource", action)({
   args: { societyId: v.id("societies"), sourceId: v.id("grantSources"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx: any, { societyId, sourceId }: any) => {

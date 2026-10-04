@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -9,25 +10,25 @@ import {
 } from "../shared/functions/bylawRules";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const getActive = query({
+export const getActive = authorizedQuery("bylawRules:getActive", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => getActivePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const getForDate = query({
+export const getForDate = authorizedQuery("bylawRules:getForDate", query)({
   args: { societyId: v.id("societies"), dateISO: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => getForDatePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const list = query({
+export const list = authorizedQuery("bylawRules:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsertActive = mutation({
+export const upsertActive = authorizedMutation("bylawRules:upsertActive", mutation)({
   args: {
     id: v.optional(v.id("bylawRuleSets")),
     societyId: v.id("societies"),
@@ -81,7 +82,7 @@ export const upsertActive = mutation({
   handler: async (ctx, args) => upsertActivePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const resetToDefault = mutation({
+export const resetToDefault = authorizedMutation("bylawRules:resetToDefault", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => resetToDefaultPortable(await toPortableMutationCtx(ctx), args),

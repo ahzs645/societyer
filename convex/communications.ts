@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { action, internalMutation, mutation, query, type ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -307,25 +308,25 @@ async function resolveAudienceRecipients(
   );
 }
 
-export const listTemplates = query({
+export const listTemplates = authorizedQuery("communications:listTemplates", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listTemplatesPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const getTemplate = query({
+export const getTemplate = authorizedQuery("communications:getTemplate", query)({
   args: { id: v.id("communicationTemplates") },
   returns: v.any(),
   handler: async (ctx, args) => getTemplatePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listCampaigns = query({
+export const listCampaigns = authorizedQuery("communications:listCampaigns", query)({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, args) => listCampaignsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listDeliveries = query({
+export const listDeliveries = authorizedQuery("communications:listDeliveries", query)({
   args: {
     societyId: v.id("societies"),
     campaignId: v.optional(v.id("communicationCampaigns")),
@@ -336,19 +337,19 @@ export const listDeliveries = query({
   handler: async (ctx, args) => listDeliveriesPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listMemberPrefs = query({
+export const listMemberPrefs = authorizedQuery("communications:listMemberPrefs", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listMemberPrefsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listSegments = query({
+export const listSegments = authorizedQuery("communications:listSegments", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listSegmentsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsertTemplate = mutation({
+export const upsertTemplate = authorizedMutation("communications:upsertTemplate", mutation)({
   args: {
     id: v.optional(v.id("communicationTemplates")),
     societyId: v.id("societies"),
@@ -366,7 +367,7 @@ export const upsertTemplate = mutation({
   handler: async (ctx, args) => upsertTemplatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertSegment = mutation({
+export const upsertSegment = authorizedMutation("communications:upsertSegment", mutation)({
   args: {
     id: v.optional(v.id("communicationSegments")),
     societyId: v.id("societies"),
@@ -384,13 +385,13 @@ export const upsertSegment = mutation({
   handler: async (ctx, args) => upsertSegmentPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeSegment = mutation({
+export const removeSegment = authorizedMutation("communications:removeSegment", mutation)({
   args: { id: v.id("communicationSegments") },
   returns: v.any(),
   handler: async (ctx, args) => removeSegmentPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const ensureDefaultTemplates = mutation({
+export const ensureDefaultTemplates = authorizedMutation("communications:ensureDefaultTemplates", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
@@ -417,7 +418,7 @@ export const ensureDefaultTemplates = mutation({
   },
 });
 
-export const upsertMemberPref = mutation({
+export const upsertMemberPref = authorizedMutation("communications:upsertMemberPref", mutation)({
   args: {
     societyId: v.id("societies"),
     memberId: v.id("members"),
@@ -540,13 +541,13 @@ export const _recordDelivery = internalMutation({
   },
 });
 
-export const markDeliveryOpened = mutation({
+export const markDeliveryOpened = authorizedMutation("communications:markDeliveryOpened", mutation)({
   args: { id: v.id("communicationDeliveries") },
   returns: v.any(),
   handler: async (ctx, args) => markDeliveryOpenedPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const markDeliveryBounced = mutation({
+export const markDeliveryBounced = authorizedMutation("communications:markDeliveryBounced", mutation)({
   args: { id: v.id("communicationDeliveries"), errorMessage: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => markDeliveryBouncedPortable(await toPortableMutationCtx(ctx), args),
@@ -968,7 +969,7 @@ async function sendCampaignInternal(
   };
 }
 
-export const sendCampaign = action({
+export const sendCampaign = authorizedAction("communications:sendCampaign", action)({
   args: {
     societyId: v.id("societies"),
     templateId: v.optional(v.id("communicationTemplates")),
@@ -997,7 +998,7 @@ export const sendCampaign = action({
   },
 });
 
-export const sendMeetingNotice = action({
+export const sendMeetingNotice = authorizedAction("communications:sendMeetingNotice", action)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),

@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation, internalMutation, query } from "./lib/untypedServer";
 import { Id } from "./_generated/dataModel";
@@ -225,25 +226,25 @@ const SAFE_FIELD_ALLOWLIST: Record<string, string[]> = {
 
 const SENSITIVE_FIELD_RE = /(password|secret|token|key|credential|sin|ssn|birth|dob|phone|email|address|signature|bank|account|routing|card|private|notes)/i;
 
-export const listDefinitions = query({
+export const listDefinitions = authorizedQuery("aiAgents:listDefinitions", query)({
   args: {},
   returns: v.any(),
   handler: async (ctx) => listDefinitionsPortable(await toPortableQueryCtx(ctx)),
 });
 
-export const listSkills = query({
+export const listSkills = authorizedQuery("aiAgents:listSkills", query)({
   args: { societyId: v.optional(v.id("societies")) },
   returns: v.any(),
   handler: async (ctx, args) => listSkillsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listAllSkills = query({
+export const listAllSkills = authorizedQuery("aiAgents:listAllSkills", query)({
   args: { societyId: v.optional(v.id("societies")) },
   returns: v.any(),
   handler: async (ctx, args) => listAllSkillsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const loadSkills = query({
+export const loadSkills = authorizedQuery("aiAgents:loadSkills", query)({
   args: {
     societyId: v.optional(v.id("societies")),
     skillNames: v.array(v.string()),
@@ -252,7 +253,7 @@ export const loadSkills = query({
   handler: async (ctx, args) => loadSkillsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsertSkill = mutation({
+export const upsertSkill = authorizedMutation("aiAgents:upsertSkill", mutation)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -267,7 +268,7 @@ export const upsertSkill = mutation({
   handler: async (ctx, args) => upsertSkillPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const setSkillActive = mutation({
+export const setSkillActive = authorizedMutation("aiAgents:setSkillActive", mutation)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -278,7 +279,7 @@ export const setSkillActive = mutation({
   handler: async (ctx, args) => setSkillActivePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeSkill = mutation({
+export const removeSkill = authorizedMutation("aiAgents:removeSkill", mutation)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -288,13 +289,13 @@ export const removeSkill = mutation({
   handler: async (ctx, args) => removeSkillPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const listLogicFunctions = query({
+export const listLogicFunctions = authorizedQuery("aiAgents:listLogicFunctions", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listLogicFunctionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listToolDrafts = query({
+export const listToolDrafts = authorizedQuery("aiAgents:listToolDrafts", query)({
   args: {
     societyId: v.id("societies"),
     status: v.optional(v.string()),
@@ -304,7 +305,7 @@ export const listToolDrafts = query({
   handler: async (ctx, args) => listToolDraftsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const approveToolDraft = mutation({
+export const approveToolDraft = authorizedMutation("aiAgents:approveToolDraft", mutation)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -314,7 +315,7 @@ export const approveToolDraft = mutation({
   handler: async (ctx, args) => approveToolDraftPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const rejectToolDraft = mutation({
+export const rejectToolDraft = authorizedMutation("aiAgents:rejectToolDraft", mutation)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -324,7 +325,7 @@ export const rejectToolDraft = mutation({
   handler: async (ctx, args) => rejectToolDraftPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertLogicFunction = mutation({
+export const upsertLogicFunction = authorizedMutation("aiAgents:upsertLogicFunction", mutation)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -345,7 +346,7 @@ export const upsertLogicFunction = mutation({
   handler: async (ctx, args) => upsertLogicFunctionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const getToolCatalog = query({
+export const getToolCatalog = authorizedQuery("aiAgents:getToolCatalog", query)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -364,7 +365,7 @@ export const getToolCatalog = query({
   },
 });
 
-export const learnTools = query({
+export const learnTools = authorizedQuery("aiAgents:learnTools", query)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -391,7 +392,7 @@ export const learnTools = query({
   },
 });
 
-export const executeTool = mutation({
+export const executeTool = authorizedMutation("aiAgents:executeTool", mutation)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -445,7 +446,7 @@ export const executeTool = mutation({
   },
 });
 
-export const getChatContext = query({
+export const getChatContext = authorizedQuery("aiAgents:getChatContext", query)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -483,7 +484,7 @@ export const getChatContext = query({
 // Agent-scoped run context for the live (LLM) runner in aiChatActions.runAgentLive.
 // Mirrors getChatContext but narrows skills/tools to the selected agent and builds
 // an agent-specific system prompt, so the model acts as that agent.
-export const getAgentRunContext = query({
+export const getAgentRunContext = authorizedQuery("aiAgents:getAgentRunContext", query)({
   args: {
     societyId: v.id("societies"),
     agentKey: v.string(),
@@ -648,7 +649,7 @@ export const _recordAgentRun = internalMutation({
   },
 });
 
-export const listRuns = query({
+export const listRuns = authorizedQuery("aiAgents:listRuns", query)({
   args: {
     societyId: v.id("societies"),
     agentKey: v.optional(v.string()),
@@ -672,7 +673,7 @@ export const listRuns = query({
   },
 });
 
-export const auditForRun = query({
+export const auditForRun = authorizedQuery("aiAgents:auditForRun", query)({
   args: { runId: v.id("aiAgentRuns") },
   returns: v.any(),
   handler: async (ctx, { runId }) => {
@@ -689,7 +690,7 @@ export const auditForRun = query({
   },
 });
 
-export const runAgent = mutation({
+export const runAgent = authorizedMutation("aiAgents:runAgent", mutation)({
   args: {
     societyId: v.id("societies"),
     agentKey: v.string(),

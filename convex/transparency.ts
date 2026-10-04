@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import {
@@ -10,13 +11,13 @@ import {
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import { buildConvexCapabilities } from "./providers/capabilities";
 
-export const listPublications = query({
+export const listPublications = authorizedQuery("transparency:listPublications", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPublicationsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsertPublication = mutation({
+export const upsertPublication = authorizedMutation("transparency:upsertPublication", mutation)({
   args: {
     id: v.optional(v.id("publications")),
     societyId: v.id("societies"),
@@ -37,13 +38,13 @@ export const upsertPublication = mutation({
   handler: async (ctx, args): Promise<any> => upsertPublicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removePublication = mutation({
+export const removePublication = authorizedMutation("transparency:removePublication", mutation)({
   args: { id: v.id("publications"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args): Promise<void> => removePublicationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const publicCenter = query({
+export const publicCenter = authorizedQuery("transparency:publicCenter", query)({
   args: { slug: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args): Promise<any> => publicCenterPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),

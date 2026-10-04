@@ -103,7 +103,7 @@ function corporationPacketDocxBlocks(packet: CorporationDocumentPacket, context?
     { kind: "heading", text: "Required signers" },
     ...(packet.requiredSigners?.length ? packet.requiredSigners : ["Review signing requirements before use."])
       .map((text) => ({ kind: "listItem", text })),
-    ...(execution
+    ...(!packet.preparationOnly && execution
       ? [
           { kind: "heading", text: "Execution" },
           { kind: "paragraph", text: execution.adoptionClause },

@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -24,19 +25,19 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 // signatures) so the frontend keeps working; each handler now reads/writes the
 // motions table directly. The "backlog list" is the by_society_status query.
 
-export const list = query({
+export const list = authorizedQuery("motionBacklog:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const suggestForMeeting = query({
+export const suggestForMeeting = authorizedQuery("motionBacklog:suggestForMeeting", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => suggestForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("motionBacklog:create", mutation)({
   args: {
     societyId: v.id("societies"),
     title: v.string(),
@@ -49,7 +50,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("motionBacklog:update", mutation)({
   args: {
     backlogId: v.id("motions"),
     title: v.optional(v.string()),
@@ -61,13 +62,13 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("motionBacklog:remove", mutation)({
   args: { backlogId: v.id("motions") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createFromMinutesMotion = mutation({
+export const createFromMinutesMotion = authorizedMutation("motionBacklog:createFromMinutesMotion", mutation)({
   args: {
     minutesId: v.id("minutes"),
     motionIndex: v.number(),
@@ -78,7 +79,7 @@ export const createFromMinutesMotion = mutation({
   handler: async (ctx, args) => createFromMinutesMotionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createFromMinutesSection = mutation({
+export const createFromMinutesSection = authorizedMutation("motionBacklog:createFromMinutesSection", mutation)({
   args: {
     minutesId: v.id("minutes"),
     sectionIndex: v.number(),
@@ -90,13 +91,13 @@ export const createFromMinutesSection = mutation({
   handler: async (ctx, args) => createFromMinutesSectionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const seedPipaSetup = mutation({
+export const seedPipaSetup = authorizedMutation("motionBacklog:seedPipaSetup", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => seedPipaSetupPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const addToAgenda = mutation({
+export const addToAgenda = authorizedMutation("motionBacklog:addToAgenda", mutation)({
   args: {
     backlogId: v.id("motions"),
     agendaId: v.id("agendas"),
@@ -110,7 +111,7 @@ export const addToAgenda = mutation({
 // Used by "Schedule next meeting" so unfinished business becomes tracked motion
 // rows AND agenda items on the new meeting. Idempotent: deduped by source
 // minutes+motion index (motion row) and by motionId (agenda item).
-export const carryForwardToMeeting = mutation({
+export const carryForwardToMeeting = authorizedMutation("motionBacklog:carryForwardToMeeting", mutation)({
   args: {
     meetingId: v.id("meetings"),
     sourceMinutesId: v.id("minutes"),
@@ -120,7 +121,7 @@ export const carryForwardToMeeting = mutation({
   handler: async (ctx, args) => carryForwardToMeetingPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const seedToMinutes = mutation({
+export const seedToMinutes = authorizedMutation("motionBacklog:seedToMinutes", mutation)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => seedToMinutesPortable(await toPortableMutationCtx(ctx), args),

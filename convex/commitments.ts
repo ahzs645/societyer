@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -33,31 +34,31 @@ const commitmentFields = {
   notes: v.optional(v.string()),
 };
 
-export const list = query({
+export const list = authorizedQuery("commitments:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("commitments:get", query)({
   args: { id: v.id("commitments") },
   returns: v.any(),
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const eventsForSociety = query({
+export const eventsForSociety = authorizedQuery("commitments:eventsForSociety", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => eventsForSocietyPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const eventsForCommitment = query({
+export const eventsForCommitment = authorizedQuery("commitments:eventsForCommitment", query)({
   args: { commitmentId: v.id("commitments") },
   returns: v.any(),
   handler: async (ctx, args) => eventsForCommitmentPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("commitments:create", mutation)({
   args: {
     societyId: v.id("societies"),
     ...commitmentFields,
@@ -66,7 +67,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("commitments:update", mutation)({
   args: {
     id: v.id("commitments"),
     patch: v.object({
@@ -93,7 +94,7 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const recordEvent = mutation({
+export const recordEvent = authorizedMutation("commitments:recordEvent", mutation)({
   args: {
     commitmentId: v.id("commitments"),
     title: v.string(),
@@ -109,13 +110,13 @@ export const recordEvent = mutation({
   handler: async (ctx, args) => recordEventPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeEvent = mutation({
+export const removeEvent = authorizedMutation("commitments:removeEvent", mutation)({
   args: { id: v.id("commitmentEvents") },
   returns: v.any(),
   handler: async (ctx, args) => removeEventPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("commitments:remove", mutation)({
   args: { id: v.id("commitments") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

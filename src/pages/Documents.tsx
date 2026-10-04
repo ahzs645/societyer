@@ -46,6 +46,7 @@ export function DocumentsPage() {
   const remove = useMutation(api.documents.remove);
   const createDemoVersion = useMutation(api.documentVersions.createDemoVersion);
   const beginVersionUpload = useAction(api.documentVersions.beginUpload);
+  const completeUpload = useAction(api.documentVersions.completeUpload);
   const recordVersionUpload = useMutation(api.documentVersions.recordUploadedVersion);
   const syncDocument = useAction(api.paperless.syncDocument);
   const committees = useQuery(api.committees.list, society ? { societyId: society._id } : "skip");
@@ -97,6 +98,7 @@ export function DocumentsPage() {
       createDemoVersion,
       beginUpload: beginVersionUpload,
       recordUploadedVersion: recordVersionUpload,
+      completeUpload,
     });
     return result.versionId;
   };

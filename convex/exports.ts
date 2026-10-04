@@ -1,3 +1,4 @@
+import { authorizedQuery } from "./lib/authorizedServer";
 import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
@@ -214,13 +215,13 @@ export const EXPORTABLE_TABLES = [
   "partyPortals",
 ] as const;
 
-export const listExportableTables = query({
+export const listExportableTables = authorizedQuery("exports:listExportableTables", query)({
   args: { societyId: v.optional(v.id("societies")) },
   returns: v.any(),
   handler: async (ctx, args) => listExportableTablesPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const exportTable = query({
+export const exportTable = authorizedQuery("exports:exportTable", query)({
   args: {
     societyId: v.id("societies"),
     table: v.string(),
@@ -230,7 +231,7 @@ export const exportTable = query({
   handler: async (ctx, args) => exportTablePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const exportTablePage = query({
+export const exportTablePage = authorizedQuery("exports:exportTablePage", query)({
   args: {
     societyId: v.id("societies"),
     table: v.string(),
@@ -241,7 +242,7 @@ export const exportTablePage = query({
   handler: async (ctx, args) => exportTablePagePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const countTablePage = query({
+export const countTablePage = authorizedQuery("exports:countTablePage", query)({
   args: {
     societyId: v.id("societies"),
     table: v.string(),
@@ -251,7 +252,7 @@ export const countTablePage = query({
   handler: async (ctx, args) => countTablePagePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const exportAttachmentPage = query({
+export const exportAttachmentPage = authorizedQuery("exports:exportAttachmentPage", query)({
   args: {
     societyId: v.id("societies"),
     source: v.union(v.literal("documents"), v.literal("documentVersions")),
@@ -261,7 +262,7 @@ export const exportAttachmentPage = query({
   handler: async (ctx, args) => exportAttachmentPagePortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),
 });
 
-export const exportWorkspace = query({
+export const exportWorkspace = authorizedQuery("exports:exportWorkspace", query)({
   args: {
     societyId: v.id("societies"),
     includeEmptyTables: v.optional(v.boolean()),
@@ -271,7 +272,7 @@ export const exportWorkspace = query({
   handler: async (ctx, args) => exportWorkspacePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const validateCurrentDatabase = query({
+export const validateCurrentDatabase = authorizedQuery("exports:validateCurrentDatabase", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => validateCurrentDatabasePortable(await toPortableQueryCtx(ctx), args),

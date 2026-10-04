@@ -1,5 +1,7 @@
 export type CorporationDocumentPacket = {
   key: string;
+  preparationOnly?: boolean;
+  sourceUrls?: string[];
   templateName: string;
   packageName: string;
   summary: string;
@@ -23,10 +25,58 @@ export type CorporationDocumentPacket = {
 };
 
 const COMMON_ENTITY_TYPES = ["corporation__business_"];
-const COMMON_JURISDICTIONS = ["federal__canada_", "CA-FED-CBCA", "CA-ON-OBCA"];
+const COMMON_JURISDICTIONS = ["federal__canada_", "CA-FED-CBCA", "CA-BC", "british_columbia", "CA-ON-OBCA"];
 const COMMON_REVIEW_FIELDS = ["CorporationName", "Jurisdiction", "Articles", "Bylaws", "MinuteBook", "Directors", "Officers", "Shareholders", "ISCRegister"];
 
 export const CORPORATION_DOCUMENT_PACKETS: CorporationDocumentPacket[] = [
+  {
+    key: "bc-incorporation-agreement", templateName: "BC incorporation agreement — preparation draft",
+    packageName: "BC incorporation agreement preparation", preparationOnly: true,
+    summary: "An original working draft for the incorporators' agreement; review every subscription and execution detail before signing.",
+    documentTag: "incorporation_preparation", partType: "document", signatureRequired: false, requiredSigners: [],
+    requiredDataFields: ["CorporationName", "Incorporators", "ShareClasses", "ShareSubscriptions"],
+    optionalDataFields: ["AgreementDate", "NumberedCompany"], reviewDataFields: ["ShareRights", "IncorporatorEligibility", "ExecutionAuthority", "Articles", "NameApproval"],
+    jurisdictions: ["CA-BC", "british_columbia"],
+    sourceUrls: ["https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00", "https://www2.gov.bc.ca/gov/content/employment-business/business/managing-a-business/permits-licences/businesses-incorporated-companies/incorporated-companies"],
+    timeline: "Complete and sign a reviewed incorporation agreement before submitting the application.",
+    deliverable: "Editable original agreement draft with review prompts; no execution or registry acceptance is asserted.",
+    terms: "Ordinary private BC company only. Tailored legal review is required. Each incorporator must agree to take at least one share; a company, society or other authorized entity may be an incorporator. Verify signing authority. This draft does not reproduce a government form.",
+    sections: [
+      { heading: "Draft incorporation agreement", body: ["Proposed company: {org.name}.", "The incorporators listed below agree to form the company under the Business Corporations Act and agree to take the shares recorded opposite their names, subject to completion and review of this draft.", "[Insert each incorporator's full legal name, address, individual or entity status, and authority of any entity signatory.]", "[For each incorporator, state at least one subscribed share: class and series, number of shares, consideration and payment arrangements. Reconcile this schedule with the reviewed articles.]", "[Insert the agreed incorporation application particulars and the execution date. Obtain each incorporator's signature only after all review prompts are resolved.]" ] },
+      { heading: "Review and evidence", body: ["Retain the executed agreement with the articles at the records office. Preserve the incorporation application, certified notice of articles and certificate separately.", "Official statutory source: https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00 (ss. 10–12)." ] },
+    ],
+  },
+  {
+    key: "bc-articles-preparation", templateName: "BC articles — preparation draft", packageName: "BC ordinary private company articles preparation",
+    preparationOnly: true, summary: "Original articles drafting worksheet for an ordinary private BC company, including a share-rights schedule and governance choices.",
+    documentTag: "incorporation_preparation", partType: "document", signatureRequired: false, requiredSigners: [],
+    requiredDataFields: ["CorporationName", "ShareClasses", "RegisteredOffice", "RecordsOffice", "Directors"],
+    optionalDataFields: ["TransferRestrictions", "BusinessRestrictions", "AnnualReferenceDate"], reviewDataFields: ["Articles", "ShareRights", "SecuritiesExemptions", "Quorum", "DirectorAuthority", "SpecialCompanySubtype"],
+    jurisdictions: ["CA-BC", "british_columbia"], sourceUrls: ["https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00"],
+    timeline: "Review articles before incorporation and retain the executed version in the records office.",
+    deliverable: "Editable articles worksheet; unresolved drafting choices must be completed before execution or filing.",
+    terms: "Requires tailored legal review. ULC, community contribution and benefit company provisions are outside this ordinary private route. The articles, notice of articles and incorporation agreement must agree. This is original application-authored guidance, not the prescribed Table 1 articles.",
+    sections: [
+      { heading: "Proposed articles of {org.name}", body: ["[Record the proposed legal or numbered name and the date/version of these articles.]", "Share structure: [state each class/series, authorized maximum or unlimited number, par value if applicable, and the complete special rights and restrictions].", "Transfer and issuance: [state approved transfer restrictions, pre-emptive rights, subscription/payment terms and the treatment of share certificates]." ] },
+      { heading: "Governance clauses for review", body: ["[Draft shareholder and director meeting procedures, notice, quorum, voting, written resolutions, chair, proxies and adjournments consistent with the Act.]", "[Draft director number and qualification provisions, election/removal terms, officer appointment and delegated signing authority.]", "[Draft borrowing, dividends, records inspection, indemnity and amendment provisions within statutory limits.]", "[Record the BC registered and records offices in the notice of articles; confirm director consent and reconcile the notice with these articles.]" ] },
+      { heading: "Completion and official originals", body: ["Remove unresolved prompts only after a clause-by-clause legal review. Retain execution evidence independently from registry evidence.", "Official Act and prescribed provisions: https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02057_00. Use official originals for prescribed model wording." ] },
+    ],
+  },
+  {
+    key: "federal-articles-preparation", templateName: "Federal CBCA articles — preparation draft", packageName: "Federal CBCA incorporation articles preparation",
+    preparationOnly: true, summary: "Original worksheet to prepare the facts and schedules for the official federal business incorporation application.",
+    documentTag: "incorporation_preparation", partType: "document", signatureRequired: false, requiredSigners: [],
+    requiredDataFields: ["CorporationName", "RegisteredOfficeProvince", "ShareClasses", "Directors", "Incorporators"],
+    optionalDataFields: ["ShareTransferRestrictions", "BusinessRestrictions", "OtherProvisions"], reviewDataFields: ["CBCAArticles", "DirectorEligibility", "ShareRights", "NameApproval", "ISCInformation", "SecuritiesExemptions"],
+    jurisdictions: ["CA-FED-CBCA", "federal__canada_"], sourceUrls: ["https://laws-lois.justice.gc.ca/eng/acts/C-44/", "https://ised-isde.canada.ca/site/corporations-canada/en/business-corporations/how-incorporate-business"],
+    timeline: "Review and complete before submitting the official incorporation application.",
+    deliverable: "Editable incorporation facts and schedules worksheet; official filing and certificate evidence remain separate.",
+    terms: "Federal CBCA business corporation only; requires tailored legal review. Use the official application for submission. This original worksheet does not reproduce an ISED form layout or model articles.",
+    sections: [
+      { heading: "Articles preparation for {org.name}", body: ["Proposed corporate name: {org.name}. [Confirm a numbered or approved name and any required name-search evidence.]", "Registered office province/territory: [insert the jurisdiction to be stated in the articles]. Record the full office address separately for the official address notice.", "Share classes: [state authorized classes/series, maximum or unlimited quantities and each class's rights, privileges, restrictions and conditions].", "Transfer restrictions: [insert reviewed restrictions or expressly state none].", "Directors: [state a fixed number or the minimum and maximum number; verify eligibility, consents and applicable residency rules].", "Business restrictions and other provisions: [state reviewed restrictions, or expressly state none, and any additional lawful provisions]." ] },
+      { heading: "Application facts and registry evidence", body: ["[Record every incorporator and signing authority, first directors, registered office address and required ISC information in the official application.]", "After acceptance, retain the certificate, articles and official notices. A signed worksheet is not a certificate of incorporation.", "Official incorporation workflow: https://ised-isde.canada.ca/site/corporations-canada/en/business-corporations/how-incorporate-business. Statutory source: https://laws-lois.justice.gc.ca/eng/acts/C-44/." ] },
+    ],
+  },
   {
     key: "organize-corporation",
     templateName: "Organize corporation / initial resolutions",

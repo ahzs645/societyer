@@ -72,6 +72,7 @@
     "test:local-workspace-binding": "tsx scripts/check-local-workspace-binding.ts",
     "test:organization-domain": "tsx scripts/check-organization-domain.ts",
     "test:jurisdiction-modules": "tsx scripts/check-jurisdiction-modules.ts",
+    "test:incorporation-preparation": "tsx scripts/check-incorporation-preparation.ts",
     "test:post-incorporation-steps": "tsx scripts/check-post-incorporation-steps.ts",
     "test:post-incorporation-checklist-flow": "tsx scripts/check-post-incorporation-checklist-flow.ts",
     "test:firm-flow": "tsx scripts/check-firm-flow.ts",
@@ -143,7 +144,18 @@
     "test:motions-seed-to-minutes": "tsx scripts/check-motions-seed-to-minutes.ts",
     "test:meeting-template-materialize": "tsx scripts/check-meeting-template-materialize.ts",
     "test:bylaw-sections": "tsx scripts/check-bylaw-sections.ts",
-    "test:grant-feed-parsers": "tsx scripts/check-grant-feed-parsers.ts"
+    "test:grant-feed-parsers": "tsx scripts/check-grant-feed-parsers.ts",
+    "test:authorization-policy": "tsx scripts/check-authorization-policy.ts",
+    "test:hosted-identity": "tsx scripts/check-hosted-identity.ts",
+    "test:auth-broker": "tsx scripts/check-auth-broker.ts",
+    "test:document-security": "tsx scripts/check-document-security.ts",
+    "test:document-upload-binding": "tsx scripts/check-document-upload-binding.ts",
+    "test:integration-settings": "tsx scripts/check-integration-settings.ts",
+    "test:research-legal-boundaries": "tsx scripts/check-research-legal-boundaries.ts",
+    "test:research-implementation": "npm run test:authorization-policy && npm run test:hosted-identity && npm run test:auth-broker && npm run test:document-security && npm run test:document-upload-binding && npm run test:integration-settings && npm run test:research-legal-boundaries && npm run test:generate-from-catalog && npm run test:sharepoint-adapter && npm run test:generated-document-access && npm run test:incorporation-preparation",
+    "server:typecheck": "tsc -p tsconfig.server.json --noEmit",
+    "test:sharepoint-adapter": "tsx scripts/check-sharepoint-adapter.ts",
+    "test:generated-document-access": "tsx scripts/check-generated-document-access.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

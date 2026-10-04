@@ -2,10 +2,12 @@
   "schemaVersion": "1.0.0",
   "packId": "compliance-ca-on-obca",
   "status": "draft",
-  "version": "2026.06.04",
+  "version": "2026.10.04-research-draft",
   "reviewedAt": "2026-06-04",
   "jurisdictionCode": "CA-ON-OBCA",
-  "entityTypes": ["corporation__business_"],
+  "entityTypes": [
+    "corporation__business_"
+  ],
   "title": "Ontario OBCA compliance obligation pack",
   "description": "Draft operational schedules for core Ontario OBCA and Ontario Business Registry maintenance obligations.",
   "sourceGuidePackId": "ca-on-obca",
@@ -48,58 +50,91 @@
       "ruleId": "compliance-ca-on-obca-annual-meeting",
       "status": "draft",
       "title": "Annual meeting planning deadline",
-      "summary": "Track annual meeting planning against the fiscal year end.",
-      "obligationKey": "agm.annual_meeting",
+      "summary": "Hold the first annual meeting within 18 months after incorporation.",
+      "obligationKey": "agm.first_meeting",
       "appliesTo": {
-        "entityTypes": ["corporation__business_"],
-        "contextKinds": ["home"],
-        "homeJurisdictionCodes": ["CA-ON-OBCA"]
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-ON-OBCA"
+        ]
       },
       "schedule": {
-        "kind": "annual",
-        "anchorFact": "fiscalYearEnd",
-        "dueOffset": { "months": 6 }
+        "kind": "offset",
+        "anchorFact": "incorporationDate",
+        "dueOffset": {
+          "months": 18
+        }
       },
       "authority": {
         "guidePackId": "ca-on-obca",
-        "guideRuleIds": ["ca-on-obca-agm-timing"],
-        "sourceIds": ["ontario-business-registry"],
+        "guideRuleIds": [
+          "ca-on-obca-agm-timing"
+        ],
+        "sourceIds": [
+          "ontario-business-registry"
+        ],
         "displayCitation": "OBCA ss.94, 154"
       },
       "creates": {
-        "requiredEvidence": ["meetingMinutes", "shareholderResolution"],
+        "requiredEvidence": [
+          "meetingMinutes",
+          "shareholderResolution"
+        ],
         "checklist": [
           "Confirm annual meeting timing against fiscal year end.",
           "Prepare notice, agenda, and shareholder package.",
           "Archive minutes or written resolutions."
         ]
       },
-      "caveat": "Operational date only; articles, by-laws, waivers, and meeting history can affect the workflow."
+      "caveat": "Operational date only; articles, by-laws, waivers, and meeting history can affect the workflow.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
     },
     {
       "ruleId": "compliance-ca-on-obca-initial-return",
       "status": "draft",
       "title": "Initial return deadline",
-      "summary": "Track the initial Ontario Business Registry return from incorporation.",
+      "summary": "Ontario home corporations file the initial return within 60 days after incorporation.",
       "obligationKey": "registry.initial_return",
       "appliesTo": {
-        "entityTypes": ["corporation__business_"],
-        "contextKinds": ["home", "extra_provincial"]
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-ON-OBCA"
+        ]
       },
       "schedule": {
         "kind": "offset",
         "anchorFact": "incorporationDate",
-        "dueOffset": { "days": 60 }
+        "dueOffset": {
+          "days": 60
+        }
       },
       "authority": {
         "guidePackId": "ca-on-obca",
-        "guideRuleIds": ["ca-on-obca-obr-filings"],
-        "sourceIds": ["ontario-cia-initial-notice-change-corporation", "ontario-cia-initial-notice-change-extra-provincial"],
+        "guideRuleIds": [
+          "ca-on-obca-obr-filings"
+        ],
+        "sourceIds": [
+          "ontario-cia-initial-notice-change-corporation",
+          "ontario-cia-initial-notice-change-extra-provincial"
+        ],
         "displayCitation": "Ontario Business Registry filings"
       },
       "creates": {
         "filingKind": "OntarioInitialReturn",
-        "requiredEvidence": ["confirmationNumber", "profileReportEvidence"],
+        "requiredEvidence": [
+          "confirmationNumber",
+          "profileReportEvidence"
+        ],
         "checklist": [
           "Verify corporation number, registered/head office, directors, officers, and company key custody.",
           "Prepare the initial return filing packet.",
@@ -107,7 +142,8 @@
           "Capture confirmation number, receipt, and profile-report evidence."
         ]
       },
-      "caveat": "Confirm entity-specific Ontario Business Registry instructions and filing status."
+      "caveat": "Confirm entity-specific Ontario Business Registry instructions and filing status.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
     },
     {
       "ruleId": "compliance-ca-on-obca-annual-return-window",
@@ -116,31 +152,48 @@
       "summary": "Track an annual return filing window from fiscal year end to an operational six-month due date.",
       "obligationKey": "registry.annual_return",
       "appliesTo": {
-        "entityTypes": ["corporation__business_"],
-        "contextKinds": ["home"],
-        "homeJurisdictionCodes": ["CA-ON-OBCA"]
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-ON-OBCA"
+        ]
       },
       "schedule": {
         "kind": "window",
         "recurrence": "annual",
         "opens": {
           "anchorFact": "fiscalYearEnd",
-          "offset": { "days": 1 }
+          "offset": {
+            "days": 1
+          }
         },
         "closes": {
           "anchorFact": "fiscalYearEnd",
-          "offset": { "months": 6 }
+          "offset": {
+            "months": 6
+          }
         }
       },
       "authority": {
         "guidePackId": "ca-on-obca",
-        "guideRuleIds": ["ca-on-obca-obr-filings"],
-        "sourceIds": ["ontario-cia-annual-return"],
+        "guideRuleIds": [
+          "ca-on-obca-obr-filings"
+        ],
+        "sourceIds": [
+          "ontario-cia-annual-return"
+        ],
         "displayCitation": "Ontario Business Registry filings"
       },
       "creates": {
         "filingKind": "OntarioAnnualReturn",
-        "requiredEvidence": ["confirmationNumber", "receiptOrAcknowledgement"],
+        "requiredEvidence": [
+          "confirmationNumber",
+          "receiptOrAcknowledgement"
+        ],
         "checklist": [
           "Review Ontario Business Registry profile data.",
           "Prepare the annual return filing packet.",
@@ -149,6 +202,161 @@
         ]
       },
       "caveat": "Draft operational window; confirm current Ontario Business Registry annual-return instructions before filing."
+    },
+    {
+      "ruleId": "compliance-ca-on-extra-provincial-initial-return",
+      "status": "draft",
+      "title": "Ontario extra-provincial initial return deadline",
+      "summary": "The initial return clock starts when the corporation begins business in Ontario.",
+      "obligationKey": "registry.initial_return",
+      "appliesTo": {
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "extra_provincial"
+        ]
+      },
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "commencedBusinessDate",
+        "dueOffset": {
+          "days": 60
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-on-obca",
+        "guideRuleIds": [
+          "ca-on-obca-obr-filings"
+        ],
+        "sourceIds": [
+          "ontario-cia-initial-notice-change-corporation",
+          "ontario-cia-initial-notice-change-extra-provincial"
+        ],
+        "displayCitation": "Ontario Business Registry filings"
+      },
+      "creates": {
+        "filingKind": "OntarioInitialReturn",
+        "requiredEvidence": [
+          "confirmationNumber",
+          "profileReportEvidence"
+        ],
+        "checklist": [
+          "Verify corporation number, registered/head office, directors, officers, and company key custody.",
+          "Prepare the initial return filing packet.",
+          "File through the Ontario Business Registry or approved service path.",
+          "Capture confirmation number, receipt, and profile-report evidence."
+        ]
+      },
+      "caveat": "Business commencement must be recorded explicitly. Home incorporation or registry registration dates cannot substitute.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
+    },
+    {
+      "ruleId": "compliance-ca-on-licensed-foreign-annual-return",
+      "status": "draft",
+      "title": "Ontario licensed foreign corporation annual return",
+      "summary": "Foreign corporations licensed under the Extra-Provincial Corporations Act file within six months after taxation year end.",
+      "obligationKey": "registry.annual_return",
+      "appliesTo": {
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "extra_provincial"
+        ],
+        "corporationClasses": [
+          "foreign_epca_licensed"
+        ]
+      },
+      "schedule": {
+        "kind": "window",
+        "recurrence": "annual",
+        "opens": {
+          "anchorFact": "fiscalYearEnd",
+          "offset": {
+            "days": 1
+          }
+        },
+        "closes": {
+          "anchorFact": "fiscalYearEnd",
+          "offset": {
+            "months": 6
+          }
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-on-obca",
+        "guideRuleIds": [
+          "ca-on-obca-obr-filings"
+        ],
+        "sourceIds": [
+          "ontario-cia-annual-return"
+        ],
+        "displayCitation": "Ontario Business Registry filings"
+      },
+      "creates": {
+        "filingKind": "OntarioAnnualReturn",
+        "requiredEvidence": [
+          "confirmationNumber",
+          "receiptOrAcknowledgement"
+        ],
+        "checklist": [
+          "Review Ontario Business Registry profile data.",
+          "Prepare the annual return filing packet.",
+          "File through the Ontario Business Registry or approved service path.",
+          "Archive confirmation, receipt, and profile-report evidence."
+        ]
+      },
+      "caveat": "Only an evidenced foreign EPCA licence establishes this class; ordinary federal CBCA registrations are excluded.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
+    },
+    {
+      "ruleId": "compliance-ca-on-obca-subsequent-agm",
+      "status": "draft",
+      "title": "Subsequent annual meeting deadline",
+      "summary": "Hold the subsequent annual meeting within 15 months after the preceding AGM.",
+      "obligationKey": "agm.subsequent_meeting",
+      "appliesTo": {
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "home"
+        ],
+        "homeJurisdictionCodes": [
+          "CA-ON-OBCA"
+        ]
+      },
+      "schedule": {
+        "kind": "offset",
+        "anchorFact": "annualReferenceDate",
+        "dueOffset": {
+          "months": 15
+        }
+      },
+      "authority": {
+        "guidePackId": "ca-on-obca",
+        "guideRuleIds": [
+          "ca-on-obca-agm-timing"
+        ],
+        "sourceIds": [
+          "ontario-business-registry"
+        ],
+        "displayCitation": "OBCA ss.94, 154"
+      },
+      "creates": {
+        "requiredEvidence": [
+          "meetingMinutes",
+          "shareholderResolution"
+        ],
+        "checklist": [
+          "Confirm annual meeting timing against fiscal year end.",
+          "Prepare notice, agenda, and shareholder package.",
+          "Archive minutes or written resolutions."
+        ]
+      },
+      "caveat": "Operational date only; articles, by-laws, waivers, and meeting history can affect the workflow.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
     }
   ]
 }

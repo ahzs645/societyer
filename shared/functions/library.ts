@@ -7,12 +7,13 @@
  * oracle. The grouping/section helpers below are pure and `ctx.db`-free.
  */
 
+import { documentAccessPredicate } from "./documents";
 import type { PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
 
 export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
-  const [documents, materials] = await Promise.all([
+  const [allDocuments, allMaterials] = await Promise.all([
     ctx.db
       .query("documents")
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
@@ -22,6 +23,11 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
       .withIndex("by_society", (q) => q.eq("societyId", societyId))
       .collect(),
   ]);
+
+  const allows = await documentAccessPredicate(ctx, societyId);
+  const documents = allDocuments.filter((document) => allows(document));
+  const visibleIds = new Set(documents.map((document) => String(document._id)));
+  const materials = allMaterials.filter((material) => visibleIds.has(String(material.documentId)));
 
   const meetingIds = Array.from(new Set<string>((materials as any[]).map((row) => String(row.meetingId))));
   const meetings = await Promise.all(meetingIds.map((id) => getOwned(ctx, "meetings", String(id), societyId)));

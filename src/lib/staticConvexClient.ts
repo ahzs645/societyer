@@ -1,5 +1,6 @@
+import { getStoredUserId } from "../hooks/useCurrentUser";
 import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
-import { PortableRuntime } from "../../shared/portable/define";
+import { definePortableQuery, PortableRuntime } from "../../shared/portable/define";
 import type { PortableDoc, PortablePrincipal, RuntimeKind } from "../../shared/portable/ctx";
 import { LocalStoreDb } from "../../shared/portable/localRowStore";
 import { PORTABLE_FUNCTIONS } from "../../shared/functions/registry";
@@ -94,9 +95,10 @@ export class StaticConvexClient {
   ): PortablePrincipal {
     const users = (this.store.listRows("users") ?? []) as PortableDoc[];
     const eligible = users.filter(
-      (row) => typeof row.societyId === "string" && row.status !== "Disabled",
+      (row) => typeof row.societyId === "string" && (!row.status || row.status === "Active"),
     );
-    const user = eligible.find((row) => row.role === "Owner") ?? eligible[0];
+    const selectedId = typeof window !== "undefined" ? getStoredUserId() : null;
+    const user = eligible.find((row) => row._id === selectedId) ?? eligible.find((row) => row.role === "Owner") ?? eligible[0];
     return {
       kind: "user",
       runtime: workspace.runtime,
@@ -133,16 +135,20 @@ export class StaticConvexClient {
     return this.clientUrl;
   }
 
+  private registerLegacyQuery(name: string) {
+    if (this.portable.has(name)) throw new Error(`Function ${name} is not a query.`);
+    this.portable.register(definePortableQuery({ name, applicationPolicy: true,
+      handler: async (_ctx, args) => mutableQueryResult(name, args, this.store),
+    }));
+  }
+
   watchQuery(query: any, args?: StaticArgs) {
     const name = functionName(query);
     const kind = this.portable.kind(name);
     if (kind === "query") return this.portableQueries.watchQuery(name, args);
     warnLegacyFallback(name, kind, "watchQuery");
-    return {
-      onUpdate: (callback: () => void) => this.store.onUpdate(callback),
-      localQueryResult: () => mutableQueryResult(name, args, this.store),
-      journal: () => undefined,
-    };
+    this.registerLegacyQuery(name);
+    return this.portableQueries.watchQuery(name, args);
   }
 
   watchPaginatedQuery(
@@ -154,14 +160,8 @@ export class StaticConvexClient {
     const kind = this.portable.kind(name);
     if (kind === "query") return this.portableQueries.watchPaginatedQuery(name, args, options);
     warnLegacyFallback(name, kind, "watchPaginatedQuery");
-    return {
-      onUpdate: (callback: () => void) => this.store.onUpdate(callback),
-      localQueryResult: () => ({
-        results: mutableQueryResult(name, args, this.store) ?? [],
-        status: "Exhausted",
-        loadMore: () => undefined,
-      }),
-    };
+    this.registerLegacyQuery(name);
+    return this.portableQueries.watchPaginatedQuery(name, args, options);
   }
 
   query(query: any, args?: StaticArgs) {
@@ -169,7 +169,7 @@ export class StaticConvexClient {
     const kind = this.portable.kind(name);
     if (kind === "query") return this.portable.runQuery(name, args ?? {});
     warnLegacyFallback(name, kind, "query");
-    return Promise.resolve(mutableQueryResult(name, args, this.store));
+    return this.portable.authorizeFunction(name, "query", args ?? {}).then(() => mutableQueryResult(name, args, this.store));
   }
 
   mutation(mutation: any, args?: StaticArgs) {
@@ -186,7 +186,7 @@ export class StaticConvexClient {
       return this.portable.runMutation(name, enriched);
     }
     warnLegacyFallback(name, kind, "mutation");
-    const result = Promise.resolve(mutationResult(name, args, this.store));
+    const result = this.portable.authorizeFunction(name, "mutation", args ?? {}).then(() => mutationResult(name, args, this.store));
     if (name === "society:createWorkspace") {
       // convex/society.createWorkspace seeds the record-table metadata for the
       // new society (seedSociety). The offline mirror doesn't, and the one-shot
@@ -209,7 +209,7 @@ export class StaticConvexClient {
   action(action: any, args?: StaticArgs) {
     const name = functionName(action);
     warnLegacyFallback(name, this.portable.kind(name), "action");
-    return Promise.resolve(mutationResult(name, args, this.store));
+    return this.portable.authorizeFunction(name, "action", args ?? {}).then(() => mutationResult(name, args, this.store));
   }
 
   prewarmQuery() {

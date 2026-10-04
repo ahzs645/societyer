@@ -1,3 +1,4 @@
+import { bylawBaselineForOrganization } from "../../shared/bylawBaselines";
 import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -491,10 +492,13 @@ export function MeetingDetailPage() {
   const transcriptProvider = transcriptOnFile
     ? transcriptRecord?.provider ?? (minutesDraftTranscript ? "manual" : null)
     : null;
-  const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
+  const requiresLegalQuorumRegister = bylawBaselineForOrganization(society, String(society?._id ?? "")).quorumRequiresLegalRegister;
+  const recordedQuorumSnapshot = getQuorumSnapshot(minutes, meeting);
+  const quorumSnapshot = requiresLegalQuorumRegister ? { ...recordedQuorumSnapshot, required: undefined } : recordedQuorumSnapshot;
   const presentCountForQuorum = quorumPresentCount(minutes);
   const activeProxyCount = (meetingProxies ?? []).filter((proxy: any) => !proxy.revokedAtISO).length;
   const calculatedQuorumMet = computedQuorumMet({
+    requiresLegalRegister: requiresLegalQuorumRegister,
     presentCount: presentCountForQuorum,
     activeProxyCount,
     required: quorumSnapshot.required ?? meeting.quorumRequired,
@@ -1193,7 +1197,7 @@ export function MeetingDetailPage() {
         heldAt: meeting.scheduledAt,
         attendees,
         absent: [],
-        quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
+        quorumMet: requiresLegalQuorumRegister || quorumRequired == null ? false : attendees.length >= quorumRequired,
         quorumRequired: quorumRequired ?? undefined,
         discussion: "",
         sections: [],
@@ -1383,7 +1387,7 @@ export function MeetingDetailPage() {
         heldAt: meeting.scheduledAt,
         attendees,
         absent: [],
-        quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
+        quorumMet: requiresLegalQuorumRegister || quorumRequired == null ? false : attendees.length >= quorumRequired,
         quorumRequired: quorumRequired ?? undefined,
         discussion: "",
         sections: next.map((entry) => {
@@ -1557,6 +1561,7 @@ export function MeetingDetailPage() {
         .filter(Boolean);
       const required = quorumSnapshot.required ?? meeting.quorumRequired;
       const quorumMet = computedQuorumMet({
+    requiresLegalRegister: requiresLegalQuorumRegister,
         presentCount: attendees.length,
         activeProxyCount,
         required,

@@ -164,6 +164,7 @@ export function motionMeetsThreshold(
   if (cast === 0) return null;
   const ratio = votesFor / cast;
   const threshold = thresholdFor(m.resolutionType, thresholds);
+  if (threshold === 2 / 3) return votesFor * 3 >= cast * 2;
   // A simple majority needs *more* than half (a tie loses); any super-majority
   // carries when the threshold is met exactly.
   return threshold === 0.5 ? ratio > 0.5 : ratio >= threshold;
@@ -254,18 +255,19 @@ export function findResolutionType(types: ResolutionType[], value?: string): Res
 
 /** Whether a motion's votes meet a given resolution type's threshold (votes-cast
  *  base). Bases other than votesCast need member/quorum context the inline
- *  indicator lacks and are approximated here as votes-cast. */
+ *  indicator lacks; without that context no legal judgement is returned. */
 export function motionCarriesByType(
-  m: { votesFor?: number; votesAgainst?: number },
+  m: { votesFor?: number; votesAgainst?: number; eligibleMembers?: number; quorumPresent?: number },
   type?: ResolutionType,
 ): boolean | null {
   const votesFor = m.votesFor ?? 0;
   const votesAgainst = m.votesAgainst ?? 0;
   const cast = votesFor + votesAgainst;
-  if (cast === 0) return null;
-  const ratio = votesFor / cast;
+  const denominator = type?.base === "eligibleMembers" ? m.eligibleMembers : type?.base === "quorum" ? m.quorumPresent : cast;
+  if (!denominator || denominator < cast || !Number.isFinite(denominator)) return null;
   const threshold = pctToThresholdFraction(type?.thresholdPct ?? 50);
-  return threshold === 0.5 ? ratio > 0.5 : ratio >= threshold;
+  if (threshold === 2 / 3) return votesFor * 3 >= denominator * 2;
+  return threshold === 0.5 ? votesFor * 2 > denominator : votesFor >= denominator * threshold;
 }
 
 /** Resolve a motion's configured type from the society's rules and report

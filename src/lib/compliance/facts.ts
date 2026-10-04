@@ -1,5 +1,6 @@
 import {
   homeJurisdictionCode,
+  canonicalizeJurisdictionCode,
   organizationEntityType,
   organizationLabel,
 } from "../../../shared/organizationDomain";
@@ -30,12 +31,14 @@ export function complianceFactsForOrganization(
 ): ComplianceFacts[] {
   const asOfDate = options.asOfDate ?? new Date().toISOString().slice(0, 10);
   const entityType = organizationEntityType(organization);
-  const homeJurisdiction = homeJurisdictionCode(organization);
+  const homeJurisdiction = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
   const homeFacts: ComplianceFacts = {
     jurisdictionCode: homeJurisdiction,
     entityType,
     entitySubtype: cleanText(organization.entitySubtype) || cleanText(organization.subtype) || undefined,
     homeJurisdictionCode: homeJurisdiction,
+    legalSubtype: organization.legalSubtype,
+    formationStatus: organization.formationStatus ?? "unverified",
     contextKind: "home",
     registrationType: "home",
     status: cleanText(organization.status) || undefined,
@@ -43,6 +46,11 @@ export function complianceFactsForOrganization(
     incorporationDate: organization.incorporationDate,
     anniversaryDate: organization.anniversaryDate ?? organization.incorporationDate,
     fiscalYearEnd: fiscalYearEndDateForCurrentCycle(organization.fiscalYearEnd, asOfDate),
+    annualMeetingDate: cleanText(organization.annualMeetingDate) || undefined,
+    annualMeetingYear: organization.annualMeetingYear,
+    annualReferenceDate: cleanText(organization.annualReferenceDate) || cleanText(organization.annualMeetingDate) || undefined,
+    agmExtensionDate: cleanText(organization.agmExtensionDate) || undefined,
+    agmExtensionEvidence: cleanText(organization.agmExtensionEvidence) || undefined,
     eventDates: organizationEventDates(organization),
     contextLabel: organizationLabel(organization),
   };
@@ -60,8 +68,14 @@ export function fiscalYearEndDateForCurrentCycle(fiscalYearEnd?: string | null, 
   if (/^\d{4}-\d{2}-\d{2}$/.test(fiscalYearEnd)) return fiscalYearEnd;
   if (!/^\d{2}-\d{2}$/.test(fiscalYearEnd)) return undefined;
   const currentYear = Number(asOfDate.slice(0, 4));
-  const candidate = `${currentYear}-${fiscalYearEnd}`;
-  return candidate > asOfDate ? `${currentYear - 1}-${fiscalYearEnd}` : candidate;
+  const [month, day] = fiscalYearEnd.split("-").map(Number);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
+  const candidateForYear = (year: number) => {
+    const maxDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return `${year}-${String(month).padStart(2, "0")}-${String(Math.min(day, maxDay)).padStart(2, "0")}`;
+  };
+  const candidate = candidateForYear(currentYear);
+  return candidate > asOfDate ? candidateForYear(currentYear - 1) : candidate;
 }
 
 function complianceFactsForRegistration(
@@ -71,9 +85,10 @@ function complianceFactsForRegistration(
 ): ComplianceFacts | null {
   const jurisdictionCode = registrationJurisdictionCode(registration.jurisdiction);
   if (!jurisdictionCode) return null;
-  const registrationAnchor = registration.registrationDate ?? registration.activityCommencementDate ?? organization.incorporationDate;
   return {
     jurisdictionCode,
+    legalSubtype: organization.legalSubtype,
+    formationStatus: organization.formationStatus ?? "unverified",
     entityType: organizationEntityType(organization),
     entitySubtype: cleanText(registration.entitySubtype) || cleanText(organization.entitySubtype) || undefined,
     homeJurisdictionCode: registrationJurisdictionCode(registration.homeJurisdiction) ?? homeJurisdictionCode(organization),
@@ -82,8 +97,8 @@ function complianceFactsForRegistration(
     corporationClass: registration.corporationClass ?? undefined,
     status: registration.status ?? undefined,
     asOfDate,
-    incorporationDate: registrationAnchor,
-    anniversaryDate: registration.annualReturnDueDate ?? registrationAnchor,
+    incorporationDate: organization.incorporationDate,
+    anniversaryDate: registration.registrationDate ?? undefined,
     fiscalYearEnd: fiscalYearEndDateForCurrentCycle(organization.fiscalYearEnd, asOfDate),
     registrationDate: registration.registrationDate ?? undefined,
     commencedBusinessDate: registration.activityCommencementDate ?? undefined,
@@ -130,7 +145,13 @@ function registrationNumberLabel(registration: RegistrationComplianceSource) {
 
 function organizationEventDates(organization: any): Record<string, string | undefined> {
   return {
-    iscChangeDate: cleanText(organization.iscChangeDate) || cleanText(organization.lastIscChangeDate) || undefined,
+    iscAwarenessDate: cleanText(organization.iscAwarenessDate) || undefined,
+    iscRegisterEntryDate: cleanText(organization.iscRegisterEntryDate) || undefined,
+    amalgamationDate: cleanText(organization.amalgamationDate) || undefined,
+    continuanceDate: cleanText(organization.continuanceDate) || undefined,
+    transparencyAwarenessDate: cleanText(organization.transparencyAwarenessDate) || undefined,
+    transparencyEntryDate: cleanText(organization.transparencyEntryDate) || undefined,
+    transparencyCessationEntryDate: cleanText(organization.transparencyCessationEntryDate) || undefined,
     directorChangeDate: cleanText(organization.directorChangeDate) || cleanText(organization.lastDirectorChangeDate) || undefined,
     registeredOfficeChangeDate:
       cleanText(organization.registeredOfficeChangeDate) ||

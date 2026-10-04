@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { authorizedAction, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { minutesMotionsForDisplay } from "../shared/minutesMotions";
 import { query, internalMutation, mutation, action } from "./_generated/server";
@@ -42,19 +43,19 @@ const STEP_DEFINITIONS: Record<string, { label: string; note?: string }[]> = {
   ],
 };
 
-export const listRuns = query({
+export const listRuns = authorizedQuery("filingBot:listRuns", query)({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, args) => listRunsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const runsForFiling = query({
+export const runsForFiling = authorizedQuery("filingBot:runsForFiling", query)({
   args: { filingId: v.id("filings") },
   returns: v.any(),
   handler: async (ctx, args) => runsForFilingPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const getRun = query({
+export const getRun = authorizedQuery("filingBot:getRun", query)({
   args: { id: v.id("filingBotRuns") },
   returns: v.any(),
   handler: async (ctx, args) => getRunPortable(await toPortableQueryCtx(ctx), args),
@@ -176,7 +177,7 @@ export const _patchFiling = internalMutation({
 // is what a signed off-platform automation (or a human operator) would paste
 // into Societies Online. In demo mode we also render it into a summary PDF
 // via an HTTP action — here we return the structured data.
-export const buildFilingPacket = query({
+export const buildFilingPacket = authorizedQuery("filingBot:buildFilingPacket", query)({
   args: { societyId: v.id("societies"), kind: v.string() },
   returns: v.any(),
   handler: async (ctx, { societyId, kind }) => {
@@ -263,7 +264,7 @@ export const buildFilingPacket = query({
 // ends in `manual_required` — the user files in the portal, then records the
 // real confirmation number via the normal Filings "mark filed" flow. It does
 // NOT fabricate a confirmation number or mark the filing Filed.
-export const run = action({
+export const run = authorizedAction("filingBot:run", action)({
   args: {
     societyId: v.id("societies"),
     filingId: v.id("filings"),

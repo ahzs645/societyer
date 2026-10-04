@@ -39,13 +39,13 @@ const cbcaByRule = new Map(cbcaObligations.map((obligation) => [obligation.ruleI
 
 assert.equal(
   cbcaByRule.get("compliance-ca-fed-cbca-annual-return-window")?.windowStartDate,
-  "2027-03-15",
-  "Past CBCA annual return window should roll forward to the next anniversary date",
+  "2026-03-15",
+  "Past CBCA annual return window should retain the latest commenced anniversary",
 );
 assert.equal(
   cbcaByRule.get("compliance-ca-fed-cbca-annual-return-window")?.dueDate,
-  "2027-05-14",
-  "Past annual window should roll forward to the next annual due date",
+  "2026-05-14",
+  "Past annual window should retain the overdue latest annual due date",
 );
 assert.equal(
   cbcaByRule.get("compliance-ca-fed-cbca-annual-return-window")?.creates?.filingKind,
@@ -63,7 +63,7 @@ assert.equal(
   "Offset obligation should add the configured offset to the incorporation date",
 );
 assert.equal(
-  cbcaByRule.get("compliance-ca-fed-cbca-isc-annual-review")?.creates?.filingKind,
+  cbcaByRule.get("compliance-ca-fed-cbca-isc-annual-filing")?.creates?.filingKind,
   "FederalIscUpdate",
   "CBCA ISC annual review should create an ISC update/review workflow",
 );
@@ -86,7 +86,7 @@ const cbcaEventObligations = computeComplianceObligations({
   ...cbcaFacts,
   asOfDate: "2026-06-04",
   eventDates: {
-    iscChangeDate: "2026-06-01",
+    iscRegisterEntryDate: "2026-06-01",
     directorChangeDate: "2026-06-02",
     registeredOfficeChangeDate: "2026-06-03",
   },
@@ -221,8 +221,8 @@ const bcCompanyObligations = computeComplianceObligations(bcCompanyFacts, packs)
 const bcCompanyByRule = new Map(bcCompanyObligations.map((obligation) => [obligation.ruleId, obligation]));
 assert.equal(
   bcCompanyByRule.get("compliance-ca-bc-company-annual-report")?.dueDate,
-  "2027-05-01",
-  "BC company annual report should compute within two months after the next anniversary",
+  "2026-05-01",
+  "BC company annual report should compute within two months after the commenced anniversary",
 );
 assert.equal(
   bcCompanyByRule.get("compliance-ca-bc-company-annual-report")?.creates?.filingKind,
@@ -251,6 +251,7 @@ const federalPlusOntarioFacts = complianceFactsForOrganization(federalWithOntari
       registrationType: "extra_provincial",
       jurisdiction: "CA-ON-OBCA",
       registrationDate: "2026-01-05",
+      activityCommencementDate: "2026-01-02",
       annualReturnDueDate: "2026-06-30",
       status: "active",
       registrationNumber: "ON-123",
@@ -261,17 +262,17 @@ assert.equal(federalPlusOntarioFacts.length, 2, "Home plus Ontario registration 
 const federalPlusOntarioObligations = federalPlusOntarioFacts.flatMap((facts) => computeComplianceObligations(facts, packs));
 const ontarioRegistrationInitial = federalPlusOntarioObligations.find(
   (obligation) =>
-    obligation.ruleId === "compliance-ca-on-obca-initial-return" &&
+    obligation.ruleId === "compliance-ca-on-extra-provincial-initial-return" &&
     obligation.sourceRegistrationId === "reg-on",
 );
 assert.equal(
   ontarioRegistrationInitial?.dueDate,
-  "2026-03-06",
-  "Ontario extra-provincial initial return should compute from registration date",
+  "2026-03-03",
+  "Ontario extra-provincial initial return should compute from Ontario business commencement",
 );
 assert.equal(
   ontarioRegistrationInitial?.contextKey,
-  "registration:reg-on:compliance-ca-on-obca-initial-return",
+  "registration:reg-on:compliance-ca-on-extra-provincial-initial-return",
   "Registration-backed obligations should have registration-specific decision keys",
 );
 assert.equal(
@@ -314,8 +315,8 @@ const bcRegistrationAnnual = federalPlusBcObligations.find(
 );
 assert.equal(
   bcRegistrationAnnual?.dueDate,
-  "2026-04-30",
-  "BC extra-provincial annual report should compute from registration annualReturnDueDate",
+  "2026-06-01",
+  "BC extra-provincial annual report should compute two calendar months after registration anniversary",
 );
 assert.equal(
   bcRegistrationAnnual?.creates?.filingKind,

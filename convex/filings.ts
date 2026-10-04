@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -12,25 +13,25 @@ import {
 } from "../shared/functions/filings";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const get = query({
+export const get = authorizedQuery("filings:get", query)({
   args: { id: v.id("filings") },
   returns: v.any(),
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const list = query({
+export const list = authorizedQuery("filings:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const guidance = query({
+export const guidance = authorizedQuery("filings:guidance", query)({
   args: { kind: v.string(), jurisdictionCode: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => guidancePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("filings:create", mutation)({
   args: {
     societyId: v.id("societies"),
     kind: v.string(),
@@ -50,7 +51,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const markFiled = mutation({
+export const markFiled = authorizedMutation("filings:markFiled", mutation)({
   args: {
     id: v.id("filings"),
     filedAt: v.string(),
@@ -68,7 +69,7 @@ export const markFiled = mutation({
   handler: async (ctx, args) => markFiledPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("filings:update", mutation)({
   args: {
     id: v.id("filings"),
     patch: v.object({
@@ -101,7 +102,7 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const importBcRegistryHistory = mutation({
+export const importBcRegistryHistory = authorizedMutation("filings:importBcRegistryHistory", mutation)({
   args: {
     societyId: v.id("societies"),
     records: v.array(
@@ -133,7 +134,7 @@ export const importBcRegistryHistory = mutation({
   handler: async (ctx, args) => importBcRegistryHistoryPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("filings:remove", mutation)({
   args: { id: v.id("filings") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

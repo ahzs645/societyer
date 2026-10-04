@@ -50,9 +50,17 @@ export function ComplianceObligationsPage() {
   const jurisdictionCode = homeJurisdictionCode(organization);
   const jurisdictionCopy = jurisdictionDisplayCopy(jurisdictionCode);
   const jurisdictionModule = jurisdictionModuleContract(jurisdictionCode);
-  const missingFacts = requiredFactLabels(facts);
-  const overdue = obligations.filter((obligation) => obligation.status === "overdue").length;
-  const dueToday = obligations.filter((obligation) => obligation.status === "due_today").length;
+  const missingFacts = [
+    ...requiredFactLabels(facts),
+    ...factsList.filter(item => item.contextKind === "extra_provincial").flatMap(item => item.jurisdictionCode === "CA-ON-OBCA" && !item.commencedBusinessDate
+      ? [`Ontario business commencement date (${item.contextLabel ?? "registration"})`]
+      : item.jurisdictionCode === "CA-BC" && !item.registrationDate ? [`BC registration date (${item.contextLabel ?? "registration"})`] : []),
+    ...(facts?.legalSubtype && ["unlimited_liability_company", "community_contribution_company", "benefit_company", "other"].includes(facts.legalSubtype) ? ["reviewed subtype rule pack before automated deadlines"] : []),
+  ];
+  const filingIsComplete = (obligation: (typeof obligations)[number]) => (filings ?? []).some(filing =>
+    filing.status === "Filed" && filingMatchKey(filing.kind, filing.dueDate, filing.sourceRegistrationId) === filingMatchKey(obligation.creates?.filingKind ?? "", obligation.dueDate, obligation.sourceRegistrationId));
+  const overdue = obligations.filter((obligation) => obligation.status === "overdue" && !filingIsComplete(obligation)).length;
+  const dueToday = obligations.filter((obligation) => obligation.status === "due_today" && !filingIsComplete(obligation)).length;
   const filingMatches = new Map(
     (filings ?? []).map((filing) => [filingMatchKey(filing.kind, filing.dueDate, filing.sourceRegistrationId), filing]),
   );
@@ -242,7 +250,7 @@ export function ComplianceObligationsPage() {
                     obligationKey: obligation.obligationKey,
                     ruleId: obligation.ruleId,
                   });
-                  const decision = decisionsByRuleId.get(obligation.contextKey);
+                  const decision = decisionsByRuleId.get(obligation.occurrenceKey);
                   const isDismissed = decision?.status === "dismissed";
                   const isReviewed = decision?.status === "resolved" || Boolean(existingFiling);
                   const hasStagedPacket = decision?.targetTable === "legalPrecedentRuns";
@@ -255,12 +263,13 @@ export function ComplianceObligationsPage() {
                     `Obligation key: ${obligation.obligationKey}`,
                     obligation.windowStartDate ? `Window opens: ${formatDate(obligation.windowStartDate)}` : "",
                     filingKind ? `Filing kind: ${filingKind}` : "",
+                    obligation.caveat ? `Rule limits: ${obligation.caveat}` : "",
                     obligation.creates?.requiredEvidence?.length
                       ? `Evidence: ${obligation.creates.requiredEvidence.join(", ")}`
                       : "",
                   ].filter(Boolean).join("\n");
                   return (
-                    <tr key={obligation.contextKey}>
+                    <tr key={obligation.occurrenceKey}>
                       <td>
                         <strong>{obligation.title}</strong>
                         <div className="muted" style={{ fontSize: 12 }} title={obligationDetails}>
@@ -272,9 +281,10 @@ export function ComplianceObligationsPage() {
                         <div className="muted" style={{ fontSize: 12 }}>{relative(obligation.dueDate)}</div>
                       </td>
                       <td>
-                        <Badge tone={isDismissed ? "neutral" : isReviewed ? "success" : statusTone(obligation.status)}>
-                          {isDismissed ? "Dismissed" : isReviewed ? "Reviewed" : statusLabel(obligation.status)}
+                        <Badge tone={existingFiling?.status === "Filed" ? "success" : statusTone(obligation.status)}>
+                          {existingFiling?.status === "Filed" ? "Filed" : statusLabel(obligation.status)}
                         </Badge>
+                        {isDismissed || isReviewed ? <div className="muted" style={{ fontSize: 12 }}>{isDismissed ? "Workflow dismissed" : "Workflow reviewed"}</div> : null}
                         {decision?.updatedAtISO ? (
                           <div className="muted" style={{ fontSize: 12 }}>{relative(decision.updatedAtISO.slice(0, 10))}</div>
                         ) : null}
@@ -362,7 +372,7 @@ function filingMatchKey(kind: string, dueDate: string, sourceRegistrationId?: st
 function decisionPayload(societyId: any, obligation: ReturnType<typeof computeComplianceObligations>[number]) {
   return {
     societyId,
-    ruleId: obligation.contextKey,
+    ruleId: obligation.occurrenceKey,
     flagLevel: obligation.status === "overdue" ? "err" : obligation.status === "due_today" ? "warn" : "info",
     flagText: obligation.title,
     evidenceRequired: obligation.creates?.requiredEvidence ?? [],
@@ -375,6 +385,8 @@ function requiredFactLabels(facts: ComplianceFacts | null) {
   if (!facts.incorporationDate) missing.push("incorporation date");
   if (!facts.anniversaryDate) missing.push("anniversary date");
   if (!facts.fiscalYearEnd) missing.push("fiscal year end");
+  if (facts.entityType === "society" && !facts.annualMeetingDate) missing.push("actual AGM/deemed AGM date to compute its report");
+  if (facts.entityType !== "society" && !facts.annualReferenceDate) missing.push("last AGM/annual reference date for subsequent meetings");
   return missing;
 }
 

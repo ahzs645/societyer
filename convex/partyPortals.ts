@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import { listPortable, createPortable, revokePortable, centerPortable } from "../shared/functions/partyPortals";
@@ -12,13 +13,13 @@ import { buildConvexCapabilities } from "./providers/capabilities";
  * whether files can be pulled (vs. read-only metadata).
  */
 
-export const list = query({
+export const list = authorizedQuery("partyPortals:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("partyPortals:create", mutation)({
   args: {
     societyId: v.id("societies"),
     token: v.string(),
@@ -32,7 +33,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const revoke = mutation({
+export const revoke = authorizedMutation("partyPortals:revoke", mutation)({
   args: { id: v.id("partyPortals") },
   returns: v.any(),
   handler: async (ctx, args) => revokePortable(await toPortableMutationCtx(ctx), args),
@@ -40,7 +41,7 @@ export const revoke = mutation({
 
 /** Public, token-gated view. Returns null for an unknown/revoked/expired token,
  *  otherwise only the sections the token's scopes allow. */
-export const center = query({
+export const center = authorizedQuery("partyPortals:center", query)({
   args: { token: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => centerPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),

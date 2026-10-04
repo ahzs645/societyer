@@ -1,10 +1,11 @@
+import { authorizedQuery } from "./lib/authorizedServer";
 import { query } from "./lib/untypedServer";
 import { v } from "convex/values";
-import { hasPermission, PERMISSIONS, type Permission } from "./lib/permissions";
+import { requirePermission, PERMISSIONS, type Permission } from "./lib/permissions";
 import { myPermissionsPortable } from "../shared/functions/permissions";
 import { toPortableQueryCtx } from "./lib/portable";
 
-export const check = query({
+export const check = authorizedQuery("permissions:check", query)({
   args: {
     userId: v.id("users"),
     societyId: v.id("societies"),
@@ -12,13 +13,14 @@ export const check = query({
   },
   returns: v.any(),
   handler: async (ctx, { userId, societyId, permission }) => {
-    const user = await ctx.db.get(userId);
-    if (!user || user.societyId !== societyId) return false;
-    return hasPermission(user.role, permission as Permission);
+    try {
+      await requirePermission(ctx, societyId, userId, permission as Permission);
+      return true;
+    } catch { return false; }
   },
 });
 
-export const myPermissions = query({
+export const myPermissions = authorizedQuery("permissions:myPermissions", query)({
   args: {
     userId: v.id("users"),
     societyId: v.id("societies"),
@@ -27,7 +29,7 @@ export const myPermissions = query({
   handler: async (ctx, args) => myPermissionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listAll = query({
+export const listAll = authorizedQuery("permissions:listAll", query)({
   args: {},
   returns: v.any(),
   handler: async () => PERMISSIONS.map((p) => p),

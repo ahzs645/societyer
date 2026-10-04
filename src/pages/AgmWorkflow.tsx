@@ -1,3 +1,4 @@
+import { noticeWindowSatisfied } from "../features/meetings/lib/noticeWindow";
 import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -150,7 +151,7 @@ export function AgmWorkflowPage() {
   ) ?? 0;
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
   const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
-  const noticeWithinWindow = noticeDaysBeforeMeeting >= noticeMinDays && noticeDaysBeforeMeeting <= noticeMaxDays;
+  const noticeWithinWindow = noticeWindowSatisfied(meeting.noticeSentAt ?? new Date(), meeting.scheduledAt, noticeMinDays, noticeMaxDays, rules);
 
   return (
     <div className="page">

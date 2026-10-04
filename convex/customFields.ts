@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import {
@@ -11,7 +12,7 @@ import {
 } from "../shared/functions/customFields";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const listDefinitions = query({
+export const listDefinitions = authorizedQuery("customFields:listDefinitions", query)({
   args: {
     societyId: v.id("societies"),
     entityType: v.optional(v.string()),
@@ -20,7 +21,7 @@ export const listDefinitions = query({
   handler: async (ctx, args) => listDefinitionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const createDefinition = mutation({
+export const createDefinition = authorizedMutation("customFields:createDefinition", mutation)({
   args: {
     societyId: v.id("societies"),
     entityType: v.string(),
@@ -35,7 +36,7 @@ export const createDefinition = mutation({
   handler: async (ctx, args) => createDefinitionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateDefinition = mutation({
+export const updateDefinition = authorizedMutation("customFields:updateDefinition", mutation)({
   args: {
     id: v.id("customFieldDefinitions"),
     label: v.optional(v.string()),
@@ -48,13 +49,13 @@ export const updateDefinition = mutation({
   handler: async (ctx, args) => updateDefinitionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const deleteDefinition = mutation({
+export const deleteDefinition = authorizedMutation("customFields:deleteDefinition", mutation)({
   args: { id: v.id("customFieldDefinitions") },
   returns: v.any(),
   handler: async (ctx, args) => deleteDefinitionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const listValues = query({
+export const listValues = authorizedQuery("customFields:listValues", query)({
   args: {
     entityType: v.string(),
     subjectId: v.optional(v.string()),
@@ -64,7 +65,7 @@ export const listValues = query({
   handler: async (ctx, args) => listValuesPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const setValue = mutation({
+export const setValue = authorizedMutation("customFields:setValue", mutation)({
   args: {
     societyId: v.id("societies"),
     definitionId: v.id("customFieldDefinitions"),
@@ -77,7 +78,7 @@ export const setValue = mutation({
   handler: async (ctx, args) => setValuePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const clearValue = mutation({
+export const clearValue = authorizedMutation("customFields:clearValue", mutation)({
   args: {
     entityType: v.string(),
     subjectId: v.optional(v.string()),

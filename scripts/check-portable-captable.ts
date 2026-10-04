@@ -125,6 +125,7 @@ const cids: Ids = await t.run(async (ctx: any) => {
     status: "Active",
     authProvider: PORTABLE_TEST_IDENTITY.issuer,
     authSubject: PORTABLE_TEST_AUTH_SUBJECT,
+    authIssuer: PORTABLE_TEST_IDENTITY.issuer,
     createdAtISO: iso,
   });
   const classId = await ctx.db.insert("rightsClasses", {

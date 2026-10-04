@@ -1,3 +1,4 @@
+import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { query, internalMutation, mutation, action } from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
@@ -22,25 +23,25 @@ function frontendAppUrl(path: string) {
   return `${base.replace(/\/$/, "")}/#${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-export const plans = query({
+export const plans = authorizedQuery("subscriptions:plans", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => plansPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const mySubscriptions = query({
+export const mySubscriptions = authorizedQuery("subscriptions:mySubscriptions", query)({
   args: { societyId: v.id("societies"), email: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => mySubscriptionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const allSubscriptions = query({
+export const allSubscriptions = authorizedQuery("subscriptions:allSubscriptions", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => allSubscriptionsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsertPlan = mutation({
+export const upsertPlan = authorizedMutation("subscriptions:upsertPlan", mutation)({
   args: {
     id: v.optional(v.id("subscriptionPlans")),
     societyId: v.id("societies"),
@@ -59,13 +60,13 @@ export const upsertPlan = mutation({
   handler: async (ctx, args) => upsertPlanPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const feeTimeline = query({
+export const feeTimeline = authorizedQuery("subscriptions:feeTimeline", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => feeTimelinePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsertFeePeriod = mutation({
+export const upsertFeePeriod = authorizedMutation("subscriptions:upsertFeePeriod", mutation)({
   args: {
     id: v.optional(v.id("membershipFeePeriods")),
     societyId: v.id("societies"),
@@ -85,19 +86,19 @@ export const upsertFeePeriod = mutation({
   handler: async (ctx, args) => upsertFeePeriodPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeFeePeriod = mutation({
+export const removeFeePeriod = authorizedMutation("subscriptions:removeFeePeriod", mutation)({
   args: { id: v.id("membershipFeePeriods"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => removeFeePeriodPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removePlan = mutation({
+export const removePlan = authorizedMutation("subscriptions:removePlan", mutation)({
   args: { id: v.id("subscriptionPlans"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => removePlanPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const cancelSubscription = mutation({
+export const cancelSubscription = authorizedMutation("subscriptions:cancelSubscription", mutation)({
   args: { id: v.id("memberSubscriptions"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => cancelSubscriptionPortable(await toPortableMutationCtx(ctx), args),
@@ -106,7 +107,7 @@ export const cancelSubscription = mutation({
 // Begin checkout. Live mode returns a hosted Stripe Checkout URL. Demo mode
 // short-circuits: we create a pending subscription immediately and return a
 // demo-scheme URL the UI can interpret as "click to pay".
-export const beginCheckout = action({
+export const beginCheckout = authorizedAction("subscriptions:beginCheckout", action)({
   args: {
     societyId: v.id("societies"),
     planId: v.id("subscriptionPlans"),
@@ -150,7 +151,7 @@ export const beginCheckout = action({
   },
 });
 
-export const getPlan = query({
+export const getPlan = authorizedQuery("subscriptions:getPlan", query)({
   args: { id: v.id("subscriptionPlans") },
   returns: v.any(),
   handler: async (ctx, args) => getPlanPortable(await toPortableQueryCtx(ctx), args),
@@ -180,7 +181,7 @@ export const _createPending = internalMutation({
 
 // Simulate the Stripe webhook the success URL would receive in production.
 // Called by the /membership/success demo page.
-export const simulateActivation = mutation({
+export const simulateActivation = authorizedMutation("subscriptions:simulateActivation", mutation)({
   args: {
     societyId: v.id("societies"),
     planId: v.id("subscriptionPlans"),

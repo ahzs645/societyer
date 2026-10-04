@@ -14,7 +14,7 @@ import { DateTimeInput } from "../components/DateTimeInput";
 import { Modal, useConfirm } from "../components/Modal";
 import { toDateTimeLocalValue } from "../lib/format";
 import { useBylawRules } from "../hooks/useBylawRules";
-import { daysUntil, isGeneralMeeting } from "../features/meetings/lib/noticeWindow";
+import { noticeDaysUntil, isGeneralMeeting } from "../features/meetings/lib/noticeWindow";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import {
   RecordTable,
@@ -283,7 +283,7 @@ export function MeetingTemplatesPage() {
     // Same guard as the Meetings page: creating a general meeting with less
     // than the minimum notice is a compliance failure, so block it here too.
     if (isGeneralMeeting(scheduleDraft.type)) {
-      const days = daysUntil(scheduleDraft.scheduledAt);
+      const days = noticeDaysUntil(scheduleDraft.scheduledAt, rules);
       if (days == null || days < noticeMinDays) {
         toast.error(`General meetings need at least ${noticeMinDays} days of notice.`);
         return;

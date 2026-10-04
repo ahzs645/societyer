@@ -44,6 +44,7 @@ const ontarioRegistrationId = await client.mutation("organizationDetails:upsertR
   homeJurisdiction: "CA-FED-CBCA",
   registrationNumber: "ON-9001",
   registrationDate: "2026-01-05",
+  activityCommencementDate: "2026-01-02",
   annualReturnDueDate: "2026-06-30",
   status: "active",
 });

@@ -1,9 +1,10 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./lib/untypedServer";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { getEffectivePortable, setStatusPortable, upsertPortable } from "../shared/functions/aiSettings";
 
-export const getEffective = query({
+export const getEffective = authorizedQuery("aiSettings:getEffective", query)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -12,7 +13,7 @@ export const getEffective = query({
   handler: async (ctx, args) => getEffectivePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsert = mutation({
+export const upsert = authorizedMutation("aiSettings:upsert", mutation)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -32,7 +33,7 @@ export const upsert = mutation({
   handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const setStatus = mutation({
+export const setStatus = authorizedMutation("aiSettings:setStatus", mutation)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),

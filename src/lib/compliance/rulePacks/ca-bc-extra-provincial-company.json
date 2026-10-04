@@ -2,10 +2,12 @@
   "schemaVersion": "1.0.0",
   "packId": "compliance-ca-bc-extra-provincial-company",
   "status": "draft",
-  "version": "2026.06.04",
+  "version": "2026.10.04-research-draft",
   "reviewedAt": "2026-06-04",
   "jurisdictionCode": "CA-BC",
-  "entityTypes": ["corporation__business_"],
+  "entityTypes": [
+    "corporation__business_"
+  ],
   "title": "BC extra-provincial company compliance obligation pack",
   "description": "Draft operational schedules for federal or foreign corporations registered extra-provincially in British Columbia.",
   "sourceGuidePackId": "ca-bc-bca",
@@ -32,27 +34,54 @@
       "ruleId": "compliance-ca-bc-extra-provincial-annual-report",
       "status": "draft",
       "title": "BC extra-provincial annual report",
-      "summary": "Track the BC extra-provincial registration annual report or registry maintenance due date.",
+      "summary": "File the BC extra-provincial annual report within two calendar months after the BC registration anniversary.",
       "obligationKey": "registry.extra_provincial_annual_report",
       "appliesTo": {
-        "entityTypes": ["corporation__business_"],
-        "contextKinds": ["extra_provincial"],
-        "registrationTypes": ["extra_provincial"]
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "extra_provincial"
+        ],
+        "registrationTypes": [
+          "extra_provincial"
+        ]
       },
       "schedule": {
-        "kind": "annual",
-        "anchorFact": "annualReturnDueDate",
-        "dueOffset": { "days": 0 }
+        "kind": "window",
+        "recurrence": "annual",
+        "opens": {
+          "anchorFact": "registrationDate",
+          "offset": {
+            "years": 1
+          }
+        },
+        "closes": {
+          "anchorFact": "registrationDate",
+          "offset": {
+            "years": 1,
+            "months": 2
+          }
+        }
       },
       "authority": {
         "guidePackId": "ca-bc-bca",
-        "guideRuleIds": ["ca-bc-bca-annual-report"],
-        "sourceIds": ["bc-business-corporations-act", "bc-registry-annual-report-company"],
+        "guideRuleIds": [
+          "ca-bc-bca-annual-report"
+        ],
+        "sourceIds": [
+          "bc-business-corporations-act",
+          "bc-registry-annual-report-company"
+        ],
         "displayCitation": "BC Business Corporations Act and registry annual report workflow"
       },
       "creates": {
         "filingKind": "BCExtraProvincialAnnualReport",
-        "requiredEvidence": ["confirmationNumber", "receiptOrAcknowledgement", "profileReportEvidence"],
+        "requiredEvidence": [
+          "confirmationNumber",
+          "receiptOrAcknowledgement",
+          "profileReportEvidence"
+        ],
         "checklist": [
           "Review the BC extra-provincial registration profile.",
           "Confirm attorney/agent, registered office or mailing details, and corporation status.",
@@ -61,7 +90,8 @@
           "Archive confirmation, receipt, and profile-report evidence."
         ]
       },
-      "caveat": "Draft operational cadence for registration tracking; confirm current BC corporate registry instructions for the entity and registration type."
+      "caveat": "BC registration date supplies the anniversary. A manually recorded expected due date does not replace the statutory anchor.",
+      "reviewNotes": "Updated from the supplied source-backed research register (retrieved 2026-10-04); qualified legal approval remains required."
     },
     {
       "ruleId": "compliance-ca-bc-extra-provincial-profile-evidence",
@@ -70,23 +100,38 @@
       "summary": "Track annual evidence review for BC extra-provincial registration details.",
       "obligationKey": "registry.extra_provincial_profile_evidence",
       "appliesTo": {
-        "entityTypes": ["corporation__business_"],
-        "contextKinds": ["extra_provincial"],
-        "registrationTypes": ["extra_provincial"]
+        "entityTypes": [
+          "corporation__business_"
+        ],
+        "contextKinds": [
+          "extra_provincial"
+        ],
+        "registrationTypes": [
+          "extra_provincial"
+        ]
       },
       "schedule": {
         "kind": "annual",
         "anchorFact": "registrationDate",
-        "dueOffset": { "years": 1 }
+        "dueOffset": {
+          "years": 1
+        }
       },
       "authority": {
         "guidePackId": "ca-bc-bca",
-        "guideRuleIds": ["ca-bc-bca-records"],
-        "sourceIds": ["bc-business-corporations-act"],
+        "guideRuleIds": [
+          "ca-bc-bca-records"
+        ],
+        "sourceIds": [
+          "bc-business-corporations-act"
+        ],
         "displayCitation": "BC Business Corporations Act records and registry evidence workflow"
       },
       "creates": {
-        "requiredEvidence": ["profileReportEvidence", "attorneyForServiceEvidence"],
+        "requiredEvidence": [
+          "profileReportEvidence",
+          "attorneyForServiceEvidence"
+        ],
         "checklist": [
           "Request or capture a dated registry profile/report where available.",
           "Confirm registration number, assumed name, local representative, addresses, and current status.",

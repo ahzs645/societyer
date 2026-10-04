@@ -1,3 +1,4 @@
+import { DEFAULT_BYLAW_RULES, bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
 /**
  * PORTABLE FUNCTIONS: the bylaw-rules domain
  * (getActive / getForDate / list / upsertActive / resetToDefault).
@@ -16,46 +17,9 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
 
-export const DEFAULT_BYLAW_RULES = {
-  societyId: "placeholder",
-  version: 1,
-  status: "Active",
-  generalNoticeMinDays: 14,
-  generalNoticeMaxDays: 60,
-  allowElectronicMeetings: true,
-  allowHybridMeetings: true,
-  allowElectronicVoting: false,
-  allowProxyVoting: false,
-  proxyHolderMustBeMember: false,
-  proxyLimitPerGrantorPerMeeting: 1,
-  quorumType: "percentage",
-  quorumValue: 10,
-  quorumMinimumCount: 3,
-  memberProposalThresholdPct: 5,
-  memberProposalMinSignatures: 1,
-  memberProposalLeadDays: 7,
-  requisitionMeetingThresholdPct: 10,
-  annualReportDueDaysAfterMeeting: 30,
-  requireAgmFinancialStatements: true,
-  requireAgmElections: true,
-  ballotIsAnonymous: true,
-  voterMustBeMemberAtRecordDate: true,
-  inspectionMemberRegisterByMembers: true,
-  inspectionMemberRegisterByPublic: false,
-  inspectionDirectorRegisterByMembers: true,
-  inspectionCopiesAllowed: true,
-  ordinaryResolutionThresholdPct: 50,
-  specialResolutionThresholdPct: 66.67,
-  unanimousWrittenSpecialResolution: true,
-  updatedAtISO: new Date(0).toISOString(),
-};
 
-function getDefaultBylawRules(societyId: string) {
-  return {
-    ...DEFAULT_BYLAW_RULES,
-    societyId,
-    updatedAtISO: new Date().toISOString(),
-  };
+export function getDefaultBylawRules(societyId: string, organization?: any) {
+  return bylawBaselineForOrganization(organization, societyId);
 }
 
 async function getBylawRuleSetForDate(
@@ -72,11 +36,8 @@ async function getBylawRuleSetForDate(
     .filter((row) => row.status !== "Draft")
     .filter((row) => effectiveTimestamp(row) <= targetTs);
   const selected = eligible.sort(compareRuleSetsDesc)[0];
-  if (selected) return selected;
-  return {
-    ...getDefaultBylawRules(societyId),
-    isFallback: true,
-  };
+  const organization = await ctx.db.get(societyId);
+  return contextualBylawRules(organization, societyId, selected);
 }
 
 export async function getActiveBylawRuleSet(
@@ -191,7 +152,9 @@ export async function resetToDefaultPortable(ctx: PortableMutationCtx, { society
   await requireSocietyMembership(ctx, societyId);
   const now = new Date().toISOString();
   const defaults = {
-    ...getDefaultBylawRules(societyId),
+    ...DEFAULT_BYLAW_RULES,
+    societyId,
+    status: "Baseline",
     effectiveFromISO: now,
     updatedAtISO: now,
     version: await getNextBylawRuleVersion(ctx, societyId),
@@ -213,3 +176,5 @@ function timestamp(value?: string) {
   const ts = new Date(value).getTime();
   return Number.isFinite(ts) ? ts : Number.NEGATIVE_INFINITY;
 }
+
+export { DEFAULT_BYLAW_RULES };

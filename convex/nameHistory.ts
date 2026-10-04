@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -20,28 +21,28 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
  */
 
 /** Full name timeline (sorted by startISO, tie-broken by regPosn). */
-export const list = query({
+export const list = authorizedQuery("nameHistory:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** The legal name in effect on a specific ISO date. */
-export const asOf = query({
+export const asOf = authorizedQuery("nameHistory:asOf", query)({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => asOfPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Human-readable summary of the society's name-change history. */
-export const narrative = query({
+export const narrative = authorizedQuery("nameHistory:narrative", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => narrativePortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Create a new name record or patch an existing one. Returns the id. */
-export const upsert = mutation({
+export const upsert = authorizedMutation("nameHistory:upsert", mutation)({
   args: {
     id: v.optional(v.id("societyNameHistory")),
     societyId: v.id("societies"),
@@ -56,7 +57,7 @@ export const upsert = mutation({
 });
 
 /** Delete a name record. */
-export const remove = mutation({
+export const remove = authorizedMutation("nameHistory:remove", mutation)({
   args: { id: v.id("societyNameHistory") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

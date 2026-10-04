@@ -1,3 +1,4 @@
+import { documentAccessPredicate } from "./documents";
 /**
  * PORTABLE FUNCTIONS: the organization-history domain
  * (list / removeSource / bulkSetItemReviewStatus / removeItem).
@@ -1057,10 +1058,9 @@ function formatCentsForNote(value: number) {
 }
 
 async function docsByCategory(ctx: any, societyId: string, category: string) {
-  return await ctx.db
-    .query("documents")
-    .withIndex("by_society_category", (q: any) => q.eq("societyId", societyId).eq("category", category))
-    .collect();
+  const rows = await ctx.db.query("documents").withIndex("by_society_category", (q: any) => q.eq("societyId", societyId).eq("category", category)).collect();
+  const allows = await documentAccessPredicate(ctx, societyId);
+  return rows.filter((row: any) => allows(row));
 }
 
 function hydrateSource(doc: any, includeRestrictedContent = false) {

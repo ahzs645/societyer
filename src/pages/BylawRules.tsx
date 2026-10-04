@@ -1,3 +1,4 @@
+import { DecisionAssessmentCard } from "../components/DecisionAssessmentCard";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -150,7 +151,7 @@ export function BylawRulesPage() {
         title="Bylaw rules"
         icon={<Scale size={16} />}
         iconColor="purple"
-        subtitle="Configure the active rules derived from the society's bylaws. AGM, proxy, proposal, meeting, election, and inspection workflows read from here first."
+        subtitle="Configure rules derived from the operative bylaws or articles. Draft baselines require review; workspace roles do not establish legal voting rights."
         actions={
           <>
             <button
@@ -158,7 +159,7 @@ export function BylawRulesPage() {
               onClick={async () => {
                 await reset({ societyId: society._id });
                 setForm(null);
-                toast.info("Reverted to BC Model Bylaw baseline");
+                toast.info("Using the jurisdiction draft baseline; governing instruments still require review");
               }}
             >
               <RefreshCw size={12} /> Reset to defaults
@@ -170,13 +171,13 @@ export function BylawRulesPage() {
         }
       />
 
+      <DecisionAssessmentCard key={String(society._id)} organization={society} />
+
       {rules?.isFallback && (
         <div className="bylaw-rules__notice" role="status">
           <Info size={14} aria-hidden="true" />
           <div>
-            No active custom rule set exists yet. The app is using BC Model
-            Bylaw baseline assumptions until you save a bylaw-specific
-            configuration.
+            {rules?.baselineLabel ?? "Statutory draft baseline"}. This does not record adoption of model bylaws. {rules?.quorumRequiresLegalRegister ? "Corporate quorum requires the legal shareholder and issued voting share registers; attendee headcount cannot establish it." : "Review the filed bylaws and legal member electorate."}
           </div>
         </div>
       )}

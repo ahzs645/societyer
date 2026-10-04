@@ -1,3 +1,5 @@
+import { getPortable as getAccessibleDocument } from "./documents";
+import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
 /**
  * PORTABLE FUNCTIONS: the dashboard domain (navCounts / summary).
  *
@@ -551,46 +553,9 @@ function evaluateDashboardComplianceRules(
 
 /* ------------------ bylaw-rule resolution (inlined, pure) ---------------- */
 
-const DEFAULT_BYLAW_RULES = {
-  societyId: "placeholder",
-  version: 1,
-  status: "Active",
-  generalNoticeMinDays: 14,
-  generalNoticeMaxDays: 60,
-  allowElectronicMeetings: true,
-  allowHybridMeetings: true,
-  allowElectronicVoting: false,
-  allowProxyVoting: false,
-  proxyHolderMustBeMember: false,
-  proxyLimitPerGrantorPerMeeting: 1,
-  quorumType: "percentage",
-  quorumValue: 10,
-  quorumMinimumCount: 3,
-  memberProposalThresholdPct: 5,
-  memberProposalMinSignatures: 1,
-  memberProposalLeadDays: 7,
-  requisitionMeetingThresholdPct: 10,
-  annualReportDueDaysAfterMeeting: 30,
-  requireAgmFinancialStatements: true,
-  requireAgmElections: true,
-  ballotIsAnonymous: true,
-  voterMustBeMemberAtRecordDate: true,
-  inspectionMemberRegisterByMembers: true,
-  inspectionMemberRegisterByPublic: false,
-  inspectionDirectorRegisterByMembers: true,
-  inspectionCopiesAllowed: true,
-  ordinaryResolutionThresholdPct: 50,
-  specialResolutionThresholdPct: 66.67,
-  unanimousWrittenSpecialResolution: true,
-  updatedAtISO: new Date(0).toISOString(),
-};
 
-function getDefaultBylawRules(societyId: string) {
-  return {
-    ...DEFAULT_BYLAW_RULES,
-    societyId,
-    updatedAtISO: new Date().toISOString(),
-  };
+export function getDefaultBylawRules(societyId: string, organization?: any) {
+  return bylawBaselineForOrganization(organization, societyId);
 }
 
 async function getBylawRuleSetForDate(
@@ -607,11 +572,8 @@ async function getBylawRuleSetForDate(
     .filter((row) => row.status !== "Draft")
     .filter((row) => effectiveTimestamp(row) <= targetTs);
   const selected = eligible.sort(compareRuleSetsDesc)[0];
-  if (selected) return selected;
-  return {
-    ...getDefaultBylawRules(societyId),
-    isFallback: true,
-  };
+  const organization = await ctx.db.get(societyId);
+  return contextualBylawRules(organization, societyId, selected);
 }
 
 async function getActiveBylawRuleSet(ctx: PortableQueryCtx, societyId: string) {
@@ -1019,7 +981,7 @@ async function buildFilingEvidenceChain(
     ...(filing.sourceDocumentIds ?? []),
   ].filter(Boolean) as DashboardId[];
   const [documents, submitter, indexedAuditEvents] = await Promise.all([
-    Promise.all(documentIds.map((id) => getOwned(ctx, "documents", id, societyId))),
+    Promise.all(documentIds.map((id) => getAccessibleDocument(ctx, { id: String(id) }))),
     filing.submittedByUserId
       ? getOwned(ctx, "users", filing.submittedByUserId, societyId)
       : Promise.resolve(null),

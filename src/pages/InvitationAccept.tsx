@@ -8,6 +8,9 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { useAuth } from "../auth/AuthProvider";
 
 const FAILURE_MESSAGES: Partial<Record<MembershipResolution["status"], string>> = {
+  "invitation-expired": "This invitation has expired. Ask a workspace administrator to issue another link.",
+  "invitation-email-unverified": "Verify your email address with your sign-in provider before accepting this invitation.",
+  "invitation-issuer-unavailable": "The inviting administrator no longer has authority to grant this access. Ask a current owner to reissue the invitation.",
   "invalid-invitation": "This invitation link is invalid.",
   "invitation-revoked": "This invitation has been revoked.",
   "invitation-already-accepted": "This invitation has already been used.",

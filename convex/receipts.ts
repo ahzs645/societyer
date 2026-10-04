@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -9,13 +10,13 @@ import {
 } from "../shared/functions/receipts";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("receipts:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => receiptsListPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const issue = mutation({
+export const issue = authorizedMutation("receipts:issue", mutation)({
   args: {
     societyId: v.id("societies"),
     charityNumber: v.string(),
@@ -34,13 +35,13 @@ export const issue = mutation({
   handler: async (ctx, args) => receiptIssuePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const voidReceipt = mutation({
+export const voidReceipt = authorizedMutation("receipts:voidReceipt", mutation)({
   args: { id: v.id("donationReceipts"), reason: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => receiptVoidPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("receipts:remove", mutation)({
   args: { id: v.id("donationReceipts") },
   returns: v.any(),
   handler: async (ctx, args) => receiptRemovePortable(await toPortableMutationCtx(ctx), args),

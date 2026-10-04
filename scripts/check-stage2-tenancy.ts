@@ -116,6 +116,7 @@ function genericRow(table: string, tenant: Tenant, mappings: Map<string, string>
     displayName: `Stage 2 User ${tenant}`,
     email: `stage2-${tenant.toLowerCase()}@example.test`,
     authSubject: `stage2-subject-${tenant.toLowerCase()}`,
+    authIssuer: "https://stage2.test",
     tags: [],
     position: 0,
     isSystem: false,

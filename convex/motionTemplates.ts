@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -9,13 +10,13 @@ import {
 } from "../shared/functions/motionTemplates";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("motionTemplates:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("motionTemplates:create", mutation)({
   args: {
     societyId: v.id("societies"),
     title: v.string(),
@@ -28,7 +29,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("motionTemplates:update", mutation)({
   args: {
     templateId: v.id("motionTemplates"),
     title: v.optional(v.string()),
@@ -41,13 +42,13 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("motionTemplates:remove", mutation)({
   args: { templateId: v.id("motionTemplates") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const seedDefaults = mutation({
+export const seedDefaults = authorizedMutation("motionTemplates:seedDefaults", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => seedDefaultsPortable(await toPortableMutationCtx(ctx), args),

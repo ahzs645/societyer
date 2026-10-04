@@ -13,6 +13,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
+import { documentAccessPredicate, filterDocumentLinkedRows } from "./documents";
 import { requireSocietyMembership } from "./access";
 import { createDownloadUrl } from "../storage/signedUrl";
 
@@ -291,8 +292,10 @@ export async function exportAttachmentPagePortable(
       .query("documentVersions")
       .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
       .paginate(paginationOpts);
+    const allows = await documentAccessPredicate(ctx, societyId);
+    const parents = await Promise.all(page.page.map((row: any) => ctx.db.get(String(row.documentId), "documents")));
     const attachments = await Promise.all(
-      page.page.map(async (row: any) => ({
+      page.page.filter((_, index) => allows(parents[index])).map(async (row: any) => ({
         source: "documentVersions",
         id: row._id,
         documentId: row.documentId,
@@ -313,9 +316,10 @@ export async function exportAttachmentPagePortable(
     .query("documents")
     .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
     .paginate(paginationOpts);
+  const allows = await documentAccessPredicate(ctx, societyId);
   const attachments = await Promise.all(
     page.page
-      .filter((row: any) => row.storageId || row.url)
+      .filter((row: any) => allows(row) && (row.storageId || row.url))
       .map(async (row: any) => ({
         source: "documents",
         id: row._id,
@@ -342,7 +346,7 @@ async function downloadUrlForVersion(row: any) {
       "http://127.0.0.1:8787";
     return `${base.replace(/\/$/, "")}/api/v1/workflow-generated-documents/${encodeURIComponent(row.storageKey)}`;
   }
-  if (row.storageProvider === "rustfs" || row.storageProvider === "demo") {
+  if (row.storageProvider === "rustfs" || row.storageProvider === "r2" || row.storageProvider === "demo") {
     return await createDownloadUrl({
       provider: row.storageProvider,
       key: row.storageKey,
@@ -496,7 +500,14 @@ async function paginateForSociety(
   const indexName = SOCIETY_INDEX_BY_TABLE[table] ?? "by_society";
   const query = ctx.db.query(table).withIndex(indexName, (q) => q.eq("societyId", societyId));
   const page = await query.paginate(paginationOpts);
-  return { ...page, page: page.page.map((row: Record<string, any>) => sanitizeRow(row, options)) };
+  let visibleRows = page.page;
+  if (["documents", "documentVersions", "documentComments", "meetingMaterials", "paperlessDocumentSyncs"].includes(table)) {
+    const allows = await documentAccessPredicate(ctx, societyId);
+    const parents = table === "documents" ? visibleRows : await Promise.all(visibleRows.map((row) => row.documentId ? ctx.db.get(String(row.documentId), "documents") : null));
+    visibleRows = visibleRows.filter((_, index) => allows(parents[index]));
+  }
+  if (["generatedLegalDocuments", "legalPrecedentRuns", "legalSigners", "sourceEvidence", "minuteBookItems"].includes(table)) visibleRows = await filterDocumentLinkedRows(ctx, societyId, visibleRows, table);
+  return { ...page, page: visibleRows.map((row: Record<string, any>) => sanitizeRow(row, options)) };
 }
 
 function paginateCollectedRows(

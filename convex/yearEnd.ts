@@ -1,3 +1,4 @@
+import { authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { query } from "./lib/untypedServer";
 import {
@@ -16,25 +17,25 @@ import { toPortableQueryCtx } from "./lib/portable";
  * statement) lives in convex/programStatements.ts.
  */
 
-export const annualStatement = query({
+export const annualStatement = authorizedQuery("yearEnd:annualStatement", query)({
   args: { societyId: v.id("societies"), fiscalYear: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => annualStatementPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const orgRevenueExpense = query({
+export const orgRevenueExpense = authorizedQuery("yearEnd:orgRevenueExpense", query)({
   args: { societyId: v.id("societies"), fiscalYear: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => orgRevenueExpensePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const restrictedFundStatement = query({
+export const restrictedFundStatement = authorizedQuery("yearEnd:restrictedFundStatement", query)({
   args: { societyId: v.id("societies"), fiscalYear: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => restrictedFundStatementPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const readiness = query({
+export const readiness = authorizedQuery("yearEnd:readiness", query)({
   args: { societyId: v.id("societies"), fiscalYear: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => readinessPortable(await toPortableQueryCtx(ctx), args),

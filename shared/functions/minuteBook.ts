@@ -9,6 +9,7 @@
  * Dexie runtime, and the convex-test oracle.
  */
 
+import { documentAccessPredicate, filterDocumentLinkedRows } from "./documents";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { assertAllowedOption } from "../orgHubOptions";
@@ -81,19 +82,23 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
 
   const documents = await collectBinderDocumentPreviews(ctx, societyId);
   const binderDocuments = documents;
+  const visibleItems = await filterDocumentLinkedRows(ctx, String(societyId), items, "minuteBookItems");
+  const visibleEvidence = await filterDocumentLinkedRows(ctx, String(societyId), sourceEvidence, "sourceEvidence");
+  const visibleMaterials = await filterDocumentLinkedRows(ctx, String(societyId), meetingMaterials, "meetingMaterials");
+  const visibleSignatures = await filterDocumentLinkedRows(ctx, String(societyId), signatures, "signatures");
   const graphInput = {
-    items,
+    items: visibleItems,
     documents,
     meetings,
     minutes,
     filings,
     policies,
     workflowPackages,
-    signatures,
-    sourceEvidence,
+    signatures: visibleSignatures,
+    sourceEvidence: visibleEvidence,
     motionEvidence,
     archiveAccessions,
-    meetingMaterials,
+    meetingMaterials: visibleMaterials,
     meetingAttendanceRecords,
     communicationCampaigns,
     communicationDeliveries,
@@ -112,18 +117,18 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
   };
 
   return {
-    items: sortDesc(items.map(minuteBookItemPreview), "effectiveDate"),
+    items: sortDesc(visibleItems.map(minuteBookItemPreview), "effectiveDate"),
     documents: sortDesc(binderDocuments, "createdAtISO"),
     meetings: sortDesc(meetings.map(meetingPreview), "scheduledAt"),
     minutes: sortDesc(minutes.map(minutesPreview), "heldAt"),
     filings: sortDesc(filings.map(filingPreview), "dueDate"),
     policies: sortDesc(policies.map(policyPreview), "effectiveDate"),
     workflowPackages: sortDesc(workflowPackages.map(workflowPackagePreview), "effectiveDate"),
-    signatures: sortDesc(signatures.map(signaturePreview), "signedAtISO"),
-    sourceEvidence: sortDesc(sourceEvidence.map(sourceEvidencePreview), "createdAtISO"),
+    signatures: sortDesc(visibleSignatures.map(signaturePreview), "signedAtISO"),
+    sourceEvidence: sortDesc(visibleEvidence.map(sourceEvidencePreview), "createdAtISO"),
     motionEvidence: sortDesc(motionEvidence.map(motionEvidencePreview), "meetingDate"),
     archiveAccessions: sortDesc(archiveAccessions.map(archiveAccessionPreview), "dateReceived"),
-    meetingMaterials: sortDesc(meetingMaterials.map(meetingMaterialPreview), "createdAtISO"),
+    meetingMaterials: sortDesc(visibleMaterials.map(meetingMaterialPreview), "createdAtISO"),
     meetingAttendanceRecords: sortDesc(meetingAttendanceRecords.map(attendancePreview), "meetingDate"),
     communicationCampaigns: sortDesc(communicationCampaigns.map(communicationCampaignPreview), "createdAtISO"),
     communicationDeliveries: sortDesc(communicationDeliveries.map(communicationDeliveryPreview), "sentAtISO"),
@@ -141,7 +146,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
     recordsLocations: recordsLocations.map(recordsLocationPreview),
     recordBundles: buildRecordBundles(graphInput),
     checks: minuteBookChecks({
-      items,
+      items: visibleItems,
       documents,
       binderDocuments,
       meetings,
@@ -249,7 +254,8 @@ async function collectBinderDocumentPreviews(ctx: PortableQueryCtx, societyId: a
         .take(DOCUMENT_PREVIEW_LIMIT_PER_CATEGORY),
     ),
   );
-  return groups.flat().map((doc: any) => ({
+  const allows = await documentAccessPredicate(ctx, String(societyId));
+  return groups.flat().filter((doc) => allows(doc)).map((doc: any) => ({
     _id: doc._id,
     title: doc.title,
     category: doc.category,

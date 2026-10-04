@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import {
@@ -8,7 +9,7 @@ import {
 } from "../shared/functions/orgChartAssignments";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("orgChartAssignments:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
@@ -20,13 +21,13 @@ export const list = query({
  * end-of-day on that date. History begins at the first edit after the revisions
  * table existed, so dates before that return nothing for the affected subjects.
  */
-export const listAsOf = query({
+export const listAsOf = authorizedQuery("orgChartAssignments:listAsOf", query)({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => listAsOfPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsert = mutation({
+export const upsert = authorizedMutation("orgChartAssignments:upsert", mutation)({
   args: {
     societyId: v.id("societies"),
     subjectType: v.string(),
@@ -41,7 +42,7 @@ export const upsert = mutation({
   handler: async (ctx, args) => upsertPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("orgChartAssignments:remove", mutation)({
   args: {
     societyId: v.id("societies"),
     subjectType: v.string(),

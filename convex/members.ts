@@ -1,21 +1,22 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { membersList, memberGet, memberCreate, memberUpdate, memberRemove, memberMerge } from "../shared/functions/members";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("members:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => membersList(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("members:get", query)({
   args: { id: v.id("members") },
   returns: v.any(),
   handler: async (ctx, args) => memberGet(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("members:create", mutation)({
   args: {
     societyId: v.id("societies"),
     firstName: v.string(),
@@ -34,7 +35,7 @@ export const create = mutation({
   handler: async (ctx, args) => memberCreate(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("members:update", mutation)({
   args: {
     id: v.id("members"),
     patch: v.object({
@@ -56,7 +57,7 @@ export const update = mutation({
   handler: async (ctx, args) => memberUpdate(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("members:remove", mutation)({
   args: { id: v.id("members") },
   returns: v.any(),
   handler: async (ctx, args) => memberRemove(await toPortableMutationCtx(ctx), args),
@@ -68,7 +69,7 @@ export const remove = mutation({
 // embedded inside array-of-object snapshots (written resolution signatures,
 // election-question options, minutes/motion movers) are intentionally NOT
 // rewired — those are historical records of who acted at the time.
-export const merge = mutation({
+export const merge = authorizedMutation("members:merge", mutation)({
   args: {
     keepId: v.id("members"),
     dropIds: v.array(v.id("members")),

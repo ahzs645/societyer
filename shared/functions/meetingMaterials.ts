@@ -1,3 +1,4 @@
+import { committeeAppointmentIsActive, getPortable as getAccessibleDocument } from "./documents";
 /**
  * PORTABLE FUNCTIONS: the meeting-materials domain
  * (listForMeeting / listForSociety / attach / setAvailability / remove).
@@ -85,10 +86,10 @@ function canAccessMeetingMaterial(
   context: AccessSubjectContext,
   requiredAccess = "view",
 ) {
-  if (!material || materialEffectiveStatus(material) === "withdrawn") return false;
+  if (!material || ["withdrawn", "expired", "pending"].includes(materialEffectiveStatus(material))) return false;
   if (roleCanBypass(context.userRole)) return true;
   if (hasExplicitGrant(material, context, requiredAccess)) return true;
-  return broadAccessAllows(material.accessLevel, context);
+  return (requiredAccess === "view" || roleAtLeast(context.userRole, "Director")) && broadAccessAllows(material.accessLevel, context);
 }
 
 function hasExplicitGrant(
@@ -172,7 +173,7 @@ async function documentAccessContextForActor(
   if (actingUserId && String(actingUserId) !== userId) {
     throw new Error("Authenticated actor does not match the current principal.");
   }
-  const user = await getOwned(ctx, "users", userId, String(societyId));
+  const user = await requireSocietyMembership(ctx, String(societyId));
 
   const committeeRows = await ctx.db
     .query("committeeMembers")
@@ -180,24 +181,14 @@ async function documentAccessContextForActor(
     .collect();
   const committeeIds = committeeRows
     .filter((row: Record<string, any>) =>
-      (user.memberId && String(row.memberId ?? "") === String(user.memberId)) ||
-      (user.directorId && String(row.directorId ?? "") === String(user.directorId)) ||
-      normalizeDocLabel(row.email ?? "") === normalizeDocLabel(user.email ?? "") ||
-      normalizeDocLabel(row.name ?? "") === normalizeDocLabel(user.displayName ?? ""),
+      committeeAppointmentIsActive(row) && (
+        (user.memberId && String(row.memberId ?? "") === String(user.memberId)) ||
+        (user.directorId && String(row.directorId ?? "") === String(user.directorId))
+      ),
     )
     .map((row: Record<string, any>) => String(row.committeeId));
 
   return documentAccessContextFromUser(user, Array.from(new Set(committeeIds)));
-}
-
-function normalizeDocLabel(value: string) {
-  return String(value ?? "")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9@.]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
 }
 
 // --- Portable copy of convex/lib/agendaItems.ts (ctx.db-only) ----------------
@@ -250,10 +241,10 @@ export async function listForMeetingPortable(
   const rows = await Promise.all(
     visibleMaterials.map(async (material) => ({
       ...material,
-      document: await getOwned(ctx, "documents", String(material.documentId), societyId),
+      document: await getAccessibleDocument(ctx, { id: String(material.documentId) }),
     })),
   );
-  return rows.sort((a: any, b: any) => a.order - b.order || String(a.createdAtISO).localeCompare(String(b.createdAtISO)));
+  return rows.filter((row) => row.document).sort((a: any, b: any) => a.order - b.order || String(a.createdAtISO).localeCompare(String(b.createdAtISO)));
 }
 
 export async function packageForMeetingPortable(
@@ -285,7 +276,7 @@ export async function packageForMeetingPortable(
 
   const materialRows = await Promise.all(
     visibleMaterials.map(async (material) => {
-      const document = await getOwned(ctx, "documents", String(material.documentId), societyId);
+      const document = await getAccessibleDocument(ctx, { id: String(material.documentId) });
       const downloadUrl = document?.storageId
         ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(document.storageId) })).url
         : null;
@@ -335,7 +326,7 @@ export async function listForSocietyPortable(
   const rows = await Promise.all(
     visibleMaterials.map(async (material) => ({
       ...material,
-      document: await getOwned(ctx, "documents", String(material.documentId), societyId),
+      document: await getAccessibleDocument(ctx, { id: String(material.documentId) }),
       meeting: await getOwned(ctx, "meetings", String(material.meetingId), societyId),
     })),
   );

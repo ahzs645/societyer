@@ -169,7 +169,7 @@ export function makeMeetingDraft(
   const template = meetingTemplatesForType(data.meetingTemplates, type).find((row) => row.isDefault) ??
     meetingTemplatesForType(data.meetingTemplates, type)[0];
   const scheduled = new Date();
-  scheduled.setDate(scheduled.getDate() + data.noticeMinDays);
+  scheduled.setDate(scheduled.getDate() + data.noticeMinDays + ((data.rules as any)?.noticeRequiresClearDays ? 1 : 0));
   return blankMeetingDraft({
     type,
     scheduledAt: toDateTimeLocalValue(scheduled),
@@ -249,7 +249,7 @@ export function MeetingFormFields({
     <div className="meeting-form">
       {isGeneralMeeting(value.type) &&
       (daysUntil(value.scheduledAt) ?? 0) >= 0 &&
-      !meetsNoticeWindow(value.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays) ? (
+      !meetsNoticeWindow(value.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays, effectiveRules) ? (
         <div className="flag flag--warn" style={{ marginBottom: 12 }}>
           <AlertTriangle />
           <div>
@@ -366,7 +366,7 @@ export function MeetingFormFields({
           className="input"
           type="number"
           placeholder={
-            effectiveRules?.quorumType === "fixed"
+            (effectiveRules as any)?.quorumRequiresLegalRegister ? "Legal electorate review required" : effectiveRules?.quorumType === "fixed"
               ? String(effectiveRules?.quorumValue ?? "")
               : "Computed for AGM/SGM"
           }

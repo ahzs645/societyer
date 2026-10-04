@@ -88,7 +88,9 @@ export const governanceTables = {
     societyId: v.id("societies"),
     email: v.string(),
     role: v.string(),
-    token: v.string(),
+    token: v.optional(v.string()), // Legacy invitations require reissue.
+    tokenHash: v.optional(v.string()),
+    expiresAtISO: v.optional(v.string()),
     invitedByUserId: v.optional(v.id("users")),
     createdAtISO: v.string(),
     acceptedAtISO: v.optional(v.string()),
@@ -96,7 +98,8 @@ export const governanceTables = {
     revokedAtISO: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
-    .index("by_token", ["token"]),
+    .index("by_token", ["token"])
+    .index("by_token_hash", ["tokenHash"]),
 
   // ========== Priority A additions ==========
 

@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -16,6 +17,9 @@ import {
   upsertPluginInstallationPortable,
   listIntegrationSyncStatesPortable,
 } from "../shared/functions/apiPlatform";
+import { resolveAuthIssuer } from "../shared/authConfiguration";
+import { hasPermission, listPermissionsForRole } from "../shared/functions/permissions";
+import { isActiveMembership } from "../shared/functions/access";
 import { bootstrapUserIdentityPortable } from "../shared/functions/users";
 import { assertConvexOutboundUrl } from "./lib/outboundUrlPolicy";
 import {
@@ -213,13 +217,13 @@ function invalidToken(reason: string) {
   return { valid: false as const, reason };
 }
 
-export const listClients = query({
+export const listClients = authorizedQuery("apiPlatform:listClients", query)({
   args: { societyId: v.id("societies") },
   returns: v.array(apiClientReturn),
   handler: async (ctx, args) => listClientsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const createClient = mutation({
+export const createClient = authorizedMutation("apiPlatform:createClient", mutation)({
   args: {
     societyId: v.id("societies"),
     name: v.string(),
@@ -231,7 +235,7 @@ export const createClient = mutation({
   handler: async (ctx, args) => createClientPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateClient = mutation({
+export const updateClient = authorizedMutation("apiPlatform:updateClient", mutation)({
   args: {
     id: v.id("apiClients"),
     patch: v.object({
@@ -245,7 +249,7 @@ export const updateClient = mutation({
   handler: async (ctx, args) => updateClientPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const listTokens = query({
+export const listTokens = authorizedQuery("apiPlatform:listTokens", query)({
   args: {
     societyId: v.id("societies"),
     clientId: v.optional(v.id("apiClients")),
@@ -254,7 +258,7 @@ export const listTokens = query({
   handler: async (ctx, args) => listTokensPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const createToken = mutation({
+export const createToken = authorizedMutation("apiPlatform:createToken", mutation)({
   args: {
     societyId: v.id("societies"),
     clientId: v.id("apiClients"),
@@ -290,7 +294,7 @@ export const createToken = mutation({
   },
 });
 
-export const verifyToken = mutation({
+export const verifyToken = authorizedMutation("apiPlatform:verifyToken", mutation)({
   args: {
     tokenHash: v.string(),
     requiredScope: v.optional(v.string()),
@@ -335,19 +339,32 @@ export const verifyToken = mutation({
     if (!scopeAllows(token.scopes, requiredScope)) {
       return invalidToken("insufficient_scope");
     }
+    const owner = token.createdByUserId ? await ctx.db.get(token.createdByUserId) : null;
+    if (!owner || owner.societyId !== token.societyId || !isActiveMembership(owner)) {
+      return invalidToken("principal_disabled_or_removed");
+    }
+    if (!owner.authSubject || !owner.authIssuer) return invalidToken("principal_unbound");
+    if (owner.externalIdentityId) {
+      const identity = await ctx.db.get(owner.externalIdentityId);
+      if (!identity || identity.status !== "Active" || identity.issuer !== owner.authIssuer || identity.subject !== owner.authSubject) return invalidToken("principal_disabled_or_removed");
+    }
+    if (requiredScope && !hasPermission(owner.role, requiredScope as any)) {
+      return invalidToken("insufficient_scope");
+    }
+    const effectiveScopes = listPermissionsForRole(owner.role).filter((scope) => scopeAllows(token.scopes, scope));
     await ctx.db.patch(token._id, { lastUsedAtISO: nowISO() });
     return {
       valid: true as const,
       token: redactToken(token),
       client,
       societyId: token.societyId,
-      scopes: token.scopes,
+      scopes: [...effectiveScopes],
       userId: token.createdByUserId,
     };
   },
 });
 
-export const resourceTenantStatus = query({
+export const resourceTenantStatus = authorizedQuery("apiPlatform:resourceTenantStatus", query)({
   args: {
     id: v.string(),
     societyId: v.id("societies"),
@@ -368,7 +385,7 @@ export const resourceTenantStatus = query({
   },
 });
 
-export const revokeToken = mutation({
+export const revokeToken = authorizedMutation("apiPlatform:revokeToken", mutation)({
   args: { id: v.id("apiTokens") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
@@ -384,19 +401,19 @@ export const revokeToken = mutation({
   },
 });
 
-export const listPluginInstallations = query({
+export const listPluginInstallations = authorizedQuery("apiPlatform:listPluginInstallations", query)({
   args: { societyId: v.id("societies") },
   returns: v.array(pluginInstallationReturn),
   handler: async (ctx, args) => listPluginInstallationsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listIntegrationCatalog = query({
+export const listIntegrationCatalog = authorizedQuery("apiPlatform:listIntegrationCatalog", query)({
   args: { societyId: v.optional(v.id("societies")) },
   returns: v.array(integrationCatalogItemReturn),
   handler: async (ctx, args) => listIntegrationCatalogPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const installIntegration = mutation({
+export const installIntegration = authorizedMutation("apiPlatform:installIntegration", mutation)({
   args: {
     societyId: v.id("societies"),
     slug: v.string(),
@@ -407,7 +424,7 @@ export const installIntegration = mutation({
   handler: async (ctx, args) => installIntegrationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateIntegrationHealth = mutation({
+export const updateIntegrationHealth = authorizedMutation("apiPlatform:updateIntegrationHealth", mutation)({
   args: {
     id: v.id("pluginInstallations"),
     secretStatus: v.optional(v.record(v.string(), v.boolean())),
@@ -419,7 +436,7 @@ export const updateIntegrationHealth = mutation({
   handler: async (ctx, args) => updateIntegrationHealthPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertPluginInstallation = mutation({
+export const upsertPluginInstallation = authorizedMutation("apiPlatform:upsertPluginInstallation", mutation)({
   args: {
     id: v.optional(v.id("pluginInstallations")),
     societyId: v.id("societies"),
@@ -435,7 +452,7 @@ export const upsertPluginInstallation = mutation({
   handler: async (ctx, args) => upsertPluginInstallationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const listWebhookSubscriptions = query({
+export const listWebhookSubscriptions = authorizedQuery("apiPlatform:listWebhookSubscriptions", query)({
   args: { societyId: v.id("societies") },
   returns: v.array(webhookSubscriptionReturn),
   handler: async (ctx, { societyId }) =>
@@ -448,7 +465,7 @@ export const listWebhookSubscriptions = query({
     })()).map(redactWebhookSubscription),
 });
 
-export const listWebhookSubscriptionsForEvent = query({
+export const listWebhookSubscriptionsForEvent = authorizedQuery("apiPlatform:listWebhookSubscriptionsForEvent", query)({
   args: {
     societyId: v.id("societies"),
     eventType: v.string(),
@@ -480,7 +497,7 @@ export const listWebhookSubscriptionsForEvent = query({
   },
 });
 
-export const upsertWebhookSubscription = mutation({
+export const upsertWebhookSubscription = authorizedMutation("apiPlatform:upsertWebhookSubscription", mutation)({
   args: {
     id: v.optional(v.id("webhookSubscriptions")),
     societyId: v.id("societies"),
@@ -551,7 +568,7 @@ export const upsertWebhookSubscription = mutation({
   },
 });
 
-export const setWebhookSubscriptionStatus = mutation({
+export const setWebhookSubscriptionStatus = authorizedMutation("apiPlatform:setWebhookSubscriptionStatus", mutation)({
   args: {
     id: v.id("webhookSubscriptions"),
     societyId: v.id("societies"),
@@ -573,7 +590,7 @@ export const setWebhookSubscriptionStatus = mutation({
   },
 });
 
-export const createWebhookDelivery = mutation({
+export const createWebhookDelivery = authorizedMutation("apiPlatform:createWebhookDelivery", mutation)({
   args: {
     societyId: v.id("societies"),
     subscriptionId: v.id("webhookSubscriptions"),
@@ -612,7 +629,7 @@ export const createWebhookDelivery = mutation({
   },
 });
 
-export const updateWebhookDelivery = mutation({
+export const updateWebhookDelivery = authorizedMutation("apiPlatform:updateWebhookDelivery", mutation)({
   args: {
     id: v.id("webhookDeliveries"),
     status: v.string(),
@@ -655,7 +672,7 @@ export const updateWebhookDelivery = mutation({
   },
 });
 
-export const listWebhookDeliveries = query({
+export const listWebhookDeliveries = authorizedQuery("apiPlatform:listWebhookDeliveries", query)({
   args: { societyId: v.id("societies"), subscriptionId: v.optional(v.id("webhookSubscriptions")) },
   returns: v.array(webhookDeliveryReturn),
   handler: async (ctx, { societyId, subscriptionId }) => {
@@ -679,7 +696,7 @@ export const listWebhookDeliveries = query({
   },
 });
 
-export const listIntegrationSyncStates = query({
+export const listIntegrationSyncStates = authorizedQuery("apiPlatform:listIntegrationSyncStates", query)({
   args: {
     societyId: v.id("societies"),
     provider: v.optional(v.string()),
@@ -689,7 +706,7 @@ export const listIntegrationSyncStates = query({
   handler: async (ctx, args) => listIntegrationSyncStatesPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsertIntegrationSyncState = mutation({
+export const upsertIntegrationSyncState = authorizedMutation("apiPlatform:upsertIntegrationSyncState", mutation)({
   args: {
     id: v.optional(v.id("integrationSyncStates")),
     societyId: v.id("societies"),
@@ -756,7 +773,7 @@ export const upsertIntegrationSyncState = mutation({
   },
 });
 
-export const actorForBetterAuthSubject = query({
+export const actorForBetterAuthSubject = authorizedQuery("apiPlatform:actorForBetterAuthSubject", query)({
   args: { societyId: v.id("societies"), authSubject: idString },
   returns: v.union(
     v.null(),
@@ -771,13 +788,13 @@ export const actorForBetterAuthSubject = query({
       .query("users")
       .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
       .collect();
-    const user = rows.find((row) => row.societyId === societyId);
+    const user = rows.find((row) => row.societyId === societyId && row.authIssuer === resolveAuthIssuer(process.env) && row.status === "Active");
     return user ? { userId: user._id, role: user.role, societyId: user.societyId } : null;
   },
 });
 
 /** Operator-only recovery for Owner placeholders created before creator binding. */
-export const bootstrapUserIdentity = mutation({
+export const bootstrapUserIdentity = authorizedMutation("apiPlatform:bootstrapUserIdentity", mutation)({
   args: {
     userId: v.id("users"),
     authSubject: v.string(),
@@ -790,12 +807,13 @@ export const bootstrapUserIdentity = mutation({
       userId,
       authSubject,
       authProvider: "better-auth",
+      authIssuer: resolveAuthIssuer(process.env),
     });
     return boundUserId as Id<"users">;
   },
 });
 
-export const devActorForSociety = query({
+export const devActorForSociety = authorizedQuery("apiPlatform:devActorForSociety", query)({
   args: { societyId: v.optional(v.id("societies")) },
   returns: v.union(
     v.null(),

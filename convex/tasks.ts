@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -11,31 +12,31 @@ import {
 } from "../shared/functions/tasks";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("tasks:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => tasksList(await toPortableQueryCtx(ctx), args),
 });
 
-export const byCommittee = query({
+export const byCommittee = authorizedQuery("tasks:byCommittee", query)({
   args: { committeeId: v.id("committees") },
   returns: v.any(),
   handler: async (ctx, args) => tasksByCommittee(await toPortableQueryCtx(ctx), args),
 });
 
-export const byGoal = query({
+export const byGoal = authorizedQuery("tasks:byGoal", query)({
   args: { goalId: v.id("goals") },
   returns: v.any(),
   handler: async (ctx, args) => tasksByGoal(await toPortableQueryCtx(ctx), args),
 });
 
-export const byMeeting = query({
+export const byMeeting = authorizedQuery("tasks:byMeeting", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => tasksByMeeting(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("tasks:create", mutation)({
   args: {
     societyId: v.id("societies"),
     title: v.string(),
@@ -59,7 +60,7 @@ export const create = mutation({
   handler: async (ctx, args) => taskCreate(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("tasks:update", mutation)({
   args: {
     id: v.id("tasks"),
     patch: v.object({
@@ -91,7 +92,7 @@ export const update = mutation({
   handler: async (ctx, args) => taskUpdate(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("tasks:remove", mutation)({
   args: { id: v.id("tasks") },
   returns: v.any(),
   handler: async (ctx, args) => taskRemove(await toPortableMutationCtx(ctx), args),

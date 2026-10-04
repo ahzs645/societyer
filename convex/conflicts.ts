@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -9,19 +10,19 @@ import {
 } from "../shared/functions/conflicts";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("conflicts:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => conflictsListPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const forMeeting = query({
+export const forMeeting = authorizedQuery("conflicts:forMeeting", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => conflictsForMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("conflicts:create", mutation)({
   args: {
     societyId: v.id("societies"),
     directorId: v.id("directors"),
@@ -39,13 +40,13 @@ export const create = mutation({
   handler: async (ctx, args) => conflictsCreatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const resolve = mutation({
+export const resolve = authorizedMutation("conflicts:resolve", mutation)({
   args: { id: v.id("conflicts"), resolvedAt: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => conflictsResolvePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("conflicts:remove", mutation)({
   args: { id: v.id("conflicts") },
   returns: v.any(),
   handler: async (ctx, args) => conflictsRemovePortable(await toPortableMutationCtx(ctx), args),

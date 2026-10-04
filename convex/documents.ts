@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -22,25 +23,25 @@ import {
 } from "../shared/functions/documents";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("documents:list", query)({
   args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("documents:get", query)({
   args: { id: v.id("documents"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const getMany = query({
+export const getMany = authorizedQuery("documents:getMany", query)({
   args: { ids: v.array(v.id("documents")), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => getManyPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("documents:create", mutation)({
   args: {
     societyId: v.id("societies"),
     committeeId: v.optional(v.id("committees")),
@@ -61,7 +62,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const markOpened = mutation({
+export const markOpened = authorizedMutation("documents:markOpened", mutation)({
   args: {
     id: v.id("documents"),
     userId: v.optional(v.id("users")),
@@ -71,7 +72,7 @@ export const markOpened = mutation({
   handler: async (ctx, args) => markOpenedPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateReviewStatus = mutation({
+export const updateReviewStatus = authorizedMutation("documents:updateReviewStatus", mutation)({
   args: {
     id: v.id("documents"),
     reviewStatus: v.optional(v.string()),
@@ -81,31 +82,31 @@ export const updateReviewStatus = mutation({
   handler: async (ctx, args) => updateReviewStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const reviewQueues = query({
+export const reviewQueues = authorizedQuery("documents:reviewQueues", query)({
   args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => reviewQueuesPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const createPipaPolicyDraft = mutation({
+export const createPipaPolicyDraft = authorizedMutation("documents:createPipaPolicyDraft", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => createPipaPolicyDraftPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const rebuildPipaPolicyDraftFromSociety = mutation({
+export const rebuildPipaPolicyDraftFromSociety = authorizedMutation("documents:rebuildPipaPolicyDraftFromSociety", mutation)({
   args: { id: v.id("documents") },
   returns: v.any(),
   handler: async (ctx, args) => rebuildPipaPolicyDraftFromSocietyPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createMemberDataGapMemoDraft = mutation({
+export const createMemberDataGapMemoDraft = authorizedMutation("documents:createMemberDataGapMemoDraft", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => createMemberDataGapMemoDraftPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateDraftContent = mutation({
+export const updateDraftContent = authorizedMutation("documents:updateDraftContent", mutation)({
   args: {
     id: v.id("documents"),
     title: v.string(),
@@ -116,7 +117,7 @@ export const updateDraftContent = mutation({
   handler: async (ctx, args) => updateDraftContentPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const linkPrivacyPolicyEvidence = mutation({
+export const linkPrivacyPolicyEvidence = authorizedMutation("documents:linkPrivacyPolicyEvidence", mutation)({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -125,7 +126,7 @@ export const linkPrivacyPolicyEvidence = mutation({
   handler: async (ctx, args) => linkPrivacyPolicyEvidencePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createGovernanceDocumentFromLocalFile = mutation({
+export const createGovernanceDocumentFromLocalFile = authorizedMutation("documents:createGovernanceDocumentFromLocalFile", mutation)({
   args: {
     societyId: v.id("societies"),
     documentKind: v.union(
@@ -151,7 +152,7 @@ export const createGovernanceDocumentFromLocalFile = mutation({
   handler: async (ctx, args) => createGovernanceDocumentFromLocalFilePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createLocalDocumentFromConnector = mutation({
+export const createLocalDocumentFromConnector = authorizedMutation("documents:createLocalDocumentFromConnector", mutation)({
   args: {
     societyId: v.id("societies"),
     title: v.string(),
@@ -173,7 +174,7 @@ export const createLocalDocumentFromConnector = mutation({
   handler: async (ctx, args) => createLocalDocumentFromConnectorPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const mergeConnectorDocumentMetadata = mutation({
+export const mergeConnectorDocumentMetadata = authorizedMutation("documents:mergeConnectorDocumentMetadata", mutation)({
   args: {
     documentId: v.id("documents"),
     title: v.optional(v.string()),
@@ -192,19 +193,19 @@ export const mergeConnectorDocumentMetadata = mutation({
   handler: async (ctx, args) => mergeConnectorDocumentMetadataPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const flagForDeletion = mutation({
+export const flagForDeletion = authorizedMutation("documents:flagForDeletion", mutation)({
   args: { id: v.id("documents"), flagged: v.boolean() },
   returns: v.any(),
   handler: async (ctx, args) => flagForDeletionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const archive = mutation({
+export const archive = authorizedMutation("documents:archive", mutation)({
   args: { id: v.id("documents"), reason: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => archivePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("documents:remove", mutation)({
   args: { id: v.id("documents") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

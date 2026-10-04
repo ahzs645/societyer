@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -8,25 +9,25 @@ import {
 } from "../shared/functions/serviceProviders";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("serviceProviders:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const functionsCatalog = query({
+export const functionsCatalog = authorizedQuery("serviceProviders:functionsCatalog", query)({
   args: {},
   returns: v.any(),
   handler: () => functionsCatalogPortable(),
 });
 
-export const activeAsOf = query({
+export const activeAsOf = authorizedQuery("serviceProviders:activeAsOf", query)({
   args: { societyId: v.id("societies"), asOf: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => activeAsOfPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsert = mutation({
+export const upsert = authorizedMutation("serviceProviders:upsert", mutation)({
   args: {
     id: v.optional(v.id("serviceProviders")),
     societyId: v.id("societies"),

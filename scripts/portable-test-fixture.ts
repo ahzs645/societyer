@@ -34,6 +34,7 @@ export async function seedPortableTestMembership(
     status: "Active",
     authProvider: "portable-fixture",
     authSubject: PORTABLE_TEST_AUTH_SUBJECT,
+    authIssuer: PORTABLE_TEST_IDENTITY.issuer,
     createdAtISO: "2026-01-01T00:00:00.000Z",
   });
 }
@@ -50,6 +51,7 @@ export function portableTestSeed(societyId: string): Record<string, PortableDoc[
       status: "Active",
       authProvider: "portable-fixture",
       authSubject: PORTABLE_TEST_AUTH_SUBJECT,
+    authIssuer: PORTABLE_TEST_IDENTITY.issuer,
       createdAtISO: "2026-01-01T00:00:00.000Z",
     }],
   };

@@ -1,3 +1,4 @@
+import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { query, mutation, action, internalMutation, internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
@@ -22,7 +23,7 @@ import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export { normalizeNotificationLink };
 
-export const list = query({
+export const list = authorizedQuery("notifications:list", query)({
   args: {
     societyId: v.id("societies"),
     userId: v.optional(v.id("users")),
@@ -36,13 +37,13 @@ export const list = query({
   handler: async (ctx, args) => notificationsList(await toPortableQueryCtx(ctx), args),
 });
 
-export const unreadCount = query({
+export const unreadCount = authorizedQuery("notifications:unreadCount", query)({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => notificationsUnreadCount(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("notifications:create", mutation)({
   args: {
     societyId: v.id("societies"),
     userId: v.optional(v.id("users")),
@@ -56,13 +57,13 @@ export const create = mutation({
   handler: async (ctx, args) => notificationCreate(await toPortableMutationCtx(ctx), args),
 });
 
-export const markRead = mutation({
+export const markRead = authorizedMutation("notifications:markRead", mutation)({
   args: { id: v.id("notifications") },
   returns: v.any(),
   handler: async (ctx, args) => notificationMarkRead(await toPortableMutationCtx(ctx), args),
 });
 
-export const markAllRead = mutation({
+export const markAllRead = authorizedMutation("notifications:markAllRead", mutation)({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => notificationMarkAllRead(await toPortableMutationCtx(ctx), args),
@@ -71,7 +72,7 @@ export const markAllRead = mutation({
 /** Clear a single notification from the bell. Stamps dismissedAt (and readAt
  * if not already read) so it leaves the bell + unread count immediately, but
  * the row survives on the Notifications page until `purgeDismissed` runs. */
-export const dismiss = mutation({
+export const dismiss = authorizedMutation("notifications:dismiss", mutation)({
   args: { id: v.id("notifications") },
   returns: v.any(),
   handler: async (ctx, args) => notificationDismiss(await toPortableMutationCtx(ctx), args),
@@ -79,14 +80,14 @@ export const dismiss = mutation({
 
 /** Hide a notification from the bell until `untilISO` (null un-snoozes it). The
  *  row resurfaces automatically once the time passes — no purge needed. */
-export const snooze = mutation({
+export const snooze = authorizedMutation("notifications:snooze", mutation)({
   args: { id: v.id("notifications"), untilISO: v.union(v.string(), v.null()) },
   returns: v.any(),
   handler: async (ctx, args) => notificationSnooze(await toPortableMutationCtx(ctx), args),
 });
 
 /** Clear every (non-dismissed) notification for this user/society from the bell. */
-export const dismissAll = mutation({
+export const dismissAll = authorizedMutation("notifications:dismissAll", mutation)({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => notificationDismissAll(await toPortableMutationCtx(ctx), args),
@@ -95,14 +96,14 @@ export const dismissAll = mutation({
 /** Permanently delete a single notification now, without waiting for the
  * retention purge. Used by the "Delete permanently" action on the
  * Notifications page (Dismissed tab). */
-export const remove = mutation({
+export const remove = authorizedMutation("notifications:remove", mutation)({
   args: { id: v.id("notifications") },
   returns: v.any(),
   handler: async (ctx, args) => notificationRemove(await toPortableMutationCtx(ctx), args),
 });
 
 /** Permanently delete every dismissed notification for this user/society now. */
-export const removeAllDismissed = mutation({
+export const removeAllDismissed = authorizedMutation("notifications:removeAllDismissed", mutation)({
   args: { societyId: v.id("societies"), userId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => notificationRemoveAllDismissed(await toPortableMutationCtx(ctx), args),
@@ -154,13 +155,13 @@ export const purgeDismissed = internalMutation({
   },
 });
 
-export const listPrefs = query({
+export const listPrefs = authorizedQuery("notifications:listPrefs", query)({
   args: { userId: v.id("users") },
   returns: v.any(),
   handler: async (ctx, args) => notificationsListPrefs(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsertPref = mutation({
+export const upsertPref = authorizedMutation("notifications:upsertPref", mutation)({
   args: {
     userId: v.id("users"),
     channel: v.string(),
@@ -385,7 +386,7 @@ function digestAllows(
 
 // Action: bundle digest email + SMS for anyone who wants them. Per-user, the
 // open items are filtered by that user's per-kind prefs for each channel.
-export const sendDigest = action({
+export const sendDigest = authorizedAction("notifications:sendDigest", action)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {

@@ -1,9 +1,12 @@
+import { validateHostedAuth } from "../../shared/authConfiguration";
+import { isLocalDataRuntime } from "./staticRuntime";
+import { resolvedConvexUrl } from "./appRuntime";
+
 export type AuthMode = "none" | "better-auth";
 
 export function getAuthMode(): AuthMode {
-  return import.meta.env.VITE_AUTH_MODE === "better-auth"
-    ? "better-auth"
-    : "none";
+  if (isLocalDataRuntime()) return "none";
+  return validateHostedAuth(import.meta.env, resolvedConvexUrl());
 }
 
 export function isBetterAuthMode() {

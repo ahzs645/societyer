@@ -1,5 +1,6 @@
 "use node";
 
+import { authorizedAction } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { action } from "./lib/untypedServer";
 import { api, internal } from "./_generated/api";
@@ -13,7 +14,7 @@ function env(name: string): string | undefined {
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
-export const sendChatMessage = action({
+export const sendChatMessage = authorizedAction("aiChatActions:sendChatMessage", action)({
   args: {
     societyId: v.id("societies"),
     threadId: v.optional(v.id("aiChatThreads")),
@@ -174,7 +175,7 @@ export const sendChatMessage = action({
 // learning, permissioned tool execution) that chat uses, persisting the model's real
 // output. With no key (or on error) it falls back to the deterministic runAgent
 // mutation so the feature still works offline/in demo and never hard-fails.
-export const runAgentLive = action({
+export const runAgentLive = authorizedAction("aiChatActions:runAgentLive", action)({
   args: {
     societyId: v.id("societies"),
     agentKey: v.string(),

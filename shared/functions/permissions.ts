@@ -6,7 +6,7 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
-import type { Role } from "./access";
+import { requireSocietyMembership, type Role } from "./access";
 
 export const PERMISSIONS = [
   "society:read",
@@ -104,12 +104,12 @@ export const ROLE_MATRIX: Record<Role, readonly Permission[]> = {
 };
 
 export function hasPermission(role: string, permission: Permission): boolean {
-  if (!(role in ROLE_MATRIX)) return false;
+  if (!Object.prototype.hasOwnProperty.call(ROLE_MATRIX, role)) return false;
   return (ROLE_MATRIX[role as Role] as readonly string[]).includes(permission);
 }
 
 export function listPermissionsForRole(role: string): readonly Permission[] {
-  if (!(role in ROLE_MATRIX)) return [];
+  if (!Object.prototype.hasOwnProperty.call(ROLE_MATRIX, role)) return [];
   return ROLE_MATRIX[role as Role];
 }
 
@@ -117,10 +117,27 @@ export async function myPermissionsPortable(
   ctx: PortableQueryCtx,
   { userId, societyId }: { userId: string; societyId: string },
 ) {
-  const user = await ctx.db.get(userId);
-  if (!user || user.societyId !== societyId) return { role: null, permissions: [] };
-  return {
-    role: user.role,
-    permissions: listPermissionsForRole(String(user.role)),
-  };
+  const user = await requireSocietyMembership(ctx, societyId);
+  if (user._id !== userId) throw new Error("Authenticated actor does not match the current principal.");
+  return { role: user.role, permissions: listPermissionsForRole(String(user.role)) };
+}
+
+/** The current membership, never an actor or role supplied by the caller. */
+export async function requirePermissionPortable(
+  ctx: PortableQueryCtx,
+  societyId: string,
+  permission: Permission,
+) {
+  const user = await requireSocietyMembership(ctx, societyId);
+  if (!hasPermission(String(user.role), permission)) {
+    throw new Error(`Permission ${permission} required.`);
+  }
+  if (ctx.principal.kind === "service") {
+    const scopes = ctx.principal.scopes;
+    const resource = permission.split(":")[0];
+    if (!scopes.includes("*") && !scopes.includes(permission) && !scopes.includes(`${resource}:*`)) {
+      throw new Error(`Service scope ${permission} required.`);
+    }
+  }
+  return user;
 }

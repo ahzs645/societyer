@@ -1,3 +1,4 @@
+import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation, action } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
@@ -148,19 +149,19 @@ const structuredMinutesFields = {
   agmDetails: v.optional(agmDetails),
 };
 
-export const list = query({
+export const list = authorizedQuery("minutes:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const getByMeeting = query({
+export const getByMeeting = authorizedQuery("minutes:getByMeeting", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => getByMeetingPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("minutes:create", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
@@ -191,7 +192,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("minutes:update", mutation)({
   args: {
     id: v.id("minutes"),
     patch: v.object({
@@ -230,7 +231,7 @@ export const update = mutation({
 });
 
 // Upsert a minutes row from an AI-generated draft (transcripts.runPipeline).
-export const upsertFromDraft = mutation({
+export const upsertFromDraft = authorizedMutation("minutes:upsertFromDraft", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
@@ -261,19 +262,19 @@ export const upsertFromDraft = mutation({
   handler: async (ctx, args) => upsertFromDraftPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const backfillMotionPersonLinks = mutation({
+export const backfillMotionPersonLinks = authorizedMutation("minutes:backfillMotionPersonLinks", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => backfillMotionPersonLinksPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const backfillQuorumSnapshot = mutation({
+export const backfillQuorumSnapshot = authorizedMutation("minutes:backfillQuorumSnapshot", mutation)({
   args: { id: v.id("minutes") },
   returns: v.any(),
   handler: async (ctx, args) => backfillQuorumSnapshotPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const generateDraft = action({
+export const generateDraft = authorizedAction("minutes:generateDraft", action)({
   args: {
     meetingId: v.id("meetings"),
     transcript: v.string(),

@@ -4,6 +4,7 @@
  * staticConvex.ts imports and delegates to these. Structural store type keeps the
  * module decoupled from the mirror's internal classes.
  */
+import { assertPacketCompatible, packetDataWithProvenance } from "../../shared/templateProvenance";
 import { SOCIETY_ID } from "./staticConvexFixtures";
 import {
   CORPORATION_DOCUMENT_PACKETS,
@@ -208,6 +209,8 @@ export function staticCreatePacketRunArtifacts(
     `societyer:legal-precedent-run:${args.runId}`,
   ]);
   const society = store?.getRow("societies", args.societyId);
+  assertPacketCompatible(society, args.packet);
+  const provenanceData = packetDataWithProvenance(args.dataJson, society, args.packet);
   const fileOpts = { shortName: society?.shortName, effectiveDate: args.effectiveDate };
   const docxDataUrl = corporationPacketDocxDataUrl(args.packet);
   const docxFileName = corporationPacketDocxFileName(args.packet, fileOpts);
@@ -237,7 +240,7 @@ export function staticCreatePacketRunArtifacts(
       librarySection: "governance",
       flaggedForDeletion: false,
       sourceExternalIds,
-      sourcePayloadJson: args.dataJson,
+      sourcePayloadJson: provenanceData,
       tags: ["corporation-packet", args.packet.key, "editable-docx"],
     });
     store.upsertRow("documentVersions", {
@@ -268,7 +271,7 @@ export function staticCreatePacketRunArtifacts(
       eventId: args.eventId,
       effectiveDate: args.effectiveDate,
       documentTag: args.packet.documentTag,
-      dataJson: args.dataJson,
+      dataJson: provenanceData,
       subloopJsonList: [],
       signersRequiredRoleHolderIds: signerRoleHolderIds,
       signersWhoSignedIds: [],
@@ -388,6 +391,7 @@ export function staticGenerateDocumentFromCatalog(
   const socPacket = SOCIETY_DOCUMENT_PACKETS.find((p) => p.key === args?.packetKey);
   const packet = corpPacket ?? socPacket;
   if (!packet) throw new Error(`No document packet matches key: ${args?.packetKey}`);
+  assertPacketCompatible(store?.getRow("societies", societyId), packet);
   const markerKind = corpPacket ? "corporation" : "society";
   if (markerKind === "corporation") staticSeedCorporationDocumentPackets(store, { societyId });
   else staticSeedSocietyDocumentPackets(store, { societyId });
@@ -441,7 +445,6 @@ export function staticStageCorporationDocumentPacket(
   staticUniqueStrings: StaticUniqueStrings,
 ) {
   const societyId = args?.societyId ?? SOCIETY_ID;
-  staticSeedCorporationDocumentPackets(store, { societyId });
   const packet = args?.packetKey
     ? CORPORATION_DOCUMENT_PACKETS.find((candidate) => candidate.key === args.packetKey)
     : corporationPacketForComplianceObligation({
@@ -450,6 +453,8 @@ export function staticStageCorporationDocumentPacket(
         ruleId: args?.obligationRuleId,
       });
   if (!packet) throw new Error("No corporation document packet matches this obligation.");
+  assertPacketCompatible(store?.getRow("societies", societyId), packet);
+  staticSeedCorporationDocumentPackets(store, { societyId });
 
   const marker = corporationPacketPrecedentMarker(packet);
   const precedent = (store?.listRows("legalPrecedents", { societyId }) ?? [])

@@ -229,7 +229,15 @@ export function Select<T extends string>({
   useEffect(() => {
     if (!open || !menuRef.current) return;
     const items = menuRef.current.querySelectorAll<HTMLElement>(".menu__list .menu__item");
-    items[activeIdx]?.scrollIntoView({ block: "nearest" });
+    const list = menuRef.current.querySelector<HTMLElement>(".menu__list");
+    const item = items[activeIdx];
+    if (!list || !item) return;
+    // scrollIntoView can move the page while a low trigger's portal is being
+    // flipped above it, firing the page-scroll dismissal. Scroll only the list.
+    const bounds = list.getBoundingClientRect();
+    const active = item.getBoundingClientRect();
+    if (active.top < bounds.top) list.scrollTop -= bounds.top - active.top;
+    else if (active.bottom > bounds.bottom) list.scrollTop += active.bottom - bounds.bottom;
   }, [activeIdx, open]);
 
   const commit = (idx: number) => {

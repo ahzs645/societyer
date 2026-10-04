@@ -28,6 +28,7 @@ export interface RenderContext {
     kind: string;
     jurisdiction: string;
     registrationNumber: string;
+    purposes: string;
     legislation: string;
   };
   dir: GroupContext;
@@ -47,6 +48,7 @@ export interface RenderContext {
 export type RenderContextOrg = LegalEntityLike & {
   shortName?: string | null;
   incorporationNumber?: string | null;
+  purposes?: string | null;
 };
 
 export interface BuildRenderContextInput {
@@ -104,6 +106,7 @@ export function buildRenderContext(input: BuildRenderContextInput): RenderContex
       kind,
       jurisdiction: org.jurisdictionCode ?? "",
       registrationNumber: input.registrationNumber ?? org.incorporationNumber ?? "",
+      purposes: org.purposes?.trim() || "[Insert the society’s reviewed lawful purposes.]",
       legislation: resolveLegislation(kind, org.actFormedUnder),
     },
     dir: buildGroup(input.directors ?? []),

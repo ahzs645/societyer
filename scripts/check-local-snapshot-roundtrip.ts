@@ -89,6 +89,16 @@ const ontarioRegistrationId = await source.mutation("organizationDetails:upsertR
   status: "active",
 });
 
+const beforeCommencement = await source.query("organizationDetails:overview", { societyId: federalWorkspace.societyId });
+const pendingOntarioFacts = complianceFactsForOrganization({ jurisdictionCode: "CA-FED-CBCA", entityType: "corporation__business_", incorporationDate: "2025-02-10" }, { asOfDate: "2026-02-01", registrations: beforeCommencement.registrations });
+assert.equal(pendingOntarioFacts.flatMap(facts => computeComplianceObligations(facts)).some(obligation => obligation.sourceRegistrationId === ontarioRegistrationId && obligation.creates?.filingKind === "OntarioInitialReturn"), false, "Registration alone cannot infer Ontario business commencement");
+await source.mutation("organizationDetails:upsertRegistration", {
+  id: ontarioRegistrationId,
+  societyId: federalWorkspace.societyId,
+  jurisdiction: "CA-ON-OBCA",
+  activityCommencementDate: "2026-01-02",
+});
+
 const packetSeed = await source.mutation("legalOperations:seedCorporationDocumentPackets", {
   societyId: federalWorkspace.societyId,
 });
@@ -170,7 +180,7 @@ assert.deepEqual(holdings, [{
 const importedDetails = await imported.query("organizationDetails:overview", { societyId: federalWorkspace.societyId });
 assert.equal(importedDetails.registrations.length, 2);
 assert.ok(importedDetails.registrations.some((row: any) => row._id === importedFederal.primaryRegistrationId && row.registrationType === "home"));
-assert.ok(importedDetails.registrations.some((row: any) => row._id === ontarioRegistrationId && row.registrationType === "extra_provincial"));
+assert.ok(importedDetails.registrations.some((row: any) => row._id === ontarioRegistrationId && row.registrationType === "extra_provincial" && row.activityCommencementDate === "2026-01-02"));
 
 const importedPackets = await imported.query("legalOperations:templateEngine", { societyId: federalWorkspace.societyId });
 assert.equal(importedPackets.templates.length, corpTemplateCount);

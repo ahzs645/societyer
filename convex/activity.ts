@@ -1,15 +1,16 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { listPortable, listForRecordPortable, logPortable } from "../shared/functions/activity";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("activity:list", query)({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listForRecord = query({
+export const listForRecord = authorizedQuery("activity:listForRecord", query)({
   args: {
     societyId: v.id("societies"),
     entityType: v.string(),
@@ -21,7 +22,7 @@ export const listForRecord = query({
   handler: async (ctx, args) => listForRecordPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const log = mutation({
+export const log = authorizedMutation("activity:log", mutation)({
   args: {
     societyId: v.id("societies"),
     actor: v.string(),

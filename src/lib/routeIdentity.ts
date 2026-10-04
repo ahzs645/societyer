@@ -275,6 +275,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/dividends": { icon: Coins, group: "records", label: "Dividends", entityKinds: ["corporation"] },
   "/app/significant-individuals": { icon: ShieldCheck, group: "records", label: "Significant individuals", entityKinds: ["corporation"] },
   "/app/service-providers": { icon: Briefcase, group: "records", label: "Service providers" },
+  "/app/research-library": { icon: BookOpen, group: "compliance", label: "Research library" },
   "/app/compliance-settings": { icon: CalendarClock, group: "records", label: "Compliance settings" },
   "/app/corporate-history": { icon: History, group: "records", label: "Corporate history" },
   "/app/annual-filings": { icon: CalendarCheck, group: "records", label: "Annual filings" },

@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { votingPowerPortable } from "../shared/functions/votingPower";
@@ -55,7 +56,7 @@ import {
 } from "../shared/functions/legalDocuments";
 import { getOwned, principalUserId, requireSocietyMembership } from "../shared/functions/access";
 
-export const listRoleHolders = query({
+export const listRoleHolders = authorizedQuery("legalOperations:listRoleHolders", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -65,7 +66,7 @@ export const listRoleHolders = query({
   },
 });
 
-export const upsertRoleHolder = mutation({
+export const upsertRoleHolder = authorizedMutation("legalOperations:upsertRoleHolder", mutation)({
   args: {
     id: v.optional(v.id("roleHolders")),
     societyId: v.id("societies"),
@@ -141,7 +142,7 @@ export const upsertRoleHolder = mutation({
   },
 });
 
-export const removeRoleHolder = mutation({
+export const removeRoleHolder = authorizedMutation("legalOperations:removeRoleHolder", mutation)({
   args: { id: v.id("roleHolders"), actorUserId: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -155,7 +156,7 @@ export const removeRoleHolder = mutation({
   },
 });
 
-export const rightsLedger = query({
+export const rightsLedger = authorizedQuery("legalOperations:rightsLedger", query)({
   // `asOf` (YYYY-MM-DD) reconstructs the cap table at a past date: transfers are
   // truncated to that day and holdings re-derived from them, for a point-in-time
   // register. Omitted = live state from the stored holdings.
@@ -174,7 +175,7 @@ export const rightsLedger = query({
  * voting-signatory set (natural persons at the age of majority). Logic in the
  * tested shared/votingPower.ts.
  */
-export const votingPower = query({
+export const votingPower = authorizedQuery("legalOperations:votingPower", query)({
   // `asOf` (YYYY-MM-DD) computes the roll-up from the cap table as it stood on a
   // past date (holdings re-derived from transfers ≤ asOf). Omitted = live state.
   args: { societyId: v.id("societies"), asOf: v.optional(v.string()) },
@@ -190,7 +191,7 @@ export const votingPower = query({
   },
 });
 
-export const upsertRightsClass = mutation({
+export const upsertRightsClass = authorizedMutation("legalOperations:upsertRightsClass", mutation)({
   args: {
     id: v.optional(v.id("rightsClasses")),
     societyId: v.id("societies"),
@@ -223,7 +224,7 @@ export const upsertRightsClass = mutation({
   },
 });
 
-export const upsertRightsholdingTransfer = mutation({
+export const upsertRightsholdingTransfer = authorizedMutation("legalOperations:upsertRightsholdingTransfer", mutation)({
   args: {
     id: v.optional(v.id("rightsholdingTransfers")),
     societyId: v.id("societies"),
@@ -264,7 +265,7 @@ export const upsertRightsholdingTransfer = mutation({
   },
 });
 
-export const removeRightsClass = mutation({
+export const removeRightsClass = authorizedMutation("legalOperations:removeRightsClass", mutation)({
   args: { id: v.id("rightsClasses") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -277,7 +278,7 @@ export const removeRightsClass = mutation({
   },
 });
 
-export const removeRightsholdingTransfer = mutation({
+export const removeRightsholdingTransfer = authorizedMutation("legalOperations:removeRightsholdingTransfer", mutation)({
   args: { id: v.id("rightsholdingTransfers") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -290,7 +291,7 @@ export const removeRightsholdingTransfer = mutation({
   },
 });
 
-export const templateEngine = query({
+export const templateEngine = authorizedQuery("legalOperations:templateEngine", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -300,7 +301,7 @@ export const templateEngine = query({
   },
 });
 
-export const seedStarterPolicyTemplates = mutation({
+export const seedStarterPolicyTemplates = authorizedMutation("legalOperations:seedStarterPolicyTemplates", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -310,7 +311,7 @@ export const seedStarterPolicyTemplates = mutation({
   },
 });
 
-export const seedCorporationDocumentPackets = mutation({
+export const seedCorporationDocumentPackets = authorizedMutation("legalOperations:seedCorporationDocumentPackets", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -320,7 +321,7 @@ export const seedCorporationDocumentPackets = mutation({
   },
 });
 
-export const seedSocietyDocumentPackets = mutation({
+export const seedSocietyDocumentPackets = authorizedMutation("legalOperations:seedSocietyDocumentPackets", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -336,7 +337,7 @@ export const seedSocietyDocumentPackets = mutation({
  * then produces the draft document + version + artifacts via the same
  * createPacketRunArtifacts path (which binds the grammar-aware render context).
  */
-export const generateDocumentFromCatalog = mutation({
+export const generateDocumentFromCatalog = authorizedMutation("legalOperations:generateDocumentFromCatalog", mutation)({
   args: {
     societyId: v.id("societies"),
     packetKey: v.string(),
@@ -368,7 +369,7 @@ export async function generatePacketForSociety(
  * corporation packets, everything else (societies) gets the society packets.
  * Idempotent — safe to call on entity creation or on demand.
  */
-export const seedDocumentPacketsForEntity = mutation({
+export const seedDocumentPacketsForEntity = authorizedMutation("legalOperations:seedDocumentPacketsForEntity", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
@@ -388,7 +389,7 @@ export async function seedDocumentPacketsForEntityHelper(ctx: any, societyId: an
   return seedDocumentPacketsForEntityPortable(await toPortableMutationCtx(ctx), societyId);
 }
 
-export const stageCorporationDocumentPacket = mutation({
+export const stageCorporationDocumentPacket = authorizedMutation("legalOperations:stageCorporationDocumentPacket", mutation)({
   args: {
     societyId: v.id("societies"),
     packetKey: v.optional(v.string()),
@@ -410,7 +411,7 @@ export const stageCorporationDocumentPacket = mutation({
   },
 });
 
-export const stageShareIssuancePacket = mutation({
+export const stageShareIssuancePacket = authorizedMutation("legalOperations:stageShareIssuancePacket", mutation)({
   args: {
     societyId: v.id("societies"),
     transferId: v.id("rightsholdingTransfers"),
@@ -425,7 +426,7 @@ export const stageShareIssuancePacket = mutation({
   },
 });
 
-export const stageShareSplitPacket = mutation({
+export const stageShareSplitPacket = authorizedMutation("legalOperations:stageShareSplitPacket", mutation)({
   args: {
     societyId: v.id("societies"),
     rightsClassId: v.id("rightsClasses"),
@@ -442,7 +443,7 @@ export const stageShareSplitPacket = mutation({
   },
 });
 
-export const upsertTemplateDataField = mutation({
+export const upsertTemplateDataField = authorizedMutation("legalOperations:upsertTemplateDataField", mutation)({
   args: {
     id: v.optional(v.id("legalTemplateDataFields")),
     societyId: v.optional(v.id("societies")),
@@ -473,7 +474,7 @@ export const upsertTemplateDataField = mutation({
   },
 });
 
-export const upsertLegalTemplate = mutation({
+export const upsertLegalTemplate = authorizedMutation("legalOperations:upsertLegalTemplate", mutation)({
   args: {
     id: v.optional(v.id("legalTemplates")),
     societyId: v.optional(v.id("societies")),
@@ -531,7 +532,7 @@ export const upsertLegalTemplate = mutation({
   },
 });
 
-export const upsertLegalPrecedent = mutation({
+export const upsertLegalPrecedent = authorizedMutation("legalOperations:upsertLegalPrecedent", mutation)({
   args: {
     id: v.optional(v.id("legalPrecedents")),
     societyId: v.optional(v.id("societies")),
@@ -576,7 +577,7 @@ export const upsertLegalPrecedent = mutation({
   },
 });
 
-export const upsertLegalPrecedentRun = mutation({
+export const upsertLegalPrecedentRun = authorizedMutation("legalOperations:upsertLegalPrecedentRun", mutation)({
   args: {
     id: v.optional(v.id("legalPrecedentRuns")),
     societyId: v.id("societies"),
@@ -613,7 +614,7 @@ export const upsertLegalPrecedentRun = mutation({
   },
 });
 
-export const upsertGeneratedLegalDocument = mutation({
+export const upsertGeneratedLegalDocument = authorizedMutation("legalOperations:upsertGeneratedLegalDocument", mutation)({
   args: {
     id: v.optional(v.id("generatedLegalDocuments")),
     societyId: v.id("societies"),
@@ -657,7 +658,7 @@ export const upsertGeneratedLegalDocument = mutation({
   },
 });
 
-export const upsertLegalSigner = mutation({
+export const upsertLegalSigner = authorizedMutation("legalOperations:upsertLegalSigner", mutation)({
   args: {
     id: v.optional(v.id("legalSigners")),
     societyId: v.id("societies"),
@@ -686,7 +687,7 @@ export const upsertLegalSigner = mutation({
   },
 });
 
-export const removeTemplateDataField = mutation({
+export const removeTemplateDataField = authorizedMutation("legalOperations:removeTemplateDataField", mutation)({
   args: { id: v.id("legalTemplateDataFields") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -700,7 +701,7 @@ export const removeTemplateDataField = mutation({
   },
 });
 
-export const removeLegalTemplate = mutation({
+export const removeLegalTemplate = authorizedMutation("legalOperations:removeLegalTemplate", mutation)({
   args: { id: v.id("legalTemplates") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -714,7 +715,7 @@ export const removeLegalTemplate = mutation({
   },
 });
 
-export const removeLegalPrecedent = mutation({
+export const removeLegalPrecedent = authorizedMutation("legalOperations:removeLegalPrecedent", mutation)({
   args: { id: v.id("legalPrecedents") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -728,7 +729,7 @@ export const removeLegalPrecedent = mutation({
   },
 });
 
-export const removeLegalPrecedentRun = mutation({
+export const removeLegalPrecedentRun = authorizedMutation("legalOperations:removeLegalPrecedentRun", mutation)({
   args: { id: v.id("legalPrecedentRuns") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -741,7 +742,7 @@ export const removeLegalPrecedentRun = mutation({
   },
 });
 
-export const removeGeneratedLegalDocument = mutation({
+export const removeGeneratedLegalDocument = authorizedMutation("legalOperations:removeGeneratedLegalDocument", mutation)({
   args: { id: v.id("generatedLegalDocuments") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -754,7 +755,7 @@ export const removeGeneratedLegalDocument = mutation({
   },
 });
 
-export const removeLegalSigner = mutation({
+export const removeLegalSigner = authorizedMutation("legalOperations:removeLegalSigner", mutation)({
   args: { id: v.id("legalSigners") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -767,7 +768,7 @@ export const removeLegalSigner = mutation({
   },
 });
 
-export const formationMaintenance = query({
+export const formationMaintenance = authorizedQuery("legalOperations:formationMaintenance", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -777,7 +778,7 @@ export const formationMaintenance = query({
   },
 });
 
-export const upsertFormationRecord = mutation({
+export const upsertFormationRecord = authorizedMutation("legalOperations:upsertFormationRecord", mutation)({
   args: {
     id: v.optional(v.id("formationRecords")),
     societyId: v.id("societies"),
@@ -819,7 +820,7 @@ export const upsertFormationRecord = mutation({
   },
 });
 
-export const upsertNameSearchItem = mutation({
+export const upsertNameSearchItem = authorizedMutation("legalOperations:upsertNameSearchItem", mutation)({
   args: {
     id: v.optional(v.id("nameSearchItems")),
     societyId: v.id("societies"),
@@ -849,7 +850,7 @@ export const upsertNameSearchItem = mutation({
   },
 });
 
-export const upsertEntityAmendment = mutation({
+export const upsertEntityAmendment = authorizedMutation("legalOperations:upsertEntityAmendment", mutation)({
   args: {
     id: v.optional(v.id("entityAmendments")),
     societyId: v.id("societies"),
@@ -876,7 +877,7 @@ export const upsertEntityAmendment = mutation({
   },
 });
 
-export const upsertAnnualMaintenanceRecord = mutation({
+export const upsertAnnualMaintenanceRecord = authorizedMutation("legalOperations:upsertAnnualMaintenanceRecord", mutation)({
   args: {
     id: v.optional(v.id("annualMaintenanceRecords")),
     societyId: v.id("societies"),
@@ -930,7 +931,7 @@ export const upsertAnnualMaintenanceRecord = mutation({
   },
 });
 
-export const upsertJurisdictionMetadata = mutation({
+export const upsertJurisdictionMetadata = authorizedMutation("legalOperations:upsertJurisdictionMetadata", mutation)({
   args: {
     id: v.optional(v.id("jurisdictionMetadata")),
     jurisdiction: v.string(),
@@ -946,7 +947,7 @@ export const upsertJurisdictionMetadata = mutation({
   handler: async (ctx, args) => upsertJurisdictionMetadataPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertSupportLog = mutation({
+export const upsertSupportLog = authorizedMutation("legalOperations:upsertSupportLog", mutation)({
   args: {
     id: v.optional(v.id("supportLogs")),
     societyId: v.optional(v.id("societies")),
@@ -971,7 +972,7 @@ export const upsertSupportLog = mutation({
   handler: async (ctx, args) => upsertSupportLogPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeFormationRecord = mutation({
+export const removeFormationRecord = authorizedMutation("legalOperations:removeFormationRecord", mutation)({
   args: { id: v.id("formationRecords") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -984,7 +985,7 @@ export const removeFormationRecord = mutation({
   },
 });
 
-export const removeNameSearchItem = mutation({
+export const removeNameSearchItem = authorizedMutation("legalOperations:removeNameSearchItem", mutation)({
   args: { id: v.id("nameSearchItems") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -997,7 +998,7 @@ export const removeNameSearchItem = mutation({
   },
 });
 
-export const removeEntityAmendment = mutation({
+export const removeEntityAmendment = authorizedMutation("legalOperations:removeEntityAmendment", mutation)({
   args: { id: v.id("entityAmendments") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -1010,7 +1011,7 @@ export const removeEntityAmendment = mutation({
   },
 });
 
-export const removeAnnualMaintenanceRecord = mutation({
+export const removeAnnualMaintenanceRecord = authorizedMutation("legalOperations:removeAnnualMaintenanceRecord", mutation)({
   args: { id: v.id("annualMaintenanceRecords") },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -1023,13 +1024,13 @@ export const removeAnnualMaintenanceRecord = mutation({
   },
 });
 
-export const removeJurisdictionMetadata = mutation({
+export const removeJurisdictionMetadata = authorizedMutation("legalOperations:removeJurisdictionMetadata", mutation)({
   args: { id: v.id("jurisdictionMetadata") },
   returns: v.any(),
   handler: async (ctx, args) => removeJurisdictionMetadataPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeSupportLog = mutation({
+export const removeSupportLog = authorizedMutation("legalOperations:removeSupportLog", mutation)({
   args: { id: v.id("supportLogs") },
   returns: v.any(),
   handler: async (ctx, args) => removeSupportLogPortable(await toPortableMutationCtx(ctx), args),

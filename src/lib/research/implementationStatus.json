@@ -1,0 +1,1714 @@
+{
+  "metadata": {
+    "baseline_commit": "375ef99fc6d9112879158959edf451142f7e450e",
+    "review_date_vancouver": "2026-10-03",
+    "scope": "Implementation accounting of all 73 supplied backlog items. Partial means acceptance remains incomplete; source-backed draft rules are not legal approval. Live providers/deployment not inspected.",
+    "state_definitions": {
+      "implemented": "Supported code acceptance completed with local tests; stated live/provider limits still apply.",
+      "partial": "Concrete code changes exist; remaining acceptance or integration work is stated.",
+      "external_review": "Requires current legal/vendor/administrator evidence that is not available; product route stays gated.",
+      "deferred": "Explicitly deferred by the supplied implementation order."
+    }
+  },
+  "items": [
+    {
+      "id": "AUTH-B01",
+      "priority": "P0",
+      "area": "Authentication / provider fit",
+      "item": "Resolve Clerk's provider-level same-email linking before migration or strict enterprise rollout.",
+      "state": "external_review",
+      "implemented": "Preserved Better Auth and disabled implicit linking using its pinned supported control.",
+      "remaining": "Clerk is not installed; no vendor-supported cross-provider linking proof or migration performed.",
+      "files": [
+        "shared/authConfiguration.ts",
+        "shared/functions/identity.ts",
+        "shared/functions/access.ts",
+        "server/auth-config.ts",
+        "docs/hosted-identity-and-provider-gates.md"
+      ],
+      "checks": [
+        "test:hosted-identity",
+        "test:auth-broker",
+        "test:identity-binding"
+      ],
+      "acceptance": "Same email under two distinct upstream accounts cannot acquire another account's Societyer memberships without explicit authorized proof; all enabled OAuth, SSO and directory-provisioning paths are tested, or the exception is explicitly accepted and documented.",
+      "research_area": "authentication"
+    },
+    {
+      "id": "AUTH-B02",
+      "priority": "P0",
+      "area": "Entra setup instructions",
+      "item": "Reconcile the published acceptMappedClaims configuration conflict.",
+      "state": "external_review",
+      "implemented": "No unsupported claims-mapping workaround was added.",
+      "remaining": "Clerk/Entra administrator must resolve the documented manifest conflict before adopting that connection.",
+      "files": [
+        "shared/authConfiguration.ts",
+        "shared/functions/identity.ts",
+        "shared/functions/access.ts",
+        "server/auth-config.ts",
+        "docs/hosted-identity-and-provider-gates.md"
+      ],
+      "checks": [
+        "test:hosted-identity",
+        "test:auth-broker",
+        "test:identity-binding"
+      ],
+      "acceptance": "Published Societyer setup instructions contain no unsupported claims-mapping workaround; actual issued claims, issuer, audience and signatures validate under a documented minimal configuration.",
+      "research_area": "authentication"
+    },
+    {
+      "id": "AUTH-B03",
+      "priority": "P0",
+      "area": "Identity / hosted deployment",
+      "item": "Require exactly one hosted session broker and issuer-aware principal lookup.",
+      "state": "partial",
+      "implemented": "Single-broker validation and immutable exact issuer/subject bindings, audience and signed-token checks.",
+      "remaining": "Configured hosted deployment and all live endpoint proofs remain unverified.",
+      "files": [
+        "shared/authConfiguration.ts",
+        "shared/functions/identity.ts",
+        "shared/functions/access.ts",
+        "server/auth-config.ts",
+        "docs/hosted-identity-and-provider-gates.md"
+      ],
+      "checks": [
+        "test:hosted-identity",
+        "test:auth-broker",
+        "test:identity-binding"
+      ],
+      "acceptance": "Hosted startup rejects missing/contradictory providers; all user requests map an allowlisted issuer plus exact subject to one immutable local user ID. Auth-disabled/local mode cannot reach hosted resources.",
+      "research_area": "authentication"
+    },
+    {
+      "id": "AUTH-B04",
+      "priority": "P0",
+      "area": "Workspace lifecycle",
+      "item": "Apply active membership, role/action and record rules on sessions, API keys and workflows.",
+      "state": "partial",
+      "implemented": "Common action boundaries, active identity/membership, creator-current API scopes, workflow step authority checks.",
+      "remaining": "External automation runners and all delayed callback privileges require a live execution/revocation proof.",
+      "files": [
+        "shared/authConfiguration.ts",
+        "shared/functions/identity.ts",
+        "shared/functions/access.ts",
+        "server/auth-config.ts",
+        "docs/hosted-identity-and-provider-gates.md"
+      ],
+      "checks": [
+        "test:hosted-identity",
+        "test:auth-broker",
+        "test:identity-binding"
+      ],
+      "acceptance": "All protected reads/writes, exports, downloads and queued jobs require the same current access predicate. API-key scopes are intersected with current owning user permissions unless the key belongs to an explicit service principal.",
+      "research_area": "authentication"
+    },
+    {
+      "id": "AUTH-B05",
+      "priority": "P0",
+      "area": "Microsoft tenant access",
+      "item": "Specify and test enterprise SSO policy without inferring organization from email.",
+      "state": "external_review",
+      "implemented": "Enterprise/tenant/session requirements remain explicit gates; no email-domain inference.",
+      "remaining": "An approved enterprise connection and session-level tenant evidence are not available in this workspace.",
+      "files": [
+        "shared/authConfiguration.ts",
+        "shared/functions/identity.ts",
+        "shared/functions/access.ts",
+        "server/auth-config.ts",
+        "docs/hosted-identity-and-provider-gates.md"
+      ],
+      "checks": [
+        "test:hosted-identity",
+        "test:auth-broker",
+        "test:identity-binding"
+      ],
+      "acceptance": "Approved member and approved guest can complete intended flows; personal/foreign-tenant/unassigned or locally uninvited identities gain no workspace rights. Existing non-SSO sessions cannot bypass an SSO-required workspace.",
+      "research_area": "authentication"
+    },
+    {
+      "id": "BCC-B01",
+      "priority": "P0",
+      "area": "Entity/routing",
+      "item": "Add BC subtype and actual registry/migration state; update links using September 2026 guidance.",
+      "state": "partial",
+      "implemented": "Explicit ordinary/special BC subtype controls, preparation gates and current sourced registry route references.",
+      "remaining": "Specific registry migration/transaction state and unsupported subtype legal evidence need external verification.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "Named/numbered ordinary and benefit paths route correctly; unreviewed special subtype automation is held for review; official links are dated.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "BCC-B02",
+      "priority": "P0",
+      "area": "Preparation documents",
+      "item": "Replace worksheet-only completion with four-document model and executed-original evidence.",
+      "state": "partial",
+      "implemented": "Separate agreement/articles preparation packets and evidence stages for application/certified registry documents.",
+      "remaining": "Tailored legally operative executed originals and full four-document acceptance remain incomplete.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "Cannot mark pre-filing preparation complete without all incorporator signatures and consistent subscriptions/articles/application; certificate controls legal incorporation state.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "BCC-B03",
+      "priority": "P0",
+      "area": "Governance",
+      "item": "Implement separate BC corporation voting and quorum rule engine.",
+      "state": "partial",
+      "implemented": "Exact BC meeting/written thresholds and statutory/Table1 quorum distinctions with evidence-aware preview.",
+      "remaining": "Operative articles, pre-existing facts, proxy/class/conflict rights and legal review are required.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "Threshold uses cast versus eligible denominator correctly; handles all-shareholder waivers, sole holder, adopted Table 1 5% requirement, conflicts and no casting vote.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "BCC-B04",
+      "priority": "P0",
+      "area": "Company roles and shares",
+      "item": "Keep legal persons/officeholders/holders separate from workspace membership roles.",
+      "state": "partial",
+      "implemented": "Existing legal people/role-holders/securities registers stay independent of application membership.",
+      "remaining": "Full evidence-backed capacity eligibility and legal signing/filer permissions need additional workflow.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "Cap table and legal electorate use issued shares and statutory rights; workspace admins cannot confer legal votes through role edits.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "BCC-B05",
+      "priority": "P0",
+      "area": "Deadlines",
+      "item": "Separate incorporation anniversary, annual reference date, financial year and change/awareness events.",
+      "state": "partial",
+      "implemented": "Independent incorporation anniversary, annual reference date, fiscal year and transparency change/entry/cessation clocks.",
+      "remaining": "Actual waiver/exception evidence, complete historic meetings and instrument-specific legal review remain.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "Home annual report +2months; director +15days; AGM first18months/subsequentcalendar+15; transparency annualwindow/30day/10day/destruction tracked independently.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "BCC-B06",
+      "priority": "P0",
+      "area": "Transparency privacy",
+      "item": "Implement exempt-company screening, indirect-control evidence and restricted ownership register.",
+      "state": "partial",
+      "implemented": "Existing restricted ownership-register paths, source-backed exemption/change reminders and date facts.",
+      "remaining": "Complete exempt-company screening and indirect-control evidence collection remain incomplete.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "Sensitive birth/citizenship/address data not exposed through ordinary member directory; unsuccessful inquiries and control basis retained; statutory inspection tracked.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "BCC-B07",
+      "priority": "P0",
+      "area": "Storage/retention",
+      "item": "Create record-specific preservation, access and destruction policies for minute book and transparency records.",
+      "state": "partial",
+      "implemented": "Record-specific document access and retention metadata retained; legal cessation clock/reminders added.",
+      "remaining": "Complete legal destruction/hold/inspection lifecycle requires policy review and provider integration.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "Company can inspect/copy records through BC records office; signed originals integrity/export preserved; former-significant-individual deletion window has a reviewed hold exception procedure.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "SOC-B01",
+      "priority": "P0",
+      "area": "Incorporation",
+      "item": "Replace preparatory checklist with complete BC society route and explicit online/assisted states",
+      "state": "partial",
+      "implemented": "BC society staged preparation/incorporation checklist, official online source links and registry evidence controls.",
+      "remaining": "Authenticated current registry screens/attestation, assisted location acceptance and payment controls need external confirmation.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/societyDocumentPackets.ts",
+        "src/pages/PostIncorporationChecklist.tsx",
+        "src/lib/compliance/rulePacks/ca-bc.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:post-incorporation-checklist-flow",
+        "test:research-legal-boundaries"
+      ],
+      "acceptance": "All s13 inputs; valid name; qualified/consenting director roster; model/custom bylaws; authorized filer; $130 base plus separate fees; certificate activates registration.",
+      "research_area": "bc_society"
+    },
+    {
+      "id": "SOC-B02",
+      "priority": "P0",
+      "area": "Governance engine",
+      "item": "Separate member/director decisions and meeting/written/electronic-ballot modes",
+      "state": "partial",
+      "implemented": "Member/director and meeting/written/electronic decision modes distinguish legal denominators.",
+      "remaining": "Actual adopted bylaws, electorates and ballot/conflict evidence need legal review/integration.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/societyDocumentPackets.ts",
+        "src/pages/PostIncorporationChecklist.tsx",
+        "src/lib/compliance/rulePacks/ca-bc.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:post-incorporation-checklist-flow",
+        "test:research-legal-boundaries"
+      ],
+      "acceptance": "Evaluator records authority/mode/denominator/threshold and warns on unsupported modes; integer fraction comparisons; deemed AGM distinct.",
+      "research_area": "bc_society"
+    },
+    {
+      "id": "SOC-B03",
+      "priority": "P0",
+      "area": "Compliance",
+      "item": "Correct calendar-year AGM/report reminders and no-AGM/extension branches",
+      "state": "partial",
+      "implemented": "Calendar-year AGM/incorporation exemption, actual AGM+30 annual report and no-AGM/extension branches.",
+      "remaining": "A full persistent ledger of every historical actual AGM event still needs import and evidence.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/societyDocumentPackets.ts",
+        "src/pages/PostIncorporationChecklist.tsx",
+        "src/lib/compliance/rulePacks/ca-bc.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:post-incorporation-checklist-flow",
+        "test:research-legal-boundaries"
+      ],
+      "acceptance": "Incorporation-year exemption; Dec31 AGM;30-day report; Jan31 no-AGM; registrar extension treated as prior-year AGM.",
+      "research_area": "bc_society"
+    },
+    {
+      "id": "SOC-B04",
+      "priority": "P0",
+      "area": "Authorization and records",
+      "item": "Separate legal membership/directorship from application roles and implement statutory record access",
+      "state": "partial",
+      "implemented": "Workspace memberships remain separate from existing legal member/director/person registers; shared document ACL tightened.",
+      "remaining": "Statutory capacity/evidence-based inspection workflow and alternate fulfillment need further completion.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/societyDocumentPackets.ts",
+        "src/pages/PostIncorporationChecklist.tsx",
+        "src/lib/compliance/rulePacks/ca-bc.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:post-incorporation-checklist-flow",
+        "test:research-legal-boundaries"
+      ],
+      "acceptance": "Member legal request flow; protected board disclosures; restricted-register conditions;14-day copy SLA; private profile excluded from register.",
+      "research_area": "bc_society"
+    },
+    {
+      "id": "FED-B01",
+      "priority": "P0",
+      "area": "Federal ISC",
+      "item": "Correct initial ISC filing and distinct control-register clocks",
+      "state": "implemented",
+      "implemented": "Initial ISC upon incorporation and independent subsequent change-awareness/register-entry clocks.",
+      "remaining": "Legal rules are draft, source-backed; actual filing evidence is supplied by the organization.",
+      "files": [
+        "src/lib/compliance/facts.ts",
+        "src/lib/compliance/rulePacks/ca-fed-cbca.json",
+        "src/lib/compliance/rulePacks/ca-on-obca.json",
+        "src/pages/OrganizationDetails.tsx",
+        "shared/postIncorporationSteps.ts"
+      ],
+      "checks": [
+        "test:research-legal-boundaries",
+        "test:local-snapshots",
+        "test:incorporation-preparation"
+      ],
+      "acceptance": "Initial incorporation requires ISC completeness before filing; +30 applies only to amalgamation/continuance; changes retain awareness and filing clocks",
+      "research_area": "federal_ontario"
+    },
+    {
+      "id": "FED-B02",
+      "priority": "P0",
+      "area": "Jurisdiction events",
+      "item": "Split home incorporation and extra-provincial activity/registration anchors",
+      "state": "implemented",
+      "implemented": "Home incorporation, business commencement, provincial registration anniversaries and Ontario annual-return applicability separated.",
+      "remaining": "Actual operations/registration facts and licensed foreign-company evidence must be entered.",
+      "files": [
+        "src/lib/compliance/facts.ts",
+        "src/lib/compliance/rulePacks/ca-fed-cbca.json",
+        "src/lib/compliance/rulePacks/ca-on-obca.json",
+        "src/pages/OrganizationDetails.tsx",
+        "shared/postIncorporationSteps.ts"
+      ],
+      "checks": [
+        "test:research-legal-boundaries",
+        "test:local-snapshots",
+        "test:incorporation-preparation"
+      ],
+      "acceptance": "No ambiguous fallback from registrationDate to activityCommencementDate; unknown required date blocks a claimed statutory deadline",
+      "research_area": "federal_ontario"
+    },
+    {
+      "id": "FED-B03",
+      "priority": "P0",
+      "area": "Governance engine",
+      "item": "Replace corporation fallback values with cited company rules",
+      "state": "partial",
+      "implemented": "CBCA voting/quorum/written-resolution baseline evaluator and entity-aware default review gates.",
+      "remaining": "Actual governing instruments/class/proxy/conflict facts and qualified review are still required.",
+      "files": [
+        "src/lib/compliance/facts.ts",
+        "src/lib/compliance/rulePacks/ca-fed-cbca.json",
+        "src/lib/compliance/rulePacks/ca-on-obca.json",
+        "src/pages/OrganizationDetails.tsx",
+        "shared/postIncorporationSteps.ts"
+      ],
+      "checks": [
+        "test:research-legal-boundaries",
+        "test:local-snapshots",
+        "test:incorporation-preparation"
+      ],
+      "acceptance": "CBCA notice/quorum/resolutions/electronic conditions carry classification and provenance; unreviewed defaults cannot be represented as compliance",
+      "research_area": "federal_ontario"
+    },
+    {
+      "id": "FED-B04",
+      "priority": "P0",
+      "area": "Sensitive ownership records",
+      "item": "Separate internal ISC data, public filing projection and evidence",
+      "state": "partial",
+      "implemented": "Existing internal ISC registers and independent filing prompts maintained.",
+      "remaining": "Dedicated public-field projection and exemption/indirect-control evidence workflows remain incomplete.",
+      "files": [
+        "src/lib/compliance/facts.ts",
+        "src/lib/compliance/rulePacks/ca-fed-cbca.json",
+        "src/lib/compliance/rulePacks/ca-on-obca.json",
+        "src/pages/OrganizationDetails.tsx",
+        "shared/postIncorporationSteps.ts"
+      ],
+      "checks": [
+        "test:research-legal-boundaries",
+        "test:local-snapshots",
+        "test:incorporation-preparation"
+      ],
+      "acceptance": "Public exports contain only public fields with minor/relief handling; internal register remains restricted; logs exclude sensitive values",
+      "research_area": "federal_ontario"
+    },
+    {
+      "id": "REPO-B01",
+      "priority": "P0",
+      "area": "Baseline reconciliation",
+      "item": "Pin the exact working tree that implements the supplied brief",
+      "state": "implemented",
+      "implemented": "Confirmed clean starting workspace commit exactly matches research commit 375ef99fc6d9112879158959edf451142f7e450e.",
+      "remaining": "Runtime has no configured provider credentials; no deployed production instance was inspected.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Record Git SHA and deployment mode; reconcile missing auth/preparation/module files, entity reset guard and cross-mode packet guard; retain a diff of which findings still apply.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B02",
+      "priority": "P0",
+      "area": "Authorization",
+      "item": "Enforce one explicit action policy at shared server boundaries",
+      "state": "partial",
+      "implemented": "Shared action policy covers hosted public entry points, application portable registry and legacy local dispatch.",
+      "remaining": "Fine-grained external runner callback/service execution policy and complete deployed-path proof remain.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Every exposed query/mutation/action has an action classification; Member/Viewer cannot perform protected writes; the same record/actions are allowed or denied across direct Convex, REST, workflows and local policy simulations. API keys and workflow steps re-evaluate present role/status/scope at execution as part of this P0 gate. Role recovery is a separate controlled operation; security/directory disabling is never blocked to preserve an Active Owner.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B03",
+      "priority": "P0",
+      "area": "Document confidentiality",
+      "item": "Apply document ACL to versions and all content paths",
+      "state": "partial",
+      "implemented": "Document ACL is reused for metadata, versions, native blobs, exports, generated workflow bytes and linked document views.",
+      "remaining": "Provider live revocation, all background/plugin content surfaces and administrator record-grant review still require deployment acceptance.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "A document denied in metadata is also denied in version list, direct version get, signed URL, preview, financial attachment, generated file, search and export. Record denial precedes any content URL issuance.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B04",
+      "priority": "P0",
+      "area": "Workspace administration",
+      "item": "Centralize role/status changes and ordinary-transition Owner invariant",
+      "state": "implemented",
+      "implemented": "Owner-only privileged grants, Active Owner transition invariant and genuine incident disabling with recovery state.",
+      "remaining": "Authoritative external directory termination integration is separately outstanding.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Only Owner may grant/revoke Owner/Admin; Admin manages Director/Member/Viewer only; role/status enums validated; ordinary administrative demotion/removal/bulk/import/restore transitions preserve at least one Active Owner atomically; intended hosted Owner removal works. Genuine security disabling or authoritative directory deprovisioning must immediately deny access even for the last Owner and place the workspace in explicit controlled recovery, without retaining or restoring the compromised/terminated identity.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B05",
+      "priority": "P0",
+      "area": "Identity migration",
+      "item": "Bind external identities by issuer and subject",
+      "state": "partial",
+      "implemented": "Immutable external identity tuple separates legal/person history from workspace membership; no email migration.",
+      "remaining": "Historical legacy memberships require operator-verified issuer backfill; cross-broker cutover remains external.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "A verified externalIdentity tuple maps to one person; membership is separate; same email never automatically authorizes migration; same subject under two issuers cannot collide; all frontend/Convex/REST/API/workflow mint points use one configured session provider.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B06",
+      "priority": "P0",
+      "area": "Invitation acceptance",
+      "item": "Use verified identity acceptance with expiry and bounded role grants",
+      "state": "implemented",
+      "implemented": "Hashed expiring single-use invitations, verified email and bounded role assignment; legacy plaintext tokens require reissue.",
+      "remaining": "Verification semantics still depend on the selected identity broker.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Invitations are expiring, one-use, tenant-bound, hashed at rest, and role-limited to issuer authority; unverified/ambiguous identity cannot consume elevated invitation; revoked/expired/wrong-workspace invitations fail without membership creation.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B07",
+      "priority": "P0",
+      "area": "Storage object integrity",
+      "item": "Finalize only server-issued upload handles",
+      "state": "implemented",
+      "implemented": "Server-issued actor/document/workspace-bound upload handles; bounded byte verification, digest, sealed immutable key and atomic consumption.",
+      "remaining": "Live RustFS/R2 probe, object permissions and CORS remain unverified.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Opaque handle binds actor, workspace, document, provider key, expiry and expected size/content type; server verifies object hash/size and unique locator before atomic version commit; replay cannot relink content; orphan cleanup is separate.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B08",
+      "priority": "P0",
+      "area": "Entity-specific legal guidance",
+      "item": "Replace universal governance defaults and wrong formation triggers",
+      "state": "partial",
+      "implemented": "Initial ISC/Ontario trigger corrections, independent event facts and entity-aware governance preview.",
+      "remaining": "Operative articles/bylaws and legal reviewer approval are required before compliance automation can be relied upon.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Each record states statute/entity/subtype/registration context and source-effective date; no corporate workspace inherits society reset; initial CBCA ISC at incorporation; Ontario extra-provincial initial return uses business commencement; missing facts remain unresolved.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B09",
+      "priority": "P0",
+      "area": "API keys and workflows",
+      "item": "Re-evaluate present authority for service execution",
+      "state": "partial",
+      "implemented": "API keys intersect creator current authority; workflows re-read current initiator authority before steps.",
+      "remaining": "Scheduled service-principal design and full external runner callback proof remain unresolved.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Before hosted API/workflow use, each API call and workflow step re-evaluates current actor/service status and action authority, intersected with token scope and document policy; disabling/removing/demoting a principal takes effect immediately on future access; callback authority binds exact workflow/run/actions. This is part of the P0 shared authorization gate, not a later hardening phase.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "SYN-B01",
+      "priority": "P0",
+      "area": "Legal identity and setup",
+      "item": "Separate legal entity, workspace and registration states",
+      "state": "partial",
+      "implemented": "Entity/workspace/registry evidence states and provincial dates captured independently.",
+      "remaining": "Complete evidence-driven pending/legal-active state machine across legacy entities remains incomplete.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/templateProvenance.ts",
+        "src/pages/Society.tsx",
+        "src/pages/ResearchLibrary.tsx"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:generate-from-catalog"
+      ],
+      "acceptance": "Pending filings remain pending until official evidence and effective date are recorded; home and extra-provincial contexts remain distinct.",
+      "research_area": "root_findings"
+    },
+    {
+      "id": "STO-B01",
+      "priority": "P0",
+      "area": "Authorization",
+      "item": "Use one record-aware document action check on all versions/content/preview/export/workflow endpoints",
+      "state": "partial",
+      "implemented": "Common record access checks across version/download/export and linked metadata paths.",
+      "remaining": "Live provider revocation and complete deployed endpoint matrix proof remain unverified.",
+      "files": [
+        "shared/storage/providerCapabilities.ts",
+        "shared/storage/signedUrl.ts",
+        "shared/storage/sharePointAdapter.ts",
+        "convex/documentVersions.ts",
+        "src/components/DocumentStorageSettingsCard.tsx"
+      ],
+      "checks": [
+        "test:document-security",
+        "test:document-upload-binding",
+        "test:integration-settings",
+        "test:sharepoint-adapter"
+      ],
+      "acceptance": "A denied logical document cannot be accessed through any version or signedURL path, including API keys and workflows.",
+      "research_area": "storage"
+    },
+    {
+      "id": "STO-B02",
+      "priority": "P0",
+      "area": "Upload finalization",
+      "item": "Replace client-chosen provider/key finalization with server-issued bound handles",
+      "state": "implemented",
+      "implemented": "Bound issued handles plus backend actual bytes/size/SHA-256 verification and immutable registered version locator.",
+      "remaining": "Live deployment byte storage/permission/CORS tests remain unverified.",
+      "files": [
+        "shared/storage/providerCapabilities.ts",
+        "shared/storage/signedUrl.ts",
+        "shared/storage/sharePointAdapter.ts",
+        "convex/documentVersions.ts",
+        "src/components/DocumentStorageSettingsCard.tsx"
+      ],
+      "checks": [
+        "test:document-security",
+        "test:document-upload-binding",
+        "test:integration-settings",
+        "test:sharepoint-adapter"
+      ],
+      "acceptance": "Handle binds actor, workspace, doc/version, provider/connection, key/item, size and expiry; backend verifies object before committing.",
+      "research_area": "storage"
+    },
+    {
+      "id": "STO-B03",
+      "priority": "P0",
+      "area": "Storage model",
+      "item": "Create capability-aware provider/version abstraction and one authoritative home",
+      "state": "partial",
+      "implemented": "Capability-aware one-provider version references, local/RustFS/R2 support and persistent authoritative preference/custody evidence.",
+      "remaining": "Provider migration/promotion orchestration and SharePoint deployment integration are not enabled.",
+      "files": [
+        "shared/storage/providerCapabilities.ts",
+        "shared/storage/signedUrl.ts",
+        "shared/storage/sharePointAdapter.ts",
+        "convex/documentVersions.ts",
+        "src/components/DocumentStorageSettingsCard.tsx"
+      ],
+      "checks": [
+        "test:document-security",
+        "test:document-upload-binding",
+        "test:integration-settings",
+        "test:sharepoint-adapter"
+      ],
+      "acceptance": "Persist stable logical IDs, provider locators, native vs application versions, hash, provenance and retention state; no URL identity.",
+      "research_area": "storage"
+    },
+    {
+      "id": "STO-B04",
+      "priority": "P0",
+      "area": "Microsoft onboarding",
+      "item": "Collect admin answers and verify a least-privilege resource connection",
+      "state": "partial",
+      "implemented": "Separate tenant/site/library, delegated/app-only consent and selected-resource grant evidence, readiness and custody options.",
+      "remaining": "Administrator-owned resources, actual licenses/geography and least-privilege live access must be proved.",
+      "files": [
+        "shared/storage/providerCapabilities.ts",
+        "shared/storage/signedUrl.ts",
+        "shared/storage/sharePointAdapter.ts",
+        "convex/documentVersions.ts",
+        "src/components/DocumentStorageSettingsCard.tsx"
+      ],
+      "checks": [
+        "test:document-security",
+        "test:document-upload-binding",
+        "test:integration-settings",
+        "test:sharepoint-adapter"
+      ],
+      "acceptance": "Consent, grant, tenant ownership, chosen resource, data location, license and access model recorded separately.",
+      "research_area": "storage"
+    },
+    {
+      "id": "AUTH-B06",
+      "priority": "P1",
+      "area": "Provisioning / deprovisioning",
+      "item": "Add source-scoped identity lifecycle events with measured revocation.",
+      "state": "partial",
+      "implemented": "Disabled identities and workspace memberships deny new requests.",
+      "remaining": "Source-authenticated directory lifecycle/SCIM event processing is not implemented.",
+      "files": [
+        "shared/authConfiguration.ts",
+        "shared/functions/identity.ts",
+        "shared/functions/access.ts",
+        "server/auth-config.ts",
+        "docs/hosted-identity-and-provider-gates.md"
+      ],
+      "checks": [
+        "test:hosted-identity",
+        "test:auth-broker",
+        "test:identity-binding"
+      ],
+      "acceptance": "Provisioning never grants Owner/Admin or reactivates a manually removed membership by default. Deactivation updates the intended workspace only; multi-directory and directory-removal behavior is documented; last active Owner continuity is protected in local admin actions without ignoring a genuine security disable.",
+      "research_area": "authentication"
+    },
+    {
+      "id": "AUTH-B07",
+      "priority": "P1",
+      "area": "Provider migration / dependencies",
+      "item": "Audit exact Better Auth dependency graph and build an immutable mapping migration plan.",
+      "state": "partial",
+      "implemented": "Audited Better Auth 1.6.23, immutable mappings, safe import stripping and operator backfill/migration runbook.",
+      "remaining": "Authorized old/new identity exports and a live cutover/rollback rehearsal are still needed.",
+      "files": [
+        "shared/authConfiguration.ts",
+        "shared/functions/identity.ts",
+        "shared/functions/access.ts",
+        "server/auth-config.ts",
+        "docs/hosted-identity-and-provider-gates.md"
+      ],
+      "checks": [
+        "test:hosted-identity",
+        "test:auth-broker",
+        "test:identity-binding"
+      ],
+      "acceptance": "Every retained local user ID has a validated old-issuer/subject to new-issuer/subject mapping; missing/ambiguous mappings stop migration; old sessions are revoked at cutover; no email-only join; rollback preserves roles and audit history.",
+      "research_area": "authentication"
+    },
+    {
+      "id": "AUTH-B08",
+      "priority": "P1",
+      "area": "MFA / recovery",
+      "item": "Document Entra Conditional Access, session duration and recovery policy.",
+      "state": "partial",
+      "implemented": "Configurable bounded absolute sessions, five-minute JWTs, documented MFA/Conditional Access/recovery gates.",
+      "remaining": "Upstream tenant policy and fresh MFA evidence cannot be verified without approved infrastructure.",
+      "files": [
+        "shared/authConfiguration.ts",
+        "shared/functions/identity.ts",
+        "shared/functions/access.ts",
+        "server/auth-config.ts",
+        "docs/hosted-identity-and-provider-gates.md"
+      ],
+      "checks": [
+        "test:hosted-identity",
+        "test:auth-broker",
+        "test:identity-binding"
+      ],
+      "acceptance": "Administrator can demonstrate MFA/Conditional Access for intended users and guests. Recovery bypass is absent or narrowly authorized, audited and constrained; sensitive changes require fresh authentication.",
+      "research_area": "authentication"
+    },
+    {
+      "id": "AUTH-B09",
+      "priority": "P1",
+      "area": "Graph storage consent",
+      "item": "Keep identity and storage authorization independently revocable.",
+      "state": "partial",
+      "implemented": "Identity session configuration and Graph storage consent/resource evidence are separate.",
+      "remaining": "Live disconnect, native Microsoft access and outstanding capability URL behavior need provider testing.",
+      "files": [
+        "shared/authConfiguration.ts",
+        "shared/functions/identity.ts",
+        "shared/functions/access.ts",
+        "server/auth-config.ts",
+        "docs/hosted-identity-and-provider-gates.md"
+      ],
+      "checks": [
+        "test:hosted-identity",
+        "test:auth-broker",
+        "test:identity-binding"
+      ],
+      "acceptance": "Disconnecting storage leaves allowed sign-in intact but denies file operations; removing a workspace member blocks mediated storage even when app credentials remain valid. No Graph access/refresh tokens enter public profile metadata.",
+      "research_area": "authentication"
+    },
+    {
+      "id": "BCC-B08",
+      "priority": "P1",
+      "area": "Templates/reuse",
+      "item": "Add official sources, exact versions and distinction between licensed statutory text and provider PDFs.",
+      "state": "partial",
+      "implemented": "Source URLs, actual source snapshots and third-party form classification/reuse inventory preserved.",
+      "remaining": "No claim of licensed reuse rights for unverified nonstatutory form layouts.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "Inventory marks form/sample/model/internal precedent, source and revision; templates carry required attribution/nonofficial notices.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "BCC-B09",
+      "priority": "P1",
+      "area": "Fees/timing",
+      "item": "Show base government charges and dynamic operational estimates with conflict notes.",
+      "state": "partial",
+      "implemented": "Supplied base-fee/processing/conflict evidence searchable; storage forecast explicit.",
+      "remaining": "Live registry fees, licensed service costs and processing estimates require rechecking.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "CAD350/1000, name30, optional priority100 and futuredate100 separated; checkout receipt final; no guaranteed1–2-day promise.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "BCC-B10",
+      "priority": "P1",
+      "area": "Signing",
+      "item": "Specify legally reviewed electronic execution and completing-party handoff.",
+      "state": "external_review",
+      "implemented": "Preparation, signing, filing and certified evidence are distinct.",
+      "remaining": "Legally reviewed electronic execution/completing-party procedures require current registry/operator evidence.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "Exported signed record includes signature intent/attribution, immutable signed version and chronology; completing party verifies and records records-office delivery.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "BCC-B11",
+      "priority": "P1",
+      "area": "Annual governance",
+      "item": "Implement independent financial production, GAAP and auditor-waiver documents.",
+      "state": "partial",
+      "implemented": "Financial preparation waiver no longer suppresses annual registry filings.",
+      "remaining": "Full GAAP/financial production and independently executed auditor waiver instruments need specialized document work/review.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "Auditor waiver is annual; production waiver applies to identified statements; GAAP waiver specific year; CCC production waiver disabled.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "BCC-B12",
+      "priority": "P1",
+      "area": "Regulatory updates",
+      "item": "Monitor phased migration and pending BC public transparency registry commencement.",
+      "state": "partial",
+      "implemented": "No unverified public transparency-registry obligation enabled; phased migration uncertainty retained.",
+      "remaining": "Current commencement and registry rollout need later authoritative review; no monitor scheduled without request.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "Future rule remains pending until effective and operational evidence is recorded; migration routing updates keep old company state.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "SOC-B05",
+      "priority": "P1",
+      "area": "Templates",
+      "item": "Add official model text and original legally operative draft templates with accurate labels",
+      "state": "partial",
+      "implemented": "Original constitution/bylaw preparation drafts and official form source/reuse inventory.",
+      "remaining": "Exact licensed prescribed model reproduction and tailored legally operative bylaw drafting require qualified review.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/societyDocumentPackets.ts",
+        "src/pages/PostIncorporationChecklist.tsx",
+        "src/lib/compliance/rulePacks/ca-bc.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:post-incorporation-checklist-flow",
+        "test:research-legal-boundaries"
+      ],
+      "acceptance": "Schedule1 source/version stored; license notices; changes highlighted; originals called internal drafts; government worksheet linked.",
+      "research_area": "bc_society"
+    },
+    {
+      "id": "SOC-B06",
+      "priority": "P1",
+      "area": "Subtype management",
+      "item": "Model ordinary/member-funded and legacy reporting societies explicitly",
+      "state": "partial",
+      "implemented": "Ordinary/member-funded subtype is explicit and contradictory charity facts rejected.",
+      "remaining": "Legacy reporting-society facts and ongoing statutory eligibility evidence need specialized review.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/societyDocumentPackets.ts",
+        "src/pages/PostIncorporationChecklist.tsx",
+        "src/lib/compliance/rulePacks/ca-bc.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:post-incorporation-checklist-flow",
+        "test:research-legal-boundaries"
+      ],
+      "acceptance": "Eligibility evidence and ongoing checks; no post-incorporation toggle without required authority; audit/financial notice derives from applicable bylaws.",
+      "research_area": "bc_society"
+    },
+    {
+      "id": "SOC-B07",
+      "priority": "P1",
+      "area": "Document lifecycle",
+      "item": "Preserve certified instruments and separate vote, filing and effective times",
+      "state": "partial",
+      "implemented": "Separate executed/filed/certified evidence stages retained and draft generation never marks incorporation complete.",
+      "remaining": "Fully versioned vote/filing/effective alteration timestamps across all instruments remain incomplete.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/societyDocumentPackets.ts",
+        "src/pages/PostIncorporationChecklist.tsx",
+        "src/lib/compliance/rulePacks/ca-bc.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:post-incorporation-checklist-flow",
+        "test:research-legal-boundaries"
+      ],
+      "acceptance": "Read-only certified original; draft/authorized/submitted/accepted/effective status; complete chain to resolution and receipt.",
+      "research_area": "bc_society"
+    },
+    {
+      "id": "SOC-B08",
+      "priority": "P1",
+      "area": "Storage",
+      "item": "Add record inspection/export and retention rules to each provider",
+      "state": "partial",
+      "implemented": "Record ACL/version/export improvements and custody/retention plan settings.",
+      "remaining": "Complete entity-specific inspection/preservation/destruction rules and provider restore proof remain.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/societyDocumentPackets.ts",
+        "src/pages/PostIncorporationChecklist.tsx",
+        "src/lib/compliance/rulePacks/ca-bc.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:post-incorporation-checklist-flow",
+        "test:research-legal-boundaries"
+      ],
+      "acceptance": "Export readable content+metadata; office access check; preserved consents/versions; retention relevance gate; no uncontrolled destruction.",
+      "research_area": "bc_society"
+    },
+    {
+      "id": "SOC-B09",
+      "priority": "P1",
+      "area": "Source upkeep",
+      "item": "Keep processing estimates and filing UI facts explicitly recheckable",
+      "state": "partial",
+      "implemented": "Official registry links, draft/source/review dates and supplied source conflicts available in Research library.",
+      "remaining": "Current authenticated portal timings/payment/signing screens have not been rechecked live.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/societyDocumentPackets.ts",
+        "src/pages/PostIncorporationChecklist.tsx",
+        "src/lib/compliance/rulePacks/ca-bc.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:post-incorporation-checklist-flow",
+        "test:research-legal-boundaries"
+      ],
+      "acceptance": "observed_at/source/effective dates separate; unresolved items shown; canonical current links; no1–2-day priority promise.",
+      "research_area": "bc_society"
+    },
+    {
+      "id": "FED-B05",
+      "priority": "P1",
+      "area": "Official document preparation",
+      "item": "Replace incomplete worksheet implications with a versioned document inventory",
+      "state": "partial",
+      "implemented": "Original federal articles preparation packet, official source inventory and draft/executed/filed/certified checklist evidence.",
+      "remaining": "These are authored preparation worksheets, not a reviewed complete set of executed incorporation instruments.",
+      "files": [
+        "src/lib/compliance/facts.ts",
+        "src/lib/compliance/rulePacks/ca-fed-cbca.json",
+        "src/lib/compliance/rulePacks/ca-on-obca.json",
+        "src/pages/OrganizationDetails.tsx",
+        "shared/postIncorporationSteps.ts"
+      ],
+      "checks": [
+        "test:research-legal-boundaries",
+        "test:local-snapshots",
+        "test:incorporation-preparation"
+      ],
+      "acceptance": "Each item states official/model/internal, version, filed/retained status, signing role and approval/adoption evidence",
+      "research_area": "federal_ontario"
+    },
+    {
+      "id": "FED-B06",
+      "priority": "P1",
+      "area": "Alternative channels",
+      "item": "Resolve exact current federal paper incorporation route",
+      "state": "external_review",
+      "implemented": "Online filing and unresolved offline assistance remain clearly distinguished in supplied source references.",
+      "remaining": "Exact current complete federal paper route needs current authoritative registry confirmation.",
+      "files": [
+        "src/lib/compliance/facts.ts",
+        "src/lib/compliance/rulePacks/ca-fed-cbca.json",
+        "src/lib/compliance/rulePacks/ca-on-obca.json",
+        "src/pages/OrganizationDetails.tsx",
+        "shared/postIncorporationSteps.ts"
+      ],
+      "checks": [
+        "test:research-legal-boundaries",
+        "test:local-snapshots",
+        "test:incorporation-preparation"
+      ],
+      "acceptance": "Either a current complete channel/form/ISC/signature/fee/time/destination entry or an explicit unresolved assistance branch",
+      "research_area": "federal_ontario"
+    },
+    {
+      "id": "FED-B07",
+      "priority": "P1",
+      "area": "Federal completion and access",
+      "item": "Track certificate, registry access custodian, post-incorporation records and BN/RC separately",
+      "state": "partial",
+      "implemented": "Registry confirmation evidence and independent CRA statuses captured without soliciting keys/passwords.",
+      "remaining": "A complete registry-custodian and legal share-payment completion workflow remains incomplete.",
+      "files": [
+        "src/lib/compliance/facts.ts",
+        "src/lib/compliance/rulePacks/ca-fed-cbca.json",
+        "src/lib/compliance/rulePacks/ca-on-obca.json",
+        "src/pages/OrganizationDetails.tsx",
+        "shared/postIncorporationSteps.ts"
+      ],
+      "checks": [
+        "test:research-legal-boundaries",
+        "test:local-snapshots",
+        "test:incorporation-preparation"
+      ],
+      "acceptance": "Workspace pending until certificate evidence; paid share-issue and organizational decisions retained; no raw key/password solicitation",
+      "research_area": "federal_ontario"
+    },
+    {
+      "id": "FED-B08",
+      "priority": "P1",
+      "area": "Ontario next scope",
+      "item": "Keep existing Ontario entry but make full legal automation conditional on completed current-law review",
+      "state": "external_review",
+      "implemented": "Ontario stays visible for factual registration tracking, with full preparation/governance automation gated.",
+      "remaining": "Current Ontario law/fee/signing/governance review is incomplete in the supplied research.",
+      "files": [
+        "src/lib/compliance/facts.ts",
+        "src/lib/compliance/rulePacks/ca-fed-cbca.json",
+        "src/lib/compliance/rulePacks/ca-on-obca.json",
+        "src/pages/OrganizationDetails.tsx",
+        "shared/postIncorporationSteps.ts"
+      ],
+      "checks": [
+        "test:research-legal-boundaries",
+        "test:local-snapshots",
+        "test:incorporation-preparation"
+      ],
+      "acceptance": "Verified initial-return home/EP distinction now; complete governance/status badge only after ss. 93-104, 118, 126, 129, 140.2, 154 and related provisions reviewed",
+      "research_area": "federal_ontario"
+    },
+    {
+      "id": "REPO-B10",
+      "priority": "P1",
+      "area": "Legal capacities and records",
+      "item": "Separate workspace accounts from legal people/capacities",
+      "state": "partial",
+      "implemented": "Existing people/role-holder/share registers remain independent of workspace roles; identity imports never assert legal capacity.",
+      "remaining": "Full evidence-backed capacity timelines and alternate statutory inspection fulfillment remain incomplete.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Persist person identity, capacity, organization, effective dates, share/member class, voting rights, appointment/cessation evidence and authorized filer/signatory status separately from app membership. Statutory member-register export excludes CRM notes and unrelated confidential fields; inspection request workflow records claimant capacity, purpose/restriction review and disclosed extract.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B11",
+      "priority": "P1",
+      "area": "Compliance engine",
+      "item": "Persist obligations by cycle and completion evidence",
+      "state": "partial",
+      "implemented": "Annual occurrences preserve overdue cycles and occurrence-specific decisions; tracking or dismissal does not mark a filing complete.",
+      "remaining": "Historical actual AGM event ledgers and rule-version snapshots for every obligation still need expansion.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "A missed annual cycle remains overdue until recorded completion/waiver/applicable exception; next cycle can exist simultaneously; rule changes do not overwrite history; different home/extra registrations stay separate.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B12",
+      "priority": "P1",
+      "area": "Resolution evaluation",
+      "item": "Use the correct electorate and exact threshold",
+      "state": "partial",
+      "implemented": "Exact cross-multiplied meeting/written thresholds and missing-electorate/quorum evidence refusal.",
+      "remaining": "Proxy/conflict/class-right evidence and legally verified electorate snapshots require additional integration/review.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Vote result stores denominator source/date, counted votes, abstentions/exclusions, class rights and threshold; insufficient denominator produces not-evaluable; calculations distinguish strict majority from at-least supermajority and written consent eligibility.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B13",
+      "priority": "P1",
+      "area": "Committee access",
+      "item": "Replace label matches with explicit memberships",
+      "state": "implemented",
+      "implemented": "Committee access uses stable legal record references and active appointment intervals; label/email matches do not grant access.",
+      "remaining": "Ambiguous legacy records need manual reconciliation rather than inferred access.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Runtime access uses explicit stable IDs and valid appointment dates; ambiguous email/name matches are review suggestions only; revocation invalidates future content issuance.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B14",
+      "priority": "P1",
+      "area": "Template provenance and compatibility",
+      "item": "Attach official/template provenance and entity guards",
+      "state": "partial",
+      "implemented": "Entity/subtype/jurisdiction generation guards and actual source packet/version/provenance snapshots retained in draft artifacts.",
+      "remaining": "Executed/adopted evidence and third-party form reuse rights remain independently reviewable records.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Each generated document records template ID/version/source/reuse conditions, applicable statute/subtype, legal review state and adoption/signature evidence. Incompatible generation paths reject even with a manually chosen packet key.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B15",
+      "priority": "P1",
+      "area": "Storage provider integration",
+      "item": "Implement one authoritative provider per document and proof of concept",
+      "state": "partial",
+      "implemented": "Local/RustFS preserved, R2 S3 adapter implemented; scoped SharePoint server primitives and per-workspace policy/evidence interface.",
+      "remaining": "SharePoint deployment wiring/token custody and an approved live isolation/recovery/export pilot remain.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Workspace maps to approved provider/library; app document UUID survives rename/move; provider object/version IDs and eTags stored; upload/download/version/export work; another workspace is denied; revocation and legal-hold behavior documented.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "REPO-B16",
+      "priority": "P1",
+      "area": "Rule evidence and review",
+      "item": "Preserve existing review gates and add legal-force semantics",
+      "state": "partial",
+      "implemented": "Source citations, draft/review status and separate research/source dates remain visible; unsupported routes gated.",
+      "remaining": "Every provision effective window and mandatory/conditional/recommended legal-force classification needs reviewer completion.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "Required/conditional/recommended/operational classes are explicit; each executable rule has applicable entity/context, trigger, calculation, exceptions, provision, evidence and effective window; invalid review transitions fail validation; pending incorporation is separate from active legal entity obligations.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "SYN-B02",
+      "priority": "P1",
+      "area": "Legal capacities",
+      "item": "Separate people, workspace roles and legal capacities",
+      "state": "partial",
+      "implemented": "Person/external identity and workspace role histories remain separate; backups do not create login bindings.",
+      "remaining": "Fully evidence-backed legal capacities and non-login statutory inspection workflow still need expansion.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/templateProvenance.ts",
+        "src/pages/Society.tsx",
+        "src/pages/ResearchLibrary.tsx"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:generate-from-catalog"
+      ],
+      "acceptance": "Each legal capacity has evidence and effective dates; removing access does not change historical legal registers.",
+      "research_area": "root_findings"
+    },
+    {
+      "id": "SYN-B03",
+      "priority": "P1",
+      "area": "Template provenance",
+      "item": "Classify templates and verify reuse terms",
+      "state": "partial",
+      "implemented": "Authored draft snapshots, template type/reuse/source references and executed/certified evidence distinctions.",
+      "remaining": "Unverified government/model form reuse permissions and statutory attribution reproduction need review.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/templateProvenance.ts",
+        "src/pages/Society.tsx",
+        "src/pages/ResearchLibrary.tsx"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:generate-from-catalog"
+      ],
+      "acceptance": "Each template records source/version/reuse conditions, required customization and filing versus retention; statutory-text attribution implemented where applicable.",
+      "research_area": "root_findings"
+    },
+    {
+      "id": "SYN-B04",
+      "priority": "P1",
+      "area": "Tax and status",
+      "item": "Separate BN and tax programs from charity status",
+      "state": "partial",
+      "implemented": "Independent persisted BN/RC/GST/payroll/charity states and shared evidence reference.",
+      "remaining": "Actual agency receipt identifiers and taxpayer/program applicability require accountant/administrator verification.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/templateProvenance.ts",
+        "src/pages/Society.tsx",
+        "src/pages/ResearchLibrary.tsx"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:generate-from-catalog"
+      ],
+      "acceptance": "Receipt evidence and each program identifier/status are independent; no duplicate BN created by preparation flow.",
+      "research_area": "root_findings"
+    },
+    {
+      "id": "STO-B05",
+      "priority": "P1",
+      "area": "SharePoint adapter",
+      "item": "Implement bounded uploads, stable locators, conflicts and change reconciliation",
+      "state": "partial",
+      "implemented": "Server SharePoint primitives for bounded small/resumable upload, stable locators/eTags, conflicts, retries, version bytes and delta checkpoints.",
+      "remaining": "Deployment connection/token custody, resumable recovery across processes and subscription renewal remain unwired; no live Graph proof.",
+      "files": [
+        "shared/storage/providerCapabilities.ts",
+        "shared/storage/signedUrl.ts",
+        "shared/storage/sharePointAdapter.ts",
+        "convex/documentVersions.ts",
+        "src/components/DocumentStorageSettingsCard.tsx"
+      ],
+      "checks": [
+        "test:document-security",
+        "test:document-upload-binding",
+        "test:integration-settings",
+        "test:sharepoint-adapter"
+      ],
+      "acceptance": "Small/resumable upload, version download, rename, conflict, retry, external change, delta reset and subscription renewal supported.",
+      "research_area": "storage"
+    },
+    {
+      "id": "STO-B06",
+      "priority": "P1",
+      "area": "R2 adapter",
+      "item": "Implement immutable version keys and feature-specific controls",
+      "state": "partial",
+      "implemented": "R2 endpoint/account/bucket/S3 credentials adapter with auto region, own immutable keys, size/hash verification.",
+      "remaining": "Native lock permissions, restore and independent backup acceptance require an approved bucket.",
+      "files": [
+        "shared/storage/providerCapabilities.ts",
+        "shared/storage/signedUrl.ts",
+        "shared/storage/sharePointAdapter.ts",
+        "convex/documentVersions.ts",
+        "src/components/DocumentStorageSettingsCard.tsx"
+      ],
+      "checks": [
+        "test:document-security",
+        "test:document-upload-binding",
+        "test:integration-settings",
+        "test:sharepoint-adapter"
+      ],
+      "acceptance": "Core S3 functions work; unsupported features are rejected or replaced explicitly; scoped runtime credentials cannot change lock policy.",
+      "research_area": "storage"
+    },
+    {
+      "id": "STO-B07",
+      "priority": "P1",
+      "area": "Revocation",
+      "item": "Make a document download broker and tested offboarding runbook",
+      "state": "partial",
+      "implemented": "New requests re-authorize; SharePoint adapter streams bytes without exposing capability URLs; saved offboarding plan.",
+      "remaining": "Existing S3 signed URLs remain capabilities until expiry; deployed broker wiring and native provider revocation need live proof.",
+      "files": [
+        "shared/storage/providerCapabilities.ts",
+        "shared/storage/signedUrl.ts",
+        "shared/storage/sharePointAdapter.ts",
+        "convex/documentVersions.ts",
+        "src/components/DocumentStorageSettingsCard.tsx"
+      ],
+      "checks": [
+        "test:document-security",
+        "test:document-upload-binding",
+        "test:integration-settings",
+        "test:sharepoint-adapter"
+      ],
+      "acceptance": "New broker requests deny after removal; held content stays retained; remaining native grants and issued URLs are reported accurately.",
+      "research_area": "storage"
+    },
+    {
+      "id": "STO-B08",
+      "priority": "P1",
+      "area": "Records and recovery",
+      "item": "Add explicit retention, purge, restore and inspectable export states",
+      "state": "partial",
+      "implemented": "Existing workspace backups retained, document version/hash metadata exports, custody and retention/offboarding plans.",
+      "remaining": "End-to-end content/hash restore and legal-hold/purge lifecycle across providers remain incomplete.",
+      "files": [
+        "shared/storage/providerCapabilities.ts",
+        "shared/storage/signedUrl.ts",
+        "shared/storage/sharePointAdapter.ts",
+        "convex/documentVersions.ts",
+        "src/components/DocumentStorageSettingsCard.tsx"
+      ],
+      "checks": [
+        "test:document-security",
+        "test:document-upload-binding",
+        "test:integration-settings",
+        "test:sharepoint-adapter"
+      ],
+      "acceptance": "Export all required versions and metadata with hash manifest; deletion distinguishes retained/blocked/purged; restore succeeds.",
+      "research_area": "storage"
+    },
+    {
+      "id": "STO-B09",
+      "priority": "P1",
+      "area": "Audit",
+      "item": "Capture application allow/deny audit and link provider events",
+      "state": "partial",
+      "implemented": "Common application action decision checks and current actor bindings.",
+      "remaining": "Durable allow/deny application audit correlation, provider event links and full retention/privacy policy remain work.",
+      "files": [
+        "shared/storage/providerCapabilities.ts",
+        "shared/storage/signedUrl.ts",
+        "shared/storage/sharePointAdapter.ts",
+        "convex/documentVersions.ts",
+        "src/components/DocumentStorageSettingsCard.tsx"
+      ],
+      "checks": [
+        "test:document-security",
+        "test:document-upload-binding",
+        "test:integration-settings",
+        "test:sharepoint-adapter"
+      ],
+      "acceptance": "Events identify actor/workspace/document/version/action/outcome without exposing credential URLs; denial and background actions logged.",
+      "research_area": "storage"
+    },
+    {
+      "id": "AUTH-B10",
+      "priority": "P2",
+      "area": "Desktop",
+      "item": "Separate offline local records from connected hosted identity.",
+      "state": "partial",
+      "implemented": "Local/hosted trust is explicit, imported auth bindings are stripped, no-auth remote configuration rejected.",
+      "remaining": "Native external-browser PKCE sign-in and approved offline-data/revocation policy remain work.",
+      "files": [
+        "shared/authConfiguration.ts",
+        "shared/functions/identity.ts",
+        "shared/functions/access.ts",
+        "server/auth-config.ts",
+        "docs/hosted-identity-and-provider-gates.md"
+      ],
+      "checks": [
+        "test:hosted-identity",
+        "test:auth-broker",
+        "test:identity-binding"
+      ],
+      "acceptance": "Hosted calls require the selected broker; native sign-in uses a vetted external-browser/PKCE flow with bounded callbacks and secure token custody. Offline state is visibly local and does not grant server access.",
+      "research_area": "authentication"
+    },
+    {
+      "id": "BCC-B13",
+      "priority": "P2",
+      "area": "Subtype expansion",
+      "item": "Review benefit, ULC, public and CCC documents/rules separately before full automation.",
+      "state": "external_review",
+      "implemented": "Special BC subtypes have explicit selectable facts and preparation review gates.",
+      "remaining": "Dedicated benefit/ULC/public/CCC instruments/rules require specialist legal review.",
+      "files": [
+        "shared/corporationDocumentPackets.ts",
+        "shared/entitySetup.ts",
+        "src/components/EntitySetupFields.tsx",
+        "src/lib/compliance/rulePacks/ca-bc-company.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:research-legal-boundaries",
+        "test:corporation-settings"
+      ],
+      "acceptance": "Each subtype has dedicated evidence/requirements/templates; no ordinary-template claim of suitability.",
+      "research_area": "bc_company"
+    },
+    {
+      "id": "SOC-B10",
+      "priority": "P2",
+      "area": "Tax/charity",
+      "item": "Maintain CRA status/accounts as separate registrations",
+      "state": "partial",
+      "implemented": "BN, RC, GST/HST, payroll and charity states/evidence are independent persisted options.",
+      "remaining": "Accountant assessment and actual CRA evidence cannot be inferred from incorporation.",
+      "files": [
+        "shared/entitySetup.ts",
+        "shared/societyDocumentPackets.ts",
+        "src/pages/PostIncorporationChecklist.tsx",
+        "src/lib/compliance/rulePacks/ca-bc.json",
+        "shared/legalDecision.ts"
+      ],
+      "checks": [
+        "test:incorporation-preparation",
+        "test:post-incorporation-checklist-flow",
+        "test:research-legal-boundaries"
+      ],
+      "acceptance": "Charity decision evidence and RR account distinct from BN; tax tasks applicability-based; no automatic duplicate BN request.",
+      "research_area": "bc_society"
+    },
+    {
+      "id": "REPO-B17",
+      "priority": "P2",
+      "area": "Optional personalized permissions",
+      "item": "Defer arbitrary per-person module overrides until base policy works",
+      "state": "deferred",
+      "implemented": "Arbitrary per-person module overrides were not introduced; common roles and record ACL enforcement are implemented first.",
+      "remaining": "An action-scoped expiring override design remains intentionally deferred by the research recommendation.",
+      "files": [
+        "shared/functions/actionPolicy.ts",
+        "convex/lib/authorizedServer.ts",
+        "shared/functions/users.ts",
+        "shared/functions/invitations.ts",
+        "shared/functions/documents.ts",
+        "convex/documentVersions.ts"
+      ],
+      "checks": [
+        "test:authorization-policy",
+        "test:document-security",
+        "test:document-upload-binding"
+      ],
+      "acceptance": "First release supports clear roles and record-specific access; any later override has action-level scope, reason, approver, expiry, deny precedence and effective-access preview; cannot create Owner authority or statutory capacity.",
+      "research_area": "repo_permissions"
+    },
+    {
+      "id": "STO-B10",
+      "priority": "P2",
+      "area": "Cost and capacity",
+      "item": "Add per-workspace usage and retention forecasts",
+      "state": "partial",
+      "implemented": "Manual R2 Standard/IA forecast with billing-unit rounding, shared remaining allowances, version/backup footprint and separate costs.",
+      "remaining": "Measured per-workspace provider usage, license contract and invoice reconciliation remain unavailable.",
+      "files": [
+        "shared/storage/providerCapabilities.ts",
+        "shared/storage/signedUrl.ts",
+        "shared/storage/sharePointAdapter.ts",
+        "convex/documentVersions.ts",
+        "src/components/DocumentStorageSettingsCard.tsx"
+      ],
+      "checks": [
+        "test:document-security",
+        "test:document-upload-binding",
+        "test:integration-settings",
+        "test:sharepoint-adapter"
+      ],
+      "acceptance": "Dashboard distinguishes provider byte/version counts, shared allowances, subscription/add-on/backup and monthly usage estimates.",
+      "research_area": "storage"
+    },
+    {
+      "id": "STO-B11",
+      "priority": "P2",
+      "area": "Customer-owned storage",
+      "item": "Extend pilot to per-client tenant onboarding and exports",
+      "state": "partial",
+      "implemented": "Per-workspace customer-owned tenant/library and custody/offboarding settings.",
+      "remaining": "Two approved tenants, contractual/licensing isolation and full per-customer deployment onboarding need a successful live pilot.",
+      "files": [
+        "shared/storage/providerCapabilities.ts",
+        "shared/storage/signedUrl.ts",
+        "shared/storage/sharePointAdapter.ts",
+        "convex/documentVersions.ts",
+        "src/components/DocumentStorageSettingsCard.tsx"
+      ],
+      "checks": [
+        "test:document-security",
+        "test:document-upload-binding",
+        "test:integration-settings",
+        "test:sharepoint-adapter"
+      ],
+      "acceptance": "Each client sees only its connection; exports and revocation leave custody with the owning company; consent changes are auditable.",
+      "research_area": "storage"
+    }
+  ]
+}

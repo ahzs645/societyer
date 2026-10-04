@@ -1144,7 +1144,7 @@
     "surface": "convex",
     "name": "aiAgents:auditForRun",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/aiAgents.ts",
     "idArguments": [
       {
@@ -1160,7 +1160,7 @@
     "surface": "convex",
     "name": "aiAgents:executeTool",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/aiAgents.ts",
     "idArguments": [
       {
@@ -1194,7 +1194,7 @@
     "surface": "convex",
     "name": "aiAgents:getAgentRunContext",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/aiAgents.ts",
     "idArguments": [
       {
@@ -1216,7 +1216,7 @@
     "surface": "convex",
     "name": "aiAgents:getChatContext",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/aiAgents.ts",
     "idArguments": [
       {
@@ -1238,7 +1238,7 @@
     "surface": "convex",
     "name": "aiAgents:getToolCatalog",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/aiAgents.ts",
     "idArguments": [
       {
@@ -1260,7 +1260,7 @@
     "surface": "convex",
     "name": "aiAgents:learnTools",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/aiAgents.ts",
     "idArguments": [
       {
@@ -1323,7 +1323,7 @@
     "surface": "convex",
     "name": "aiAgents:listRuns",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/aiAgents.ts",
     "idArguments": [
       {
@@ -1701,7 +1701,7 @@
     "surface": "convex",
     "name": "aiChatActions:runAgentLive",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/aiChatActions.ts",
     "idArguments": [
       {
@@ -1723,7 +1723,7 @@
     "surface": "convex",
     "name": "aiChatActions:sendChatMessage",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/aiChatActions.ts",
     "idArguments": [
       {
@@ -1853,7 +1853,7 @@
     "surface": "convex",
     "name": "aiSettingsActions:listProviderModels",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/aiSettingsActions.ts",
     "idArguments": [
       {
@@ -1875,7 +1875,7 @@
     "surface": "convex",
     "name": "aiSettingsActions:validateProviderKey",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/aiSettingsActions.ts",
     "idArguments": []
   },
@@ -2002,7 +2002,7 @@
     "surface": "convex",
     "name": "apiPlatform:actorForBetterAuthSubject",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2018,7 +2018,7 @@
     "surface": "convex",
     "name": "apiPlatform:bootstrapUserIdentity",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2056,7 +2056,7 @@
     "surface": "convex",
     "name": "apiPlatform:createToken",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2084,7 +2084,7 @@
     "surface": "convex",
     "name": "apiPlatform:createWebhookDelivery",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2106,7 +2106,7 @@
     "surface": "convex",
     "name": "apiPlatform:devActorForSociety",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2230,7 +2230,7 @@
     "surface": "convex",
     "name": "apiPlatform:listWebhookDeliveries",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2252,7 +2252,7 @@
     "surface": "convex",
     "name": "apiPlatform:listWebhookSubscriptions",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2268,7 +2268,7 @@
     "surface": "convex",
     "name": "apiPlatform:listWebhookSubscriptionsForEvent",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2284,7 +2284,7 @@
     "surface": "convex",
     "name": "apiPlatform:resourceTenantStatus",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2300,7 +2300,7 @@
     "surface": "convex",
     "name": "apiPlatform:revokeToken",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2316,7 +2316,7 @@
     "surface": "convex",
     "name": "apiPlatform:setWebhookSubscriptionStatus",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2376,7 +2376,7 @@
     "surface": "convex",
     "name": "apiPlatform:updateWebhookDelivery",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2392,7 +2392,7 @@
     "surface": "convex",
     "name": "apiPlatform:upsertIntegrationSyncState",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2460,7 +2460,7 @@
     "surface": "convex",
     "name": "apiPlatform:upsertWebhookSubscription",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": [
       {
@@ -2500,7 +2500,7 @@
     "surface": "convex",
     "name": "apiPlatform:verifyToken",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/apiPlatform.ts",
     "idArguments": []
   },
@@ -3079,6 +3079,15 @@
         "optional": true
       }
     ]
+  },
+  {
+    "key": "convex:authorization:checkAction",
+    "surface": "convex",
+    "name": "authorization:checkAction",
+    "kind": "query",
+    "access": "service",
+    "source": "convex/authorization.ts",
+    "idArguments": []
   },
   {
     "key": "convex:bylawAmendments:createDraft",
@@ -3980,7 +3989,7 @@
     "surface": "convex",
     "name": "communications:ensureDefaultTemplates",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/communications.ts",
     "idArguments": [
       {
@@ -4152,7 +4161,7 @@
     "surface": "convex",
     "name": "communications:sendCampaign",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/communications.ts",
     "idArguments": [
       {
@@ -4180,7 +4189,7 @@
     "surface": "convex",
     "name": "communications:sendMeetingNotice",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/communications.ts",
     "idArguments": [
       {
@@ -5456,11 +5465,11 @@
     ]
   },
   {
-    "key": "convex:documentVersions:beginUpload",
+    "key": "convex:documentVersions:allocateUploadHandle",
     "surface": "convex",
-    "name": "documentVersions:beginUpload",
-    "kind": "action",
-    "access": "unclassified",
+    "name": "documentVersions:allocateUploadHandle",
+    "kind": "mutation",
+    "access": "service",
     "source": "convex/documentVersions.ts",
     "idArguments": [
       {
@@ -5484,11 +5493,71 @@
     ]
   },
   {
+    "key": "convex:documentVersions:beginUpload",
+    "surface": "convex",
+    "name": "documentVersions:beginUpload",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/documentVersions.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:documentVersions:claimUploadHandle",
+    "surface": "convex",
+    "name": "documentVersions:claimUploadHandle",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/documentVersions.ts",
+    "idArguments": [
+      {
+        "path": "uploadHandleId",
+        "table": "documentUploadHandles",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:documentVersions:completeUpload",
+    "surface": "convex",
+    "name": "documentVersions:completeUpload",
+    "kind": "action",
+    "access": "authenticated",
+    "source": "convex/documentVersions.ts",
+    "idArguments": [
+      {
+        "path": "uploadHandleId",
+        "table": "documentUploadHandles",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:documentVersions:createDemoVersion",
     "surface": "convex",
     "name": "documentVersions:createDemoVersion",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/documentVersions.ts",
     "idArguments": [
       {
@@ -5532,7 +5601,7 @@
     "surface": "convex",
     "name": "documentVersions:getDownloadTarget",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/documentVersions.ts",
     "idArguments": [
       {
@@ -5548,7 +5617,7 @@
     "surface": "convex",
     "name": "documentVersions:getDownloadUrl",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/documentVersions.ts",
     "idArguments": [
       {
@@ -5592,6 +5661,22 @@
     ]
   },
   {
+    "key": "convex:documentVersions:markUploadVerified",
+    "surface": "convex",
+    "name": "documentVersions:markUploadVerified",
+    "kind": "mutation",
+    "access": "service",
+    "source": "convex/documentVersions.ts",
+    "idArguments": [
+      {
+        "path": "uploadHandleId",
+        "table": "documentUploadHandles",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:documentVersions:recordUploadedVersion",
     "surface": "convex",
     "name": "documentVersions:recordUploadedVersion",
@@ -5599,6 +5684,12 @@
     "access": "authenticated",
     "source": "convex/documentVersions.ts",
     "idArguments": [
+      {
+        "path": "uploadHandleId",
+        "table": "documentUploadHandles",
+        "array": false,
+        "optional": true
+      },
       {
         "path": "societyId",
         "table": "societies",
@@ -5638,6 +5729,22 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:documentVersions:storageCapabilities",
+    "surface": "convex",
+    "name": "documentVersions:storageCapabilities",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/documentVersions.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -6589,7 +6696,7 @@
     "surface": "convex",
     "name": "files:attachUploadedFileToDocument",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/files.ts",
     "idArguments": [
       {
@@ -6611,7 +6718,7 @@
     "surface": "convex",
     "name": "files:generateLogoUploadUrl",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/files.ts",
     "idArguments": []
   },
@@ -6620,7 +6727,7 @@
     "surface": "convex",
     "name": "files:generateUploadUrl",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/files.ts",
     "idArguments": []
   },
@@ -6727,7 +6834,7 @@
     "surface": "convex",
     "name": "filingBot:buildFilingPacket",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/filingBot.ts",
     "idArguments": [
       {
@@ -6775,7 +6882,7 @@
     "surface": "convex",
     "name": "filingBot:run",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/filingBot.ts",
     "idArguments": [
       {
@@ -7228,7 +7335,7 @@
     "surface": "convex",
     "name": "financialHub:oauthUrl",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/financialHub.ts",
     "idArguments": [
       {
@@ -7342,7 +7449,7 @@
     "surface": "convex",
     "name": "financialHub:sync",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/financialHub.ts",
     "idArguments": [
       {
@@ -7586,7 +7693,7 @@
     "surface": "convex",
     "name": "firm:batchGeneratePacket",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/firm.ts",
     "idArguments": [
       {
@@ -8544,7 +8651,7 @@
     "surface": "convex",
     "name": "grantSources:discoverFromSource",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/grantSources.ts",
     "idArguments": [
       {
@@ -11851,7 +11958,7 @@
     "surface": "convex",
     "name": "minutes:generateDraft",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/minutes.ts",
     "idArguments": [
       {
@@ -12803,7 +12910,7 @@
     "surface": "convex",
     "name": "notifications:sendDigest",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/notifications.ts",
     "idArguments": [
       {
@@ -13191,6 +13298,12 @@
         "optional": false
       },
       {
+        "path": "licenceEvidenceDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
         "path": "profileReportDocumentId",
         "table": "documents",
         "array": false,
@@ -13440,7 +13553,7 @@
     "surface": "convex",
     "name": "paperless:connectionStatus",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/paperless.ts",
     "idArguments": [
       {
@@ -13456,7 +13569,7 @@
     "surface": "convex",
     "name": "paperless:createBylawsHistoryImportSession",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/paperless.ts",
     "idArguments": [
       {
@@ -13478,7 +13591,7 @@
     "surface": "convex",
     "name": "paperless:createDiscoveryImportSession",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/paperless.ts",
     "idArguments": [
       {
@@ -13500,7 +13613,7 @@
     "surface": "convex",
     "name": "paperless:createMeetingMinutesImportSession",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/paperless.ts",
     "idArguments": [
       {
@@ -13522,7 +13635,7 @@
     "surface": "convex",
     "name": "paperless:createTransposedImportSession",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/paperless.ts",
     "idArguments": [
       {
@@ -13598,7 +13711,7 @@
     "surface": "convex",
     "name": "paperless:pullSourceDocument",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/paperless.ts",
     "idArguments": [
       {
@@ -13658,7 +13771,7 @@
     "surface": "convex",
     "name": "paperless:recordPulledSourceDocument",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/paperless.ts",
     "idArguments": [
       {
@@ -13686,7 +13799,7 @@
     "surface": "convex",
     "name": "paperless:recordSyncRefresh",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/paperless.ts",
     "idArguments": [
       {
@@ -13702,7 +13815,7 @@
     "surface": "convex",
     "name": "paperless:recordSyncResult",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/paperless.ts",
     "idArguments": [
       {
@@ -13736,7 +13849,7 @@
     "surface": "convex",
     "name": "paperless:refreshSync",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/paperless.ts",
     "idArguments": [
       {
@@ -13814,7 +13927,7 @@
     "surface": "convex",
     "name": "paperless:syncDocument",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/paperless.ts",
     "idArguments": [
       {
@@ -13873,7 +13986,7 @@
     "surface": "convex",
     "name": "paperless:testConnection",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/paperless.ts",
     "idArguments": [
       {
@@ -14187,7 +14300,7 @@
     "surface": "convex",
     "name": "permissions:check",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/permissions.ts",
     "idArguments": [
       {
@@ -14209,7 +14322,7 @@
     "surface": "convex",
     "name": "permissions:listAll",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/permissions.ts",
     "idArguments": []
   },
@@ -14460,6 +14573,28 @@
         "table": "societies",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:postIncorporation:recordEvidence",
+    "surface": "convex",
+    "name": "postIncorporation:recordEvidence",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/postIncorporation.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -15149,7 +15284,7 @@
     "surface": "convex",
     "name": "secrets:create",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/secrets.ts",
     "idArguments": [
       {
@@ -15227,7 +15362,7 @@
     "surface": "convex",
     "name": "secrets:revealSecret",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/secrets.ts",
     "idArguments": [
       {
@@ -15249,7 +15384,7 @@
     "surface": "convex",
     "name": "secrets:update",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/secrets.ts",
     "idArguments": [
       {
@@ -15289,7 +15424,7 @@
     "surface": "convex",
     "name": "seed:reset",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/seed.ts",
     "idArguments": []
   },
@@ -15298,7 +15433,7 @@
     "surface": "convex",
     "name": "seed:run",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/seed.ts",
     "idArguments": []
   },
@@ -15323,7 +15458,7 @@
     "surface": "convex",
     "name": "seedRecordTableMetadata:run",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/seedRecordTableMetadata.ts",
     "idArguments": []
   },
@@ -15332,7 +15467,7 @@
     "surface": "convex",
     "name": "seedRecordTableMetadata:runForSociety",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/seedRecordTableMetadata.ts",
     "idArguments": [
       {
@@ -15348,7 +15483,7 @@
     "surface": "convex",
     "name": "seedRecordTableMetadata:wipe",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/seedRecordTableMetadata.ts",
     "idArguments": []
   },
@@ -15805,7 +15940,7 @@
     "surface": "convex",
     "name": "society:createWorkspace",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/society.ts",
     "idArguments": [
       {
@@ -15955,6 +16090,22 @@
     ]
   },
   {
+    "key": "convex:society:updateIntegrationSettings",
+    "surface": "convex",
+    "name": "society:updateIntegrationSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/society.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:society:updateInventorySettings",
     "surface": "convex",
     "name": "society:updateInventorySettings",
@@ -16007,7 +16158,7 @@
     "surface": "convex",
     "name": "society:upsert",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/society.ts",
     "idArguments": [
       {
@@ -16035,7 +16186,7 @@
     "surface": "convex",
     "name": "storageOwnershipBackfill:run",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/storageOwnershipBackfill.ts",
     "idArguments": []
   },
@@ -16091,7 +16242,7 @@
     "surface": "convex",
     "name": "subscriptions:beginCheckout",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/subscriptions.ts",
     "idArguments": [
       {
@@ -16252,7 +16403,7 @@
     "surface": "convex",
     "name": "subscriptions:simulateActivation",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/subscriptions.ts",
     "idArguments": [
       {
@@ -16648,7 +16799,7 @@
     "surface": "convex",
     "name": "transcripts:runPipeline",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/transcripts.ts",
     "idArguments": [
       {
@@ -16973,6 +17124,22 @@
         "table": "users",
         "array": false,
         "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:users:securityDisable",
+    "surface": "convex",
+    "name": "users:securityDisable",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/users.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "users",
+        "array": false,
+        "optional": false
       }
     ]
   },
@@ -17689,7 +17856,7 @@
     "surface": "convex",
     "name": "waveCache:healthCheck",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/waveCache.ts",
     "idArguments": []
   },
@@ -17698,7 +17865,7 @@
     "surface": "convex",
     "name": "waveCache:invoicePaymentProbe",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/waveCache.ts",
     "idArguments": []
   },
@@ -17787,7 +17954,7 @@
     "surface": "convex",
     "name": "waveCache:sync",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/waveCache.ts",
     "idArguments": [
       {
@@ -18019,7 +18186,7 @@
     "surface": "convex",
     "name": "workflows:_listDue",
     "kind": "query",
-    "access": "unclassified",
+    "access": "service",
     "source": "convex/workflows.ts",
     "idArguments": []
   },
@@ -18028,6 +18195,22 @@
     "surface": "convex",
     "name": "workflows:_markExternalQueued",
     "kind": "mutation",
+    "access": "service",
+    "source": "convex/workflows.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "workflowRuns",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:workflows:_requireRunAuthority",
+    "surface": "convex",
+    "name": "workflows:_requireRunAuthority",
+    "kind": "query",
     "access": "service",
     "source": "convex/workflows.ts",
     "idArguments": [
@@ -18142,7 +18325,7 @@
     "surface": "convex",
     "name": "workflows:createPdfTemplateImportSession",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/workflows.ts",
     "idArguments": [
       {
@@ -18176,7 +18359,7 @@
     "surface": "convex",
     "name": "workflows:get",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/workflows.ts",
     "idArguments": [
       {
@@ -18208,7 +18391,7 @@
     "surface": "convex",
     "name": "workflows:inspectPdfTemplate",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/workflows.ts",
     "idArguments": [
       {
@@ -18246,7 +18429,7 @@
     "surface": "convex",
     "name": "workflows:listCatalog",
     "kind": "query",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/workflows.ts",
     "idArguments": []
   },
@@ -18280,7 +18463,7 @@
     "surface": "convex",
     "name": "workflows:receiveExternalCallback",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/workflows.ts",
     "idArguments": [
       {
@@ -18314,7 +18497,7 @@
     "surface": "convex",
     "name": "workflows:recordConnectorRun",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/workflows.ts",
     "idArguments": [
       {
@@ -18336,7 +18519,7 @@
     "surface": "convex",
     "name": "workflows:recordGeneratedDocument",
     "kind": "mutation",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/workflows.ts",
     "idArguments": [
       {
@@ -18408,7 +18591,7 @@
     "surface": "convex",
     "name": "workflows:run",
     "kind": "action",
-    "access": "unclassified",
+    "access": "authenticated",
     "source": "convex/workflows.ts",
     "idArguments": [
       {
@@ -30517,6 +30700,12 @@
         "optional": false
       },
       {
+        "path": "licenceEvidenceDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
         "path": "profileReportDocumentId",
         "table": "documents",
         "array": false,
@@ -31401,6 +31590,28 @@
         "table": "societies",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:postIncorporation:recordEvidence",
+    "surface": "portable",
+    "name": "postIncorporation:recordEvidence",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "documentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -32686,6 +32897,22 @@
     ]
   },
   {
+    "key": "portable:society:updateIntegrationSettings",
+    "surface": "portable",
+    "name": "society:updateIntegrationSettings",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:society:updateInventorySettings",
     "surface": "portable",
     "name": "society:updateInventorySettings",
@@ -33515,6 +33742,44 @@
     ]
   },
   {
+    "key": "portable:users:remove",
+    "surface": "portable",
+    "name": "users:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "users",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:users:securityDisable",
+    "surface": "portable",
+    "name": "users:securityDisable",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "users",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:users:setRole",
     "surface": "portable",
     "name": "users:setRole",
@@ -33527,6 +33792,46 @@
         "table": "users",
         "array": false,
         "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:users:upsert",
+    "surface": "portable",
+    "name": "users:upsert",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "users",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "memberId",
+        "table": "members",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "directorId",
+        "table": "directors",
+        "array": false,
+        "optional": true
       },
       {
         "path": "actingUserId",

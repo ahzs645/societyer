@@ -1,3 +1,4 @@
+import { entitySetupFields, validateEntitySetup, entityPreparationDecision, validateFormationEvidence } from "../../shared/entitySetup";
 // Legacy static query/mutation mirror. Scheduled for deletion once the local
 // portable migration backlog is complete.
 import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
@@ -656,11 +657,11 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
     const generated = new Set<string>();
     for (const run of store?.listRows("legalPrecedentRuns", { societyId: args?.societyId }) ?? []) {
       for (const id of run.sourceExternalIds ?? []) {
-        const match = /^societyer:corporation-packet-run:(.+)$/.exec(String(id));
+        const match = /^societyer:(?:corporation|society)-packet-run:(.+)$/.exec(String(id));
         if (match) generated.add(match[1]);
       }
     }
-    return { steps, generatedPacketKeys: Array.from(generated) };
+    return { steps, generatedPacketKeys: Array.from(generated), evidence: society.postIncorporationEvidence ?? [], preparation: entityPreparationDecision(society) };
   }
   if (moduleName === "roleHolderHistory" && exportName === "revisionHistory") {
     const revisions = staticStoredRoleHolderRevisions(store, { roleHolderId: args?.roleHolderId });
@@ -843,6 +844,8 @@ const MUT_NOT_HANDLED = Symbol("staticConvex.mutationNotHandled");
 function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "society:createWorkspace") {
     const createWorkspace = () => {
+      validateEntitySetup(args ?? {});
+      validateFormationEvidence(args ?? {});
       const now = new Date().toISOString();
       const societyId = staticLocalId("society", "workspace");
       const workflowId = staticLocalId("workflow", "onboarding");
@@ -864,6 +867,10 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
         primaryRegistrationId: homeRegistrationId,
         anniversaryDate,
         corporationKeyVaultItemId: args?.corporationKeyVaultItemId,
+        continuanceDate: args?.continuanceDate,
+        amalgamationDate: args?.amalgamationDate,
+        ...entitySetupFields(args ?? {}),
+        formationStatus: args?.formationStatus || "preparing",
         entityType: args?.entityType,
         actFormedUnder: args?.actFormedUnder,
         officialEmail: args?.officialEmail,
@@ -1285,6 +1292,9 @@ function mutCasesSubscriptions8(name: string, args: StaticArgs, store?: StaticDe
 }
 
 function mutCasesAssets9(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
+  if (name === "documentVersions:completeUpload") {
+    throw new Error("Hosted upload verification is unavailable in the local runtime. Use local filesystem storage or explicit demo uploads.");
+  }
   if (name === "documentVersions:recordUploadedVersion") {
     const now = new Date().toISOString();
     const id = `static_documentVersion_${Date.now()}`;
@@ -1462,6 +1472,11 @@ export function mutationResult(name: string, args: StaticArgs, store?: StaticDem
         .concat([row])
         .sort(staticRightsholdingTransferChronologicalSort);
       validateLedger(proposedTransfers);
+    }
+    if (name === "society:upsert") {
+      validateEntitySetup(row);
+      validateFormationEvidence(row, args?.id, store?.getRow("documents", row.certificateEvidenceDocumentId), store?.listRows("documentVersions", { documentId: row.certificateEvidenceDocumentId }) ?? []);
+      if (row.formationStatus === "incorporated") row.incorporationDate = row.certificateDate;
     }
     store?.upsertRow(tableName, row);
     if (name === "society:upsert" && !args?.id) {

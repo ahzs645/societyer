@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import type { ICalEvent } from "../shared/icalendar";
@@ -17,14 +18,14 @@ import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
  */
 
 /** Read the current feed token for the Settings/Integrations UI (null = off). */
-export const getFeedToken = query({
+export const getFeedToken = authorizedQuery("calendarFeed:getFeedToken", query)({
   args: { societyId: v.id("societies") },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => getFeedTokenPortable(await toPortableQueryCtx(ctx), args),
 });
 
 /** Enable/rotate (token = string) or disable (token = null) the feed. */
-export const setFeedToken = mutation({
+export const setFeedToken = authorizedMutation("calendarFeed:setFeedToken", mutation)({
   args: { societyId: v.id("societies"), token: v.union(v.string(), v.null()) },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => setFeedTokenPortable(await toPortableMutationCtx(ctx), args),

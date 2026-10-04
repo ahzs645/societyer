@@ -1,3 +1,4 @@
+import { authorizedMutation } from "./lib/authorizedServer";
 /**
  * Seeds objectMetadata + fieldMetadata + a default "All records" view for
  * each Twenty-style object. Idempotent — re-running tops up missing rows
@@ -27,7 +28,7 @@ async function seedSociety(ctx: any, societyId: any) {
   await seedSocietyPortable(await toPortableMutationCtx(ctx), societyId, RECORD_TABLE_OBJECTS);
 }
 
-export const run = mutation({
+export const run = authorizedMutation("seedRecordTableMetadata:run", mutation)({
   args: { serviceToken: serviceTokenValidator },
   returns: v.object({ seededSocieties: v.number(), objects: v.number() }),
   handler: async (ctx, { serviceToken }) => {
@@ -36,7 +37,7 @@ export const run = mutation({
   },
 });
 
-export const runForSociety = mutation({
+export const runForSociety = authorizedMutation("seedRecordTableMetadata:runForSociety", mutation)({
   args: { societyId: v.id("societies"), serviceToken: serviceTokenValidator },
   returns: v.object({ ok: v.boolean(), objects: v.number() }),
   handler: async (ctx, { societyId, serviceToken }) => {
@@ -52,7 +53,7 @@ export const runForSociety = mutation({
  * button so users don't have to drop to the CLI when a society is missing
  * its metadata. Also called automatically when a new society is created.
  */
-export const ensureForSociety = mutation({
+export const ensureForSociety = authorizedMutation("seedRecordTableMetadata:ensureForSociety", mutation)({
   args: { societyId: v.id("societies") },
   returns: v.object({ ok: v.boolean(), objects: v.number() }),
   handler: async (ctx, { societyId }) =>
@@ -64,7 +65,7 @@ export { seedSociety };
 /**
  * Nukes metadata rows for testing. Leaves underlying record tables alone.
  */
-export const wipe = mutation({
+export const wipe = authorizedMutation("seedRecordTableMetadata:wipe", mutation)({
   args: { serviceToken: serviceTokenValidator },
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, { serviceToken }) => {

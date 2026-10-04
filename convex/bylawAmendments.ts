@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -16,19 +17,19 @@ import {
 } from "../shared/functions/bylawAmendments";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("bylawAmendments:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("bylawAmendments:get", query)({
   args: { id: v.id("bylawAmendments") },
   returns: v.any(),
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const createDraft = mutation({
+export const createDraft = authorizedMutation("bylawAmendments:createDraft", mutation)({
   args: {
     societyId: v.id("societies"),
     title: v.string(),
@@ -41,7 +42,7 @@ export const createDraft = mutation({
   handler: async (ctx, args) => createDraftPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateDraft = mutation({
+export const updateDraft = authorizedMutation("bylawAmendments:updateDraft", mutation)({
   args: {
     id: v.id("bylawAmendments"),
     patch: v.object({
@@ -56,13 +57,13 @@ export const updateDraft = mutation({
   handler: async (ctx, args) => updateDraftPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const startConsultation = mutation({
+export const startConsultation = authorizedMutation("bylawAmendments:startConsultation", mutation)({
   args: { id: v.id("bylawAmendments"), actor: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => startConsultationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const markResolutionPassed = mutation({
+export const markResolutionPassed = authorizedMutation("bylawAmendments:markResolutionPassed", mutation)({
   args: {
     id: v.id("bylawAmendments"),
     meetingId: v.optional(v.id("meetings")),
@@ -75,7 +76,7 @@ export const markResolutionPassed = mutation({
   handler: async (ctx, args) => markResolutionPassedPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const markFiled = mutation({
+export const markFiled = authorizedMutation("bylawAmendments:markFiled", mutation)({
   args: {
     id: v.id("bylawAmendments"),
     filingId: v.optional(v.id("filings")),
@@ -85,7 +86,7 @@ export const markFiled = mutation({
   handler: async (ctx, args) => markFiledPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const withdraw = mutation({
+export const withdraw = authorizedMutation("bylawAmendments:withdraw", mutation)({
   args: { id: v.id("bylawAmendments"), actor: v.optional(v.string()), reason: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => withdrawPortable(await toPortableMutationCtx(ctx), args),
@@ -95,7 +96,7 @@ export const withdraw = mutation({
  *  mutation produced. Used when a fresh draft replaces a non-draft amendment
  *  (e.g. a revised version supersedes one in consultation), optionally linking
  *  the superseding amendment. Withdrawn amendments are terminal. */
-export const supersede = mutation({
+export const supersede = authorizedMutation("bylawAmendments:supersede", mutation)({
   args: {
     id: v.id("bylawAmendments"),
     supersededByAmendmentId: v.optional(v.id("bylawAmendments")),
@@ -109,7 +110,7 @@ export const supersede = mutation({
 // Persist an amendment's proposed text as structured section records (replacing
 // any prior set for that amendment). The client parses the text with
 // shared/bylawSections so the section model is identical to the diff view.
-export const materializeSections = mutation({
+export const materializeSections = authorizedMutation("bylawAmendments:materializeSections", mutation)({
   args: {
     amendmentId: v.id("bylawAmendments"),
     sections: v.array(
@@ -125,13 +126,13 @@ export const materializeSections = mutation({
   handler: async (ctx, args) => materializeSectionsPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const sectionsForAmendment = query({
+export const sectionsForAmendment = authorizedQuery("bylawAmendments:sectionsForAmendment", query)({
   args: { amendmentId: v.id("bylawAmendments") },
   returns: v.any(),
   handler: async (ctx, args) => sectionsForAmendmentPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("bylawAmendments:remove", mutation)({
   args: { id: v.id("bylawAmendments") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

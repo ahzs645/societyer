@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { integrationSettingsValidator } from "./lib/integrationSettings";
 import { ycnRegisterTables } from "./tables/ycnRegisters";
 import { legalDocsTables } from "./tables/legalDocs";
 import { formationTables } from "./tables/formation";
@@ -32,6 +33,7 @@ import { storageTables } from "./tables/storage";
 
 export default defineSchema({
   societies: defineTable({
+    accessRecoveryRequired: v.optional(v.boolean()),
     name: v.string(),
     incorporationNumber: v.optional(v.string()),
     incorporationDate: v.optional(v.string()),
@@ -42,6 +44,32 @@ export default defineSchema({
     anniversaryDate: v.optional(v.string()),
     corporationKeyVaultItemId: v.optional(v.id("secretVaultItems")),
     entityType: v.optional(v.string()),
+    legalSubtype: v.optional(v.string()),
+    formationStatus: v.optional(v.string()),
+    certificateEvidenceDocumentId: v.optional(v.id("documents")),
+    certificateReference: v.optional(v.string()),
+    certificateDate: v.optional(v.string()),
+    postIncorporationEvidence: v.optional(v.array(v.object({
+      stepKey: v.string(), stage: v.string(), documentId: v.optional(v.id("documents")),
+      confirmationNumber: v.optional(v.string()), notes: v.optional(v.string()),
+      recordedAtISO: v.string(), recordedByUserId: v.optional(v.id("users")),
+    }))),
+    craBnStatus: v.optional(v.string()),
+    craRcStatus: v.optional(v.string()),
+    gstHstStatus: v.optional(v.string()),
+    payrollStatus: v.optional(v.string()),
+    charityStatus: v.optional(v.string()),
+    taxStatusEvidence: v.optional(v.string()),
+    annualReferenceDate: v.optional(v.string()),
+    annualMeetingDate: v.optional(v.string()),
+    agmExtensionDate: v.optional(v.string()),
+    agmExtensionEvidence: v.optional(v.string()),
+    iscAwarenessDate: v.optional(v.string()),
+    iscRegisterEntryDate: v.optional(v.string()),
+    transparencyAwarenessDate: v.optional(v.string()),
+    transparencyEntryDate: v.optional(v.string()),
+    transparencyCessationEntryDate: v.optional(v.string()),
+    annualMeetingYear: v.optional(v.number()),
     actFormedUnder: v.optional(v.string()),
     officialEmail: v.optional(v.string()),
     numbered: v.optional(v.boolean()),
@@ -96,6 +124,7 @@ export default defineSchema({
     // Days a dismissed notification is kept before the daily purge deletes it.
     // Undefined = use the default (30). 0 = keep forever (never auto-delete).
     notificationRetentionDays: v.optional(v.number()),
+    integrationSettings: v.optional(integrationSettingsValidator),
     demoMode: v.optional(v.boolean()),
     // YCN-style compliance settings consumed by shared/corporationSettings.ts to
     // derive AGM / annual-report deadlines. Optional and additive.
@@ -152,6 +181,8 @@ export default defineSchema({
 
   organizationRegistrations: defineTable({
     societyId: v.id("societies"),
+    corporationClass: v.optional(v.string()),
+    licenceEvidenceDocumentId: v.optional(v.id("documents")),
     registrationType: v.optional(v.string()), // home | extra_provincial | business_name | branch | licence | deregistered
     jurisdiction: v.string(),
     homeJurisdiction: v.optional(v.string()),

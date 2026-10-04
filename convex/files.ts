@@ -1,15 +1,19 @@
 // @ts-nocheck
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { assertNativeFileStorageEnabled } from "./providers/env";
+import { requireDocumentAccess } from "../shared/functions/documents";
 import { getUrlPortable } from "../shared/functions/files";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { buildConvexCapabilities } from "./providers/capabilities";
+import { matchesVerifiedIdentity } from "../shared/functions/identity";
 import {
   claimStorageId,
   requireAuthenticated,
   requireOwnedRow,
   requireSocietyMembership,
+  requireRolePortable,
 } from "../shared/functions/access";
 
 async function requireUploadMembership(ctx: MutationCtx) {
@@ -33,7 +37,7 @@ async function requireUploadMembership(ctx: MutationCtx) {
       .withIndex("by_auth_subject", (q) => q.eq("authSubject", principal.subject))
       .collect();
     const active = memberships.find((membership) =>
-      typeof membership.societyId === "string" &&
+      matchesVerifiedIdentity(membership, principal) && typeof membership.societyId === "string" &&
       (!membership.status || membership.status === "Active"));
     if (active && typeof active.societyId === "string") {
       await requireSocietyMembership(portableCtx, active.societyId);
@@ -43,7 +47,7 @@ async function requireUploadMembership(ctx: MutationCtx) {
   throw new Error("Society membership not found.");
 }
 
-export const generateUploadUrl = mutation({
+export const generateUploadUrl = authorizedMutation("files:generateUploadUrl", mutation)({
   args: {},
   returns: v.any(),
   handler: async (ctx) => {
@@ -58,7 +62,7 @@ export const generateUploadUrl = mutation({
 // content, and its only sinks are the society.setLogo/setDarkLogo/setLetterhead
 // mutations — never the document store. Document/meeting/item uploads keep
 // using the gated generateUploadUrl above.
-export const generateLogoUploadUrl = mutation({
+export const generateLogoUploadUrl = authorizedMutation("files:generateLogoUploadUrl", mutation)({
   args: {},
   returns: v.any(),
   handler: async (ctx) => {
@@ -67,7 +71,7 @@ export const generateLogoUploadUrl = mutation({
   },
 });
 
-export const attachUploadedFileToDocument = mutation({
+export const attachUploadedFileToDocument = authorizedMutation("files:attachUploadedFileToDocument", mutation)({
   args: {
     documentId: v.id("documents"),
     storageId: v.id("_storage"),
@@ -80,12 +84,18 @@ export const attachUploadedFileToDocument = mutation({
     assertNativeFileStorageEnabled();
     const portableCtx = await toPortableMutationCtx(ctx);
     const document = await requireOwnedRow(portableCtx, "documents", documentId);
+    await requireRolePortable(portableCtx, { societyId: String(document.societyId), required: "Director" });
+    await requireDocumentAccess(portableCtx, documentId, "manage");
+    const metadata = await ctx.db.system.get(storageId);
+    if (!metadata) throw new Error("Uploaded file not found.");
+    fileSizeBytes = metadata.size;
+    mimeType = metadata.contentType;
     await claimStorageId(portableCtx, storageId, String(document.societyId));
     await ctx.db.patch(documentId, { storageId, fileName, mimeType, fileSizeBytes });
   },
 });
 
-export const getUrl = query({
+export const getUrl = authorizedQuery("files:getUrl", query)({
   args: { storageId: v.id("_storage") },
   returns: v.any(),
   handler: async (ctx, args) => getUrlPortable(await toPortableQueryCtx(ctx, buildConvexCapabilities(ctx)), args),

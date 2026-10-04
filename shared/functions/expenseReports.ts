@@ -8,6 +8,7 @@
  * oracle.
  */
 
+import { getPortable as getAccessibleDocument, requireDocumentAccess } from "./documents";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 
@@ -21,7 +22,7 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
     reports.map(async (report) => ({
       ...report,
       receiptDocument: report.receiptDocumentId
-        ? await getOwned(ctx, "documents", report.receiptDocumentId, societyId)
+        ? await getAccessibleDocument(ctx, { id: String(report.receiptDocumentId) })
         : null,
       claimantUser: report.claimantUserId
         ? await getOwned(ctx, "users", report.claimantUserId, societyId)
@@ -62,7 +63,7 @@ export async function upsertPortable(
   await Promise.all([
     args.id ? getOwned(ctx, "expenseReports", args.id, args.societyId) : Promise.resolve(),
     args.claimantUserId ? getOwned(ctx, "users", args.claimantUserId, args.societyId) : Promise.resolve(),
-    args.receiptDocumentId ? getOwned(ctx, "documents", args.receiptDocumentId, args.societyId) : Promise.resolve(),
+    args.receiptDocumentId ? requireDocumentAccess(ctx, args.receiptDocumentId) : Promise.resolve(),
   ]);
   if (!args.title.trim()) throw new Error("Expense title is required.");
   if (!args.claimantName.trim()) throw new Error("Claimant name is required.");

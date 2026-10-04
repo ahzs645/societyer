@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { mutation, query } from "./lib/untypedServer";
 import {
@@ -17,19 +18,19 @@ const statementLine = v.object({
   notes: v.optional(v.string()),
 });
 
-export const list = query({
+export const list = authorizedQuery("programStatements:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => programStatementsList(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("programStatements:get", query)({
   args: { id: v.id("programStatements") },
   returns: v.any(),
   handler: async (ctx, args) => programStatementGet(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("programStatements:create", mutation)({
   args: {
     societyId: v.id("societies"),
     grantId: v.optional(v.id("grants")),
@@ -47,7 +48,7 @@ export const create = mutation({
   handler: async (ctx, args) => programStatementCreate(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("programStatements:update", mutation)({
   args: {
     id: v.id("programStatements"),
     patch: v.object({
@@ -66,7 +67,7 @@ export const update = mutation({
   handler: async (ctx, args) => programStatementUpdate(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("programStatements:remove", mutation)({
   args: { id: v.id("programStatements") },
   returns: v.any(),
   handler: async (ctx, args) => programStatementRemove(await toPortableMutationCtx(ctx), args),

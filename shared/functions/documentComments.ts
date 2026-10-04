@@ -7,6 +7,7 @@
  * oracle.
  */
 
+import { requireDocumentAccess } from "./documents";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 
@@ -14,7 +15,7 @@ export async function listForDocumentPortable(ctx: PortableQueryCtx, { documentI
   const document = await ctx.db.get(documentId, "documents");
   if (!document) throw new Error("documents not found.");
   await requireSocietyMembership(ctx, String(document.societyId));
-  await getOwned(ctx, "documents", documentId, String(document.societyId));
+  await requireDocumentAccess(ctx, documentId);
   return ctx.db
     .query("documentComments")
     .withIndex("by_document", (q) => q.eq("documentId", documentId))
@@ -37,6 +38,7 @@ export async function createPortable(
   if (!args.body.trim()) throw new Error("Comment body is required.");
   await requireSocietyMembership(ctx, args.societyId);
   const document = await getOwned(ctx, "documents", args.documentId, args.societyId);
+  await requireDocumentAccess(ctx, args.documentId, "comment");
   const authorUserId = args.authorUserId
     ? await principalUserId(ctx, args.societyId)
     : undefined;
@@ -66,6 +68,7 @@ export async function setStatusPortable(
   if (!comment) return;
   await requireSocietyMembership(ctx, String(comment.societyId));
   await getOwned(ctx, "documentComments", id, String(comment.societyId));
+  await requireDocumentAccess(ctx, String(comment.documentId), "comment");
   const resolvedByUserId = status === "resolved"
     ? await principalUserId(ctx, String(comment.societyId))
     : undefined;
@@ -81,5 +84,6 @@ export async function removePortable(ctx: PortableMutationCtx, { id }: { id: str
   if (!comment) return;
   await requireSocietyMembership(ctx, String(comment.societyId));
   await getOwned(ctx, "documentComments", id, String(comment.societyId));
+  await requireDocumentAccess(ctx, String(comment.documentId), "comment");
   await ctx.db.delete(id);
 }

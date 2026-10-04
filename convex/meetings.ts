@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -13,19 +14,19 @@ import {
 } from "../shared/functions/meetings";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("meetings:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("meetings:get", query)({
   args: { id: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("meetings:create", mutation)({
   args: {
     societyId: v.id("societies"),
     committeeId: v.optional(v.id("committees")),
@@ -69,7 +70,7 @@ export const create = mutation({
 // refuses to overwrite existing agenda items unless `replace` is set, and only
 // fills minutes sections/motions when they are still empty (never clobbers
 // recorded minutes) unless `replace` is set.
-export const applyTemplate = mutation({
+export const applyTemplate = authorizedMutation("meetings:applyTemplate", mutation)({
   args: {
     meetingId: v.id("meetings"),
     meetingTemplateId: v.id("meetingTemplates"),
@@ -79,7 +80,7 @@ export const applyTemplate = mutation({
   handler: async (ctx, args) => applyTemplatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("meetings:update", mutation)({
   args: {
     id: v.id("meetings"),
     patch: v.object({
@@ -124,7 +125,7 @@ export const update = mutation({
   handler: async (ctx, args) => updatePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const markSourceReview = mutation({
+export const markSourceReview = authorizedMutation("meetings:markSourceReview", mutation)({
   args: {
     id: v.id("meetings"),
     status: v.string(),
@@ -135,7 +136,7 @@ export const markSourceReview = mutation({
   handler: async (ctx, args) => markSourceReviewPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const setPackageReviewStatus = mutation({
+export const setPackageReviewStatus = authorizedMutation("meetings:setPackageReviewStatus", mutation)({
   args: {
     id: v.id("meetings"),
     status: v.string(),
@@ -146,13 +147,13 @@ export const setPackageReviewStatus = mutation({
   handler: async (ctx, args) => setPackageReviewStatusPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const backfillQuorumSnapshot = mutation({
+export const backfillQuorumSnapshot = authorizedMutation("meetings:backfillQuorumSnapshot", mutation)({
   args: { id: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => backfillQuorumSnapshotPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("meetings:remove", mutation)({
   args: { id: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),

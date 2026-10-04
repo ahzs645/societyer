@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { authorizedAction, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { action, internalMutation, query } from "./_generated/server";
 import { api, internal } from "./_generated/api";
@@ -37,13 +38,13 @@ const structureValidator = v.object({
   rawJson: v.string(),
 });
 
-export const summary = query({
+export const summary = authorizedQuery("waveCache:summary", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => summaryPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const resources = query({
+export const resources = authorizedQuery("waveCache:resources", query)({
   args: {
     societyId: v.id("societies"),
     resourceType: v.optional(v.string()),
@@ -54,13 +55,13 @@ export const resources = query({
   handler: async (ctx, args) => resourcesPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const resource = query({
+export const resource = authorizedQuery("waveCache:resource", query)({
   args: { id: v.id("waveCacheResources") },
   returns: v.any(),
   handler: async (ctx, args) => resourcePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const resourceByExternalId = query({
+export const resourceByExternalId = authorizedQuery("waveCache:resourceByExternalId", query)({
   args: {
     societyId: v.id("societies"),
     externalId: v.string(),
@@ -70,7 +71,7 @@ export const resourceByExternalId = query({
   handler: async (ctx, args) => resourceByExternalIdPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const structures = query({
+export const structures = authorizedQuery("waveCache:structures", query)({
   args: {
     societyId: v.id("societies"),
     search: v.optional(v.string()),
@@ -80,7 +81,7 @@ export const structures = query({
   handler: async (ctx, args) => structuresPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const sync = action({
+export const sync = authorizedAction("waveCache:sync", action)({
   args: {
     societyId: v.id("societies"),
     connectionId: v.optional(v.id("financialConnections")),
@@ -129,7 +130,7 @@ export const sync = action({
   },
 });
 
-export const healthCheck = action({
+export const healthCheck = authorizedAction("waveCache:healthCheck", action)({
   args: {
     businessId: v.optional(v.string()),
   },
@@ -160,7 +161,7 @@ export const healthCheck = action({
   },
 });
 
-export const invoicePaymentProbe = action({
+export const invoicePaymentProbe = authorizedAction("waveCache:invoicePaymentProbe", action)({
   args: {
     businessId: v.optional(v.string()),
     allAccessibleBusinesses: v.optional(v.boolean()),

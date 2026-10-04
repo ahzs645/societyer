@@ -1,3 +1,4 @@
+import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { action, mutation, query } from "./lib/untypedServer";
 import type { ActionCtx } from "./_generated/server";
 import { v } from "convex/values";
@@ -165,21 +166,21 @@ import {
   unique,
 } from "./paperlessHelpers";
 
-export const tagProfiles = query({
+export const tagProfiles = authorizedQuery("paperless:tagProfiles", query)({
   args: {},
   returns: v.any(),
   handler: () => tagProfilesPortable(),
 });
 
 
-export const listConnection = query({
+export const listConnection = authorizedQuery("paperless:listConnection", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listConnectionPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
-export const connectionStatus = query({
+export const connectionStatus = authorizedQuery("paperless:connectionStatus", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
@@ -197,21 +198,21 @@ export const connectionStatus = query({
 });
 
 
-export const recentSyncs = query({
+export const recentSyncs = authorizedQuery("paperless:recentSyncs", query)({
   args: { societyId: v.id("societies"), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, args) => recentSyncsPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
-export const syncForDocument = query({
+export const syncForDocument = authorizedQuery("paperless:syncForDocument", query)({
   args: { documentId: v.id("documents") },
   returns: v.any(),
   handler: async (ctx, args) => syncForDocumentPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
-export const sourcePullContext = query({
+export const sourcePullContext = authorizedQuery("paperless:sourcePullContext", query)({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -222,7 +223,7 @@ export const sourcePullContext = query({
 });
 
 
-export const pullSourceDocument = action({
+export const pullSourceDocument = authorizedAction("paperless:pullSourceDocument", action)({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -273,7 +274,7 @@ export const pullSourceDocument = action({
 });
 
 
-export const recordPulledSourceDocument = mutation({
+export const recordPulledSourceDocument = authorizedMutation("paperless:recordPulledSourceDocument", mutation)({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -317,7 +318,7 @@ export const recordPulledSourceDocument = mutation({
 });
 
 
-export const createMeetingMinutesImportSession = action({
+export const createMeetingMinutesImportSession = authorizedAction("paperless:createMeetingMinutesImportSession", action)({
   args: {
     societyId: v.id("societies"),
     query: v.optional(v.string()),
@@ -385,7 +386,7 @@ export const createMeetingMinutesImportSession = action({
 });
 
 
-export const createDiscoveryImportSession = action({
+export const createDiscoveryImportSession = authorizedAction("paperless:createDiscoveryImportSession", action)({
   args: {
     societyId: v.id("societies"),
     query: v.optional(v.string()),
@@ -449,7 +450,7 @@ export const createDiscoveryImportSession = action({
 });
 
 
-export const createTransposedImportSession = action({
+export const createTransposedImportSession = authorizedAction("paperless:createTransposedImportSession", action)({
   args: {
     societyId: v.id("societies"),
     query: v.optional(v.string()),
@@ -500,7 +501,7 @@ export const createTransposedImportSession = action({
 });
 
 
-export const createBylawsHistoryImportSession = action({
+export const createBylawsHistoryImportSession = authorizedAction("paperless:createBylawsHistoryImportSession", action)({
   args: {
     societyId: v.id("societies"),
     query: v.optional(v.string()),
@@ -539,7 +540,7 @@ export const createBylawsHistoryImportSession = action({
 });
 
 
-export const authorizeMeetingImport = query({
+export const authorizeMeetingImport = authorizedQuery("paperless:authorizeMeetingImport", query)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.id("users"),
@@ -549,14 +550,14 @@ export const authorizeMeetingImport = query({
 });
 
 
-export const getSync = query({
+export const getSync = authorizedQuery("paperless:getSync", query)({
   args: { id: v.id("paperlessDocumentSyncs") },
   returns: v.any(),
   handler: async (ctx, args) => getSyncPortable(await toPortableQueryCtx(ctx), args),
 });
 
 
-export const upsertConnection = mutation({
+export const upsertConnection = authorizedMutation("paperless:upsertConnection", mutation)({
   args: {
     societyId: v.id("societies"),
     autoCreateTags: v.boolean(),
@@ -603,7 +604,7 @@ export const upsertConnection = mutation({
 });
 
 
-export const disconnect = mutation({
+export const disconnect = authorizedMutation("paperless:disconnect", mutation)({
   args: {
     societyId: v.id("societies"),
     actingUserId: v.optional(v.id("users")),
@@ -625,7 +626,7 @@ export const disconnect = mutation({
 });
 
 
-export const testConnection = action({
+export const testConnection = authorizedAction("paperless:testConnection", action)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
@@ -645,7 +646,7 @@ export const testConnection = action({
 });
 
 
-export const recordConnectionTest = mutation({
+export const recordConnectionTest = authorizedMutation("paperless:recordConnectionTest", mutation)({
   args: {
     societyId: v.id("societies"),
     ok: v.boolean(),
@@ -660,7 +661,7 @@ export const recordConnectionTest = mutation({
 });
 
 
-export const syncContext = query({
+export const syncContext = authorizedQuery("paperless:syncContext", query)({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -730,7 +731,7 @@ export const syncContext = query({
 });
 
 
-export const syncDocument = action({
+export const syncDocument = authorizedAction("paperless:syncDocument", action)({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -757,7 +758,7 @@ export const syncDocument = action({
         throw new Error("Paperless-ngx sync is unavailable for Electron local filesystem documents.");
       } else if (syncCtx.source.provider === "local") {
         throw new Error("Paperless-ngx sync is unavailable for API-local generated documents.");
-      } else if (syncCtx.source.provider !== "rustfs") {
+      } else if (syncCtx.source.provider !== "rustfs" && syncCtx.source.provider !== "r2") {
         throw new Error(`Paperless-ngx sync does not support ${syncCtx.source.provider} document versions.`);
       } else {
         const url = await createDownloadUrl({
@@ -818,7 +819,7 @@ export const syncDocument = action({
 });
 
 
-export const refreshSync = action({
+export const refreshSync = authorizedAction("paperless:refreshSync", action)({
   args: { syncId: v.id("paperlessDocumentSyncs") },
   returns: v.any(),
   handler: async (ctx, { syncId }) => {
@@ -837,7 +838,7 @@ export const refreshSync = action({
 });
 
 
-export const recordSyncResult = mutation({
+export const recordSyncResult = authorizedMutation("paperless:recordSyncResult", mutation)({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -905,7 +906,7 @@ export const recordSyncResult = mutation({
 });
 
 
-export const recordSyncRefresh = mutation({
+export const recordSyncRefresh = authorizedMutation("paperless:recordSyncRefresh", mutation)({
   args: {
     syncId: v.id("paperlessDocumentSyncs"),
     status: v.string(),

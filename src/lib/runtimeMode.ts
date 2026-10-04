@@ -7,6 +7,7 @@ export type RuntimeMode =
 export type DocumentStorageProvider =
   | "convex"
   | "rustfs"
+  | "r2"
   | "local-filesystem"
   | "demo"
   | "none";
@@ -122,7 +123,7 @@ function isRuntimeMode(value: string): value is RuntimeMode {
 function isDocumentStorageProvider(value: string): value is DocumentStorageProvider {
   return (
     value === "convex" ||
-    value === "rustfs" ||
+    value === "rustfs" || value === "r2" ||
     value === "local-filesystem" ||
     value === "demo" ||
     value === "none"

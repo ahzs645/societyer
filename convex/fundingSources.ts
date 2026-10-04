@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -13,13 +14,13 @@ import {
 } from "../shared/functions/fundingSources";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("fundingSources:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => fundingSourcesList(await toPortableQueryCtx(ctx), args),
 });
 
-export const rollup = query({
+export const rollup = authorizedQuery("fundingSources:rollup", query)({
   args: {
     societyId: v.id("societies"),
     from: v.optional(v.string()),
@@ -29,7 +30,7 @@ export const rollup = query({
   handler: async (ctx, args) => fundingSourcesRollup(await toPortableQueryCtx(ctx), args),
 });
 
-export const upsertSource = mutation({
+export const upsertSource = authorizedMutation("fundingSources:upsertSource", mutation)({
   args: {
     id: v.optional(v.id("fundingSources")),
     societyId: v.id("societies"),
@@ -64,13 +65,13 @@ export const upsertSource = mutation({
   handler: async (ctx, args) => upsertSourcePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeSource = mutation({
+export const removeSource = authorizedMutation("fundingSources:removeSource", mutation)({
   args: { id: v.id("fundingSources"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => removeSourcePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const upsertEvent = mutation({
+export const upsertEvent = authorizedMutation("fundingSources:upsertEvent", mutation)({
   args: {
     id: v.optional(v.id("fundingSourceEvents")),
     societyId: v.id("societies"),
@@ -93,13 +94,13 @@ export const upsertEvent = mutation({
   handler: async (ctx, args) => upsertEventPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const removeEvent = mutation({
+export const removeEvent = authorizedMutation("fundingSources:removeEvent", mutation)({
   args: { id: v.id("fundingSourceEvents"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => removeEventPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const importStudentLevy = mutation({
+export const importStudentLevy = authorizedMutation("fundingSources:importStudentLevy", mutation)({
   args: {
     societyId: v.id("societies"),
     sourceId: v.optional(v.id("fundingSources")),
@@ -146,7 +147,7 @@ export const importStudentLevy = mutation({
   handler: async (ctx, args) => importStudentLevyPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const applyOtenFeeStructure = mutation({
+export const applyOtenFeeStructure = authorizedMutation("fundingSources:applyOtenFeeStructure", mutation)({
   args: {
     confirm: v.string(),
     societyId: v.optional(v.id("societies")),

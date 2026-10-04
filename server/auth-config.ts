@@ -4,6 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins";
+import { authSessionDurationSeconds, resolveAuthIssuer, validateHostedAuth } from "../shared/authConfiguration";
 
 const DEVELOPMENT_AUTH_SECRET =
   "societyer-dev-secret-change-me-before-production-use";
@@ -13,8 +14,12 @@ function env(name: string, fallback?: string): string | undefined {
 }
 
 export function getAuthMode(): "none" | "better-auth" {
-  const mode = env("AUTH_MODE", env("VITE_AUTH_MODE", "none"));
-  return mode === "better-auth" ? "better-auth" : "none";
+  return validateHostedAuth(process.env, process.env.CONVEX_URL ?? process.env.VITE_CONVEX_URL);
+}
+
+export const authIssuer = resolveAuthIssuer(process.env);
+if (process.env.NODE_ENV === "production" && getAuthMode() === "none" && !["localhost", "127.0.0.1", "[::1]"].includes(new URL(authIssuer).hostname)) {
+  throw new Error("An internet-facing deployment requires Better Auth. Keep auth-disabled deployments local.");
 }
 
 function authSecret(): string {
@@ -46,17 +51,20 @@ export function createAuthDatabase() {
 }
 
 export const auth = betterAuth({
-  baseURL: env("BETTER_AUTH_BASE_URL", "http://127.0.0.1:5173"),
+  baseURL: authIssuer,
   secret: authSecret(),
-  trustedOrigins: [env("BETTER_AUTH_BASE_URL", "http://127.0.0.1:5173")!],
+  trustedOrigins: [new URL(authIssuer).origin],
   database: createAuthDatabase(),
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,
   },
+  account: { accountLinking: { enabled: true, disableImplicitLinking: true, trustedProviders: [] } },
+  session: { expiresIn: authSessionDurationSeconds(process.env), disableSessionRefresh: true },
   plugins: [
     jwt({
       jwks: { keyPairConfig: { alg: "ES256" } },
+      jwt: { issuer: authIssuer, audience: authIssuer, expirationTime: "5m" },
     }),
   ],
   user: {

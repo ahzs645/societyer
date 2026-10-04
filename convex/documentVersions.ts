@@ -1,6 +1,7 @@
-import { query, mutation, action } from "./_generated/server";
+import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
+import { query, mutation, action, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireRole } from "./users";
 import {
@@ -8,7 +9,12 @@ import {
   buildUploadStorageKey,
   createUploadUrl,
   createDownloadUrl,
+  verifyAndSealUpload,
 } from "./providers/storage";
+import { providers } from "./providers/env";
+import { DOCUMENT_STORAGE_CAPABILITIES } from "../shared/storage/providerCapabilities";
+import { requireDocumentAccess } from "../shared/functions/documents";
+import { validateUploadMetadata, validateUploadHandle } from "../shared/storage/uploadVerification";
 import { assertNativeFileStorageEnabled } from "./providers/env";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 import {
@@ -24,13 +30,13 @@ import {
   type Role,
 } from "../shared/functions/access";
 
-export const listForDocument = query({
+export const listForDocument = authorizedQuery("documentVersions:listForDocument", query)({
   args: { documentId: v.id("documents") },
   returns: v.any(),
   handler: async (ctx, args) => listForDocumentPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const latest = query({
+export const latest = authorizedQuery("documentVersions:latest", query)({
   args: { documentId: v.id("documents") },
   returns: v.any(),
   handler: async (ctx, args) => latestPortable(await toPortableQueryCtx(ctx), args),
@@ -38,7 +44,7 @@ export const latest = query({
 
 // Action: caller asks us for a presigned upload URL. The client PUTs the file
 // itself and then calls `recordUploadedVersion` to register the new version.
-export const beginUpload = action({
+export const beginUpload = authorizedAction("documentVersions:beginUpload", action)({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -50,25 +56,89 @@ export const beginUpload = action({
   returns: v.any(),
   handler: async (ctx, args) => {
     assertNativeFileStorageEnabled();
-    await ctx.runQuery(api.paperless.sourcePullContext, {
-      societyId: args.societyId,
-      documentId: args.documentId,
-      actingUserId: args.actingUserId,
-    });
-
-    const key = buildUploadStorageKey(
-      args.societyId,
-      args.documentId,
-      crypto.randomUUID(),
-      args.fileName,
-    );
-    const presigned = await createUploadUrl({ key, mimeType: args.mimeType });
-    return { presigned };
+    const allocated = await ctx.runMutation(internal.documentVersions.allocateUploadHandle, args);
+    const presigned = await createUploadUrl({ key: allocated.stagingKey, mimeType: args.mimeType });
+    return { presigned, uploadHandleId: allocated.uploadHandleId };
   },
 });
 
-export const recordUploadedVersion = mutation({
+export const storageCapabilities = authorizedQuery("documentVersions:storageCapabilities", query)({
+  args: { societyId: v.id("societies") }, returns: v.any(),
+  handler: async (ctx, { societyId }) => {
+    await requireSocietyMembership(await toPortableQueryCtx(ctx), societyId);
+    return { activeProvider: providers.storage().id, deploymentConfigured: providers.storage().live, connectionVerified: false, providers: DOCUMENT_STORAGE_CAPABILITIES };
+  },
+});
+
+export const allocateUploadHandle = internalMutation({
   args: {
+    societyId: v.id("societies"), documentId: v.id("documents"), fileName: v.string(),
+    mimeType: v.optional(v.string()), fileSizeBytes: v.optional(v.number()), actingUserId: v.optional(v.id("users")),
+  }, returns: v.any(),
+  handler: async (ctx, args) => {
+    assertNativeFileStorageEnabled();
+    validateUploadMetadata(args);
+    const portable = await toPortableMutationCtx(ctx);
+    const actor = await requireSocietyMembership(portable, args.societyId);
+    if (args.actingUserId && String(args.actingUserId) !== actor._id) throw new Error("Authenticated actor does not match the current principal.");
+    if (!canActAs(actor.role as Role, "Director")) throw new Error("Role Director required.");
+    const document = await requireDocumentAccess(portable, args.documentId, "manage");
+    if (String(document.societyId) !== String(args.societyId)) throw new Error("documents not found.");
+    const storage = providers.storage();
+    const provider = storage.id;
+    if (!storage.live || provider === "demo") throw new Error("Live upload storage is not configured. Use the explicit demo upload flow.");
+    const stagingKey = buildUploadStorageKey(args.societyId, args.documentId, crypto.randomUUID(), args.fileName);
+    const uploadHandleId = await ctx.db.insert("documentUploadHandles", {
+      societyId: args.societyId, documentId: args.documentId, actorUserId: actor._id as Id<"users">,
+      provider, stagingKey, fileName: args.fileName, mimeType: args.mimeType,
+      fileSizeBytes: args.fileSizeBytes!, expiresAtISO: new Date(Date.now() + 15 * 60 * 1000).toISOString(), status: "pending",
+    });
+    return { uploadHandleId, stagingKey };
+  },
+});
+
+export const claimUploadHandle = internalMutation({
+  args: { uploadHandleId: v.id("documentUploadHandles") }, returns: v.any(),
+  handler: async (ctx, { uploadHandleId }) => {
+    assertNativeFileStorageEnabled();
+    const handle = await ctx.db.get(uploadHandleId);
+    if (!handle) throw new Error("Upload handle not found.");
+    const portable = await toPortableMutationCtx(ctx);
+    const actor = await requireSocietyMembership(portable, handle.societyId);
+    if (!canActAs(actor.role as Role, "Director")) throw new Error("Role Director required.");
+    await requireDocumentAccess(portable, handle.documentId, "manage");
+    validateUploadHandle(handle, { societyId: handle.societyId, documentId: handle.documentId, actorUserId: actor._id }, "pending");
+    const storageKey = buildUploadStorageKey(handle.societyId, handle.documentId, `sealed-${crypto.randomUUID()}`, handle.fileName);
+    await ctx.db.patch(uploadHandleId, { status: "verifying", storageKey });
+    return { ...handle, storageKey };
+  },
+});
+
+export const markUploadVerified = internalMutation({
+  args: { uploadHandleId: v.id("documentUploadHandles"), sha256: v.string() }, returns: v.null(),
+  handler: async (ctx, { uploadHandleId, sha256 }) => {
+    const handle = await ctx.db.get(uploadHandleId);
+    if (!handle) throw new Error("Upload handle not found.");
+    const actor = await requireSocietyMembership(await toPortableMutationCtx(ctx), handle.societyId);
+    validateUploadHandle(handle, { societyId: handle.societyId, documentId: handle.documentId, actorUserId: actor._id }, "verifying");
+    await ctx.db.patch(uploadHandleId, { status: "verified", sha256, verifiedAtISO: new Date().toISOString() });
+    return null;
+  },
+});
+
+export const completeUpload = authorizedAction("documentVersions:completeUpload", action)({
+  args: { uploadHandleId: v.id("documentUploadHandles") }, returns: v.any(),
+  handler: async (ctx, { uploadHandleId }) => {
+    const handle = await ctx.runMutation(internal.documentVersions.claimUploadHandle, { uploadHandleId });
+    const verified = await verifyAndSealUpload(handle);
+    await ctx.runMutation(internal.documentVersions.markUploadVerified, { uploadHandleId, sha256: verified.sha256 });
+    return { uploadHandleId };
+  },
+});
+
+export const recordUploadedVersion = authorizedMutation("documentVersions:recordUploadedVersion", mutation)({
+  args: {
+    uploadHandleId: v.optional(v.id("documentUploadHandles")),
     societyId: v.id("societies"),
     documentId: v.id("documents"),
     storageProvider: v.string(),
@@ -97,6 +167,14 @@ export const recordUploadedVersion = mutation({
       required: "Director",
     });
     await getOwned(portableCtx, "documents", args.documentId, args.societyId);
+    await requireDocumentAccess(portableCtx, args.documentId, "manage");
+    if (!args.uploadHandleId) throw new Error("A server-verified upload handle is required.");
+    const handle = await ctx.db.get(args.uploadHandleId);
+    validateUploadHandle(handle, { societyId: args.societyId, documentId: args.documentId, actorUserId: uploader._id }, "verified");
+    if (!handle?.storageKey || !handle.sha256) throw new Error("Upload verification is incomplete.");
+    // Provider, object identity and checksum come only from the verified handle.
+    args = { ...args, storageProvider: handle.provider, storageKey: handle.storageKey, fileName: handle.fileName, mimeType: handle.mimeType, fileSizeBytes: handle.fileSizeBytes, sha256: handle.sha256 };
+    await ctx.db.patch(handle._id, { status: "consumed" });
     const uploaderId = uploader._id;
 
     // Allocate the authoritative version in this mutation. Concurrent recorders
@@ -179,7 +257,7 @@ export const recordUploadedVersion = mutation({
   },
 });
 
-export const getDownloadUrl = action({
+export const getDownloadUrl = authorizedAction("documentVersions:getDownloadUrl", action)({
   args: { versionId: v.id("documentVersions") },
   returns: v.any(),
   handler: async (ctx, { versionId }): Promise<string | null> => {
@@ -190,7 +268,7 @@ export const getDownloadUrl = action({
   },
 });
 
-export const getDownloadTarget = action({
+export const getDownloadTarget = authorizedAction("documentVersions:getDownloadTarget", action)({
   args: { versionId: v.id("documentVersions") },
   returns: v.any(),
   handler: async (ctx, { versionId }) => {
@@ -229,7 +307,7 @@ async function downloadTargetForVersion(version: any) {
     };
   }
 
-  if (version.storageProvider === "rustfs" || version.storageProvider === "demo") {
+  if (version.storageProvider === "rustfs" || version.storageProvider === "r2" || version.storageProvider === "demo") {
     return {
       kind: "url",
       ...baseTarget,
@@ -247,7 +325,7 @@ async function downloadTargetForVersion(version: any) {
   };
 }
 
-export const get = query({
+export const get = authorizedQuery("documentVersions:get", query)({
   args: { id: v.id("documentVersions") },
   returns: v.any(),
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
@@ -256,7 +334,7 @@ export const get = query({
 // Demo-friendly helper: creates a new version inline with a synthesized blob.
 // The frontend calls this when demo mode is on to simulate the upload flow
 // without juggling presigned URLs.
-export const createDemoVersion = mutation({
+export const createDemoVersion = authorizedMutation("documentVersions:createDemoVersion", mutation)({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -278,6 +356,8 @@ export const createDemoVersion = mutation({
       throw new Error(`Role Director required — you have ${uploader.role}.`);
     }
     await getOwned(portableCtx, "documents", args.documentId, args.societyId);
+    await requireDocumentAccess(portableCtx, args.documentId, "manage");
+    if (providers.storage().live) throw new Error("Demo versions are unavailable on a live storage deployment.");
     const uploaderId = uploader._id;
     const existing = await ctx.db
       .query("documentVersions")
@@ -329,7 +409,7 @@ export const createDemoVersion = mutation({
   },
 });
 
-export const rollback = mutation({
+export const rollback = authorizedMutation("documentVersions:rollback", mutation)({
   args: {
     versionId: v.id("documentVersions"),
     actingUserId: v.optional(v.id("users")),

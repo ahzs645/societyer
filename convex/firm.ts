@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { organizationKind, organizationLabel } from "../shared/organizationDomain";
@@ -21,7 +22,7 @@ function packetKindFor(packetKey: string): string | null {
  * Multiple_Copy analogue: generate one document packet across many entities.
  */
 
-export const overview = query({
+export const overview = authorizedQuery("firm:overview", query)({
   args: { todayISO: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, args) => overviewPortable(await toPortableQueryCtx(ctx), args),
@@ -33,13 +34,13 @@ export const overview = query({
  * every entity, then resolves each hit's entity name. Powers the command
  * palette's "Across entities" group.
  */
-export const search = query({
+export const search = authorizedQuery("firm:search", query)({
   args: { query: v.string() },
   returns: v.any(),
   handler: async (ctx, args) => searchPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const batchGeneratePacket = mutation({
+export const batchGeneratePacket = authorizedMutation("firm:batchGeneratePacket", mutation)({
   args: {
     societyIds: v.array(v.id("societies")),
     packetKey: v.string(),

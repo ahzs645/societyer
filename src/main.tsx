@@ -39,6 +39,7 @@ const MeetingDetailPage = React.lazy(() => import("./pages/MeetingDetail").then(
 const MeetingMinutesPreviewPage = React.lazy(() => import("./features/meetings/pages/MeetingMinutesPreviewPage").then((m) => ({ default: m.MeetingMinutesPreviewPage })));
 const MinutesPage = React.lazy(() => import("./pages/Minutes").then((m) => ({ default: m.MinutesPage })));
 const FilingsPage = React.lazy(() => import("./pages/Filings").then((m) => ({ default: m.FilingsPage })));
+const ResearchLibraryPage = React.lazy(() => import("./pages/ResearchLibrary").then((m) => ({ default: m.ResearchLibraryPage })));
 const ComplianceObligationsPage = React.lazy(() => import("./pages/ComplianceObligations").then((m) => ({ default: m.ComplianceObligationsPage })));
 const DeadlinesPage = React.lazy(() => import("./pages/Deadlines").then((m) => ({ default: m.DeadlinesPage })));
 const AnnualCyclePage = React.lazy(() => import("./pages/AnnualCycle").then((m) => ({ default: m.AnnualCyclePage })));
@@ -418,6 +419,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="minutes" element={<MinutesPage />} />
             <Route path="filings" element={<FilingsPage />} />
             <Route path="compliance-obligations" element={<ComplianceObligationsPage />} />
+            <Route path="research-library" element={<ResearchLibraryPage />} />
             <Route path="deadlines" element={<DeadlinesPage />} />
             <Route path="annual-cycle" element={<AnnualCyclePage />} />
             <Route path="documents" element={<DocumentsPage />} />

@@ -25,9 +25,12 @@ export function UsersPage() {
   const upsert = useMutation(api.users.upsert);
   const setRole = useMutation(api.users.setRole);
   const remove = useMutation(api.users.remove);
+  const securityDisable = useMutation(api.users.securityDisable);
+  const [incident, setIncident] = useState<{ id: any; name: string; reason: string } | null>(null);
   const actingUserId = useCurrentUserId() ?? undefined;
   const { role: myRole, permissions, can } = usePermissions();
   const canManageUsers = can("users:write");
+  const assignableRoles = myRole === "Owner" ? ROLES : ROLES.filter((role) => !["Owner", "Admin"].includes(role));
   const [draft, setDraft] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
@@ -65,6 +68,8 @@ export function UsersPage() {
           ) : undefined
         }
       />
+
+      {society.accessRecoveryRequired && <div className="card"><div className="card__body">This workspace requires controlled access recovery. A security disable removed its last Active Owner. An authorized operator must establish a new owner; disabled identities keep no access.</div></div>}
 
       {myRole && (
         <div className="card">
@@ -114,8 +119,9 @@ export function UsersPage() {
           </thead>
           <tbody>
             {(users ?? []).map((u) => {
-              const ownerCount = (users ?? []).filter((x) => x.role === "Owner").length;
-              const isLastOwner = u.role === "Owner" && ownerCount <= 1;
+              const ownerCount = (users ?? []).filter((x) => x.role === "Owner" && (!x.status || x.status === "Active")).length;
+              const isLastOwner = u.role === "Owner" && (!u.status || u.status === "Active") && ownerCount <= 1;
+              const mayManage = canManageUsers && (myRole === "Owner" || !["Owner", "Admin"].includes(u.role));
               const lastOwnerHint = "Promote another user to Owner before changing or removing this one.";
               return (
               <tr key={u._id}>
@@ -126,7 +132,7 @@ export function UsersPage() {
                 <td title={isLastOwner ? lastOwnerHint : undefined}>
                   <Select
                     value={u.role}
-                    disabled={isLastOwner || !canManageUsers}
+                    disabled={isLastOwner || !mayManage}
                     onChange={async (v) => {
                       const ok = await confirm({
                         title: "Change user role?",
@@ -138,7 +144,7 @@ export function UsersPage() {
                       await setRole({ id: u._id, role: v });
                       toast.success("Role updated");
                     }}
-                    options={ROLES.map((r) => ({ value: r, label: r }))}
+                    options={assignableRoles.map((r) => ({ value: r, label: r }))}
                   />
                 </td>
                 <td>
@@ -148,6 +154,8 @@ export function UsersPage() {
                 </td>
                 <td className="mono">{u.lastLoginAtISO ?? "—"}</td>
                 <td>
+                  {mayManage && <button className="btn btn--ghost btn--sm" onClick={() => setDraft(u)}>Edit access</button>}
+                  {mayManage && u.status !== "Disabled" && <button className="btn btn--ghost btn--sm" onClick={() => setIncident({ id: u._id, name: u.displayName, reason: "" })}>Security disable</button>}
                   <button
                     className="btn btn--ghost btn--sm"
                     onClick={() => {
@@ -162,7 +170,7 @@ export function UsersPage() {
                   <button
                     className="btn btn--ghost btn--sm btn--icon"
                     aria-label={`Remove user ${u.name ?? u.email}`}
-                    disabled={isLastOwner || !canManageUsers}
+                    disabled={isLastOwner || !mayManage}
                     title={isLastOwner ? lastOwnerHint : !canManageUsers ? "Your role can't manage users." : undefined}
                     onClick={async () => {
                       const ok = await confirm({
@@ -194,8 +202,20 @@ export function UsersPage() {
       </div>
 
       {canManageUsers && (
-        <InvitationsPanel societyId={society._id} />
+        <InvitationsPanel societyId={society._id} assignableRoles={assignableRoles} />
       )}
+
+      <Drawer open={!!incident} onClose={() => setIncident(null)} title="Security disable access" footer={<>
+        <button className="btn" onClick={() => setIncident(null)}>Cancel</button>
+        <button className="btn btn--accent" disabled={!incident?.reason.trim()} onClick={async () => {
+          if (!incident) return;
+          try { await securityDisable({ id: incident.id, reason: incident.reason }); setIncident(null); toast.success("Access disabled"); }
+          catch (error) { toast.error("Could not disable access", error instanceof Error ? error.message : String(error)); }
+        }}>Disable immediately</button>
+      </>}>
+        <p>Disable {incident?.name} for a security incident. Their future sessions, API calls and workflow work lose access immediately. Disabling the last Active Owner places this workspace in controlled recovery.</p>
+        <Field label="Incident reason"><textarea className="input" value={incident?.reason ?? ""} maxLength={1000} onChange={(event) => incident && setIncident({ ...incident, reason: event.target.value })} /></Field>
+      </Drawer>
 
       <Drawer
         open={!!draft}
@@ -256,7 +276,7 @@ export function UsersPage() {
               <Select
                 value={draft.role}
                 onChange={(v) => setDraft({ ...draft, role: v })}
-                options={ROLES.map((r) => ({ value: r, label: r }))}
+                options={assignableRoles.map((r) => ({ value: r, label: r }))}
               />
             </Field>
             <Field label="Status">
@@ -267,6 +287,8 @@ export function UsersPage() {
                   { value: "Active", label: "Active" },
                   { value: "Invited", label: "Invited" },
                   { value: "Disabled", label: "Disabled" },
+                  { value: "Suspended", label: "Suspended" },
+                  { value: "Pending", label: "Pending" },
                 ]}
               />
             </Field>
@@ -293,9 +315,10 @@ function roleSummary(role?: string | null): string {
 }
 
 function InvitationsPanel({
-  societyId,
+  societyId, assignableRoles,
 }: {
   societyId: any;
+  assignableRoles: string[];
 }) {
   const invitations = useQuery(api.invitations.list, { societyId });
   const create = useMutation(api.invitations.create);
@@ -303,7 +326,8 @@ function InvitationsPanel({
   const toast = useToast();
   const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [form, setForm] = useState<{ email: string; role: string } | null>(null);
+  const [form, setForm] = useState<{ email: string; role: string; expiresInDays: number } | null>(null);
+  const [issuedTokens, setIssuedTokens] = useState<Record<string, string>>({});
 
   // ?intent=invite (from the "Invite teammate" command palette action) opens
   // the invite form.
@@ -315,7 +339,7 @@ function InvitationsPanel({
     }
     if (inviteIntentHandled.current) return;
     inviteIntentHandled.current = true;
-    setForm({ email: "", role: "Member" });
+    setForm({ email: "", role: "Member", expiresInDays: 7 });
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("intent");
@@ -325,17 +349,21 @@ function InvitationsPanel({
 
   const invite = async () => {
     if (!form?.email.trim()) return;
-    await create({
+    try {
+    const issued = await create({
       societyId,
       email: form.email.trim(),
       role: form.role,
+      expiresInDays: form.expiresInDays,
     });
+    setIssuedTokens((previous) => ({ ...previous, [issued.id]: issued.token }));
     setForm(null);
-    toast.success("Invitation created");
+    toast.success("Invitation created — copy the link before leaving this page");
+    } catch (error) { toast.error("Could not create invitation", error instanceof Error ? error.message : String(error)); }
   };
 
   const pending = (invitations ?? []).filter(
-    (i: any) => !i.acceptedAtISO && !i.revokedAtISO,
+    (i: any) => !i.acceptedAtISO && !i.revokedAtISO && i.expiresAtISO && Date.parse(i.expiresAtISO) > Date.now(),
   );
 
   const copyInvitationLink = async (token: string) => {
@@ -354,12 +382,12 @@ function InvitationsPanel({
       <div className="card__head">
         <h2 className="card__title">Invitations</h2>
         <span className="card__subtitle">
-          Create and manage pending workspace invitations.
+          Invitations require a verified email, expire automatically, and can be used once. Links are available only when created.
         </span>
         <button
           className="btn-action btn-action--primary"
           style={{ marginLeft: "auto" }}
-          onClick={() => setForm({ email: "", role: "Member" })}
+          onClick={() => setForm({ email: "", role: "Member", expiresInDays: 7 })}
         >
           <PlusCircle size={12} /> Invite
         </button>
@@ -380,7 +408,8 @@ function InvitationsPanel({
               ? "accepted"
               : inv.revokedAtISO
                 ? "revoked"
-                : "pending";
+                : !inv.expiresAtISO || Date.parse(inv.expiresAtISO) <= Date.now()
+                  ? "expired" : "pending";
             return (
               <tr key={inv._id}>
                 <td className="mono">{inv.email}</td>
@@ -390,14 +419,16 @@ function InvitationsPanel({
                     {status}
                   </Badge>
                 </td>
-                <td className="mono muted">{inv.createdAtISO?.slice(0, 10)}</td>
+                <td className="mono muted">{inv.createdAtISO?.slice(0, 10)}<div className="muted">Expires {inv.expiresAtISO?.slice(0, 10) ?? "Reissue required"}</div></td>
                 <td className="table__actions">
                   {status === "pending" && (
                     <>
                       <button
                         className="btn btn--sm btn--ghost btn--icon"
                         aria-label="Copy invitation link"
-                        onClick={() => void copyInvitationLink(inv.token)}
+                        disabled={!issuedTokens[inv._id]}
+                        title={issuedTokens[inv._id] ? "Copy the newly issued invitation link" : "Invitation secrets are shown once. Revoke and reissue to create a new link."}
+                        onClick={() => void copyInvitationLink(issuedTokens[inv._id])}
                       >
                         <Copy size={12} />
                       </button>
@@ -455,11 +486,14 @@ function InvitationsPanel({
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </Field>
+            <Field label="Expires in">
+              <Select value={String(form.expiresInDays)} onChange={(v) => setForm({ ...form, expiresInDays: Number(v) })} options={[1, 7, 14, 30].map((days) => ({ value: String(days), label: `${days} day${days === 1 ? "" : "s"}` }))} />
+            </Field>
             <Field label="Role">
               <Select
                 value={form.role}
                 onChange={(v) => setForm({ ...form, role: v })}
-                options={ROLES.map((r) => ({ value: r, label: r }))}
+                options={assignableRoles.map((r) => ({ value: r, label: r }))}
               />
             </Field>
           </div>

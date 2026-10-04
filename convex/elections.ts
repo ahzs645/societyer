@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -19,13 +20,13 @@ import {
 } from "../shared/functions/elections";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
-export const list = query({
+export const list = authorizedQuery("elections:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const get = query({
+export const get = authorizedQuery("elections:get", query)({
   args: {
     id: v.id("elections"),
     actingUserId: v.optional(v.id("users")),
@@ -34,7 +35,7 @@ export const get = query({
   handler: async (ctx, args) => getPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listNominations = query({
+export const listNominations = authorizedQuery("elections:listNominations", query)({
   args: {
     electionId: v.id("elections"),
     actingUserId: v.optional(v.id("users")),
@@ -43,7 +44,7 @@ export const listNominations = query({
   handler: async (ctx, args) => listNominationsPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listMine = query({
+export const listMine = authorizedQuery("elections:listMine", query)({
   args: {
     societyId: v.id("societies"),
     userId: v.optional(v.id("users")),
@@ -52,7 +53,7 @@ export const listMine = query({
   handler: async (ctx, args) => listMinePortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const create = mutation({
+export const create = authorizedMutation("elections:create", mutation)({
   args: {
     societyId: v.id("societies"),
     meetingId: v.optional(v.id("meetings")),
@@ -71,7 +72,7 @@ export const create = mutation({
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const updateSettings = mutation({
+export const updateSettings = authorizedMutation("elections:updateSettings", mutation)({
   args: {
     electionId: v.id("elections"),
     nominationsOpenAtISO: v.optional(v.string()),
@@ -85,7 +86,7 @@ export const updateSettings = mutation({
   handler: async (ctx, args) => updateSettingsPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const addQuestion = mutation({
+export const addQuestion = authorizedMutation("elections:addQuestion", mutation)({
   args: {
     electionId: v.id("elections"),
     title: v.string(),
@@ -105,7 +106,7 @@ export const addQuestion = mutation({
   handler: async (ctx, args) => addQuestionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const submitNomination = mutation({
+export const submitNomination = authorizedMutation("elections:submitNomination", mutation)({
   args: {
     electionId: v.id("elections"),
     questionId: v.optional(v.id("electionQuestions")),
@@ -118,7 +119,7 @@ export const submitNomination = mutation({
   handler: async (ctx, args) => submitNominationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const reviewNomination = mutation({
+export const reviewNomination = authorizedMutation("elections:reviewNomination", mutation)({
   args: {
     id: v.id("electionNominations"),
     status: v.string(),
@@ -128,7 +129,7 @@ export const reviewNomination = mutation({
   handler: async (ctx, args) => reviewNominationPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const publishNominationToBallot = mutation({
+export const publishNominationToBallot = authorizedMutation("elections:publishNominationToBallot", mutation)({
   args: {
     id: v.id("electionNominations"),
     questionId: v.id("electionQuestions"),
@@ -138,7 +139,7 @@ export const publishNominationToBallot = mutation({
   handler: async (ctx, args) => publishNominationToBallotPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const snapshotEligibleVoters = mutation({
+export const snapshotEligibleVoters = authorizedMutation("elections:snapshotEligibleVoters", mutation)({
   args: {
     electionId: v.id("elections"),
     actingUserId: v.optional(v.id("users")),
@@ -147,7 +148,7 @@ export const snapshotEligibleVoters = mutation({
   handler: async (ctx, args) => snapshotEligibleVotersPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const castBallot = mutation({
+export const castBallot = authorizedMutation("elections:castBallot", mutation)({
   args: {
     electionId: v.id("elections"),
     choices: v.array(
@@ -162,7 +163,7 @@ export const castBallot = mutation({
   handler: async (ctx, args) => castBallotPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const close = mutation({
+export const close = authorizedMutation("elections:close", mutation)({
   args: {
     electionId: v.id("elections"),
     actingUserId: v.optional(v.id("users")),
@@ -171,7 +172,7 @@ export const close = mutation({
   handler: async (ctx, args) => closePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const tallyElection = mutation({
+export const tallyElection = authorizedMutation("elections:tallyElection", mutation)({
   args: {
     electionId: v.id("elections"),
     resultsSummary: v.optional(v.string()),
@@ -182,7 +183,7 @@ export const tallyElection = mutation({
   handler: async (ctx, args) => tallyElectionPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const tally = query({
+export const tally = authorizedQuery("elections:tally", query)({
   args: {
     electionId: v.id("elections"),
     actingUserId: v.optional(v.id("users")),

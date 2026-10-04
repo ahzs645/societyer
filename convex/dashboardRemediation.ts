@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { authorizedMutation } from "./lib/authorizedServer";
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
@@ -17,7 +18,7 @@ const remediationArgs = {
   evidenceRequired: v.array(v.string()),
 };
 
-export const createComplianceReviewTask = mutation({
+export const createComplianceReviewTask = authorizedMutation("dashboardRemediation:createComplianceReviewTask", mutation)({
   args: {
     ...remediationArgs,
     title: v.optional(v.string()),
@@ -28,7 +29,7 @@ export const createComplianceReviewTask = mutation({
   handler: async (ctx, args) => createComplianceReviewTaskPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const createPrivacyReviewTask = mutation({
+export const createPrivacyReviewTask = authorizedMutation("dashboardRemediation:createPrivacyReviewTask", mutation)({
   args: {
     ...remediationArgs,
     assignee: v.optional(v.string()),
@@ -38,13 +39,13 @@ export const createPrivacyReviewTask = mutation({
   handler: async (ctx, args) => createPrivacyReviewTaskPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const markPrivacyProgramReviewed = mutation({
+export const markPrivacyProgramReviewed = authorizedMutation("dashboardRemediation:markPrivacyProgramReviewed", mutation)({
   args: remediationArgs,
   returns: v.any(),
   handler: async (ctx, args) => markPrivacyProgramReviewedPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const markMemberDataAccessReviewed = mutation({
+export const markMemberDataAccessReviewed = authorizedMutation("dashboardRemediation:markMemberDataAccessReviewed", mutation)({
   args: remediationArgs,
   returns: v.any(),
   handler: async (ctx, args) => markMemberDataAccessReviewedPortable(await toPortableMutationCtx(ctx), args),

@@ -1,3 +1,4 @@
+import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { internalMutation, mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import {
@@ -182,19 +183,19 @@ export const backfillProceduralClassification = internalMutation({
 
 // ----- queries --------------------------------------------------------------
 
-export const list = query({
+export const list = authorizedQuery("motions:list", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx: any, args: any) => listPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listForMinutes = query({
+export const listForMinutes = authorizedQuery("motions:listForMinutes", query)({
   args: { minutesId: v.id("minutes") },
   returns: v.any(),
   handler: async (ctx: any, args: any) => listForMinutesPortable(await toPortableQueryCtx(ctx), args),
 });
 
-export const listForMeeting = query({
+export const listForMeeting = authorizedQuery("motions:listForMeeting", query)({
   args: { meetingId: v.id("meetings") },
   returns: v.any(),
   handler: async (ctx: any, args: any) => listForMeetingPortable(await toPortableQueryCtx(ctx), args),
@@ -202,7 +203,7 @@ export const listForMeeting = query({
 
 // Backlog list = motions parked before/around a meeting. Folds in the old
 // motionBacklog query surface; the "backlog" is just a status filter now.
-export const backlog = query({
+export const backlog = authorizedQuery("motions:backlog", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx: any, args: any) => backlogPortable(await toPortableQueryCtx(ctx), args),
@@ -210,7 +211,7 @@ export const backlog = query({
 
 // ----- mutations ------------------------------------------------------------
 
-export const create = mutation({
+export const create = authorizedMutation("motions:create", mutation)({
   args: {
     societyId: v.id("societies"),
     text: v.string(),
@@ -221,7 +222,7 @@ export const create = mutation({
   handler: async (ctx: any, args: any) => createPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const update = mutation({
+export const update = authorizedMutation("motions:update", mutation)({
   args: {
     motionId: v.id("motions"),
     patch: v.object({
@@ -237,7 +238,7 @@ export const update = mutation({
 /** Set an explicit, overridable status (and optional outcome), appending a
  *  history entry so the cross-meeting trail is preserved (see "Votes Model A +
  *  History" in the design doc). */
-export const setStatus = mutation({
+export const setStatus = authorizedMutation("motions:setStatus", mutation)({
   args: {
     motionId: v.id("motions"),
     status: v.string(),
@@ -253,13 +254,13 @@ export const setStatus = mutation({
 /** Replace a motion's tag/label set (normalized: trimmed, lowercased, deduped).
  *  Drives the master-list filtering, including the default-hidden routine
  *  labels (adjournment, previous-minutes). */
-export const setTags = mutation({
+export const setTags = authorizedMutation("motions:setTags", mutation)({
   args: { motionId: v.id("motions"), tags: v.array(v.string()) },
   returns: v.any(),
   handler: async (ctx: any, args: any) => setTagsPortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const recordVote = mutation({
+export const recordVote = authorizedMutation("motions:recordVote", mutation)({
   args: {
     motionId: v.id("motions"),
     votesFor: v.optional(v.number()),
@@ -270,7 +271,7 @@ export const recordVote = mutation({
   handler: async (ctx: any, args: any) => recordVotePortable(await toPortableMutationCtx(ctx), args),
 });
 
-export const remove = mutation({
+export const remove = authorizedMutation("motions:remove", mutation)({
   args: { motionId: v.id("motions") },
   returns: v.any(),
   handler: async (ctx: any, args: any) => removePortable(await toPortableMutationCtx(ctx), args),

@@ -1,3 +1,4 @@
+import { validateUploadMetadata } from "../../shared/storage/uploadVerification";
 import { isDemoMode } from "./demoMode";
 import { writeLocalDocumentVersion } from "./documentStorage";
 import { getDocumentStorageProvider, isNativeFileStorageEnabled } from "./runtimeMode";
@@ -13,6 +14,7 @@ export async function uploadDocumentVersion({
   createDemoVersion,
   beginUpload,
   recordUploadedVersion,
+  completeUpload,
 }: {
   societyId: any;
   documentId: any;
@@ -21,6 +23,7 @@ export async function uploadDocumentVersion({
   createDemoVersion: (args: any) => Promise<any>;
   beginUpload: (args: any) => Promise<any>;
   recordUploadedVersion: (args: any) => Promise<any>;
+  completeUpload?: (args: any) => Promise<any>;
 }) {
   if (!isNativeFileStorageEnabled()) {
     throw new Error(NATIVE_FILE_STORAGE_DISABLED_MESSAGE);
@@ -58,23 +61,28 @@ export async function uploadDocumentVersion({
     return { versionId: recorded.versionId, version: recorded.version, provider: "demo" };
   }
 
-  const { presigned } = await beginUpload({
+  validateUploadMetadata({ fileName: file.name, fileSizeBytes: file.size, mimeType: file.type });
+  if (!completeUpload) throw new Error("This deployment requires the verified upload flow.");
+  const { presigned, uploadHandleId } = await beginUpload({
     societyId,
     documentId,
     fileName: file.name,
     mimeType: file.type,
     fileSizeBytes: file.size,
   });
-  if (presigned.provider === "rustfs") {
+  if (presigned.provider === "rustfs" || presigned.provider === "r2") {
     const res = await fetch(presigned.url, {
       method: "PUT",
       headers: presigned.headers ?? (file.type ? { "Content-Type": file.type } : {}),
       body: file,
     });
-    if (!res.ok) throw new Error(`RustFS upload failed (${res.status})`);
+    if (!res.ok) throw new Error(`${presigned.provider === "r2" ? "R2" : "RustFS"} upload failed (${res.status})`);
   }
 
+  if (!uploadHandleId || !completeUpload) throw new Error("This deployment requires the verified upload flow.");
+  await completeUpload({ uploadHandleId });
   const recorded = await recordUploadedVersion({
+    uploadHandleId,
     societyId,
     documentId,
     storageProvider: presigned.provider,

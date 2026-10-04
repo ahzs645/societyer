@@ -98,10 +98,10 @@ function canAccessMeetingMaterial(
   context: AccessSubjectContext,
   requiredAccess = "view",
 ) {
-  if (!material || materialEffectiveStatus(material) === "withdrawn") return false;
+  if (!material || ["withdrawn", "expired", "pending"].includes(materialEffectiveStatus(material))) return false;
   if (roleCanBypass(context.userRole)) return true;
   if (hasExplicitGrant(material, context, requiredAccess)) return true;
-  return broadAccessAllows(material.accessLevel, context);
+  return (requiredAccess === "view" || roleAtLeast(context.userRole, "Director")) && broadAccessAllows(material.accessLevel, context);
 }
 
 function hasExplicitGrant(
@@ -166,7 +166,7 @@ function normalizeMaterialLabel(value: string) {
     .replace(/\s+/g, " ");
 }
 
-function canAccessDocument(
+export function canAccessDocument(
   document: any,
   linkedMaterials: any[],
   context: AccessSubjectContext,
@@ -181,10 +181,13 @@ function canAccessDocument(
   );
   if (materialLinks.length > 0) {
     return materialLinks.some((material) =>
-      canAccessMeetingMaterial(material, context, requiredAccess),
+      canAccessMeetingMaterial(material, material.accessLevel === "committee"
+        ? { ...context, committeeIds: document.committeeId ? (context.committeeIds ?? []).filter((id) => String(id) === String(document.committeeId)) : [] }
+        : context, requiredAccess),
     );
   }
 
+  if (requiredAccess !== "view") return roleAtLeast(context.userRole, "Director");
   if (document.tags?.includes("public") || document.librarySection === "public") return true;
   if (document.committeeId && (context.committeeIds ?? []).map(String).includes(String(document.committeeId))) return true;
   if (document.category === "Policy" || document.category === "Bylaws" || document.category === "Constitution") {
@@ -208,8 +211,8 @@ async function documentAccessContextForActor(
   societyId: any,
   actingUserId?: any,
 ): Promise<AccessSubjectContext | null> {
-  if (!actingUserId) return null;
-  const user = await getOwned(ctx, "users", String(actingUserId), String(societyId));
+  const user = await requireSocietyMembership(ctx, String(societyId));
+  if (actingUserId && String(actingUserId) !== String(user._id)) throw new Error("Authenticated actor does not match the current principal.");
 
   const committeeRows = await ctx.db
     .query("committeeMembers")
@@ -217,24 +220,72 @@ async function documentAccessContextForActor(
     .collect();
   const committeeIds = committeeRows
     .filter((row: any) =>
-      (user.memberId && String(row.memberId ?? "") === String(user.memberId)) ||
-      (user.directorId && String(row.directorId ?? "") === String(user.directorId)) ||
-      normalizeActorLabel(row.email ?? "") === normalizeActorLabel(user.email ?? "") ||
-      normalizeActorLabel(row.name ?? "") === normalizeActorLabel(user.displayName ?? ""),
+      committeeAppointmentIsActive(row) && (
+        (user.memberId && String(row.memberId ?? "") === String(user.memberId)) ||
+        (user.directorId && String(row.directorId ?? "") === String(user.directorId))
+      ),
     )
     .map((row: any) => String(row.committeeId));
 
   return documentAccessContextFromUser(user, Array.from(new Set(committeeIds)));
 }
 
-function normalizeActorLabel(value: string) {
-  return String(value ?? "")
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9@.]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
+/** Labels/email are review hints, never authorization keys. */
+export function committeeAppointmentIsActive(row: { joinedAt?: string; leftAt?: string }, now = Date.now()) {
+  const joined = Date.parse(row.joinedAt ?? "");
+  const left = row.leftAt ? Date.parse(row.leftAt) : Infinity;
+  return Number.isFinite(joined) && joined <= now && left > now;
+}
+
+/** Resolve the authenticated actor once and apply the same ACL to every delivery path. */
+export async function documentAccessPredicate(ctx: PortableQueryCtx, societyId: string) {
+  const [context, materials] = await Promise.all([
+    documentAccessContextForActor(ctx, societyId),
+    ctx.db.query("meetingMaterials").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+  ]);
+  return (document: any, access = "view") => !!context && String(document?.societyId) === societyId && canAccessDocument(document, materials, context, access);
+}
+
+export async function requireDocumentAccess(ctx: PortableQueryCtx, documentId: string, access = "view") {
+  const document = await ctx.db.get(documentId, "documents");
+  if (!document || typeof document.societyId !== "string") throw new Error("documents not found.");
+  const allows = await documentAccessPredicate(ctx, document.societyId);
+  if (!allows(document, access)) throw new Error("documents not found.");
+  return document;
+}
+
+/** Apply document policy to rows that embed document previews, content or evidence. */
+export async function filterDocumentLinkedRows(ctx: PortableQueryCtx, societyId: string, rows: any[], table = "") {
+  const actor = await requireSocietyMembership(ctx, societyId);
+  const allows = await documentAccessPredicate(ctx, societyId);
+  const admin = actor.role === "Owner" || actor.role === "Admin";
+  const generated = table === "legalPrecedentRuns"
+    ? await ctx.db.query("generatedLegalDocuments").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect() : [];
+  const results = await Promise.all(rows.map(async (row) => {
+    if (row.societyId && String(row.societyId) !== societyId) return false;
+    if (admin) return true;
+    const relatedRows = [row];
+    if (row.generatedDocumentId) {
+      const parent = await ctx.db.get(String(row.generatedDocumentId), "generatedLegalDocuments");
+      if (!parent || String(parent.societyId) !== societyId) return false;
+      relatedRows.push(parent);
+    }
+    if (table === "legalPrecedentRuns") relatedRows.push(...generated.filter((item) => String(item.precedentRunId) === String(row._id)));
+    const ids = new Set<string>();
+    for (const related of relatedRows) {
+      for (const field of ["documentId", "draftDocumentId", "sourceDocumentId", "docxDocumentId", "pdfDocumentId", "signedDocumentId"]) if (related[field]) ids.add(String(related[field]));
+      for (const field of ["documentIds", "sourceDocumentIds"]) for (const id of related[field] ?? []) ids.add(String(id));
+    }
+    if (!ids.size) return roleAtLeast(actor.role, "Director");
+    const documents = await Promise.all([...ids].map((id) => ctx.db.get(id, "documents")));
+    return documents.every((document) => allows(document));
+  }));
+  return rows.filter((_, index) => results[index]);
+}
+
+export async function publicDocumentAccessPredicate(ctx: PortableQueryCtx, societyId: string) {
+  const materials = await ctx.db.query("meetingMaterials").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  return (document: any) => String(document?.societyId) === societyId && canAccessDocument(document, materials, { userRole: "Viewer" });
 }
 
 /* ------------------------------- handlers --------------------------------- */
@@ -259,7 +310,7 @@ export async function listPortable(
   ]);
   return groups
     .flat()
-    .filter((doc) => !accessContext || canAccessDocument(doc, linkedMaterials, accessContext))
+    .filter((doc) => accessContext && canAccessDocument(doc, linkedMaterials, accessContext))
     .sort((a, b) => String(b.createdAtISO ?? "").localeCompare(String(a.createdAtISO ?? "")));
 }
 
