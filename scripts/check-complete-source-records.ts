@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import {MemoryDb,LocalStoreDb,MemoryRowStore,PortableRuntime,makeCapabilities} from '../shared/portable/index';
+import {PORTABLE_FUNCTIONS} from '../shared/functions/registry';
+import {portableTestSeed,portableTestPrincipal} from './portable-test-fixture';
+import {preflightSourceMeetingRecord,changedSourceMinuteSections} from '../shared/sourceMeetingRecord';
+
+const source='Executive Meeting\nMarch 13, 2012\nTime: 2:30pm–3:00pm\nPresent:\nTerry Robert\nKenna Lattimer\nChelsea Coady\nNini Long\n\n1. Review of previous minutes\nA reported decision remains source wording.\n\nSigned: Source recorder';
+const baseline=[{title:'Review of previous minutes',discussion:'A reported decision remains source wording.',type:'discussion'}];
+const edited=[{...baseline[0],discussion:'Notes changed by the browser user.'}];
+for(const engine of ['memory','local-store'] as const){
+ const societyId='soc_source_completion';
+ const seed={...portableTestSeed(societyId),meetings:[{_id:'meeting',societyId,title:'Imported source',status:'Held'}],documents:[{_id:'source',societyId,title:'Executive minutes.doc',category:'Minutes',content:JSON.stringify({extractedText:source}),createdAtISO:'2012-03-13',flaggedForDeletion:false},{_id:'unlinked',societyId,title:'Unlinked',category:'Minutes',content:'{}',createdAtISO:'2012-03-13',flaggedForDeletion:false}],minutes:[{_id:'edited',societyId,meetingId:'meeting',sourceDocumentIds:['source'],sections:edited,discussion:'Retain this summary',attendees:['Terry Robert'],absent:[],decisions:[],actionItems:[],quorumMet:false},{_id:'frozen',societyId,meetingId:'meeting',approvedAt:'2013-01-01',adoptedSnapshot:{discussion:'Frozen'},sourceDocumentIds:['source']},{_id:'atomic',societyId,meetingId:'meeting',sourceDocumentIds:['source'],sections:[]},{_id:'atomic_bad',societyId,meetingId:'meeting',sourceDocumentIds:['source'],sections:[]}]};
+ const db=engine==='memory'?new MemoryDb({seed}):new LocalStoreDb(new MemoryRowStore(seed));
+ const runtime=new PortableRuntime({db,capabilities:makeCapabilities({}),principalProvider:portableTestPrincipal}).registerAll(PORTABLE_FUNCTIONS);
+ const entry={id:'edited',sourceSelection:[{documentId:'source',selectedText:source}],expectedSections:baseline,expectedStructured:{motions:[],decisions:[],actionItems:[]}};
+ const result:any=await runtime.runMutation('minutes:completeSourceRecords',{societyId,entries:[entry,{id:'frozen'}]});
+ assert.equal(result[1].skipped,'adopted');
+ const saved:any=await db.get('edited');
+ assert.deepEqual(saved.sections,edited);assert.equal(saved.discussion,'Retain this summary');assert.deepEqual(saved.attendees,['Terry Robert']);
+ assert.equal(saved.sourceMeetingRecord.completionRevision,'source-record-v3');
+ assert.equal(preflightSourceMeetingRecord(saved.sourceMeetingRecord).passed,true);
+ assert.deepEqual(saved.sourceMeetingRecord.participants.map((p:any)=>p.name),['Terry Robert','Kenna Lattimer','Chelsea Coady','Nini Long']);
+ assert.equal(saved.chairName,undefined);assert.equal(saved.approvedAt,undefined);
+ assert.deepEqual(changedSourceMinuteSections(saved.sourceMeetingRecord,saved.sections),edited,'A pre-upgrade user edit remains visible as a current supplement');
+ assert.equal((await runtime.runMutation('minutes:completeSourceRecords',{societyId,entries:[entry]}) as any)[0].skipped,'already_complete');
+ await assert.rejects(()=>runtime.runMutation('minutes:update',{id:'edited',patch:{sourceMeetingRecord:{version:1}}}),/managed through cited source/);
+ await assert.rejects(()=>runtime.runMutation('minutes:completeSourceRecords',{societyId,entries:[{id:'atomic',sourceSelection:[{documentId:'source',fullText:source,selectedText:source,blocks:[{kind:'paragraph',text:'Missing most original text'}]}]}]}),/coverage/);
+ assert.equal((await db.get('atomic'))!.sourceMeetingRecord,undefined,'Failed coverage has zero writes');
+ await assert.rejects(()=>runtime.runMutation('minutes:completeSourceRecords',{societyId,entries:[{id:'atomic'},{id:'atomic_bad',sourceSelection:[{documentId:'unlinked'}]}]}),/already be linked/);
+ assert.equal((await db.get('atomic'))!.sourceMeetingRecord,undefined,'A later invalid linked source cannot partially complete the batch');
+ assert.equal((await db.get('frozen'))!.sourceMeetingRecord,undefined);
+ console.log(engine+': complete source coverage, unchanged user edits, frozen records, idempotence and atomic failures passed');
+}

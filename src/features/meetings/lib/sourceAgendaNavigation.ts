@@ -14,3 +14,10 @@ export function minuteSectionIndexForAgendaEntry(
     String(section.title ?? "").trim().replace(/\s+/g, " ").toLowerCase() === title ? [index] : []);
   return matching.length === 1 ? matching[0] : null;
 }
+import { changedSourceMinuteSections } from "../../../../shared/sourceMeetingRecord";
+
+export function unchangedSourceDumpSection(section: any, record: any): boolean {
+  if (!Array.isArray(record?.sectionBaseline)) return false;
+  if (!/^source (?:notes awaiting agenda mapping|evidence awaiting extraction)$/i.test(String(section?.title ?? "").trim())) return false;
+  return changedSourceMinuteSections(record, [section]).length === 0;
+}

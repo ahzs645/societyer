@@ -959,6 +959,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "minutes:update", handler: minutesFns.updatePortable }),
   definePortableMutation({ name: "minutes:transposeSource", handler: minutesFns.transposeSourcePortable }),
   definePortableMutation({ name: "minutes:transposeSources", handler: minutesFns.transposeSourcesPortable }),
+  definePortableMutation({ name: "minutes:completeSourceRecords", handler: minutesFns.completeSourceRecordsPortable }),
   definePortableMutation({ name: "minutes:upsertFromDraft", handler: minutesFns.upsertFromDraftPortable }),
   definePortableMutation({ name: "minutes:backfillMotionPersonLinks", handler: minutesFns.backfillMotionPersonLinksPortable }),
 

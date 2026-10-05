@@ -24,6 +24,7 @@ import {
 } from "./MeetingDetailSupport";
 import { MeetingTranscriptCard } from "./MeetingTranscriptCard";
 import { hasStartedMinutesDraft } from "../lib/meetingDetailHelpers";
+import { SourceOriginalDownload } from "./SourceOriginalDownload";
 
 export function MeetingSidebarColumn({
   meeting,
@@ -33,6 +34,8 @@ export function MeetingSidebarColumn({
   selectedMinutesExportStyle,
   minutesExportStyle,
   setMinutesExportStyle,
+  sourceFidelityInExport,
+  setSourceFidelityInExport,
   includeTranscriptInExport,
   setIncludeTranscriptInExport,
   includeActionItemsInExport,
@@ -87,6 +90,8 @@ export function MeetingSidebarColumn({
   selectedMinutesExportStyle: any;
   minutesExportStyle: MinutesExportStyleId;
   setMinutesExportStyle: (value: MinutesExportStyleId) => void;
+  sourceFidelityInExport: boolean;
+  setSourceFidelityInExport: (value: boolean) => void;
   includeTranscriptInExport: boolean;
   setIncludeTranscriptInExport: (value: boolean) => void;
   includeActionItemsInExport: boolean;
@@ -145,6 +150,7 @@ export function MeetingSidebarColumn({
   const canDownload = can("exports:download");
   const show = (panel: NonNullable<typeof visiblePanels>[number]) => visiblePanels.includes(panel);
   const minutesExportBlocked = formalExportBlockers.length > 0;
+  const sourceDocumentsAccessible = can("documents:read") && (minutes?.sourceDocumentIds ?? []).every((id: string) => (sourceDocuments ?? []).some((document: any) => document._id === id));
   const agmRun = useQuery(
     api.agm.runForMeeting,
     can("meetings:read") && meeting?.type === "AGM" && show("agm") ? { meetingId: meeting._id } : "skip",
@@ -156,9 +162,10 @@ export function MeetingSidebarColumn({
             <div className="card__head"><h2 className="card__title">Meeting details</h2></div>
             <div className="card__body col">
               <Detail label="Type"><Badge tone={meeting.type === "AGM" ? "accent" : "info"}>{meeting.type}</Badge></Detail>
-              <Detail label="Scheduled">{formatDateTime(meeting.scheduledAt)}</Detail>
+              <Detail label={minutes?.sourceMeetingRecord?.header?.dateText ? "Source date" : "Scheduled"}>{minutes?.sourceMeetingRecord ? (minutes.sourceMeetingRecord.header?.dateText || formatDate(meeting.scheduledAt)) : formatDateTime(meeting.scheduledAt)}</Detail>
+              {minutes?.sourceMeetingRecord?.header?.timeText && <Detail label="Source time">{minutes.sourceMeetingRecord.header.timeText}</Detail>}
               <Detail label="Location">
-                <span className="meeting-detail-location-value">{meeting.location ?? "—"}</span>
+                <span className="meeting-detail-location-value">{minutes?.sourceMeetingRecord?.header?.locationText || meeting.location || "—"}</span>
               </Detail>
               <Detail label="Electronic">{meeting.electronic ? "Yes" : "No"}</Detail>
               <Detail label="Notice sent">{meeting.noticeSentAt ? formatDate(meeting.noticeSentAt) : "—"}</Detail>
@@ -180,6 +187,7 @@ export function MeetingSidebarColumn({
                 <span className="card__subtitle">{selectedMinutesExportStyle.source}</span>
               </div>
               <div className="card__body col" style={{ gap: 12 }}>
+                {minutes && !minutes.approvedAt && <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{minutes.sourceMeetingRecord || minutes.sourceTransposition ? "Source record · approval not recorded" : "Draft minutes · approval not recorded"}</span>}
                 {minutesExportBlocked && (
                   <div className="callout callout--warn" role="status">
                     <div className="callout__body callout__body--list">
@@ -207,6 +215,12 @@ export function MeetingSidebarColumn({
                       {selectedMinutesExportStyle.tone}
                     </p>
                     <div className="col" style={{ gap: 6 }}>
+                      {(minutes?.sourceMeetingRecord || minutes?.sourceTransposition) && <Checkbox
+                        checked={sourceFidelityInExport && !publicCopyMode && minutesExportStyle !== "board-public"}
+                        onChange={setSourceFidelityInExport}
+                        disabled={publicCopyMode || minutesExportStyle === "board-public"}
+                        label="Complete source record"
+                      />}
                       <Checkbox
                         checked={includeActionItemsInExport}
                         onChange={setIncludeActionItemsInExport}
@@ -336,6 +350,11 @@ export function MeetingSidebarColumn({
                     Link source documents by importing or backfilling the meeting-minute source records.
                   </div>
                 )}
+                {sourceDocumentsAccessible && (minutes.sourceMeetingRecord?.documents ?? []).map((document: any) => <SourceOriginalDownload key={document.documentId} source={document} />)}
+                {sourceDocumentsAccessible && minutes.sourceTransposition?.originalText && <details style={{ marginTop: 12 }}>
+                  <summary>Source extraction audit</summary>
+                  <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 480, overflow: "auto" }}>{minutes.sourceTransposition.originalText}</pre>
+                </details>}
               </div>
             </div>
           )}

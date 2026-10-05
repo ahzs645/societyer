@@ -27,6 +27,7 @@ import {
   readStoredExportBool,
   readStoredMinutesStyle,
 } from "../lib/minutesExportPrefs";
+import { minuteSectionIndexForAgendaEntry } from "../lib/sourceAgendaNavigation";
 
 export function MeetingMinutesPreviewPage() {
   const { id } = useParams<{ id: string }>();
@@ -50,7 +51,9 @@ export function MeetingMinutesPreviewPage() {
   const minutesSignatures = useQuery(api.signatures.listForEntity, loaded && can("documents:read") && minutes ? { entityType: "minutes", subjectId: minutes._id as string } : "skip");
   const meetingConflicts = useQuery(api.conflicts.forMeeting, loaded && can("conflicts:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
   const meetingProxies = useQuery(api.proxies.forMeeting, loaded && can("proxies:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const meetingPackage = useQuery(api.meetingMaterials.packageForMeeting, loaded && can("meetings:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
+  const [sourceFidelityInExport, setSourceFidelityInExport] = useState(() => readStoredExportBool("sourceFidelity", true));
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
   const [includeDiscussionSummaryInExport, setIncludeDiscussionSummaryInExport] = useState(() => readStoredExportBool("includeDiscussionSummary", false));
@@ -64,6 +67,7 @@ export function MeetingMinutesPreviewPage() {
   }, [minutesExportStyle]);
 
   useEffect(() => {
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}sourceFidelity`, String(sourceFidelityInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeTranscript`, String(includeTranscriptInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeActionItems`, String(includeActionItemsInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeDiscussionSummary`, String(includeDiscussionSummaryInExport));
@@ -71,6 +75,7 @@ export function MeetingMinutesPreviewPage() {
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeSignatures`, String(includeSignaturesInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includePlaceholders`, String(includePlaceholdersInExport));
   }, [
+    sourceFidelityInExport,
     includeActionItemsInExport,
     includeApprovalInExport,
     includeDiscussionSummaryInExport,
@@ -103,6 +108,23 @@ export function MeetingMinutesPreviewPage() {
     agendaItemCount: agendaTree.length,
     motions: displayMotions,
   });
+  const publicCopy = minutesExportStyle === "board-public";
+  const canDownload = can("exports:download");
+  const rawSections = minutes.sections ?? [];
+  const hiddenSections = new Set<number>();
+  if (publicCopy) rawSections.forEach((section: any, index: number) => {
+    if (section.publicVisible !== false) return;
+    hiddenSections.add(index);
+    if ((section.depth ?? 0) === 0) for (let child = index + 1; child < rawSections.length && rawSections[child].depth === 1; child++) hiddenSections.add(child);
+  });
+  const visibleSections = rawSections.filter((_: any, index: number) => !hiddenSections.has(index));
+  const visibleAgendaTree = agendaTree.filter(entry => {
+    const sectionIndex = minuteSectionIndexForAgendaEntry(entry, rawSections);
+    return sectionIndex === null || !hiddenSections.has(sectionIndex);
+  });
+  const indexRemap = new Map<number, number>();
+  rawSections.forEach((_: any, index: number) => { if (!hiddenSections.has(index)) indexRemap.set(index, indexRemap.size); });
+  const visibleMotions = displayMotions.filter((motion: any) => motion.sectionIndex == null || !hiddenSections.has(motion.sectionIndex));
 
   const bodyHtml = renderMinutesHtml({
     society: {
@@ -118,8 +140,8 @@ export function MeetingMinutesPreviewPage() {
       location: meeting.location ?? null,
       electronic: !!meeting.electronic,
       noticeSentAt: meeting.noticeSentAt ?? null,
-      agendaItems: agendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
-      agendaItemTree: agendaTree,
+      agendaItems: visibleAgendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
+      agendaItemTree: visibleAgendaTree,
       ...(minutes.adoptedMeeting ?? {}),
     },
     minutes: {
@@ -130,6 +152,9 @@ export function MeetingMinutesPreviewPage() {
       attendanceEvents: minutes.attendanceEvents,
       quorumCheckpoints: minutes.quorumCheckpoints,
       futureMeetingSuggestions: minutes.futureMeetingSuggestions,
+      sourceMeetingRecord: publicCopy ? undefined : minutes.sourceMeetingRecord,
+      sourceTransposition: publicCopy ? undefined : minutes.sourceTransposition,
+      linkedTasks: publicCopy ? undefined : meetingPackage?.tasks,
 
       chairName: minutes.chairName ?? null,
       secretaryName: minutes.secretaryName ?? null,
@@ -144,12 +169,13 @@ export function MeetingMinutesPreviewPage() {
       quorumStatus: minutes.quorumStatus,
       quorumRequired: quorumSnapshot.required,
       quorumSourceLabel: quorumSnapshot.label,
-      discussion: minutes.discussion,
-      sections: minutes.sections ?? null,
-      motions: displayMotions.map((m: any) => ({
+      discussion: publicCopy && (minutes.sourceMeetingRecord || minutes.sourceTransposition) ? "" : minutes.discussion,
+      sections: visibleSections,
+      motions: visibleMotions.map((m: any) => ({
         ...m,
         movedBy: motionPersonDisplayName(m.movedBy, motionPeople, { memberId: m.movedByMemberId, directorId: m.movedByDirectorId }),
         secondedBy: motionPersonDisplayName(m.secondedBy, motionPeople, { memberId: m.secondedByMemberId, directorId: m.secondedByDirectorId }),
+        sectionIndex: publicCopy && m.sectionIndex != null ? indexRemap.get(m.sectionIndex) : m.sectionIndex,
       })) as any,
       decisions: minutes.decisions,
       actionItems: minutes.actionItems as any,
@@ -160,10 +186,12 @@ export function MeetingMinutesPreviewPage() {
       sessionSegments: minutes.sessionSegments ?? null,
       appendices: minutes.appendices ?? null,
       agmDetails: minutes.agmDetails ?? null,
-      draftTranscript: minutes.draftTranscript ?? null,
+      draftTranscript: publicCopy ? null : minutes.draftTranscript ?? null,
     },
     styleId: minutesExportStyle,
     options: {
+      sourceFidelity: sourceFidelityInExport && !publicCopy,
+      publicOnly: publicCopy,
       includeTranscript: includeTranscriptInExport,
       includeActionItems: includeActionItemsInExport,
       includeDiscussionSummary: includeDiscussionSummaryInExport,
@@ -178,6 +206,7 @@ export function MeetingMinutesPreviewPage() {
   });
 
   const exportPreviewToWord = () => {
+    if (!canDownload) return;
     if (formalExportBlockers.length) {
       toast.error("Final minutes export is blocked", formalExportBlockers.join(" "));
       return;
@@ -191,6 +220,7 @@ export function MeetingMinutesPreviewPage() {
   };
 
   const exportPreviewToPdf = async () => {
+    if (!canDownload) return;
     if (formalExportBlockers.length) {
       toast.error("Final minutes export is blocked", formalExportBlockers.join(" "));
       return;
@@ -204,6 +234,7 @@ export function MeetingMinutesPreviewPage() {
   };
 
   const printPreview = async () => {
+    if (!canDownload) return;
     if (formalExportBlockers.length) {
       toast.error("Final minutes export is blocked", formalExportBlockers.join(" "));
       return;
@@ -226,13 +257,13 @@ export function MeetingMinutesPreviewPage() {
         </div>
         <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
           <button className="btn-action" onClick={() => window.close()}>Close page</button>
-          <button className="btn-action btn-action--primary" onClick={exportPreviewToWord} disabled={formalExportBlockers.length > 0}>
+          <button className="btn-action btn-action--primary" onClick={exportPreviewToWord} disabled={!canDownload || formalExportBlockers.length > 0}>
             <FileDown size={12} /> Export Word
           </button>
-          <button className="btn-action" onClick={exportPreviewToPdf} disabled={formalExportBlockers.length > 0}>
+          <button className="btn-action" onClick={exportPreviewToPdf} disabled={!canDownload || formalExportBlockers.length > 0}>
             <FileDown size={12} /> Download PDF
           </button>
-          <button className="btn-action" onClick={printPreview} disabled={formalExportBlockers.length > 0}>
+          <button className="btn-action" onClick={printPreview} disabled={!canDownload || formalExportBlockers.length > 0}>
             <Printer size={12} /> Print
           </button>
         </div>
@@ -240,6 +271,7 @@ export function MeetingMinutesPreviewPage() {
 
       <div className="meeting-preview-page__layout">
         <aside className="meeting-preview-page__settings">
+          {!minutes.approvedAt && <p className="muted">{minutes.sourceMeetingRecord || minutes.sourceTransposition ? "Source record · approval not recorded" : "Draft minutes · approval not recorded"}</p>}
           {formalExportBlockers.length > 0 && (
             <div className="callout callout--warn" role="status">
               <div className="callout__body callout__body--list">
@@ -260,6 +292,7 @@ export function MeetingMinutesPreviewPage() {
             />
           </Field>
           <div className="col" style={{ gap: 6 }}>
+            {(minutes.sourceMeetingRecord || minutes.sourceTransposition) && <label><input type="checkbox" checked={sourceFidelityInExport && !publicCopy} disabled={publicCopy} onChange={(event) => setSourceFidelityInExport(event.target.checked)} /> Complete source record</label>}
             <label><input type="checkbox" checked={includeTranscriptInExport} onChange={(event) => setIncludeTranscriptInExport(event.target.checked)} /> Include transcript</label>
             <label><input type="checkbox" checked={includeActionItemsInExport} onChange={(event) => setIncludeActionItemsInExport(event.target.checked)} /> Include action items</label>
             <label><input type="checkbox" checked={includeDiscussionSummaryInExport} onChange={(event) => setIncludeDiscussionSummaryInExport(event.target.checked)} /> Include discussion summary</label>

@@ -1,3 +1,4 @@
+import { resolveSourceMeetingRecord, changedSourceMinuteSections, type SourceMeetingRecord, type SourceMeetingBlock } from "../../../../shared/sourceMeetingRecord";
 import { checkpointResult, decisionReadiness } from "../../../../shared/evidenceReview";
 // Meeting-minutes domain renderer. Takes structured minutes data + a chosen
 // style (Standard / Formal AGM / Executive Agenda / Numbered Agenda / Action
@@ -42,6 +43,9 @@ export type MinutesProxyLine = {
 };
 
 export type MinutesExportOptions = {
+  sourceFidelity?: boolean;
+  publicOnly?: boolean;
+  privateCopy?: boolean;
   includeTranscript?: boolean;
   includeActionItems?: boolean;
   includeDiscussionSummary?: boolean;
@@ -86,7 +90,7 @@ type DetailedAttendance = {
   notes?: string;
 };
 
-type MinutesRenderArgs = {
+export type MinutesRenderArgs = {
   society: {
     name: string;
     incorporationNumber?: string | null;
@@ -108,6 +112,9 @@ type MinutesRenderArgs = {
     agendaItemTree?: { title: string; depth: 0 | 1 }[];
   };
   minutes: {
+    sourceMeetingRecord?: SourceMeetingRecord | null;
+    sourceTransposition?: any;
+    linkedTasks?: any[];
     consentItems?: any[];
     conditionalDecisions?: any[];
     decisionRequirements?: any[];
@@ -136,9 +143,19 @@ type MinutesRenderArgs = {
     discussion: string;
     sections?: {
       title: string;
+      agendaItemId?: string;
       type?: string;
       presenter?: string;
       discussion?: string;
+      motionText?: string;
+      motionId?: string;
+      linkedTaskIds?: string[];
+      sourceKind?: string;
+      sourceReference?: string;
+      sourceReviewStatus?: string;
+      sourceEvidence?: any;
+      publicVisible?: boolean;
+      depth?: 0 | 1;
       reportSubmitted?: boolean;
       decisions?: string[];
       actionItems?: MinutesActionItem[];
@@ -201,6 +218,9 @@ type MinutesRenderArgs = {
 };
 
 const DEFAULT_MINUTES_EXPORT_OPTIONS: Required<MinutesExportOptions> = {
+  sourceFidelity: true,
+  publicOnly: false,
+  privateCopy: false,
   includeTranscript: true,
   includeActionItems: true,
   includeDiscussionSummary: false,
@@ -216,8 +236,14 @@ const DEFAULT_MINUTES_EXPORT_OPTIONS: Required<MinutesExportOptions> = {
 
 /** Build the body HTML for a meeting-minutes export. */
 export function renderMinutesHtml(args: MinutesRenderArgs): string {
+  if (isImportMetadataTranscript(args.minutes.draftTranscript)) args = {...args,minutes:{...args.minutes,draftTranscript:null}};
   const styleId = normalizeMinutesStyleId(args.styleId);
   const options = { ...DEFAULT_MINUTES_EXPORT_OPTIONS, ...(args.options ?? {}) };
+
+  const sourceRecord = resolveSourceMeetingRecord(args.minutes);
+  if (sourceRecord && options.sourceFidelity && !options.publicOnly && (styleId !== "board-public" || options.privateCopy)) {
+    return renderDocumentHeader(args.society) + renderSourceFidelityMinutes(args, sourceRecord, styleId, options);
+  }
 
   let body: string;
   if (styleId === "formal-agm") body = renderFormalAgmMinutes(args, options);
@@ -227,7 +253,7 @@ export function renderMinutesHtml(args: MinutesRenderArgs): string {
   else if (styleId === "board-public") body = renderBoardPublicMinutes(args, options);
   else body = renderStandardMinutes(args, options);
 
-  return renderDocumentHeader(args.society) + body + (styleId === "board-public" ? "" : renderSourceDecisionEvidence(args.minutes));
+  return renderDocumentHeader(args.society) + body + renderUnrepresentedSectionDetails(args.minutes,body,options) + (styleId === "board-public" ? "" : renderSourceDecisionEvidence(args.minutes));
 }
 
 /**
@@ -262,6 +288,12 @@ export function getMinutesStyleGaps({
   meeting: MinutesRenderArgs["meeting"];
   minutes: MinutesRenderArgs["minutes"];
 }): MinutesDataGap[] {
+  const sourceRecord = resolveSourceMeetingRecord(minutes);
+  if (sourceRecord && styleId !== "board-public") return [
+    gap("Complete linked source documents",sourceRecord.documents.every(document=>document.blocks.length>0),"Original source content and related package materials can be recreated.","One linked source has no readable content."),
+    gap("Literal meeting header",!!sourceRecord.header.literalTitle,"Title, dates and location retain their original wording.","The source header is not recorded."),
+    gap("Source attendance",sourceRecord.participants.length>0,"Participant observations retain the source names and categories.","The source does not identify a structured attendance list; its original wording remains in the export."),
+  ];
   const agendaItems = meeting.agendaItems ?? [];
   const businessMotions = minutes.motions.filter((motion) => !isAdjournmentMotionForExport(motion));
   const motionHasVoteLanguage = businessMotions.some(
@@ -1155,6 +1187,8 @@ function renderMinuteSections(sections: MinutesRenderArgs["minutes"]["sections"]
         section.presenter ? `<p class="meta">Presenter: ${escapeHtml(section.presenter)}</p>` : "",
         section.reportSubmitted ? `<p class="meta">Report submitted in writing.</p>` : "",
         section.discussion ? renderMinutesMarkdownHtml(section.discussion) : "",
+        section.motionText ? `<p><strong>${section.sourceKind && section.sourceKind !== "recorded_minutes" ? "Proposed motion wording" : "Motion wording"}:</strong> ${escapeHtml(section.motionText)}</p>` : "",
+        section.sourceReference ? `<p class="meta">Source: ${escapeHtml(section.sourceReference)}${section.sourceReviewStatus ? ` · ${escapeHtml(section.sourceReviewStatus)}` : ""}</p>` : "",
         section.decisions?.length ? renderOptionalSection("Decisions", renderDecisionsList(section.decisions, options), true, options, "h3") : "",
         section.actionItems?.length && options.includeActionItems ? renderOptionalSection("Action Items", renderActionItemsTable(section.actionItems, options), true, options, "h3") : "",
       ].filter(Boolean).join("");
@@ -1742,4 +1776,109 @@ function renderSourceDecisionEvidence(minutes: MinutesRenderArgs["minutes"]) {
     ['Future meeting suggestions', minutes.futureMeetingSuggestions ?? [], row => `${row.title ?? row.committee ?? 'Meeting'}: ${row.date ?? 'unknown date'}; ${row.status}; ${row.venue ?? 'unknown venue'}`],
   ];
   return groups.filter(([,rows])=>rows.length).map(([title,rows,label])=>`<section><h2>${escapeHtml(title)}</h2><ul>${rows.map(row=>`<li>${escapeHtml(label(row))} <span class="meta">${escapeHtml(row.sourceReference ?? '')} · ${escapeHtml(row.sourceUrl ?? '')}</span></li>`).join('')}</ul></section>`).join('');
+}
+
+function isImportMetadataTranscript(value:unknown):boolean {
+ if(typeof value!=='string')return false;
+ try{const metadata=JSON.parse(value);return !!metadata&&typeof metadata==='object'&&(metadata.importSessionId||metadata.sourceDocumentIds||metadata.sourceExternalIds||metadata.importedMotions);}catch{return false;}
+}
+function sourceImageUrl(value:string|undefined):string|undefined {
+ if(!value)return undefined;
+ return /^(?:data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml);base64,|https?:\/\/|\/(?!\/)|\.\.?\/)/i.test(value)?value:undefined;
+}
+function sourceLinkUrl(value:string|undefined):string|undefined {return value&&/^(?:https?:\/\/|mailto:|\/(?!\/)|\.\.?\/)/i.test(value)?value:undefined;}
+function renderLiteralSourceText(text:string,links:Array<{text:string;url:string;offset?:number}>=[]):string {
+ let cursor=0;const pieces:string[]=[];
+ for(const link of links){
+  if(!sourceLinkUrl(link.url)||!link.text)continue;
+  const offset=link.offset??text.indexOf(link.text,cursor);
+  if(offset<cursor||text.slice(offset,offset+link.text.length)!==link.text)continue;
+  pieces.push(escapeHtml(text.slice(cursor,offset)),`<a href="${escapeHtml(link.url)}">${escapeHtml(link.text)}</a>`);cursor=offset+link.text.length;
+ }
+ pieces.push(escapeHtml(text.slice(cursor)));return pieces.join('').replace(/\n/g,'<br/>');
+}
+export function renderSourceMeetingBlocks(blocks:SourceMeetingBlock[]):string {
+ return blocks.map(block=>{
+  if(block.kind==='page_break')return '<div style="page-break-before:always; break-before:page;"></div>';
+  if(block.kind==='image'){
+   const url=sourceImageUrl(block.dataUrl??block.url);const description=[block.alt,block.caption].filter(Boolean).join(' · ');
+   return `<figure>${url?`<img src="${escapeHtml(url)}" alt="${escapeHtml(block.alt??'Source image')}" style="max-width:100%;height:auto;${block.width?`width:${Math.max(1,block.width)}px;`:''}" />`:''}${description?`<p class="meta">${escapeHtml(description)}</p>`:''}${!url?'<p class="meta">Source image is retained with the original document.</p>':''}</figure>`;
+  }
+  if(block.kind==='table'){
+   return `<table data-variant="source" style="width:100%;border-collapse:collapse;table-layout:fixed;"><tbody>${block.rows.map(row=>`<tr>${row.cells.map((cell,index)=>{
+    const tag=cell.header?'th':'td';const paragraphs=cell.paragraphs?.length?cell.paragraphs:[cell.text];
+    const contents=cell.blocks?.length?renderSourceMeetingBlocks(cell.blocks):paragraphs.map(text=>`<p style="white-space:pre-wrap;margin:0 0 3pt;">${escapeHtml(text).replace(/\n/g,'<br/>')}</p>`).join('');
+    return `<${tag}${cell.colSpan&&cell.colSpan>1?` colspan="${cell.colSpan}"`:''}${cell.rowSpan&&cell.rowSpan>1?` rowspan="${cell.rowSpan}"`:''} style="vertical-align:top;border:1px solid #777;padding:4pt;${block.widths?.[index]?`width:${block.widths[index]}%;`:''}">${contents}</${tag}>`;
+   }).join('')}</tr>`).join('')}</tbody></table>`;
+  }
+  if(block.kind==='heading'){const level=Math.max(1,Math.min(6,block.level??2));return `<h${level}>${renderLiteralSourceText(block.text,block.links)}</h${level}>`;}
+  return block.text?`<p style="white-space:pre-wrap;">${renderLiteralSourceText(block.text,block.links)}</p>`:'<p style="height:3pt;margin:0;"></p>';
+ }).join('\n');
+}
+function renderSourceFidelityMinutes(args:MinutesRenderArgs,record:SourceMeetingRecord,styleId:MinutesExportStyleId,options:Required<MinutesExportOptions>):string {
+ const renderedOriginals=new Map<string,SourceMeetingRecord['documents'][number]>();
+ const sourceDocuments=record.documents.map((document,index)=>{
+  const key=document.originalSha256?`${document.originalSha256}:${document.fullText}`:undefined;
+  if(key&&renderedOriginals.has(key))return `<p class="meta">Additional reference to the same original: ${escapeHtml(document.title)} · ${escapeHtml(document.sourceReference)}. Its complete source content is included above.${sourceLinkUrl(document.originalUrl)?` <a href="${escapeHtml(document.originalUrl!)}">Original document</a>`:''}</p>`;
+  if(key)renderedOriginals.set(key,document);
+  const before=document.blocks.slice(0,document.primaryBlockStart);
+  const main=document.blocks.slice(document.primaryBlockStart,document.primaryBlockEnd);
+  const after=document.blocks.slice(document.primaryBlockEnd);
+  const related=(blocks:SourceMeetingBlock[],label:string)=>blocks.length?`<section class="source-materials"><h2>${escapeHtml(label)}</h2><p class="meta">Related source material; it does not establish decisions at the selected meeting.</p>${renderSourceMeetingBlocks(blocks)}</section>`:'';
+  return `<section class="source-document" data-source-document="${escapeHtml(document.documentId)}">
+   ${index?`<h2>${escapeHtml(document.title)}</h2>`:''}
+   <p class="meta">Source: ${escapeHtml(document.sourceReference)}${sourceLinkUrl(document.originalUrl)?` · <a href="${escapeHtml(document.originalUrl!)}">Original document</a>`:''}</p>
+   ${related(before,'Source materials preceding the selected meeting')}
+   <section class="source-meeting-body">${renderSourceMeetingBlocks(main)}</section>
+   ${related(after,'Additional source materials')}
+  </section>`;
+ }).join('\n');
+ const changed=changedSourceMinuteSections(record,args.minutes.sections??[]);
+ const supplements=changed.length?`<section class="current-minute-additions"><h2>Current minute additions and edits</h2><p class="meta">These editable records supplement the retained source wording.</p>${renderMinuteSections(changed,{...options,includeActionItems:true})}${renderUnrepresentedSectionDetails({...args.minutes,sections:changed},renderMinuteSections(changed,{...options,includeActionItems:true}),options)}</section>`:'';
+ const structuredExtras=renderNewStructuredMinuteInformation(args.minutes,record,options);
+ return `<article data-minutes-style="${escapeHtml(styleId)}" data-source-fidelity="true" class="source-fidelity source-fidelity-${escapeHtml(styleId)}">
+  <p class="meta">${escapeHtml(record.sourceKind==='recorded_minutes'?'Source recreation · imported minutes pending review':'Source recreation · proposed script, agenda or template wording')}${args.minutes.approvedAt?' · Adoption is recorded separately.':' · No approval is inferred.'}</p>
+  ${sourceDocuments}${supplements}${structuredExtras}
+  ${options.includeApprovalBlock?renderApprovalBlock(args.minutes,options):''}
+  ${options.includeSignatures&&options.signatures.length?renderSignatureBlock(options.signatures):''}
+  ${renderFooter(options)}
+ </article>`;
+}
+function renderUnrepresentedSectionDetails(minutes:MinutesRenderArgs['minutes'],existingHtml:string,options:Required<MinutesExportOptions>):string {
+ const content=(minutes.sections??[]).map(section=>{
+  const parts:string[]=[];
+  if(section.motionText&&!existingHtml.includes(escapeHtml(section.motionText)))parts.push(`<p><strong>${section.sourceKind&&section.sourceKind!=='recorded_minutes'?'Proposed motion wording':'Motion wording'}:</strong> ${escapeHtml(section.motionText)}</p>`);
+  const tasks=(section.linkedTaskIds??[]).map(id=>{
+   const task=minutes.linkedTasks?.find(row=>row._id===id||row.id===id);
+   return `<li>${escapeHtml(task?.title??id)}${task?.description?` — ${escapeHtml(task.description)}`:''}${task?.dueDate?` · Due ${escapeHtml(task.dueDate)}`:''}${task?.status?` · ${escapeHtml(task.status)}`:''}</li>`;
+  });
+  if(tasks.length)parts.push(`<h3>Linked actions</h3><ul>${tasks.join('')}</ul>`);
+  if(!parts.length)return '';
+  if(section.sourceReference&&!existingHtml.includes(escapeHtml(section.sourceReference)))parts.push(`<p class="meta">Source: ${escapeHtml(section.sourceReference)}</p>`);
+  return `<section><h2>${escapeHtml(section.title)}</h2>${parts.join('')}</section>`;
+ }).filter(Boolean);
+ return content.join('');
+}
+function renderNewStructuredMinuteInformation(minutes:MinutesRenderArgs['minutes'],record:SourceMeetingRecord,options:Required<MinutesExportOptions>):string {
+ const source=record.documents.map(document=>document.fullText).join('\n');
+ const normalized=(value:string)=>value.replace(/\s+/g,' ').trim();
+ const notInSource=(value:string)=>!!value&&!normalized(source).includes(normalized(value))&&!record.sectionBaseline.some(section=>JSON.stringify(section).includes(value));
+ const baseline=record.structuredBaseline;
+ const decisionBaseline=baseline?.decisions??[];const actionBaseline=baseline?.actionItems??[];const motionBaseline=baseline?.motions??[];
+ const sameMotion=(a:any,b:any)=>JSON.stringify(['text','movedBy','secondedBy','outcome','votesFor','votesAgainst','abstentions'].map(key=>a[key]??null))===JSON.stringify(['text','movedBy','secondedBy','outcome','votesFor','votesAgainst','abstentions'].map(key=>b[key]??null));
+ const sameAction=(a:any,b:any)=>JSON.stringify(['text','assignee','dueDate','done'].map(key=>a[key]??null))===JSON.stringify(['text','assignee','dueDate','done'].map(key=>b[key]??null));
+ const extraDecisions=minutes.decisions.filter(decision=>baseline?!decisionBaseline.includes(decision):notInSource(decision));
+ const extraActions=minutes.actionItems.filter(action=>baseline?!actionBaseline.some(old=>sameAction(old,action)):notInSource(action.text));
+ const extraMotions=minutes.motions.filter(motion=>baseline?!motionBaseline.some(old=>sameMotion(old,motion)):notInSource(motion.text));
+ const removedDecisions=baseline?decisionBaseline.filter(decision=>!minutes.decisions.includes(decision)):[];
+ const removedActions=baseline?actionBaseline.filter(action=>!minutes.actionItems.some(current=>sameAction(current,action))):[];
+ const removedMotions=baseline?motionBaseline.filter(motion=>!minutes.motions.some(current=>sameMotion(current,motion))):[];
+ const removals=[...removedDecisions,...removedActions.map(action=>action.text),...removedMotions.map(motion=>motion.text)];
+ const listFields=new Set(['detailedAttendance','attendees','absent','sessionSegments','appendices']);
+ const comparableField=(field:string,value:any)=>listFields.has(field)&&(value==null||(Array.isArray(value)&&value.length===0))?null:value??null;
+ const revisedFields=baseline?Object.keys(baseline.details).filter(field=>JSON.stringify(comparableField(field,(minutes as any)[field]))!==JSON.stringify(comparableField(field,baseline.details[field]))):[];
+ const displayField=(value:any):string=>typeof value==='string'?value:value===null||value===undefined?'Cleared':Array.isArray(value)?value.map(displayField).join('; '):typeof value==='object'?Object.entries(value).map(([key,item])=>`${humanizeLabel(key)}: ${displayField(item)}`).join('; '):String(value);
+ const fieldChanges=revisedFields.length?`<h2>Current record changes</h2><table>${revisedFields.map(field=>`<tr><th>${escapeHtml(humanizeLabel(field))}</th><td>${escapeHtml(displayField((minutes as any)[field]))}</td></tr>`).join('')}</table>`:'';
+ const extras=[fieldChanges,removals.length?`<h2>Items changed or removed from the editable record</h2><p class="meta">The original source wording remains retained above.</p>${renderList(removals)}`:'',extraDecisions.length?`<h2>Current decisions</h2>${renderDecisionsList(extraDecisions,options)}`:'',extraActions.length?`<h2>Current actions</h2>${renderActionItemsTable(extraActions,options)}`:'',extraMotions.length?`<h2>Current motions</h2>${extraMotions.map(renderSampleMotion).join('')}`:'',renderSourceDecisionEvidence(minutes)];
+ return extras.filter(Boolean).join('');
 }

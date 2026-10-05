@@ -85,8 +85,8 @@ export function hasRecordedMeetingMinutes(meeting: any, record: any, motions?: a
   return meeting?.status === "Held" && hasStartedMinutesDraft(resolvedRecord);
 }
 
-/** Hard blockers for final Word/PDF/print output. Preview stays available so a
- * recorder can inspect layout while resolving these governance gaps. */
+/** Drafts and imported source records can be downloaded without adopting them.
+ * The approval workflow retains its separate governance checks. */
 export function formalMinutesExportBlockers({
   meeting,
   minutes,
@@ -98,6 +98,7 @@ export function formalMinutesExportBlockers({
   agendaItemCount: number;
   motions: any[];
 }): string[] {
+  if (minutes && !minutes.approvedAt) return [];
   const blockers: string[] = [];
   if ((minutes?.quorumCheckpoints ?? []).some((row: any) => checkpointResult(row) === 'conflict')) blockers.push('Resolve conflicting decision-time quorum evidence.');
   for (const row of minutes?.conditionalDecisions ?? []) if (row.outcome === 'Carried' && decisionReadiness(row, minutes.decisionRequirements ?? [], minutes.quorumCheckpoints ?? []) !== 'Effective') blockers.push(`Review conditional decision ${row.title ?? row.id} before formal export.`);

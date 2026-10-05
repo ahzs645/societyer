@@ -8,6 +8,7 @@
 // wp:anchor inside the next paragraph so the text wraps around them — this is
 // what makes the letterhead sit beside the title in the meeting minutes.
 
+import { normalizeLegacyFontGlyphs } from "./documentGlyphText";
 import { createStoredZip, ensureExtension, triggerBlobDownload } from "./zip";
 
 /**
@@ -374,6 +375,13 @@ function imageDimensionsFor(image: DocxImage, node: HTMLElement): { width: numbe
     const ratio = image.widthEmu / image.heightEmu;
     return { width: Math.max(1, Math.round(heightEmu * ratio)), height: heightEmu };
   }
+  // Source figures carry a width; treating every figure as a 36pt logo makes
+  // charts unreadable. Honor that width while fitting the printable page.
+  const widthPt = parsePoints(styles["width"]) ?? parsePoints(node.getAttribute("width"));
+  if (widthPt && widthPt > 0) {
+    const widthEmu = Math.round(Math.min(widthPt, 468) * EMU_PER_POINT);
+    return {width:widthEmu,height:Math.max(1,Math.round(widthEmu * image.heightEmu / image.widthEmu))};
+  }
   return { width: image.widthEmu, height: image.heightEmu };
 }
 
@@ -475,6 +483,8 @@ function docxBlockFromNode(node: ChildNode, rels: DocxRels): string {
     case "br":
       return docxParagraph("");
     case "div":
+    case "figure":
+    case "figcaption":
     case "section":
     case "article":
     case "header":
@@ -824,7 +834,7 @@ function docxTableCell(cell: HTMLTableCellElement, rels: DocxRels, statement = f
 }
 
 function docxRun(text: string, props = "") {
-  return `<w:r>${props ? `<w:rPr>${props}</w:rPr>` : ""}<w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r>`;
+  return `<w:r>${props ? `<w:rPr>${props}</w:rPr>` : ""}<w:t xml:space="preserve">${escapeXml(normalizeLegacyFontGlyphs(text))}</w:t></w:r>`;
 }
 
 // Collapse runs of whitespace (including newlines) to a single space without

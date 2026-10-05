@@ -91,15 +91,17 @@ assert.deepEqual(
   [],
   "procedural consent records do not require a counted tally",
 );
-assert.ok(
+assert.equal(
   formalMinutesExportBlockers({
     meeting: { status: "Held" },
     minutes: { attendees: [], sections: [], chairName: "", secretaryName: "", recorderName: "" },
     agendaItemCount: 0,
     motions: [{ text: "Approve budget", outcome: "Carried" }],
-  }).length >= 4,
-  "final export is blocked when attendance, agenda, officers, and motion governance are incomplete",
+  }).length,
+  0,
+  "unapproved source and draft minutes export without invented attendees or officers",
 );
+assert.ok(formalMinutesExportBlockers({meeting:{status:"Held"},minutes:{approvedAt:"2026-01-01",attendees:[],sections:[]},agendaItemCount:0,motions:[{text:"Approve budget",outcome:"Carried"}]}).length >= 4, "approved formal minutes retain governance completeness checks");
 assert.equal(
   meetingScheduleConflicts(
     [{ _id: "meeting-1", status: "Scheduled", scheduledAt: "2026-08-01T10:00:00", title: "Board" } as any],

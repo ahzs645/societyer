@@ -6,6 +6,7 @@ import { summarizeMinutes } from "./providers/llm";
 import {
   transposeSourcePortable,
   transposeSourcesPortable,
+  completeSourceRecordsPortable,
   listPortable,
   getByMeetingPortable,
   createPortable,
@@ -279,6 +280,12 @@ export const backfillMotionPersonLinks = authorizedMutation("minutes:backfillMot
 
 const sourceSelection = v.object({documentId:v.id("documents"),selectedText:v.string(),sourceKind:v.optional(v.string()),sourceReference:v.optional(v.string())});
 const transposeArgs = {id:v.id("minutes"),sourceSelection:v.optional(v.array(sourceSelection)),expectedAgendaItems:v.optional(v.array(v.any()))};
+export const completeSourceRecords = authorizedMutation("minutes:completeSourceRecords", mutation)({
+  args: {societyId:v.id("societies"),entries:v.array(v.object({id:v.id("minutes"),sourceSelection:v.optional(v.array(v.any())),expectedSections:v.optional(v.array(v.any())),expectedStructured:v.optional(v.any())}))},
+  returns: v.any(),
+  handler: async (ctx,args) => completeSourceRecordsPortable(await toPortableMutationCtx(ctx),args),
+});
+
 export const transposeSources = authorizedMutation("minutes:transposeSources", mutation)({
   args: {societyId:v.id("societies"),entries:v.array(v.object(transposeArgs))}, returns:v.any(),
   handler: async (ctx,args) => transposeSourcesPortable(await toPortableMutationCtx(ctx),args),

@@ -1,12 +1,22 @@
 // Web-only vector conversion; native Electron PDF printing does not load this renderer.
 import {
   PDFDocument,
-  StandardFonts,
+  pushGraphicsState,
+  popGraphicsState,
+  concatTransformationMatrix,
   rgb,
   type PDFFont,
   type PDFImage,
   type PDFPage,
 } from "pdf-lib";
+import { normalizeLegacyFontGlyphs } from "./documentGlyphText";
+import fontkit from "@pdf-lib/fontkit";
+import regularFontUrl from "../assets/pdf-fonts/NotoSerif-Regular.ttf?url";
+import boldFontUrl from "../assets/pdf-fonts/NotoSerif-Bold.ttf?url";
+import italicFontUrl from "../assets/pdf-fonts/NotoSerif-Italic.ttf?url";
+import boldItalicFontUrl from "../assets/pdf-fonts/NotoSerif-BoldItalic.ttf?url";
+import mathFontUrl from "../assets/pdf-fonts/NotoSansMath-Regular.ttf?url";
+import symbolsFontUrl from "../assets/pdf-fonts/NotoSansSymbols2-Regular.ttf?url";
 import { PAGE_WIDTH_PX } from "./docxPreview";
 import { fetchDocumentDownload } from "./documentDownload";
 
@@ -18,6 +28,8 @@ type PdfFonts = {
   bold: PDFFont;
   italic: PDFFont;
   boldItalic: PDFFont;
+  symbols: PDFFont;
+  math: PDFFont;
 };
 
 type PdfColor = ReturnType<typeof rgb>;
@@ -101,15 +113,24 @@ function chooseFont(style: CSSStyleDeclaration, fonts: PdfFonts): PDFFont {
   return fonts.regular;
 }
 
+// Old Word Symbol/Wingdings runs encode visual bullets in private-use slots.
+// Keep the real Unicode source letters; map only those legacy font glyphs.
 function pdfSafeText(text: string): string {
-  return text
-    .replace(/\u00a0/g, " ")
-    .replace(/\u2011/g, "-")
-    .replace(/[\u200b-\u200d\ufeff]/g, "")
-    .replace(
-      /[^\t\n\r -~\u00a1-\u00ff\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc\u2013\u2014\u2018\u2019\u201a\u201c\u201d\u201e\u2020\u2021\u2022\u2026\u2030\u2039\u203a\u20ac\u2122]/g,
-      "?",
-    );
+  return normalizeLegacyFontGlyphs(text)
+    .replace(/[\u200b-\u200d\ufeff]/g, "").replace(/[\t\r\n]/g, " ");
+}
+
+let fontBytes: Promise<Uint8Array[]> | undefined;
+async function embedDocumentFonts(pdf: PDFDocument): Promise<PdfFonts> {
+  fontBytes ??= Promise.all([regularFontUrl, boldFontUrl, italicFontUrl, boldItalicFontUrl, symbolsFontUrl, mathFontUrl]
+    .map(async url => {
+      const response = await fetchDocumentDownload(url);
+      if (!response.ok) throw new Error("PDF fonts could not be loaded. Please try again.");
+      return new Uint8Array(await response.arrayBuffer());
+    })).catch(error => { fontBytes = undefined; throw error; });
+  pdf.registerFontkit(fontkit);
+  const embedded = await Promise.all((await fontBytes).map(bytes => pdf.embedFont(bytes, { subset: true })));
+  return { regular: embedded[0], bold: embedded[1], italic: embedded[2], boldItalic: embedded[3], symbols: embedded[4], math: embedded[5] };
 }
 
 function lineWidthPt(value: string, scale: number): number {
@@ -202,6 +223,9 @@ function drawTextNode(
   const font = chooseFont(style, fonts);
   const fontSize = Math.max(1, cssNumber(style.fontSize) * geometry.scaleY);
 
+  const supported = new Set(font.getCharacterSet());
+  const symbols = new Set(fonts.symbols.getCharacterSet());
+  const math = new Set(fonts.math.getCharacterSet());
   const underline = style.textDecorationLine.includes("underline");
   for (const { text, rect } of renderedTextLines(textNode)) {
     if (!text.trim()) continue;
@@ -215,11 +239,27 @@ function drawTextNode(
     }
     const box = rectToPdf(rect, geometry);
     const safe = pdfSafeText(text);
-    try {
-      page.drawText(safe, { x: box.x, y: box.y + fontSize * 0.18, size: fontSize, font, color });
-    } catch {
-      page.drawText(safe.replace(/[^\x20-\x7e]/g, "?"), { x: box.x, y: box.y + fontSize * 0.18, size: fontSize, font, color });
+    const runs: Array<{ text: string; font: PDFFont }> = [];
+    for (const char of safe) {
+      const code = char.codePointAt(0)!;
+      const selected = supported.has(code) ? font : symbols.has(code) ? fonts.symbols : math.has(code) ? fonts.math : undefined;
+      if (!selected) throw new Error(`PDF font does not contain source character U+${code.toString(16).toUpperCase()}. Use Print or download the original source.`);
+      const previous = runs[runs.length - 1];
+      if (previous?.font === selected) previous.text += char;
+      else runs.push({ text: char, font: selected });
     }
+    const width = runs.reduce((sum, run) => sum + run.font.widthOfTextAtSize(run.text, fontSize), 0);
+    // Embedded Unicode fonts can have different advances from the browser's
+    // preview font. Fit their searchable glyphs to the measured line, keeping
+    // right-edge text and adjacent inline runs inside the same layout boxes.
+    const horizontalScale = width > 0 ? box.width / width : 1;
+    page.pushOperators(pushGraphicsState(), concatTransformationMatrix(horizontalScale, 0, 0, 1, box.x, 0));
+    let cursor = 0;
+    for (const run of runs) {
+      page.drawText(run.text, { x: cursor, y: box.y + fontSize * 0.18, size: fontSize, font: run.font, color });
+      cursor += run.font.widthOfTextAtSize(run.text, fontSize);
+    }
+    page.pushOperators(popGraphicsState());
     if (underline) {
       page.drawLine({
         start: { x: box.x, y: box.y + fontSize * 0.08 },
@@ -382,12 +422,7 @@ export async function renderVectorPdfFromDocxHtml(html: string): Promise<Uint8Ar
     pdf.setProducer("Societyer");
     pdf.setCreator("Societyer");
 
-    const fonts: PdfFonts = {
-      regular: await pdf.embedFont(StandardFonts.TimesRoman),
-      bold: await pdf.embedFont(StandardFonts.TimesRomanBold),
-      italic: await pdf.embedFont(StandardFonts.TimesRomanItalic),
-      boldItalic: await pdf.embedFont(StandardFonts.TimesRomanBoldItalic),
-    };
+    const fonts = await embedDocumentFonts(pdf);
     const imageCache = new Map<string, Promise<PDFImage | null>>();
 
     for (const section of sections) {

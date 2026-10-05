@@ -129,35 +129,35 @@ const MEDIA_MIME: Record<string, string> = {
   svg: "image/svg+xml",
 };
 
-// Returns the sorted `word/media/*` entries paired with the rendered <img>
-// elements in document order — the pairing docx-preview itself relies on.
+// Resolve each rendered blob by its actual bytes. DOM placement order is not
+// archive media order: one relationship can appear many times in a document.
 async function mediaEntriesFor(docxBlob: Blob): Promise<{ ext: string; bytes: Uint8Array }[]> {
   const zip = await JSZip.loadAsync(docxBlob);
-  const mediaPaths = Object.keys(zip.files)
-    .filter((n) => n.startsWith("word/media/"))
-    .sort();
-  return Promise.all(
-    mediaPaths.map(async (path) => ({
-      ext: path.slice(path.lastIndexOf(".") + 1).toLowerCase(),
-      bytes: await zip.files[path].async("uint8array"),
-    })),
-  );
+  const mediaPaths = Object.keys(zip.files).filter(n => n.startsWith("word/media/"));
+  return Promise.all(mediaPaths.map(async path => ({
+    ext: path.slice(path.lastIndexOf(".") + 1).toLowerCase(),
+    bytes: await zip.files[path].async("uint8array"),
+  })));
 }
-
-// Rebind rendered <img> blob: URLs to fresh blobs with the correct MIME. Used
-// by the on-screen preview, where short-lived object URLs are ideal.
-export async function retypeImageBlobs(target: HTMLElement, docxBlob: Blob): Promise<void> {
-  const imgs = Array.from(target.querySelectorAll("img")).filter((img) =>
-    img.src.startsWith("blob:"),
-  );
-  if (imgs.length === 0) return;
+async function rebindRenderedImages(target: HTMLElement, docxBlob: Blob, inline: boolean): Promise<void> {
+  const images = Array.from(target.querySelectorAll("img")).filter(img => img.src.startsWith("blob:"));
+  if (!images.length) return;
   const media = await mediaEntriesFor(docxBlob);
-  for (let i = 0; i < imgs.length && i < media.length; i += 1) {
-    const mime = MEDIA_MIME[media[i].ext] ?? "application/octet-stream";
-    const previous = imgs[i].src;
-    imgs[i].src = URL.createObjectURL(new Blob([media[i].bytes], { type: mime }));
-    URL.revokeObjectURL(previous);
+  const replacements = new Map<string, string>();
+  for (const source of new Set(images.map(image => image.src))) {
+    const response = await fetch(source);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const entry = media.find(item => item.bytes.length === bytes.length && item.bytes.every((value, index) => value === bytes[index]));
+    if (!entry) throw new Error("A rendered document image does not match the original Word media.");
+    const mime = MEDIA_MIME[entry.ext] ?? "application/octet-stream";
+    replacements.set(source, inline ? `data:${mime};base64,${bytesToBase64(entry.bytes)}` : URL.createObjectURL(new Blob([entry.bytes], { type: mime })));
   }
+  // Update every placement before revoking a URL shared by several images.
+  for (const image of images) image.src = replacements.get(image.src)!;
+  for (const source of replacements.keys()) URL.revokeObjectURL(source);
+}
+export async function retypeImageBlobs(target: HTMLElement, docxBlob: Blob): Promise<void> {
+  await rebindRenderedImages(target, docxBlob, false);
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -173,17 +173,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 // are origin-scoped and don't survive being serialized into a print iframe's
 // srcdoc or an Electron offscreen window, so the PDF path inlines the bytes.
 export async function inlineDocxImagesAsDataUrls(target: HTMLElement, docxBlob: Blob): Promise<void> {
-  const imgs = Array.from(target.querySelectorAll("img")).filter((img) =>
-    img.src.startsWith("blob:"),
-  );
-  if (imgs.length === 0) return;
-  const media = await mediaEntriesFor(docxBlob);
-  for (let i = 0; i < imgs.length && i < media.length; i += 1) {
-    const mime = MEDIA_MIME[media[i].ext] ?? "application/octet-stream";
-    const previous = imgs[i].src;
-    imgs[i].src = `data:${mime};base64,${bytesToBase64(media[i].bytes)}`;
-    if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
-  }
+  await rebindRenderedImages(target, docxBlob, true);
 }
 
 // Print overrides layered after docx-preview's own styles. docx-preview styles

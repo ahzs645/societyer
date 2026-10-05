@@ -1,4 +1,5 @@
 import { buildSourceMinuteSections, hasRecordedMinuteSectionContent, attachSourceMinuteSectionLinks } from "../sourceMinutesTransposition";
+import { buildSourceMeetingRecord, preflightSourceMeetingRecord, type SourceMeetingDocumentInput } from "../sourceMeetingRecord";
 import { requireDocumentAccess, documentAccessPredicate } from "./documents";
 import { minutesEvidenceOptions } from "../minutesExportEvidence";
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
@@ -360,12 +361,12 @@ async function minutesSnapshot(ctx: PortableMutationCtx, record: any, motions: a
 
 /** Imported source copies obey the source document ACL as well as minutes access. */
 async function sourceMinutesView(ctx: PortableQueryCtx, minutes: any) {
-  if (!minutes?.sourceTransposition) return minutes;
+  if (!minutes?.sourceTransposition && !minutes?.sourceMeetingRecord) return minutes;
   let visible = true;
   try {
     await requirePermissionPortable(ctx,String(minutes.societyId),"documents:read");
     const allows = await documentAccessPredicate(ctx,String(minutes.societyId));
-    const sourceIds = [...new Set([...(minutes.sourceDocumentIds ?? []),...(minutes.sourceTransposition.originalSources ?? []).map((source:any) => source.documentId).filter(Boolean)])];
+    const sourceIds = [...new Set([...(minutes.sourceDocumentIds ?? []),...(minutes.sourceTransposition?.originalSources ?? []).map((source:any) => source.documentId).filter(Boolean),...(minutes.sourceMeetingRecord?.documents ?? []).map((source:any) => source.documentId).filter(Boolean)])];
     for (const id of sourceIds) {
       const document = await ctx.db.get(id,"documents");
       if (!document || document.societyId !== minutes.societyId || !allows(document,"view")) {visible=false;break;}
@@ -374,7 +375,7 @@ async function sourceMinutesView(ctx: PortableQueryCtx, minutes: any) {
   if (visible) return minutes;
   return {...minutes,discussion:"Source content is restricted by document access.",decisions:[],actionItems:[],displayMotions:[],
     sections:(minutes.sections ?? []).map((section:any) => ({title:section.title,depth:section.depth ?? 0,type:section.type,discussion:"Source content is restricted by document access."})),
-    draftTranscript:undefined,motions:[],motionSnapshots:[],adoptedSnapshot:undefined,adoptionHistory:[],sourceTransposition:{version:1,reviewStatus:"restricted",note:"Open the source with an authorized document account to view imported evidence."}};
+    sourceMeetingRecord:undefined,draftTranscript:undefined,motions:[],motionSnapshots:[],adoptedSnapshot:undefined,adoptionHistory:[],sourceTransposition:{version:1,reviewStatus:"restricted",note:"Open the source with an authorized document account to view imported evidence."}};
 }
 
 // ----- queries --------------------------------------------------------------
@@ -448,6 +449,46 @@ export async function transposeFreshImportedSourcePortable(ctx:PortableMutationC
   const agenda = await ctx.db.query("agendas").withIndex("by_meeting",q=>q.eq("meetingId",minutes.meetingId)).first();
   const expectedAgendaItems = agenda ? await ctx.db.query("agendaItems").withIndex("by_agenda",q=>q.eq("agendaId",agenda._id)).collect() : undefined;
   return transposeSourcePortable(ctx,{...args,expectedAgendaItems});
+}
+
+export type CompleteSourceRecordEntry = {
+  id: string;
+  sourceSelection?: Array<SourceMeetingDocumentInput & {documentId:string}>;
+  expectedSections?: any[];
+  expectedStructured?: Record<string,any>;
+};
+
+/** Add the complete source representation without replacing a recorder's edits. */
+export async function completeSourceRecordsPortable(ctx: PortableMutationCtx, {societyId,entries}: {societyId:string;entries:CompleteSourceRecordEntry[]}) {
+  await requireSocietyMembership(ctx,societyId);
+  await requirePermissionPortable(ctx,societyId,"minutes:write");
+  await requirePermissionPortable(ctx,societyId,"documents:read");
+  if (entries.length > 150) throw new Error("Complete at most 150 source records in one batch.");
+  const prepared:Array<{id:string;record:any}> = [];
+  const results:any[] = [];
+  // Preflight the entire transaction before writing source representations.
+  for (const entry of entries) {
+    const minutes = await getOwned(ctx,"minutes",entry.id,societyId);
+    if (minutes.approvedAt || minutes.adoptedSnapshot || Array.isArray(minutes.motionSnapshots)) {results.push({id:entry.id,skipped:"adopted"});continue;}
+    if (minutes.sourceMeetingRecord?.completionRevision === "source-record-v3") {results.push({id:entry.id,skipped:"already_complete"});continue;}
+    const linked = new Set<string>((minutes.sourceDocumentIds ?? []).map(String));
+    const selections = new Map((entry.sourceSelection ?? []).map(source=>[source.documentId,source]));
+    if ([...selections.keys()].some(id=>!linked.has(id))) throw new Error("A source must already be linked to these minutes.");
+    const documents:SourceMeetingDocumentInput[] = [];
+    for (const id of linked) {
+      const document = await getOwned(ctx,"documents",id,societyId);
+      await requireDocumentAccess(ctx,id);
+      documents.push({...document,originalUrl:document.url,...selections.get(id),_id:id});
+    }
+    if (!documents.length) {results.push({id:entry.id,skipped:"no_source"});continue;}
+    const meeting = await getOwned(ctx,"meetings",minutes.meetingId,societyId);
+    const record = {...buildSourceMeetingRecord({sourceDocuments:documents,minutes:{...minutes,...entry.expectedStructured,sections:entry.expectedSections ?? minutes.sourceMeetingRecord?.sectionBaseline ?? minutes.sections ?? [],motions:entry.expectedStructured?.motions ?? await resolveMinutesMotions(ctx,minutes)},meeting}),completionRevision:"source-record-v3"};
+    if (!preflightSourceMeetingRecord(record).passed) throw new Error("Complete source coverage could not be verified; no records were changed.");
+    prepared.push({id:entry.id,record});
+    results.push({id:entry.id,documents:record.documents.length,blocks:record.documents.reduce((n,doc)=>n+doc.blocks.length,0)});
+  }
+  for (const entry of prepared) await ctx.db.patch(entry.id,{sourceMeetingRecord:entry.record});
+  return results;
 }
 
 export async function transposeSourcesPortable(ctx: PortableMutationCtx, {societyId,entries}: {societyId:string;entries:SourceMinutesTransposeArgs[]}) {
@@ -532,6 +573,8 @@ export async function transposeSourcePortable(ctx: PortableMutationCtx, {id,sour
         history:[...(motion.history ?? []),{at:now,meetingId:minutes.meetingId,minutesId:id,status:"Draft",note}]});
     }
   }
+  const sourceMeetingRecord = buildSourceMeetingRecord({sourceDocuments,minutes:{...minutes,...projection,motions:await resolveMinutesMotions(ctx,{...minutes,...projection})}});
+  await ctx.db.patch(id,{sourceMeetingRecord});
   return {sections:projection.sections.length,sourceKind:projection.sourceTransposition.sourceKind};
 }
 
@@ -650,6 +693,7 @@ export async function updatePortable(
   { id, patch: rawPatch }: { id: string; patch: any },
 ) {
   const minutes = await requireOwnedRow(ctx, "minutes", id);
+  if (Object.prototype.hasOwnProperty.call(rawPatch,"sourceMeetingRecord")) throw new Error("Source records are managed through cited source completion.");
   if (["adoptedSnapshot", "adoptedRevision", "adoptionHistory", "motionSnapshots", "motionSnapshotAtISO"].some(key => Object.prototype.hasOwnProperty.call(rawPatch, key))) throw new Error("Adopted snapshots are managed by approval and amendment operations.");
   const approvalMetadata = new Set(["clearApproval", "clearApprovedInMeeting", "approvedAt", "approvedInMeetingId", "motions"]);
   if (minutes.approvedAt && !rawPatch.clearApproval && Object.keys(rawPatch).some(key => !approvalMetadata.has(key))) throw new Error("Adopted minutes are frozen. Start an amendment to change recorded content.");

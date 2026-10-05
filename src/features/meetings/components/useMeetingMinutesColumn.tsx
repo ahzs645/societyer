@@ -54,7 +54,7 @@ import {
   normalize,
 } from "./MeetingMinutesColumn.internal";
 import { agendaSequenceLabel } from "../lib/agendaNumbering";
-import { minuteSectionIndexForAgendaEntry } from "../lib/sourceAgendaNavigation";
+import { minuteSectionIndexForAgendaEntry, unchangedSourceDumpSection } from "../lib/sourceAgendaNavigation";
 import type {
   AgendaNumberingMode,
   SectionDraft,
@@ -689,6 +689,12 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   };
 
   const [openSectionIndexes, setOpenSectionIndexes] = useState<Set<number>>(() => new Set([0, 1]));
+  const sourceDumpSectionIndexes = useMemo(() => new Set<number>(sections.flatMap((section: any, index: number) =>
+    sectionEditIndex !== index && unchangedSourceDumpSection(section, minutes?.sourceMeetingRecord) ? [index] : [])), [sections, minutes?.sourceMeetingRecord, sectionEditIndex]);
+  const visibleAgendaTree = useMemo(() => agendaTree.filter(entry => {
+    const index = minuteSectionIndexForAgendaEntry(entry, sections);
+    return index === null || !sourceDumpSectionIndexes.has(index);
+  }), [agendaTree, sections, sourceDumpSectionIndexes]);
   // Handle to the section-scoped MotionEditor so saveSectionEdit can flush any
   // in-progress motion draft before persisting the section itself. Without
   // this, hitting "Save section" while typing a new motion would silently
@@ -804,6 +810,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   // saved open state to consult.
   const hiddenRowIndexes = useMemo(() => {
     const hidden = new Set<number>();
+    mergedSectionRows.forEach((row, index) => { if (row.kind === "section" && sourceDumpSectionIndexes.has(row.sectionIndex)) hidden.add(index); });
     for (let i = 0; i < mergedSectionRows.length; i += 1) {
       const row = mergedSectionRows[i];
       if (row.depth !== 0) continue;
@@ -814,7 +821,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       }
     }
     return hidden;
-  }, [mergedSectionRows, openSectionIndexes]);
+  }, [mergedSectionRows, openSectionIndexes, sourceDumpSectionIndexes]);
   // Root groups for drag-to-reorder: each entry holds the section indices that
   // belong to one root (the root itself plus any depth-1 children that follow
   // it). A leading depth-1 section (which shouldn't normally exist) gets its
@@ -1486,7 +1493,10 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     });
   };
 
-  const sectionIndexForAgendaEntry = (entry: AgendaItemEntry) => minuteSectionIndexForAgendaEntry(entry, sections);
+  const sectionIndexForAgendaEntry = (entry: AgendaItemEntry) => {
+    const index = minuteSectionIndexForAgendaEntry(entry, sections);
+    return index !== null && sourceDumpSectionIndexes.has(index) ? null : index;
+  };
   const openAgendaSection = (entry: AgendaItemEntry) => {
     const index = sectionIndexForAgendaEntry(entry);
     if (index === null) return;
@@ -1502,7 +1512,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     canEditMinutes, canEditAgenda, canEditSections, canEditAttendance, canEditMotions, canEditTasks, canEditTranscript, canAddToBacklog,
     minutes,
     agenda,
-    agendaTree,
+    agendaTree: visibleAgendaTree,
     agendaEdit,
     setAgendaEdit,
     saveAgenda,

@@ -56,7 +56,7 @@ import type {
   AttendancePerson,
 } from "./MeetingMinutesColumn.internal";
 import { useMeetingMinutesColumn, type MeetingMinutesColumnProps } from "./useMeetingMinutesColumn";
-import { SourceMinutesContext, sourceIsProposal, sourceKindLabel } from "./SourceMinutesContext";
+import { SourceMinutesContext, sourceIsProposal } from "./SourceMinutesContext";
 
 export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const {
@@ -515,7 +515,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                     Add the meeting agenda here. Imported minutes can use this as an editable reconstruction of the source document's structure.
                   </div>
                 )}
-                {minutes?.discussion && (
+                {minutes?.discussion && minutes.discussion !== minutes.sourceMeetingRecord?.structuredBaseline?.details?.discussion && (
                   <details className="meeting-minutes-narrative meeting-minutes-narrative--agenda" open>
                     <summary>Overall discussion summary</summary>
                     <div className="meeting-minutes-discussion">
@@ -882,8 +882,6 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                     <strong>{label} {section.title || "Untitled section"}</strong>
                                     {section.type === "motion" && <Badge tone="accent">Motion</Badge>}
                                     {section.type === "report" && <Badge tone="info">Report</Badge>}
-                                    {section.sourceKind && <Badge tone="info">{sourceKindLabel(section.sourceKind)}</Badge>}
-                                    {section.sourceReviewStatus && <Badge tone={section.sourceReviewStatus === "verified" ? "success" : "warn"}>{section.sourceReviewStatus === "verified" ? "Source checked" : "Awaiting review"}</Badge>}
                                   </>
                                 )}
                               </span>
@@ -991,8 +989,6 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                   refs and drop unflushed edits on save. */}
                               {canEditSections && sectionEditIndex === index && sectionDraft && !isMobileSectionEditor ? renderSectionEditor("inline") : (
                                 <>
-                                  {section.sourceReference && <p className="muted"><strong>Source:</strong> {formatSourceReferences(String(section.sourceReference))}</p>}
-                                  {sourceIsProposal(section.sourceKind) && <p className="muted">Proposed source wording. A recorded outcome must be added from meeting evidence.</p>}
                                   {section.presenter && <p><strong>Presenter:</strong> {section.presenter}</p>}
                                   {section.discussion ? (
                                     <div className="meeting-minutes-section-markdown">

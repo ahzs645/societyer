@@ -59,6 +59,7 @@ import { minutesEvidenceOptions } from "../features/meetings/lib/minutesEvidence
 import { readStoredAgendaNumberingMode } from "../features/meetings/lib/agendaNumbering";
 import { meetingTypeCategory } from "../../shared/functions/meetings";
 import { minutesMotionsForDisplay, motionRowToEmbedded } from "../../shared/minutesMotions";
+import { minuteSectionIndexForAgendaEntry } from "../features/meetings/lib/sourceAgendaNavigation";
 import { PendingAdoptionsCard, type PendingAdoption } from "../features/meetings/components/PendingAdoptionsCard";
 import type { MotionAdoptionTarget } from "../components/MotionEditor";
 import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMaterialDrawer";
@@ -252,6 +253,7 @@ export function MeetingDetailPage() {
   } | null>(null);
   const [schedulingNext, setSchedulingNext] = useState(false);
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
+  const [sourceFidelityInExport, setSourceFidelityInExport] = useState(() => readStoredExportBool("sourceFidelity", true));
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
   const [includeDiscussionSummaryInExport, setIncludeDiscussionSummaryInExport] = useState(() => readStoredExportBool("includeDiscussionSummary", false));
@@ -457,6 +459,7 @@ export function MeetingDetailPage() {
   }, [minutesExportStyle]);
 
   useEffect(() => {
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}sourceFidelity`, String(sourceFidelityInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeTranscript`, String(includeTranscriptInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeActionItems`, String(includeActionItemsInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeDiscussionSummary`, String(includeDiscussionSummaryInExport));
@@ -464,6 +467,7 @@ export function MeetingDetailPage() {
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeSignatures`, String(includeSignaturesInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includePlaceholders`, String(includePlaceholdersInExport));
   }, [
+    sourceFidelityInExport,
     includeActionItemsInExport,
     includeApprovalInExport,
     includeDiscussionSummaryInExport,
@@ -918,6 +922,9 @@ export function MeetingDetailPage() {
       attendanceEvents: minutes.attendanceEvents,
       quorumCheckpoints: minutes.quorumCheckpoints,
       futureMeetingSuggestions: minutes.futureMeetingSuggestions,
+      sourceMeetingRecord: redact || publicOnly ? undefined : minutes.sourceMeetingRecord,
+      sourceTransposition: redact || publicOnly ? undefined : minutes.sourceTransposition,
+      linkedTasks: redact || publicOnly ? undefined : linkedTasks,
 
       chairName: tx(minutes.chairName),
       secretaryName: tx(minutes.secretaryName),
@@ -945,11 +952,14 @@ export function MeetingDetailPage() {
       quorumStatus: minutes.quorumStatus,
       quorumRequired: quorumSnapshot.required,
       quorumSourceLabel: quorumSnapshot.label,
-      discussion: tx(minutes.discussion) ?? "",
+      discussion: publicOnly && (minutes.sourceMeetingRecord || minutes.sourceTransposition) ? "" : tx(minutes.discussion) ?? "",
       sections: visibleSections.map((section: any) => ({
         ...section,
+        title: tx(section.title) ?? "",
         presenter: tx(section.presenter),
         discussion: tx(section.discussion),
+        motionText: tx(section.motionText),
+        sourceReference: tx(section.sourceReference),
         decisions: (section.decisions ?? []).map((value: string) => tx(value) ?? ""),
         actionItems: (section.actionItems ?? []).map((item: any) => ({
           ...item,
@@ -1006,7 +1016,7 @@ export function MeetingDetailPage() {
             })),
           }
         : null,
-      draftTranscript: redact ? null : minutes.draftTranscript ?? null,
+      draftTranscript: redact || publicOnly ? null : minutes.draftTranscript ?? null,
     };
   };
 
@@ -1041,19 +1051,20 @@ export function MeetingDetailPage() {
   const minutesRecorded = hasRecordedMeetingMinutes(meeting, minutes, displayMotions);
 
   const renderExportBody = (redact?: (value: string) => string, publicOnly = false) => {
-    const payload = minutesRenderPayload(redact, publicOnly);
+    const restrictedCopy = publicOnly || minutesExportStyle === "board-public";
+    const payload = minutesRenderPayload(redact, restrictedCopy);
     if (!payload || !hasExportableContent) return "";
-    if (redact || publicOnly) for (const field of ["consentItems", "conditionalDecisions", "decisionRequirements", "attendanceEvents", "quorumCheckpoints", "futureMeetingSuggestions"] as const) payload[field] = [];
-    // Sections and agendaTree are seeded in lockstep (index N in sections maps
-    // to entry N in agendaTree), so we reuse the section-hide set to strip
-    // matching agenda entries. Without this filter, the "Agenda Items" header
-    // some styles render (numbered-agenda, formal-agm) still leaks hidden
-    // titles even though the section bodies and motions are gone.
-    const hiddenIndices = publicOnly && minutes
+    if (redact || restrictedCopy) for (const field of ["consentItems", "conditionalDecisions", "decisionRequirements", "attendanceEvents", "quorumCheckpoints", "futureMeetingSuggestions"] as const) payload[field] = [];
+    // Link by native item ID or unique title; source reconstruction can change
+    // the section order relative to an older imported agenda.
+    const hiddenIndices = restrictedCopy && minutes
       ? computeHiddenSectionIndices((minutes.sections ?? []) as any[])
       : new Set<number>();
     const visibleAgendaTree = hiddenIndices.size
-      ? agendaTree.filter((_, i) => !hiddenIndices.has(i))
+      ? agendaTree.filter(entry => {
+        const index = minuteSectionIndexForAgendaEntry(entry, minutes.sections ?? []);
+        return index === null || !hiddenIndices.has(index);
+      })
       : agendaTree;
     return renderMinutesHtml({
       society: {
@@ -1076,6 +1087,8 @@ export function MeetingDetailPage() {
       minutes: payload,
       styleId: minutesExportStyle,
       options: {
+        sourceFidelity: sourceFidelityInExport && !redact && !restrictedCopy,
+        publicOnly: restrictedCopy,
         includeTranscript: redact ? false : includeTranscriptInExport,
         includeActionItems: includeActionItemsInExport,
         includeDiscussionSummary: includeDiscussionSummaryInExport,
@@ -1158,10 +1171,6 @@ export function MeetingDetailPage() {
   };
 
   const openMinutesPreviewPage = () => {
-    if (meeting.status !== "Held") {
-      toast.error("Mark the meeting held before opening formal minutes.");
-      return;
-    }
     if (!meeting || !minutes) return;
     window.open(appRouteHref(`/app/meetings/${meeting._id}/preview`), "_blank", "noopener,noreferrer");
   };
@@ -2002,6 +2011,8 @@ export function MeetingDetailPage() {
     exportToPdf,
     printMinutes,
     publicCopyMode,
+    sourceFidelityInExport,
+    setSourceFidelityInExport,
     setPublicCopyMode,
     minutesExportGaps,
     formalExportBlockers,
@@ -2043,8 +2054,9 @@ export function MeetingDetailPage() {
         title={meeting.title}
         subtitle={
           <>
-            {meeting.type} · {formatDateTime(meeting.scheduledAt)}
-            {meeting.location ? ` · ${meeting.location}` : ""}
+            {meeting.type} · {minutes?.sourceMeetingRecord ? (minutes.sourceMeetingRecord.header?.dateText || formatDate(meeting.scheduledAt)) : formatDateTime(meeting.scheduledAt)}
+            {minutes?.sourceMeetingRecord?.header?.timeText ? ` · ${minutes.sourceMeetingRecord.header.timeText}` : ""}
+            {minutes?.sourceMeetingRecord?.header?.locationText || meeting.location ? ` · ${minutes?.sourceMeetingRecord?.header?.locationText || meeting.location}` : ""}
             {meetingCommittee && (
               <>
                 {" · "}
@@ -2143,21 +2155,21 @@ export function MeetingDetailPage() {
                       id: "preview-page",
                       label: "Open preview page",
                       icon: <ExternalLink size={12} />,
-                      disabled: !minutes || meeting.status !== "Held",
+                      disabled: !minutes,
                       onSelect: openMinutesPreviewPage,
                     },
                     {
                       id: "word",
                       label: "Export to Word",
                       icon: <FileDown size={12} />,
-                      disabled: !canDownload || !minutes || meeting.status !== "Held",
+                      disabled: !canDownload || !minutes,
                       onSelect: exportToWord,
                     },
                     {
                       id: "pdf",
                       label: "Download PDF",
                       icon: <FileDown size={12} />,
-                      disabled: !canDownload || !minutes || meeting.status !== "Held",
+                      disabled: !canDownload || !minutes,
                       onSelect: exportToPdf,
                     },
                     {
@@ -2514,7 +2526,7 @@ export function MeetingDetailPage() {
                     <strong>{selectedMinutesExportStyle.label}</strong>
                     <p className="muted">{selectedMinutesExportStyle.tone}</p>
                   </div>
-                  <button className="btn-action" onClick={openMinutesPreviewPage} disabled={meeting.status !== "Held"}>
+                  <button className="btn-action" onClick={openMinutesPreviewPage} disabled={!minutes}>
                     <ExternalLink size={12} /> Open separate page
                   </button>
                 </div>

@@ -124,6 +124,8 @@ export const meetingTables = {
     quorumComputedAtISO: v.optional(v.string()),
     discussion: v.string(),
     sourceTransposition: v.optional(v.any()),
+    // Ordered source document blocks and literal metadata; separate from legal adoption.
+    sourceMeetingRecord: v.optional(v.any()),
     sections: v.optional(
       v.array(
         v.object({
