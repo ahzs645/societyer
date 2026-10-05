@@ -8,11 +8,6 @@ import { buildLocalCapabilities } from "./localCapabilities";
 import type { LocalWorkspaceSnapshot } from "./localDexieRowStore";
 import { PortableQueryCache } from "./portableQueryCache";
 import {
-  mutableQueryResult,
-  mutationResult,
-  portableSyncStub,
-} from "./staticLegacyDispatch";
-import {
   STATIC_DEMO_SEED,
   StaticDemoDexieStore,
   type StaticDemoSeed,
@@ -94,7 +89,9 @@ export class StaticConvexClient {
     this.portableQueries = new PortableQueryCache(
       this.portable,
       this.store,
-      (name, args) => portableSyncStub(name, args, this.store),
+      // Authorized portable results own the cache; fixture fallbacks are never
+      // read synchronously. Load the legacy dispatcher only on an actual call.
+      () => undefined,
     );
     if (typeof window !== "undefined") {
       const refresh = () => this.portableQueries.invalidatePrincipal();
@@ -166,7 +163,10 @@ export class StaticConvexClient {
   private registerLegacyQuery(name: string) {
     if (this.portable.has(name)) throw new Error(`Function ${name} is not a query.`);
     this.portable.register(definePortableQuery({ name, applicationPolicy: true,
-      handler: async (_ctx, args) => mutableQueryResult(name, args, this.store),
+      handler: async (_ctx, args) => {
+        const { mutableQueryResult } = await import("./staticLegacyDispatch");
+        return mutableQueryResult(name, args, this.store);
+      },
     }));
   }
 
@@ -197,7 +197,10 @@ export class StaticConvexClient {
     const kind = this.portable.kind(name);
     if (kind === "query") return this.portable.runQuery(name, args ?? {});
     warnLegacyFallback(name, kind, "query");
-    return this.portable.authorizeFunction(name, "query", args ?? {}).then(() => mutableQueryResult(name, args, this.store));
+    return this.portable.authorizeFunction(name, "query", args ?? {}).then(async () => {
+      const { mutableQueryResult } = await import("./staticLegacyDispatch");
+      return mutableQueryResult(name, args, this.store);
+    });
   }
 
   mutation(mutation: any, args?: StaticArgs) {
@@ -214,7 +217,10 @@ export class StaticConvexClient {
       return this.portable.runMutation(name, enriched);
     }
     warnLegacyFallback(name, kind, "mutation");
-    const result = this.portable.authorizeFunction(name, "mutation", args ?? {}).then(() => mutationResult(name, args, this.store));
+    const result = this.portable.authorizeFunction(name, "mutation", args ?? {}).then(async () => {
+      const { mutationResult } = await import("./staticLegacyDispatch");
+      return mutationResult(name, args, this.store);
+    });
     if (name === "society:createWorkspace") {
       // convex/society.createWorkspace seeds the record-table metadata for the
       // new society (seedSociety). The offline mirror doesn't, and the one-shot
@@ -237,7 +243,10 @@ export class StaticConvexClient {
   action(action: any, args?: StaticArgs) {
     const name = functionName(action);
     warnLegacyFallback(name, this.portable.kind(name), "action");
-    return this.portable.authorizeFunction(name, "action", args ?? {}).then(() => mutationResult(name, args, this.store));
+    return this.portable.authorizeFunction(name, "action", args ?? {}).then(async () => {
+      const { mutationResult } = await import("./staticLegacyDispatch");
+      return mutationResult(name, args, this.store);
+    });
   }
 
   prewarmQuery() {

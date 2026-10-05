@@ -1,0 +1,50 @@
+# Optional deployment in Societyer's namespace. No public ingress is created.
+# Create powersync-config from service.yaml/sync-config.yaml and supply powersync-secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: societyer-powersync
+  namespace: societyer
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: societyer-powersync}
+  template:
+    metadata:
+      labels: {app: societyer-powersync}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: powersync
+          image: journeyapps/powersync-service@sha256:413a0c813e96935ebe7203b5759f8a594a7b7cd8aa42134713e63af637e0f079
+          command: [node, service/lib/entry.js, start, -r, unified]
+          ports: [{containerPort: 8080}]
+          env:
+            - {name: POWERSYNC_CONFIG_PATH, value: /config/service.yaml}
+            - {name: NODE_OPTIONS, value: --max-old-space-size=512}
+          envFrom:
+            - secretRef: {name: societyer-powersync-secret}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          readinessProbe:
+            httpGet: {path: /probes/readiness, port: 8080}
+          livenessProbe:
+            httpGet: {path: /probes/liveness, port: 8080}
+            initialDelaySeconds: 30
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: '1', memory: 768Mi}
+          volumeMounts: [{name: config, mountPath: /config, readOnly: true}]
+      volumes:
+        - name: config
+          configMap: {name: societyer-powersync-config}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: societyer-powersync
+  namespace: societyer
+spec:
+  selector: {app: societyer-powersync}
+  ports: [{port: 8080, targetPort: 8080}]

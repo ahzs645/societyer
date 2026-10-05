@@ -69,4 +69,7 @@ crons.interval(
   {},
 );
 
+// Durable fallback for temporal material/committee grants and operator maintenance.
+crons.interval("offline meeting authorization repair", { minutes: 1 }, internal.offlineMeetings.repairDownloads, {});
+
 export default crons;

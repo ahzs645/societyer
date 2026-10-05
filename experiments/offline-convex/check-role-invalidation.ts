@@ -58,16 +58,22 @@ await check('Any required read-module denial clears only the affected actor whil
   } finally { ROLE_MATRIX.Viewer = previous; }
   await owner.mutation(ref('users:upsert'), upsertArgs); assert.equal((await rows()).length, 1);
 });
-await check('Unexpected projection failures roll back the membership change and its activity atomically', async () => {
+await check('Unexpected projection failures preserve authorized security changes while blocking and clearing replicated views', async () => {
   const before = await f.native.run(async ctx => ({ aggregate: (await ctx.db.query('offlineMeetingAggregates').collect())[0], activity: (await ctx.db.query('activity').collect()).length }));
   await f.native.run(ctx => ctx.db.patch(before.aggregate._id, { mappings: 'broken-json' }));
   try {
-    await assert.rejects(() => owner.mutation(ref('users:setRole'), { id: f.ids.users['viewer-a'], role: 'Director' }));
+    await owner.mutation(ref('users:setRole'), { id: f.ids.users['viewer-a'], role: 'Director' });
+    assert.equal((await rows()).length, 0);
+    await assert.rejects(() => owner.query(makeFunctionReference<'query'>('offlineMeetings:syncIdentity'), { societyId: f.ids.societyA }), /OFFLINE_ACCESS_DENIED/);
     await f.native.run(async ctx => {
-      assert.equal((await ctx.db.get(f.ids.users['viewer-a'] as GenericId<'users'>))?.role, 'Viewer');
-      assert.equal((await ctx.db.query('activity').collect()).length, before.activity);
+      assert.equal((await ctx.db.get(f.ids.users['viewer-a'] as GenericId<'users'>))?.role, 'Director');
+      assert.equal((await ctx.db.query('activity').collect()).length, before.activity + 1);
     });
-  } finally { await f.native.run(ctx => ctx.db.patch(before.aggregate._id, { mappings: before.aggregate.mappings })); }
+  } finally {
+    await f.native.run(ctx => ctx.db.patch(before.aggregate._id, { mappings: before.aggregate.mappings }));
+    await owner.mutation(ref('users:setRole'), { id: f.ids.users['viewer-a'], role: 'Viewer' });
+    assert.equal((await rows()).length, 1);
+  }
 });
 await check('Security disable and remove clear projections without an explicit rebuild', async () => {
   await owner.mutation(ref('users:securityDisable'), { id: f.ids.users['viewer-a'], reason: 'Native revocation check' }); assert.equal((await rows()).length, 0);
@@ -78,4 +84,4 @@ await check('Security disable and remove clear projections without an explicit r
 console.log(`${checks} automatic membership projection checks passed.`);
 writeFileSync(new URL('../../artifacts/offline/automatic-role-invalidation.json', import.meta.url), JSON.stringify({ timestamp: new Date().toISOString(), passed: checks,
   runtime: 'convex-test native transaction oracle using production validators and authorized handlers', results,
-  limitations: ['Native oracle injects identity; live protocol tests separately verify JWT authentication and replicated effects', 'Only the pilot exported user mutation paths have automatic invalidation; other ACL/identity/expiry paths remain release prerequisites'] }, null, 2) + '\n');
+  limitations: ['Native oracle injects identity; live protocol tests separately verify JWT authentication and replicated effects', 'Production native writer hooks cover the watched projection dependencies; separate production invalidation checks exercise ACL, identity and expiry paths'] }, null, 2) + '\n');

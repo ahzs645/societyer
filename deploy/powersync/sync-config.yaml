@@ -1,0 +1,14 @@
+# Production allowlist: selected meeting-preparation projection only.
+config:
+  edition: 3
+streams:
+  meeting_preparation:
+    auto_subscribe: true
+    queries:
+      - |
+        SELECT uuid AS id, society_id, actor_key, meeting_uuid, revision, payload
+        FROM "offlineMeetingDownloads"
+        WHERE actor_key = auth.user_id()
+          AND society_id = auth.parameter('society_id')
+# No users, sessions, credentials, raw documents, signed URLs or arbitrary tables.
+# Membership/resource projections are maintained by the root Convex authorization hooks.

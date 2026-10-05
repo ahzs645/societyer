@@ -19,7 +19,8 @@ import {
   buildPdfTableImportBundle,
   normalizePdfTableStructures,
 } from "../convex/lib/pdfTableNormalization";
-import { auth, getAuthMode } from "./auth-config";
+import { auth, authIssuer, getAuthMode } from "./auth-config";
+import { meetingSyncConfiguration, mountMeetingSyncCredentialRoute, type MeetingSyncIdentity } from "./powersync-credentials";
 import { machinePrincipalClaims, verifyClerkConvexToken } from "./clerk-auth";
 import {
   importGcosProjectSnapshotViaConvex,
@@ -564,6 +565,14 @@ export function mountApiGateway(app: express.Express) {
   if (shouldRegisterLocalMaintenanceRoutes()) {
     mountMaintenanceRoutes(router, client);
   }
+  mountMeetingSyncCredentialRoute(router, {
+    configuration: meetingSyncConfiguration(process.env, authIssuer, getAuthMode()),
+    resolveSession: async (req) => getAuthMode() === "clerk"
+      ? resolveClerkActor(client, req)
+      : resolveBetterAuthActor(client, req),
+    queryIdentity: async (token, societyId) => convexCallWithAuth(client, token, query("offlineMeetings.syncIdentity"), { societyId }) as Promise<MeetingSyncIdentity>,
+    signer: auth.api,
+  });
   mountPlatformRoutes(router, client);
   mountBrowserConnectorRoutes(router, client);
   mountWorkflowBridgeRoutes(router, client);
@@ -1663,7 +1672,7 @@ async function resolveBetterAuthActor(client: ConvexHttpClient, req: Request): P
     throw httpError(401, "convex_token_missing", "The authenticated session did not provide a workspace token.");
   }
 
-  return resolveSessionMembership(client, req, "better-auth", convexAuthToken, authSubject);
+  return resolveSessionMembership(client, req, "better-auth", convexAuthToken, authSubject, authIssuer);
 }
 
 async function resolveClerkActor(client: ConvexHttpClient, req: Request): Promise<Actor | null> {

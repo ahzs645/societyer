@@ -7,10 +7,10 @@
  * Mounted once in Layout so the command palette's "Create meeting" command (and
  * any other caller) can pop this from anywhere in the app.
  */
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useSociety } from "../../../hooks/useSociety";
-import { MeetingCreateModal } from "./MeetingCreateModal";
+const MeetingCreateModal = lazy(() => import("./MeetingCreateModal").then((module) => ({ default: module.MeetingCreateModal })));
 
 export const OPEN_MEETING_CREATE_EVENT = "quickaction:create-meeting";
 
@@ -33,11 +33,13 @@ export function GlobalMeetingCreate() {
   if (!society || !open || !canCreate) return null;
 
   return (
+    <Suspense fallback={<div role="status" aria-live="polite">Loading form…</div>}>
     <MeetingCreateModal
       key={society._id}
       open={open}
       onClose={() => setOpen(false)}
       societyId={society._id}
     />
+    </Suspense>
   );
 }

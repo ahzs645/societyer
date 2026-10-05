@@ -32,7 +32,10 @@ import { policyTables } from "./tables/policies";
 import { storageTables } from "./tables/storage";
 import { pathwayTables } from "./tables/pathways";
 
+import { offlineMeetingTables } from "./tables/offlineMeetings";
+
 export default defineSchema({
+  ...offlineMeetingTables,
   ...pathwayTables,
   societies: defineTable({
     accessRecoveryRequired: v.optional(v.boolean()),

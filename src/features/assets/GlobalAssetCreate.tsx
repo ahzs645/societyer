@@ -6,10 +6,10 @@
  * Mounted once in Layout so the command palette's "Add asset" command (and any
  * other caller) can pop this from anywhere in the app.
  */
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useSociety } from "../../hooks/useSociety";
-import { AssetCreateModal } from "./AssetCreateModal";
+const AssetCreateModal = lazy(() => import("./AssetCreateModal").then((module) => ({ default: module.AssetCreateModal })));
 import type { AssetFormInitialValues } from "./AssetFormFields";
 
 export const OPEN_ASSET_CREATE_EVENT = "quickaction:add-asset";
@@ -44,6 +44,7 @@ export function GlobalAssetCreate() {
   if (!society || !open || !canCreate) return null;
 
   return (
+    <Suspense fallback={<div role="status" aria-live="polite">Loading form…</div>}>
     <AssetCreateModal
       key={society._id}
       open={open}
@@ -54,5 +55,6 @@ export function GlobalAssetCreate() {
       societyId={society._id}
       initialValues={initialValues}
     />
+    </Suspense>
   );
 }

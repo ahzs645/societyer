@@ -1,3 +1,8 @@
+This report records the `990b3ba` interface baseline. Subsequent production wiring,
+authorization invalidation and bundle optimization are documented in the
+[production qualification](powersync-production-qualification.md); the historical
+counts and limits below refer to this earlier qualification.
+
 # Live offline and interface qualification
 
 This qualification continues the PowerSync meeting pilot and tests the actual Societyer application against an isolated self-hosted Convex deployment. It uses real Better Auth sessions, Convex-verified JWTs, native storage HTTP transfers, and the PowerSync SQLite SDK. No production tenant, provider credentials or Zoer deployment is involved.

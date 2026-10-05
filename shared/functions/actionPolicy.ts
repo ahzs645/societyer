@@ -44,6 +44,8 @@ const METADATA_TABLE_DOMAINS: Readonly<Record<string, string>> = {
   grantApplications: "grants", grantTransactions: "grants", grantReports: "grants",
 };
 const HANDLER_POLICIES = new Set([
+  "offlineMeetings:applyCommand", "offlineMeetings:prepareFileUpload", "offlineMeetings:commitFile",
+  "offlineMeetings:authorizedSnapshot", "offlineMeetings:syncIdentity", "offlineMeetings:downloads", "offlineMeetings:fileForDownload",
   "apiPlatform:createToken", "apiPlatform:verifyToken", "apiPlatform:resourceTenantStatus", "apiPlatform:listWebhookSubscriptionsForEvent", "apiPlatform:upsertWebhookSubscription", "apiPlatform:setWebhookSubscriptionStatus", "apiPlatform:createWebhookDelivery", "apiPlatform:updateWebhookDelivery", "apiPlatform:upsertIntegrationSyncState", "apiPlatform:bootstrapUserIdentity", "apiPlatform:migrateUserToClerk",
   "elections:castBallot", "elections:submitNomination",
   "files:getUrl", "users:ensureCurrentMembership", "users:recordLogin", "users:get", "users:getByAuthSubject", "users:getByEmail",

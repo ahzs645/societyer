@@ -1,0 +1,165 @@
+{
+  "kind": "Actual browser SDK WASM SQLite/outbox contracts with injected transport outcomes; not live API tests",
+  "stats": {
+    "startTime": "2026-10-05T00:21:49.177Z",
+    "duration": 57271.637,
+    "expected": 24,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "widths": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "tests": [
+    {
+      "case": "real SQLite recovery: permanent-dependency",
+      "viewport": "phone320",
+      "status": "passed",
+      "durationMs": 4705
+    },
+    {
+      "case": "real SQLite recovery: transient-retry",
+      "viewport": "phone320",
+      "status": "passed",
+      "durationMs": 2346
+    },
+    {
+      "case": "real SQLite recovery: accepted-ack-replay",
+      "viewport": "phone320",
+      "status": "passed",
+      "durationMs": 2389
+    },
+    {
+      "case": "real SQLite recovery: authorization-quarantine",
+      "viewport": "phone320",
+      "status": "passed",
+      "durationMs": 2984
+    },
+    {
+      "case": "accepted preparation becomes revocable server content while authored recovery remains",
+      "viewport": "phone320",
+      "status": "passed",
+      "durationMs": 2091
+    },
+    {
+      "case": "browser offline state blocks an existing transport and retains untouched SDK work",
+      "viewport": "phone320",
+      "status": "passed",
+      "durationMs": 1904
+    },
+    {
+      "case": "real SQLite recovery: permanent-dependency",
+      "viewport": "phone390",
+      "status": "passed",
+      "durationMs": 2369
+    },
+    {
+      "case": "real SQLite recovery: transient-retry",
+      "viewport": "phone390",
+      "status": "passed",
+      "durationMs": 2174
+    },
+    {
+      "case": "real SQLite recovery: accepted-ack-replay",
+      "viewport": "phone390",
+      "status": "passed",
+      "durationMs": 1554
+    },
+    {
+      "case": "real SQLite recovery: authorization-quarantine",
+      "viewport": "phone390",
+      "status": "passed",
+      "durationMs": 1449
+    },
+    {
+      "case": "accepted preparation becomes revocable server content while authored recovery remains",
+      "viewport": "phone390",
+      "status": "passed",
+      "durationMs": 1369
+    },
+    {
+      "case": "browser offline state blocks an existing transport and retains untouched SDK work",
+      "viewport": "phone390",
+      "status": "passed",
+      "durationMs": 1311
+    },
+    {
+      "case": "real SQLite recovery: permanent-dependency",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 1695
+    },
+    {
+      "case": "real SQLite recovery: transient-retry",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 2094
+    },
+    {
+      "case": "real SQLite recovery: accepted-ack-replay",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 1803
+    },
+    {
+      "case": "real SQLite recovery: authorization-quarantine",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 2291
+    },
+    {
+      "case": "accepted preparation becomes revocable server content while authored recovery remains",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 2360
+    },
+    {
+      "case": "browser offline state blocks an existing transport and retains untouched SDK work",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 2040
+    },
+    {
+      "case": "real SQLite recovery: permanent-dependency",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 2539
+    },
+    {
+      "case": "real SQLite recovery: transient-retry",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 2096
+    },
+    {
+      "case": "real SQLite recovery: accepted-ack-replay",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 2964
+    },
+    {
+      "case": "real SQLite recovery: authorization-quarantine",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 2236
+    },
+    {
+      "case": "accepted preparation becomes revocable server content while authored recovery remains",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 2272
+    },
+    {
+      "case": "browser offline state blocks an existing transport and retains untouched SDK work",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 2148
+    }
+  ],
+  "publicDeployment": false,
+  "secretsAndTracesOmitted": true
+}

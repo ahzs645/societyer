@@ -81,6 +81,9 @@ services:
       - BETTER_AUTH_BASE_URL=${BETTER_AUTH_BASE_URL:-http://127.0.0.1:8080}
       - AUTH_DB_PATH=/data/auth.sqlite
       - AUTH_SESSION_MAX_AGE_SECONDS=${AUTH_SESSION_MAX_AGE_SECONDS:-28800}
+      # Dedicated meeting-preparation sync; disabled unless explicitly configured.
+      - SOCIETYER_POWERSYNC_ENABLED=${SOCIETYER_POWERSYNC_ENABLED:-0}
+      - PS_PUBLIC_ORIGIN=${PS_PUBLIC_ORIGIN:-}
       - CONNECTOR_RUNNER_SECRET=${CONNECTOR_RUNNER_SECRET:-change-me-before-using-connectors}
       # Browser connectors are not bundled in this stack. Connector actions are
       # unavailable unless you run a connector-runner elsewhere and point at it
@@ -104,6 +107,7 @@ services:
         VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
         VITE_CLERK_JWT_TEMPLATE: ${VITE_CLERK_JWT_TEMPLATE:-convex}
         VITE_DOCUMENT_STORAGE_PROVIDER: ${VITE_DOCUMENT_STORAGE_PROVIDER:-}
+        VITE_POWERSYNC_MEETING_PREPARATION: ${VITE_POWERSYNC_MEETING_PREPARATION:-0}
     image: societyer-frontend:local
     container_name: societyer-prod-frontend
     restart: unless-stopped

@@ -1,0 +1,111 @@
+{
+  "completedAt": "2026-10-05T00:28:26.485852+00:00",
+  "scope": "Production meeting-preparation implementation and isolated qualification; public activation is not performed.",
+  "baseline": {
+    "startingHead": "990b3ba8f6933e02cb657e4a418e685f9c0ff6ba",
+    "reconciledMain": "4b15fd20f3b82baa6b18cb95be7b2c62404884b3",
+    "preservedAuthenticationCommit": "cc52e24487f42c19f81b2d22385091006bc70b44",
+    "mainIsAncestor": true,
+    "mergeConflicts": false
+  },
+  "liveBrowser": {
+    "passed": 24,
+    "planned": 24,
+    "widths": [
+      320,
+      390,
+      768,
+      1440
+    ],
+    "artifact": "artifacts/offline/production-rollout-browser-results.json",
+    "transport": "Real root Convex, Better Auth, production broker and PowerSync; second-client SDK SQLite and native attachment bytes verified."
+  },
+  "sdkRecovery": {
+    "passed": 24,
+    "planned": 24,
+    "artifact": "artifacts/offline/production-rollout-recovery-results.json",
+    "transport": "Actual SDK/WASM/SQLite, injected command outcomes; not additional live API tests."
+  },
+  "additionalChecks": {
+    "productionCredentialGroups": 12,
+    "productionInvalidationOracleGroups": 12,
+    "existingPilotNativeChecks": 39,
+    "builtLazyOpeningCases": 12,
+    "builtSharedFocusResponsiveCases": 4,
+    "reconciledSecuritySuite": "passed",
+    "serverTypecheck": "passed",
+    "interfaceContracts": "passed",
+    "combinedConvexTypeScriptFrontendBuild": "passed",
+    "bundleBudgets": "passed",
+    "offlineScopedLint": {
+      "errors": 0,
+      "warnings": 1,
+      "warning": "Page function length style limit"
+    }
+  },
+  "bundleComparison": {
+    "bootstrap": {
+      "beforeGzipBytes": 860231,
+      "afterGzipBytes": 196841,
+      "reductionPercent": 77.12
+    },
+    "landing": {
+      "beforeGzipBytes": 866243,
+      "afterGzipBytes": 203130,
+      "reductionPercent": 76.55
+    },
+    "betterAuthDashboard": {
+      "beforeGzipBytes": 914123,
+      "afterGzipBytes": 314054,
+      "reductionPercent": 65.64
+    },
+    "clerkDashboard": {
+      "beforeGzipBytes": 914153,
+      "afterGzipBytes": 313474,
+      "reductionPercent": 65.71
+    },
+    "localDashboard": {
+      "beforeGzipBytes": 1277559,
+      "afterGzipBytes": 655351,
+      "reductionPercent": 48.7
+    }
+  },
+  "labRestoration": {
+    "restoredBindings": 8,
+    "originalIssuer": "http://127.0.0.1:43477",
+    "betterAuthLogin": 200,
+    "tokenEndpoint": 200,
+    "nativeMembership": "bound",
+    "ownerRolePreserved": true,
+    "allEightRoleStatusProviderSubjectBindingsUnchanged": true,
+    "nativeOfflineIdentity": "bound",
+    "timestamp": "2026-10-05T00:27:30.981Z"
+  },
+  "publicDeployment": {
+    "activated": false,
+    "credentialsConfigured": false,
+    "remainingInputs": [
+      "Production Convex deployment/export credential",
+      "Public HTTPS PowerSync origin and routing",
+      "Verified-TLS PostgreSQL storage",
+      "Existing persistent auth configuration in secret manager"
+    ]
+  },
+  "limits": [
+    "Selected meeting preparation only; default-disabled feature gates.",
+    "50 memberships and 100 selected aggregates per workspace; no unrestricted dataset qualification.",
+    "PowerSync Convex connector remains experimental in the pinned release.",
+    "Root shell/auth lifecycle requires initial online authentication; offline hard reload was qualified for durable work and online recovery only.",
+    "No external Clerk/Microsoft login, physical-device, Safari or packaged Electron qualification in this rollout.",
+    "Heavy editors and other feature chunks still incur transfer on first use.",
+    "Unreachable clients cannot learn new revocations; direct operator DB changes use repair cron.",
+    "External production TLS/export/storage reachability requires target qualification."
+  ],
+  "reproduction": "experiments/live-qualification/rollout/README.md",
+  "runbook": "docs/powersync-production-rollout.md",
+  "knownFixtureSecretScan": {
+    "privateValuesChecked": 23,
+    "publicFilesAndBundlesScanned": 2161,
+    "matchingFiles": []
+  }
+}

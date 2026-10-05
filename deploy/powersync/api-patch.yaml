@@ -1,0 +1,25 @@
+# Apply only to a hosted-auth Societyer release behind configured HTTPS.
+# AUTH_MODE is deliberately read from the existing app secret; this does not switch providers.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: societyer-api
+  namespace: societyer
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          env:
+            - name: AUTH_MODE
+              value: null
+              valueFrom: {secretKeyRef: {name: societyer-app-secret, key: AUTH_MODE}}
+            - name: BETTER_AUTH_BASE_URL
+              value: null
+              valueFrom: {secretKeyRef: {name: societyer-app-secret, key: BETTER_AUTH_BASE_URL}}
+            - name: SOCIETYER_API_PUBLIC_URL
+              value: null
+              valueFrom: {secretKeyRef: {name: societyer-app-secret, key: BETTER_AUTH_BASE_URL}}
+            - {name: SOCIETYER_POWERSYNC_ENABLED, value: '1'}
+            - name: PS_PUBLIC_ORIGIN
+              valueFrom: {secretKeyRef: {name: societyer-powersync-secret, key: PS_PUBLIC_ORIGIN}}

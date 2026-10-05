@@ -1,0 +1,152 @@
+{
+  "source": "Built Vite production preview with actual local portable/Dexie demo runtime, no route/query mocks",
+  "viewports": [
+    320,
+    1440
+  ],
+  "planned": 12,
+  "executed": 12,
+  "passed": 12,
+  "cases": [
+    {
+      "title": "cold New task event loads its form once and remains usable",
+      "project": "narrow-phone",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2148
+        }
+      ]
+    },
+    {
+      "title": "cold New asset event loads its form once and remains usable",
+      "project": "narrow-phone",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2621
+        }
+      ]
+    },
+    {
+      "title": "cold Schedule meeting event loads its form once and remains usable",
+      "project": "narrow-phone",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2425
+        }
+      ]
+    },
+    {
+      "title": "cold New commitment event loads its form once and remains usable",
+      "project": "narrow-phone",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3026
+        }
+      ]
+    },
+    {
+      "title": "a cold shortcut opens the deferred palette and subsequent shortcuts still toggle it",
+      "project": "narrow-phone",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1727
+        }
+      ]
+    },
+    {
+      "title": "a cold assistant open event survives its deferred renderer import",
+      "project": "narrow-phone",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1635
+        }
+      ]
+    },
+    {
+      "title": "cold New task event loads its form once and remains usable",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2431
+        }
+      ]
+    },
+    {
+      "title": "cold New asset event loads its form once and remains usable",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2646
+        }
+      ]
+    },
+    {
+      "title": "cold Schedule meeting event loads its form once and remains usable",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2496
+        }
+      ]
+    },
+    {
+      "title": "cold New commitment event loads its form once and remains usable",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3042
+        }
+      ]
+    },
+    {
+      "title": "a cold shortcut opens the deferred palette and subsequent shortcuts still toggle it",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2084
+        }
+      ]
+    },
+    {
+      "title": "a cold assistant open event survives its deferred renderer import",
+      "project": "desktop",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1916
+        }
+      ]
+    }
+  ],
+  "initialFailuresFixed": [
+    "Rollup onlyExplicitManualChunks option caused a React scheduler initialization cycle; option removed and production shell cold-load verified.",
+    "Permission-protected synthetic open events were dispatched before actor permissions resolved; harness now waits for the authorized actor before first event."
+  ],
+  "limits": [
+    "Demo browser loading qualification; live-role and production HTTPS/session flows qualified separately.",
+    "Viewport Chromium/touch simulation; not physical devices or packaged Electron."
+  ]
+}

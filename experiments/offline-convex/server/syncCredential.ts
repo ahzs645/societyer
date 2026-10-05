@@ -1,7 +1,7 @@
 import { makeFunctionReference } from "convex/server";
 import type { ConvexHttpClient } from "convex/browser";
 
-type Signer = { signJWT(input: { body: { payload: Record<string, unknown>; overrideOptions: { audience: string; expirationTime: string } } }): Promise<{ token: string }> };
+type Signer = { signJWT(input: { body: { payload: Record<string, unknown>; overrideOptions: { jwt: { audience: string; expirationTime: string } } } }): Promise<{ token: string }> };
 /** Server-only adapter. Pass the existing authenticated client and auth.api.
  * The HTTP route must use Societyer's existing session resolver. Never expose
  * the signer directly, accept client identity claims, or allow local-dev actors.
@@ -14,6 +14,6 @@ export async function issueMeetingSyncCredential(client: ConvexHttpClient, signe
   // Uses the existing Better Auth machine signer even in Clerk user mode.
   // No new human sign-in flow, provider, or signing-key store.
   const signed = await signer.signJWT({ body: { payload: { sub: identity.actorKey, society_id: identity.societyId },
-    overrideOptions: { audience: endpoint.origin, expirationTime: "5m" } } });
+    overrideOptions: { jwt: { audience: endpoint.origin, expirationTime: "5m" } } } });
   return { endpoint: endpoint.origin, token: signed.token };
 }

@@ -425,8 +425,8 @@ function writeStringArray(key: string, value: string[]) {
   }
 }
 
-export function CommandPalette() {
-  const [open, setOpen] = useState(false);
+export function CommandPalette({ initiallyOpen = false }: { initiallyOpen?: boolean }) {
+  const [open, setOpen] = useState(initiallyOpen);
   const dialogRef = useDialogFocus<HTMLDivElement>(open, () => setOpen(false), ".kbar__input");
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);

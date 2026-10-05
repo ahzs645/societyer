@@ -20,6 +20,7 @@ export const INTERFACE_ROUTE_READ_PERMISSIONS: Readonly<Record<string, Permissio
   "/app/employees": "employees:read",
   "/app/committees": "committees:read",
   "/app/meetings": "meetings:read",
+  "/app/meetings/offline": "meetings:read",
   "/app/meeting-templates": "meetings:read",
   "/app/meeting-templates/new": "meetings:read",
   "/app/meeting-evidence": "meetings:read",

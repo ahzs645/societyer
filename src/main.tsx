@@ -6,7 +6,7 @@ import { isLocalDataRuntime, isStaticDemoRuntime } from "./lib/staticRuntime";
 import { getRuntimeMode, isLocalRuntimeMode } from "./lib/runtimeMode";
 import { AuthProvider } from "./auth/AuthProvider";
 import { AuthGate } from "./components/AuthGate";
-import { Layout } from "./components/Layout";
+const Layout = React.lazy(() => import("./components/Layout").then(m => ({ default: m.Layout })));
 import { WebMcpTools } from "./features/webmcp/WebMcpTools";
 import { ModuleGate } from "./components/ModuleGate";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -34,6 +34,7 @@ const MembersPage = React.lazy(() => import("./pages/Members").then((m) => ({ de
 const MemberDetailPage = React.lazy(() => import("./pages/MemberDetail").then((m) => ({ default: m.MemberDetailPage })));
 const DirectorsPage = React.lazy(() => import("./pages/Directors").then((m) => ({ default: m.DirectorsPage })));
 const OrgChartPage = React.lazy(() => import("./pages/OrgChart").then((m) => ({ default: m.OrgChartPage })));
+const OfflineMeetingPreparationPage = React.lazy(() => import("./pages/OfflineMeetingPreparation").then(m => ({ default: m.OfflineMeetingPreparationPage })));
 const MeetingsPage = React.lazy(() => import("./pages/Meetings").then((m) => ({ default: m.MeetingsPage })));
 const MeetingDetailPage = React.lazy(() => import("./pages/MeetingDetail").then((m) => ({ default: m.MeetingDetailPage })));
 const MeetingMinutesPreviewPage = React.lazy(() => import("./features/meetings/pages/MeetingMinutesPreviewPage").then((m) => ({ default: m.MeetingMinutesPreviewPage })));
@@ -411,6 +412,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="directors" element={<DirectorsPage />} />
             <Route path="org-chart" element={<OrgChartPage />} />
             <Route path="meetings" element={<MeetingsPage />} />
+            <Route path="meetings/offline" element={<OfflineMeetingPreparationPage />} />
             <Route path="meeting-templates" element={<MeetingTemplatesPage />} />
             <Route path="meeting-templates/new" element={<MeetingTemplateBuilderPage />} />
             <Route path="meeting-templates/:templateId" element={<MeetingTemplateBuilderPage />} />

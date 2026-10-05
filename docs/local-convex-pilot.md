@@ -140,9 +140,11 @@ those supported pilot paths. The real SDK browser suite separately tests SQLite,
 durable offline commands, native attachment transfers, conflicts and reconnects;
 see the consolidated qualification report for its final results.
 
-This remains a meeting-preparation pilot. Document/material ACL changes, external
-identity changes and grant expiry still need comprehensive projection invalidation
-before production rollout. Offline clients cannot receive revocation while
+This records the earlier meeting-preparation pilot. The subsequent [production
+rollout](powersync-production-rollout.md) adds document/material ACL, external
+identity and temporal invalidation, native credential delivery and permanent
+command recovery. See its [qualification](powersync-production-qualification.md)
+for the current root application evidence and deployment prerequisites. Offline clients cannot receive revocation while
 unreachable. Pending SDK CRUD can hold a replication checkpoint, so native
 authorization denial must also clear downloaded cache while retaining authored
 recovery work. Packaged Electron and external provider sign-ins remain unqualified.

@@ -60,8 +60,8 @@ await check("Sync token adapter derives identity and workspace through current a
   const credential = await issueMeetingSyncCredential(client, signer, f.ids.societyA, "https://sync.example.test/");
   assert.equal(credential.endpoint, "https://sync.example.test");
   assert.deepEqual(signed.body.payload, { sub: `${fixtureIssuer}|owner-a`, society_id: f.ids.societyA });
-  assert.deepEqual(signed.body.overrideOptions, { audience: "https://sync.example.test", expirationTime: "5m" });
-  await assert.rejects(() => issueMeetingSyncCredential(client, signer, f.ids.societyB, "https://sync.example.test"), /membership not found/);
+  assert.deepEqual(signed.body.overrideOptions, { jwt: { audience: "https://sync.example.test", expirationTime: "5m" } });
+  await assert.rejects(() => issueMeetingSyncCredential(client, signer, f.ids.societyB, "https://sync.example.test"), /membership not found|OFFLINE_ACCESS_DENIED/);
   await assert.rejects(() => issueMeetingSyncCredential(client, signer, f.ids.societyA, "http://sync.example.test"), /HTTPS/);
 });
 await check("Metadata acceptance is separate from file availability", async () => {
@@ -106,7 +106,7 @@ await check("Late validation failure rolls back graph, mapping, receipt and proj
   await f.native.run(async ctx => { for (let i = 0; i < 49; i++) await ctx.db.insert("users", { societyId: f.ids.societyA, role: "Viewer", status: "Active", displayName: `limit-${i}`, email: `limit-${i}@example.test`, createdAtISO: "2026-10-04" }); });
   const before = await f.native.run(async ctx => ({ meetings: (await ctx.db.query("meetings").collect()).length, receipts: (await ctx.db.query("offlineMeetingReceipts").collect()).length }));
   const nextKeys = Object.fromEntries(Object.keys(keys).map(key => [key, randomUUID()])) as typeof keys;
-  await assert.rejects(() => owner.mutation(f.meetingApply, { societyId: f.ids.societyA, command: { ...command, keys: nextKeys, meetingUuid: nextKeys.meeting, operationId: randomUUID() } }), /PILOT_MEMBERSHIP_LIMIT/);
+  await assert.rejects(() => owner.mutation(f.meetingApply, { societyId: f.ids.societyA, command: { ...command, keys: nextKeys, meetingUuid: nextKeys.meeting, operationId: randomUUID() } }), /OFFLINE_MEETING_MEMBERSHIP_LIMIT/);
   await f.native.run(async ctx => {
     assert.equal((await ctx.db.query("meetings").collect()).length, before.meetings); assert.equal((await ctx.db.query("offlineMeetingReceipts").collect()).length, before.receipts);
     for (const user of await ctx.db.query("users").collect()) if (user.displayName?.startsWith("limit-")) await ctx.db.delete(user._id);
@@ -114,10 +114,10 @@ await check("Late validation failure rolls back graph, mapping, receipt and proj
 });
 await check("Viewer, foreign workspace, anonymous and foreign issuer cannot upload", async () => {
   await assert.rejects(() => f.actor("viewer-a").mutation(f.meetingApply, args), /Permission meetings:write/);
-  await assert.rejects(() => f.actor("owner-b").mutation(f.meetingApply, args), /membership not found/);
-  await assert.rejects(() => f.native.mutation(f.meetingApply, args), /membership not found/);
-  await assert.rejects(() => f.actor("owner-a", "https://foreign.clerk.accounts.dev").mutation(f.meetingApply, args), /membership not found/);
-  await assert.rejects(() => f.actor("owner-b").query(f.meetingDownloads, { societyId: f.ids.societyA }), /membership not found/);
+  await assert.rejects(() => f.actor("owner-b").mutation(f.meetingApply, args), /membership not found|OFFLINE_ACCESS_DENIED/);
+  await assert.rejects(() => f.native.mutation(f.meetingApply, args), /membership not found|OFFLINE_ACCESS_DENIED/);
+  await assert.rejects(() => f.actor("owner-a", "https://foreign.clerk.accounts.dev").mutation(f.meetingApply, args), /membership not found|OFFLINE_ACCESS_DENIED/);
+  await assert.rejects(() => f.actor("owner-b").query(f.meetingDownloads, { societyId: f.ids.societyA }), /membership not found|OFFLINE_ACCESS_DENIED/);
 });
 await check("Adopted minutes require an online action", async () => {
   const minutesId = mappings.find(row => row.table === "minutes")!.nativeId;

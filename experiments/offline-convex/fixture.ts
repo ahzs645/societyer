@@ -4,7 +4,8 @@ import schema from "./convex/schema";
 import type { Batch } from "./src/connector";
 
 export const fixtureIssuer = "https://offline-evaluation.clerk.accounts.dev";
-export async function createFixture() {
+export async function createFixture(extraModules: Record<string, () => Promise<any>> = {}) {
+  process.env.OFFLINE_MEETING_PREPARATION_ENABLED = "1";
   process.env.AUTH_MODE = "clerk";
   process.env.VITE_AUTH_MODE = "clerk";
   process.env.CLERK_JWT_ISSUER_DOMAIN = fixtureIssuer;
@@ -13,6 +14,7 @@ export async function createFixture() {
     "./offlineDrafts.js": () => import("./convex/offlineDrafts"),
     "./offlineMeetings.js": () => import("./convex/offlineMeetings"),
     "./users.js": () => import("./convex/users"),
+    ...extraModules,
   } as any);
   const ids = await native.run(async ctx => {
     const societyA = await ctx.db.insert("societies", { name: "Evaluation A", isCharity: false, isMemberFunded: false, updatedAt: Date.now() });

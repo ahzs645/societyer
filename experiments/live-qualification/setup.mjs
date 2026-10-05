@@ -22,7 +22,7 @@ if (command === "start" && !existsSync(privateEnv)) {
     AUTH_DB_PATH: resolve(root, "tmp/live-qualification-auth.sqlite"), BETTER_AUTH_BASE_URL: "http://127.0.0.1:43477",
     VITE_AUTH_BASE_URL: "http://127.0.0.1:43477", CONVEX_SELF_HOSTED_URL: "http://127.0.0.1:43230",
     VITE_CONVEX_URL: "http://127.0.0.1:43230", CONVEX_URL: "http://127.0.0.1:43230", VITE_RUNTIME_MODE: "convex-self-hosted", VITE_DOCUMENT_STORAGE_PROVIDER: "convex",
-    BETTER_AUTH_JWKS_URL: "http://host.docker.internal:43487/api/auth/jwks", OFFLINE_LOCAL_QUALIFICATION: "1", NODE_ENV: "development" };
+    BETTER_AUTH_JWKS_URL: "http://host.docker.internal:43487/api/auth/jwks", OFFLINE_LOCAL_QUALIFICATION: "1", OFFLINE_MEETING_PREPARATION_ENABLED: "1", NODE_ENV: "development" };
   writeFileSync(privateEnv, Object.entries(settings).map(([key, value]) => `${key}=${value}\n`).join(""), { mode: 0o600 });
 }
 if (!existsSync(privateEnv)) throw new Error("Run npm start first.");
@@ -68,7 +68,8 @@ if (command === "start") {
   entries(resolve(root, "convex"), overlay);
   entries(resolve(here, "convex"), overlay);
   const cli = resolve(root, "node_modules/.bin/convex");
-  for (const name of ["AUTH_MODE", "VITE_AUTH_MODE", "BETTER_AUTH_BASE_URL", "VITE_AUTH_BASE_URL", "BETTER_AUTH_JWKS_URL", "OFFLINE_LOCAL_QUALIFICATION", "SOCIETYER_MAINTENANCE_TOKEN", "SOCIETYER_API_PLATFORM_TOKEN", "SECRET_VAULT_ENCRYPTION_KEY"]) {
+  process.env.OFFLINE_MEETING_PREPARATION_ENABLED ??= "1";
+  for (const name of ["OFFLINE_MEETING_PREPARATION_ENABLED", "AUTH_MODE", "VITE_AUTH_MODE", "BETTER_AUTH_BASE_URL", "VITE_AUTH_BASE_URL", "BETTER_AUTH_JWKS_URL", "OFFLINE_LOCAL_QUALIFICATION", "SOCIETYER_MAINTENANCE_TOKEN", "SOCIETYER_API_PLATFORM_TOKEN", "SECRET_VAULT_ENCRYPTION_KEY"]) {
     run(cli, ["env", "set", name, process.env[name]], here, true);
   }
   run(cli, ["dev", "--once", "--typecheck", "disable", "--codegen", "disable"]);

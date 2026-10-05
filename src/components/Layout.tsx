@@ -78,7 +78,6 @@ import {
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { DemoBanner } from "./DemoBanner";
-import { CommandPalette } from "./CommandPalette";
 import { DraftMinutesPicker } from "./DraftMinutesPicker";
 import { GlobalTaskCreate } from "@/features/tasks/GlobalTaskCreate";
 import { GlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
@@ -86,7 +85,7 @@ import { GlobalMeetingCreate } from "@/features/meetings/components/GlobalMeetin
 import { GlobalCommitmentCreate } from "@/features/commitments/GlobalCommitmentCreate";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { NotificationBell } from "./NotificationBell";
-import { GlobalAiAssistant, openGlobalAiAssistant } from "../features/ai/GlobalAiAssistant";
+import { openGlobalAiAssistant } from "../features/ai/aiAssistantEvents";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { setStoredUserId } from "../hooks/useCurrentUser";
 import { setStoredSocietyId, useSocietySelection } from "../hooks/useSociety";

@@ -9,7 +9,9 @@ const apiServerTarget = `http://127.0.0.1:${process.env.AUTH_SERVER_PORT ?? "878
 const output = {
   manualChunks(id: string) {
     if (!id.includes("node_modules")) return;
-    if (id.includes("/react/") || id.includes("/react-dom/")) return "react-vendor";
+    // Match the package itself, not @clerk/react or better-auth's /react/
+    // adapter: grouping those with React would eagerly load optional providers.
+    if (id.includes("/node_modules/react/") || id.includes("/node_modules/react-dom/")) return "react-vendor";
     if (id.includes("/react-router") || id.includes("/@remix-run/")) return "router-vendor";
     if (id.includes("/convex/")) return "convex-vendor";
     if (id.includes("/lucide-react/")) return "icons-vendor";
@@ -24,6 +26,7 @@ const output = {
 };
 const build = {
   target: "esnext" as const,
+  manifest: true,
   chunkSizeWarningLimit: 1000,
   rollupOptions: { output },
 };
@@ -31,6 +34,10 @@ const build = {
 export default defineConfig({
   base,
   plugins: [react()],
+  // PowerSync uses its own worker and WASM loader. Pre-bundling that loader
+  // rewrites its worker URL and can leave SQLite initialization waiting forever.
+  optimizeDeps: { exclude: ["@powersync/web"] },
+  worker: { format: "es" },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

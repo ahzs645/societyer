@@ -1,0 +1,31 @@
+# Separate sync service; uses external PostgreSQL with verified TLS.
+# Supply environment via the runtime secret manager; no deploy/signing keys belong in frontend env.
+name: societyer-meeting-sync
+services:
+  powersync:
+    image: journeyapps/powersync-service@sha256:413a0c813e96935ebe7203b5759f8a594a7b7cd8aa42134713e63af637e0f079
+    command: [node, service/lib/entry.js, start, -r, unified]
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/service.yaml
+      PS_CONVEX_DEPLOYMENT_URL: ${PS_CONVEX_DEPLOYMENT_URL:?Set the root Convex deployment HTTPS URL}
+      PS_CONVEX_DEPLOY_KEY: ${PS_CONVEX_DEPLOY_KEY:?Supply a dedicated root deployment export credential}
+      PS_STORAGE_URI: ${PS_STORAGE_URI:?Supply verified-TLS PostgreSQL storage}
+      PS_JWKS_URL: ${PS_JWKS_URL:?Set the existing auth broker public HTTPS JWKS URL}
+      PS_PUBLIC_ORIGIN: ${PS_PUBLIC_ORIGIN:?Set the externally exposed HTTPS PowerSync origin}
+      NODE_OPTIONS: --max-old-space-size=512
+    ports:
+      # TLS reverse proxy must be on this machine; do not expose plaintext sync publicly.
+      - "127.0.0.1:${PS_LISTEN_PORT:-43240}:8080"
+    volumes:
+      - ./service.yaml:/config/service.yaml:ro
+      - ./sync-config.yaml:/config/sync-config.yaml:ro
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/probes/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 768m

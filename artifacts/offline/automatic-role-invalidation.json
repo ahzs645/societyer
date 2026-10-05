@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-04T21:22:11.440Z",
+  "timestamp": "2026-10-04T23:55:21.121Z",
   "passed": 7,
   "runtime": "convex-test native transaction oracle using production validators and authorized handlers",
   "results": [
@@ -24,7 +24,7 @@
       "passed": true
     },
     {
-      "name": "Unexpected projection failures roll back the membership change and its activity atomically",
+      "name": "Unexpected projection failures preserve authorized security changes while blocking and clearing replicated views",
       "passed": true
     },
     {
@@ -34,6 +34,6 @@
   ],
   "limitations": [
     "Native oracle injects identity; live protocol tests separately verify JWT authentication and replicated effects",
-    "Only the pilot exported user mutation paths have automatic invalidation; other ACL/identity/expiry paths remain release prerequisites"
+    "Production native writer hooks cover the watched projection dependencies; separate production invalidation checks exercise ACL, identity and expiry paths"
   ]
 }

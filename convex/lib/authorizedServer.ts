@@ -2,6 +2,7 @@
 import { makeFunctionReference } from "convex/server";
 import { requireFunctionAction } from "../../shared/functions/actionPolicy";
 import { toPortableQueryCtx } from "./portable";
+import { withMeetingDownloadInvalidation } from "./offlineMeetingInvalidation";
 
 function wrap(builder: any, name: string, kind: "query" | "mutation" | "action") {
   return (definition: any) => {
@@ -12,7 +13,9 @@ function wrap(builder: any, name: string, kind: "query" | "mutation" | "action")
       } else {
         await requireFunctionAction(await toPortableQueryCtx(ctx), name, kind, args);
       }
-      return handler(ctx, args);
+      // These two domain handlers atomically maintain their own aggregate revision and projection.
+      const ownsProjection = name === "offlineMeetings:applyCommand" || name === "offlineMeetings:commitFile";
+      return kind === "mutation" && !ownsProjection ? withMeetingDownloadInvalidation(ctx, next => handler(next, args)) : handler(ctx, args);
     } });
   };
 }

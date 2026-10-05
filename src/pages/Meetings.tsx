@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { meetingPreparationEnabled } from "../offline/config";
+import { getAuthMode } from "../lib/authMode";
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { SeedPrompt, PageHeader } from "./_helpers";
@@ -243,6 +246,8 @@ export function MeetingsPage() {
         iconColor="orange"
         subtitle="Board meetings, committee meetings, and general meetings (AGM/SGM)."
         actions={
+          <>
+          {meetingPreparationEnabled() && getAuthMode() !== "none" && !isLocalDataRuntime() && <Link className="btn" to="/app/meetings/offline">Offline preparation</Link>}
           <button
             className="btn-action btn-action--primary meetings-page__new"
             type="button"
@@ -254,6 +259,7 @@ export function MeetingsPage() {
             <Plus size={14} />
             <span className="meetings-page__new-label">New meeting</span>
           </button>
+          </>
         }
       />
 

@@ -47,7 +47,8 @@ import { useSociety } from "../../hooks/useSociety";
 import { Skeleton } from "../../components/ui";
 import { useToast } from "../../components/Toast";
 
-const OPEN_EVENT = "societyer-ai:open";
+import { OPEN_AI_ASSISTANT_EVENT as OPEN_EVENT } from "./aiAssistantEvents";
+export { openGlobalAiAssistant } from "./aiAssistantEvents";
 
 type SuggestedPrompt = {
   id: string;
@@ -99,18 +100,14 @@ const FALLBACK_MODELS: ModelOption[] = [
   { id: "gpt-4o", label: "GPT-4o", provider: "openai" },
 ];
 
-export function openGlobalAiAssistant() {
-  window.dispatchEvent(new Event(OPEN_EVENT));
-}
-
-export function GlobalAiAssistant() {
+export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: boolean }) {
   const society = useSociety();
   const { can } = usePermissions();
   const canRead = can("tasks:read");
   const canWrite = can("tasks:write");
   const canReadSettings = can("settings:read");
   const canListModels = can("settings:write");
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen);
   const actingUserId = useCurrentUserId() ?? undefined;
   const location = useLocation();
   const navigate = useNavigate();

@@ -7,10 +7,10 @@
  * Mounted once in Layout so the command palette's "Add task" command (and
  * any other caller) can pop this from anywhere in the app.
  */
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useSociety } from "../../hooks/useSociety";
-import { TaskCreateModal } from "./TaskCreateModal";
+const TaskCreateModal = lazy(() => import("./TaskCreateModal").then((module) => ({ default: module.TaskCreateModal })));
 
 export const OPEN_TASK_CREATE_EVENT = "quickaction:add-task";
 
@@ -33,11 +33,13 @@ export function GlobalTaskCreate() {
   if (!society || !open || !canCreate) return null;
 
   return (
+    <Suspense fallback={<div role="status" aria-live="polite">Loading form…</div>}>
     <TaskCreateModal
       key={society._id}
       open={open}
       onClose={() => setOpen(false)}
       societyId={society._id}
     />
+    </Suspense>
   );
 }

@@ -1,0 +1,45 @@
+name: societyer-production-offline-qualification
+services:
+  sync-storage:
+    image: postgres@sha256:00bc86618629af00d2937fdc5a5d63db3ff8450acf52f0636ec813c7f4902929
+    environment:
+      POSTGRES_USER: powersync
+      POSTGRES_DB: powersync
+      POSTGRES_PASSWORD: ${SYNC_STORAGE_PASSWORD}
+    volumes: [storage:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U powersync -d powersync]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  powersync:
+    image: journeyapps/powersync-service@sha256:413a0c813e96935ebe7203b5759f8a594a7b7cd8aa42134713e63af637e0f079
+    ports: [127.0.0.1:43228:8080]
+    networks: [default, native]
+    extra_hosts: [host.docker.internal:host-gateway]
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/service.yaml
+      PS_CONVEX_DEPLOYMENT_URL: http://societyer-live-qualification-backend-1:3210
+      PS_CONVEX_DEPLOY_KEY: ${PS_CONVEX_DEPLOY_KEY}
+      PS_STORAGE_URI: postgresql://powersync:${SYNC_STORAGE_PASSWORD}@sync-storage:5432/powersync
+      PS_JWKS_URL: http://host.docker.internal:43488/api/auth/jwks
+      PS_PUBLIC_ORIGIN: https://sync-qualification.test:43229
+      NO_PROXY: host.docker.internal,sync-storage,societyer-live-qualification-backend-1,127.0.0.1,localhost
+      no_proxy: host.docker.internal,sync-storage,societyer-live-qualification-backend-1,127.0.0.1,localhost
+    volumes:
+      - ./service.yaml:/config/service.yaml:ro
+      - ../../../deploy/powersync/sync-config.yaml:/config/sync-config.yaml:ro
+    depends_on:
+      sync-storage: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/probes/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  storage:
+
+networks:
+  native:
+    external: true
+    name: societyer-live-qualification_default

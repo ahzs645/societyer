@@ -1,0 +1,241 @@
+{
+  "kind": "Actual root production-page browser qualification against isolated full native Convex, actual Better Auth broker and actual PowerSync service/SDK replication",
+  "stats": {
+    "startTime": "2026-10-05T00:22:23.590Z",
+    "duration": 269925.196,
+    "expected": 24,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "widths": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "configuration": {
+    "publicDeployment": false,
+    "powersyncService": "1.26.1",
+    "nativeBackend": "isolated root backend",
+    "syncRules": "deploy/powersync/sync-config.yaml",
+    "originChecks": "unchanged production HTTPS/origin gates",
+    "tls": "disposable certificate public-key pin with local-only browser DNS mappings",
+    "crossOriginIsolationHeaders": false
+  },
+  "tests": [
+    {
+      "case": "production broker, native command, actual PowerSync replica and attachment transfer",
+      "viewport": "phone320",
+      "status": "passed",
+      "durationMs": 12297,
+      "annotations": []
+    },
+    {
+      "case": "production page applies all five roles and broker rejects forged workspace",
+      "viewport": "phone320",
+      "status": "passed",
+      "durationMs": 15999,
+      "annotations": []
+    },
+    {
+      "case": "offline parent and dependent child reconnect through production uploads and real replication",
+      "viewport": "phone320",
+      "status": "passed",
+      "durationMs": 5069,
+      "annotations": []
+    },
+    {
+      "case": "stale unsaved minutes require explicit resolution and stale queued descendants are quarantined",
+      "viewport": "phone320",
+      "status": "passed",
+      "durationMs": 11920,
+      "annotations": []
+    },
+    {
+      "case": "actual material ACL revocation and scheduled expiry remove downloaded attachment bytes",
+      "viewport": "phone320",
+      "status": "passed",
+      "durationMs": 17092,
+      "annotations": []
+    },
+    {
+      "case": "offline hard reload preserves authored SQLite work and recovers after returning online",
+      "viewport": "phone320",
+      "status": "passed",
+      "durationMs": 5375,
+      "annotations": [
+        {
+          "type": "offline-root-shell",
+          "description": "Offline navigation unavailable; authored SQLite work recovered on online reopen."
+        }
+      ]
+    },
+    {
+      "case": "production broker, native command, actual PowerSync replica and attachment transfer",
+      "viewport": "phone390",
+      "status": "passed",
+      "durationMs": 8990,
+      "annotations": []
+    },
+    {
+      "case": "production page applies all five roles and broker rejects forged workspace",
+      "viewport": "phone390",
+      "status": "passed",
+      "durationMs": 13250,
+      "annotations": []
+    },
+    {
+      "case": "offline parent and dependent child reconnect through production uploads and real replication",
+      "viewport": "phone390",
+      "status": "passed",
+      "durationMs": 4462,
+      "annotations": []
+    },
+    {
+      "case": "stale unsaved minutes require explicit resolution and stale queued descendants are quarantined",
+      "viewport": "phone390",
+      "status": "passed",
+      "durationMs": 12434,
+      "annotations": []
+    },
+    {
+      "case": "actual material ACL revocation and scheduled expiry remove downloaded attachment bytes",
+      "viewport": "phone390",
+      "status": "passed",
+      "durationMs": 17364,
+      "annotations": []
+    },
+    {
+      "case": "offline hard reload preserves authored SQLite work and recovers after returning online",
+      "viewport": "phone390",
+      "status": "passed",
+      "durationMs": 6412,
+      "annotations": [
+        {
+          "type": "offline-root-shell",
+          "description": "Offline navigation unavailable; authored SQLite work recovered on online reopen."
+        }
+      ]
+    },
+    {
+      "case": "production broker, native command, actual PowerSync replica and attachment transfer",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 9520,
+      "annotations": []
+    },
+    {
+      "case": "production page applies all five roles and broker rejects forged workspace",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 13422,
+      "annotations": []
+    },
+    {
+      "case": "offline parent and dependent child reconnect through production uploads and real replication",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 4970,
+      "annotations": []
+    },
+    {
+      "case": "stale unsaved minutes require explicit resolution and stale queued descendants are quarantined",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 13099,
+      "annotations": []
+    },
+    {
+      "case": "actual material ACL revocation and scheduled expiry remove downloaded attachment bytes",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 19933,
+      "annotations": []
+    },
+    {
+      "case": "offline hard reload preserves authored SQLite work and recovers after returning online",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 7515,
+      "annotations": [
+        {
+          "type": "offline-root-shell",
+          "description": "Offline navigation unavailable; authored SQLite work recovered on online reopen."
+        }
+      ]
+    },
+    {
+      "case": "production broker, native command, actual PowerSync replica and attachment transfer",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 9630,
+      "annotations": []
+    },
+    {
+      "case": "production page applies all five roles and broker rejects forged workspace",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 14189,
+      "annotations": []
+    },
+    {
+      "case": "offline parent and dependent child reconnect through production uploads and real replication",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 5678,
+      "annotations": []
+    },
+    {
+      "case": "stale unsaved minutes require explicit resolution and stale queued descendants are quarantined",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 11487,
+      "annotations": []
+    },
+    {
+      "case": "actual material ACL revocation and scheduled expiry remove downloaded attachment bytes",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 18786,
+      "annotations": []
+    },
+    {
+      "case": "offline hard reload preserves authored SQLite work and recovers after returning online",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 6591,
+      "annotations": [
+        {
+          "type": "offline-root-shell",
+          "description": "Offline navigation unavailable; authored SQLite work recovered on online reopen."
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Chromium viewport emulation; physical devices, Safari, packaged Electron and external Clerk/Microsoft logins are outside this laboratory.",
+    "Root offline hard reload preserves authored work and recovers after online reopen. New offline tabs, offline shell boot and expired hosted sessions are not qualified; authentication may require returning online."
+  ],
+  "failuresFoundAndResolved": [
+    "Better Auth broker principal resolution did not pass the configured issuer.",
+    "PowerSync could not reach a loopback-only native source via the host gateway; lab connector now uses the native Docker network.",
+    "Attachment action could race the actual PowerSync grant checkpoint; UI now waits for confirmed descriptor.",
+    "Lingering Convex websocket could send while browser offline; connector now gates navigator offline before outbox consumption.",
+    "A save completion could erase a subsequently typed draft; busy controls now prevent concurrent editing.",
+    "Quarantined authored history blocked restoring the authorized canonical mirror; history now remains independent while canonical content restores."
+  ],
+  "secretsAccountsPayloadsAndTracesOmitted": true,
+  "restoration": {
+    "restoredBindings": 8,
+    "originalIssuer": "http://127.0.0.1:43477",
+    "betterAuthLogin": 200,
+    "tokenEndpoint": 200,
+    "nativeMembership": "bound",
+    "ownerRolePreserved": true,
+    "allEightRoleStatusProviderSubjectBindingsUnchanged": true,
+    "nativeOfflineIdentity": "bound",
+    "timestamp": "2026-10-05T00:27:30.981Z"
+  },
+  "fixtureCleanup": "No labelled qualification meeting graphs remain; cleanup removed zero interrupted graphs."
+}

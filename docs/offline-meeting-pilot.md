@@ -1,9 +1,11 @@
 # Meeting offline pilot and Zoer test target
 
-Status: the pilot is now deployed and tested against an isolated local Convex
-backend. See the [local backend follow-up](local-convex-pilot.md) for 16 live
-checks and the shared runtime fix. PowerSync replication and Zoer deployment
-remain unverified.
+Status: this is the historical fixture/Zoer baseline. Actual local PowerSync and
+full-app qualification subsequently passed; production meeting-preparation code,
+credential delivery and invalidation are now implemented. See the current
+[production rollout runbook](powersync-production-rollout.md) and
+[qualification report](powersync-production-qualification.md). Public production
+activation still requires configured deployment credentials and HTTPS routing.
 
 The record below describes the original fixture baseline at `ef5f8d9`, before
 that local backend follow-up. Its source fingerprints and unchanged-source

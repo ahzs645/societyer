@@ -1,6 +1,7 @@
+import { meetingInvalidatingMutation } from "./lib/offlineMeetingInvalidation";
 // @ts-nocheck
 import { authorizedQuery } from "./lib/authorizedServer";
-import { internalMutation, query } from "./_generated/server";
+import { internalMutation as nativeInternalMutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { expiredForSocietyPortable } from "../shared/functions/retention";
@@ -11,6 +12,8 @@ import { toPortableQueryCtx } from "./lib/portable";
  * `createdAtISO` and flag them for deletion review. Also drops an in-app
  * notification on each society that has at least one newly-flagged record.
  */
+const internalMutation = meetingInvalidatingMutation(nativeInternalMutation);
+
 export const flagExpired = internalMutation({
   args: { cursor: v.optional(v.string()) },
   returns: v.any(),

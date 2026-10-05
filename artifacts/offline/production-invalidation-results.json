@@ -1,0 +1,61 @@
+{
+  "completedAt": "2026-10-04T23:53:04.741Z",
+  "passed": 12,
+  "results": [
+    {
+      "name": "Original document/material grants independently gate replication; unauthorized and foreign mutations are denied",
+      "passed": true
+    },
+    {
+      "name": "Availability, document archive and deletion flags atomically invalidate cached file descriptors",
+      "passed": true
+    },
+    {
+      "name": "File attachment sink rechecks document/material ACL and drops replaced versions for all actors",
+      "passed": true
+    },
+    {
+      "name": "Temporal material expiry runs through the real durable scheduled native function without a client rebuild",
+      "passed": true
+    },
+    {
+      "name": "Committee appointment add/remove and temporal end revoke the actual document and material access context",
+      "passed": true
+    },
+    {
+      "name": "Online content writes advance the offline revision; pending old commands cannot overwrite newer notes",
+      "passed": true
+    },
+    {
+      "name": "Native identity disable/rebind clears old actor projections and grants only the authoritative replacement binding",
+      "passed": true
+    },
+    {
+      "name": "One-minute repair removes stale operator-written identity authority without granting its expired view",
+      "passed": true
+    },
+    {
+      "name": "Ordinary workspaces remain unaffected; deleted selected meetings remove projections and recurring scope",
+      "passed": true
+    },
+    {
+      "name": "Oversized imported membership or meeting sets cannot roll back role and security revocations",
+      "passed": true
+    },
+    {
+      "name": "Retired and foreign issuer memberships cannot block current actors or receive replicated snapshots",
+      "passed": true
+    },
+    {
+      "name": "Feature-disabled deployments cannot issue download authority or accept offline commands",
+      "passed": true
+    }
+  ],
+  "runtime": "Native Convex transaction oracle using production exports and actual scheduled mutations",
+  "limits": [
+    "Identity transport injected by convex-test; live production broker replication tested separately",
+    "Trusted internal identity disable/end-date writes exercise the same native writer hook without exposing an operator API",
+    "Workspace limits remain 50 memberships and 100 selected meeting aggregates",
+    "Direct admin-key database changes are repaired by the one-minute cron, not intercepted"
+  ]
+}

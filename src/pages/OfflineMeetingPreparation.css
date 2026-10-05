@@ -1,0 +1,10 @@
+.offline-meeting-preparation { min-width: 0; }
+.offline-meeting-preparation p, .offline-meeting-preparation h3 { overflow-wrap: anywhere; }
+.offline-meeting-form { display: grid; gap: 12px; max-width: 680px; margin-top: 24px; }
+.offline-meeting-form fieldset { display: grid; gap: 12px; min-width: 0; border: 0; margin: 0; padding: 0; }
+.offline-meeting-preparation label { display: grid; gap: 6px; min-width: 0; }
+.offline-meeting-preparation input, .offline-meeting-preparation textarea { max-width: 100%; min-width: 0; width: 100%; box-sizing: border-box; }
+.offline-meeting-list { display: grid; gap: 16px; list-style: none; padding: 0; }
+.offline-meeting-list .card { padding: 16px; min-width: 0; }
+.offline-meeting-list form { display: grid; gap: 10px; margin-bottom: 12px; }
+.offline-meeting-error { color: var(--color-danger, #b42318); }

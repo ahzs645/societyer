@@ -10,6 +10,7 @@ export type InterfaceRoute = {
   redirectTo?: string;
 };
 export const INTERFACE_ROUTES: InterfaceRoute[] = [
+  { pattern: "/app/meetings/offline", path: "/demo/app/meetings/offline", kind: "app", fixture: "route" },
   {
     "pattern": "/",
     "path": "/",

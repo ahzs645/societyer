@@ -241,6 +241,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/outbox": { icon: Inbox, group: "work", label: "Outbox" },
 
   // ---- Meetings & votes ----
+  "/app/meetings/offline": { icon: Calendar, group: "meetings", label: "Offline preparation" },
   "/app/meetings": { icon: Calendar, group: "meetings", label: "Meetings" },
   "/app/meeting-templates": { icon: BookMarked, group: "meetings", label: "Meeting templates" },
   "/app/agendas": { icon: ListOrdered, group: "meetings", label: "Agendas" },

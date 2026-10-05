@@ -7,10 +7,10 @@
  * Mounted once in Layout so the command palette's "Add commitment" command (and
  * any other caller) can pop this from anywhere in the app.
  */
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useSociety } from "../../hooks/useSociety";
-import { CommitmentCreateModal } from "./CommitmentCreateModal";
+const CommitmentCreateModal = lazy(() => import("./CommitmentCreateModal").then((module) => ({ default: module.CommitmentCreateModal })));
 
 export const OPEN_COMMITMENT_CREATE_EVENT = "quickaction:add-commitment";
 
@@ -33,11 +33,13 @@ export function GlobalCommitmentCreate() {
   if (!society || !open || !canCreate) return null;
 
   return (
+    <Suspense fallback={<div role="status" aria-live="polite">Loading form…</div>}>
     <CommitmentCreateModal
       key={society._id}
       open={open}
       onClose={() => setOpen(false)}
       societyId={society._id}
     />
+    </Suspense>
   );
 }

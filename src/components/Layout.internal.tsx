@@ -81,13 +81,12 @@ import {
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { DemoBanner } from "./DemoBanner";
-import { CommandPalette } from "./CommandPalette";
+import { DeferredCommandPalette, DeferredAiAssistant } from "./DeferredShellOverlays";
 import { DraftMinutesPicker } from "./DraftMinutesPicker";
 import { GlobalTaskCreate } from "@/features/tasks/GlobalTaskCreate";
 import { GlobalAssetCreate } from "@/features/assets/GlobalAssetCreate";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { NotificationBell } from "./NotificationBell";
-import { GlobalAiAssistant, openGlobalAiAssistant } from "../features/ai/GlobalAiAssistant";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { setStoredUserId } from "../hooks/useCurrentUser";
 import { setStoredSocietyId, useSocietySelection } from "../hooks/useSociety";
@@ -171,7 +170,7 @@ function SidebarThemeToggle() {
 function CommandPaletteSafe() {
   return (
     <ErrorBoundary label="CommandPalette" fallback={null}>
-      <CommandPalette />
+      <DeferredCommandPalette />
     </ErrorBoundary>
   );
 }
@@ -180,7 +179,7 @@ function CommandPaletteSafe() {
 function GlobalAiAssistantSafe() {
   return (
     <ErrorBoundary label="GlobalAiAssistant" fallback={null}>
-      <GlobalAiAssistant />
+      <DeferredAiAssistant />
     </ErrorBoundary>
   );
 }

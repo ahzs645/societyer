@@ -1,0 +1,462 @@
+{
+  "measuredAt": "2026-10-05T00:16:37.708Z",
+  "method": "Deduplicated transitive static-import closure per scenario, including JavaScript and CSS. gzip level 9 per asset; excludes HTML, fonts, WASM, external provider scripts, and optional dynamic feature chunks. This is build transfer size, not a network or Lighthouse timing score.",
+  "budgetsGzipBytes": {
+    "bootstrap": 400000,
+    "landing": 425000,
+    "betterAuthDashboard": 550000,
+    "clerkDashboard": 625000,
+    "localDashboard": 900000
+  },
+  "current": {
+    "scenarios": {
+      "bootstrap": {
+        "rawBytes": 882294,
+        "gzipBytes": 196841,
+        "assetCount": 6,
+        "assets": [
+          "assets/convex-vendor.js",
+          "assets/icons-vendor.js",
+          "assets/index.css",
+          "assets/index.js",
+          "assets/react-vendor.js",
+          "assets/router-vendor.js"
+        ]
+      },
+      "landing": {
+        "rawBytes": 902500,
+        "gzipBytes": 203130,
+        "assetCount": 9,
+        "assets": [
+          "assets/InstallAppPrompt.js",
+          "assets/Landing.js",
+          "assets/convex-vendor.js",
+          "assets/icons-vendor.js",
+          "assets/index.css",
+          "assets/index.js",
+          "assets/react-vendor.js",
+          "assets/router-vendor.js",
+          "assets/useThemePreference.js"
+        ]
+      },
+      "betterAuthDashboard": {
+        "rawBytes": 1277111,
+        "gzipBytes": 314054,
+        "assetCount": 34,
+        "assets": [
+          "assets/Dashboard.js",
+          "assets/GlobalAssetCreate.js",
+          "assets/Layout.js",
+          "assets/Tooltip.js",
+          "assets/_helpers.js",
+          "assets/authClient.js",
+          "assets/convex-vendor.js",
+          "assets/convex.js",
+          "assets/demoMode.js",
+          "assets/desktopBackup.js",
+          "assets/desktopBridge.js",
+          "assets/documentDownload.js",
+          "assets/documentStorage.js",
+          "assets/format.js",
+          "assets/icons-vendor.js",
+          "assets/index.css",
+          "assets/index.js",
+          "assets/jurisdictionWorkspace.js",
+          "assets/meetingDetailHelpers.js",
+          "assets/minutesMotions.js",
+          "assets/motionGovernance.js",
+          "assets/organizationDomain.js",
+          "assets/proceduralMotions.js",
+          "assets/react-vendor.js",
+          "assets/react.js",
+          "assets/registry.js",
+          "assets/router-vendor.js",
+          "assets/schemas.js",
+          "assets/societyDocumentPackets.js",
+          "assets/store.js",
+          "assets/ui.js",
+          "assets/useAiChatVisibility.js",
+          "assets/useThemePreference.js",
+          "assets/zip.js"
+        ]
+      },
+      "clerkDashboard": {
+        "rawBytes": 1283671,
+        "gzipBytes": 313474,
+        "assetCount": 35,
+        "assets": [
+          "assets/ClerkAuthProvider.js",
+          "assets/Dashboard.js",
+          "assets/GlobalAssetCreate.js",
+          "assets/Layout.js",
+          "assets/Tooltip.js",
+          "assets/_helpers.js",
+          "assets/convex-vendor.js",
+          "assets/convex.js",
+          "assets/demoMode.js",
+          "assets/desktopBackup.js",
+          "assets/desktopBridge.js",
+          "assets/documentDownload.js",
+          "assets/documentStorage.js",
+          "assets/format.js",
+          "assets/icons-vendor.js",
+          "assets/index.css",
+          "assets/index.js",
+          "assets/index24.js",
+          "assets/jurisdictionWorkspace.js",
+          "assets/meetingDetailHelpers.js",
+          "assets/minutesMotions.js",
+          "assets/motionGovernance.js",
+          "assets/organizationDomain.js",
+          "assets/proceduralMotions.js",
+          "assets/react-vendor.js",
+          "assets/react.js",
+          "assets/registry.js",
+          "assets/router-vendor.js",
+          "assets/schemas.js",
+          "assets/societyDocumentPackets.js",
+          "assets/store.js",
+          "assets/ui.js",
+          "assets/useAiChatVisibility.js",
+          "assets/useThemePreference.js",
+          "assets/zip.js"
+        ]
+      },
+      "localDashboard": {
+        "rawBytes": 2642252,
+        "gzipBytes": 655351,
+        "assetCount": 44,
+        "assets": [
+          "assets/Dashboard.js",
+          "assets/GlobalAssetCreate.js",
+          "assets/Layout.js",
+          "assets/Tooltip.js",
+          "assets/_helpers.js",
+          "assets/bylawBaselines.js",
+          "assets/convex-vendor.js",
+          "assets/corporationSettings.js",
+          "assets/define.js",
+          "assets/demoMode.js",
+          "assets/desktopBackup.js",
+          "assets/desktopBridge.js",
+          "assets/dividends2.js",
+          "assets/documentDownload.js",
+          "assets/documentStorage.js",
+          "assets/entitySetup.js",
+          "assets/equityLedger.js",
+          "assets/format.js",
+          "assets/icons-vendor.js",
+          "assets/ids.js",
+          "assets/index.css",
+          "assets/index.js",
+          "assets/integrationCatalog.js",
+          "assets/jurisdictionWorkspace.js",
+          "assets/localDataClient.js",
+          "assets/meetingDetailHelpers.js",
+          "assets/meetings2.js",
+          "assets/minutesMotions.js",
+          "assets/motionGovernance.js",
+          "assets/organizationDomain.js",
+          "assets/proceduralMotions.js",
+          "assets/programStatement.js",
+          "assets/react-vendor.js",
+          "assets/react.js",
+          "assets/recordTableMetadataDefinitions.js",
+          "assets/registry.js",
+          "assets/router-vendor.js",
+          "assets/schemas.js",
+          "assets/societyDocumentPackets.js",
+          "assets/store.js",
+          "assets/ui.js",
+          "assets/useAiChatVisibility.js",
+          "assets/useThemePreference.js",
+          "assets/zip.js"
+        ]
+      }
+    },
+    "largestJavaScriptChunks": [
+      {
+        "name": "MarkdownEditor",
+        "asset": "assets/MarkdownEditor.js",
+        "rawBytes": 1373510,
+        "gzipBytes": 435545
+      },
+      {
+        "name": "localDataClient",
+        "asset": "assets/localDataClient.js",
+        "rawBytes": 1216954,
+        "gzipBytes": 309450
+      },
+      {
+        "name": "bwip-js",
+        "asset": "assets/bwip-js.js",
+        "rawBytes": 948960,
+        "gzipBytes": 257223
+      },
+      {
+        "name": "pdf",
+        "asset": "assets/pdf.js",
+        "rawBytes": 441067,
+        "gzipBytes": 182266
+      },
+      {
+        "name": "ResearchLibrary",
+        "asset": "assets/ResearchLibrary.js",
+        "rawBytes": 599436,
+        "gzipBytes": 131261
+      },
+      {
+        "name": "AssetScanner",
+        "asset": "assets/AssetScanner.js",
+        "rawBytes": 362171,
+        "gzipBytes": 111101
+      },
+      {
+        "name": "BrowserConnectors",
+        "asset": "assets/BrowserConnectors.js",
+        "rawBytes": 326929,
+        "gzipBytes": 86600
+      },
+      {
+        "name": "style",
+        "asset": "assets/style.js",
+        "rawBytes": 176811,
+        "gzipBytes": 57805
+      },
+      {
+        "name": "docx-preview",
+        "asset": "assets/docx-preview.js",
+        "rawBytes": 172805,
+        "gzipBytes": 50521
+      },
+      {
+        "name": "react-vendor",
+        "asset": "assets/react-vendor.js",
+        "rawBytes": 142608,
+        "gzipBytes": 45675
+      },
+      {
+        "name": "index",
+        "asset": "assets/index.js",
+        "rawBytes": 153131,
+        "gzipBytes": 44160
+      },
+      {
+        "name": "MeetingDetail",
+        "asset": "assets/MeetingDetail.js",
+        "rawBytes": 156995,
+        "gzipBytes": 43792
+      }
+    ]
+  },
+  "baseline": {
+    "scenarios": {
+      "bootstrap": {
+        "rawBytes": 3030163,
+        "gzipBytes": 860231,
+        "assetCount": 7,
+        "assets": [
+          "assets/convex-vendor-WqiXzsG2.js",
+          "assets/icons-vendor-DB-TxY_s.js",
+          "assets/index-C2_RnOge.js",
+          "assets/index-DekmiD42.css",
+          "assets/react-vendor-BZV40eAE.css",
+          "assets/react-vendor-DwZQdXYC.js",
+          "assets/router-vendor-D-w8bu-M.js"
+        ]
+      },
+      "landing": {
+        "rawBytes": 3049852,
+        "gzipBytes": 866243,
+        "assetCount": 9,
+        "assets": [
+          "assets/InstallAppPrompt-C5RaeI8u.js",
+          "assets/Landing-C5mzIbvD.js",
+          "assets/convex-vendor-WqiXzsG2.js",
+          "assets/icons-vendor-DB-TxY_s.js",
+          "assets/index-C2_RnOge.js",
+          "assets/index-DekmiD42.css",
+          "assets/react-vendor-BZV40eAE.css",
+          "assets/react-vendor-DwZQdXYC.js",
+          "assets/router-vendor-D-w8bu-M.js"
+        ]
+      },
+      "betterAuthDashboard": {
+        "rawBytes": 3234210,
+        "gzipBytes": 914123,
+        "assetCount": 15,
+        "assets": [
+          "assets/Dashboard-Gj1MmCAH.js",
+          "assets/_helpers-g5ZqXXJo.js",
+          "assets/authClient-AuiypkYz.js",
+          "assets/convex-D_Yw8plo.js",
+          "assets/convex-vendor-WqiXzsG2.js",
+          "assets/icons-vendor-DB-TxY_s.js",
+          "assets/index-C2_RnOge.js",
+          "assets/index-DekmiD42.css",
+          "assets/jurisdictionWorkspace-0l9bRib8.js",
+          "assets/react-vendor-BZV40eAE.css",
+          "assets/react-vendor-DwZQdXYC.js",
+          "assets/registry-V4fM-Jzb.js",
+          "assets/router-vendor-D-w8bu-M.js",
+          "assets/schemas-DiCpADNF.js",
+          "assets/societyDocumentPackets-CYBoT3nH.js"
+        ]
+      },
+      "clerkDashboard": {
+        "rawBytes": 3234331,
+        "gzipBytes": 914153,
+        "assetCount": 15,
+        "assets": [
+          "assets/ClerkAuthProvider-DZKvrEDG.js",
+          "assets/Dashboard-Gj1MmCAH.js",
+          "assets/_helpers-g5ZqXXJo.js",
+          "assets/convex-D_Yw8plo.js",
+          "assets/convex-vendor-WqiXzsG2.js",
+          "assets/icons-vendor-DB-TxY_s.js",
+          "assets/index-C2_RnOge.js",
+          "assets/index-DekmiD42.css",
+          "assets/jurisdictionWorkspace-0l9bRib8.js",
+          "assets/react-vendor-BZV40eAE.css",
+          "assets/react-vendor-DwZQdXYC.js",
+          "assets/registry-V4fM-Jzb.js",
+          "assets/router-vendor-D-w8bu-M.js",
+          "assets/schemas-DiCpADNF.js",
+          "assets/societyDocumentPackets-CYBoT3nH.js"
+        ]
+      },
+      "localDashboard": {
+        "rawBytes": 4670657,
+        "gzipBytes": 1277559,
+        "assetCount": 23,
+        "assets": [
+          "assets/Dashboard-Gj1MmCAH.js",
+          "assets/_helpers-g5ZqXXJo.js",
+          "assets/convex-vendor-WqiXzsG2.js",
+          "assets/corporationSettings-CnOVWRPl.js",
+          "assets/define-bPAczoOR.js",
+          "assets/dividends-BSlG36iE.js",
+          "assets/entitySetup-BqGO4QSf.js",
+          "assets/equityLedger-BKISyPNy.js",
+          "assets/icons-vendor-DB-TxY_s.js",
+          "assets/index-C2_RnOge.js",
+          "assets/index-DekmiD42.css",
+          "assets/integrationCatalog-dbgeIVeY.js",
+          "assets/jurisdictionWorkspace-0l9bRib8.js",
+          "assets/localDataClient-CCZ46i7z.js",
+          "assets/meetings-KVPEyjr4.js",
+          "assets/programStatement-DeyhjMRy.js",
+          "assets/react-vendor-BZV40eAE.css",
+          "assets/react-vendor-DwZQdXYC.js",
+          "assets/recordTableMetadataDefinitions-ck8vLYnu.js",
+          "assets/registry-V4fM-Jzb.js",
+          "assets/router-vendor-D-w8bu-M.js",
+          "assets/schemas-DiCpADNF.js",
+          "assets/societyDocumentPackets-CYBoT3nH.js"
+        ]
+      }
+    },
+    "largestJavaScriptChunks": [
+      {
+        "name": "index",
+        "asset": "assets/index-C2_RnOge.js",
+        "rawBytes": 1960212,
+        "gzipBytes": 612413
+      },
+      {
+        "name": "localDataClient",
+        "asset": "assets/localDataClient-CCZ46i7z.js",
+        "rawBytes": 1263236,
+        "gzipBytes": 322886
+      },
+      {
+        "name": "bwip-js",
+        "asset": "assets/bwip-js-DaLU0jCL.js",
+        "rawBytes": 948960,
+        "gzipBytes": 257223
+      },
+      {
+        "name": "pdf",
+        "asset": "assets/pdf-K-Md04Kj.js",
+        "rawBytes": 441050,
+        "gzipBytes": 182279
+      },
+      {
+        "name": "ResearchLibrary",
+        "asset": "assets/ResearchLibrary-hn4--z-2.js",
+        "rawBytes": 599453,
+        "gzipBytes": 131307
+      },
+      {
+        "name": "react-vendor",
+        "asset": "assets/react-vendor-DwZQdXYC.js",
+        "rawBytes": 389157,
+        "gzipBytes": 124329
+      },
+      {
+        "name": "AssetScanner",
+        "asset": "assets/AssetScanner-DJjsn0n-.js",
+        "rawBytes": 362150,
+        "gzipBytes": 111113
+      },
+      {
+        "name": "BrowserConnectors",
+        "asset": "assets/BrowserConnectors-D2FbwAmY.js",
+        "rawBytes": 326919,
+        "gzipBytes": 86641
+      },
+      {
+        "name": "docx-preview",
+        "asset": "assets/docx-preview-CdcIrA2x.js",
+        "rawBytes": 172814,
+        "gzipBytes": 50531
+      },
+      {
+        "name": "MeetingDetail",
+        "asset": "assets/MeetingDetail-XEXzhEZa.js",
+        "rawBytes": 156520,
+        "gzipBytes": 43819
+      },
+      {
+        "name": "RecordTable",
+        "asset": "assets/RecordTable-BzpgVTwa.js",
+        "rawBytes": 131173,
+        "gzipBytes": 40459
+      },
+      {
+        "name": "index",
+        "asset": "assets/index-CytlLE9R.js",
+        "rawBytes": 87089,
+        "gzipBytes": 34566
+      }
+    ]
+  },
+  "comparison": {
+    "bootstrap": {
+      "beforeGzipBytes": 860231,
+      "afterGzipBytes": 196841,
+      "reductionPercent": 77.12
+    },
+    "landing": {
+      "beforeGzipBytes": 866243,
+      "afterGzipBytes": 203130,
+      "reductionPercent": 76.55
+    },
+    "betterAuthDashboard": {
+      "beforeGzipBytes": 914123,
+      "afterGzipBytes": 314054,
+      "reductionPercent": 65.64
+    },
+    "clerkDashboard": {
+      "beforeGzipBytes": 914153,
+      "afterGzipBytes": 313474,
+      "reductionPercent": 65.71
+    },
+    "localDashboard": {
+      "beforeGzipBytes": 1277559,
+      "afterGzipBytes": 655351,
+      "reductionPercent": 48.7
+    }
+  },
+  "failures": []
+}

@@ -1,0 +1,23 @@
+# Isolated production qualification; pinned PowerSync service v1.26.1.
+_type: self-hosted
+telemetry:
+  disable_telemetry_sharing: true
+replication:
+  connections:
+    - type: convex
+      deployment_url: !env PS_CONVEX_DEPLOYMENT_URL
+      deploy_key: !env PS_CONVEX_DEPLOY_KEY
+      polling_interval_ms: 1000
+      request_timeout_ms: 60000
+storage:
+  type: postgresql
+  sslmode: disable
+  uri: !env PS_STORAGE_URI
+sync_config:
+  path: /config/sync-config.yaml
+client_auth:
+  jwks_uri: !env PS_JWKS_URL
+  audience:
+    - !env PS_PUBLIC_ORIGIN
+# PS_JWKS_URL is the existing Better Auth broker's /api/auth/jwks endpoint.
+# PS_PUBLIC_ORIGIN must match the production credential broker HTTPS audience.
