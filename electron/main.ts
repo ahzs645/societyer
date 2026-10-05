@@ -21,6 +21,7 @@ import {
   READ_LOCAL_WORKSPACE_SNAPSHOT_CHANNEL,
 } from "./workspace.js";
 import { createMainWindow } from "./window.js";
+import { configureDesktopModes, resumeDesktopMode } from "./desktopMode.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL || process.env.SOCIETYER_ELECTRON_DEV === "1");
@@ -33,6 +34,7 @@ let mainWindow: BrowserWindow | null = null;
 registerDesktopProtocolPrivileges();
 
 async function openMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
   mainWindow = await createMainWindow({
     environment,
   });
@@ -43,6 +45,8 @@ async function openMainWindow() {
 
   return mainWindow;
 }
+
+configureDesktopModes(openMainWindow);
 
 registerIpc(environment);
 handleValidatedIpc({
@@ -79,6 +83,7 @@ app.whenReady().then(() =>
     registerNativeThemeSync();
     await ensureWorkspace();
     await openMainWindow();
+    await resumeDesktopMode();
     await logger.info("main window opened");
 
     app.on("activate", () => {

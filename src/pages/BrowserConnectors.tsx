@@ -10,7 +10,7 @@ import { useSociety } from "../hooks/useSociety";
 import { useToast } from "../components/Toast";
 import { formatDateTime } from "../lib/format";
 import { enrichGcosNormalizedGrant, readGcosExportFile } from "../lib/gcosExportImport";
-import { isStaticDemoRuntime } from "../lib/staticRuntime";
+import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 
 type RunnerHealth = {
   ok?: boolean;
@@ -214,11 +214,12 @@ function requireSocietyOwned<T extends { societyId?: string }>(value: T, society
 
 export function BrowserConnectorsPage() {
   const staticDemo = isStaticDemoRuntime();
+  const localOnly = isLocalDataRuntime();
   const society = useSociety();
   const toast = useToast();
   const [searchParams] = useSearchParams();
   const requestedConnectorId = searchParams.get("connector");
-  const [health, setHealth] = useState<RunnerHealth | null>(() => staticDemo ? staticDemoHealth() : null);
+  const [health, setHealth] = useState<RunnerHealth | null>(() => localOnly ? localConnectorHealth(staticDemo) : null);
   const [connectors, setConnectors] = useState<ConnectorManifest[]>([]);
   const [connectorId, setConnectorId] = useState(DEFAULT_CONNECTOR_ID);
   const [sessions, setSessions] = useState<BrowserSession[]>([]);
@@ -267,7 +268,7 @@ export function BrowserConnectorsPage() {
   const showGenericUtilities = Boolean(selectedConnector && !connectorPanelPolicy[selectedConnector.id]?.hideGenericUtilities);
 
   useEffect(() => {
-    if (staticDemo) return;
+    if (localOnly) return;
     let stopped = false;
     let timer: number | undefined;
     const poll = async () => {
@@ -282,12 +283,12 @@ export function BrowserConnectorsPage() {
       refreshInFlight.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [society?._id, staticDemo]);
+  }, [society?._id, localOnly]);
 
   useEffect(() => {
     setSessions([]);
     setConnectors([]);
-    setHealth(staticDemo ? staticDemoHealth() : null);
+    setHealth(localOnly ? localConnectorHealth(staticDemo) : null);
     setProfileKey(profileKeyFor(availableConnectors.find((connector) => connector.id === connectorId)));
     setAuthCheck(null);
     setSavedConnection(null);
@@ -307,8 +308,8 @@ export function BrowserConnectorsPage() {
   if (society === null) return <SeedPrompt />;
 
   async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-    if (staticDemo) {
-      throw new Error("Browser apps are a read-only preview in the static demo. Start the local app and connector stack to use them.");
+    if (localOnly) {
+      throw new Error("Browser connectors require a connected workspace and its connector runner.");
     }
     const controller = new AbortController();
     const abort = () => controller.abort();
@@ -340,8 +341,8 @@ export function BrowserConnectorsPage() {
 
   async function refresh() {
     if (!society?._id) return;
-    if (staticDemo) {
-      setHealth(staticDemoHealth());
+    if (localOnly) {
+      setHealth(localConnectorHealth(staticDemo));
       setSessions([]);
       return;
     }
@@ -1149,13 +1150,14 @@ export function BrowserConnectorsPage() {
                 <ArrowLeft size={12} /> Apps
               </Button>
             )}
-            <Button size="sm" disabled={busy} onClick={refresh}>
+            <Button size="sm" disabled={busy || localOnly} onClick={refresh}>
               <RefreshCw size={12} /> Refresh
             </Button>
           </>
         }
       >
 
+      {localOnly && <p className="muted" role="status">Browser connectors require a connected workspace. You can review available connector workflows here; this local workspace does not contact the runner or open hosted browser sessions.</p>}
       {!workspaceConnector && activeTab === "apps" && (
         <>
           <div className="card__head" style={{ marginBottom: 8 }}>
@@ -1468,13 +1470,15 @@ export function BrowserConnectorsPage() {
   );
 }
 
-function staticDemoHealth(): RunnerHealth {
+function localConnectorHealth(demo: boolean): RunnerHealth {
   return {
     ok: false,
     browser: {
       ok: false,
       provider: "preview",
-      detail: "Browser apps are shown for preview only in the static demo; no connector service is contacted.",
+      detail: demo
+        ? "Browser apps are shown for preview only in the static demo; no connector service is contacted."
+        : "Browser connectors require a connected workspace and its connector runner. No connector service is contacted in local mode.",
     },
     activeSessions: 0,
   };

@@ -1,3 +1,5 @@
+import { GuidedOrganizationSetup } from "../components/GuidedOrganizationSetup";
+import { formatAddressText } from "../../shared/structuredAddress";
 import { EntitySetupFields } from "../components/EntitySetupFields";
 import { entitySetupFields, validateEntitySetup } from "../../shared/entitySetup";
 import { IncorporationPreparation } from "../components/IncorporationPreparation";
@@ -5,10 +7,9 @@ import { authenticatedFetch } from "@/lib/authToken";
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Building2, CheckCircle2, FileDown, KeyRound, Landmark, MapPin, Plus, Trash2, Upload } from "lucide-react";
+import { FileDown, KeyRound, Landmark, MapPin, Plus, Trash2, Upload } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
-import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { setStoredSocietyId } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -23,7 +24,7 @@ import { useToast } from "../components/Toast";
 import { formatDate } from "../lib/format";
 import { JURISDICTION_OPTIONS } from "../lib/jurisdictionGuideTracks";
 import { optionChoices, optionLabel } from "../lib/orgHubOptions";
-import { jurisdictionDisplayCopy, jurisdictionModuleContract, WORKSPACE_SETUP_TRACKS, workspaceSetupTrack, workspaceGovernanceCopy } from "../../shared/jurisdictionWorkspace";
+import { jurisdictionDisplayCopy, jurisdictionModuleContract, workspaceGovernanceCopy } from "../../shared/jurisdictionWorkspace";
 import { homeJurisdictionCode, isCorporation, isSociety } from "../../shared/organizationDomain";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { useAuth } from "../auth/AuthProvider";
@@ -31,6 +32,8 @@ import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import {
   localWorkspaceRestoreSupported,
   restoreLocalWorkspaceBackup,
+  readWorkspaceBackupFile,
+  summarizeWorkspaceBackup,
   type WorkspaceBackupSummary,
 } from "../lib/localWorkspaceExport";
 
@@ -45,258 +48,34 @@ const LIFECYCLE_DATE_TYPES: { value: LifecycleDateKey; label: string }[] = [
   { value: "removedAtISO", label: "Removed date" },
 ];
 
-const CORE_ONBOARDING_STEPS = [
-  "Organization profile",
-  "Registered locations",
-  "Governance documents",
-  "People and access",
-];
-
-const OPTIONAL_ONBOARDING_STEPS = [
-  "Registry verification",
-  "Annual compliance calendar",
-  "Member register",
-  "Finance controls",
-  "Privacy and records program",
-  "Insurance and risk",
-  "Integrations",
-  "Board adoption packet",
-];
-
 export function SocietyNewPage() {
   const createWorkspace = useMutation(api.society.createWorkspace);
-  const actingUserId = useCurrentUserId() ?? undefined;
   const auth = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const [searchParams] = useSearchParams();
   const [saving, setSaving] = useState(false);
-  const [setupMode, setSetupMode] = useState<string>("bc_society");
-  const [form, setForm] = useState({
-    name: "",
-    incorporationNumber: "",
-    incorporationDate: "",
-    fiscalYearEnd: "",
-    jurisdictionCode: "CA-BC",
-    entityType: "society",
-    actFormedUnder: "societies_act",
-    officialEmail: "",
-    organizationStatus: "active",
-    formationStatus: "preparing",
-    registeredOfficeAddress: "",
-    mailingAddress: "",
-    purposes: "",
-    privacyOfficerName: "",
-    privacyOfficerEmail: "",
-    isCharity: false,
-    isMemberFunded: false,
-    distributing: false,
-    legalSubtype: "ordinary_society",
-    craBnStatus: "unknown", craRcStatus: "unknown", gstHstStatus: "unknown", payrollStatus: "unknown", charityStatus: "unknown", taxStatusEvidence: "",
-  });
-
-  const set = (k: string, v: any) => setForm((current) => ({ ...current, [k]: v, ...(k === "isCharity" ? { charityStatus: v ? "registered" : "not_applied" } : k === "isMemberFunded" ? { legalSubtype: v ? "member_funded_society" : "ordinary_society" } : k === "legalSubtype" ? { isMemberFunded: v === "member_funded_society" } : {}) }));
-  const setupTrack = workspaceSetupTrack(form) ?? WORKSPACE_SETUP_TRACKS[0];
-  const corporate = isCorporation(form);
-  const governance = workspaceGovernanceCopy(form);
-  const optionalSteps = OPTIONAL_ONBOARDING_STEPS.map((step) => step === "Member register" ? governance.registerLabel : step);
-  const setSetupTrack = (id: string) => {
-    setSetupMode(id);
-    if (id === "custom_existing") return;
-    const track = WORKSPACE_SETUP_TRACKS.find((item) => item.id === id);
-    if (!track) return;
-    setForm((current) => ({
-      ...current,
-      jurisdictionCode: track.jurisdictionCode,
-      entityType: track.entityType,
-      actFormedUnder: track.actFormedUnder,
-      isMemberFunded: false,
-      isCharity: false,
-      distributing: false,
-      charityStatus: "unknown",
-      legalSubtype: track.id === "bc_society" ? "ordinary_society" : track.id === "bc_company" ? "ordinary_private_company" : track.id === "federal_cbca" ? "federal_private_corporation" : "other",
-    }));
-  };
-  const canSave = form.name.trim().length > 0 && !saving;
-
-  const save = async () => {
-    if (!canSave) return;
+  const canRestore = isLocalDataRuntime() && !isStaticDemoRuntime() && localWorkspaceRestoreSupported();
+  const restoreCard = canRestore ? <RestoreBackupCard
+    onRestored={(summary) => {
+      const restoredSocietyId = summary.societies[0]?._id;
+      if (restoredSocietyId) setStoredSocietyId(restoredSocietyId as any);
+      toast.success("Backup restored", `${summary.rowCount} records across ${summary.tableCount} tables.`);
+      navigate("/app");
+    }}
+    onError={(message) => toast.error("Could not restore the backup", message)}
+  /> : null;
+  const create = async (values: Record<string, any>) => {
     setSaving(true);
     try {
-      validateEntitySetup(form);
-      const result = await createWorkspace({ ...form });
+      const result = await createWorkspace(values as any);
       auth.refreshMembership(result.societyId);
       setStoredSocietyId(result.societyId);
       toast.success("Workspace created", `${result.taskIds.length} onboarding tasks created.`);
       navigate(`/app/workflows/${result.workflowId}`);
-    } catch (error: any) {
-      toast.error("Could not create workspace", error?.message ?? "Check required fields and try again.");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
-
-  // Restoring only makes sense against a local workspace: a backup file is a
-  // snapshot of this device's database, and the demo runtime is throwaway.
-  const canRestore = isLocalDataRuntime() && !isStaticDemoRuntime() && localWorkspaceRestoreSupported();
-  const restoreRequested = searchParams.get("restore") === "1";
-
-  const restoreCard = canRestore ? (
-    <RestoreBackupCard
-      onRestored={(summary) => {
-        const restoredSocietyId = summary.societies[0]?._id;
-        if (restoredSocietyId) setStoredSocietyId(restoredSocietyId as any);
-        toast.success(
-          "Backup restored",
-          `${summary.rowCount} record${summary.rowCount === 1 ? "" : "s"} across ${summary.tableCount} table${summary.tableCount === 1 ? "" : "s"}.`,
-        );
-        navigate("/app");
-      }}
-      onError={(message) => toast.error("Could not restore the backup", message)}
-    />
-  ) : null;
-
-  return (
-    <div className="society-create-shell">
-      <div className="society-create">
-        <aside className="society-create__intro">
-          <div className="society-create__brand">
-            <div className="society-create__logo"><Building2 size={18} /></div>
-            <span>Societyer setup</span>
-          </div>
-          <div className="society-create__copy">
-            <h1>New organization workspace</h1>
-            <p>
-              Start with the organization profile. Registry verification and advanced setup stay optional
-              until the workspace exists.
-            </p>
-          </div>
-          <div className="society-create__steps" aria-label="Onboarding steps">
-            {CORE_ONBOARDING_STEPS.map((step, index) => (
-              <div className="society-create__step" key={step}>
-                <span className="society-create__step-index">{index + 1}</span>
-                <span>{step}</span>
-              </div>
-            ))}
-            <div className="society-create__step society-create__step--optional">
-              <CheckCircle2 size={14} />
-              <span>Optional setup can be skipped</span>
-            </div>
-          </div>
-        </aside>
-
-        <main className="society-create__main">
-          <div className="society-create__topbar">
-            <Link className="btn" to="/app/society">Cancel</Link>
-            <button className="btn btn--accent" onClick={save} disabled={!canSave}>
-              {saving ? "Creating..." : "Create workspace"}
-            </button>
-          </div>
-
-          {restoreRequested && restoreCard}
-
-          <section className="card society-create__card">
-            <div className="card__head">
-              <div>
-                <h2 className="card__title">Organization profile</h2>
-                <span className="card__subtitle">Choose the legal setup, then enter a legal or proposed name.</span>
-              </div>
-            </div>
-            <div className="card__body">
-              <Field label="Organization setup" hint={setupMode === "custom_existing" ? "Record existing legal details. Other entity types and provinces do not gain reviewed formation guidance by selecting them." : setupTrack.hint}>
-                <Select value={setupMode} onChange={setSetupTrack} options={[...WORKSPACE_SETUP_TRACKS.map((track) => ({ value: track.id, label: track.label, hint: track.hint })), { value: "custom_existing", label: "Other existing organization (manual setup)", hint: "Keep existing entity details; statutory and formation guidance may be unavailable." }]} />
-              </Field>
-              <Field label={form.formationStatus === "preparing" ? "Proposed name / working name" : "Recorded legal name"}>
-                <input className="input" value={form.name} onChange={(e) => set("name", e.target.value)} />
-              </Field>
-              <div className="society-field-grid society-field-grid--three">
-                <Field label="Incorporation #" hint={form.organizationStatus === "pre_incorporation" ? "Assigned after incorporation." : undefined}>
-                  <input className="input" disabled={form.organizationStatus === "pre_incorporation"} value={form.incorporationNumber} onChange={(e) => set("incorporationNumber", e.target.value)} />
-                </Field>
-                <Field label="Incorporation date">
-                  <DatePicker disabled={form.organizationStatus === "pre_incorporation"} value={form.incorporationDate} onChange={(v) => set("incorporationDate", v)} />
-                </Field>
-                <Field label="Fiscal year end" hint="MM-DD">
-                  <input className="input" value={form.fiscalYearEnd} onChange={(e) => set("fiscalYearEnd", e.target.value)} placeholder="03-31" />
-                </Field>
-              </div>
-              <div className="society-field-grid">
-                <Field label="Legal jurisdiction">
-                  {setupMode === "custom_existing" ? <Select value={form.jurisdictionCode} onChange={(value) => set("jurisdictionCode", value)} options={optionChoices("entityJurisdictions")} /> : <input className="input" readOnly value={form.jurisdictionCode === "CA-FED-CBCA" ? "Canada — federal" : form.jurisdictionCode === "CA-BC" ? "British Columbia — provincial" : "Ontario — provincial"} />}
-                </Field>
-                <Field label="Entity type">
-                  {setupMode === "custom_existing" ? <Select value={form.entityType} onChange={(value) => set("entityType", value)} options={optionChoices("entityTypes")} /> : <input className="input" readOnly value={optionLabel("entityTypes", form.entityType)} />}
-                </Field>
-              </div>
-              <div className="society-field-grid">
-                <Field label="Act formed under">
-                  {setupMode === "custom_existing" ? <Select value={form.actFormedUnder} onChange={(value) => set("actFormedUnder", value)} options={optionChoices("actsFormedUnder")} /> : <input className="input" readOnly value={optionLabel("actsFormedUnder", form.actFormedUnder)} />}
-                </Field>
-                <Field label="Official email">
-                  <input className="input" type="email" value={form.officialEmail} onChange={(e) => set("officialEmail", e.target.value)} />
-                </Field>
-              </div>
-              <Field label={governance.purposesLabel}>
-                <MarkdownEditor rows={4} value={form.purposes} onChange={(markdown) => set("purposes", markdown)} />
-              </Field>
-              <EntitySetupFields form={form} set={set} />
-              <div className="society-toggle-stack">
-                {(!corporate || setupMode === "custom_existing") && <Toggle checked={form.isCharity} onChange={(v) => set("isCharity", v)} label="Registered CRA charity" />}
-                {!corporate && <Toggle checked={form.isMemberFunded} onChange={(v) => set("isMemberFunded", v)} label="Member-funded society" />}
-                {corporate && <Toggle checked={form.distributing} onChange={(v) => set("distributing", v)} label="Distributing corporation" />}
-              </div>
-            </div>
-          </section>
-
-          {["preparing", "submitted"].includes(form.formationStatus ?? "") && <IncorporationPreparation organization={form} />}
-
-          <section className="card society-create__card">
-            <div className="card__head"><h2 className="card__title">Onboarding flow</h2></div>
-            <div className="card__body society-onboarding-flow">
-              <div>
-                <span className="society-onboarding-flow__eyebrow">Core</span>
-                <div className="society-onboarding-flow__list">
-                  {CORE_ONBOARDING_STEPS.map((step) => (
-                    <span key={step} className="pill pill--sm">{step}</span>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <span className="society-onboarding-flow__eyebrow">Optional later</span>
-                <div className="society-onboarding-flow__list">
-                  {optionalSteps.map((step) => (
-                    <span key={step} className="pill pill--sm pill--gray">{step}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-        </main>
-
-        <aside className="society-create__side">
-          {!restoreRequested && restoreCard}
-
-          <section className="card society-create__card">
-            <div className="card__head"><h2 className="card__title">After profile</h2></div>
-            <div className="card__body">
-              <p className="muted" style={{ marginTop: 0 }}>
-                Societyer will create the workspace, switch you into it, and open an onboarding
-                workflow. Registry verification is optional; locations, documents, and people are
-                handled as follow-up tasks inside the workspace.
-              </p>
-              <div className="society-create__next-list">
-                <span>Optional registry check</span>
-                <span>Registered locations</span>
-                <span>Governance documents</span>
-                <span>People and access</span>
-                <span>Advanced setup checklist</span>
-              </div>
-            </div>
-          </section>
-        </aside>
-      </div>
-    </div>
-  );
+  return <GuidedOrganizationSetup onCreate={create} saving={saving} restoreCard={restoreCard} canRestore={canRestore} restoreRequested={searchParams.get("restore") === "1"} />;
 }
 
 /**
@@ -316,23 +95,19 @@ function RestoreBackupCard({
 
   const restore = async (file: File | null | undefined, input: HTMLInputElement) => {
     if (!file) return;
-    const ok = await confirm({
-      title: "Restore this backup?",
-      message: `Everything currently stored in this workspace is replaced by the contents of "${file.name}". This cannot be undone.`,
-      confirmLabel: "Restore",
-      tone: "danger",
-    });
-    // Reset the input either way, so re-picking the same file fires onChange.
     input.value = "";
-    if (!ok) return;
     setRestoring(true);
     try {
-      onRestored(await restoreLocalWorkspaceBackup(file));
+      const preview = summarizeWorkspaceBackup(await readWorkspaceBackupFile(file));
+      const ok = await confirm({
+        title: "Restore this backup?",
+        message: `Replace this device's local workspace with ${preview.rowCount} records for ${preview.societies.slice(0, 5).map((society) => society.name).join(", ") + (preview.societies.length > 5 ? ` and ${preview.societies.length - 5} more organizations` : "")} from "${file.name}"? Export current records first if you need to keep them. ${preview.attachmentCount} attachment references are included; separate desktop files need their original file backup. This replaces local records and cannot be undone.`,
+        confirmLabel: "Restore", tone: "danger",
+      });
+      if (ok) onRestored(await restoreLocalWorkspaceBackup(file));
     } catch (error: any) {
       onError(error?.message ?? "The backup file could not be read.");
-    } finally {
-      setRestoring(false);
-    }
+    } finally { setRestoring(false); }
   };
 
   return (
@@ -346,7 +121,7 @@ function RestoreBackupCard({
       <div className="card__body">
         <p className="muted" style={{ marginTop: 0 }}>
           Choose the <code className="mono">.json</code> backup exported from Societyer on another device or
-          from the desktop app. Records, attachment references, and change history are restored together.
+          from the desktop app. Records, attachment references, and change history are restored together. Files stored separately in a desktop folder need their original file backup.
         </p>
         <label className={`btn btn--accent${restoring ? " is-disabled" : ""}`} style={{ justifySelf: "start" }}>
           <Upload size={14} /> {restoring ? "Restoring…" : "Choose backup file"}
@@ -498,8 +273,8 @@ export function SocietyPage() {
         niceClassification: form.niceClassification,
         isCharity: form.isCharity,
         isMemberFunded: form.isMemberFunded,
-        registeredOfficeAddress: registeredOfficeLine,
-        mailingAddress: mailingAddressLine,
+        registeredOfficeAddress: society.onboardingAnswersJson && currentRegisteredOffice ? guidedAddressText(currentRegisteredOffice) : registeredOfficeLine,
+        mailingAddress: society.onboardingAnswersJson && currentMailingAddress ? guidedAddressText(currentMailingAddress) : mailingAddressLine,
         purposes: form.purposes,
         privacyOfficerName: form.privacyOfficerName,
         privacyOfficerEmail: form.privacyOfficerEmail,
@@ -1177,6 +952,10 @@ function addressLine(row: any) {
   return [row.unit, row.street, row.city, row.provinceState, row.postalCode, row.country]
     .filter(isAddressPart)
     .join(", ");
+}
+
+function guidedAddressText(row: Record<string, any>) {
+  return formatAddressText(Object.fromEntries(["unit", "street", "city", "provinceState", "postalCode", "country"].map((key) => [key, isAddressPart(row[key]) ? row[key] : ""])));
 }
 
 function isAddressPart(value: unknown) {

@@ -1,3 +1,4 @@
+import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
 import { test, expect, type Page } from "@playwright/test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,9 +14,7 @@ import { join } from "node:path";
 const RUNTIME_KEY = "societyer:app-runtime";
 
 async function createOrganization(page: Page, name: string) {
-  await page.getByRole("textbox").first().fill(name);
-  await page.getByRole("button", { name: /^Create workspace$/ }).click();
-  await page.waitForURL(/\/app\/workflows\//, { timeout: 20_000 });
+  await completeGuidedOrganizationSetup(page, name);
   // Setup hands off to the onboarding workflow it just created. If that page
   // can't find the workflow — or finds a row shaped differently from the one
   // the Convex mutation writes — the pipeline dead-ends on its final step.

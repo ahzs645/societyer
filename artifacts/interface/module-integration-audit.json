@@ -1,0 +1,168 @@
+{
+  "baseline": "28f2e92c703a2f2bb460ccd5565190dccd24c33e",
+  "scope": "Module inventory contracts, selected routes/settings and focused public/admin actions; not a full product certification.",
+  "routeContract": {
+    "uniquePatterns": 137,
+    "dynamicPatterns": 26,
+    "moduleGatedPaths": 39,
+    "configurableModules": 21
+  },
+  "browser": {
+    "inventoryRouteAndSettings": {
+      "stats": {
+        "startTime": "2026-10-05T01:28:41.189Z",
+        "duration": 326723.29199999996,
+        "expected": 60,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "command": "INTERFACE_AUDIT_URL=http://127.0.0.1:4189 playwright test tests/interface-routes.spec.ts tests/interface-role-settings.spec.ts -c playwright.interface.config.ts --grep '/app/(settings|users|audit|exports|portfolio|custom-fields)|/public|/portal|Viewer can inspect'",
+      "routePatterns": 14,
+      "readonlyConfigurationScenarios": 1,
+      "viewports": [
+        320,
+        390,
+        768,
+        1440
+      ],
+      "runtime": "seeded browser-local demo, frozen Vite source, Chromium emulation"
+    },
+    "electionLifecycle": {
+      "stats": {
+        "startTime": "2026-10-05T01:34:35.581Z",
+        "duration": 37761.309,
+        "expected": 4,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "runtime": "seeded browser-local demo, frozen Vite source, Chromium emulation",
+      "workers": 1
+    },
+    "financePreparationSupplement": {
+      "stats": {
+        "startTime": "2026-10-05T01:35:42.528Z",
+        "duration": 34964.637,
+        "expected": 6,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "runtime": "seeded browser-local demo, frozen Vite source, Chromium emulation",
+      "workers": 1
+    },
+    "financeRoleSupplement": {
+      "stats": {
+        "startTime": "2026-10-05T01:36:18.639Z",
+        "duration": 23092.319,
+        "expected": 2,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "runtime": "seeded browser-local demo, frozen Vite source, Chromium emulation",
+      "workers": 1
+    },
+    "guidedSetup": {
+      "evidence": "artifacts/interface/guided-organization-setup.json",
+      "distinctPassed": 16,
+      "viewports": [
+        320,
+        390,
+        768,
+        1440
+      ],
+      "transactionCases": 12,
+      "malformedBackupPreservationCases": 4,
+      "workers": 1,
+      "runtime": "actual browser-local workspace via public setup, real Settings backup download and fresh-device restore"
+    },
+    "hostedSignupSetup": {
+      "distinctPassed": 4,
+      "viewports": [
+        320,
+        1440
+      ],
+      "scenarioKinds": [
+        "existing organization",
+        "proposed organization"
+      ],
+      "runtime": "actual Better Auth UI, JWT and native Convex on disposable deployment",
+      "assertions": [
+        "own Owner membership",
+        "reload persistence",
+        "foreign workspace read denied"
+      ],
+      "workers": 1
+    },
+    "operations": {
+      "evidence": "artifacts/interface/module-operations-qualification.json",
+      "distinctPassed": 44,
+      "actualFreshLocalCases": 8,
+      "demoRegressionCases": 36,
+      "viewports": [
+        320,
+        390,
+        768,
+        1440
+      ],
+      "workers": 1,
+      "runtime": "actual fresh browser-local workspace and explicit seeded demo, frozen Vite source",
+      "includesInventoryExistingActionCases": 12
+    },
+    "publicLinksAndIntakeContracts": {
+      "stats": {
+        "startTime": "2026-10-05T02:00:29.926Z",
+        "duration": 50198.244,
+        "expected": 12,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "command": "INTERFACE_AUDIT_URL=http://127.0.0.1:4191 playwright test tests/interface-public-links.spec.ts -c playwright.interface.config.ts --workers 1",
+      "viewports": [
+        320,
+        390,
+        768,
+        1440
+      ],
+      "workers": 1,
+      "runtime": "seeded browser-local demo, fresh frozen Vite source, Chromium emulation",
+      "scenarios": [
+        "legacy unsafe links suppressed and long stakeholder table contained",
+        "invalid publication editor URL retains draft drawer",
+        "foreign-workspace member query observed; volunteer and grant UI payloads omit foreign membership"
+      ],
+      "intakeBoundary": "Submission interception verifies the rendered UI payload contract, not live hosted public intake.",
+      "harnessCorrection": "Select foreign visitor after public renderer mounts so departing UserPicker does not legitimately restore its workspace Owner."
+    }
+  },
+  "nativeChecks": [
+    "firm overview and batch packet flow",
+    "196 business export tables with 7 forbidden internal authorization/synchronization exclusions",
+    "app route href and scheme validation",
+    "creator-only personal view metadata",
+    "complete route/read-policy contract",
+    "election lifecycle on native Convex, MemoryDb and LocalStoreDb with timezone round-trips",
+    "90 task/source owned and foreign reference checks"
+  ],
+  "limits": [
+    "UI intake payload interception is not live hosted intake submission",
+    "Local public pages are previews until hosted",
+    "Mode switching keeps local and remote data separate",
+    "Provider credentials and actual submissions are external deployment steps",
+    "AI file references contain names/sizes only; file-content ingestion is not implemented"
+  ],
+  "desktopQualification": {
+    "evidence": "artifacts/offline/desktop-dual-mode-runtime.json",
+    "passed": 12,
+    "runtime": "actual packaged Linux Electron with isolated HTTPS fixture",
+    "limits": [
+      "no automatic local/hosted dataset merge",
+      "no all-module replication",
+      "external enterprise SSO and signed macOS/Windows packages unqualified"
+    ]
+  },
+  "countingNote": "Results are grouped by audit area; repeated existing integration scenarios must not be summed as distinct product workflows."
+}

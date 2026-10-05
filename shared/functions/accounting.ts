@@ -15,6 +15,7 @@ import { getPortable as getAccessibleDocument } from "./documents";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, principalUserId, requireRolePortable, requireSocietyMembership } from "./access";
 import { transactionBackfillSides, validateBalancedJournalLines } from "../accountingCore";
+import { requirePermissionPortable } from "./permissions";
 
 const ACCOUNT_TYPES = ["Asset", "Liability", "Equity", "Income", "Expense"] as const;
 const NORMAL_BALANCES = ["debit", "credit"] as const;
@@ -326,7 +327,8 @@ export async function exportCsvPortable(
   ctx: PortableQueryCtx,
   { societyId, kind, fiscalYear }: { societyId: string; kind: string; fiscalYear?: string },
 ) {
-  await requireSocietyMembership(ctx, societyId);
+  await requirePermissionPortable(ctx, societyId, "exports:download");
+  await requirePermissionPortable(ctx, societyId, "financials:read");
   if (kind === "chart_of_accounts") {
     const accounts = await ctx.db.query("financialAccounts").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
     const rows = [["code", "name", "type", "subtype", "currency", "normal_balance", "external_id"]];
@@ -368,7 +370,8 @@ export async function boardAuditorPackagePortable(
   ctx: PortableQueryCtx,
   { societyId, fiscalYear, packageKind }: { societyId: string; fiscalYear?: string; packageKind?: string },
 ) {
-  await requireSocietyMembership(ctx, societyId);
+  await requirePermissionPortable(ctx, societyId, "exports:download");
+  await requirePermissionPortable(ctx, societyId, "financials:read");
   const [society, trial, ledger, entries, restrictions, reconciliations] = await Promise.all([
     ctx.db.get(societyId),
     buildTrialBalance(ctx, societyId, fiscalYear),

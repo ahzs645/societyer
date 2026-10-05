@@ -1,3 +1,4 @@
+import { isLocalDataRuntime } from "./staticRuntime";
 import { convexSiteUrl } from "./convexSite";
 import { authenticatedFetch } from "./authToken";
 
@@ -16,6 +17,7 @@ export async function streamChatMessage({
   modelId?: string;
   onToken: (token: string) => void;
 }) {
+  if (isLocalDataRuntime()) throw new Error("Live AI streaming requires a connected workspace.");
   const response = await authenticatedFetch(`${convexSiteUrl()}/ai-chat/stream`, {
     method: "POST",
     headers: {

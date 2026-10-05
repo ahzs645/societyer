@@ -67,6 +67,12 @@ export const create = authorizedMutation("elections:create", mutation)({
     scrutineerUserIds: v.optional(v.array(v.id("users"))),
     notes: v.optional(v.string()),
     actingUserId: v.optional(v.id("users")),
+    initialQuestion: v.optional(v.object({
+      title: v.string(),
+      description: v.optional(v.string()),
+      maxSelections: v.number(),
+      options: v.array(v.object({ id: v.string(), label: v.string(), memberId: v.optional(v.id("members")), statement: v.optional(v.string()) })),
+    })),
   },
   returns: v.any(),
   handler: async (ctx, args) => createPortable(await toPortableMutationCtx(ctx), args),

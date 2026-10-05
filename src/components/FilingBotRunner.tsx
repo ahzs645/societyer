@@ -7,6 +7,7 @@ import { Drawer, Badge } from "./ui";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "./Toast";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Bot, CheckCircle2, Circle, XCircle, Loader2, ExternalLink, FileText } from "lucide-react";
 import { formatDateTime } from "../lib/format";
 
@@ -47,7 +48,7 @@ export function FilingBotRunner({
     <Drawer
       open={open}
       onClose={onClose}
-      title={`Societies Online bot · ${filingLabel}`}
+      title={`Societies Online preparation · ${filingLabel}`}
       footer={
         <>
           <button className="btn" onClick={onClose}>Close</button>
@@ -73,14 +74,14 @@ export function FilingBotRunner({
       }
     >
       <div className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-md)" }}>
-        The Societies Online portal has no public API — auto-submission isn't
-        permitted. The bot gathers and validates everything, pre-fills Form 11,
-        stages signatures, then deep-links you to <a href="https://www.bcregistry.ca/societies/" target="_blank" rel="noreferrer">bcregistry.ca/societies <ExternalLink size={11} /></a>{" "}
+        This assistant collects a preparation packet from your records. Review
+        consents, resolution evidence and required signatures, then open <a href="https://www.bcregistry.gov.bc.ca/societies/" target="_blank" rel="noreferrer">BC Societies Online <ExternalLink size={11} /></a>{" "}
         for final submission. It never files on your behalf or generates a confirmation number —
         after you submit in Societies Online, record the real confirmation number in Filings.
       </div>
 
       {isLocalDataRuntime() && <p className="muted" role="status">Preparing a filing with the bot requires a connected server. The packet preview and official portal remain available for manual filing.</p>}
+      <p><Link to="/app/filings/prefill" onClick={onClose}>Open filing pre-fill to copy or export form values</Link></p>
       {packet && (
         <div className="card" style={{ marginBottom: 12 }}>
           <div className="card__head">

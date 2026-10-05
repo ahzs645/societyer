@@ -1,0 +1,328 @@
+{
+  "baseline": "28f2e92c703a2f2bb460ccd5565190dccd24c33e",
+  "qualification": "Operations module integration audit on frozen source",
+  "viewports": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "browser": {
+    "actualFreshBrowserLocalCases": 8,
+    "demoRegressionCases": 36,
+    "passed": 44,
+    "failed": 0,
+    "cases": [
+      {
+        "name": "commitment preparation reaches editable tasks and rejects an invalid event while preserving the draft",
+        "project": "narrow-phone",
+        "status": "passed",
+        "durationMs": 13842
+      },
+      {
+        "name": "commitment preparation reaches editable tasks and rejects an invalid event while preserving the draft",
+        "project": "phone",
+        "status": "passed",
+        "durationMs": 14854
+      },
+      {
+        "name": "commitment preparation reaches editable tasks and rejects an invalid event while preserving the draft",
+        "project": "tablet",
+        "status": "passed",
+        "durationMs": 10678
+      },
+      {
+        "name": "commitment preparation reaches editable tasks and rejects an invalid event while preserving the draft",
+        "project": "desktop",
+        "status": "passed",
+        "durationMs": 16821
+      },
+      {
+        "name": "a real local workspace keeps live AI, Paperless and browser sessions unavailable without outbound requests",
+        "project": "narrow-phone",
+        "status": "passed",
+        "durationMs": 9174
+      },
+      {
+        "name": "a real local workspace keeps live AI, Paperless and browser sessions unavailable without outbound requests",
+        "project": "phone",
+        "status": "passed",
+        "durationMs": 8807
+      },
+      {
+        "name": "a real local workspace keeps live AI, Paperless and browser sessions unavailable without outbound requests",
+        "project": "tablet",
+        "status": "passed",
+        "durationMs": 8427
+      },
+      {
+        "name": "a real local workspace keeps live AI, Paperless and browser sessions unavailable without outbound requests",
+        "project": "desktop",
+        "status": "passed",
+        "durationMs": 8847
+      },
+      {
+        "name": "API clients persist, real tabs select panels, and local preview cannot issue server credentials",
+        "project": "narrow-phone",
+        "status": "passed",
+        "durationMs": 4087
+      },
+      {
+        "name": "integration setup, unavailable browser sessions, and package lifecycle tabs respond",
+        "project": "narrow-phone",
+        "status": "passed",
+        "durationMs": 4010
+      },
+      {
+        "name": "exports contain native file controls and handle invalid previews; local webhooks stay gated",
+        "project": "narrow-phone",
+        "status": "passed",
+        "durationMs": 3034
+      },
+      {
+        "name": "public previews preserve demo links, public form validation, and invalid-token privacy",
+        "project": "narrow-phone",
+        "status": "passed",
+        "durationMs": 3340
+      },
+      {
+        "name": "local preparation stays useful while external sends, workflow runs, and feed links are gated",
+        "project": "narrow-phone",
+        "status": "passed",
+        "durationMs": 3896
+      },
+      {
+        "name": "manual outbox drafts and custom field definitions persist; AI tabs expose their actual content",
+        "project": "narrow-phone",
+        "status": "passed",
+        "durationMs": 5072
+      },
+      {
+        "name": "Admin manages API clients while Viewer retains read-only client access",
+        "project": "narrow-phone",
+        "status": "passed",
+        "durationMs": 7050
+      },
+      {
+        "name": "API clients persist, real tabs select panels, and local preview cannot issue server credentials",
+        "project": "phone",
+        "status": "passed",
+        "durationMs": 4124
+      },
+      {
+        "name": "integration setup, unavailable browser sessions, and package lifecycle tabs respond",
+        "project": "phone",
+        "status": "passed",
+        "durationMs": 5425
+      },
+      {
+        "name": "exports contain native file controls and handle invalid previews; local webhooks stay gated",
+        "project": "phone",
+        "status": "passed",
+        "durationMs": 3402
+      },
+      {
+        "name": "public previews preserve demo links, public form validation, and invalid-token privacy",
+        "project": "phone",
+        "status": "passed",
+        "durationMs": 3478
+      },
+      {
+        "name": "local preparation stays useful while external sends, workflow runs, and feed links are gated",
+        "project": "phone",
+        "status": "passed",
+        "durationMs": 4660
+      },
+      {
+        "name": "manual outbox drafts and custom field definitions persist; AI tabs expose their actual content",
+        "project": "phone",
+        "status": "passed",
+        "durationMs": 4923
+      },
+      {
+        "name": "Admin manages API clients while Viewer retains read-only client access",
+        "project": "phone",
+        "status": "passed",
+        "durationMs": 6332
+      },
+      {
+        "name": "API clients persist, real tabs select panels, and local preview cannot issue server credentials",
+        "project": "tablet",
+        "status": "passed",
+        "durationMs": 3785
+      },
+      {
+        "name": "integration setup, unavailable browser sessions, and package lifecycle tabs respond",
+        "project": "tablet",
+        "status": "passed",
+        "durationMs": 5091
+      },
+      {
+        "name": "exports contain native file controls and handle invalid previews; local webhooks stay gated",
+        "project": "tablet",
+        "status": "passed",
+        "durationMs": 3626
+      },
+      {
+        "name": "public previews preserve demo links, public form validation, and invalid-token privacy",
+        "project": "tablet",
+        "status": "passed",
+        "durationMs": 3962
+      },
+      {
+        "name": "local preparation stays useful while external sends, workflow runs, and feed links are gated",
+        "project": "tablet",
+        "status": "passed",
+        "durationMs": 4081
+      },
+      {
+        "name": "manual outbox drafts and custom field definitions persist; AI tabs expose their actual content",
+        "project": "tablet",
+        "status": "passed",
+        "durationMs": 5508
+      },
+      {
+        "name": "Admin manages API clients while Viewer retains read-only client access",
+        "project": "tablet",
+        "status": "passed",
+        "durationMs": 7056
+      },
+      {
+        "name": "API clients persist, real tabs select panels, and local preview cannot issue server credentials",
+        "project": "desktop",
+        "status": "passed",
+        "durationMs": 4766
+      },
+      {
+        "name": "integration setup, unavailable browser sessions, and package lifecycle tabs respond",
+        "project": "desktop",
+        "status": "passed",
+        "durationMs": 5028
+      },
+      {
+        "name": "exports contain native file controls and handle invalid previews; local webhooks stay gated",
+        "project": "desktop",
+        "status": "passed",
+        "durationMs": 3471
+      },
+      {
+        "name": "public previews preserve demo links, public form validation, and invalid-token privacy",
+        "project": "desktop",
+        "status": "passed",
+        "durationMs": 3566
+      },
+      {
+        "name": "local preparation stays useful while external sends, workflow runs, and feed links are gated",
+        "project": "desktop",
+        "status": "passed",
+        "durationMs": 4058
+      },
+      {
+        "name": "manual outbox drafts and custom field definitions persist; AI tabs expose their actual content",
+        "project": "desktop",
+        "status": "passed",
+        "durationMs": 7481
+      },
+      {
+        "name": "Admin manages API clients while Viewer retains read-only client access",
+        "project": "desktop",
+        "status": "passed",
+        "durationMs": 6538
+      },
+      {
+        "name": "document metadata opens its review workbench and validates page comments",
+        "project": "narrow-phone",
+        "status": "passed",
+        "durationMs": 11919
+      },
+      {
+        "name": "document metadata opens its review workbench and validates page comments",
+        "project": "phone",
+        "status": "passed",
+        "durationMs": 12380
+      },
+      {
+        "name": "document metadata opens its review workbench and validates page comments",
+        "project": "tablet",
+        "status": "passed",
+        "durationMs": 13089
+      },
+      {
+        "name": "document metadata opens its review workbench and validates page comments",
+        "project": "desktop",
+        "status": "passed",
+        "durationMs": 13174
+      },
+      {
+        "name": "workflow preparation is readable for Viewer while workflow and package writes stay disabled",
+        "project": "narrow-phone",
+        "status": "passed",
+        "durationMs": 10176
+      },
+      {
+        "name": "workflow preparation is readable for Viewer while workflow and package writes stay disabled",
+        "project": "phone",
+        "status": "passed",
+        "durationMs": 8748
+      },
+      {
+        "name": "workflow preparation is readable for Viewer while workflow and package writes stay disabled",
+        "project": "tablet",
+        "status": "passed",
+        "durationMs": 8507
+      },
+      {
+        "name": "workflow preparation is readable for Viewer while workflow and package writes stay disabled",
+        "project": "desktop",
+        "status": "passed",
+        "durationMs": 7656
+      }
+    ]
+  },
+  "nativeAndPortableTaskSourceChecks": {
+    "result": "passed",
+    "assertions": 90,
+    "source": "scripts/check-task-source-links.ts",
+    "coverage": [
+      "owned source correlation keys on creation and edit",
+      "foreign source keys rejected",
+      "real commitment completion IDs and parent ownership",
+      "unknown namespaces rejected",
+      "filing dropdown/API table agreement",
+      "foreign filings rejected",
+      "Viewer writes denied"
+    ]
+  },
+  "authorizationPolicy": {
+    "result": "passed",
+    "hostedClassifications": 928,
+    "portableClassifications": 821
+  },
+  "checks": {
+    "appTypecheck": "passed",
+    "scopedLintErrors": 0,
+    "scopedLintWarnings": 23,
+    "diffWhitespace": "passed"
+  },
+  "corrections": [
+    "Tasks now validate known generated source keys against their actual owned source rows instead of treating all keys as completion IDs.",
+    "Task filing references validate the filings table used by the dropdown and native API.",
+    "Rejected task and commitment saves retain drafts and report errors; pending saves disable edits.",
+    "Actual local workspaces block provider AI, Paperless sync and browser-runner requests; preparation and records remain available.",
+    "AI file references explicitly contain names and sizes only.",
+    "Marketplace handoffs open actual calendar and board-pack surfaces; existing setup checklist state survives reopening and refresh; checklist completion does not claim a tested provider connection.",
+    "Board-pack creation uses the current atomic native/portable mutation without a partial multi-call fallback."
+  ],
+  "boundaries": [
+    "Browser cases use a real local workspace or an explicitly seeded demo against frozen Vite source, not packaged Electron.",
+    "Local AI inference, provider OCR, browser sessions and automatic workflow execution require additional host capabilities or a connected server.",
+    "AI file-content ingestion is not implemented; picker references are metadata only.",
+    "Planned Microsoft/Google/CRM catalog entries do not imply completed provider adapters.",
+    "PowerSync production synchronization remains scoped to meeting preparation rather than every module."
+  ],
+  "harnessCorrections": [
+    "Required title controls use accessible textbox selectors.",
+    "Paperless connection controls can say Enable connection or Save connection depending on saved preview records.",
+    "Final browser cases ran serially on frozen source to avoid HMR context replacement and concurrent cold-load delays."
+  ]
+}

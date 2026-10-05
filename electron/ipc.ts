@@ -7,8 +7,10 @@ import { registerSecretHandlers } from "./ipc/secretHandlers.js";
 import { registerServiceHandlers } from "./ipc/serviceHandlers.js";
 import { registerUpdateHandlers } from "./ipc/updateHandlers.js";
 import { registerWorkspaceHandlers } from "./ipc/workspaceHandlers.js";
+import { registerModeHandlers } from "./ipc/modeHandlers.js";
 
 export function registerIpc(environment: DesktopEnvironment) {
+  registerModeHandlers();
   registerAppHandlers(environment);
   registerWorkspaceHandlers();
   registerDocumentHandlers();

@@ -17,8 +17,39 @@ import type {
 } from "../portable/ctx";
 import { validateIntegrationSettings, type IntegrationSettings } from "../integrationSettings";
 import { requirePermissionPortable } from "./permissions";
-import { matchesVerifiedIdentity, ensureExternalIdentityPortable } from "./identity";
-import { claimStorageId, requireAuthenticated, requireRolePortable, requireSocietyMembership } from "./access";
+import { matchesVerifiedIdentity, ensureExternalIdentityPortable, assertExternalIdentityActive } from "./identity";
+import { claimStorageId, requireAuthenticated, requireRolePortable, requireSocietyMembership, isActiveMembership } from "./access";
+
+export type WorkspaceCreationAccess = { allowed: boolean; reason: string };
+
+/** Creating a fresh tenant never grants authority in an existing tenant.
+ * A backup/profile/email is not proof of a hosted identity. */
+export async function workspaceCreationAccessPortable(ctx: PortableQueryCtx): Promise<WorkspaceCreationAccess> {
+  const principal = ctx.principal;
+  if (principal.kind !== "user") return { allowed: false, reason: "Sign in with a user account to create a workspace." };
+  if (principal.assurance === "trusted-workspace") return { allowed: true, reason: "Local workspace creation is available." };
+  if (principal.assurance !== "verified-jwt" || !principal.issuer || !principal.subject) return { allowed: false, reason: "A verified user identity is required." };
+  const identities = await ctx.db.query("externalIdentities").withIndex("by_issuer_subject", q => q.eq("issuer", principal.issuer).eq("subject", principal.subject)).collect();
+  if (identities.length > 1 || identities.some(identity => identity.status !== "Active")) return { allowed: false, reason: "Your identity is disabled or has conflicting bindings. Contact an administrator." };
+  const users = (await ctx.db.query("users").withIndex("by_auth_subject", q => q.eq("authSubject", principal.subject)).collect()).filter(user => matchesVerifiedIdentity(user, principal));
+  if (new Set(users.map(user => user.societyId)).size !== users.length) return { allowed: false, reason: "Your workspace bindings conflict. Contact an administrator." };
+  if (users.length && !users.some(isActiveMembership)) return { allowed: false, reason: "Your existing workspace access is inactive. Contact an administrator." };
+  for (const user of users.filter(isActiveMembership)) {
+    try { await assertExternalIdentityActive(ctx.db, user); }
+    catch { return { allowed: false, reason: "Your identity is disabled or its binding is invalid." }; }
+  }
+  return { allowed: true, reason: "You can create a separate organization workspace." };
+}
+
+export async function assertWorkspaceCreator(ctx: PortableQueryCtx, actingUserId?: string) {
+  const access = await workspaceCreationAccessPortable(ctx);
+  if (!access.allowed) throw new Error(access.reason);
+  if (actingUserId && ctx.principal.kind === "user" && ctx.principal.assurance === "verified-jwt") {
+    const user = await ctx.db.get(actingUserId, "users");
+    if (!user?.societyId || !matchesVerifiedIdentity(user, ctx.principal) || !isActiveMembership(user)) throw new Error("Authenticated actor does not match the current principal.");
+    await requireSocietyMembership(ctx, String(user.societyId));
+  }
+}
 
 export type NewSocietyOwnerInput = {
   societyId: string;

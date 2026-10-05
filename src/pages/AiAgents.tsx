@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useAction, useQuery } from "convex/react";
 import { Bot, BrainCircuit, CheckCircle2, History, KeyRound, ListTree, MessageSquare, Play, RefreshCw, Save, Search, ShieldCheck, SlidersHorizontal, Trash2, Wrench, XCircle } from "lucide-react";
 import { api } from "@/lib/convexApi";
@@ -74,7 +75,10 @@ export function AiAgentsPage() {
   const society = useSociety();
   const { loaded, can } = usePermissions();
   const canWriteTasks = loaded && can("tasks:write");
+  const localOnly = isLocalDataRuntime() && !isStaticDemoRuntime();
+  const canRunLive = canWriteTasks && !localOnly;
   const canWriteSettings = loaded && can("settings:write");
+  const canConfigureProvider = canWriteSettings && !localOnly;
   const actingUserId = useCurrentUserId() ?? undefined;
   const agents = useQuery(api.aiAgents.listDefinitions, {}) as AgentDefinition[] | undefined;
   const skills = useQuery(api.aiAgents.listSkills, society ? { societyId: society._id } : "skip") as SkillDefinition[] | undefined;
@@ -163,7 +167,7 @@ export function AiAgentsPage() {
       effectiveProvider.provider === aiSetup.provider &&
       !aiSetup.apiKey.trim(),
   );
-  const setupEditable = canWriteSettings && (setupValidated || savedProviderReady);
+  const setupEditable = canConfigureProvider && (setupValidated || savedProviderReady);
 
   useEffect(() => {
     if (!effectiveProvider || aiSetup.apiKey.trim() || validation) return;
@@ -183,7 +187,7 @@ export function AiAgentsPage() {
   if (society === null) return <SeedPrompt />;
 
   const startRun = async () => {
-    if (!canWriteTasks) return;
+    if (!canRunLive) return;
     if (!selectedAgent || !input.trim()) return;
     setBusy(true);
     try {
@@ -204,7 +208,7 @@ export function AiAgentsPage() {
   };
 
   const submitChat = async () => {
-    if (!canWriteTasks) return;
+    if (!canRunLive) return;
     if (!society || !chatInput.trim()) return;
     setChatBusy(true);
     setStreamingText("");
@@ -255,7 +259,7 @@ export function AiAgentsPage() {
   };
 
   const validateProviderAndLoadModels = async () => {
-    if (!canWriteSettings) return;
+    if (!canConfigureProvider) return;
     if (!society || !aiSetup.apiKey.trim()) return;
     setSetupBusy(true);
     try {
@@ -284,7 +288,7 @@ export function AiAgentsPage() {
   };
 
   const saveValidatedProvider = async () => {
-    if (!canWriteSettings) return;
+    if (!canConfigureProvider) return;
     if (!society || !setupEditable) return;
     setSetupBusy(true);
     try {
@@ -330,7 +334,7 @@ export function AiAgentsPage() {
   };
 
   const loadModelCatalog = async (forceRefresh = false) => {
-    if (!canWriteSettings) return;
+    if (!canConfigureProvider) return;
     setModelBusy(true);
     try {
       const result = await listProviderModels({
@@ -371,6 +375,8 @@ export function AiAgentsPage() {
         activeTab={activeSection}
         onTabChange={(section) => setActiveSection(section as AiAgentSection)}
       >
+        {localOnly && <p className="muted" role="status">Live AI chat, agents and provider keys require a connected workspace. You can review saved conversations, tool drafts and runs, and prepare skills locally.</p>}
+        {isStaticDemoRuntime() && <p className="muted" role="status">AI actions in this demo use simulated responses and provider validation. No external AI provider is contacted.</p>}
         {activeSection === "chat" && (
           <>
         <div className="card" style={{ marginBottom: 16 }}>
@@ -394,7 +400,7 @@ export function AiAgentsPage() {
             <div className="settings-pair">
               <Field label="Scope">
                 <Select
-                  disabled={!canWriteSettings} value={aiSetup.scope}
+                  disabled={!canConfigureProvider} value={aiSetup.scope}
                   onChange={(value) => setAiSetup((draft) => ({ ...draft, scope: value }))}
                   options={[
                     { value: "personal", label: "Personal" },
@@ -404,7 +410,7 @@ export function AiAgentsPage() {
               </Field>
               <Field label="Provider">
                 <Select
-                  disabled={!canWriteSettings} value={aiSetup.provider}
+                  disabled={!canConfigureProvider} value={aiSetup.provider}
                   onChange={(value) => {
                     const provider = value;
                     setAiSetup((draft) => ({
@@ -430,7 +436,7 @@ export function AiAgentsPage() {
               <Field label="Base URL">
                 <input
                   className="input"
-                  disabled={!canWriteSettings} value={aiSetup.baseUrl}
+                  disabled={!canConfigureProvider} value={aiSetup.baseUrl}
                   onChange={(event) => {
                     setAiSetup((draft) => ({ ...draft, baseUrl: event.target.value }));
                     setValidation(null);
@@ -444,7 +450,7 @@ export function AiAgentsPage() {
               <input
                 className="input"
                 type="password"
-                disabled={!canWriteSettings} value={aiSetup.apiKey}
+                disabled={!canConfigureProvider} value={aiSetup.apiKey}
                 onChange={(event) => {
                   setAiSetup((draft) => ({ ...draft, apiKey: event.target.value }));
                   setValidation(null);
@@ -459,7 +465,7 @@ export function AiAgentsPage() {
                 <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{validation.message}</span>
               </div>
             )}
-            <button className="btn btn--accent" disabled={!canWriteSettings || setupBusy || !aiSetup.apiKey.trim()} onClick={validateProviderAndLoadModels}>
+            <button className="btn btn--accent" disabled={!canConfigureProvider || setupBusy || !aiSetup.apiKey.trim()} onClick={validateProviderAndLoadModels}>
               <ShieldCheck size={12} /> {setupBusy ? "Validating..." : "Validate key and load models"}
             </button>
             <div style={{ height: 1, background: "var(--border)" }} />
@@ -531,12 +537,12 @@ export function AiAgentsPage() {
                 <textarea
                   className="textarea"
                   rows={4}
-                  disabled={!canWriteTasks} value={chatInput}
+                  disabled={!canRunLive} value={chatInput}
                   placeholder="Ask the assistant to find records, draft tasks, inspect workflow context, or prepare a filing packet."
                   onChange={(event) => setChatInput(event.target.value)}
                 />
               </Field>
-              <button className="btn btn--accent" disabled={!canWriteTasks || chatBusy || !chatInput.trim()} onClick={submitChat}>
+              <button className="btn btn--accent" disabled={!canRunLive || chatBusy || !chatInput.trim()} onClick={submitChat}>
                 <MessageSquare size={12} /> {chatBusy ? "Sending..." : "Send chat message"}
               </button>
             </div>
@@ -728,7 +734,7 @@ export function AiAgentsPage() {
                   <textarea
                     className="textarea"
                     rows={6}
-                    disabled={!canWriteTasks} value={input}
+                    disabled={!canRunLive} value={input}
                     placeholder={selectedAgent.requiredInputHints.join("; ")}
                     onChange={(event) => setInput(event.target.value)}
                   />
@@ -736,7 +742,7 @@ export function AiAgentsPage() {
                 <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                   Include: {selectedAgent.requiredInputHints.join(", ")}
                 </div>
-                <button className="btn btn--accent" disabled={!canWriteTasks || busy || !input.trim()} onClick={startRun}>
+                <button className="btn btn--accent" disabled={!canRunLive || busy || !input.trim()} onClick={startRun}>
                   <Play size={12} /> {busy ? "Running..." : "Run this agent"}
                 </button>
               </div>

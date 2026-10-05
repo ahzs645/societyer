@@ -5,6 +5,8 @@ import { MENU_ACTION_CHANNEL } from "./ipcChannels.js";
 import { makeDesktopLogger } from "./observability.js";
 import { openExternal } from "./shell.js";
 import { checkForUpdate } from "./updates.js";
+import { openHostedModeFromMenu, returnToLocalMode } from "./desktopMode.js";
+import { isRegisteredLocalRenderer } from "./ipcAuthority.js";
 
 const logger = makeDesktopLogger("menu");
 
@@ -12,7 +14,15 @@ export function configureApplicationMenu(environment: DesktopEnvironment) {
   const appName = app.getName() || "Societyer";
   const focusedWindow = () => BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   const dispatch = (action: string) => {
-    focusedWindow()?.webContents.send(MENU_ACTION_CHANNEL, action);
+    const focused = focusedWindow();
+    if (focused && isRegisteredLocalRenderer(focused.webContents)) {
+      focused.webContents.send(MENU_ACTION_CHANNEL, action);
+      return;
+    }
+    void returnToLocalMode().then(() => {
+      BrowserWindow.getAllWindows().find((window) => isRegisteredLocalRenderer(window.webContents))
+        ?.webContents.send(MENU_ACTION_CHANNEL, action);
+    });
   };
   const openDocs = () => {
     void openExternal("https://github.com/ahzs645/societyer");
@@ -80,6 +90,9 @@ export function configureApplicationMenu(environment: DesktopEnvironment) {
     {
       label: "File",
       submenu: [
+        { label: "Open Online Workspace", accelerator: "CmdOrCtrl+Shift+O", click: () => void openHostedModeFromMenu() },
+        { label: "Return to Local Workspace", accelerator: "CmdOrCtrl+Shift+L", click: () => void returnToLocalMode() },
+        { type: "separator" },
         {
           label: "Create Backup",
           accelerator: "CmdOrCtrl+Shift+B",

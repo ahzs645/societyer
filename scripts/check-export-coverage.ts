@@ -17,7 +17,7 @@ if (existsSync(tablesDir)) {
 const exportsSource = readFileSync(exportsPath, "utf8");
 
 const schemaTables = schemaSources.flatMap((src) =>
-  Array.from(src.matchAll(/^  ([A-Za-z0-9]+): defineTable/gm)).map((match) => match[1]),
+  Array.from(src.matchAll(/^  ([A-Za-z0-9_]+): defineTable/gm)).map((match) => match[1]),
 );
 const exportList = exportsSource.match(/export const EXPORTABLE_TABLES = \[([\s\S]*?)\] as const;/);
 if (!exportList) {
@@ -25,10 +25,18 @@ if (!exportList) {
 }
 
 const exportTables = Array.from(exportList[1].matchAll(/"([^"]+)"/g)).map((match) => match[1]);
-// Server-issued upload capabilities and global external identities must never
-// be restored from a workspace backup; identity mappings require reconciliation.
-const NON_WORKSPACE_AUTHORIZATION_TABLES = new Set(["documentUploadHandles", "externalIdentities"]);
-const missing = schemaTables.filter((table) => !exportTables.includes(table) && !NON_WORKSPACE_AUTHORIZATION_TABLES.has(table));
+// Authorization capabilities, synchronization receipts and derived projections
+// cannot be restored as business records. Native meetings/agendas/minutes remain
+// exportable; device-authored pending work uses the offline recovery export.
+const NON_WORKSPACE_EXPORT_TABLES = new Set([
+  "documentUploadHandles", "externalIdentities", "powersync_checkpoints",
+  "offlineMeetingAggregates", "offlineMeetingReceipts", "offlineMeetingDownloads", "offlineMeetingScopes",
+]);
+const forbidden = exportTables.filter(table => NON_WORKSPACE_EXPORT_TABLES.has(table));
+if (forbidden.length) throw new Error(`Internal authorization/synchronization tables must not be exported: ${forbidden.join(", ")}.`);
+const staleExclusions = [...NON_WORKSPACE_EXPORT_TABLES].filter(table => !schemaTables.includes(table));
+if (staleExclusions.length) throw new Error(`Export exclusions no longer exist in the schema: ${staleExclusions.join(", ")}.`);
+const missing = schemaTables.filter((table) => !exportTables.includes(table) && !NON_WORKSPACE_EXPORT_TABLES.has(table));
 const extra = exportTables.filter((table) => !schemaTables.includes(table));
 const duplicates = exportTables.filter((table, index) => exportTables.indexOf(table) !== index);
 
@@ -41,4 +49,4 @@ if (missing.length || extra.length || duplicates.length) {
   throw new Error(`Export table coverage does not match schema (${parts.join("; ")}).`);
 }
 
-console.log(`Export coverage ok: ${exportTables.length} schema tables covered.`);
+console.log(`Export coverage ok: ${exportTables.length} business tables covered; ${NON_WORKSPACE_EXPORT_TABLES.size} internal authorization/synchronization tables excluded.`);

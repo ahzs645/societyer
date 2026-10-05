@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { authorizedAction, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
-import { minutesMotionsForDisplay } from "../shared/minutesMotions";
 import { query, internalMutation, mutation, action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
@@ -16,15 +15,16 @@ import {
   listRunsPortable,
   runsForFilingPortable,
   getRunPortable,
+  buildFilingPacketPortable,
 } from "../shared/functions/filingBot";
-import { resolveMinutesMotions } from "../shared/functions/minutes";
+import { bcSocietyBotKind } from "../shared/filingPreparation";
 
 const STEP_DEFINITIONS: Record<string, { label: string; note?: string }[]> = {
   AnnualReport: [
     { label: "Gather current directors, registered address, purposes" },
-    { label: "Validate BC-resident requirement and director consents" },
+    { label: "Collect residency and consent facts for operator review" },
     { label: "Pre-fill BC Societies Online Form 11 (annual report)" },
-    { label: "Queue signature from authorized signatory" },
+    { label: "List potential signatories for operator confirmation" },
     { label: "Stage Form 11 and deep-link to Societies Online for review" },
     { label: "Ready for you to submit — no filing was sent automatically" },
   ],
@@ -79,7 +79,10 @@ export const _createRun = internalMutation({
     const portable = await toPortableMutationCtx(ctx);
     await getOwned(portable, "filings", args.filingId, args.societyId);
     const triggeredByUserId = await principalUserId(portable, args.societyId);
-    const steps = (STEP_DEFINITIONS[args.kind] ?? []).map((s) => ({
+    const society = await ctx.db.get(args.societyId);
+    if (!society) throw new Error("Society not found.");
+    const kind = bcSocietyBotKind(society, args.kind);
+    const steps = STEP_DEFINITIONS[kind].map((s) => ({
       label: s.label,
       status: "pending",
       note: s.note,
@@ -87,7 +90,7 @@ export const _createRun = internalMutation({
     return await ctx.db.insert("filingBotRuns", {
       societyId: args.societyId,
       filingId: args.filingId,
-      kind: args.kind,
+      kind,
       status: "queued",
       startedAtISO: new Date().toISOString(),
       steps,
@@ -180,81 +183,7 @@ export const _patchFiling = internalMutation({
 export const buildFilingPacket = authorizedQuery("filingBot:buildFilingPacket", query)({
   args: { societyId: v.id("societies"), kind: v.string() },
   returns: v.any(),
-  handler: async (ctx, { societyId, kind }) => {
-    await requireSocietyMembership(await toPortableQueryCtx(ctx), societyId);
-    const [society, directors, members, minutes, meetings] = await Promise.all([
-      ctx.db.get(societyId),
-      ctx.db.query("directors").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("members").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("minutes").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-      ctx.db.query("meetings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
-    ]);
-    if (!society) return null;
-    const activeDirectors = directors.filter((d) => d.status === "Active");
-    const lastAgm = meetings
-      .filter((m) => m.type === "AGM" && m.status === "Held")
-      .sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt))[0];
-    const lastAgmMinutesRaw = lastAgm
-      ? minutes.find((mn) => mn.meetingId === lastAgm._id)
-      : undefined;
-    // Flip the filing-packet motion read onto the first-class table (Phase 2C):
-    // attach resolved displayMotions so minutesMotionsForDisplay() below reads the
-    // table. No-op on data without motionIds (falls back to the embedded array).
-    const lastAgmMinutes = lastAgmMinutesRaw
-      ? { ...lastAgmMinutesRaw, displayMotions: await resolveMinutesMotions(await toPortableQueryCtx(ctx), lastAgmMinutesRaw) }
-      : undefined;
-
-    if (kind === "AnnualReport") {
-      return {
-        form: "BC-Societies-Form-11",
-        society: {
-          name: society.name,
-          incorporationNumber: society.incorporationNumber,
-          incorporationDate: society.incorporationDate,
-          registeredOfficeAddress: society.registeredOfficeAddress,
-          mailingAddress: society.mailingAddress,
-        },
-        agmDate: lastAgm?.scheduledAt?.slice(0, 10),
-        directors: activeDirectors.map((d) => ({
-          name: `${d.firstName} ${d.lastName}`,
-          position: d.position,
-          bcResident: d.isBCResident,
-          consentOnFile: d.consentOnFile,
-          termStart: d.termStart,
-        })),
-        signatories: activeDirectors.slice(0, 2).map((d) => ({
-          name: `${d.firstName} ${d.lastName}`,
-          position: d.position,
-        })),
-        votingMembers: members.filter((m) => m.votingRights && m.status === "Active").length,
-      };
-    }
-    if (kind === "BylawAmendment") {
-      const specialResolutions = minutesMotionsForDisplay(lastAgmMinutes).filter((m) =>
-        /special resolution|bylaw/i.test(m.text),
-      );
-      return {
-        form: "BC-Societies-BylawAmendment",
-        society: { name: society.name, incorporationNumber: society.incorporationNumber },
-        approvedAt: lastAgm?.scheduledAt?.slice(0, 10),
-        specialResolutions,
-      };
-    }
-    if (kind === "ChangeOfDirectors") {
-      return {
-        form: "BC-Societies-ChangeOfDirectors",
-        society: { name: society.name, incorporationNumber: society.incorporationNumber },
-        directors: activeDirectors.map((d) => ({
-          name: `${d.firstName} ${d.lastName}`,
-          position: d.position,
-          bcResident: d.isBCResident,
-          termStart: d.termStart,
-          termEnd: d.termEnd,
-        })),
-      };
-    }
-    return { form: "unknown" };
-  },
+  handler: async (ctx, args) => buildFilingPacketPortable(await toPortableQueryCtx(ctx), args),
 });
 
 // The preparation assistant. BC Societies Online has no public API and does not
@@ -289,7 +218,7 @@ export const run = authorizedAction("filingBot:run", action)({
       severity: "info",
       title: `Preparing filing: ${filing.kind}`,
       body: `Gathering and pre-filling ${filing.kind} for ${filing.periodLabel ?? filing.dueDate}. You'll submit it in Societies Online.`,
-      linkHref: "/filings",
+      linkHref: "/app/filings",
     });
 
     const packet = await ctx.runQuery(api.filingBot.buildFilingPacket, {
@@ -297,7 +226,8 @@ export const run = authorizedAction("filingBot:run", action)({
       kind: filing.kind,
     });
 
-    const steps = STEP_DEFINITIONS[filing.kind] ?? [];
+    const runKind = filing.kind === "BCSocietyAnnualReport" ? "AnnualReport" : filing.kind;
+    const steps = STEP_DEFINITIONS[runKind];
     const lastIndex = steps.length - 1;
     try {
       for (let i = 0; i < steps.length; i++) {
@@ -331,7 +261,7 @@ export const run = authorizedAction("filingBot:run", action)({
         severity: "info",
         title: `Filing ready to submit: ${filing.kind}`,
         body: `Form pre-filled and validated. Submit it in Societies Online, then record your confirmation number in Filings.`,
-        linkHref: "/filings",
+        linkHref: "/app/filings",
       });
       return { runId, status: "manual_required" as const };
     } catch (err: any) {
@@ -345,7 +275,7 @@ export const run = authorizedAction("filingBot:run", action)({
         severity: "err",
         title: `Filing bot failed: ${filing.kind}`,
         body: err?.message ?? "Unknown error",
-        linkHref: "/filings",
+        linkHref: "/app/filings",
       });
       throw err;
     }

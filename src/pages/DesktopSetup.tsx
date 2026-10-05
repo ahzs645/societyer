@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "./_helpers";
 import { DesktopDiagnosticsPanel } from "../components/DesktopDiagnosticsPanel";
+import { DesktopModePanel } from "../components/DesktopModePanel";
 import { Badge } from "../components/ui";
 import {
   getDesktopBridge,
@@ -275,7 +276,7 @@ export function DesktopSetupPage() {
     <div className="page page--wide">
       <PageHeader
         title="Welcome to Societyer Desktop"
-        subtitle="Choose where local documents live, confirm the desktop bridge, and connect optional services when needed."
+        subtitle="Choose a local or online workspace, prepare your local vault, and connect optional services when needed."
         icon={<HardDrive size={16} />}
         iconColor="blue"
         actions={
@@ -288,6 +289,8 @@ export function DesktopSetupPage() {
           </button>
         }
       />
+
+      <DesktopModePanel />
 
       {statusMessage && (
         <div className="notice notice--info" style={{ marginBottom: 16 }}>

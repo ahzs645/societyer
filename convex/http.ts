@@ -14,10 +14,16 @@ import { toPortableQueryCtx } from "./lib/portable";
 import type { Doc, Id } from "./_generated/dataModel";
 import { hostedPrincipal } from "./lib/authIdentity";
 import { assertExternalIdentityActive, matchesAuthBinding } from "../shared/functions/identity";
+import { workspaceCreationAccessPortable } from "../shared/functions/society";
 
 const http = httpRouter();
 const WEBHOOK_TOLERANCE_MS = 5 * 60 * 1000;
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+
+export const workspaceCreationAccess = authorizedQuery("http:workspaceCreationAccess", query)({
+  args: {}, returns: v.object({ allowed: v.boolean(), reason: v.string() }),
+  handler: async ctx => workspaceCreationAccessPortable(await toPortableQueryCtx(ctx)),
+});
 
 /**
  * Bootstrap the authenticated workspace picker without trusting a society id

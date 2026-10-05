@@ -28,6 +28,7 @@ const SETUP_STEPS = [
  */
 export function AppSetupPage() {
   const [existing] = useState(() => readAppRuntimeChoice());
+  const restoreRequested = new URLSearchParams(window.location.search).get("restore") === "1";
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -120,6 +121,7 @@ export function AppSetupPage() {
             </div>
           )}
 
+          {restoreRequested && <div className="notice notice--info">To bring back a Societyer backup, choose “I have a backup to restore” under local storage. The restored records stay on this device.</div>}
           <LocalStorageOption busy={busy} onChoose={chooseLocal} />
           <ServerOption
             busy={busy}

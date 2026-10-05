@@ -84,7 +84,9 @@ export function GrantSourceDetailPage() {
             )}
             <button
               className="btn-action btn-action--primary"
+              disabled={!canWrite}
               onClick={async () => {
+                if (!canWrite) return;
                 const grantId = await upsertGrant({
                   societyId: society._id,
                   title: `${source.name} application`,

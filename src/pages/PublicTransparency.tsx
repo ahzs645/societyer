@@ -5,6 +5,8 @@ import { api } from "@/lib/convexApi";
 import { Badge } from "../components/ui";
 import { Mail, Scale, ShieldCheck, ClipboardList, FileText } from "lucide-react";
 import { formatDate } from "../lib/format";
+import { publicationUrl } from "../lib/publicationUrl";
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 
 export function PublicTransparencyPage() {
   const { slug } = useParams<{ slug?: string }>();
@@ -26,14 +28,14 @@ export function PublicTransparencyPage() {
 
   const { society, directors, publications } = data;
   const statusLabels = [
-    { label: "Public page live", tone: "success" },
+    { label: isLocalDataRuntime() ? "Local public-page preview" : "Public page live", tone: "success" },
     society.publicShowBoard ? { label: "Board roster published", tone: "info" } : null,
     society.publicShowBylaws ? { label: "Governance records published", tone: "info" } : null,
     society.publicShowFinancials ? { label: "Financial records published", tone: "info" } : null,
   ].filter((row): row is { label: string; tone: string } => row !== null);
 
   return (
-    <div className="landing" style={{ minHeight: "100vh" }}>
+    <div className="landing" style={{ minHeight: "100vh", overflowWrap: "anywhere" }}>
       <section className="landing__hero" style={{ paddingTop: 72, paddingBottom: 48 }}>
         <div className="landing__container">
           <div className="landing__eyebrow">
@@ -152,10 +154,10 @@ export function PublicTransparencyPage() {
                         Open file
                       </a>
                     )}
-                    {publication.url && (
+                    {publicationUrl(publication.url) && (
                       <a
                         className="btn-action"
-                        href={publication.url}
+                        href={publicationUrl(publication.url)!}
                         target="_blank"
                         rel="noreferrer"
                         aria-label={`Open link for ${publication.title}`}
@@ -163,7 +165,7 @@ export function PublicTransparencyPage() {
                         Open link
                       </a>
                     )}
-                    {!publication.downloadUrl && !publication.url && (
+                    {!publication.downloadUrl && !publicationUrl(publication.url) && (
                       <span className="muted">No file or public link attached yet.</span>
                     )}
                   </div>

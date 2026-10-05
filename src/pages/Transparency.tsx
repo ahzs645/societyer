@@ -5,6 +5,7 @@ import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { appRouteHref, appRouteAbsoluteHref } from "../lib/appRouteHref";
+import { publicationUrl } from "../lib/publicationUrl";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field } from "../components/ui";
@@ -295,6 +296,7 @@ export function TransparencyPage() {
               ...existing,
               [fieldName]: value,
             };
+            if (merged.url && !publicationUrl(merged.url)) throw new Error("Use a valid HTTP or HTTPS public link.");
             if (merged.status === "Published") {
               merged.reviewStatus = "Approved";
               merged.approvedByUserId = merged.approvedByUserId ?? actingUserId;
@@ -435,6 +437,10 @@ export function TransparencyPage() {
               disabled={!canPublish}
               onClick={async () => {
                 if (!canPublish) return;
+                if (publicationDraft.url && !publicationUrl(publicationDraft.url)) {
+                  toast.error("Use a valid HTTP or HTTPS public link.");
+                  return;
+                }
                 if (publicationDraft.status === "Published") {
                   if (!publicationDraft.title?.trim()) {
                     toast.error("Add a title before publishing");

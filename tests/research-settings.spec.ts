@@ -1,3 +1,4 @@
+import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
 import { expect, test } from "@playwright/test";
 
 test("storage policy persists while planned providers stay blocked and app identity stays separate", async ({ page }) => {
@@ -84,9 +85,7 @@ test("local Owner can edit storage policy while acting Member remains restricted
   await page.goto("/setup", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /Start a new organization/i }).click();
   await page.waitForURL(/\/app\/society\/new/);
-  await page.getByRole("textbox").first().fill("Storage Policy Society");
-  await page.getByRole("button", { name: "Create workspace", exact: true }).click();
-  await page.waitForURL(/\/app\/workflows\//);
+  await completeGuidedOrganizationSetup(page, "Storage Policy Society", true);
   await page.goto("/app/users", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "Add user", exact: true }).click();
   await page.getByLabel("Display name", { exact: true }).fill("Storage Policy Member");

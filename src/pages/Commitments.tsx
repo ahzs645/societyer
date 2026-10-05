@@ -82,6 +82,7 @@ export function CommitmentsPage() {
   const [eventForm, setEventForm] = useState<EventForm | null>(null);
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -172,35 +173,45 @@ export function CommitmentsPage() {
   };
 
   const saveCommitment = async () => {
-    if (!canWrite) return;
+    if (!canWrite || saving) return;
     if (!form) return;
-    const payload = commitmentPayload(form);
-    if (editingId) {
-      await update({ id: editingId as any, patch: payload });
-      toast.success("Commitment updated");
-    } else {
-      await create({ societyId: society._id, ...payload });
-      toast.success("Commitment added");
-    }
-    closeForm();
+    setSaving(true);
+    try {
+      const payload = commitmentPayload(form);
+      if (editingId) {
+        await update({ id: editingId as any, patch: payload });
+        toast.success("Commitment updated");
+      } else {
+        await create({ societyId: society._id, ...payload });
+        toast.success("Commitment added");
+      }
+      closeForm();
+    } catch (error) {
+      toast.error("Could not save commitment", error instanceof Error ? error.message : "Please try again.");
+    } finally { setSaving(false); }
   };
 
   const saveEvent = async () => {
-    if (!canWrite) return;
+    if (!canWrite || saving) return;
     if (!eventForm) return;
-    await recordEvent({
-      commitmentId: eventForm.commitment._id,
-      title: eventForm.title.trim() || `${eventForm.commitment.title} completed`,
-      happenedAtISO: eventForm.happenedAtISO,
-      meetingId: emptyToUndefined(eventForm.meetingId) as any,
-      evidenceDocumentIds: eventForm.evidenceDocumentIds as any[],
-      evidenceStatus: eventForm.evidenceStatus,
-      evidenceNotes: emptyToUndefined(eventForm.evidenceNotes),
-      summary: emptyToUndefined(eventForm.summary),
-      nextDueDate: emptyToUndefined(eventForm.nextDueDate),
-    });
-    toast.success("Completion recorded");
-    setEventForm(null);
+    setSaving(true);
+    try {
+      await recordEvent({
+        commitmentId: eventForm.commitment._id,
+        title: eventForm.title.trim() || `${eventForm.commitment.title} completed`,
+        happenedAtISO: eventForm.happenedAtISO,
+        meetingId: emptyToUndefined(eventForm.meetingId) as any,
+        evidenceDocumentIds: eventForm.evidenceDocumentIds as any[],
+        evidenceStatus: eventForm.evidenceStatus,
+        evidenceNotes: emptyToUndefined(eventForm.evidenceNotes),
+        summary: emptyToUndefined(eventForm.summary),
+        nextDueDate: emptyToUndefined(eventForm.nextDueDate),
+      });
+      toast.success("Completion recorded");
+      setEventForm(null);
+    } catch (error) {
+      toast.error("Could not record completion", error instanceof Error ? error.message : "Please try again.");
+    } finally { setSaving(false); }
   };
 
   const createPreparationTask = async (row: any) => {
@@ -210,27 +221,31 @@ export function CommitmentsPage() {
       toast.info("Open task already exists", existing[0].title);
       return;
     }
-    const dueDate = row.nextDueDate ? subtractDays(row.nextDueDate, row.noticeLeadDays ?? 14) : undefined;
-    const sourceTitle = documentsById.get(String(row.sourceDocumentId))?.title;
-    await createTask({
-      societyId: society._id,
-      title: `Prepare ${row.title}`,
-      description: [
-        row.requirement,
-        row.sourceLabel ? `Source: ${row.sourceLabel}` : undefined,
-        sourceTitle ? `Document: ${sourceTitle}` : undefined,
-        row.uncertaintyNote ? `Review note: ${row.uncertaintyNote}` : undefined,
-      ].filter(Boolean).join("\n"),
-      status: "Todo",
-      priority: isOverdue(row) ? "High" : "Medium",
-      assignee: row.owner,
-      dueDate,
-      documentId: row.sourceDocumentId,
-      commitmentId: row._id,
-      eventId: `commitment:${row._id}`,
-      tags: ["commitment", row.category?.toLowerCase?.()].filter(Boolean),
-    });
-    toast.success("Preparation task created", dueDate ? `Due ${formatDate(dueDate)}` : row.title);
+    try {
+      const dueDate = row.nextDueDate ? subtractDays(row.nextDueDate, row.noticeLeadDays ?? 14) : undefined;
+      const sourceTitle = documentsById.get(String(row.sourceDocumentId))?.title;
+      await createTask({
+        societyId: society._id,
+        title: `Prepare ${row.title}`,
+        description: [
+          row.requirement,
+          row.sourceLabel ? `Source: ${row.sourceLabel}` : undefined,
+          sourceTitle ? `Document: ${sourceTitle}` : undefined,
+          row.uncertaintyNote ? `Review note: ${row.uncertaintyNote}` : undefined,
+        ].filter(Boolean).join("\n"),
+        status: "Todo",
+        priority: isOverdue(row) ? "High" : "Medium",
+        assignee: row.owner,
+        dueDate,
+        documentId: row.sourceDocumentId,
+        commitmentId: row._id,
+        eventId: `commitment:${row._id}`,
+        tags: ["commitment", row.category?.toLowerCase?.()].filter(Boolean),
+      });
+      toast.success("Preparation task created", dueDate ? `Due ${formatDate(dueDate)}` : row.title);
+    } catch (error) {
+      toast.error("Could not create preparation task", error instanceof Error ? error.message : "Please try again.");
+    }
   };
 
   return (
@@ -418,8 +433,10 @@ export function CommitmentsPage() {
                         tone: "danger",
                       });
                       if (!ok) return;
-                      await remove({ id: row._id });
-                      toast.success("Commitment deleted");
+                      try {
+                        await remove({ id: row._id });
+                        toast.success("Commitment deleted");
+                      } catch (error) { toast.error("Could not delete commitment", error instanceof Error ? error.message : "Please try again."); }
                     },
                   },
                 ],
@@ -459,8 +476,10 @@ export function CommitmentsPage() {
                           tone: "danger",
                         });
                         if (!ok) return;
-                        await removeEvent({ id: event._id });
-                        toast.success("Completion removed");
+                        try {
+                          await removeEvent({ id: event._id });
+                          toast.success("Completion removed");
+                        } catch (error) { toast.error("Could not remove completion record", error instanceof Error ? error.message : "Please try again."); }
                       }}
                     disabled={!canWrite}
                    >
@@ -500,18 +519,18 @@ export function CommitmentsPage() {
         footer={
           <>
             <button className="btn" onClick={closeForm}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveCommitment} disabled={!canWrite || (!form?.title.trim() || !form?.requirement.trim())}>
+            <button className="btn btn--accent" onClick={saveCommitment} disabled={!canWrite || saving || (!form?.title.trim() || !form?.requirement.trim())}>
               Save
             </button>
           </>
         }
       >
         {form && (
-          <CommitmentFormFields
+          <fieldset disabled={!canWrite || saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><CommitmentFormFields
             value={form}
             onChange={(patch) => setForm((prev) => (prev ? { ...prev, ...patch } : prev))}
             data={{ documents }}
-          />
+          /></fieldset>
         )}
       </Drawer>
 
@@ -522,19 +541,19 @@ export function CommitmentsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setEventForm(null)}>Cancel</button>
-            <button className="btn btn--accent" onClick={saveEvent} disabled={!canWrite || (!eventForm?.happenedAtISO)}>
+            <button className="btn btn--accent" onClick={saveEvent} disabled={!canWrite || saving || (!eventForm?.happenedAtISO)}>
               Record
             </button>
           </>
         }
       >
         {eventForm && (
-          <EventFormFields
+          <fieldset disabled={!canWrite || saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><EventFormFields
             form={eventForm}
             setForm={setEventForm}
             documents={(documents ?? []) as any[]}
             meetings={(meetings ?? []) as any[]}
-          />
+          /></fieldset>
         )}
       </Drawer>
     </div>

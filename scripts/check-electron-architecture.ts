@@ -58,6 +58,8 @@ assert.equal(normalizeDesktopProtocolPathname("/assets/../secrets"), null);
 assert.equal(normalizeDesktopProtocolPathname("/assets/%2e%2e/secrets"), "assets/%2e%2e/secrets");
 
 assert.equal(protocolPathFromUrl(new URL("societyer-app://index.html")), "/index.html");
+assert.equal(protocolPathFromUrl(new URL("societyer-app://index.html/assets/app.js")), "/assets/app.js");
+assert.equal(protocolPathFromUrl(new URL("./assets/app.js", "societyer-app://index.html")), "/assets/app.js");
 assert.equal(protocolPathFromUrl(new URL("societyer-app://assets/app.js")), "/assets/app.js");
 assert.equal(protocolPathFromUrl(new URL("societyer-app:///assets/app.js")), "/assets/app.js");
 

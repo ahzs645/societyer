@@ -1,3 +1,4 @@
+import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -108,6 +109,7 @@ export function DocumentsPage() {
   };
 
   const maybeSyncToPaperless = async (documentId: any) => {
+    if (isLocalDataRuntime() && !isStaticDemoRuntime()) return;
     if (!paperlessConnection?.autoUpload || paperlessConnection.status !== "connected") return;
     if (getDocumentStorageProvider() === "local-filesystem") {
       toast.info("Paperless sync is skipped for local filesystem documents.");

@@ -233,7 +233,8 @@ export function FilingsPage() {
       <p className="muted">
         Related: annual jurisdiction filings are also tracked on{" "}
         <Link to="/app/annual-filings">Annual filings</Link> and{" "}
-        <Link to="/app/formation-maintenance">Formation &amp; annual maintenance</Link>.
+        <Link to="/app/formation-maintenance">Formation &amp; annual maintenance</Link>.{" "}
+        <Link to="/app/filings/prefill">Prepare filing values</Link> before submitting through the official portal.
       </p>
 
       {showMetadataWarning ? (
@@ -282,10 +283,10 @@ export function FilingsPage() {
                     <button
                       className="btn btn--sm"
                       onClick={() => setBotFor({ id: r._id, label: `${r.kind}: ${r.periodLabel ?? r.dueDate}` })}
-                      title="Run the Societies Online filing bot"
+                      title="Prepare a BC society filing for manual submission"
                     disabled={!canWrite}
                    >
-                      <Bot size={12} /> Bot
+                      <Bot size={12} /> Prepare
                     </button>
                   )}
                   <button

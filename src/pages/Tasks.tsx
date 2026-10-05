@@ -92,6 +92,7 @@ export function TasksPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<EditableTaskForm | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -292,71 +293,77 @@ export function TasksPage() {
   };
 
   const save = async () => {
-    if (!form || !canManage) return;
-    if (form._id) {
-      await update({
-        id: form._id,
-        patch: cleanPatch({
-          title: form.title,
-          description: form.description || undefined,
-          status: form.status,
-          priority: form.priority,
-          assignee: form.assignee || undefined,
-          responsibleUserIds: form.responsibleUserId
-            ? [form.responsibleUserId as Id<"users">]
-            : [],
-          dueDate: form.dueDate || undefined,
-          committeeId: form.committeeId
-            ? (form.committeeId as Id<"committees">)
-            : undefined,
-          goalId: form.goalId ? (form.goalId as Id<"goals">) : undefined,
-          filingId: form.filingId ? (form.filingId as Id<"filings">) : undefined,
-          workflowId: form.workflowId
-            ? (form.workflowId as Id<"workflows">)
-            : undefined,
-          documentId: form.documentId
-            ? (form.documentId as Id<"documents">)
-            : undefined,
-          commitmentId: form.commitmentId
-            ? (form.commitmentId as Id<"commitments">)
-            : undefined,
-          eventId: form.eventId || undefined,
-          completionNote: form.completionNote || undefined,
-          completedByUserId:
-            form.status === "Done" && currentUserId ? currentUserId : undefined,
-        }),
+    if (!form || !canManage || saving) return;
+    if (!form.title.trim()) { toast.error("Title is required"); return; }
+    setSaving(true);
+    try {
+      if (form._id) {
+        await update({
+          id: form._id,
+          patch: cleanPatch({
+            title: form.title,
+            description: form.description || undefined,
+            status: form.status,
+            priority: form.priority,
+            assignee: form.assignee || undefined,
+            responsibleUserIds: form.responsibleUserId
+              ? [form.responsibleUserId as Id<"users">]
+              : [],
+            dueDate: form.dueDate || undefined,
+            committeeId: form.committeeId
+              ? (form.committeeId as Id<"committees">)
+              : undefined,
+            goalId: form.goalId ? (form.goalId as Id<"goals">) : undefined,
+            filingId: form.filingId ? (form.filingId as Id<"filings">) : undefined,
+            workflowId: form.workflowId
+              ? (form.workflowId as Id<"workflows">)
+              : undefined,
+            documentId: form.documentId
+              ? (form.documentId as Id<"documents">)
+              : undefined,
+            commitmentId: form.commitmentId
+              ? (form.commitmentId as Id<"commitments">)
+              : undefined,
+            eventId: form.eventId || undefined,
+            completionNote: form.completionNote || undefined,
+            completedByUserId:
+              form.status === "Done" && currentUserId ? currentUserId : undefined,
+          }),
+        });
+        setOpen(false);
+        toast.success("Task updated", form.title);
+        return;
+      }
+
+      await create({
+        societyId: society._id,
+        title: form.title,
+        description: form.description || undefined,
+        status: form.status,
+        priority: form.priority,
+        assignee: form.assignee || undefined,
+        responsibleUserIds: form.responsibleUserId
+          ? [form.responsibleUserId as Id<"users">]
+          : undefined,
+        dueDate: form.dueDate || undefined,
+        committeeId: form.committeeId
+          ? (form.committeeId as Id<"committees">)
+          : undefined,
+        goalId: form.goalId ? (form.goalId as Id<"goals">) : undefined,
+        filingId: form.filingId ? (form.filingId as Id<"filings">) : undefined,
+        workflowId: form.workflowId ? (form.workflowId as Id<"workflows">) : undefined,
+        documentId: form.documentId ? (form.documentId as Id<"documents">) : undefined,
+        commitmentId: form.commitmentId
+          ? (form.commitmentId as Id<"commitments">)
+          : undefined,
+        eventId: form.eventId || undefined,
+        tags: form.tags ?? [],
       });
       setOpen(false);
-      toast.success("Task updated", form.title);
-      return;
-    }
-
-    await create({
-      societyId: society._id,
-      title: form.title,
-      description: form.description || undefined,
-      status: form.status,
-      priority: form.priority,
-      assignee: form.assignee || undefined,
-      responsibleUserIds: form.responsibleUserId
-        ? [form.responsibleUserId as Id<"users">]
-        : undefined,
-      dueDate: form.dueDate || undefined,
-      committeeId: form.committeeId
-        ? (form.committeeId as Id<"committees">)
-        : undefined,
-      goalId: form.goalId ? (form.goalId as Id<"goals">) : undefined,
-      filingId: form.filingId ? (form.filingId as Id<"filings">) : undefined,
-      workflowId: form.workflowId ? (form.workflowId as Id<"workflows">) : undefined,
-      documentId: form.documentId ? (form.documentId as Id<"documents">) : undefined,
-      commitmentId: form.commitmentId
-        ? (form.commitmentId as Id<"commitments">)
-        : undefined,
-      eventId: form.eventId || undefined,
-      tags: form.tags ?? [],
-    });
-    setOpen(false);
-    toast.success("Task created", form.title);
+      toast.success("Task created", form.title);
+    } catch (error) {
+      toast.error("Could not save task", error instanceof Error ? error.message : "Please try again.");
+    } finally { setSaving(false); }
   };
 
   const confirmDelete = async (id: Id<"tasks">, title: string) => {
@@ -368,20 +375,28 @@ export function TasksPage() {
       tone: "danger",
     });
     if (!approved) return;
-    await remove({ id });
-    toast.success("Task deleted");
+    try {
+      await remove({ id });
+      toast.success("Task deleted");
+    } catch (error) {
+      toast.error("Could not delete task", error instanceof Error ? error.message : "Please try again.");
+    }
   };
 
   const markComplete = async (task: TaskRecord) => {
     if (!canManage) return;
-    await update({
-      id: task._id,
-      patch: {
-        status: "Done",
-        completedByUserId: currentUserId ?? undefined,
-      },
-    });
-    toast.success("Task completed", task.title);
+    try {
+      await update({
+        id: task._id,
+        patch: {
+          status: "Done",
+          completedByUserId: currentUserId ?? undefined,
+        },
+      });
+      toast.success("Task completed", task.title);
+    } catch (error) {
+      toast.error("Could not complete task", error instanceof Error ? error.message : "Please try again.");
+    }
   };
 
   const updateInlineField = async (
@@ -693,8 +708,8 @@ export function TasksPage() {
             <button className="btn" onClick={() => setOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" onClick={save} disabled={!canManage}>
-              {form?._id ? "Save" : "Create"}
+            <button className="btn btn--accent" onClick={save} disabled={!canManage || saving || !form?.title.trim()}>
+              {saving ? "Saving…" : form?._id ? "Save" : "Create"}
             </button>
           </>
         }
@@ -715,7 +730,7 @@ export function TasksPage() {
                 belong in Commitments.
               </p>
             )}
-            <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            <fieldset disabled={!canManage || saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <TaskFormFields
               readOnly={!canManage}
               value={form}

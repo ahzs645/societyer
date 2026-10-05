@@ -200,7 +200,17 @@
     "check:powersync-production-config": "tsx scripts/check-powersync-production-config.ts",
     "test:powersync-invalidation": "tsx scripts/check-powersync-invalidation.ts",
     "test:offline-rollout": "playwright test -c playwright.offline-rollout.config.ts",
-    "test:frontend-bundle-budget": "node scripts/check-frontend-bundle-budget.mjs"
+    "test:frontend-bundle-budget": "node scripts/check-frontend-bundle-budget.mjs",
+    "test:workspace-creation-access": "tsx scripts/check-workspace-creation-access.ts",
+    "test:desktop-dual-mode": "tsx scripts/check-desktop-dual-mode.ts",
+    "test:desktop-dual-mode-runtime": "node scripts/check-desktop-dual-mode-runtime.mjs",
+    "test:election-lifecycle": "tsx scripts/check-election-lifecycle.ts",
+    "test:filing-preparation-integration": "tsx scripts/check-filing-preparation-integration.ts",
+    "test:guided-onboarding": "tsx scripts/check-guided-onboarding.ts",
+    "test:task-source-links": "tsx scripts/check-task-source-links.ts",
+    "test:guided-setup-browser": "playwright test --config playwright.guided-setup.config.ts",
+    "test:live-guided-setup": "playwright test --config playwright.live-interface.config.ts tests/live-interface-guided-setup.spec.ts --workers=1",
+    "test:structured-address": "tsx scripts/check-structured-address.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

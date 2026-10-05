@@ -1,4 +1,5 @@
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { OrganizationOnboardingPanel } from "../components/OrganizationOnboardingPanel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -240,6 +241,7 @@ export function WorkflowDetailPage() {
         </div>
       </div>
 
+      {workflow.recipe === "workspace_onboarding" && String(workflow.societyId) === String(society._id) && <OrganizationOnboardingPanel organization={society} />}
       {isLocalDataRuntime() && <p className="muted" style={{ padding: "8px 16px", margin: 0 }}>Workflow execution requires a connected server. You can prepare and review this workflow here.</p>}
       <div className="workflow-shell">
         <section className="workflow-canvas" aria-label="Workflow canvas">

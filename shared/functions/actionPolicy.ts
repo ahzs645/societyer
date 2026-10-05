@@ -4,6 +4,7 @@ import { requireAuthenticated } from "./access";
 import { requirePermissionPortable, type Permission } from "./permissions";
 import { uploadPermission } from "./uploadPolicy";
 import { isAllowedOption } from "../orgHubOptions";
+import { assertWorkspaceCreator } from "./society";
 
 const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   society: ["society", "dashboard", "organizationDetails", "organizationHistory", "firm"],
@@ -51,7 +52,7 @@ const HANDLER_POLICIES = new Set([
   "files:getUrl", "users:ensureCurrentMembership", "users:recordLogin", "users:get", "users:getByAuthSubject", "users:getByEmail",
   "invitations:accept", "invitations:getByToken", "permissions:myPermissions", "permissions:check", "permissions:listAll",
   "society:createWorkspace", "society:create", "society:list", "society:listMine", "society:current", "firm:list", "firm:organizations",
-  "http:currentPrincipalMemberships", "http:me", "http:gatewayApiPrincipal", "http:gatewayWorkflowBinding", "http:gatewayGeneratedDocumentAccess",
+  "http:workspaceCreationAccess", "http:currentPrincipalMemberships", "http:me", "http:gatewayApiPrincipal", "http:gatewayWorkflowBinding", "http:gatewayGeneratedDocumentAccess",
 ]);
 // Public intake/token routes retain their existing narrow, handler-level policy.
 const PUBLIC_HANDLERS = new Set(["publicPortal:getSocietyBySlug", "publicPortal:volunteerIntakeContext", "publicPortal:grantIntakeContext", "transparency:publicCenter", "partyPortals:center", "volunteers:submitApplication","grants:submitApplication", "publicPortal:getByToken", "publicPortal:submit", "partyPortals:getByToken", "partyPortals:respond"]);
@@ -60,6 +61,8 @@ const PUBLIC_HANDLERS = new Set(["publicPortal:getSocietyBySlug", "publicPortal:
 // references. Keep the exceptions endpoint-specific: targetId and other row
 // references in the same request still require workspace ownership.
 const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
+  // Task handlers validate known source-correlation keys or actual completion IDs.
+  "tasks:create": ["eventId"],
   "complianceObligations:markReviewed": ["ruleId"],
   "complianceObligations:dismissDecision": ["ruleId"],
   "complianceObligations:reopenDecision": ["ruleId"],
@@ -158,6 +161,9 @@ async function societyForArgs(ctx: PortableQueryCtx, name: string, args: Record<
 }
 
 export async function requireFunctionAction(ctx: PortableQueryCtx, name: string, kind: "query" | "mutation" | "action", args: Record<string, any>) {
+  if (["society:createWorkspace", "society:create"].includes(name)) {
+    await assertWorkspaceCreator(ctx, args.actingUserId); return;
+  }
   if (["files:generateUploadUrl", "files:generateLogoUploadUrl"].includes(name) && typeof args.societyId !== "string") throw new Error("An authorized workspace is required.");
   let permission = actionPermission(name, kind);
   if (name === "files:generateUploadUrl") permission = uploadPermission(args.purpose);

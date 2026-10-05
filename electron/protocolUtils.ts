@@ -11,6 +11,9 @@ export function normalizeDesktopProtocolPathname(rawPath: string): string | null
 }
 
 export function protocolPathFromUrl(url: URL): string {
+  // Preserve the established IndexedDB origin while resolving Vite's relative
+  // ./assets imports from societyer-app://index.html correctly.
+  if (url.hostname === "index.html") return decodeURIComponent(url.pathname || "/index.html");
   const hostPath = url.hostname ? `/${url.hostname}${url.pathname}` : url.pathname;
   return decodeURIComponent(hostPath);
 }

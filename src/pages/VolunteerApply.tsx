@@ -24,6 +24,7 @@ export function VolunteerApplyPage() {
     slug ? { slug } : "skip",
   );
   const currentUser = useCurrentUser();
+  const applicantMemberId = currentUser?.societyId === context?.society?._id ? currentUser?.memberId : undefined;
   const submitApplication = useMutation(api.volunteers.submitApplication);
   const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
@@ -77,7 +78,7 @@ export function VolunteerApplyPage() {
     try {
       await submitApplication({
       societyId: context.society._id,
-      memberId: currentUser?.memberId ?? undefined,
+      memberId: applicantMemberId ?? undefined,
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       email: form.email.trim(),
@@ -89,7 +90,7 @@ export function VolunteerApplyPage() {
         .map((value) => value.trim())
         .filter(Boolean),
       notes: form.notes || undefined,
-      source: currentUser?.memberId ? "portal" : "public",
+      source: applicantMemberId ? "portal" : "public",
       });
       toast.success("Volunteer application submitted");
       setForm((current) => ({

@@ -23,6 +23,7 @@ export function GrantApplyPage() {
   const { slug } = useParams<{ slug: string }>();
   const context = useQuery(api.publicPortal.grantIntakeContext, slug ? { slug } : "skip");
   const currentUser = useCurrentUser();
+  const applicantMemberId = currentUser?.societyId === context?.society?._id ? currentUser?.memberId : undefined;
   const submitApplication = useMutation(api.grants.submitApplication);
   const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
@@ -99,7 +100,7 @@ export function GrantApplyPage() {
       await submitApplication({
       societyId: context.society._id,
       grantId: form.grantId ? (form.grantId as any) : undefined,
-      memberId: currentUser?.memberId ?? undefined,
+      memberId: applicantMemberId ?? undefined,
       applicantName: form.applicantName.trim(),
       organizationName: form.organizationName || undefined,
       email: form.email.trim(),
@@ -109,7 +110,7 @@ export function GrantApplyPage() {
       projectSummary: projectSummary.trim(),
       proposedUseOfFunds: proposedUseOfFunds || undefined,
       expectedOutcomes: expectedOutcomes || undefined,
-      source: currentUser?.memberId ? "portal" : "public",
+      source: applicantMemberId ? "portal" : "public",
       });
       toast.success("Grant application submitted");
       setForm((current) => ({

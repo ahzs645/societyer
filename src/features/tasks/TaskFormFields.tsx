@@ -232,7 +232,7 @@ export function TaskFormFields({
           className="input mono"
           value={value.eventId}
           onChange={(e) => onChange({ eventId: e.target.value })}
-          placeholder="custom.event or imported event id"
+          placeholder="Completion record ID or linked source key"
         />
       </Field>
       {mode === "edit" && (

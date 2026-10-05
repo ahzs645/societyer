@@ -69,15 +69,11 @@ export function IntegrationMarketplacePage() {
   const { loaded, can } = usePermissions();
   const canWriteSettings = loaded && can("settings:write");
   const canCreateBoardPack = loaded && can("tasks:write");
-  const canUseBoardPackFallback = canCreateBoardPack && can("meetings:write");
   const actingUserId = useCurrentUserId() ?? undefined;
   const installations = useQuery(api.apiPlatform.listPluginInstallations, society ? { societyId: society._id } : "skip") as Installation[] | undefined;
   const meetings = useQuery(api.meetings.list, society ? { societyId: society._id } : "skip") as any[] | undefined;
   const upsertPluginInstallation = usePermissionedMutation(api.apiPlatform.upsertPluginInstallation, canWriteSettings);
   const createBoardPack = usePermissionedMutation(api.workflowPackages.createBoardPack, canCreateBoardPack);
-  const upsertWorkflowPackage = usePermissionedMutation(api.workflowPackages.upsert, canUseBoardPackFallback);
-  const createTask = usePermissionedMutation(api.tasks.create, canUseBoardPackFallback);
-  const setPackageReviewStatus = usePermissionedMutation(api.meetings.setPackageReviewStatus, canUseBoardPackFallback);
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") === "setup" ? "setup" : "catalog";
@@ -111,7 +107,10 @@ export function IntegrationMarketplacePage() {
         slug: item.slug,
         status: "installed",
         capabilities: item.capabilities,
-        configJson: JSON.stringify(catalogConfig(item), null, 2),
+        configJson: JSON.stringify({
+          ...parseConfigJson(item.installation?.configJson),
+          ...catalogConfig(item),
+        }, null, 2),
         installedByUserId: actingUserId as any,
       });
       toast.success("Integration installed", item.name);
@@ -156,16 +155,10 @@ export function IntegrationMarketplacePage() {
     if (!meetingId) return;
     setBusySlug("board-pack-workflow");
     try {
-      let result: any;
-      try {
-        result = await createBoardPack({
-          societyId: society._id,
-          meetingId: meetingId as any,
-        });
-      } catch (error) {
-        if (!canUseBoardPackFallback) throw error;
-        result = await createBoardPackFallback();
-      }
+      const result = await createBoardPack({
+        societyId: society._id,
+        meetingId: meetingId as any,
+      });
       toast.success("Board pack created", `${result.taskIds.length} follow-up tasks opened`);
     } catch (error: any) {
       toast.error("Could not create board pack", error?.message);
@@ -174,57 +167,9 @@ export function IntegrationMarketplacePage() {
     }
   };
 
-  const createBoardPackFallback = async () => {
-    if (!canUseBoardPackFallback) throw new Error("Board-pack changes are not permitted.");
-    const meeting = meetingOptions.find((item) => item._id === meetingId);
-    if (!meeting) throw new Error("Meeting not found.");
-    const packageId = await upsertWorkflowPackage({
-      societyId: society._id,
-      eventType: "custom.event",
-      effectiveDate: String(meeting.scheduledAt).slice(0, 10),
-      status: "draft",
-      packageName: `Board pack - ${meeting.title}`,
-      parts: [
-        "Agenda",
-        "Meeting materials",
-        "Notice of meeting",
-        "Attendance and quorum",
-        "Draft minutes",
-        "Follow-up actions",
-        "Minute-book publication",
-      ],
-      notes: `Board-pack workflow for ${meeting.title}. Created from frontend compatibility mode because the K8s Convex runtime does not have createBoardPack deployed yet.`,
-      supportingDocumentIds: [],
-      priceItems: [],
-      signerRoster: [],
-      signerEmails: [],
-      signingPackageIds: [],
-    });
-    await setPackageReviewStatus({
-      id: meeting._id,
-      status: "needs_review",
-      notes: `Board pack package ${String(packageId)} created from integration marketplace.`,
-    });
-    const taskIds: any[] = [];
-    for (const task of boardPackTaskDrafts(meeting, String(packageId))) {
-      taskIds.push(await createTask({
-        societyId: society._id,
-        meetingId: meeting._id,
-        title: task.title,
-        description: task.description,
-        status: "Todo",
-        priority: task.priority,
-        dueDate: task.dueDate,
-        eventId: task.eventId,
-        tags: ["board-pack", task.key],
-      }));
-    }
-    return { packageId, taskIds };
-  };
-
   const openItem = (item: CatalogItem) => {
     setSelectedSlug(item.slug);
-    setHealthDraft({});
+    setHealthDraft({ ...(parseConfigJson(item.installation?.configJson).secretStatus ?? {}) });
     setDetailOpen(true);
   };
 
@@ -435,6 +380,10 @@ function IntegrationDeepLinks({ item }: { item: CatalogItem }) {
 
 function integrationLinksFor(slug: string) {
   const links: Record<string, Array<{ label: string; to: string; primary?: boolean }>> = {
+    "board-pack-workflow": [
+      { label: "Review board-pack packages", to: "/app/workflow-packages", primary: true },
+      { label: "Follow-up tasks", to: "/app/tasks" },
+    ],
     "paperless-ngx": [
       { label: "Paperless setup", to: "/app/paperless", primary: true },
       { label: "Review imports", to: "/app/imports?source=Paperless" },
@@ -455,10 +404,12 @@ function integrationLinksFor(slug: string) {
       { label: "Connector runs", to: "/app/workflow-runs?provider=browser-connector&triggeredBy=connector" },
     ],
     "google-calendar": [
-      { label: "Calendar sync state", to: "/app/workflow-runs?provider=calendar-sync" },
+      { label: "Calendar setup and imports", to: "/app/calendar-sync", primary: true },
+      { label: "Calendar sync history", to: "/app/workflow-runs?provider=calendar-sync" },
     ],
     "microsoft-365": [
-      { label: "Calendar sync state", to: "/app/workflow-runs?provider=calendar-sync" },
+      { label: "Calendar setup and imports", to: "/app/calendar-sync", primary: true },
+      { label: "Calendar sync history", to: "/app/workflow-runs?provider=calendar-sync" },
     ],
   };
   return links[slug] ?? [];
@@ -494,7 +445,7 @@ function statusLabel(status: string) {
 }
 
 const HEALTH_LABELS: Record<string, string> = {
-  ready: "Ready",
+  ready: "Checklist complete",
   needs_setup: "Needs setup",
   not_installed: "Not installed",
   planned: "Coming soon",
@@ -526,7 +477,7 @@ function mergeCatalogWithInstallations(installations: Installation[]): CatalogIt
         messages: !installation
           ? ["Install this integration to configure credentials, actions, and connections."]
           : [
-              missingSecrets.length ? `Still needs setup: ${missingSecrets.join(", ")}` : "All required credentials are confirmed.",
+              missingSecrets.length ? `Still needs setup: ${missingSecrets.join(", ")}` : "Setup checklist complete. Provider connectivity has not been tested here.",
               ...(Array.isArray(config.healthMessages) ? config.healthMessages : []),
             ],
       },
@@ -556,30 +507,4 @@ function parseConfigJson(value?: string) {
   } catch {
     return {};
   }
-}
-
-function addDays(date: string, days: number) {
-  const parsed = new Date(`${date.slice(0, 10)}T12:00:00.000Z`);
-  parsed.setUTCDate(parsed.getUTCDate() + days);
-  return parsed.toISOString().slice(0, 10);
-}
-
-function boardPackTaskDrafts(meeting: any, packageId: string) {
-  const meetingDate = String(meeting.scheduledAt ?? new Date().toISOString()).slice(0, 10);
-  const title = String(meeting.title ?? "meeting");
-  return [
-    ["prepare-agenda", `Prepare agenda for ${title}`, "Confirm agenda items, bylaw-required business, motions, presenters, and time boxes.", "High", addDays(meetingDate, -14)],
-    ["attach-materials", `Attach board materials for ${title}`, "Attach reports, motions, financials, policies, and supporting documents to the meeting materials list.", "High", addDays(meetingDate, -10)],
-    ["send-notice", `Send meeting notice for ${title}`, "Queue or record notice delivery, including remote attendance instructions and material access.", "High", addDays(meetingDate, -7)],
-    ["record-quorum", `Record attendance and quorum for ${title}`, "Capture present/absent/proxy attendance, quorum source, remote participation, and conflicts.", "High", meetingDate],
-    ["draft-minutes", `Draft minutes for ${title}`, "Create draft minutes from agenda, transcript, notes, and motions without approving the record.", "High", addDays(meetingDate, 2)],
-    ["publish-minute-book", `Publish minute-book entry for ${title}`, "After minutes approval, publish evidence into the minute book and close the board pack.", "Medium", addDays(meetingDate, 14)],
-  ].map(([key, taskTitle, description, priority, dueDate]) => ({
-    key,
-    title: taskTitle,
-    description,
-    priority,
-    dueDate,
-    eventId: `boardPack:${packageId}:${key}`,
-  }));
 }

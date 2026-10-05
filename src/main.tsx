@@ -366,7 +366,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               path="/app/society/new"
               element={
                 <SetupGate>
-                  <AuthGate>
+                  <AuthGate allowWorkspaceCreation>
                     <SocietyNewPage />
                   </AuthGate>
                 </SetupGate>

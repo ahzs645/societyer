@@ -1,5 +1,13 @@
 import type { DocumentVersionRef } from "./documentStorage";
 
+export type DesktopHostedConfiguration = { origin: string; authenticationOrigins: string[] };
+export type DesktopModeState = {
+  mode: "local" | "online";
+  startupMode: "local" | "online";
+  hostedApplication: DesktopHostedConfiguration | null;
+  lastError?: string;
+};
+
 export type DesktopWorkspaceInfo = {
   id: string;
   name?: string;
@@ -158,6 +166,9 @@ export type DesktopPrintToPdfResult = {
 };
 
 export type SocietyerDesktopBridge = {
+  getDesktopMode(): Promise<DesktopModeState>;
+  openHostedMode(configuration?: DesktopHostedConfiguration): Promise<DesktopModeState>;
+  returnToLocalMode(): Promise<DesktopModeState>;
   chooseWorkspaceDirectory(): Promise<string | null>;
   getWorkspaceInfo(): Promise<DesktopWorkspaceInfo | null>;
   getSetupState(): Promise<DesktopSetupState>;

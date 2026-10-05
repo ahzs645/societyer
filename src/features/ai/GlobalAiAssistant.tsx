@@ -1,3 +1,4 @@
+import { isLocalDataRuntime, isStaticDemoRuntime } from "../../lib/staticRuntime";
 import { usePermissions } from "@/hooks/usePermissions";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useAction, useQuery } from "convex/react";
@@ -105,8 +106,10 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   const { can } = usePermissions();
   const canRead = can("tasks:read");
   const canWrite = can("tasks:write");
+  const localOnly = isLocalDataRuntime() && !isStaticDemoRuntime();
+  const canSend = canWrite && !localOnly;
   const canReadSettings = can("settings:read");
-  const canListModels = can("settings:write");
+  const canListModels = can("settings:write") && !localOnly;
   const [open, setOpen] = useState(initiallyOpen);
   const actingUserId = useCurrentUserId() ?? undefined;
   const location = useLocation();
@@ -264,10 +267,10 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
-    if (!canWrite || !open || !society || !input.trim()) return;
+    if (!canSend || !open || !society || !input.trim()) return;
     const trimmed = input.trim();
     const filesNote = attachedFiles.length
-      ? `\n\n[Attached files: ${attachedFiles
+      ? `\n\n[File references (names and sizes only; file contents are not attached): ${attachedFiles
           .map((file) => `${file.name} (${formatBytes(file.size)})`)
           .join(", ")}]`
       : "";
@@ -539,7 +542,10 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                 )}
 
                 <form className="global-ai-composer" onSubmit={submit}>
+                  {localOnly && <p className="muted" role="status">Live AI requires a connected workspace. Saved conversations and drafts remain available locally.</p>}
+                  {isStaticDemoRuntime() && <p className="muted" role="status">Demo replies are simulated; no AI provider is contacted.</p>}
                   <ContextChipRow context={browsingContext} />
+                  {attachedFiles.length > 0 && <p className="muted" role="status">Only file names and sizes are included in your message. File contents are not uploaded or analyzed.</p>}
                   {attachedFiles.length > 0 && (
                     <div className="global-ai-files">
                       {attachedFiles.map((file, index) => (
@@ -562,7 +568,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                   <div className="global-ai-composer__box">
                     <textarea
                       ref={composerRef}
-                      readOnly={!canWrite}
+                      readOnly={!canSend}
                       value={input}
                       onChange={(event) => setInput(event.target.value)}
                       placeholder="Ask the assistant to inspect this page, find records, draft tasks, or use workspace tools."
@@ -576,8 +582,8 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                         <button
                           type="button"
                           className="global-ai-icon-btn"
-                          aria-label="Attach files"
-                          title="Attach files"
+                          aria-label="Add file references"
+                          title="Add file references (names and sizes only)"
                           onClick={() => fileInputRef.current?.click()}
                           disabled={!canWrite}
                         >
@@ -598,14 +604,14 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                           options={modelOptions}
                           onChange={setPickedModelId}
                           providerActive={providerActive}
-                          locked={!canWrite || isModelLocked}
+                          locked={!canSend || isModelLocked}
                           providerLabel={effectiveProvider?.label}
                         />
                       </div>
                       <button
                         type="submit"
                         className="global-ai-send"
-                        disabled={!canWrite || busy || !input.trim() || !society}
+                        disabled={!canSend || busy || !input.trim() || !society}
                         aria-label="Send message"
                         title="Send (⌘/Ctrl + Enter)"
                       >

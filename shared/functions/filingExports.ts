@@ -8,20 +8,25 @@
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
-import { requireSocietyMembership } from "./access";
+import { requirePermissionPortable } from "./permissions";
+import { bcSocietyPreparationKind, CRA_PRE_FILL_KINDS, filingDueDateMonthsAfter } from "../filingPreparation";
 
 /**
  * Returns JSON payloads matching the field shape of Societies Online filing
- * forms, derived from current data. The user copies values into the online
- * form; a future "FilingBot" can submit them directly.
+ * forms, derived from current data. The user reviews and copies these values
+ * into the official form. No submission is made by this query.
  */
 export async function societiesOnlinePreFillPortable(
   ctx: PortableQueryCtx,
-  { societyId, kind }: { societyId: string; kind: string },
+  { societyId, kind: requestedKind }: { societyId: string; kind: string },
 ) {
-  await requireSocietyMembership(ctx, societyId);
+  await requirePermissionPortable(ctx, societyId, "filings:read");
+  await requirePermissionPortable(ctx, societyId, "society:read");
   const society = await ctx.db.get(societyId);
   if (!society) throw new Error("Society not found");
+  const kind = bcSocietyPreparationKind(society, requestedKind);
+  if (["AnnualReport", "ChangeOfDirectors"].includes(kind)) await requirePermissionPortable(ctx, societyId, "directors:read");
+  if (kind === "AnnualReport") await requirePermissionPortable(ctx, societyId, "meetings:read");
 
   if (kind === "AnnualReport") {
     const directors = (
@@ -118,7 +123,11 @@ export async function craPreFillPortable(
   ctx: PortableQueryCtx,
   { societyId, kind, fiscalYear }: { societyId: string; kind: string; fiscalYear: string },
 ) {
-  await requireSocietyMembership(ctx, societyId);
+  await requirePermissionPortable(ctx, societyId, "filings:read");
+  await requirePermissionPortable(ctx, societyId, "financials:read");
+  await requirePermissionPortable(ctx, societyId, "society:read");
+  if (!CRA_PRE_FILL_KINDS.some(option => option.id === kind)) throw new Error("Unsupported CRA pre-fill form.");
+  if (!/^[1-9]\d{3}$/.test(fiscalYear)) throw new Error("A four-digit fiscal year is required.");
   const financials = (
     await ctx.db
       .query("financials")
@@ -127,11 +136,13 @@ export async function craPreFillPortable(
   ).find((f: Record<string, any>) => f.fiscalYear === fiscalYear);
   const society = await ctx.db.get(societyId);
   if (!society) throw new Error("Society not found");
+  if (kind === "T3010" && !society.isCharity) return { kind, fiscalYear, error: "T3010 applies to registered charities. Confirm charity registration in entity settings first." };
   if (!financials) {
     return { kind, fiscalYear, error: "No financial statements on file for that year." };
   }
 
   if (kind === "T3010") {
+    await requirePermissionPortable(ctx, societyId, "directors:read");
     return {
       form: "CRA T3010 Registered Charity Information Return",
       charityName: society.name,
@@ -145,7 +156,7 @@ export async function craPreFillPortable(
           .withIndex("by_society", (q) => q.eq("societyId", societyId))
           .collect()
       ).filter((d: Record<string, any>) => d.status === "Active").length,
-      dueDate: monthsAfter(financials.periodEnd, 6),
+      dueDate: filingDueDateMonthsAfter(financials.periodEnd, 6),
     };
   }
 
@@ -157,19 +168,13 @@ export async function craPreFillPortable(
       totalRevenue: financials.revenueCents / 100,
       totalExpenses: financials.expensesCents / 100,
       netIncome: (financials.revenueCents - financials.expensesCents) / 100,
-      dueDate: monthsAfter(financials.periodEnd, 6),
+      dueDate: filingDueDateMonthsAfter(financials.periodEnd, 6),
       note:
         kind === "T1044"
           ? "File with T2 if investment income > $10k or assets > $200k, or previously required."
-          : "Short-form T2 allowed if operating in a single province.",
+          : "This summary is not a completed T2. Confirm filing obligations and T2 Short eligibility using CRA guidance.",
     };
   }
 
   return { kind, fiscalYear };
-}
-
-function monthsAfter(iso: string, months: number): string {
-  const d = new Date(iso);
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
 }

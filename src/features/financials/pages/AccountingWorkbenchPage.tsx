@@ -186,11 +186,11 @@ export function AccountingWorkbenchPage() {
   const backfillTransactions = useMutation(api.accounting.backfillFinancialTransactionsToJournal);
   const upsertCounterparty = useMutation(api.accounting.upsertCounterparty);
   const upsertFundRestriction = useMutation(api.accounting.upsertFundRestriction);
-  const chartCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "chart_of_accounts" } : "skip");
-  const trialCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "trial_balance" } : "skip");
-  const journalCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "journal_entries" } : "skip");
-  const ledgerCsv = useQuery(api.accounting.exportCsv, society ? { societyId: society._id, kind: "general_ledger" } : "skip");
-  const boardAuditorPackage = useQuery(api.accounting.boardAuditorPackage, society ? { societyId: society._id, fiscalYear: currentYear(), packageKind: "board_auditor" } : "skip");
+  const chartCsv = useQuery(api.accounting.exportCsv, society && canExport ? { societyId: society._id, kind: "chart_of_accounts" } : "skip");
+  const trialCsv = useQuery(api.accounting.exportCsv, society && canExport ? { societyId: society._id, kind: "trial_balance" } : "skip");
+  const journalCsv = useQuery(api.accounting.exportCsv, society && canExport ? { societyId: society._id, kind: "journal_entries" } : "skip");
+  const ledgerCsv = useQuery(api.accounting.exportCsv, society && canExport ? { societyId: society._id, kind: "general_ledger" } : "skip");
+  const boardAuditorPackage = useQuery(api.accounting.boardAuditorPackage, society && canExport ? { societyId: society._id, fiscalYear: currentYear(), packageKind: "board_auditor" } : "skip");
 
   const candidates = transactionCandidates?.transactionCandidates ?? [];
   const cashAccounts = (accounts ?? []).filter((account: any) => ["Asset", "Bank", "Credit"].includes(account.accountType));
@@ -338,6 +338,7 @@ export function AccountingWorkbenchPage() {
   };
 
   const doExport = (kind: string) => {
+    if (!canExport) return;
     const result = exportByKind[kind];
     if (!result?.csv) {
       toast.warn("Export is still loading");
@@ -347,6 +348,7 @@ export function AccountingWorkbenchPage() {
   };
 
   const doPackageExport = () => {
+    if (!canExport) return;
     if (!boardAuditorPackage?.files) {
       toast.warn("Package is still loading");
       return;

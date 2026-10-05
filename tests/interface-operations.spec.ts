@@ -342,6 +342,8 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
       await expect(page.getByRole("button", { name: "Edit workspace", exact: true })).toBeDisabled();
       await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
       await expect(page.getByRole("tab", { name: "Edit", exact: true })).toHaveCount(0);
+      await navigate("grants/sources/bc-arts-council");
+      await expect(page.getByRole("button", { name: "Add to pipeline", exact: true })).toBeDisabled();
       expect(errors).toEqual([]);
       return;
     }
@@ -373,6 +375,12 @@ for (const role of ["Viewer", "Director", "Member"] as const) {
     await expect(page.getByRole("button", { name: "New funding source", exact: true })).toBeDisabled();
     await navigate("financials/accounting");
     await expect(page.getByRole("button", { name: "Journal entry", exact: true })).toBeDisabled();
+    const accountingExports = page.getByRole("button", { name: /^(chart of accounts|trial balance|journal entries|general ledger|board\/auditor ZIP)$/ });
+    await expect(accountingExports).toHaveCount(5);
+    for (const button of await accountingExports.all()) {
+      if (role === "Viewer") await expect(button).toBeDisabled();
+      else await expect(button).toBeEnabled();
+    }
     await navigate("financials/year-end");
     await page.getByRole("button", { name: "Restricted funds", exact: true }).click();
     if (role !== "Director") await expect(page.getByRole("button", { name: "Export Word", exact: true })).toBeDisabled();

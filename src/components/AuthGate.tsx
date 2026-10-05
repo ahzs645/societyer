@@ -1,8 +1,11 @@
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
+import { useQuery } from "convex/react";
+import { api } from "../lib/convexApi";
 import { useAuth } from "../auth/AuthProvider";
 
-export function AuthGate({ children }: { children: React.ReactNode }) {
+export function AuthGate({ children, allowWorkspaceCreation = false }: { children: React.ReactNode; allowWorkspaceCreation?: boolean }) {
   const auth = useAuth();
+  const creationAccess = useQuery(api.http.workspaceCreationAccess, auth.mode !== "none" && auth.sessionStatus === "authenticated" && auth.convexAuthStatus === "authenticated" && auth.membershipState === "ready" && auth.membershipStatus === "needs-invitation" ? {} : "skip");
 
   if (auth.mode === "none") return <>{children}</>;
 
@@ -51,11 +54,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (auth.membershipState !== "ready" || auth.membershipStatus !== "bound") {
     if (auth.membershipStatus === "needs-invitation") {
+      if (creationAccess === undefined) return <AuthMessage title="Checking setup access" message="Checking whether this account can create its own workspace…" />;
+      if (allowWorkspaceCreation && creationAccess.allowed) return <>{children}</>;
       return (
         <AuthMessage
-          title="Invitation required"
-          message="This account does not have a workspace membership. Open a valid invitation link to continue."
+          title={creationAccess.allowed ? "Set up your workspace" : "Invitation required"}
+          message={creationAccess.allowed ? "Create your own organization workspace, or open an invitation to join an existing organization. A new workspace does not give access to anyone else's records." : creationAccess.reason}
         >
+          {creationAccess.allowed && <Link className="btn btn--accent" to="/app/society/new">Set up an organization</Link>}
           <button className="btn" type="button" onClick={() => void auth.signOut()}>Sign out</button>
         </AuthMessage>
       );

@@ -8,6 +8,7 @@ import { useToast } from "./Toast";
 import { Badge } from "./ui";
 import { ExternalLink, RefreshCw, UploadCloud } from "lucide-react";
 import { useState } from "react";
+import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 
 export function PaperlessDocumentAction({
   documentId,
@@ -25,7 +26,8 @@ export function PaperlessDocumentAction({
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const permissions = usePermissions();
-  const canEdit = permissions.loaded && permissions.can("documents:write");
+  const localOnly = isLocalDataRuntime() && !isStaticDemoRuntime();
+  const canEdit = permissions.loaded && permissions.can("documents:write") && !localOnly;
   const [busy, setBusy] = useState(false);
 
   const run = async () => {
@@ -72,7 +74,7 @@ export function PaperlessDocumentAction({
         className="btn btn--ghost btn--sm"
         disabled={busy || disabled || !resolvedSocietyId || !canEdit}
         onClick={run}
-        title="Send the current document file to Paperless-ngx with Societyer tags"
+        title={localOnly ? "Paperless synchronization requires a connected workspace" : "Send the current document file to Paperless-ngx with Societyer tags"}
       >
         {busy ? <RefreshCw size={12} /> : <UploadCloud size={12} />}
         {busy ? "Syncing" : "Sync"}

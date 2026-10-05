@@ -1,3 +1,4 @@
+import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
 import { expect, test, type Page, type Locator } from "@playwright/test";
 
 // Each scenario provisions a fresh legal workspace before exercising bytes,
@@ -10,9 +11,7 @@ async function createLocalWorkspace(page: Page) {
   await page.goto("/setup");
   await page.getByRole("button", { name: /Start a new organization/i }).click();
   await page.waitForURL(/\/app\/society\/new/);
-  await page.getByRole("textbox").first().fill("Local upload persistence audit");
-  await page.getByRole("button", { name: "Create workspace", exact: true }).click();
-  await page.waitForURL(/\/app\/workflows\//);
+  await completeGuidedOrganizationSetup(page, "Local upload persistence audit", true);
   expect(page.url()).not.toContain("/demo/");
 }
 

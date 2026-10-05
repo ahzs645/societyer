@@ -1,3 +1,4 @@
+import { readOnboardingAnswersJson, validateInitialOrganizationProfile } from "../../shared/onboarding";
 import { entitySetupFields, validateEntitySetup, entityPreparationDecision, validateFormationEvidence, certificateAnniversaryDate } from "../../shared/entitySetup";
 import { validateWorkspaceLegalIdentity, validateWorkspaceLegalIdentityUpdate } from "../../shared/organizationDomain";
 // Legacy static query/mutation mirror. Scheduled for deletion once the local
@@ -845,6 +846,8 @@ const MUT_NOT_HANDLED = Symbol("staticConvex.mutationNotHandled");
 function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexieStore | null): any {
   if (name === "society:createWorkspace") {
     const createWorkspace = () => {
+      readOnboardingAnswersJson(args?.onboardingAnswersJson, args);
+      if (args?.onboardingAnswersJson) validateInitialOrganizationProfile(args);
       validateEntitySetup(args ?? {});
       validateFormationEvidence(args ?? {});
       validateWorkspaceLegalIdentity({ ...args, jurisdictionCode: args?.jurisdictionCode ?? args?.homeJurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE });
@@ -861,6 +864,8 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
         _id: societyId,
         _creationTime: Date.now(),
         name: args?.name,
+        onboardingAnswersJson: args?.onboardingAnswersJson,
+        numbered: args?.numbered === true,
         incorporationNumber: args?.incorporationNumber,
         incorporationDate: args?.incorporationDate,
         fiscalYearEnd: args?.fiscalYearEnd,

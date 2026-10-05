@@ -1,3 +1,4 @@
+import { onboardingGovernanceSummary, readOnboardingAnswersJson } from "./onboarding";
 import { PATHWAY_REGISTRY, resolvePathway } from "./pathways/registry";
 import { canonicalizeJurisdictionCode, homeJurisdictionCode, isCorporation, type LegalEntityLike } from "./organizationDomain";
 
@@ -594,6 +595,8 @@ export function buildWorkspaceOnboardingTasks(args: any) {
   const organization = { ...args, jurisdictionCode: args?.jurisdictionCode ?? DEFAULT_HOME_JURISDICTION_CODE };
   const registry = registryOnboardingCopy(organization);
   const governance = workspaceGovernanceCopy(organization);
+  const answers = readOnboardingAnswersJson(args.onboardingAnswersJson, args);
+  const initialSetup = answers ? ` ${onboardingGovernanceSummary(answers, organization)}` : "";
   return [
     ...(args?.organizationStatus === "pre_incorporation" ? [{
       title: "Prepare incorporation before recording an active registration",
@@ -615,13 +618,13 @@ export function buildWorkspaceOnboardingTasks(args: any) {
     },
     {
       title: "Add governance documents",
-      description: governance.documentsDescription,
+      description: governance.documentsDescription + initialSetup,
       priority: "High",
       tags: ["documents", "governance"],
     },
     {
       title: "Add people and workspace access",
-      description: governance.peopleDescription,
+      description: governance.peopleDescription + initialSetup,
       priority: "High",
       tags: ["people", "access"],
     },
@@ -634,11 +637,12 @@ export function buildWorkspaceOnboardingTasks(args: any) {
   ];
 }
 
-export function workspaceOnboardingWorkflowConfig(organization: LegalEntityLike & { organizationStatus?: string } = {}) {
+export function workspaceOnboardingWorkflowConfig(organization: LegalEntityLike & { organizationStatus?: string; formationStatus?: string; onboardingAnswersJson?: string } = {}) {
   return {
     ...WORKSPACE_ONBOARDING_WORKFLOW_CONFIG,
+    ...(organization.onboardingAnswersJson ? { initialSetupAnswers: readOnboardingAnswersJson(organization.onboardingAnswersJson, organization) } : {}),
     requiredProfileFields: WORKSPACE_ONBOARDING_WORKFLOW_CONFIG.requiredProfileFields.filter((field) => organization.organizationStatus !== "pre_incorporation" || !["incorporationNumber", "incorporationDate"].includes(field)),
     optionalSections: WORKSPACE_ONBOARDING_WORKFLOW_CONFIG.optionalSections.map((section) => section === "member_register" && isCorporation(organization) ? "shareholder_securities_register" : section),
-    formationStage: organization.organizationStatus === "pre_incorporation" ? "preparing" : "incorporated",
+    formationStage: organization.organizationStatus === "pre_incorporation" ? "preparing" : organization.formationStatus || "unverified_existing",
   };
 }

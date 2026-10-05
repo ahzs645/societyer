@@ -20,7 +20,7 @@ import { budgetVariancePortable } from "../shared/functions/treasury";
 
 const db = new MemoryDb({ seed: {} });
 const caps = makeCapabilities({});
-const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: () => ({ kind: "anonymous", runtime: "test", assurance: "none" }) });
+const rt = () => new PortableRuntime({ db, capabilities: caps, principalProvider: () => ({ kind: "user", runtime: "test", assurance: "trusted-workspace", subject: "fiscal-fixture-owner" }) });
 const query = (name: string, handler: any) =>
   rt().register(definePortableQuery({ name, handler })).runQuery(name, {});
 const mutate = (name: string, handler: any) =>
@@ -29,6 +29,7 @@ const mutate = (name: string, handler: any) =>
 // --- 4-digit label on a March-31 society: FY "2027" = Apr 1 2026 … Mar 31 2027 ---
 const { societyId } = await mutate("setup", async (ctx: any) => {
   const societyId = await ctx.db.insert("societies", { name: "Fiscal Co", fiscalYearEnd: "03-31" });
+  await ctx.db.insert("users", { societyId, role: "Owner", status: "Active", authSubject: "fiscal-fixture-owner" });
   await ctx.db.insert("budgets", { societyId, fiscalYear: "2027", category: "Rent", plannedCents: 1_200_000 });
   // Two transactions inside the fiscal window (sign is irrelevant — Math.abs):
   await ctx.db.insert("financialTransactions", { societyId, date: "2026-07-01", category: "Rent", amountCents: -100_000 });
@@ -57,6 +58,7 @@ console.log("✓ 4-digit fiscal-year label sums actuals over the society's fisca
 // --- Hyphenated label "2024-2025" must resolve to Apr 1 2024 … Mar 31 2025 ---
 const { societyId: soc2 } = await mutate("setup2", async (ctx: any) => {
   const soc2 = await ctx.db.insert("societies", { name: "Span Co", fiscalYearEnd: "03-31" });
+  await ctx.db.insert("users", { societyId: soc2, role: "Owner", status: "Active", authSubject: "fiscal-fixture-owner" });
   await ctx.db.insert("budgets", { societyId: soc2, fiscalYear: "2024-2025", category: "Rent", plannedCents: 600_000 });
   await ctx.db.insert("financialTransactions", { societyId: soc2, date: "2024-07-01", category: "Rent", amountCents: -100_000 });
   await ctx.db.insert("financialTransactions", { societyId: soc2, date: "2025-04-01", category: "Rent", amountCents: -999_999 });

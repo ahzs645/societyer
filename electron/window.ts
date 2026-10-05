@@ -7,6 +7,7 @@ import type { DesktopEnvironment } from "./environment.js";
 import { makeDesktopLogger } from "./observability.js";
 import { SOCIETYER_APP_PROTOCOL } from "./protocol.js";
 import { hardenWindowNavigation } from "./shell.js";
+import { registerLocalRendererAuthority } from "./ipcAuthority.js";
 
 export type CreateMainWindowOptions = {
   environment: DesktopEnvironment;
@@ -20,8 +21,8 @@ export async function createMainWindow(options: CreateMainWindowOptions) {
   const mainWindow = new BrowserWindow({
     width: 1320,
     height: 900,
-    minWidth: 960,
-    minHeight: 680,
+    minWidth: 360,
+    minHeight: 480,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#0f172a" : "#ffffff",
@@ -34,6 +35,9 @@ export async function createMainWindow(options: CreateMainWindowOptions) {
       sandbox: false,
     },
   });
+  registerLocalRendererAuthority(mainWindow.webContents, environment.isDev
+    ? new URL(environment.devServerUrl || "http://127.0.0.1:5173").origin
+    : undefined);
 
   mainWindow.once("ready-to-show", () => {
     if (!mainWindow.isDestroyed()) mainWindow.show();

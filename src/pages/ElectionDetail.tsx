@@ -11,9 +11,11 @@ import { Badge, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DateTimeInput } from "../components/DateTimeInput";
-import { Vote, ArrowLeft, ShieldCheck, CheckCircle2, Lock } from "lucide-react";
+import { Vote, ArrowLeft, ShieldCheck, CheckCircle2, Lock, Plus, Users } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isAuthenticatedAuthMode } from "../lib/authMode";
+import { toDateTimeLocalValue } from "../lib/format";
+import { validateElectionQuestion } from "../../shared/electionValidation";
 
 export function ElectionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -52,7 +54,7 @@ export function ElectionDetailPage() {
   );
   const documents = useQuery(
     api.documents.list,
-    electionBundle?.election
+    electionBundle?.election && loaded && can("documents:read") && canManage
       ? { societyId: electionBundle.election.societyId }
       : "skip",
   );
@@ -63,6 +65,8 @@ export function ElectionDetailPage() {
   const reviewNomination = usePermissionedMutation(api.elections.reviewNomination, canManage);
   const publishNominationToBallot = usePermissionedMutation(api.elections.publishNominationToBallot, canManage);
   const updateSettings = usePermissionedMutation(api.elections.updateSettings, canManage);
+  const addQuestion = usePermissionedMutation(api.elections.addQuestion, canManage);
+  const snapshotEligibleVoters = usePermissionedMutation(api.elections.snapshotEligibleVoters, canManage);
   const toast = useToast();
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [nominationDraft, setNominationDraft] = useState({
@@ -72,6 +76,11 @@ export function ElectionDetailPage() {
     questionId: "",
   });
   const [adminDraft, setAdminDraft] = useState<any | null>(null);
+  const [questionDraft, setQuestionDraft] = useState({ title: "", options: "", maxSelections: 1 });
+  const [savingQuestion, setSavingQuestion] = useState(false);
+  const [openingElection, setOpeningElection] = useState(false);
+  const [participantSaving, setParticipantSaving] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const election = electionBundle?.election;
   const myEligibility = useMemo(() => {
@@ -109,6 +118,7 @@ export function ElectionDetailPage() {
   const canVote =
     isAuthenticatedAuthMode() &&
     election.status === "Open" &&
+    isWindowOpen(election.opensAtISO, election.closesAtISO) &&
     !!currentUser?.memberId &&
     myEligibility &&
     myEligibility.status !== "Voted";
@@ -119,6 +129,7 @@ export function ElectionDetailPage() {
   );
   const canNominate =
     isAuthenticatedAuthMode() &&
+    ["Draft", "Open"].includes(election.status) &&
     !!currentUser?.memberId &&
     isWindowOpen(
       election.nominationsOpenAtISO ?? election.createdAtISO,
@@ -126,20 +137,27 @@ export function ElectionDetailPage() {
     );
 
   const saveBallot = async () => {
-    if (!canVote) return;
-    await castBallot({
+    if (!canVote || participantSaving) return;
+    setParticipantSaving(true);
+    try {
+      await castBallot({
       electionId: election._id,
       choices: electionBundle.questions.map((question: any) => ({
         questionId: question._id,
         optionIds: selected[question._id] ?? [],
       })),
-    });
-    toast.success("Ballot submitted");
+      });
+      toast.success("Ballot submitted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not submit the ballot. Your selections are retained.");
+    } finally { setParticipantSaving(false); }
   };
 
   const saveNomination = async () => {
-    if (!canNominate) return;
-    await submitNomination({
+    if (!canNominate || participantSaving || !nominationDraft.nomineeName.trim()) return;
+    setParticipantSaving(true);
+    try {
+      await submitNomination({
       electionId: election._id,
       questionId: nominationDraft.questionId
         ? (nominationDraft.questionId as Id<"electionQuestions">)
@@ -147,19 +165,24 @@ export function ElectionDetailPage() {
       nomineeName: nominationDraft.nomineeName,
       nomineeEmail: nominationDraft.nomineeEmail || undefined,
       statement: nominationDraft.statement || undefined,
-    });
-    toast.success("Nomination submitted");
-    setNominationDraft({
+      });
+      toast.success("Nomination submitted");
+      setNominationDraft({
       nomineeName: "",
       nomineeEmail: currentUser?.email ?? "",
       statement: "",
       questionId: "",
-    });
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not submit the nomination. Your draft is retained.");
+    } finally { setParticipantSaving(false); }
   };
 
   const saveAdminSettings = async () => {
-    if (!canManage || !adminDraft) return;
-    await updateSettings({
+    if (!canManage || !adminDraft || settingsSaving) return;
+    setSettingsSaving(true);
+    try {
+      await updateSettings({
       electionId: election._id,
       nominationsOpenAtISO: adminDraft.nominationsOpenAtISO
         ? new Date(adminDraft.nominationsOpenAtISO).toISOString()
@@ -170,8 +193,40 @@ export function ElectionDetailPage() {
       scrutineerUserIds: adminDraft.scrutineerUserIds,
       resultsSummary: adminDraft.resultsSummary || undefined,
       evidenceDocumentId: adminDraft.evidenceDocumentId || undefined,
-    });
-    toast.success("Election settings saved");
+      });
+      toast.success("Election settings saved");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save election settings. Your draft is retained.");
+    } finally { setSettingsSaving(false); }
+  };
+
+  const saveQuestion = async () => {
+    if (!canManage || election.status !== "Draft" || savingQuestion) return;
+    setSavingQuestion(true);
+    try {
+      const question = {
+        title: questionDraft.title.trim(),
+        maxSelections: questionDraft.maxSelections,
+        options: questionDraft.options.split("\n").map((label) => label.trim()).filter(Boolean).map((label, index) => ({ id: `option-${index + 1}`, label })),
+      };
+      validateElectionQuestion(question);
+      await addQuestion({ electionId: election._id, ...question });
+      setQuestionDraft({ title: "", options: "", maxSelections: 1 });
+      toast.success("Ballot question added");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add the ballot question. Your draft is retained.");
+    } finally { setSavingQuestion(false); }
+  };
+
+  const openElection = async () => {
+    if (!canManage || election.status !== "Draft" || openingElection) return;
+    setOpeningElection(true);
+    try {
+      const result = await snapshotEligibleVoters({ electionId: election._id });
+      toast.success(`Snapshotted ${result.eligibleCount} eligible voter(s) and opened voting`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open the election.");
+    } finally { setOpeningElection(false); }
   };
 
   return (
@@ -234,6 +289,7 @@ export function ElectionDetailPage() {
                   Real anonymous member voting is disabled in no-auth mode.
                 </div>
               )}
+              {electionBundle.questions.length === 0 && <p className="muted">No ballot questions yet. A director or administrator must add a question before opening voting.</p>}
               {electionBundle.questions.map((question: any) => (
                 <div key={question._id} className="panel" style={{ padding: 12 }}>
                   <strong>{question.title}</strong>
@@ -263,7 +319,7 @@ export function ElectionDetailPage() {
                                 return { ...current, [question._id]: [option.id] };
                               });
                             }}
-                            disabled={!canVote}
+                            disabled={!canVote || participantSaving}
                           />
                           {option.label}
                         </label>
@@ -273,8 +329,21 @@ export function ElectionDetailPage() {
                 </div>
               ))}
 
+              {canManage && election.status === "Draft" && (
+                <fieldset disabled={savingQuestion || openingElection} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: "grid", gap: 10 }}>
+                  <Field label="New ballot question"><input className="input" value={questionDraft.title} onChange={(event) => setQuestionDraft({ ...questionDraft, title: event.target.value })} /></Field>
+                  <Field label="Ballot options" hint="One candidate or choice per line."><textarea className="input" rows={4} value={questionDraft.options} onChange={(event) => setQuestionDraft({ ...questionDraft, options: event.target.value })} /></Field>
+                  <Field label="Maximum selections"><input className="input" type="number" min={1} step={1} value={questionDraft.maxSelections} onChange={(event) => setQuestionDraft({ ...questionDraft, maxSelections: Number(event.target.value) })} /></Field>
+                  <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+                    <button className="btn" onClick={saveQuestion} disabled={!questionDraft.title.trim() || !questionDraft.options.trim()}><Plus size={12} /> {savingQuestion ? "Adding…" : "Add ballot question"}</button>
+                    <button className="btn btn--accent" onClick={openElection} disabled={electionBundle.questions.length === 0}><Users size={12} /> {openingElection ? "Opening…" : "Snapshot + open"}</button>
+                  </div>
+                  <p className="muted">Finish the questions and accepted nominations before opening. The ballot and eligibility list are frozen when voting opens.</p>
+                </fieldset>
+              )}
+
               {canVote && (
-                <button className="btn btn--accent" onClick={saveBallot}>
+                <button className="btn btn--accent" onClick={saveBallot} disabled={participantSaving || !electionBundle.questions.length || electionBundle.questions.some((question: any) => !(selected[question._id]?.length))}>
                   Submit anonymous ballot
                 </button>
               )}
@@ -301,7 +370,7 @@ export function ElectionDetailPage() {
             </div>
             <div className="card__body" style={{ display: "grid", gap: 12 }}>
               {canNominate && (
-                <div className="panel" style={{ padding: 12, display: "grid", gap: 10 }}>
+                <fieldset disabled={participantSaving} className="panel" style={{ padding: 12, margin: 0, minWidth: 0, display: "grid", gap: 10 }}>
                   <Field label="Nominee name">
                     <input
                       className="input"
@@ -344,10 +413,10 @@ export function ElectionDetailPage() {
                       }
                     />
                   </Field>
-                  <button className="btn btn--accent" onClick={saveNomination}>
+                  <button className="btn btn--accent" onClick={saveNomination} disabled={participantSaving || !nominationDraft.nomineeName.trim()}>
                     Submit nomination
                   </button>
-                </div>
+                </fieldset>
               )}
               {!canNominate && (
                 <div className="muted" style={{ fontSize: 13 }}>
@@ -407,7 +476,7 @@ export function ElectionDetailPage() {
                             Reject
                           </button>
                         )}
-                        {nomination.status !== "OnBallot" && electionBundle.questions[0] && (
+                        {election.status === "Draft" && nomination.status === "Accepted" && electionBundle.questions[0] && (
                           <button
                             className="btn btn--ghost btn--sm"
                             onClick={async () => {
@@ -492,7 +561,7 @@ export function ElectionDetailPage() {
                     <span className="muted">No scrutineers assigned.</span>
                   )}
                 </div>
-                <div className="row" style={{ gap: 12 }}>
+                <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
                   <Field label="Nominations open">
                     <DateTimeInput
                       value={adminDraft.nominationsOpenAtISO}
@@ -558,7 +627,7 @@ export function ElectionDetailPage() {
                     ]}
                   />
                 </Field>
-                <button className="btn btn--accent" onClick={saveAdminSettings}>
+                <button className="btn btn--accent" onClick={saveAdminSettings} disabled={settingsSaving}>
                   Save election settings
                 </button>
               </div>
@@ -637,7 +706,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 function toLocalDateTime(value?: string | null) {
   if (!value) return "";
-  return new Date(value).toISOString().slice(0, 16);
+  return toDateTimeLocalValue(new Date(value));
 }
 
 function isWindowOpen(startISO?: string | null, endISO?: string | null) {

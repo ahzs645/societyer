@@ -1,0 +1,59 @@
+{
+  "kind": "actual-electron-main-and-bundled-renderer-with-disposable-https-fixture",
+  "electronVersion": "42.3.0",
+  "cases": [
+    {
+      "name": "Bundled local renderer and native workspace/file APIs",
+      "passed": true
+    },
+    {
+      "name": "HTTP hosted origin rejected before navigation",
+      "passed": true
+    },
+    {
+      "name": "HTTPS hosted mode sandboxed without native bridge",
+      "passed": true
+    },
+    {
+      "name": "Explicit HTTPS SSO popup and callback isolated from native APIs",
+      "passed": true
+    },
+    {
+      "name": "Unlisted authentication navigation blocked",
+      "passed": true
+    },
+    {
+      "name": "Returning locally closes hosted renderer and existing WebSockets",
+      "passed": true
+    },
+    {
+      "name": "Returning locally retains records and native file bytes",
+      "passed": true
+    },
+    {
+      "name": "Reopening hosted mode retains origin-scoped web session",
+      "passed": true
+    },
+    {
+      "name": "Restart resumes configured online mode and persistent session",
+      "passed": true
+    },
+    {
+      "name": "Different hosted origins use separate persistent partitions",
+      "passed": true
+    },
+    {
+      "name": "Unavailable online endpoint falls back safely with local file intact",
+      "passed": true
+    },
+    {
+      "name": "Actual bundled desktop setup fits narrow 390px window",
+      "passed": true
+    }
+  ],
+  "limits": [
+    "Hosted fixture is not live Convex or enterprise SSO",
+    "No signed macOS or Windows installer qualification",
+    "Local and hosted datasets are separate"
+  ]
+}

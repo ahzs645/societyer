@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { normalizeAddressText } from "../shared/structuredAddress";
+import { readOnboardingAnswersJson, validateInitialOrganizationProfile } from "../shared/onboarding";
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { entitySetupFields, validateEntitySetup, validateFormationEvidence, certificateAnniversaryDate } from "../shared/entitySetup";
 import { validateWorkspaceLegalIdentity, validateWorkspaceLegalIdentityUpdate } from "../shared/organizationDomain";
@@ -33,6 +35,7 @@ import {
   setLetterheadPortable,
   clearLetterheadPortable,
   seedNewSocietyOwnerPortable,
+  assertWorkspaceCreator,
 } from "../shared/functions/society";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 import { buildConvexCapabilities } from "./providers/capabilities";
@@ -270,6 +273,7 @@ export const upsert = authorizedMutation("society:upsert", mutation)({
 export const createWorkspace = authorizedMutation("society:createWorkspace", mutation)({
   args: {
     name: v.string(),
+    onboardingAnswersJson: v.optional(v.string()),
     incorporationNumber: v.optional(v.string()),
     incorporationDate: v.optional(v.string()),
     fiscalYearEnd: v.optional(v.string()),
@@ -324,6 +328,9 @@ export const createWorkspace = authorizedMutation("society:createWorkspace", mut
     taskIds: v.array(v.id("tasks")),
   }),
   handler: async (ctx, args) => {
+    await assertWorkspaceCreator(await toPortableMutationCtx(ctx), args.actingUserId);
+    readOnboardingAnswersJson(args.onboardingAnswersJson, args);
+    if (args.onboardingAnswersJson) validateInitialOrganizationProfile(args);
     const name = args.name.trim();
     if (!name) throw new Error("Society name is required.");
     if (args.fiscalYearEnd && !/^\d{2}-\d{2}$/.test(args.fiscalYearEnd)) {
@@ -343,6 +350,7 @@ export const createWorkspace = authorizedMutation("society:createWorkspace", mut
 
     const societyId = await ctx.db.insert("societies", {
       name,
+      onboardingAnswersJson: args.onboardingAnswersJson,
       incorporationNumber: blankToUndefined(args.incorporationNumber),
       incorporationDate: blankToUndefined(args.incorporationDate),
       fiscalYearEnd: blankToUndefined(args.fiscalYearEnd),
@@ -361,8 +369,8 @@ export const createWorkspace = authorizedMutation("society:createWorkspace", mut
       distributing: args.distributing,
       solicitingPublicBenefit: args.solicitingPublicBenefit,
       organizationStatus: args.organizationStatus ?? "active",
-      registeredOfficeAddress: blankToUndefined(args.registeredOfficeAddress),
-      mailingAddress: blankToUndefined(args.mailingAddress),
+      registeredOfficeAddress: normalizeAddressText(args.registeredOfficeAddress),
+      mailingAddress: normalizeAddressText(args.mailingAddress),
       purposes: blankToUndefined(args.purposes),
       privacyOfficerName: blankToUndefined(args.privacyOfficerName),
       privacyOfficerEmail: blankToUndefined(args.privacyOfficerEmail),

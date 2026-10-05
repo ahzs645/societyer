@@ -1,3 +1,4 @@
+import { completeGuidedOrganizationSetup } from "./helpers/guidedSetup";
 import { test, expect } from "@playwright/test";
 
 function monitor(page: import("@playwright/test").Page) {
@@ -94,9 +95,7 @@ test("acting Member sees own access without a roster and cannot edit member or m
   await page.goto("/setup");
   await page.getByRole("button", { name: /Start a new organization/i }).click();
   await page.waitForURL(/\/app\/society\/new/);
-  await page.getByRole("textbox").first().fill("Interface access society");
-  await page.getByRole("button", { name: "Create workspace", exact: true }).click();
-  await page.waitForURL(/\/app\/workflows\//);
+  await completeGuidedOrganizationSetup(page, "Interface access society", true);
   await page.goto("/app/members");
   await page.getByRole("button", { name: "New member", exact: true }).click();
   const memberForm = page.getByRole("dialog", { name: "Add member", exact: true });

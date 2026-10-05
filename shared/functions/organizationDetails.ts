@@ -1,3 +1,4 @@
+import { normalizeAddressText, parseAddressText } from "../structuredAddress";
 import { canonicalizeJurisdictionCode } from "../organizationDomain";
 /**
  * PORTABLE FUNCTIONS: the organization-details domain
@@ -243,17 +244,15 @@ export async function seedFromSocietyAddressesPortable(ctx: PortableMutationCtx,
   let created = 0;
 
   const insertLegacy = async (type: string, address: unknown) => {
-    const text = cleanText(address);
+    const text = society.onboardingAnswersJson && typeof address === "string" ? normalizeAddressText(address) : cleanText(address);
     if (!text) return;
     if (existing.some((row) => row.type === type && row.status === "current")) return;
     await ctx.db.insert("organizationAddresses", {
       societyId,
       type,
       status: "current",
-      street: text,
-      city: "Needs review",
-      country: "Canada",
-      notes: "Created from legacy society address text. Review and split into structured fields.",
+      ...(society.onboardingAnswersJson ? guidedAddressFields(text) : { street: text, city: "Needs review", country: "Canada" }),
+      notes: society.onboardingAnswersJson ? "Created from guided setup address fields. Review any missing details." : "Created from legacy society address text. Review and split into structured fields.",
       createdAtISO: now,
       updatedAtISO: now,
     });
@@ -279,17 +278,15 @@ export async function backfillFromExistingRecordsPortable(ctx: PortableMutationC
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
   const insertLegacyAddress = async (type: string, address: unknown) => {
-    const text = cleanText(address);
+    const text = society.onboardingAnswersJson && typeof address === "string" ? normalizeAddressText(address) : cleanText(address);
     if (!text) return;
     if (addresses.some((row) => row.type === type && row.status === "current")) return;
     await ctx.db.insert("organizationAddresses", {
       societyId,
       type,
       status: "current",
-      street: text,
-      city: "Needs review",
-      country: "Canada",
-      notes: "Backfilled from legacy society address text. Review and split into structured fields.",
+      ...(society.onboardingAnswersJson ? guidedAddressFields(text) : { street: text, city: "Needs review", country: "Canada" }),
+      notes: society.onboardingAnswersJson ? "Backfilled from guided setup address fields. Review any missing details." : "Backfilled from legacy society address text. Review and split into structured fields.",
       createdAtISO: now,
       updatedAtISO: now,
     });
@@ -380,4 +377,10 @@ function cleanObject<T extends Record<string, any>>(source: T) {
     if (value !== undefined) result[key] = value;
   }
   return result as T;
+}
+
+/** New guided records use the shared positional codec; legacy free text stays for review. */
+function guidedAddressFields(text: string) {
+  const address = parseAddressText(text);
+  return { ...address, street: address.street || "Needs review", city: address.city || "Needs review", country: address.country || "Needs review" };
 }

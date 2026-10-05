@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
@@ -13,6 +13,8 @@ import { DateTimeInput } from "../components/DateTimeInput";
 import { AlertTriangle, Info, Vote, Plus, Users, CheckCircle2, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
 import { isAuthenticatedAuthMode } from "../lib/authMode";
+import { toDateTimeLocalValue } from "../lib/format";
+import { normalizeElectionWindow, validateElectionQuestion } from "../../shared/electionValidation";
 
 type ElectionCreateForm = {
   title: string;
@@ -29,6 +31,7 @@ type ElectionCreateForm = {
 const EMPTY_OPTION_LABELS = ["", ""];
 
 export function ElectionsPage() {
+  const navigate = useNavigate();
   const society = useSociety();
   const { loaded, can } = usePermissions();
   const canManage = loaded && can("elections:write");
@@ -48,13 +51,13 @@ export function ElectionsPage() {
   );
   const { rules } = useBylawRules();
   const create = useMutation(api.elections.create);
-  const addQuestion = useMutation(api.elections.addQuestion);
   const snapshotEligibleVoters = useMutation(api.elections.snapshotEligibleVoters);
   const closeElection = useMutation(api.elections.close);
   const tallyElection = useMutation(api.elections.tallyElection);
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<ElectionCreateForm | null>(null);
+  const [saving, setSaving] = useState(false);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -65,12 +68,10 @@ export function ElectionsPage() {
     setForm({
       title: "",
       description: "",
-      opensAtISO: now.toISOString().slice(0, 16),
-      closesAtISO: closes.toISOString().slice(0, 16),
-      nominationsOpenAtISO: now.toISOString().slice(0, 16),
-      nominationsCloseAtISO: new Date(now.getTime() + 3 * 86_400_000)
-        .toISOString()
-        .slice(0, 16),
+      opensAtISO: toDateTimeLocalValue(now),
+      closesAtISO: toDateTimeLocalValue(closes),
+      nominationsOpenAtISO: toDateTimeLocalValue(now),
+      nominationsCloseAtISO: toDateTimeLocalValue(new Date(now.getTime() + 3 * 86_400_000)),
       scrutineerUserIds: [],
       questionTitle: "Election of directors",
       optionLabels: [...EMPTY_OPTION_LABELS],
@@ -79,39 +80,40 @@ export function ElectionsPage() {
   };
 
   const save = async () => {
-    if (!form || !canManage) return;
-
-    const electionId = await create({
-      societyId: society._id,
-      title: form.title,
-      description: form.description || undefined,
-      opensAtISO: new Date(form.opensAtISO).toISOString(),
-      closesAtISO: new Date(form.closesAtISO).toISOString(),
-      nominationsOpenAtISO: form.nominationsOpenAtISO
-        ? new Date(form.nominationsOpenAtISO).toISOString()
-        : undefined,
-      nominationsCloseAtISO: form.nominationsCloseAtISO
-        ? new Date(form.nominationsCloseAtISO).toISOString()
-        : undefined,
-      scrutineerUserIds: form.scrutineerUserIds,
-    });
-    const options = form.optionLabels
-      .map((label) => label.trim())
-      .filter(Boolean)
-      .map((label, index) => ({
-        id: `candidate-${index + 1}`,
-        label,
-      }));
-    if (options.length > 0) {
-      await addQuestion({
-        electionId,
-        title: form.questionTitle || "Election",
+    if (!form || !canManage || saving) return;
+    setSaving(true);
+    try {
+      if (!form.title.trim()) throw new Error("Enter an election title.");
+      normalizeElectionWindow(form.opensAtISO, form.closesAtISO, "Voting");
+      const initialQuestion = {
+        title: form.questionTitle.trim(),
         maxSelections: 1,
-        options,
+        options: form.optionLabels.map((label) => label.trim()).filter(Boolean).map((label, index) => ({ id: `candidate-${index + 1}`, label })),
+      };
+      validateElectionQuestion(initialQuestion);
+      const electionId = await create({
+        societyId: society._id,
+        title: form.title,
+        description: form.description || undefined,
+        opensAtISO: new Date(form.opensAtISO).toISOString(),
+        closesAtISO: new Date(form.closesAtISO).toISOString(),
+        nominationsOpenAtISO: form.nominationsOpenAtISO
+          ? new Date(form.nominationsOpenAtISO).toISOString()
+          : undefined,
+        nominationsCloseAtISO: form.nominationsCloseAtISO
+          ? new Date(form.nominationsCloseAtISO).toISOString()
+          : undefined,
+        scrutineerUserIds: form.scrutineerUserIds,
+        initialQuestion,
       });
+      toast.success("Election created");
+      setOpen(false);
+      navigate(`/app/elections/${electionId}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create the election. Your draft is retained.");
+    } finally {
+      setSaving(false);
     }
-    toast.success("Election created");
-    setOpen(false);
   };
 
   const updateOptionLabel = (index: number, label: string) => {
@@ -213,6 +215,7 @@ export function ElectionsPage() {
           <h2 className="card__title">All elections</h2>
           <span className="card__subtitle">{elections?.length ?? 0} total</span>
         </div>
+        <div style={{ overflowX: "auto" }}>
         <table className="table">
           <thead>
             <tr>
@@ -316,25 +319,26 @@ export function ElectionsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <Drawer
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => { if (!saving) setOpen(false); }}
         title="New election"
         footer={
           <>
-            <button className="btn" onClick={() => setOpen(false)}>
+            <button className="btn" disabled={saving} onClick={() => setOpen(false)}>
               Cancel
             </button>
-            <button className="btn btn--accent" onClick={save} disabled={!canManage}>
-              Save
+            <button className="btn btn--accent" onClick={save} disabled={!canManage || saving || !form?.title.trim() || !form.questionTitle.trim() || !form.optionLabels.some((label) => label.trim())}>
+              {saving ? "Saving…" : "Save"}
             </button>
           </>
         }
       >
         {form && (
-          <div>
+          <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <Field label="Election title">
               <input
                 className="input"
@@ -349,7 +353,7 @@ export function ElectionsPage() {
                 onChange={(markdown) => setForm({ ...form, description: markdown })}
               />
             </Field>
-            <div className="row" style={{ gap: 12 }}>
+            <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
               <Field label="Opens">
                 <DateTimeInput
                   value={form.opensAtISO}
@@ -363,7 +367,7 @@ export function ElectionsPage() {
                 />
               </Field>
             </div>
-            <div className="row" style={{ gap: 12 }}>
+            <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
               <Field label="Nominations open">
                 <DateTimeInput
                   value={form.nominationsOpenAtISO}
@@ -438,7 +442,7 @@ export function ElectionsPage() {
                 </div>
               </div>
             </Field>
-          </div>
+          </fieldset>
         )}
       </Drawer>
     </div>

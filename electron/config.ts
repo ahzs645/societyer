@@ -2,8 +2,11 @@ import { app } from "electron";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { normalizeHostedConfiguration, type HostedDesktopConfiguration } from "./desktopModePolicy.js";
 
 export type DesktopConfig = {
+  desktopMode?: "local" | "online";
+  hostedApplication?: HostedDesktopConfiguration;
   workspaceRoot?: string;
   legacyDexieWorkspaceId?: string;
   legacyDexieMigrationComplete?: boolean;
@@ -27,6 +30,8 @@ export async function readDesktopConfig(): Promise<DesktopConfig> {
   try {
     const parsed = JSON.parse(await readFile(configPath(), "utf8"));
     return {
+      desktopMode: parsed.desktopMode === "online" ? "online" : "local",
+      hostedApplication: parseHostedConfiguration(parsed.hostedApplication),
       workspaceRoot: typeof parsed.workspaceRoot === "string" ? parsed.workspaceRoot : undefined,
       legacyDexieWorkspaceId: typeof parsed.legacyDexieWorkspaceId === "string"
         ? parsed.legacyDexieWorkspaceId
@@ -43,6 +48,11 @@ export async function readDesktopConfig(): Promise<DesktopConfig> {
   }
 }
 
+function parseHostedConfiguration(value: unknown): HostedDesktopConfiguration | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  try { return normalizeHostedConfiguration(value as HostedDesktopConfiguration); } catch { return undefined; }
+}
+
 export async function writeDesktopConfig(next: DesktopConfig) {
   await mkdir(app.getPath("userData"), { recursive: true });
   const targetPath = configPath();
@@ -51,16 +61,22 @@ export async function writeDesktopConfig(next: DesktopConfig) {
   await rename(tempPath, targetPath);
 }
 
-export async function updateDesktopConfig(patch: DesktopConfig) {
-  const current = await readDesktopConfig();
-  const next = {
-    ...current,
-    ...patch,
-    services: { ...current.services, ...patch.services },
-    serviceProfiles: { ...current.serviceProfiles, ...patch.serviceProfiles },
-  };
-  await writeDesktopConfig(next);
-  return next;
+let configUpdates: Promise<unknown> = Promise.resolve();
+
+export function updateDesktopConfig(patch: DesktopConfig): Promise<DesktopConfig> {
+  const operation = configUpdates.then(async () => {
+    const current = await readDesktopConfig();
+    const next = {
+      ...current,
+      ...patch,
+      services: { ...current.services, ...patch.services },
+      serviceProfiles: { ...current.serviceProfiles, ...patch.serviceProfiles },
+    };
+    await writeDesktopConfig(next);
+    return next;
+  });
+  configUpdates = operation.catch(() => undefined);
+  return operation;
 }
 
 function parseServiceProfiles(value: unknown): DesktopConfig["serviceProfiles"] {

@@ -4,16 +4,16 @@ import { DatePicker } from "./DatePicker";
 import { CHARITY_STATUS_OPTIONS, FORMATION_STATUS_OPTIONS, ENTITY_DATE_FIELDS, LEGAL_SUBTYPE_OPTIONS, TAX_STATUS_OPTIONS, entityPreparationDecision } from "../../shared/entitySetup";
 import { canonicalizeJurisdictionCode, homeJurisdictionCode, isSociety } from "../../shared/organizationDomain";
 
-export function EntitySetupFields({ form, set, includeDates = false, documents = [] }: { form: Record<string, any>; set: (key: string, value: any) => void; includeDates?: boolean; documents?: any[] }) {
+export function EntitySetupFields({ form, set, includeDates = false, documents = [], showFormationStatus = true }: { form: Record<string, any>; set: (key: string, value: any) => void; includeDates?: boolean; documents?: any[]; showFormationStatus?: boolean }) {
   const code = canonicalizeJurisdictionCode(homeJurisdictionCode(form));
   const society = isSociety(form);
   const route = entityPreparationDecision(form);
   const subtypeOptions = LEGAL_SUBTYPE_OPTIONS.filter(({ value }) => value === "other" || (code === "CA-BC" ? society ? value.includes("society") : value.includes("company") : code === "CA-FED-CBCA" && value === "federal_private_corporation"));
   const dateFields = ENTITY_DATE_FIELDS.filter(({ value }) => value === "anniversaryDate" || value === "annualMeetingDate" || (society ? value === "agmExtensionDate" : code === "CA-BC" ? ["annualReferenceDate", "transparencyAwarenessDate", "transparencyEntryDate", "transparencyCessationEntryDate"].includes(value) : code === "CA-FED-CBCA" && ["iscAwarenessDate", "iscRegisterEntryDate"].includes(value)));
   return <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-    <Field label="Legal formation status" hint="This is separate from workspace active/archive status. Creating a workspace or draft does not establish incorporation.">
+    {showFormationStatus && <Field label="Legal formation status" hint="This is separate from workspace active/archive status. Creating a workspace or draft does not establish incorporation.">
       <Select value={form.formationStatus ?? ""} onChange={(value) => set("formationStatus", value || undefined)} options={FORMATION_STATUS_OPTIONS.filter((option) => form._id || ["preparing", "submitted", "unverified_existing"].includes(option.value))} />
-    </Field>
+    </Field>}
     {form._id && <div className="society-field-grid">
       <Field label="Official certificate evidence" hint="Upload the official registry certificate in Documents, then select it. Drafts and URL-only records are insufficient."><Select value={form.certificateEvidenceDocumentId ?? ""} onChange={(value) => set("certificateEvidenceDocumentId", value || undefined)} options={[{ value: "", label: "Select an uploaded certificate" }, ...documents.map((document) => ({ value: document._id, label: document.title }))]} /></Field>
       <Field label="Official certificate reference"><input className="input" value={form.certificateReference ?? ""} onChange={(event) => set("certificateReference", event.target.value)} /></Field>

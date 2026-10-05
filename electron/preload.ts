@@ -17,6 +17,9 @@ type SocietyerDesktopBridgeWithSnapshot = SocietyerDesktopBridge & {
 };
 
 const bridge: SocietyerDesktopBridgeWithSnapshot = {
+  getDesktopMode: () => ipcRenderer.invoke(IpcChannels.GET_DESKTOP_MODE_CHANNEL),
+  openHostedMode: (configuration) => ipcRenderer.invoke(IpcChannels.OPEN_HOSTED_MODE_CHANNEL, configuration),
+  returnToLocalMode: () => ipcRenderer.invoke(IpcChannels.RETURN_TO_LOCAL_MODE_CHANNEL),
   chooseWorkspaceDirectory: () => ipcRenderer.invoke(IpcChannels.CHOOSE_WORKSPACE_DIRECTORY_CHANNEL),
   getWorkspaceInfo: () => ipcRenderer.invoke(IpcChannels.GET_WORKSPACE_INFO_CHANNEL),
   getSetupState: () => ipcRenderer.invoke(IpcChannels.GET_SETUP_STATE_CHANNEL),
@@ -87,4 +90,7 @@ const bridge: SocietyerDesktopBridgeWithSnapshot = {
   },
 };
 
-contextBridge.exposeInMainWorld("societyerDesktop", bridge);
+if (process.isMainFrame && ((window.location.protocol === "societyer-app:" && window.location.hostname === "index.html") ||
+    (window.location.protocol === "http:" && ["localhost", "127.0.0.1"].includes(window.location.hostname)))) {
+  contextBridge.exposeInMainWorld("societyerDesktop", bridge);
+}

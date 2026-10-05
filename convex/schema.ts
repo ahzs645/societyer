@@ -39,6 +39,7 @@ export default defineSchema({
   ...pathwayTables,
   societies: defineTable({
     accessRecoveryRequired: v.optional(v.boolean()),
+    onboardingAnswersJson: v.optional(v.string()),
     name: v.string(),
     incorporationNumber: v.optional(v.string()),
     incorporationDate: v.optional(v.string()),

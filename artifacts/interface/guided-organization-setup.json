@@ -1,0 +1,151 @@
+{
+  "suite": "Guided organization setup",
+  "cases": 16,
+  "passed": 16,
+  "viewports": {
+    "narrow-phone": 320,
+    "phone": 390,
+    "tablet": 768,
+    "desktop": 1440
+  },
+  "runtime": "Actual browser-local IndexedDB via public UI, production creation and restore implementation; no mocked create or restore calls",
+  "runs": [
+    {
+      "scope": "Formation handoff and public backup export/restore; unaffected cases retained",
+      "passed": 8
+    },
+    {
+      "scope": "Malformed backup preserves existing nonempty records; focused fixture correction rerun",
+      "passed": 4
+    },
+    {
+      "scope": "Existing company and generic locations, requalified after shared sparse-address codec correction; country-only mailing survives creation, guided row seeding and profile save",
+      "passed": 4
+    }
+  ],
+  "assertions": [
+    "Explicit actual/planned governing Act",
+    "Existing company remains incorporation-evidence pending",
+    "Preparing organization remains pre-incorporation with pending home registration",
+    "Actual saved street number and generic location drawer survive input sequence",
+    "Separate society membership/director and corporate legal-role/share register handoff",
+    "Initial answers persist without fabricated certificate, member, role holder or securities records",
+    "Settings backup download restores through a fresh browser context",
+    "Malformed backup is rejected before replacement confirmation and leaves original records unchanged",
+    "Sparse mailing country stays in country after creation, row backfill and profile save"
+  ],
+  "limits": [
+    "Browser-local qualification does not prove packaged Electron or live hosted account creation",
+    "JSON restores records and attachment references; external/native filesystem bytes require their separate backup",
+    "Reviewed incorporation guides only cover registered pathways; manual existing legal details do not enable unsupported filing automation"
+  ],
+  "results": [
+    {
+      "scenario": "new incorporation stays pending and hands off a formation task with reviewed filing guidance",
+      "viewport": "narrow-phone",
+      "status": "passed",
+      "durationMs": 7309
+    },
+    {
+      "scenario": "restore previews a real backup on another device and preserves organization records",
+      "viewport": "narrow-phone",
+      "status": "passed",
+      "durationMs": 10787
+    },
+    {
+      "scenario": "new incorporation stays pending and hands off a formation task with reviewed filing guidance",
+      "viewport": "phone",
+      "status": "passed",
+      "durationMs": 7907
+    },
+    {
+      "scenario": "restore previews a real backup on another device and preserves organization records",
+      "viewport": "phone",
+      "status": "passed",
+      "durationMs": 11220
+    },
+    {
+      "scenario": "new incorporation stays pending and hands off a formation task with reviewed filing guidance",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 8384
+    },
+    {
+      "scenario": "restore previews a real backup on another device and preserves organization records",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 14318
+    },
+    {
+      "scenario": "new incorporation stays pending and hands off a formation task with reviewed filing guidance",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 9419
+    },
+    {
+      "scenario": "restore previews a real backup on another device and preserves organization records",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 12990
+    },
+    {
+      "scenario": "malformed backup never reaches destructive confirmation or changes local records",
+      "viewport": "narrow-phone",
+      "status": "passed",
+      "durationMs": 10473
+    },
+    {
+      "scenario": "malformed backup never reaches destructive confirmation or changes local records",
+      "viewport": "phone",
+      "status": "passed",
+      "durationMs": 7611
+    },
+    {
+      "scenario": "malformed backup never reaches destructive confirmation or changes local records",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 7633
+    },
+    {
+      "scenario": "malformed backup never reaches destructive confirmation or changes local records",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 7808
+    },
+    {
+      "scenario": "existing company collects its Act, addresses and share planning without fabricated certificates or securities",
+      "viewport": "narrow-phone",
+      "status": "passed",
+      "durationMs": 14765
+    },
+    {
+      "scenario": "existing company collects its Act, addresses and share planning without fabricated certificates or securities",
+      "viewport": "phone",
+      "status": "passed",
+      "durationMs": 12937
+    },
+    {
+      "scenario": "existing company collects its Act, addresses and share planning without fabricated certificates or securities",
+      "viewport": "tablet",
+      "status": "passed",
+      "durationMs": 11124
+    },
+    {
+      "scenario": "existing company collects its Act, addresses and share planning without fabricated certificates or securities",
+      "viewport": "desktop",
+      "status": "passed",
+      "durationMs": 12040
+    }
+  ],
+  "nativeAddressRegression": {
+    "command": "npx tsx scripts/check-structured-address.ts",
+    "passed": true,
+    "checks": [
+      "Real native Convex createWorkspace under verified creator preserves country-only/province-only text positions",
+      "Initial Owner retains verified issuer/subject binding",
+      "Real native organizationDetails seed writes corresponding country/province fields without inventing city/street",
+      "Legacy free-form addresses retain review behavior",
+      "Local/native shared codec round-trips country-only, city-only, province-only, postal-only, unit-only, street+country, cleared-country and full legacy CRLF values"
+    ]
+  }
+}

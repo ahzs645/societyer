@@ -29,7 +29,7 @@ export function PartyPortalPage() {
   const headingStyle = { display: "flex", alignItems: "center", gap: 8, fontSize: "var(--fs-lg)", marginBottom: 12 } as const;
 
   return (
-    <div style={{ maxWidth: 880, margin: "0 auto", padding: "32px 20px", color: "var(--text-primary)" }}>
+    <div style={{ maxWidth: 880, margin: "0 auto", padding: "32px 20px", color: "var(--text-primary)", overflowWrap: "anywhere" }}>
       <header style={{ borderBottom: "1px solid var(--border)", paddingBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Building2 size={24} />
@@ -51,14 +51,14 @@ export function PartyPortalPage() {
           {board.length === 0 ? (
             <p className="muted">No active directors on record.</p>
           ) : (
-            <table className="table">
+            <div className="table-wrap" role="region" aria-label="Board of directors" tabIndex={0}><table className="table">
               <thead><tr><th>Name</th><th>Position</th></tr></thead>
               <tbody>
                 {board.map((d: any, i: number) => (
                   <tr key={i}><td><strong>{d.name}</strong></td><td>{d.position}</td></tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </section>
       )}
@@ -69,7 +69,7 @@ export function PartyPortalPage() {
           {publications.length === 0 ? (
             <p className="muted">No published items.</p>
           ) : (
-            <table className="table">
+            <div className="table-wrap" role="region" aria-label="Publications" tabIndex={0}><table className="table">
               <thead><tr><th>Title</th><th>Category</th><th>Published</th><th /></tr></thead>
               <tbody>
                 {publications.map((p: any) => (
@@ -81,7 +81,7 @@ export function PartyPortalPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </section>
       )}
@@ -93,7 +93,7 @@ export function PartyPortalPage() {
           {documents.length === 0 ? (
             <p className="muted">No documents shared.</p>
           ) : (
-            <table className="table">
+            <div className="table-wrap" role="region" aria-label="Documents" tabIndex={0}><table className="table">
               <thead><tr><th>Title</th><th>Category</th><th /></tr></thead>
               <tbody>
                 {documents.map((d: any) => (
@@ -104,7 +104,7 @@ export function PartyPortalPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </section>
       )}

@@ -1,0 +1,49 @@
+{
+  "baseline": "28f2e92c703a2f2bb460ccd5565190dccd24c33e",
+  "requiredAuthenticationCommit": "cc52e24487f42c19f81b2d22385091006bc70b44",
+  "runtime": "Real Better Auth signup UI, broker cookies/JWTs and isolated self-hosted Convex production exports; no auth or data mocks",
+  "browser": {
+    "passed": 4,
+    "failed": 0,
+    "widths": [
+      320,
+      1440
+    ],
+    "flows": [
+      "Proposed organization",
+      "Existing organization"
+    ],
+    "assertions": [
+      "First-account self-service gate",
+      "Explicit governing Act",
+      "Native Owner bound only to created tenant",
+      "Pending legal evidence retained",
+      "Initial answers persisted",
+      "Reload preserves authoritative workspace binding",
+      "Foreign workspace read denied",
+      "No page errors or horizontal overflow"
+    ]
+  },
+  "accessRegression": {
+    "groupsPassed": 5,
+    "scope": "Native Convex handler oracle: anonymous, forged actor, untrusted issuer, disabled/inactive/ambiguous identities, returning creator and foreign tenant protections"
+  },
+  "builds": [
+    "Server TypeScript",
+    "Convex TypeScript and frontend combined Pages build",
+    "Electron native TypeScript and bundled local renderer"
+  ],
+  "preserved": [
+    "Clerk sign-in/profiles",
+    "Tenant-restricted Better Auth Microsoft mode",
+    "Fixed Societyer workspace roles",
+    "Last-active-Owner protections",
+    "React Router and Convex"
+  ],
+  "limits": [
+    "Real enterprise SSO and signed installers are separate qualifications",
+    "Four labelled fresh accounts/workspaces remain only in the disposable local lab; no production tenant was used",
+    "Mode switching does not replicate or migrate every module",
+    "Browser emulation is not physical-device or Safari qualification"
+  ]
+}

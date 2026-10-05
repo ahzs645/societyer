@@ -1,4 +1,4 @@
-import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -15,7 +15,8 @@ import { useEffect, useState } from "react";
 export function PaperlessPage() {
   const society = useSociety();
   const { can } = usePermissions();
-  const canConfigure = can("settings:write") && can("documents:write");
+  const localOnly = isLocalDataRuntime() && !isStaticDemoRuntime();
+  const canConfigure = can("settings:write") && can("documents:write") && !localOnly;
   const status = useQuery(api.paperless.connectionStatus, society ? { societyId: society._id } : "skip");
   const recentSyncs = useQuery(api.paperless.recentSyncs, society ? { societyId: society._id, limit: 12 } : "skip");
   const tagProfiles = useQuery(api.paperless.tagProfiles, {});
@@ -98,6 +99,7 @@ export function PaperlessPage() {
         }
       />
 
+      {localOnly && <p className="muted" role="status">Paperless connections and OCR synchronization require a connected workspace. Local document records and files remain available in Documents and Library.</p>}
       <div className="grid two" style={{ marginBottom: 16 }}>
         <div className="card">
           <div className="card__head">
@@ -108,13 +110,13 @@ export function PaperlessPage() {
             <div className="row" style={{ justifyContent: "space-between" }}>
               <span className="muted">Status</span>
               <Badge tone={connected ? "success" : connection?.status === "error" ? "danger" : "warn"}>
-                {connected ? "Connected" : connection?.status ?? "Not enabled"}
+                {localOnly ? "Unavailable locally" : connected ? "Connected" : connection?.status ?? "Not enabled"}
               </Badge>
             </div>
             <div className="row" style={{ justifyContent: "space-between" }}>
               <span className="muted">Runtime</span>
               <Badge tone={runtime?.live ? "success" : "info"}>
-                {runtime?.live ? "Live Paperless-ngx" : "Demo adapter"}
+                {localOnly ? "Local records" : runtime?.live ? "Live Paperless-ngx" : "Demo adapter"}
               </Badge>
             </div>
             <div className="muted">

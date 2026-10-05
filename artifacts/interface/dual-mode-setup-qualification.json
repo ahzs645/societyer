@@ -1,0 +1,57 @@
+{
+  "baseline": "28f2e92c703a2f2bb460ccd5565190dccd24c33e",
+  "requiredAuthenticationCommit": "cc52e24487f42c19f81b2d22385091006bc70b44",
+  "mainReconciliation": "Fetched current main; same starting commit, required authentication commit is an ancestor; no divergent commits or merge conflicts. Actual working diff checked.",
+  "targetedBrowserCases": {
+    "distinctPassed": 152,
+    "failed": 0,
+    "groups": {
+      "inventoryRoutesAndReadonlySettings": 60,
+      "newPublicLinksAndIntakePayloadContracts": 12,
+      "electionLifecycle": 4,
+      "financeAndFilingPreparation": 12,
+      "guidedLocalSetupAndRestore": 16,
+      "realHostedSignupAndSetup": 4,
+      "operationsIntegrationsAndDocuments": 44
+    },
+    "widths": [
+      320,
+      390,
+      768,
+      1440
+    ],
+    "qualification": "Mixed source-reviewed route rendering, browser-local transactions, demo role/provider contracts and actual hosted first-account flows; no claim of complete external-provider or every-route transaction certification. Four sparse-address repeats replace earlier results within the sixteen setup cases."
+  },
+  "electronRuntime": {
+    "passed": 12,
+    "kind": "Actual native main process and bundled local renderer, isolated HTTPS/SSO fixture; final runtime also checked against root-built dist"
+  },
+  "nativeAndPortableChecks": [
+    "Reconciled authentication and authorization suite",
+    "928 hosted and 821 portable policy classifications",
+    "5 hosted creation access groups",
+    "90 task source ownership and filing-link checks",
+    "Native and both portable election lifecycle engines",
+    "Filing resource and export authority",
+    "Sparse address creation under verified native creator and local persistence",
+    "Bounded setup and backup validation",
+    "Interface and export contracts"
+  ],
+  "buildsPassed": [
+    "Server TypeScript",
+    "Convex TypeScript and frontend Pages build",
+    "Electron native TypeScript and bundled local renderer"
+  ],
+  "securityScan": {
+    "matchingFiles": [],
+    "source": "Known isolated lab values checked against public tracked/untracked source and built bundles"
+  },
+  "limits": [
+    "Local and hosted datasets remain separate; PowerSync replication remains meeting preparation",
+    "Official registry/CRA submissions and distinct annual-filing ledgers remain manual",
+    "External providers need configured credentials and service qualification",
+    "AI file references contain names/sizes only",
+    "Large deferred frontend bundles remain a performance follow-up",
+    "Real enterprise SSO, signed OS installers and physical mobile devices not qualified"
+  ]
+}

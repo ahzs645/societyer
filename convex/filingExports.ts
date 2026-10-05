@@ -10,8 +10,8 @@ import { toPortableQueryCtx } from "./lib/portable";
 
 /**
  * Returns JSON payloads matching the field shape of Societies Online filing
- * forms, derived from current data. The user copies values into the online
- * form; a future "FilingBot" can submit them directly.
+ * forms, derived from current data. The user reviews and copies these values
+ * into the official form. No submission is made by this query.
  */
 export const societiesOnlinePreFill = authorizedQuery("filingExports:societiesOnlinePreFill", query)({
   args: { societyId: v.id("societies"), kind: v.string() },

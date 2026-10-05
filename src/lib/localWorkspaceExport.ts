@@ -1,3 +1,4 @@
+import { MAX_SETUP_BACKUP_BYTES, validateSetupBackup } from "../../shared/onboardingBackup";
 import { localDataClient } from "./localDataClient";
 
 type LocalExportCapableClient = {
@@ -49,6 +50,7 @@ export function defaultBackupFilename(now = new Date()) {
 
 /** Parse and validate a backup file without writing anything. */
 export async function readWorkspaceBackupFile(file: File) {
+  if (file.size > MAX_SETUP_BACKUP_BYTES) throw new Error("Device setup accepts backups up to 100 MB. Use a smaller workspace backup or the administrator migration tools.");
   let snapshot: any;
   try {
     snapshot = JSON.parse(await file.text());
@@ -58,6 +60,7 @@ export async function readWorkspaceBackupFile(file: File) {
   if (!snapshot || typeof snapshot !== "object" || !snapshot.tables || typeof snapshot.tables !== "object") {
     throw new Error(`"${file.name}" is not a Societyer workspace backup.`);
   }
+  validateSetupBackup(snapshot);
   return snapshot;
 }
 

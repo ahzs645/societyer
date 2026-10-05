@@ -10,6 +10,7 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
+import { isLocalDataRuntime } from "../lib/staticRuntime";
 
 export function GrantSourcesPage() {
   const society = useSociety();
@@ -62,6 +63,7 @@ const CANDIDATE_TONES: Record<string, "neutral" | "info" | "success" | "danger">
 function GrantOpportunityQueue({ societyId }: { societyId: any }) {
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("grants:write");
+  const canDiscover = canWrite && !isLocalDataRuntime() && (typeof navigator === "undefined" || navigator.onLine);
   const toast = useToast();
   const candidates = useQuery(api.grantSources.candidates, { societyId });
   const sources = useQuery(api.grantSources.list, { societyId });
@@ -74,6 +76,7 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
   const [form, setForm] = useState({ title: "", funder: "", opportunityUrl: "", applicationDueDate: "", amountText: "" });
 
   const runDiscover = async () => {
+    if (!canDiscover || discovering) return;
     if (!discoverSourceId) {
       toast.info("Choose a source to discover from.");
       return;
@@ -92,6 +95,7 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
   const active = (candidates ?? []).filter((c: any) => c.status !== "Rejected" && c.status !== "Duplicate");
 
   const save = async () => {
+    if (!canWrite) return;
     if (!form.title.trim()) {
       toast.info("Give the opportunity a title.");
       return;
@@ -111,19 +115,19 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card__head">
+      <div className="card__head" style={{ flexWrap: "wrap", gap: 8 }}>
         <h2 className="card__title">Opportunity queue</h2>
         <span className="card__subtitle">{active.length} open · triage discovered or manually-added grant opportunities</span>
-        <div className="row" style={{ gap: 6, marginLeft: "auto", alignItems: "center" }}>
+        <div className="row" style={{ gap: 6, marginLeft: "auto", alignItems: "center", flexWrap: "wrap" }}>
           {(sources ?? []).length > 0 && (
             <>
-              <select className="input" value={discoverSourceId} onChange={(e) => setDiscoverSourceId(e.target.value)} style={{ maxWidth: 200 }}>
+              <select aria-label="Grant discovery source" className="input" value={discoverSourceId} onChange={(e) => setDiscoverSourceId(e.target.value)} style={{ maxWidth: 200 }}>
                 <option value="">Discover from source…</option>
                 {(sources ?? []).map((s: any) => (
                   <option key={s._id} value={s._id}>{s.name}</option>
                 ))}
               </select>
-              <button className="btn-action" disabled={!canWrite || (discovering || !discoverSourceId)} onClick={runDiscover}>
+              <button className="btn-action" disabled={!canDiscover || discovering || !discoverSourceId} onClick={runDiscover}>
                 <RefreshCw size={12} /> Discover
               </button>
             </>
@@ -134,6 +138,7 @@ function GrantOpportunityQueue({ societyId }: { societyId: any }) {
         </div>
       </div>
       <div className="card__body col" style={{ gap: 10 }}>
+        {isLocalDataRuntime() && <p className="muted" role="status">Feed discovery requires online mode and a connected server. You can add and review opportunities locally.</p>}
         {adding && (
           <div className="col" style={{ gap: 8 }}>
             <Field label="Title">

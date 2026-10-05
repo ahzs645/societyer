@@ -2,6 +2,7 @@ import { ipcMain, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
 import { isManagedServiceId, type ManagedServiceId } from "./processManager.js";
 import { isDesktopServiceId, type DesktopServiceId } from "./services.js";
+import { assertLocalRendererAuthority } from "./ipcAuthority.js";
 
 const VoidPayload = z.undefined().optional();
 const VoidResult = z.void();
@@ -21,6 +22,7 @@ export function handleValidatedIpc<Payload, Result>(input: {
 }) {
   ipcMain.removeHandler(input.channel);
   ipcMain.handle(input.channel, async (event, rawPayload) => {
+    assertLocalRendererAuthority(event);
     const payload = (input.payload ?? VoidPayload).parse(rawPayload) as Payload;
     const result = await input.handler(event, payload);
     return (input.result ?? VoidResult).parse(result);

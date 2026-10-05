@@ -1,4 +1,7 @@
 export const CHOOSE_WORKSPACE_DIRECTORY_CHANNEL = "societyer:chooseWorkspaceDirectory";
+export const GET_DESKTOP_MODE_CHANNEL = "societyer:getDesktopMode";
+export const OPEN_HOSTED_MODE_CHANNEL = "societyer:openHostedMode";
+export const RETURN_TO_LOCAL_MODE_CHANNEL = "societyer:returnToLocalMode";
 export const GET_WORKSPACE_INFO_CHANNEL = "societyer:getWorkspaceInfo";
 export const GET_SETUP_STATE_CHANNEL = "societyer:getSetupState";
 export const SET_SETUP_COMPLETE_CHANNEL = "societyer:setSetupComplete";

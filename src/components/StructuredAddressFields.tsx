@@ -1,14 +1,10 @@
 import { Field } from "./ui";
 import { Select } from "./Select";
+import { useEffect, useRef, useState } from "react";
 
-export type StructuredAddressValue = {
-  street?: string;
-  unit?: string;
-  city?: string;
-  provinceState?: string;
-  postalCode?: string;
-  country?: string;
-};
+import { formatAddressText, parseAddressText, splitStreet, type StructuredAddressValue } from "../../shared/structuredAddress";
+export { formatAddressText, parseAddressText, splitStreet } from "../../shared/structuredAddress";
+export type { StructuredAddressValue } from "../../shared/structuredAddress";
 
 const PROVINCE_STATE_OPTIONS = [
   "Alberta",
@@ -110,42 +106,27 @@ export function StructuredAddressTextFields({
   value?: string;
   onChange: (value: string) => void;
 }) {
+  // Keep incomplete structured input intact while it is serialized into the
+  // parent text field. Re-parsing after every keystroke loses a street number
+  // entered before its street name and moves country/region-only fragments.
+  const [draft, setDraft] = useState(() => parseAddressText(value));
+  const emitted = useRef(value ?? "");
+  useEffect(() => {
+    const incoming = value ?? "";
+    if (incoming === emitted.current) return;
+    emitted.current = incoming;
+    setDraft(parseAddressText(incoming));
+  }, [value]);
   return (
     <StructuredAddressFields
-      value={parseAddressText(value)}
-      onChange={(next) => onChange(formatAddressText(next))}
+      value={draft}
+      onChange={(next) => {
+        setDraft(next);
+        emitted.current = formatAddressText(next);
+        onChange(emitted.current);
+      }}
     />
   );
-}
-
-export function formatAddressText(value: StructuredAddressValue) {
-  const line1 = [value.unit, value.street].map(cleanPart).filter(Boolean).join(", ");
-  const line2 = [value.city, value.provinceState, value.postalCode].map(cleanPart).filter(Boolean).join(", ");
-  return [line1, line2, value.country].map(cleanPart).filter(Boolean).join("\n");
-}
-
-export function splitStreet(value?: string) {
-  const text = cleanPart(value);
-  const match = text.match(/^([0-9]+[A-Za-z]?(?:-[0-9]+[A-Za-z]?)?)\s+(.+)$/);
-  if (!match) return { streetNumber: "", streetName: text };
-  return { streetNumber: match[1], streetName: match[2] };
-}
-
-function parseAddressText(value?: string): StructuredAddressValue {
-  const lines = String(value ?? "").split(/\n+/).map(cleanPart).filter(Boolean);
-  const [firstLine = "", regionLine = "", country = ""] = lines;
-  const firstParts = firstLine.split(",").map(cleanPart).filter(Boolean);
-  const street = firstParts.pop() ?? "";
-  const unit = firstParts.join(", ");
-  const regionParts = regionLine.split(",").map(cleanPart).filter(Boolean);
-  return {
-    street,
-    unit,
-    city: regionParts[0] ?? "",
-    provinceState: regionParts[1] ?? "",
-    postalCode: regionParts.slice(2).join(", "),
-    country,
-  };
 }
 
 function cleanPart(value: unknown) {

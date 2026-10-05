@@ -1,15 +1,15 @@
 /**
  * PORTABLE FUNCTIONS: the elections domain (the pure `ctx.db` handlers).
  *
- * Only the handlers that depend solely on `ctx.db` live here; the role-gated
- * mutations (which call `requireRole` / `getActiveBylawRuleSet`) remain on
- * Convex. Each handler below runs unchanged on hosted Convex, the local Dexie
+ * The handlers, including their role and workspace checks, run unchanged on
+ * hosted Convex, the local Dexie
  * runtime, and the convex-test oracle.
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, principalUserId, requireRolePortable, requireSocietyMembership } from "./access";
 import { getActiveBylawRuleSet } from "./bylawRules";
+import { normalizeElectionWindow, validateElectionQuestion, type ElectionQuestionInput } from "../electionValidation";
 
 // Portable, dep-free copy of the role hierarchy from `convex/users.ts`.
 const ROLES = ["Owner", "Admin", "Director", "Member", "Viewer"] as const;
@@ -168,16 +168,18 @@ export async function submitNominationPortable(
   const actor = await requireSocietyMembership(ctx, societyId);
   if (args.actingUserId && args.actingUserId !== actor?._id) throw new Error("Authenticated actor does not match the current principal.");
   if (!actor?.memberId) throw new Error("Only confirmed members can submit nominations.");
+  if (!args.nomineeName.trim()) throw new Error("Enter the nominee's name.");
   await getOwned(ctx, "members", actor.memberId, societyId);
   if (args.questionId) {
     const question = await getOwned(ctx, "electionQuestions", args.questionId, societyId);
     if (question.electionId !== args.electionId) throw new Error("Election question not found.");
   }
   const nowISO = new Date().toISOString();
-  if (election.nominationsOpenAtISO && nowISO < election.nominationsOpenAtISO) {
+  if (!["Draft", "Open"].includes(election.status)) throw new Error("Nominations are closed.");
+  if (Date.parse(nowISO) < Date.parse(election.nominationsOpenAtISO ?? election.createdAtISO)) {
     throw new Error("Nominations are not open yet.");
   }
-  if (election.nominationsCloseAtISO && nowISO > election.nominationsCloseAtISO) {
+  if (Date.parse(nowISO) > Date.parse(election.nominationsCloseAtISO ?? election.closesAtISO)) {
     throw new Error("Nominations are closed.");
   }
   const id = await ctx.db.insert("electionNominations", {
@@ -185,7 +187,7 @@ export async function submitNominationPortable(
     electionId: args.electionId,
     questionId: args.questionId,
     memberId: actor.memberId,
-    nomineeName: args.nomineeName,
+    nomineeName: args.nomineeName.trim(),
     nomineeEmail: args.nomineeEmail,
     statement: args.statement,
     status: "Submitted",
@@ -215,6 +217,10 @@ export async function castBallotPortable(
   if (election.status !== "Open") {
     throw new Error("Election is not open for voting.");
   }
+  const now = Date.now();
+  if (now < Date.parse(election.opensAtISO) || now > Date.parse(election.closesAtISO)) {
+    throw new Error("Voting is outside the election's opening and closing window.");
+  }
   const user = await requireSocietyMembership(ctx, societyId);
   if (actingUserId && actingUserId !== user?._id) throw new Error("Authenticated actor does not match the current principal.");
   if (!user?.memberId) {
@@ -241,12 +247,16 @@ export async function castBallotPortable(
     .query("electionQuestions")
     .withIndex("by_election", (q) => q.eq("electionId", electionId))
     .collect();
+  if (!questions.length || choices.length !== questions.length || new Set(choices.map((choice) => choice.questionId)).size !== choices.length) {
+    throw new Error("Submit exactly one response for every ballot question.");
+  }
   for (const choice of choices) {
     const question = questions.find((row) => row._id === choice.questionId);
     if (!question) throw new Error("Election question not found.");
     if (choice.optionIds.length === 0) {
       throw new Error("Each question must have at least one selection.");
     }
+    if (new Set(choice.optionIds).size !== choice.optionIds.length) throw new Error("A ballot option can only be selected once.");
     if (choice.optionIds.length > question.maxSelections) {
       throw new Error(
         `Question "${question.title}" allows at most ${question.maxSelections} selection(s).`,
@@ -348,6 +358,7 @@ export async function createPortable(
     scrutineerUserIds?: string[];
     notes?: string;
     actingUserId?: string;
+    initialQuestion?: ElectionQuestionInput;
   },
 ) {
   const { user } = await requireRolePortable(ctx, {
@@ -355,6 +366,12 @@ export async function createPortable(
     societyId: args.societyId,
     required: "Director",
   });
+  if (!args.title.trim()) throw new Error("Enter an election title.");
+  const votingWindow = normalizeElectionWindow(args.opensAtISO, args.closesAtISO, "Voting");
+  const nominationsWindow = args.nominationsOpenAtISO || args.nominationsCloseAtISO
+    ? normalizeElectionWindow(args.nominationsOpenAtISO ?? votingWindow.start, args.nominationsCloseAtISO ?? votingWindow.end, "Nominations")
+    : undefined;
+  if (args.initialQuestion) validateElectionQuestion(args.initialQuestion);
   await Promise.all([
     args.meetingId ? getOwned(ctx, "meetings", args.meetingId, args.societyId) : Promise.resolve(),
     ...(args.scrutineerUserIds ?? []).map((userId) =>
@@ -364,13 +381,13 @@ export async function createPortable(
   const id = await ctx.db.insert("elections", {
     societyId: args.societyId,
     meetingId: args.meetingId,
-    title: args.title,
+    title: args.title.trim(),
     description: args.description,
     status: "Draft",
-    opensAtISO: args.opensAtISO,
-    closesAtISO: args.closesAtISO,
-    nominationsOpenAtISO: args.nominationsOpenAtISO,
-    nominationsCloseAtISO: args.nominationsCloseAtISO,
+    opensAtISO: votingWindow.start,
+    closesAtISO: votingWindow.end,
+    nominationsOpenAtISO: nominationsWindow?.start,
+    nominationsCloseAtISO: nominationsWindow?.end,
     eligibilityCutoffISO: args.eligibilityCutoffISO,
     anonymousBallot: rules.ballotIsAnonymous,
     scrutineerUserIds: args.scrutineerUserIds,
@@ -386,6 +403,7 @@ export async function createPortable(
     action: "created",
     detail: args.title,
   });
+  if (args.initialQuestion) await addQuestionPortable(ctx, { ...args.initialQuestion, electionId: id, actingUserId: args.actingUserId });
   return id;
 }
 
@@ -408,6 +426,11 @@ export async function updateSettingsPortable(
     societyId,
     required: "Director",
   });
+  if (args.nominationsOpenAtISO || args.nominationsCloseAtISO) {
+    const window = normalizeElectionWindow(args.nominationsOpenAtISO ?? election.createdAtISO, args.nominationsCloseAtISO ?? election.closesAtISO, "Nominations");
+    args.nominationsOpenAtISO = window.start;
+    args.nominationsCloseAtISO = window.end;
+  }
   await Promise.all([
     ...(args.scrutineerUserIds ?? []).map((userId) =>
       getOwned(ctx, "users", userId, societyId)),
@@ -449,6 +472,8 @@ export async function addQuestionPortable(
     societyId,
     required: "Director",
   });
+  if (election.status !== "Draft") throw new Error("Ballot questions can only be changed while the election is a draft.");
+  validateElectionQuestion(args);
   await Promise.all(args.options.flatMap((option) => option.memberId
     ? [getOwned(ctx, "members", option.memberId, societyId)]
     : []));
@@ -486,6 +511,8 @@ export async function reviewNominationPortable(
     societyId,
     required: "Director",
   });
+  if (!["Accepted", "Rejected"].includes(status)) throw new Error("Choose Accepted or Rejected for a nomination review.");
+  if (nomination.status === "OnBallot") throw new Error("A nomination already on the ballot cannot be reviewed again.");
   await ctx.db.patch(id, {
     status,
     reviewedByUserId: await principalUserId(ctx, societyId),
@@ -517,6 +544,9 @@ export async function publishNominationToBallotPortable(
   });
   const optionId = `nomination-${id}`;
   const hasOption = question.options.some((option: Record<string, any>) => option.id === optionId);
+  const election = await getOwned(ctx, "elections", nomination.electionId, societyId);
+  if (election.status !== "Draft") throw new Error("Ballot options can only be changed while the election is a draft.");
+  if (!["Accepted", "OnBallot"].includes(nomination.status)) throw new Error("Accept the nomination before adding it to the ballot.");
   if (!hasOption) {
     await ctx.db.patch(questionId, {
       options: [
@@ -557,6 +587,10 @@ export async function snapshotEligibleVotersPortable(
     societyId,
     required: "Director",
   });
+  if (election.status !== "Draft") throw new Error("Eligibility can only be snapshotted before the election opens.");
+  const questions = await ctx.db.query("electionQuestions").withIndex("by_election", (q) => q.eq("electionId", electionId)).collect();
+  if (!questions.length) throw new Error("Add a ballot question before opening the election.");
+  questions.forEach((question) => validateElectionQuestion({ title: question.title, maxSelections: question.maxSelections, options: question.options }));
   const rules = await getActiveBylawRuleSet(ctx, societyId);
   const members = await ctx.db
     .query("members")
@@ -625,6 +659,7 @@ export async function closePortable(
     societyId,
     required: "Director",
   });
+  if (election.status !== "Open") throw new Error("Only an open election can be closed.");
   await ctx.db.patch(electionId, {
     status: "Closed",
     updatedAtISO: new Date().toISOString(),
@@ -654,7 +689,7 @@ export async function tallyElectionPortable(
     required: "Director",
   });
   if (evidenceDocumentId) await getOwned(ctx, "documents", evidenceDocumentId, societyId);
-  if (election.status === "Open") {
+  if (election.status !== "Closed") {
     throw new Error("Close the election before publishing results.");
   }
   await ctx.db.patch(electionId, {

@@ -72,18 +72,11 @@ export function LoginPage() {
   }
   if (
     auth.session &&
+    auth.convexAuthStatus === "authenticated" &&
     auth.membershipState === "ready" &&
     auth.membershipStatus === "needs-invitation"
   ) {
-    return (
-      <div className="page">
-        <h1>Invitation required</h1>
-        <p>Open the invitation link sent by your workspace administrator.</p>
-        <button className="btn" type="button" onClick={() => void auth.signOut()}>
-          Sign out
-        </button>
-      </div>
-    );
+    return <Navigate to={safeRedirect} replace />;
   }
 
   if (auth.mode === "clerk") {

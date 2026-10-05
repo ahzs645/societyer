@@ -1170,6 +1170,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "legalOperations:removeSupportLog", handler: legalRecordsFns.removeSupportLogPortable }),
 
   // filingBot
+  definePortableQuery({ name: "filingBot:buildFilingPacket", handler: filingBotFns.buildFilingPacketPortable }),
   definePortableQuery({ name: "filingBot:listRuns", handler: filingBotFns.listRunsPortable }),
   definePortableQuery({ name: "filingBot:runsForFiling", handler: filingBotFns.runsForFilingPortable }),
   definePortableQuery({ name: "filingBot:getRun", handler: filingBotFns.getRunPortable }),

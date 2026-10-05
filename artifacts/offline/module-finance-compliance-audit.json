@@ -1,0 +1,53 @@
+{
+  "scope": "Finance, grants, registry filings and compliance module integration audit",
+  "implementation": [
+    "BC society pre-fill and preparation assistant enforce entity/jurisdiction/form eligibility; canonical BCSocietyAnnualReport alias creates a real six-step run.",
+    "Read-only filing packet now uses identical portable and native handlers, including real workspace directors and annual meeting data offline.",
+    "Filing summaries and assistant packet enforce each composed read resource for scoped service principals.",
+    "CRA pre-fill validates form/year, gates T3010 to registered charities and uses clamped UTC calendar-month deadlines.",
+    "Accounting CSV and auditor package require financial read plus exports:download; UI does not query or download exports without authority.",
+    "Member/Viewer source-to-grant pipeline controls disabled; local grant feed discovery explicitly unavailable while manual candidates stay editable.",
+    "Filing checklist, formation maintenance, pre-fill, actual DOCX export and official registry handoffs connected; preparation notifications route to /app/filings."
+  ],
+  "verification": {
+    "browser": {
+      "passed": 12,
+      "failed": 0,
+      "kind": "Browser-local demo runtime; not hosted provider qualification",
+      "new_filing_and_grant_cases": 8,
+      "restricted_role_cases": 4,
+      "viewport_widths": [
+        320,
+        390,
+        768,
+        1440
+      ],
+      "roles_tested": [
+        "Viewer",
+        "Member"
+      ],
+      "retest": "Initial concurrent development-server cold-load/HMR timeouts were rerun on frozen E2E server, one worker. All unresolved cases passed."
+    },
+    "native_and_portable_integration": "scripts/check-filing-preparation-integration.ts passed: actual native and local packets; annual alias; six-step native run; unsupported run creates no row; jurisdiction/type/form/charity/year gates; Member and foreign-workspace denial; Viewer accounting export denial; docs-only/filings-only/every-missing-resource service denial and combined-scope positive; leap-year deadline clamp.",
+    "existing_checks_passed": [
+      "test:accounting-core",
+      "test:accounting-csv-injection",
+      "test:treasury-budget-variance",
+      "test:annual-filings",
+      "test:compliance-rules (5 packs and 98 obligation fixtures)",
+      "test:jurisdiction-modules (3 modules)",
+      "test:post-incorporation-checklist-flow",
+      "test:corporation-mvp",
+      "test:grant-feed-parsers",
+      "test:static-parity (300 frontend writes; 0 pending)"
+    ],
+    "typecheck": "App and Convex passed; final repeat after service-scope guard addition recorded in ignored tmp/module-finance-*-typecheck-final.log.",
+    "lint": "Scoped lint: zero errors; existing max-lines warnings and ignored nonconfigured shared/test files."
+  },
+  "remaining_limits": [
+    "Detailed Filings and per-year AnnualFilings are separate manual ledgers linked in the interface; recording one does not automatically change the other.",
+    "BC preparation assistant supports annual report, bylaw amendment and change of directors. It prepares records only; users review signatures/evidence and submit through the official portal.",
+    "Other jurisdiction registry preparation uses the existing formation/checklist/document pathway and official manual submission; no automated registry or CRA submission was qualified.",
+    "Live Wave synchronization, external grant feeds and registry imports require online mode, configured server/provider credentials and actual authorized external sessions; this audit does not claim those providers were live-tested."
+  ]
+}
