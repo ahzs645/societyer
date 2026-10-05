@@ -147,6 +147,7 @@
     "test:motions-reconcile": "tsx scripts/check-motions-reconcile.ts",
     "test:motions-carryforward": "tsx scripts/check-motions-carryforward.ts",
     "test:motions-master-list": "tsx scripts/check-motions-master-list.ts",
+    "test:source-minutes-transposition": "tsx scripts/check-source-minutes-transposition.ts && tsx scripts/check-source-minutes-convex.ts",
     "test:minutes-snapshot-immutability": "tsx scripts/check-minutes-snapshot-immutability.ts",
     "test:motions-seed-to-minutes": "tsx scripts/check-motions-seed-to-minutes.ts",
     "test:meeting-template-materialize": "tsx scripts/check-meeting-template-materialize.ts",
@@ -241,6 +242,7 @@
     "test:pgair-review-workflows": "tsx scripts/check-pgair-review-workflows.ts",
     "test:pgair-convex-schema": "tsx scripts/check-pgair-convex-schema.ts",
     "test:person-history": "tsx scripts/check-person-history.ts",
+    "test:person-assumptions": "tsx scripts/check-person-assumptions.ts",
     "test:person-history-convex": "tsx scripts/check-person-history-convex.ts"
   },
   "dependencies": {

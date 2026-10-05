@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import {convexTest} from 'convex-test';
+import {anyApi} from 'convex/server';
+import schema from '../convex/schema';
+import {betterAuthIssuer} from '../convex/lib/authIdentity';
+import {toPortableQueryCtx} from '../convex/lib/portable';
+import {getByMeetingPortable} from '../shared/functions/minutes';
+const api:any=anyApi;
+const t=convexTest(schema,{'./_generated/api.js':()=>import('../convex/_generated/api.js'),'./_generated/server.js':()=>import('../convex/_generated/server.js'),'./minutes.js':()=>import('../convex/minutes')} as any);
+const issuer=betterAuthIssuer();
+const ids=await t.run(async ctx=>{
+ const societyId=await ctx.db.insert('societies',{name:'Fictional source transposition fixture',isCharity:false,isMemberFunded:false,updatedAt:Date.now()});
+ const ownerId=await ctx.db.insert('users',{societyId,email:'source-owner@example.invalid',displayName:'Fictional owner',role:'Owner',status:'Active',authSubject:'source-owner',authIssuer:issuer,authProvider:'better-auth',createdAtISO:'2026-01-01'});
+ const documentId=await ctx.db.insert('documents',{societyId,title:'AGM_Script_2016.doc',category:'Minutes',content:JSON.stringify({extractedText:'1. Call meeting to order\nChair says: This is private scripted wording.\n2. Adoption of Agenda\nI MOVE approval. CARRIED.'}),createdAtISO:'2016-11-22',flaggedForDeletion:false,tags:[]});
+ const meetingId=await ctx.db.insert('meetings',{societyId,title:'Fictional AGM',scheduledAt:'2016-11-22',electronic:false,type:'AGM',status:'Held',attendeeIds:[]});
+ const minuteId=await ctx.db.insert('minutes',{societyId,meetingId,heldAt:'2016-11-22',attendees:[],absent:[],quorumMet:false,discussion:'Private truncated source',sections:[],decisions:[],actionItems:[],sourceDocumentIds:[documentId]});
+ const motionId=await ctx.db.insert('motions',{societyId,minutesId:minuteId,primaryMeetingId:meetingId,text:'I MOVE approval. CARRIED.',status:'Voted',outcome:'Carried',createdAtISO:'2016-11-22',updatedAtISO:'2016-11-22',history:[{at:'2016-11-22',status:'Voted',outcome:'Carried'}]});
+ await ctx.db.patch(minuteId,{motionIds:[motionId]});
+ return {societyId,ownerId,documentId,meetingId,minuteId,motionId};
+});
+const owner=t.withIdentity({subject:'source-owner',issuer});
+await owner.mutation(api.minutes.transposeSources,{societyId:ids.societyId,entries:[{id:ids.minuteId}]});
+const result=await owner.query(api.minutes.getByMeeting,{meetingId:ids.meetingId});
+assert.equal(result.sections[0].sourceKind,'script');assert.equal(result.sections[0].sourceEvidence.decisionState,'proposed');assert.match(result.sourceTransposition.originalSources[0].text,/private scripted/);
+assert.equal((await t.run(ctx=>ctx.db.get(ids.meetingId)))!.status,'Draft');
+const draftMotion=await t.run(ctx=>ctx.db.get(ids.motionId));assert.equal(draftMotion!.status,'Draft');assert.equal(draftMotion!.outcome,undefined);assert.equal(draftMotion!.history!.length,2);assert.equal(draftMotion!.history![0].outcome,'Carried','prior extraction status remains in appended audit history');
+await t.run(async native=>{const ctx=await toPortableQueryCtx(native);ctx.principal={kind:'service',runtime:'test',assurance:'trusted-internal',subject:'minutes-only',societyId:ids.societyId,actorUserId:ids.ownerId,scopes:['minutes:read']};const hidden=await getByMeetingPortable(ctx,{meetingId:ids.meetingId});assert.equal(hidden.sourceTransposition.reviewStatus,'restricted');assert.ok(!JSON.stringify(hidden).includes('private scripted'));});
+console.log('✓ Convex schema accepts source sections/provenance; mutation batch, source ACL and proposed script state passed.');

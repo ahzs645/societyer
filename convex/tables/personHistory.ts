@@ -7,6 +7,8 @@ export const personHistoryTables={
   roleTitle:v.optional(v.string()),affiliation:v.optional(v.string()),notes:v.optional(v.string()),
   meetingId:v.optional(v.id('meetings')),documentId:v.optional(v.id('documents')),
   sourceUrl:v.string(),sourceReference:v.string(),sourceExternalId:v.optional(v.string()),
+  // Assumed identities remain explicitly separate from source-verified matches.
+  // Their testOnly acknowledgement and cited rationale live in the append-only review trail.
   personId:v.optional(v.id('peopleDirectory')),matchStatus:v.string(),reviewHistory:v.array(v.any()),
   createdAtISO:v.string(),
  }).index('by_society',['societyId']).index('by_key',['societyId','occurrenceKey']).index('by_person',['societyId','personId']).index('by_record',['societyId','recordTable','recordId']),

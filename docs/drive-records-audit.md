@@ -1,5 +1,13 @@
 # PGAIR records audit and Societyer implementation
 
+## October 5 agenda and person test upgrade
+
+The all-meeting continuation extends the portable and Convex schema with source citations, source-kind and review states, original source preservation, and explicit agenda-item links on minute sections. All 142 source meetings receive source-derived sections through guarded transposition. Recorded minutes, prospective scripts and pure agendas are distinguished; proposed wording is not a passed resolution. Source-owned draft agendas align with sections only when their original baseline still matches. Edited agendas, recorded sections and adopted snapshots are preserved. Two AGM scripts use their explicit November meeting dates rather than fiscal year-end dates, with original values retained in the upgrade audit.
+
+For the authorized interface test, a separate assumed identity state connects defensible source names to profiles without upgrading their evidence to verified. Existing verified matches remain unchanged, ambiguous names remain unresolved, and organization/header fragments are separated from people. Contextual source mentions create pending notes, not confirmed attendance or legal membership. Batch operations require explicit test intent, cited evidence and the same document access as individual review, and preserve later user reviews. The Sites browser upgrade uses baseline checks and idempotent operations so existing local edits survive refresh.
+
+Validation covers portable memory and IndexedDB engines, the actual Convex schema and access rules, source preservation, idempotence, agenda alignment, immutable adopted snapshots, import provenance and production browser restoration. Updated database and evidence exports are supplied separately from the earlier connected deliverables. Unread sources and unsupported legal appointments remain unresolved.
+
 ## October 5 local-test continuation
 
 The user clarified that there is no live Societyer destination: use local test storage and export its final state. This continuation recovered the supplied implementation at base `b87bac70`, then added consent/conditional-decision evidence, decision-time quorum and future-meeting scheduling, canonical action observations, organization seats/proxies and membership assessments, financial version selection and cash mappings, guarded reconciliation, structured insurance operations and actual renewal tasks, full adopted snapshots/shared exports, and scoped destination-authorized imports.

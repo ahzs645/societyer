@@ -4,7 +4,7 @@ import { minutesMotionsForDisplay } from "../../../../shared/minutesMotions";
 import { motionCompletionGaps } from "../../../lib/motionGovernance";
 import { recordedMinutesQuorum } from "../../../../shared/minutesQuorum";
 
-export type MeetingAgendaItemEntry = { title: string; depth: 0 | 1 };
+export type MeetingAgendaItemEntry = { title: string; depth: 0 | 1; _id?: string };
 
 export function normalizedMeetingTitle(value: unknown): string {
   return String(value ?? "").trim();
@@ -199,7 +199,7 @@ function bytesToBase64(bytes: Uint8Array) {
 
 export function agendaEntriesFromRecord(record: any): MeetingAgendaItemEntry[] | null {
   const items = agendaItemsFromRecord(record);
-  return items?.map((item) => ({ title: item.title, depth: item.depth })) ?? null;
+  return items?.map((item) => ({ title: item.title, depth: item.depth, ...(item._id ? { _id: item._id } : {}) })) ?? null;
 }
 
 export function agendaItemsFromRecord(record: any): Array<MeetingAgendaItemEntry & {
@@ -229,6 +229,7 @@ export function agendaItemsFromRecord(record: any): Array<MeetingAgendaItemEntry
     entries.push({
       title,
       depth,
+      ...(typeof item._id === "string" ? { _id: item._id } : {}),
       type: item.type,
       presenter: item.presenter,
       details: item.details,

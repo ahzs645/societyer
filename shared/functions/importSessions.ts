@@ -9,7 +9,7 @@ import { existingImportTarget, rememberImportTarget } from "./importTargetIdenti
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { syncMotionsForMinutes } from "./minutes";
+import { syncMotionsForMinutes, transposeFreshImportedSourcePortable } from "./minutes";
 import { actionPermission } from "./actionPolicy";
 import { requirePermissionPortable, type Permission } from "./permissions";
 import { requireDocumentAccess } from "./documents";
@@ -531,6 +531,7 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
     if (importedMotions.length) {
       await syncMotionsForMinutes(ctx, { societyId: session.societyId, minutesId, meetingId, motions: importedMotions });
     }
+    await transposeFreshImportedSourcePortable(ctx,{id:minutesId});
     for (const { record } of group) {
       await patchRecordImportTarget(ctx, record, "meetings", { meetingId, minutesId });
     }
@@ -616,6 +617,7 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
     if (importedMotions.length) {
       await syncMotionsForMinutes(ctx, { societyId: session.societyId, minutesId, meetingId, motions: importedMotions });
     }
+    await transposeFreshImportedSourcePortable(ctx,{id:minutesId});
     await patchRecordImportTarget(ctx, record, "meetings", { meetingId, minutesId });
     meetings += 1;
     minutes += 1;
@@ -647,7 +649,7 @@ export async function backfillApprovedMeetingReferencesPortable(ctx: PortableMut
     const target = recordsForMeeting[0].importedTargets.meetings;
     const meeting = await ctx.db.get(target.meetingId) as any;
     const minutesRow = await ctx.db.get(target.minutesId) as any;
-    if (!meeting || !minutesRow) continue;
+    if (!meeting || !minutesRow || minutesRow.approvedAt || minutesRow.adoptedSnapshot || Array.isArray(minutesRow.motionSnapshots)) continue;
 
     const payloads = recordsForMeeting.map((record: any) => normalizeMotionPayload(record.payload));
     const sourceExternalIds = unique(recordsForMeeting.flatMap((record: any) => record.sourceExternalIds ?? []));

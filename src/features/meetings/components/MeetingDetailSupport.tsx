@@ -341,7 +341,7 @@ export function SourceDocumentRow({
   );
 }
 
-export type AgendaItemEntry = { title: string; depth: 0 | 1 };
+export type AgendaItemEntry = { title: string; depth: 0 | 1; _id?: string };
 
 // Structured agenda parser. Stored as JSON: either a string[] (legacy) or
 // Array<{title, depth}> (current). Children (depth=1) must follow a root

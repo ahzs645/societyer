@@ -1,3 +1,5 @@
+import { buildSourceMinuteSections, hasRecordedMinuteSectionContent, attachSourceMinuteSectionLinks } from "../sourceMinutesTransposition";
+import { requireDocumentAccess, documentAccessPredicate } from "./documents";
 import { minutesEvidenceOptions } from "../minutesExportEvidence";
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
 /**
@@ -356,6 +358,25 @@ async function minutesSnapshot(ctx: PortableMutationCtx, record: any, motions: a
   }));
 }
 
+/** Imported source copies obey the source document ACL as well as minutes access. */
+async function sourceMinutesView(ctx: PortableQueryCtx, minutes: any) {
+  if (!minutes?.sourceTransposition) return minutes;
+  let visible = true;
+  try {
+    await requirePermissionPortable(ctx,String(minutes.societyId),"documents:read");
+    const allows = await documentAccessPredicate(ctx,String(minutes.societyId));
+    const sourceIds = [...new Set([...(minutes.sourceDocumentIds ?? []),...(minutes.sourceTransposition.originalSources ?? []).map((source:any) => source.documentId).filter(Boolean)])];
+    for (const id of sourceIds) {
+      const document = await ctx.db.get(id,"documents");
+      if (!document || document.societyId !== minutes.societyId || !allows(document,"view")) {visible=false;break;}
+    }
+  } catch {visible=false;}
+  if (visible) return minutes;
+  return {...minutes,discussion:"Source content is restricted by document access.",decisions:[],actionItems:[],displayMotions:[],
+    sections:(minutes.sections ?? []).map((section:any) => ({title:section.title,depth:section.depth ?? 0,type:section.type,discussion:"Source content is restricted by document access."})),
+    draftTranscript:undefined,motions:[],motionSnapshots:[],adoptedSnapshot:undefined,adoptionHistory:[],sourceTransposition:{version:1,reviewStatus:"restricted",note:"Open the source with an authorized document account to view imported evidence."}};
+}
+
 // ----- queries --------------------------------------------------------------
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
@@ -369,7 +390,7 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
   // table-sourced transparently. The live embedded `motions[]` stays untouched on
   // the row for the editor's write path. See docs/motions-migration-finish-scope.md.
   return Promise.all(
-    rows.map(async (m) => ({ ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) })),
+    rows.map(async (m) => sourceMinutesView(ctx,{ ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) })),
   );
 }
 
@@ -384,7 +405,7 @@ export async function getByMeetingPortable(
     .collect();
   const m = rows[0];
   if (!m) return null;
-  return { ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) };
+  return sourceMinutesView(ctx,{ ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) });
 }
 
 /**
@@ -414,6 +435,104 @@ export async function resolveMinutesMotions(ctx: PortableQueryCtx, minutes: any)
   const rows = await Promise.all(ids.map((id) =>
     getOwned(ctx, "motions", String(id), String(minutes.societyId))));
   return rows.filter(Boolean).map(motionRowToEmbedded);
+}
+
+/** Enrich an imported draft from its linked original sources. Explicit and idempotent:
+ * never rewrites adopted content, a previous extraction or an edited section. */
+export type SourceMinuteSelection = {documentId:string;selectedText:string;sourceKind?:string;sourceReference?:string};
+export type SourceMinutesTransposeArgs = {id:string;sourceSelection?:SourceMinuteSelection[];expectedAgendaItems?:any[]};
+/** Used only immediately after a new import creates its agenda in the same
+ * atomic transaction; no human edit can intervene in this baseline capture. */
+export async function transposeFreshImportedSourcePortable(ctx:PortableMutationCtx,args:{id:string}) {
+  const minutes = await requireOwnedRow(ctx,"minutes",args.id);
+  const agenda = await ctx.db.query("agendas").withIndex("by_meeting",q=>q.eq("meetingId",minutes.meetingId)).first();
+  const expectedAgendaItems = agenda ? await ctx.db.query("agendaItems").withIndex("by_agenda",q=>q.eq("agendaId",agenda._id)).collect() : undefined;
+  return transposeSourcePortable(ctx,{...args,expectedAgendaItems});
+}
+
+export async function transposeSourcesPortable(ctx: PortableMutationCtx, {societyId,entries}: {societyId:string;entries:SourceMinutesTransposeArgs[]}) {
+  await requireSocietyMembership(ctx,societyId);
+  for (const entry of entries) await getOwned(ctx,"minutes",entry.id,societyId);
+  if (entries.length > 150) throw new Error("Transpose at most 150 minutes in one batch.");
+  const results: any[] = [];
+  for (const entry of entries) results.push({id:entry.id,...await transposeSourcePortable(ctx,entry)});
+  return results;
+}
+
+export async function transposeSourcePortable(ctx: PortableMutationCtx, {id,sourceSelection,expectedAgendaItems}: SourceMinutesTransposeArgs) {
+  const minutes = await requireOwnedRow(ctx, "minutes", id);
+  if (minutes.approvedAt || minutes.adoptedSnapshot || Array.isArray(minutes.motionSnapshots)) return {skipped:"adopted", sections:minutes.sections?.length ?? 0};
+  if (minutes.sourceTransposition) return {skipped:"already_transposed", sections:minutes.sections?.length ?? 0};
+  if (hasRecordedMinuteSectionContent(minutes.sections)) return {skipped:"edited_sections", sections:minutes.sections?.length ?? 0};
+  const societyId = String(minutes.societyId);
+  await requirePermissionPortable(ctx, societyId, "documents:read");
+  const selections = new Map((sourceSelection ?? []).map(selection => [String(selection.documentId),selection]));
+  if ((sourceSelection ?? []).some(selection => !(minutes.sourceDocumentIds ?? []).map(String).includes(String(selection.documentId)))) throw new Error("A selected source must already be linked to these minutes.");
+  if ((sourceSelection ?? []).some(selection => selection.sourceKind && !["recorded_minutes","script","agenda","template"].includes(selection.sourceKind))) throw new Error("Invalid source kind.");
+  const sourceDocuments: any[] = [];
+  for (const documentId of minutes.sourceDocumentIds ?? []) {
+    await getOwned(ctx, "documents", documentId, societyId);
+    await requireDocumentAccess(ctx, documentId);
+    const selection = selections.get(String(documentId));
+    sourceDocuments.push({...await ctx.db.get(documentId),...(selection ? {selectedText:selection.selectedText,sourceKind:selection.sourceKind,sourceReference:selection.sourceReference}: {})});
+  }
+  const agendas = await ctx.db.query("agendas").withIndex("by_meeting", q => q.eq("meetingId", minutes.meetingId)).collect();
+  const agenda = agendas.filter(row => row.societyId === societyId).sort((a,b) => String(a.createdAtISO).localeCompare(String(b.createdAtISO)))[0];
+  const agendaItems = agenda ? (await ctx.db.query("agendaItems").withIndex("by_agenda", q => q.eq("agendaId", agenda._id)).collect()).filter(row => row.societyId === societyId).sort((a,b) => a.order-b.order) : [];
+  const projection = buildSourceMinuteSections({minutes, agendaItems, sourceDocuments:sourceDocuments.filter(Boolean)});
+  const nativeTasks = (await ctx.db.query("tasks").withIndex("by_society",q => q.eq("societyId",societyId)).collect()).filter(task => task.meetingId === minutes.meetingId);
+  const nativeMotions = (await ctx.db.query("motions").withIndex("by_minutes",q => q.eq("minutesId",id)).collect()).filter(motion => motion.societyId === societyId);
+  const nativeLinks = attachSourceMinuteSectionLinks(projection.sections,{tasks:nativeTasks,motions:nativeMotions});
+  projection.sections = nativeLinks.sections;
+  if (agenda && expectedAgendaItems) {
+    const fields = ["_id","order","title","type","depth","details","presenter","timeAllottedMinutes","motionText","motionId","motionTemplateId","outcome","resolutionId"];
+    const comparable = (rows:any[]) => JSON.stringify(rows.slice().sort((a,b)=>a.order-b.order).map(row=>fields.map(field=>row[field] ?? null)));
+    if (agenda.status === "Draft" && comparable(agendaItems) === comparable(expectedAgendaItems)) {
+      await requirePermissionPortable(ctx,societyId,"agendas:write");
+      const keptIds = new Set<string>();
+      const now = new Date().toISOString();
+      for (let order=0;order<projection.sections.length;order++) {
+        const section = projection.sections[order];
+        const existing = section.agendaItemId ? agendaItems.find(item=>item._id===section.agendaItemId && !keptIds.has(item._id)) : undefined;
+        const fields:any={societyId,agendaId:agenda._id,order,title:section.title,type:section.type ?? "discussion",depth:section.depth ?? 0,createdAtISO:existing?.createdAtISO ?? now};
+        for (const key of ["presenter","motionId"] as const) if (section[key] !== undefined) fields[key]=section[key];
+        const itemId = existing ? existing._id : await ctx.db.insert("agendaItems",fields);
+        if (existing) await ctx.db.replace(existing._id,fields);
+        section.agendaItemId=itemId;
+        if (section.motionId) await ctx.db.patch(section.motionId,{agendaId:agenda._id,agendaItemId:itemId});
+        keptIds.add(itemId);
+      }
+      // Old imported scaffolds can contain person names mistaken for items. The
+      // exact prior agenda is retained in transposition metadata, not discarded.
+      for (const item of agendaItems) if (!keptIds.has(item._id)) {
+        for (const motion of nativeMotions) if (motion.agendaItemId === item._id && !projection.sections.some(section=>section.motionId === motion._id)) await ctx.db.patch(motion._id,{agendaItemId:undefined});
+        await ctx.db.delete(item._id);
+      }
+      await ctx.db.patch(agenda._id,{updatedAtISO:now,notes:[agenda.notes,"Reconstructed from imported source headings; original agenda retained with source transposition evidence."].filter(Boolean).join("\n\n")});
+      projection.sourceTransposition.agendaAlignment="source_baseline_matched";
+    } else projection.sourceTransposition.agendaAlignment="preserved_changed_agenda";
+  }
+
+  for (const link of nativeLinks.motionLinks) await ctx.db.patch(link.id,{sectionIndex:link.sectionIndex,sectionTitle:link.sectionTitle});
+  projection.sourceTransposition.transposedAtISO = new Date().toISOString();
+  await ctx.db.patch(id, {...projection, sourceReviewStatus:"imported_needs_review"});
+  if (projection.sourceTransposition.sourceKind !== "recorded_minutes") {
+    const meeting = await getOwned(ctx,"meetings", minutes.meetingId,societyId);
+    const explanation = "Source is an agenda, script or template. Proposed business is not evidence that the meeting was held or motions passed.";
+    const notes = String(meeting.sourceReviewNotes ?? "");
+    await ctx.db.patch(meeting._id,{status:"Draft",sourceReviewStatus:"imported_needs_review",sourceReviewNotes:notes.includes(explanation) ? notes : [notes,explanation].filter(Boolean).join("\n\n")});
+    await ctx.db.patch(id,{quorumMet:false,quorumStatus:"not_recorded"});
+    // Keep the native identity, provenance and prior audit history. A source
+    // script is a draft wording object, not a motion actually moved in a room.
+    const now = new Date().toISOString();
+    for (const motion of nativeMotions) {
+      const note = `Source classification correction: ${projection.sourceTransposition.sourceKind} wording is proposed business, not an observed motion or vote. Earlier extracted status: ${motion.status}; outcome: ${motion.outcome ?? "not recorded"}.`;
+      await ctx.db.patch(motion._id,{status:"Draft",outcome:undefined,adoptsMinutesId:undefined,votesFor:undefined,votesAgainst:undefined,abstentions:undefined,decidedBy:undefined,
+        notes:[motion.notes,note].filter(Boolean).join("\n\n"),updatedAtISO:now,
+        history:[...(motion.history ?? []),{at:now,meetingId:minutes.meetingId,minutesId:id,status:"Draft",note}]});
+    }
+  }
+  return {sections:projection.sections.length,sourceKind:projection.sourceTransposition.sourceKind};
 }
 
 // ----- mutations ------------------------------------------------------------
@@ -647,6 +766,8 @@ export async function upsertFromDraftPortable(ctx: PortableMutationCtx, args: an
     .withIndex("by_meeting", (q) => q.eq("meetingId", args.meetingId))
     .collect();
   if (existing[0]) {
+    if (existing[0].approvedAt || existing[0].adoptedSnapshot || Array.isArray(existing[0].motionSnapshots)) throw new Error("Adopted minutes are frozen. Start an amendment before importing a draft.");
+    if (hasRecordedMinuteSectionContent(existing[0].sections)) throw new Error("Existing minute sections contain recorded content. Review the new draft separately before replacing them.");
     await ctx.db.patch(existing[0]._id, payload);
     await syncMotionsForMinutes(ctx, {
       societyId: args.societyId,
@@ -825,6 +946,7 @@ type MinutesForeignKeyFields = {
   approvedInMeetingId?: string;
   sourceDocumentIds?: string[];
   sections?: Array<{
+    agendaItemId?: string;
     motionTemplateId?: string;
     motionId?: string;
     linkedTaskIds?: string[];
@@ -850,6 +972,7 @@ async function assertMinutesForeignKeys(
     ...(fields.sourceDocumentIds ?? []).map((id: string) =>
       getOwned(ctx, "documents", id, societyId)),
     ...(fields.sections ?? []).flatMap((section) => [
+      section.agendaItemId ? getOwned(ctx,"agendaItems",section.agendaItemId,societyId) : Promise.resolve(),
       section.motionTemplateId
         ? getOwned(ctx, "motionTemplates", section.motionTemplateId, societyId)
         : Promise.resolve(),

@@ -33,7 +33,8 @@ async function visibleEvents(ctx:PortableQueryCtx,societyId:string,personId:stri
   if(event.documentId&&!await readable(ctx,societyId,'documents'))continue;
   if(['role','appointment','departure'].includes(event.kind)&&!await readable(ctx,societyId,'directors'))continue;
   const occurrence=occurrences.find(o=>o._id===event.sourceOccurrenceId);
-  result.push(event.reviewStatus==='verified'&&occurrence&&occurrence.matchStatus!=='verified'?{...event,storedReviewStatus:event.reviewStatus,reviewStatus:'pending',identityReviewNeeded:true}:event);
+  const projected=event.reviewStatus==='verified'&&occurrence&&occurrence.matchStatus!=='verified'?{...event,storedReviewStatus:event.reviewStatus,reviewStatus:'pending',identityReviewNeeded:true}:event;
+  result.push(occurrence?.matchStatus==='assumed'?{...projected,identityMatchStatus:'assumed',testOnlyAssumption:true}:projected);
  }return result;
 }
 export async function overview(ctx:PortableQueryCtx,{societyId}:{societyId:string}){
@@ -52,14 +53,14 @@ export async function profile(ctx:PortableQueryCtx,{societyId,personId,asOf}:{so
  const memberIds=new Set(members.map(m=>m._id));
  for(const e of await rows(ctx,'memberHistoryEvents',societyId))if(memberIds.has(e.memberId))events.push({...e,derived:true,kind:'observation',scope:'Member history',transition:'observed',reviewStatus:e.reviewStatus==='Verified'?'verified':e.reviewStatus==='Rejected'?'rejected':'pending',href:`/app/members/${e.memberId}`});
  const visibleOccurrenceIds=new Set(occurrences.map(o=>o._id));
- const contactPoints=(await ctx.db.query('personContactPoints').withIndex('by_person',q=>q.eq('societyId',societyId).eq('personId',personId)).collect()).filter(p=>!p.sourceOccurrenceId||visibleOccurrenceIds.has(p.sourceOccurrenceId)).map(p=>{const occurrence=occurrences.find(o=>o._id===p.sourceOccurrenceId);return p.reviewStatus==='verified'&&occurrence&&occurrence.matchStatus!=='verified'?{...p,storedReviewStatus:p.reviewStatus,reviewStatus:'pending'}:p;});
+ const contactPoints=(await ctx.db.query('personContactPoints').withIndex('by_person',q=>q.eq('societyId',societyId).eq('personId',personId)).collect()).filter(p=>!p.sourceOccurrenceId||visibleOccurrenceIds.has(p.sourceOccurrenceId)).map(p=>{const occurrence=occurrences.find(o=>o._id===p.sourceOccurrenceId);const projected=p.reviewStatus==='verified'&&occurrence&&occurrence.matchStatus!=='verified'?{...p,storedReviewStatus:p.reviewStatus,reviewStatus:'pending'}:p;return occurrence?.matchStatus==='assumed'?{...projected,testOnlyAssumption:true}:projected;});
  return {person,registers,contactPoints,events:events.sort((a,b)=>b.effectiveDate.localeCompare(a.effectiveDate)),historical:asOf?personStateAt(events,asOf):null,
  occurrences:occurrences.map(o=>({...o,href:personRecordHref(o),historical:o.observedDate?.length===10?personStateAt(events,o.observedDate):null}))};
 }
 export async function forRecord(ctx:PortableQueryCtx,{societyId,recordTable,recordId}:{societyId:string;recordTable:string;recordId:string}){
  await requirePermissionPortable(ctx,societyId,'members:read');await permit(ctx,societyId,recordTable);await getOwned(ctx,recordTable,recordId,societyId);
  const all=await visibleOccurrences(ctx,societyId,{recordTable,recordId});
- return Promise.all(all.map(async o=>({...o,person:o.personId?await getOwned(ctx,'peopleDirectory',o.personId,societyId):null})));
+ return Promise.all(all.map(async o=>({...o,href:personRecordHref(o),person:o.personId?await getOwned(ctx,'peopleDirectory',o.personId,societyId):null})));
 }
 export async function createContact(ctx:PortableMutationCtx,args:{societyId:string;fullName:string;aliases?:string[];sourceKey?:string}){
  await requirePermissionPortable(ctx,args.societyId,'members:write');if(!args.fullName.trim())throw new Error('A person name is required.');
@@ -84,13 +85,15 @@ export async function observe(ctx:PortableMutationCtx,{societyId,observation}:{s
  if(existing){for(const k of fields)if(existing[k]!==values[k])throw new Error('Source occurrences are append-only; use a new key for corrected evidence.');return existing._id;}
  return ctx.db.insert('personOccurrences',{...values,societyId,...(observation.personId?{personId:observation.personId}:{}),matchStatus:observation.personId?'suggested':'unresolved',reviewHistory:[],createdAtISO:now()});
 }
-export async function reviewMatch(ctx:PortableMutationCtx,args:{societyId:string;occurrenceId:string;personId?:string;status:string;rationale:string;source:any}){
+export async function reviewMatch(ctx:PortableMutationCtx,args:{societyId:string;occurrenceId:string;personId?:string;status:string;rationale:string;source:any;testOnly?:boolean}){
  const actor=await requirePermissionPortable(ctx,args.societyId,'members:write');const occurrence=await getOwned(ctx,'personOccurrences',args.occurrenceId,args.societyId);
  await permit(ctx,args.societyId,occurrence.recordTable);
  if(!(await visibleOccurrences(ctx,args.societyId,{recordTable:occurrence.recordTable,recordId:occurrence.recordId})).some(o=>o._id===occurrence._id))throw new Error('Person source record not found.');
  requireEvidence(args.source);
- if(!['verified','rejected','unresolved','not_person'].includes(args.status)||!args.rationale.trim())throw new Error('Select a review outcome and record the identity rationale.');
+ if(!['verified','assumed','rejected','unresolved','not_person'].includes(args.status)||!args.rationale.trim())throw new Error('Select a review outcome and record the identity rationale.');
  if(args.status==='verified'&&(!args.personId||args.source.reviewStatus!=='verified'))throw new Error('A confirmed match needs a selected person and reviewed source evidence.');
+ if(args.status==='assumed'&&(!args.personId||args.testOnly!==true))throw new Error('A test assumption needs a selected person and explicit test-only acknowledgement.');
+ if(args.status==='assumed'&&occurrence.matchStatus==='verified')throw new Error('A confirmed source identity cannot be replaced by a test assumption.');
  if(args.personId)await getOwned(ctx,'peopleDirectory',args.personId,args.societyId);
  if(args.status==='verified'&&occurrence.recordTable==='directors'){
   const director=await getOwned(ctx,'directors',occurrence.recordId,args.societyId);
@@ -101,17 +104,56 @@ export async function reviewMatch(ctx:PortableMutationCtx,args:{societyId:string
   if(directors.some(d=>d.memberId===occurrence.recordId&&d.directoryPersonId&&d.directoryPersonId!==args.personId))throw new Error('A linked director has a different confirmed person identity.');
  }
  const previous={personId:occurrence.personId??null,status:occurrence.matchStatus};
- const review={previous,personId:args.personId??null,status:args.status,rationale:args.rationale,...args.source,reviewedAtISO:now(),reviewedByUserId:actor._id};
+ const isTestOnly=args.status==='assumed'||args.status==='not_person'&&args.testOnly===true;
+ const review={...args.source,previous,personId:args.personId??null,status:args.status,rationale:args.rationale,...(isTestOnly?{testOnly:true,reviewStatus:'pending'}:{}),reviewedAtISO:now(),reviewedByUserId:actor._id};
  await ctx.db.patch(args.occurrenceId,{personId:args.personId,matchStatus:args.status,reviewHistory:[...occurrence.reviewHistory,review]});
- if(occurrence.recordTable==='minutes'&&/attendance/i.test(occurrence.context)){
+ if(!isTestOnly&&occurrence.recordTable==='minutes'&&/attendance/i.test(occurrence.context)){
   const matches=await ctx.db.query('meetingAttendanceRecords').withIndex('by_society',q=>q.eq('societyId',args.societyId)).collect();
   for(const record of matches.filter(r=>r.minutesId===occurrence.recordId&&r.personName===occurrence.personName))await ctx.db.patch(record._id,{directoryPersonId:args.status==='verified'?args.personId:undefined,identityReviewStatus:args.status});
  }
- if(['members','directors'].includes(occurrence.recordTable)){
+ if(!isTestOnly&&['members','directors'].includes(occurrence.recordTable)){
   await permit(ctx,args.societyId,occurrence.recordTable,true);
   await ctx.db.patch(occurrence.recordId,{directoryPersonId:args.status==='verified'?args.personId:undefined});
  }
  return args.occurrenceId;
+}
+/** Apply cited interface assumptions in one bounded transaction, retaining later human choices. */
+export async function applyTestAssumptions(ctx:PortableMutationCtx,args:{societyId:string;testOnly:boolean;assignments:Array<{occurrenceId:string;personId?:string;status?:string;rationale:string;source:any;expectedReviewHistoryLength?:number}>}){
+ await requirePermissionPortable(ctx,args.societyId,'members:write');
+ if(args.testOnly!==true||!Array.isArray(args.assignments)||args.assignments.length>200)throw new Error('Test assumption batches require explicit test-only acknowledgement and at most 200 assignments.');
+ const results:Array<{occurrenceId:string;status:string}>=[];
+ for(const assignment of args.assignments){
+  const status=assignment.status??'assumed';if(!['assumed','not_person'].includes(status))throw new Error('Test batches support assumed identities or non-person fragments only.');
+  const occurrence=await getOwned(ctx,'personOccurrences',assignment.occurrenceId,args.societyId);
+  await permit(ctx,args.societyId,occurrence.recordTable);
+  if(!(await visibleOccurrences(ctx,args.societyId,{recordTable:occurrence.recordTable,recordId:occurrence.recordId})).some(o=>o._id===occurrence._id))throw new Error('Person source record not found.');
+  if(['verified','rejected','not_person','assumed'].includes(occurrence.matchStatus)||assignment.expectedReviewHistoryLength!==undefined&&occurrence.reviewHistory.length!==assignment.expectedReviewHistoryLength||occurrence.reviewHistory.some((review:any)=>review.status&&!review.correctedSourceReference)){
+   results.push({occurrenceId:assignment.occurrenceId,status:'preserved'});continue;
+  }
+  await reviewMatch(ctx,{societyId:args.societyId,...assignment,personId:status==='not_person'?undefined:assignment.personId,status,testOnly:true});
+  results.push({occurrenceId:assignment.occurrenceId,status});
+ }
+ return {applied:results.filter(row=>row.status!=='preserved').length,preserved:results.filter(row=>row.status==='preserved').length,results};
+}
+/** Stage source-name mentions as annotations, never as attendance or adopted minutes. */
+export async function stageTestMentions(ctx:PortableMutationCtx,args:{societyId:string;testOnly:boolean;mentions:Array<{observation:any;personId?:string;rationale:string;note?:{eventKey:string;title:string;details:string;effectiveDate?:string}}>}){
+ await requirePermissionPortable(ctx,args.societyId,'members:write');
+ if(args.testOnly!==true||!Array.isArray(args.mentions)||args.mentions.length>200)throw new Error('Test mention batches require explicit test-only acknowledgement and at most 200 mentions.');
+ const results:any[]=[];
+ for(const mention of args.mentions){
+  if(mention.observation.recordTable!=='minutes'||!mention.rationale.trim())throw new Error('A test mention needs a minutes source record and a cited rationale.');
+  const observation={...mention.observation,context:`Contextual source mention — ${mention.observation.context||'Source name reference; attendance and speaker attribution unconfirmed'}`,personId:mention.personId};
+  const occurrenceId=await observe(ctx,{societyId:args.societyId,observation});
+  const result=mention.personId?await applyTestAssumptions(ctx,{societyId:args.societyId,testOnly:true,assignments:[{occurrenceId,personId:mention.personId,rationale:mention.rationale,source:{sourceUrl:observation.sourceUrl,sourceReference:observation.sourceReference,reviewStatus:'pending'}}]}):null;
+  const occurrence=await getOwned(ctx,'personOccurrences',occurrenceId,args.societyId);let eventId;
+  if(mention.note&&mention.personId&&occurrence.personId===mention.personId&&!['rejected','not_person'].includes(occurrence.matchStatus)){
+   const existingNote=(await ctx.db.query('personHistoryEvents').withIndex('by_key',q=>q.eq('societyId',args.societyId).eq('eventKey',mention.note!.eventKey)).collect())[0];
+   if(existingNote){if(existingNote.personId!==mention.personId||existingNote.sourceOccurrenceId!==occurrenceId)throw new Error('The test note key belongs to a different source identity.');eventId=existingNote._id;}
+   else eventId=await addEvent(ctx,{societyId:args.societyId,personId:mention.personId,event:{eventKey:mention.note.eventKey,kind:'note',title:mention.note.title,details:mention.note.details,scope:'Source meeting context',effectiveDate:mention.note.effectiveDate??observation.observedDate,transition:'observed',reviewStatus:'pending',sourceOccurrenceId:occurrenceId,...(observation.meetingId?{meetingId:observation.meetingId}:{}),...(observation.documentId?{documentId:observation.documentId}:{}),sourceUrl:observation.sourceUrl,sourceReference:observation.sourceReference,...(observation.sourceExternalId?{sourceExternalId:observation.sourceExternalId}:{})}});
+  }
+  results.push({occurrenceId,...(eventId?{eventId}:{}),status:result?.results[0].status??'unresolved'});
+ }
+ return {staged:results.length,assumed:results.filter(row=>row.status==='assumed').length,results};
 }
 export async function addEvent(ctx:PortableMutationCtx,{societyId,personId,event}:{societyId:string;personId:string;event:any}){
  const actor=await requirePermissionPortable(ctx,societyId,'members:write');await getOwned(ctx,'peopleDirectory',personId,societyId);requireEvidence(event);

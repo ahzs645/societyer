@@ -123,10 +123,12 @@ export const meetingTables = {
     quorumSourceLabel: v.optional(v.string()),
     quorumComputedAtISO: v.optional(v.string()),
     discussion: v.string(),
+    sourceTransposition: v.optional(v.any()),
     sections: v.optional(
       v.array(
         v.object({
           title: v.string(),
+          agendaItemId: v.optional(v.id("agendaItems")),
           type: v.optional(v.string()), // discussion | motion | report | break | executive_session | other
           presenter: v.optional(v.string()),
           discussion: v.optional(v.string()),
@@ -152,6 +154,10 @@ export const meetingTables = {
           // Absent or true → included in the redacted "Public copy" export.
           // false → kept in internal minutes but stripped from the public copy.
           publicVisible: v.optional(v.boolean()),
+          sourceReference: v.optional(v.string()),
+          sourceReviewStatus: v.optional(v.string()),
+          sourceKind: v.optional(v.string()),
+          sourceEvidence: v.optional(v.any()),
         }),
       ),
     ),

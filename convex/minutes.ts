@@ -4,6 +4,8 @@ import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { summarizeMinutes } from "./providers/llm";
 import {
+  transposeSourcePortable,
+  transposeSourcesPortable,
   listPortable,
   getByMeetingPortable,
   createPortable,
@@ -75,6 +77,7 @@ const detailedAttendance = v.object({
 
 const minuteSection = v.object({
   title: v.string(),
+  agendaItemId: v.optional(v.id("agendaItems")),
   type: v.optional(v.string()),
   presenter: v.optional(v.string()),
   discussion: v.optional(v.string()),
@@ -89,6 +92,10 @@ const minuteSection = v.object({
   linkedTaskIds: v.optional(v.array(v.id("tasks"))),
   depth: v.optional(v.union(v.literal(0), v.literal(1))),
   publicVisible: v.optional(v.boolean()),
+  sourceReference: v.optional(v.string()),
+  sourceReviewStatus: v.optional(v.string()),
+  sourceKind: v.optional(v.string()),
+  sourceEvidence: v.optional(v.any()),
 });
 
 const sessionSegment = v.object({
@@ -142,6 +149,7 @@ const structuredMinutesFields = {
   remoteParticipation: v.optional(remoteParticipation),
   detailedAttendance: v.optional(v.array(detailedAttendance)),
   sections: v.optional(v.array(minuteSection)),
+  sourceTransposition: v.optional(v.any()),
   nextMeetingAt: v.optional(v.string()),
   nextMeetingLocation: v.optional(v.string()),
   nextMeetingNotes: v.optional(v.string()),
@@ -267,6 +275,18 @@ export const backfillMotionPersonLinks = authorizedMutation("minutes:backfillMot
   args: { societyId: v.id("societies") },
   returns: v.any(),
   handler: async (ctx, args) => backfillMotionPersonLinksPortable(await toPortableMutationCtx(ctx), args),
+});
+
+const sourceSelection = v.object({documentId:v.id("documents"),selectedText:v.string(),sourceKind:v.optional(v.string()),sourceReference:v.optional(v.string())});
+const transposeArgs = {id:v.id("minutes"),sourceSelection:v.optional(v.array(sourceSelection)),expectedAgendaItems:v.optional(v.array(v.any()))};
+export const transposeSources = authorizedMutation("minutes:transposeSources", mutation)({
+  args: {societyId:v.id("societies"),entries:v.array(v.object(transposeArgs))}, returns:v.any(),
+  handler: async (ctx,args) => transposeSourcesPortable(await toPortableMutationCtx(ctx),args),
+});
+
+export const transposeSource = authorizedMutation("minutes:transposeSource", mutation)({
+  args: transposeArgs, returns: v.any(),
+  handler: async (ctx, args) => transposeSourcePortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const backfillQuorumSnapshot = authorizedMutation("minutes:backfillQuorumSnapshot", mutation)({

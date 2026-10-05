@@ -154,6 +154,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "personHistory:setAliases", handler: personHistoryFns.setAliases }),
   definePortableMutation({ name: "personHistory:observe", handler: personHistoryFns.observe }),
   definePortableMutation({ name: "personHistory:reviewMatch", handler: personHistoryFns.reviewMatch }),
+  definePortableMutation({ name: "personHistory:applyTestAssumptions", handler: personHistoryFns.applyTestAssumptions }),
+  definePortableMutation({ name: "personHistory:stageTestMentions", handler: personHistoryFns.stageTestMentions }),
   definePortableMutation({ name: "personHistory:addContactPoint", handler: personHistoryFns.addContactPoint }),
   definePortableMutation({ name: "personHistory:stageRecord", handler: personHistoryFns.stageRecord }),
   definePortableMutation({ name: "personHistory:reviewEvent", handler: personHistoryFns.reviewEvent }),
@@ -955,6 +957,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "minutes:getByMeeting", handler: minutesFns.getByMeetingPortable }),
   definePortableMutation({ name: "minutes:create", handler: minutesFns.createPortable }),
   definePortableMutation({ name: "minutes:update", handler: minutesFns.updatePortable }),
+  definePortableMutation({ name: "minutes:transposeSource", handler: minutesFns.transposeSourcePortable }),
+  definePortableMutation({ name: "minutes:transposeSources", handler: minutesFns.transposeSourcesPortable }),
   definePortableMutation({ name: "minutes:upsertFromDraft", handler: minutesFns.upsertFromDraftPortable }),
   definePortableMutation({ name: "minutes:backfillMotionPersonLinks", handler: minutesFns.backfillMotionPersonLinksPortable }),
 

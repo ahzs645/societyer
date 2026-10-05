@@ -1,5 +1,6 @@
 // Import-session apply layer: ctx-taking writes, meeting merge, and record insertion.
 
+import { transposeSourcePortable } from "../minutes";
 import { validateFiledFacts } from "../filings";
 import { requirePermissionPortable } from "../permissions";
 import { transactionImportMappingCandidates } from "../../accountingMappingCandidates";
@@ -83,7 +84,7 @@ async function mergeExistingMeetingImport(
 ) {
   const meeting = await ctx.db.get(target.meetingId);
   const minutesRow = await ctx.db.get(target.minutesId);
-  if (!meeting || !minutesRow) return;
+  if (!meeting || !minutesRow || minutesRow.approvedAt || minutesRow.adoptedSnapshot || Array.isArray(minutesRow.motionSnapshots)) return;
 
   const currentAgenda = await meetingAgendaItemTitles(ctx, meeting._id);
   const nextAgenda = arrayOf(payload.agendaItems).map(String).map(cleanText).filter((s): s is string => Boolean(s));
@@ -167,6 +168,7 @@ async function mergeExistingMeetingImport(
   });
 
   await ctx.db.patch(minutesRow._id, minutesPatch);
+  await transposeSourcePortable(ctx,{id:minutesRow._id});
 }
 
 function minutesMotionFromPayload(motion: any) {

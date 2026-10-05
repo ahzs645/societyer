@@ -4,6 +4,9 @@
 import { type DragEvent as ReactDragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePermissions } from "@/hooks/usePermissions";
+import { api } from "@/lib/convexApi";
+import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
+import { useToast } from "@/components/Toast";
 import { ArrowDown, ArrowUp, ChevronDown, ClipboardList, Eye, EyeOff, FileText, GripVertical, IndentDecrease, IndentIncrease, ListChecks, Mic, MoreHorizontal, Pencil, Plus, Save, Trash2, Unlink, X } from "lucide-react";
 import { Badge, Field, MenuRow } from "../../../components/ui";
 import { MarkdownEditor, type MarkdownEditorHandle } from "../../../components/MarkdownEditor";
@@ -51,6 +54,7 @@ import {
   normalize,
 } from "./MeetingMinutesColumn.internal";
 import { agendaSequenceLabel } from "../lib/agendaNumbering";
+import { minuteSectionIndexForAgendaEntry } from "../lib/sourceAgendaNavigation";
 import type {
   AgendaNumberingMode,
   SectionDraft,
@@ -134,6 +138,23 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   // These callbacks save both records; gate both before the first write.
   const canEditAgenda = canEditMinutes && can("agendas:write");
   const canEditSections = canEditAgenda;
+  const canTransposeSource = canEditAgenda && !minutes?.approvedAt && !minutes?.adoptedSnapshot && !Array.isArray(minutes?.motionSnapshots);
+  const transposeSourceMutation = usePermissionedMutation(api.minutes.transposeSource, canTransposeSource);
+  const toast = useToast();
+  const [transposingSource, setTransposingSource] = useState(false);
+  const transposeSource = async () => {
+    if (!canTransposeSource || !minutes?._id || transposingSource) return;
+    setTransposingSource(true);
+    try {
+      const result = await transposeSourceMutation({ id: minutes._id });
+      if (result?.skipped) toast.info("Source reconstruction kept existing minute sections");
+      else toast.success("Source wording copied into agenda sections");
+    } catch (error) {
+      toast.error("Could not reconstruct source minutes", error instanceof Error ? error.message : String(error));
+    } finally {
+      setTransposingSource(false);
+    }
+  };
   const canEditAttendance = canEditMinutes && can("meetings:write");
   const canEditMotions = canEditMinutes; // Parent saves embedded motions with minutes.update.
   const canEditTasks = can("tasks:write");
@@ -169,6 +190,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const sectionHasDetails = (section: any) =>
     !!(
       section?.discussion ||
+      section?.motionText ||
       section?.presenter ||
       (section?.decisions ?? []).length ||
       (section?.actionItems ?? []).length ||
@@ -879,6 +901,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     const isEditingThis = sectionEditIndex === index && !!sectionDraft;
     const sectionContentEmpty = (candidate: any, candidateIndex: number) =>
       !candidate?.discussion &&
+      !candidate?.motionText &&
       !candidate?.presenter &&
       !(candidate?.decisions ?? []).length &&
       !(candidate?.actionItems ?? []).length &&
@@ -1035,6 +1058,11 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       motionText: existing.motionText,
       motionTemplateId: existing.motionTemplateId,
       motionId: existing.motionId,
+      sourceReference: existing.sourceReference,
+      sourceReviewStatus: existing.sourceReviewStatus,
+      sourceKind: existing.sourceKind,
+      sourceEvidence: existing.sourceEvidence,
+      agendaItemId: existing.agendaItemId,
       decisions: sectionDraft.decisions.map((d) => d.trim()).filter(Boolean),
       actionItems: sectionDraft.actionItems
         .map((item) => ({
@@ -1458,7 +1486,10 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     });
   };
 
-  const openAgendaSection = (index: number) => {
+  const sectionIndexForAgendaEntry = (entry: AgendaItemEntry) => minuteSectionIndexForAgendaEntry(entry, sections);
+  const openAgendaSection = (entry: AgendaItemEntry) => {
+    const index = sectionIndexForAgendaEntry(entry);
+    if (index === null) return;
     setOpenSectionIndexes((current) => new Set(current).add(index));
     window.requestAnimationFrame(() => {
       document.getElementById(`meeting-minutes-section-${index}`)?.scrollIntoView({
@@ -1493,6 +1524,9 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     saveTranscriptEditText,
     savingTranscript,
     sections,
+    canTransposeSource,
+    transposeSource,
+    transposingSource,
     motions,
     detailedSectionTitles,
     sectionEditIndex,
@@ -1560,5 +1594,6 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     renderSectionEditor,
     toggleSection,
     openAgendaSection,
+    sectionIndexForAgendaEntry,
   };
 }

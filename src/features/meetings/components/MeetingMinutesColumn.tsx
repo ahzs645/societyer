@@ -56,6 +56,7 @@ import type {
   AttendancePerson,
 } from "./MeetingMinutesColumn.internal";
 import { useMeetingMinutesColumn, type MeetingMinutesColumnProps } from "./useMeetingMinutesColumn";
+import { SourceMinutesContext, sourceIsProposal, sourceKindLabel } from "./SourceMinutesContext";
 
 export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const {
@@ -84,6 +85,9 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     saveTranscriptEditText,
     savingTranscript,
     sections,
+    canTransposeSource,
+    transposeSource,
+    transposingSource,
     motions,
     detailedSectionTitles,
     sectionEditIndex,
@@ -151,6 +155,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     renderSectionEditor,
     toggleSection,
     openAgendaSection,
+    sectionIndexForAgendaEntry,
   } = useMeetingMinutesColumn(props);
   if (transcriptEdit !== null && canEditTranscript) {
     return (
@@ -445,14 +450,14 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                 {agendaTree.length > 0 ? (
                   <ol className="meeting-minutes-agenda-list">
                     {(() => {
-                      // Each agenda entry now maps 1:1 to a minute section by
-                      // position, so both roots and children are clickable
-                      // links that scroll the matching section into view.
+                      // Reconstructed minutes may differ from the original
+                      // agenda order. Follow its stored ID or a unique title.
                       const rendered: JSX.Element[] = [];
                       let rootIndex = -1;
                       let childIndex = 0;
                       agendaTree.forEach((entry, i) => {
                         if (entry.depth === 0) {
+                          const linkedIndex = sectionIndexForAgendaEntry(entry);
                           rootIndex += 1;
                           childIndex = 0;
                           // Collect contiguous following children for this root.
@@ -469,19 +474,25 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                             <li key={i}>
                               <button
                                 type="button"
-                                className={`meeting-minutes-agenda-link${openSectionIndexes.has(i) ? " is-active" : ""}`}
-                                onClick={() => openAgendaSection(i)}
+                                className={`meeting-minutes-agenda-link${linkedIndex !== null && openSectionIndexes.has(linkedIndex) ? " is-active" : ""}`}
+                                disabled={linkedIndex === null}
+                                title={linkedIndex === null ? "No minute section is linked to this agenda item" : "Open minute section"}
+                                onClick={() => openAgendaSection(entry)}
                               >
                                 {formatSourceReferences(entry.title)}
                               </button>
                               {children.length > 0 && (
                                 <ol className="meeting-minutes-agenda-list__children">
-                                  {children.map((child) => (
+                                  {children.map((child) => {
+                                    const childIndex = sectionIndexForAgendaEntry(child.entry);
+                                    return (
                                     <li key={child.sectionIndex}>
                                       <button
                                         type="button"
-                                        className={`meeting-minutes-agenda-link${openSectionIndexes.has(child.sectionIndex) ? " is-active" : ""}`}
-                                        onClick={() => openAgendaSection(child.sectionIndex)}
+                                        className={`meeting-minutes-agenda-link${childIndex !== null && openSectionIndexes.has(childIndex) ? " is-active" : ""}`}
+                                        disabled={childIndex === null}
+                                        title={childIndex === null ? "No minute section is linked to this agenda item" : "Open minute section"}
+                                        onClick={() => openAgendaSection(child.entry)}
                                       >
                                         <span className="meeting-minutes-agenda-list__child-index">
                                           {child.label}
@@ -489,7 +500,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                         {" "}{formatSourceReferences(child.entry.title)}
                                       </button>
                                     </li>
-                                  ))}
+                                  );})}
                                 </ol>
                               )}
                             </li>,
@@ -673,6 +684,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                     </div>
                   </div>
                   <div className="card__body">
+                    <SourceMinutesContext minutes={minutes} />
                     {mergedSectionRows.length ? (
                       <div className="meeting-minutes-section-list">
                         {mergedSectionRows.map((row, rowIndex) => {
@@ -714,6 +726,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                           <details
                             key={`${section.title ?? "section"}-${index}`}
                             id={`meeting-minutes-section-${index}`}
+                            data-agenda-item-id={section.agendaItemId}
                             className={`meeting-minutes-section-item${agendaPreviewRemovals.has(index) ? " meeting-minutes-section-item--pending-remove" : ""}${isChild ? " meeting-minutes-section-item--child" : ""}${isDragging ? " is-dragging" : ""}${showDropAbove ? " is-drop-above" : ""}${showDropBelow ? " is-drop-below" : ""}${isEditingThis ? " is-editing" : ""}`}
                             open={isEditingThis || (sectionEditIndex == null && openSectionIndexes.has(index))}
                             onToggle={(event) => {
@@ -869,6 +882,8 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                     <strong>{label} {section.title || "Untitled section"}</strong>
                                     {section.type === "motion" && <Badge tone="accent">Motion</Badge>}
                                     {section.type === "report" && <Badge tone="info">Report</Badge>}
+                                    {section.sourceKind && <Badge tone="info">{sourceKindLabel(section.sourceKind)}</Badge>}
+                                    {section.sourceReviewStatus && <Badge tone={section.sourceReviewStatus === "verified" ? "success" : "warn"}>{section.sourceReviewStatus === "verified" ? "Source checked" : "Awaiting review"}</Badge>}
                                   </>
                                 )}
                               </span>
@@ -976,6 +991,8 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                   refs and drop unflushed edits on save. */}
                               {canEditSections && sectionEditIndex === index && sectionDraft && !isMobileSectionEditor ? renderSectionEditor("inline") : (
                                 <>
+                                  {section.sourceReference && <p className="muted"><strong>Source:</strong> {formatSourceReferences(String(section.sourceReference))}</p>}
+                                  {sourceIsProposal(section.sourceKind) && <p className="muted">Proposed source wording. A recorded outcome must be added from meeting evidence.</p>}
                                   {section.presenter && <p><strong>Presenter:</strong> {section.presenter}</p>}
                                   {section.discussion ? (
                                     <div className="meeting-minutes-section-markdown">
@@ -986,7 +1003,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                   )}
                                   {(section.decisions ?? []).length > 0 && (
                                     <div className="meeting-minutes-section-block">
-                                      <strong>Decisions</strong>
+                                      <strong>{sourceIsProposal(section.sourceKind) || section.sourceEvidence?.decisionState === "proposed" ? "Proposed decision wording" : "Decisions"}</strong>
                                       <ul>
                                         {section.decisions.map((decision: string, decisionIndex: number) => (
                                           <li key={decisionIndex}>{decision}</li>
@@ -994,9 +1011,16 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                       </ul>
                                     </div>
                                   )}
+                                  {section.motionText && !motionMatchesBySection[index]?.length && (
+                                    <div className="meeting-minutes-section-block">
+                                      <strong>{sourceIsProposal(section.sourceKind) ? "Proposed motion wording" : "Source motion wording"}</strong>
+                                      <div className="meeting-minutes-section-markdown">{renderMinutesMarkdown(section.motionText)}</div>
+                                      <p className="muted">Review this wording before creating or updating a motion and its outcome.</p>
+                                    </div>
+                                  )}
                                   {motionMatchesBySection[index]?.length > 0 && (
                                     <div className="meeting-minutes-section-block">
-                                      <strong>Related motions</strong>
+                                      <strong>{sourceIsProposal(section.sourceKind) ? "Proposed / related motions" : "Related motions"}</strong>
                                       <div className="meeting-minutes-section-motions">
                                         {motionMatchesBySection[index].map(({ motion, index: motionIndex }) => (
                                           <div className="meeting-minutes-section-motion" key={`${motion.text}-${motionIndex}`}>
@@ -1012,6 +1036,8 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                     </div>
                                   )}
                                   {(section.actionItems ?? []).length > 0 && (
+                                    <div className="meeting-minutes-section-block">
+                                    <strong>{sourceIsProposal(section.sourceKind) || section.sourceEvidence?.actionState === "proposed" ? "Proposed actions" : "Action items"}</strong>
                                     <ul className="meeting-minutes-section-actions">
                                       {section.actionItems.map((item: any, actionIndex: number) => (
                                         <li key={actionIndex}>
@@ -1019,6 +1045,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                         </li>
                                       ))}
                                     </ul>
+                                    </div>
                                   )}
                                   {(() => {
                                     const linkedTaskIds: string[] = Array.isArray(section.linkedTaskIds) ? section.linkedTaskIds : [];
@@ -1068,6 +1095,11 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                               ? "Copy the agenda into minute sections, then add notes, motions, decisions, and actions under each item."
                               : "Add agenda items first, then copy them into minute sections."}
                           </p>
+                          {canTransposeSource && (minutes.discussion || minutes.draftTranscript || minutes.sourceExternalId || minutes.sourceExternalIds?.length) && (
+                            <button className="btn-action btn-action--primary" disabled={transposingSource || agendaEdit !== null || sectionEditIndex !== null} onClick={() => { void transposeSource(); }}>
+                              <ClipboardList size={12} /> {transposingSource ? "Reconstructing source..." : "Reconstruct agenda record from source"}
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}

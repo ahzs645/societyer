@@ -414,6 +414,7 @@ function sectionFromAgendaItem(item: Record<string, any>) {
   const depth: 0 | 1 = item.depth === 1 ? 1 : 0;
   const section: Record<string, unknown> = {
     title: item.title,
+    ...(item._id ? {agendaItemId:item._id} : {}),
     type: item.type || inferAgendaItemType(item.title),
     discussion: item.details ?? "",
     decisions: [],
@@ -450,7 +451,7 @@ async function syncMeetingAndMinutesFromAgenda(ctx: PortableMutationCtx, meeting
     .withIndex("by_meeting", (q) => q.eq("meetingId", meeting._id))
     .collect();
   const minutes = rows[0];
-  if (!minutes) return;
+  if (!minutes || minutes.approvedAt || minutes.adoptedSnapshot || Array.isArray(minutes.motionSnapshots)) return;
 
   const existingSections = Array.isArray(minutes.sections) ? minutes.sections : [];
   // Queue per-title so duplicate-titled sections each consume one matching
@@ -472,6 +473,7 @@ async function syncMeetingAndMinutesFromAgenda(ctx: PortableMutationCtx, meeting
     if (!existing) return base;
     const merged: Record<string, unknown> = {
       title: item.title,
+      agendaItemId:item._id,
       type: item.type || existing.type || base.type,
       discussion: existing.discussion || item.details || "",
       depth: item.depth === 1 ? 1 : 0,
@@ -494,13 +496,18 @@ async function syncMeetingAndMinutesFromAgenda(ctx: PortableMutationCtx, meeting
     // saving a section with publicVisible:false isn't immediately reverted by
     // the agenda re-sync that runs from saveMinuteSections.
     if (existing.publicVisible !== undefined) merged.publicVisible = existing.publicVisible;
+    for (const key of ["sourceReference","sourceReviewStatus","sourceKind","sourceEvidence"]) if (existing[key] !== undefined) merged[key] = existing[key];
     return merged;
   });
   const nextTitles = new Set(items.map((item) => normalizeTitle(item.title)));
   for (const section of existingSections) {
     const key = normalizeTitle(section?.title ?? "");
     if (key && nextTitles.has(key)) continue;
-    if (sectionHasDetails(section)) nextSections.push(cleanMinutesSection(section));
+    if (sectionHasDetails(section)) {
+      const preserved=cleanMinutesSection(section);
+      if (!items.some(item=>item._id===preserved.agendaItemId)) delete preserved.agendaItemId;
+      nextSections.push(preserved);
+    }
   }
 
   // Source existing motions from the table (via the resolver) so each carries its
@@ -552,6 +559,7 @@ function cleanMinutesSection(section: any) {
   if (Array.isArray(section?.actionItems)) clean.actionItems = section.actionItems.map(cleanActionItem);
   if (Array.isArray(section?.linkedTaskIds)) clean.linkedTaskIds = section.linkedTaskIds;
   if (section?.publicVisible !== undefined) clean.publicVisible = section.publicVisible;
+  for (const key of ["agendaItemId","sourceReference","sourceReviewStatus","sourceKind","sourceEvidence"]) if (section?.[key] !== undefined) clean[key] = section[key];
   return clean;
 }
 
@@ -593,6 +601,8 @@ function cleanMotion(motion: any) {
 function sectionHasDetails(section: any) {
   return !!(
     section?.discussion ||
+    section?.motionText ||
+    section?.sourceEvidence ||
     section?.presenter ||
     (section?.decisions ?? []).length ||
     (section?.actionItems ?? []).length ||
