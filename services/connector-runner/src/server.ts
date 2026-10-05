@@ -127,7 +127,7 @@ function asyncRoute(
 }
 
 async function connectSession(cdpUrl: string) {
-  const browser = await chromium.connectOverCDP(cdpUrl);
+  const browser = await chromium.connectOverCDP(cdpUrl, { timeout: 15_000 });
   const context = browser.contexts()[0] ?? await browser.newContext();
   const pages = context.pages();
   const page = pages[0] ?? await context.newPage();
@@ -401,15 +401,18 @@ function publicSession(session: ActiveSession) {
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
+// Liveness does not allocate or connect to a provider browser session.
+app.get("/livez", (_req, res) => res.json({ ok: true, runner: "connector-runner" }));
+app.use(requireRunnerSecret);
+
 app.get("/healthz", asyncRoute(async (_req, res) => {
-  res.json({
-    ok: true,
+  const browser = await backend.healthCheck();
+  res.status(browser.ok ? 200 : 503).json({
+    ok: browser.ok,
     runner: "connector-runner",
-    browser: await backend.healthCheck(),
+    browser,
   });
 }));
-
-app.use(requireRunnerSecret);
 
 app.get("/connectors", (_req, res) => {
   res.json({ connectors });
@@ -853,7 +856,7 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     res.status(error.statusCode).json({ error: error.message, code: error.code });
     return;
   }
-  res.status(500).json({ error: error instanceof Error ? error.message : "Connector runner error." });
+  res.status(500).json({ error: "Connector browser operation failed. Check provider availability and configuration, then retry the read or login action." });
 });
 
 const vncWebSocketServer = new WebSocketServer({ noServer: true });

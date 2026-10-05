@@ -9,6 +9,9 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { syncMotionsForMinutes } from "./minutes";
+import { actionPermission } from "./actionPolicy";
+import { requirePermissionPortable, type Permission } from "./permissions";
+import { requireDocumentAccess } from "./documents";
 import {
   SESSION_TAG,
   RECORD_TAG,
@@ -67,6 +70,49 @@ import {
   titleForRecord,
   summarizeFromSessionMetadata,
 } from "./importSessionHelpers";
+
+// Import payloads and targetModule labels are untrusted. Destination authority
+// comes from the accepted kind and the same domains used by normal mutations.
+const SECTION_MUTATION_DOMAINS = {
+  filing: "filings", deadline: "deadlines", bylawAmendment: "bylawAmendments",
+  publication: "transparency", insurancePolicy: "insurance", financialStatement: "financials",
+  financialStatementImport: "financialHub", grant: "grants", recordsLocation: "recordsLocation",
+  archiveAccession: "library", boardRoleAssignment: "evidenceRegisters", boardRoleChange: "evidenceRegisters",
+  signingAuthority: "evidenceRegisters", meetingAttendance: "evidenceRegisters", motionEvidence: "evidenceRegisters",
+  budgetSnapshot: "financialHub", treasurerReport: "financialHub", transactionCandidate: "financialHub",
+  organizationAddress: "organizationDetails", organizationRegistration: "organizationDetails", organizationIdentifier: "organizationDetails",
+  policy: "policies", workflowPackage: "workflowPackages", minuteBookItem: "minuteBook",
+  roleHolder: "legalOperations", rightsClass: "legalOperations", rightsholdingTransfer: "legalOperations",
+  serviceProvider: "serviceProviders", dividend: "dividends", nameHistory: "nameHistory",
+  constatingEvent: "constating", significantIndividualStep: "significantIndividualSteps", asset: "assets",
+  shareCertificate: "shareCertificates", legalTemplateDataField: "legalOperations", legalTemplate: "legalOperations",
+  legalPrecedent: "legalOperations", legalPrecedentRun: "legalOperations", generatedLegalDocument: "legalOperations",
+  legalSigner: "legalOperations", formationRecord: "legalOperations", nameSearchItem: "legalOperations",
+  entityAmendment: "legalOperations", annualMaintenanceRecord: "legalOperations", jurisdictionMetadata: "legalOperations",
+  supportLog: "legalOperations", sourceEvidence: "evidenceRegisters", secretVaultItem: "secrets",
+  pipaTraining: "pipaTraining", employee: "employees", volunteer: "volunteers",
+} satisfies Record<typeof SECTION_RECORD_KINDS[number], string>;
+
+async function requireSectionPromotionPermissions(ctx: PortableMutationCtx, societyId: string, records: any[]) {
+  // Source placeholders, evidence records and import-session updates also write
+  // documents. Check the complete selection before even creating a placeholder.
+  const permissions = new Set<Permission>(["documents:read", "documents:write"]);
+  for (const record of records) {
+    if (!Object.prototype.hasOwnProperty.call(SECTION_MUTATION_DOMAINS, record.recordKind)) {
+      throw new Error(`Unsupported import section kind: ${record.recordKind}.`);
+    }
+    const domain = SECTION_MUTATION_DOMAINS[record.recordKind as keyof typeof SECTION_MUTATION_DOMAINS];
+    const permission = actionPermission(`${domain}:importSection`, "mutation");
+    if (!permission) throw new Error(`Unclassified import section kind: ${record.recordKind}.`);
+    permissions.add(permission);
+    if (record.recordKind === "roleHolder") {
+      const roleType = cleanText(record.payload?.roleType) || cleanText(record.payload?.type) || cleanText(record.payload?.role);
+      if (roleType === "controller") permissions.add("settings:write");
+      if (roleType === "director" || roleType === "officer") permissions.add("directors:write");
+    }
+  }
+  for (const permission of permissions) await requirePermissionPortable(ctx, societyId, permission);
+}
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   const sessions = await docsByCategory(ctx, societyId, SESSION_CATEGORY);
@@ -688,7 +734,20 @@ export async function applyApprovedSectionRecordsPortable(
   const session = await ctx.db.get(sessionId);
   if (!isImportSession(session)) return { total: 0, byKind: {} };
   const societyId = String(session.societyId);
+  await requirePermissionPortable(ctx, societyId, "settings:write");
+  await requirePermissionPortable(ctx, societyId, "documents:read");
+  await requireDocumentAccess(ctx, sessionId, "manage");
   const records = await sessionRecords(ctx, societyId, sessionId);
+  for (const record of records) {
+    const candidate = await ctx.db.get(record._id, "documents");
+    if (String(candidate?.societyId) !== societyId) throw new Error("documents not found.");
+    const document = await requireDocumentAccess(ctx, record._id, "manage");
+    if (String(document.societyId) !== societyId) throw new Error("documents not found.");
+    if (record.status === "Approved" && !SECTION_RECORD_KINDS.includes(record.recordKind) &&
+        ![...HISTORY_KINDS, "source", "meetingMinutes", "documentCandidate"].includes(record.recordKind)) {
+      throw new Error(`Unsupported import section kind: ${record.recordKind}.`);
+    }
+  }
   const sourceCatalog = sourceCatalogForRecords(records);
   const sectionRecords = records.filter(
     (record: any) =>
@@ -696,6 +755,29 @@ export async function applyApprovedSectionRecordsPortable(
       record.status === "Approved" &&
       !record.importedTargets?.sections,
   );
+
+  await requireSectionPromotionPermissions(ctx, societyId, sectionRecords);
+
+  // Resolve existing source references for the whole selection before writes.
+  // Otherwise a later revoked/foreign source could follow an earlier insertion
+  // in portable runtimes that do not roll back caught errors automatically.
+  const externalIds = unique(sectionRecords.flatMap(record => [
+    ...(record.sourceExternalIds ?? []), ...(record.payload?.sourceExternalIds ?? []),
+  ]));
+  for (const externalId of externalIds) {
+    let documentId = sourceCatalog.get(externalId)?.documentId;
+    if (!documentId) {
+      const evidence = await ctx.db.query("sourceEvidence")
+        .withIndex("by_society_external", q => q.eq("societyId", societyId).eq("externalId", externalId)).first();
+      documentId = evidence?.sourceDocumentId;
+    }
+    if (documentId) {
+      const candidate = await ctx.db.get(documentId, "documents");
+      if (String(candidate?.societyId) !== societyId) throw new Error("documents not found.");
+      const document = await requireDocumentAccess(ctx, documentId);
+      if (String(document.societyId) !== societyId) throw new Error("documents not found.");
+    }
+  }
 
   const byKind: Record<string, number> = {};
   let total = 0;

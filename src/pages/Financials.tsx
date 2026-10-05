@@ -321,6 +321,7 @@ export function FinancialsPage() {
     setTab("wave");
     try {
       const result = redactWaveHealthResult(await checkWaveHealth({
+        societyId: society._id,
         businessId: activeConnection?.externalBusinessId,
       }));
       setWaveHealth(result);

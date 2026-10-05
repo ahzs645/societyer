@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useMemo } from "react";
 import { createStore, useStore } from "zustand";
 import type {
   HydratedView,
@@ -9,6 +9,7 @@ import type {
   ViewFieldGroup,
   ViewGroup,
   ViewType,
+  ViewCalendarLayout,
   ViewOpenRecordIn,
   ViewSort,
   ViewVisibility,
@@ -45,6 +46,7 @@ type SavedViewSnapshot = {
   type: ViewType;
   kanbanFieldMetadataId?: string;
   calendarFieldMetadataId?: string;
+  calendarLayout: ViewCalendarLayout;
   fieldGroups: ViewFieldGroup[];
   searchTerm: string;
   anyFieldFilterValue: string;
@@ -84,7 +86,9 @@ export type RecordTableState = {
   kanbanFieldMetadataId?: string;
   setKanbanFieldMetadataId: (fieldMetadataId?: string) => void;
   calendarFieldMetadataId?: string;
+  calendarLayout: ViewCalendarLayout;
   setCalendarFieldMetadataId: (fieldMetadataId?: string) => void;
+  setCalendarLayout: (layout: ViewCalendarLayout) => void;
   fieldGroups: ViewFieldGroup[];
   setFieldGroups: (fieldGroups: ViewFieldGroup[]) => void;
   searchTerm: string;
@@ -124,7 +128,7 @@ export type RecordTableState = {
   /** Load a view from the server — replaces both live state and savedView. */
   loadView: (hydrated: HydratedView) => void;
   /** Promote current live state into savedView (call after server save). */
-  markSaved: () => void;
+  markSaved: (savedState?: RecordTableState) => void;
   /** Restore live state to savedView, throwing away unsaved edits. */
   discardDraftChanges: () => void;
 };
@@ -148,6 +152,7 @@ export function createRecordTableStore(opts: {
     type: "table",
     kanbanFieldMetadataId: undefined,
     calendarFieldMetadataId: undefined,
+    calendarLayout: "month",
     fieldGroups: [],
     searchTerm: "",
     anyFieldFilterValue: "",
@@ -215,6 +220,7 @@ export function createRecordTableStore(opts: {
     setType: (type) => set({ type }),
     setKanbanFieldMetadataId: (kanbanFieldMetadataId) => set({ kanbanFieldMetadataId }),
     setCalendarFieldMetadataId: (calendarFieldMetadataId) => set({ calendarFieldMetadataId }),
+    setCalendarLayout: (calendarLayout) => set({ calendarLayout }),
     setFieldGroups: (fieldGroups) => set({ fieldGroups }),
     setSearchTerm: (searchTerm) => set({ searchTerm }),
     setAnyFieldFilterValue: (anyFieldFilterValue) => set({ anyFieldFilterValue }),
@@ -255,6 +261,7 @@ export function createRecordTableStore(opts: {
         type: hydrated.view.type,
         kanbanFieldMetadataId: hydrated.view.kanbanFieldMetadataId,
         calendarFieldMetadataId: hydrated.view.calendarFieldMetadataId,
+        calendarLayout: hydrated.view.calendarLayout ?? "month",
         fieldGroups: hydrated.view.fieldGroups,
         searchTerm: hydrated.view.searchTerm ?? "",
         anyFieldFilterValue: hydrated.view.anyFieldFilterValue ?? "",
@@ -272,6 +279,7 @@ export function createRecordTableStore(opts: {
         type: snapshot.type,
         kanbanFieldMetadataId: snapshot.kanbanFieldMetadataId,
         calendarFieldMetadataId: snapshot.calendarFieldMetadataId,
+        calendarLayout: snapshot.calendarLayout,
         fieldGroups: snapshot.fieldGroups,
         searchTerm: snapshot.searchTerm,
         anyFieldFilterValue: snapshot.anyFieldFilterValue,
@@ -282,8 +290,8 @@ export function createRecordTableStore(opts: {
       });
     },
 
-    markSaved: () => {
-      const s = get();
+    markSaved: (savedState) => {
+      const s = savedState ?? get();
       set({
         savedView: {
           viewId: s.viewId,
@@ -295,6 +303,7 @@ export function createRecordTableStore(opts: {
           type: s.type,
           kanbanFieldMetadataId: s.kanbanFieldMetadataId,
           calendarFieldMetadataId: s.calendarFieldMetadataId,
+          calendarLayout: s.calendarLayout,
           fieldGroups: s.fieldGroups,
           searchTerm: s.searchTerm,
           anyFieldFilterValue: s.anyFieldFilterValue,
@@ -318,6 +327,7 @@ export function createRecordTableStore(opts: {
         type: snap.type,
         kanbanFieldMetadataId: snap.kanbanFieldMetadataId,
         calendarFieldMetadataId: snap.calendarFieldMetadataId,
+        calendarLayout: snap.calendarLayout,
         fieldGroups: snap.fieldGroups,
         searchTerm: snap.searchTerm,
         anyFieldFilterValue: snap.anyFieldFilterValue,
@@ -376,11 +386,13 @@ export function useRecordTableState<T>(selector: (state: RecordTableState) => T)
  */
 export function useRecordTableStoreHandle() {
   const store = useRecordTableStoreOrThrow();
-  return {
+  // Authority checks compare handles across awaited saves. Ordinary query
+  // refreshes retain the same store; only a genuine scope change replaces it.
+  return useMemo(() => ({
     get: store.getState,
     set: store.setState,
     subscribe: store.subscribe,
-  };
+  }), [store]);
 }
 
 /* ----------------------- dirty-checking ----------------------- */
@@ -444,6 +456,7 @@ export function computeIsDirty(s: RecordTableState): boolean {
     s.type !== snap.type ||
     s.kanbanFieldMetadataId !== snap.kanbanFieldMetadataId ||
     s.calendarFieldMetadataId !== snap.calendarFieldMetadataId ||
+    s.calendarLayout !== snap.calendarLayout ||
     s.visibility !== snap.visibility ||
     s.openRecordIn !== snap.openRecordIn ||
     !filtersEqual(s.filters, snap.filters) ||

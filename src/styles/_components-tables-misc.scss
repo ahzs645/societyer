@@ -461,3 +461,24 @@ select.editable-cell__input {
     background: token('bg-subtle');
   }
 }
+
+/* Calendar periods share the record-view controls and keep overflow inside the view. */
+.calendar-view__head { flex-wrap: wrap; }
+.calendar-view__title { min-width: 0; overflow-wrap: anywhere; }
+.calendar-view__scroll { min-width: 0; max-width: 100%; overflow-x: auto; }
+.calendar-view--month .calendar-view__weekdays,
+.calendar-view--month .calendar-view__grid { min-width: 560px; }
+.calendar-view--week .calendar-view__event,
+.calendar-view--list .calendar-view__event { white-space: normal; overflow-wrap: anywhere; }
+.calendar-view--week .calendar-view__date { min-height: 28px; }
+.calendar-view__agenda { display: flex; flex-direction: column; gap: token('s-3'); min-width: 0; }
+.calendar-view__agenda section { min-width: 0; }
+.calendar-view__agenda h3 { font-size: token('fs-sm'); }
+.calendar-view__undated { margin: 0; font-size: token('fs-xs'); }
+button.calendar-view__more { text-align: left; border: 0; background: transparent; cursor: pointer; }
+@media (max-width: 767px) {
+  .calendar-view--week .calendar-view__weekdays { display: none; }
+  .calendar-view--week .calendar-view__grid { grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(60px, auto); }
+  .calendar-view--week .calendar-view__date { width: auto; height: auto; min-height: 0; }
+  .calendar-view--week .calendar-view__cell.is-today .calendar-view__date { width: auto; height: auto; border-radius: token('r-sm'); justify-content: flex-start; padding: 2px 6px; }
+}

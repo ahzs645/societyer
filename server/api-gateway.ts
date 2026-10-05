@@ -1,7 +1,8 @@
+import { operatorWaveBusinessId, providerDeploymentEnv } from "../shared/providerWorkspaceBindings";
 import "./env";
 import crypto from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import express, { NextFunction, Request, Response, Router } from "express";
 import swaggerUi from "swagger-ui-express";
@@ -14,6 +15,7 @@ import {
   OpenApiGeneratorV3,
 } from "@asteasolutions/zod-to-openapi";
 import { api } from "../convex/_generated/api";
+import { assertSafeProviderReceipt } from "../shared/pathways/submissions";
 import { listPermissionsForRole } from "../convex/lib/permissions";
 import {
   buildPdfTableImportBundle,
@@ -817,12 +819,19 @@ function mountPlatformRoutes(router: Router, client: ConvexHttpClient) {
 
 async function tenantConnectorRunnerRequest(
   req: Request,
+  client: ConvexHttpClient,
   method: "GET" | "POST",
   path: string,
   body?: Record<string, unknown>,
 ) {
   const tenant = connectorTenantContext(req);
-  const result = await connectorRunnerRequest(method, path, body, tenant.tenantKey);
+  const society = await convexCall(client, query("society.getById"), { id: tenant.societyId });
+  if (!society || society.disabledModules?.includes("browserConnectors")) throw httpError(403, "module_disabled", "Browser connectors are disabled for this workspace.");
+  const wave = path.startsWith("/connectors/wave/");
+  const businessId = wave ? operatorWaveBusinessId(tenant.societyId, typeof body?.businessId === "string" ? body.businessId : undefined, providerDeploymentEnv("SOCIETYER_WAVE_WORKSPACE_BINDINGS_JSON")) : undefined;
+  const boundedBody = wave && path.includes("/actions/") ? { ...body, businessId } : body;
+  const result = await connectorRunnerRequest(method, path, boundedBody, tenant.tenantKey);
+  if (wave && typeof (result as any)?.businessId === "string") operatorWaveBusinessId(tenant.societyId, (result as any).businessId, providerDeploymentEnv("SOCIETYER_WAVE_WORKSPACE_BINDINGS_JSON"));
   return withConnectorOwnership(result, tenant.societyId);
 }
 
@@ -847,7 +856,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/sessions",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      res.json(await tenantConnectorRunnerRequest(req, "GET", "/sessions"));
+      res.json(await tenantConnectorRunnerRequest(req, client, "GET", "/sessions"));
     }),
   );
 
@@ -856,7 +865,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
       const body = stripActor(req.body ?? {});
-      res.status(201).json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", "/sessions/start-login", body)));
+      res.status(201).json(singleResponse(await tenantConnectorRunnerRequest(req, client, "POST", "/sessions/start-login", body)));
     }),
   );
 
@@ -864,7 +873,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/sessions/:sessionId/finish-login",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", `/sessions/${encodeURIComponent(req.params.sessionId)}/finish-login`)));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, client, "POST", `/sessions/${encodeURIComponent(req.params.sessionId)}/finish-login`)));
     }),
   );
 
@@ -872,7 +881,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/sessions/:sessionId/stop",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", `/sessions/${encodeURIComponent(req.params.sessionId)}/stop`)));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, client, "POST", `/sessions/${encodeURIComponent(req.params.sessionId)}/stop`)));
     }),
   );
 
@@ -882,6 +891,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     asyncHandler(async (req, res) => {
       res.json(singleResponse(await tenantConnectorRunnerRequest(
         req,
+        client,
         "POST",
         `/sessions/${encodeURIComponent(req.params.sessionId)}/paste`,
         stripActor(req.body ?? {}),
@@ -893,7 +903,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/profiles/validate",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", "/profiles/validate", stripActor(req.body ?? {}))));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, client, "POST", "/profiles/validate", stripActor(req.body ?? {}))));
     }),
   );
 
@@ -901,7 +911,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/profiles/delete",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", "/profiles/delete", stripActor(req.body ?? {}))));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, client, "POST", "/profiles/delete", stripActor(req.body ?? {}))));
     }),
   );
 
@@ -909,7 +919,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     "/browser-connectors/runs/open-page",
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
-      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", "/runs/open-page", stripActor(req.body ?? {}))));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, client, "POST", "/runs/open-page", stripActor(req.body ?? {}))));
     }),
   );
 
@@ -918,7 +928,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
       const connectorId = encodeURIComponent(String(req.params.connectorId));
-      res.status(201).json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", `/connectors/${connectorId}/auth/start`, stripActor(req.body ?? {}))));
+      res.status(201).json(singleResponse(await tenantConnectorRunnerRequest(req, client, "POST", `/connectors/${connectorId}/auth/start`, stripActor(req.body ?? {}))));
     }),
   );
 
@@ -927,7 +937,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
       const connectorId = encodeURIComponent(String(req.params.connectorId));
-      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", `/connectors/${connectorId}/auth/verify`, stripActor(req.body ?? {}))));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, client, "POST", `/connectors/${connectorId}/auth/verify`, stripActor(req.body ?? {}))));
     }),
   );
 
@@ -936,7 +946,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     requireScope(client, "settings:manage"),
     asyncHandler(async (req, res) => {
       const connectorId = encodeURIComponent(String(req.params.connectorId));
-      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", `/connectors/${connectorId}/profiles/delete`, stripActor(req.body ?? {}))));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, client, "POST", `/connectors/${connectorId}/profiles/delete`, stripActor(req.body ?? {}))));
     }),
   );
 
@@ -946,7 +956,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
     asyncHandler(async (req, res) => {
       const connectorId = encodeURIComponent(String(req.params.connectorId));
       const sessionId = encodeURIComponent(String(req.params.sessionId));
-      res.json(singleResponse(await tenantConnectorRunnerRequest(req, "POST", `/connectors/${connectorId}/auth/sessions/${sessionId}/confirm`, stripActor(req.body ?? {}))));
+      res.json(singleResponse(await tenantConnectorRunnerRequest(req, client, "POST", `/connectors/${connectorId}/auth/sessions/${sessionId}/confirm`, stripActor(req.body ?? {}))));
     }),
   );
 
@@ -960,7 +970,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       const connectorId = encodeURIComponent(connectorIdRaw);
       const sessionId = encodeURIComponent(sessionIdRaw);
       const actionId = encodeURIComponent(actionIdRaw);
-      const runnerOutput: any = await tenantConnectorRunnerRequest(req, "POST", `/connectors/${connectorId}/auth/sessions/${sessionId}/actions/${actionId}`, stripActor(req.body ?? {}));
+      const runnerOutput: any = await tenantConnectorRunnerRequest(req, client, "POST", `/connectors/${connectorId}/auth/sessions/${sessionId}/actions/${actionId}`, stripActor(req.body ?? {}));
       const workflowRunId = await recordConnectorRun(client, req, {
         connectorId: connectorIdRaw,
         actionId: actionIdRaw,
@@ -979,6 +989,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       const body = stripActor(req.body ?? {});
       const runnerOutput: any = await tenantConnectorRunnerRequest(
         req,
+        client,
         "POST",
         `/connectors/wave/auth/sessions/${sessionId}/actions/importTransactions`,
         body,
@@ -1019,6 +1030,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       const body = stripActor(req.body ?? {});
       const runnerOutput: any = await tenantConnectorRunnerRequest(
         req,
+        client,
         "POST",
         "/connectors/wave/actions/importTransactions",
         body,
@@ -1059,6 +1071,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       const body = stripActor(req.body ?? {});
       const runnerOutput: any = await tenantConnectorRunnerRequest(
         req,
+        client,
         "POST",
         `/connectors/gcos/auth/sessions/${sessionId}/actions/exportProjectSnapshot`,
         body,
@@ -1095,6 +1108,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       const body = stripActor(req.body ?? {});
       const runnerOutput: any = await tenantConnectorRunnerRequest(
         req,
+        client,
         "POST",
         "/connectors/gcos/actions/exportProjectSnapshot",
         body,
@@ -1167,7 +1181,7 @@ function mountBrowserConnectorRoutes(router: Router, client: ConvexHttpClient) {
       const actionIdRaw = String(req.params.actionId);
       const connectorId = encodeURIComponent(connectorIdRaw);
       const actionId = encodeURIComponent(actionIdRaw);
-      const runnerOutput: any = await tenantConnectorRunnerRequest(req, "POST", `/connectors/${connectorId}/actions/${actionId}`, stripActor(req.body ?? {}));
+      const runnerOutput: any = await tenantConnectorRunnerRequest(req, client, "POST", `/connectors/${connectorId}/actions/${actionId}`, stripActor(req.body ?? {}));
       const workflowRunId = await recordConnectorRun(client, req, {
         connectorId: connectorIdRaw,
         actionId: actionIdRaw,
@@ -1350,6 +1364,9 @@ function mountWorkflowBridgeRoutes(router: Router, client: ConvexHttpClient) {
     asyncHandler(async (req, res) => {
       requireWorkflowSecret(req);
       const body = req.body ?? {};
+      for (const value of [body.output, body.note, body.externalRunId]) {
+        if (value !== undefined) assertSafeProviderReceipt(value, [process.env.SOCIETYER_WORKFLOW_CALLBACK_SECRET ?? ""]);
+      }
       if (!body.workflowId || !body.runId || !body.event) {
         throw httpError(400, "invalid_workflow_callback", "workflowId, runId, and event are required.");
       }
@@ -1380,30 +1397,41 @@ function mountWorkflowBridgeRoutes(router: Router, client: ConvexHttpClient) {
           id: body.runId,
         });
         if (!run) throw httpError(404, "workflow_run_not_found", "Workflow run not found.");
+        if (typeof body.generatedPdf.base64 !== "string" || body.generatedPdf.base64.length > Math.ceil((7 * 1024 * 1024) / 3) * 4) throw httpError(413, "generated_pdf_too_large", "Generated PDF exceeds the 7 MiB callback limit.");
         const pdf = decodeBase64Pdf(body.generatedPdf.base64);
         const filename = sanitizeFileName(
           body.generatedPdf.filename || `UNBC Affiliate ID Request - ${body.runId}.pdf`,
         );
-        const storageKey = `${crypto.randomUUID()}-${filename}`;
-        const dir = generatedWorkflowDocumentDir();
-        await mkdir(dir, { recursive: true });
-        await writeFile(path.join(dir, storageKey), pdf);
-
-        const recorded = await convexCallWithAuth(client, callbackAuthToken, mutation("workflows.recordGeneratedDocument"), {
-          societyId: run.societyId,
-          workflowId: body.workflowId,
-          runId: body.runId,
-          storageKey,
-          fileName: filename,
-          mimeType: body.generatedPdf.mimeType ?? "application/pdf",
-          fileSizeBytes: pdf.byteLength,
-        });
-        generatedDocument = {
-          documentId: recorded.documentId,
-          versionId: recorded.versionId,
-          fileName: filename,
-          storageKey,
-        };
+        if (pdf.byteLength > 7 * 1024 * 1024) throw httpError(413, "generated_pdf_too_large", "Generated PDF exceeds the 7 MiB callback limit.");
+        const sha256 = crypto.createHash("sha256").update(pdf).digest("hex");
+        const identity = { workflowId: body.workflowId, runId: body.runId, sha256, fileName: filename, fileSizeBytes: pdf.byteLength };
+        const existing = await convexCallWithAuth(client, callbackAuthToken, query("workflows.generatedDocumentPreflight"), identity);
+        if (existing) generatedDocument = existing;
+        else {
+          const storageKey = `${crypto.randomUUID()}-${filename}`;
+          const dir = generatedWorkflowDocumentDir();
+          await mkdir(dir, { recursive: true });
+          await writeFile(path.join(dir, storageKey), pdf, { flag: "wx" });
+          try {
+            const recorded = await convexCallWithAuth(client, callbackAuthToken, mutation("workflows.recordGeneratedDocument"), {
+              societyId: run.societyId, ...identity, storageKey,
+              serviceToken: apiPlatformServiceToken(),
+              mimeType: "application/pdf",
+            });
+            generatedDocument = { documentId: recorded.documentId, versionId: recorded.versionId,
+              fileName: recorded.fileName, storageKey: recorded.storageKey };
+            // Concurrent identical callbacks may have recorded another candidate first.
+            if (recorded.storageKey !== storageKey) await unlink(path.join(dir, storageKey));
+          } catch (error) {
+            // A transport failure may have committed. Delete this candidate only
+            // when a fresh authoritative preflight proves it is not referenced.
+            try {
+              const recorded = await convexCallWithAuth(client, callbackAuthToken, query("workflows.generatedDocumentPreflight"), identity);
+              if (!recorded || recorded.storageKey !== storageKey) await unlink(path.join(dir, storageKey));
+            } catch { /* Unknown authority/outcome requires operator reconciliation, never unsafe deletion. */ }
+            throw error;
+          }
+        }
       }
 
       await convexCallWithAuth(client, callbackAuthToken, mutation("workflows.receiveExternalCallback"), {

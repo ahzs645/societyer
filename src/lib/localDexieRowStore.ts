@@ -334,6 +334,11 @@ export class LocalDexieRowStore implements LocalRowStore {
   async importSnapshot(snapshot: LocalWorkspaceSnapshot | { tables?: LocalSeed; attachments?: LocalAttachmentEnvelope[]; workspace?: Partial<LocalWorkspaceMeta> }) {
     const importedTables = quarantineImportedPathways(stripImportedAuthBindings(validateSnapshotTables(snapshot?.tables)));
     const importedAttachments = validateSnapshotAttachments(snapshot?.attachments);
+    // Startup may still be reading the previous vault or writing its seed. A
+    // restore must finish after that work, otherwise hydration can overwrite
+    // the restored cache, metadata or attachment references after we report
+    // success. Validate first so invalid backups never wait for or write storage.
+    await this.whenHydrated();
     const normalizedMeta = normalizeWorkspaceMeta(snapshot?.workspace, this.workspaceMeta);
     const importedCache = migrateLocalWorkspaceSnapshotTables(importedTables);
     const importedMeta: LocalWorkspaceMeta = {
@@ -619,11 +624,18 @@ function validateSnapshotTables(value: unknown): LocalSeed {
     throw new Error("Local workspace snapshot is missing tables.");
   }
   for (const [table, rows] of Object.entries(value)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table) || ["constructor", "prototype", "__proto__"].includes(table)) {
+      throw new Error("Local workspace snapshot contains an invalid table name.");
+    }
     if (!Array.isArray(rows)) {
       throw new Error(`Local workspace snapshot table "${table}" is not an array.`);
     }
-    if (rows.some((row) => !row || typeof row !== "object" || Array.isArray(row))) {
-      throw new Error(`Local workspace snapshot table "${table}" contains an invalid row.`);
+    const ids = new Set<string>();
+    for (const row of rows) {
+      if (!row || typeof row !== "object" || Array.isArray(row) || typeof row._id !== "string" || !row._id || row._id.length > 300 || ids.has(row._id)) {
+        throw new Error(`Local workspace snapshot table "${table}" contains an invalid or duplicate record.`);
+      }
+      ids.add(row._id);
     }
   }
   return cloneLocalSeed(value as LocalSeed);
@@ -632,15 +644,20 @@ function validateSnapshotTables(value: unknown): LocalSeed {
 function validateSnapshotAttachments(value: unknown): LocalAttachmentEnvelope[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) throw new Error("Local workspace snapshot attachments are not an array.");
+  const keys = new Set<string>();
   for (const attachment of value) {
     if (
       !attachment ||
       typeof attachment !== "object" ||
       Array.isArray(attachment) ||
-      typeof (attachment as { key?: unknown }).key !== "string"
+      typeof attachment.key !== "string" || !attachment.key || keys.has(attachment.key) ||
+      typeof attachment.provider !== "string" || !attachment.provider ||
+      typeof attachment.storageKey !== "string" || !attachment.storageKey ||
+      (attachment.fileSizeBytes !== undefined && (!Number.isSafeInteger(attachment.fileSizeBytes) || attachment.fileSizeBytes < 0))
     ) {
       throw new Error("Local workspace snapshot contains an invalid attachment.");
     }
+    keys.add(attachment.key);
   }
   return cloneLocalRows(value as LocalAttachmentEnvelope[]);
 }

@@ -1,0 +1,89 @@
+{
+  "sourceBaseline": "66b8dcd",
+  "executedAt": "2026-10-05T02:58:17.057903+00:00",
+  "runtime": "actual local web application, fresh setup and persisted local records",
+  "providerNetworkCalls": 0,
+  "realProviderAccountsQualified": false,
+  "viewports": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "stats": {
+    "startTime": "2026-10-05T02:50:08.728Z",
+    "duration": 62656.336,
+    "expected": 8,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "project": "narrow-phone",
+      "title": "local Paperless remains unavailable and provider configuration controls never make a remote request",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "project": "narrow-phone",
+      "title": "offline membership plans save, reject invalid fees without losing drafts, and cannot charge a member",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "project": "phone",
+      "title": "local Paperless remains unavailable and provider configuration controls never make a remote request",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "project": "phone",
+      "title": "offline membership plans save, reject invalid fees without losing drafts, and cannot charge a member",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "project": "tablet",
+      "title": "local Paperless remains unavailable and provider configuration controls never make a remote request",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "project": "tablet",
+      "title": "offline membership plans save, reject invalid fees without losing drafts, and cannot charge a member",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "project": "desktop",
+      "title": "local Paperless remains unavailable and provider configuration controls never make a remote request",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    },
+    {
+      "project": "desktop",
+      "title": "offline membership plans save, reject invalid fees without losing drafts, and cannot charge a member",
+      "status": "expected",
+      "results": [
+        "passed"
+      ]
+    }
+  ],
+  "count": 8,
+  "initialHarnessCorrection": "Connection label selector accepts Save/Enable; plan title selector distinguishes fee history from plan card. Full corrected suite rerun passed."
+}

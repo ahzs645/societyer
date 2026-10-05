@@ -94,13 +94,13 @@ function variableStrings(variables: Record<string, unknown>) {
   return Object.values(variables).filter((value): value is string => typeof value === "string");
 }
 
-export async function waveListAccounts(args: { allowDemo?: boolean } = {}): Promise<{ provider: "wave" | "demo"; accounts: WaveAccount[] }> {
+export async function waveListAccounts(args: { allowDemo?: boolean; businessId?: string } = {}): Promise<{ provider: "wave" | "demo"; accounts: WaveAccount[] }> {
   const p = providers.accounting();
   if (p.id === "demo") {
     if (args.allowDemo) return { provider: "demo", accounts: DEMO_ACCOUNTS };
     throw new Error("Live Wave sync requires WAVE_ACCESS_TOKEN.");
   }
-  const businessId = env("WAVE_BUSINESS_ID");
+  const businessId = args?.businessId ?? env("WAVE_BUSINESS_ID");
   if (!businessId) {
     throw new Error("Live Wave sync requires WAVE_BUSINESS_ID.");
   }
@@ -187,6 +187,7 @@ function shouldImportWaveAccount(account: WaveAccount) {
 
 export async function waveListTransactions(args?: {
   sinceISO?: string;
+  businessId?: string;
   allowDemo?: boolean;
 }): Promise<{ provider: "wave" | "demo"; transactions: WaveTransaction[] }> {
   const p = providers.accounting();
@@ -197,7 +198,7 @@ export async function waveListTransactions(args?: {
       : DEMO_TX;
     return { provider: "demo", transactions: filtered };
   }
-  const businessId = env("WAVE_BUSINESS_ID");
+  const businessId = args?.businessId ?? env("WAVE_BUSINESS_ID");
   if (!businessId) {
     throw new Error("Live Wave sync requires WAVE_BUSINESS_ID.");
   }

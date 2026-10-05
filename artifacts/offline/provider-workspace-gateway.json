@@ -1,0 +1,16 @@
+{
+  "sourceBaseline": "66b8dcd",
+  "executedAt": "2026-10-05T04:14:13.093Z",
+  "fixtureOnly": true,
+  "actualGatewayHttp": true,
+  "nativeHandlers": true,
+  "externallyHostedProviderContacted": false,
+  "cases": [
+    "mounted gateway actual Clerk verification/native membership denies missing provider binding, foreign business/workspace and Viewer before runner or records",
+    "disabled browser module prevents external runner execution and import/run writes",
+    "foreign provider result is rejected before staging any financial data or recording a success run",
+    "bound Wave runner response stages a real native review import and connector run without directly posting financial records",
+    "bound direct Wave import reaches actual native provider binding and transaction handler"
+  ],
+  "count": 5
+}

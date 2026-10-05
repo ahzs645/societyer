@@ -24,6 +24,7 @@ export async function sendSms(args: {
   to: string;
   body: string;
   tag?: string;
+  demo?: boolean;
 }): Promise<SentSms> {
   const sentAtISO = new Date().toISOString();
   const bodyPreview = args.body.slice(0, 140);
@@ -38,8 +39,7 @@ export async function sendSms(args: {
       ? `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
       : undefined);
 
-  if (!accountSid || !authToken || (!fromNumber && !messagingServiceSid) || !endpoint) {
-    console.log(`[sms:demo] → ${args.to} | ${args.body.slice(0, 60)}`);
+  if (args.demo === true) {
     return {
       provider: "demo",
       accepted: true,
@@ -48,6 +48,10 @@ export async function sendSms(args: {
       bodyPreview,
       sentAtISO,
     };
+  }
+
+  if (!accountSid || !authToken || (!fromNumber && !messagingServiceSid) || !endpoint) {
+    throw new Error("SMS delivery requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER or TWILIO_MESSAGING_SERVICE_SID.");
   }
 
   const params = new URLSearchParams({
@@ -60,6 +64,7 @@ export async function sendSms(args: {
 
   const response = await fetch(endpoint, {
     method: "POST",
+    signal: AbortSignal.timeout(15_000),
     headers: {
       Authorization: `Basic ${basicAuth(accountSid, authToken)}`,
       "Content-Type": "application/x-www-form-urlencoded",
@@ -68,15 +73,15 @@ export async function sendSms(args: {
   });
 
   if (!response.ok) {
-    const detail = (await response.text().catch(() => "")).trim();
-    throw new Error(detail || `Twilio request failed with status ${response.status}.`);
+    throw new Error(`Twilio request failed with status ${response.status}.`);
   }
 
   const data = await response.json().catch(() => ({}));
+  if (typeof (data as any)?.sid !== "string" || !(data as any).sid.trim()) throw new Error("Twilio did not return a delivery identifier; acceptance is unconfirmed.");
   return {
     provider: "twilio",
     accepted: true,
-    id: String((data as any)?.sid ?? `twilio-${Date.now()}`),
+    id: String((data as any).sid),
     to: args.to,
     bodyPreview,
     sentAtISO,

@@ -158,7 +158,7 @@ export function WorkflowDetailPage() {
   };
 
   const runWorkflow = async (input?: Record<string, unknown>) => {
-    if (!canManage) return;
+    if (!canManage || busy) return;
     if (isLocalDataRuntime()) { toast.warn("Workflow execution requires a connected server"); return; }
     setBusy(true);
     try {
@@ -168,7 +168,8 @@ export function WorkflowDetailPage() {
         triggeredBy: "manual",
         input,
       });
-      toast.success(result?.status === "running" ? "Workflow queued in n8n" : "Workflow run complete");
+      if (result?.status === "manual_required") toast.warn("Workflow preparation complete; manual actions remain");
+      else toast.success(result?.status === "running" ? "Workflow queued in n8n; completion is pending" : "Workflow run complete");
       setIntakeOpen(false);
     } catch (error: any) {
       toast.error(error?.message ?? "Workflow run failed");
@@ -213,7 +214,7 @@ export function WorkflowDetailPage() {
           </button>
           <button
             className="btn btn--ghost btn--sm"
-            disabled={!canManage || busy || isLocalDataRuntime()}
+            disabled={!canManage || busy || !isActive || isLocalDataRuntime()}
             onClick={() => (launchUsesIntake ? openIntake() : runWorkflow())}
           >
             <Play size={12} /> Launch

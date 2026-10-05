@@ -237,7 +237,7 @@ console.log("✓ members CRUD: real Convex == MemoryDb == LocalStoreDb (create/l
 
 // === CAPABILITY bag: the converted notifications.sendDigest call-site ==========
 {
-  const caps = buildConvexCapabilities();
+  const caps = buildConvexCapabilities(undefined, { demo: true });
   assert.equal(caps.has("email"), true, "email capability is wired on Convex");
   assert.equal(caps.has("sms"), true, "sms capability is wired on Convex");
   const email = await caps.email.sendEmail({ to: "board@example.org", subject: "Digest", text: "hi" });

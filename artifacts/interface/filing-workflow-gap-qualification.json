@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "baseline": "66b8dcdaed953e93637be15d400c2f5bf09339fb",
+  "qualifiedAtUTC": "2026-10-05T02:46:19.022656+00:00",
+  "scope": [
+    "Detailed and annual filing ledgers",
+    "Jurisdiction-specific filing preparation",
+    "Saved incorporation pathway and submission approval/dependency gates",
+    "Configured n8n workflow transport",
+    "Generated-PDF callback authority/idempotency"
+  ],
+  "fixes": [
+    "Explicit annual-ledger sourceFilingId links derive current detailed status/date and fail safely on missing, mismatched or foreign sources; no automatic verification or inferred annual period.",
+    "Identical jurisdiction/year retries reuse the row; conflicting new-save payloads and duplicate explicit edits reject atomically.",
+    "Create/update/mark-filed/direct registry import/staged section import/private bot patches enforce common filed date/method/evidence facts; effective existing evidence is reauthorized.",
+    "Invalid later staged imports roll back prior filing/source-document writes; repeated corrected imports do not duplicate records.",
+    "Unimplemented preview nodes are skipped/manual-required and cannot appear as executed; workflow launch respects active state and local-mode boundary.",
+    "n8n callback credentials go only to exact operator-configured recipe endpoints; secret-bearing POST redirects are disabled, current authority is checked immediately before egress, raw responses/errors are not stored.",
+    "Unfinished external workflows reject duplicate launches; late acknowledgements/step updates/failures cannot overwrite terminal callbacks.",
+    "Generated-PDF preflight/record/callback require current bound actor, tasks/documents write authority, enabled workflow module and active workflow; document/version/key/name references are pinned to the exact run.",
+    "PDF fingerprint and size bind one generated document/version; exact terminal callback fingerprint acknowledges retries, changed body rejects; gateway reuses stored files and removes unused concurrent candidates.",
+    "Callback notes/output reject credential fields/secret echoes/unsafe URL receipts and oversized structures before file or history writes; gateway PDF cap is 7 MiB within the existing 10 MiB JSON parser.",
+    "Generated local-file claims require the trusted platform service token in addition to the current bound actor and write permissions; new claims reject any already-used document-version storage key, including known foreign-tenant keys. Same-run pinned-file retries remain idempotent.",
+    "Generated-file downloads fail closed when historical local-provider claims for the same storage key span tenants. Nonlocal provider keys are outside that shared generated-file directory and do not block an authorized local record."
+  ],
+  "checks": [
+    {
+      "command": "npx tsx scripts/check-filing-ledger-handoffs.ts",
+      "result": "passed",
+      "evidence": "Actual native Convex handlers and local client/backup: link/status reversal/deletion, role/tenant/service permissions, duplicate retries/conflicts, date/evidence ACL validation, direct/staged import atomicity and retries."
+    },
+    {
+      "command": "npx tsx scripts/check-workflow-runner-integration.ts",
+      "result": "passed",
+      "evidence": "Three actual native n8n actions over isolated loopback HTTP; credential destination/redirect/response gates, unfinished-run duplicate launch, before-egress current authority, preview manual-required behavior."
+    },
+    {
+      "command": "npx tsx scripts/check-workflow-callback-idempotency.ts",
+      "result": "passed",
+      "evidence": "Native completed-run zero writes; concurrent identical PDF one document/version; exact callback retries; digest/body/run-reference mismatch; terminal CAS and actor/workflow/module revocation. Missing/bad platform proof and known foreign storage-key collisions create zero documents/versions; foreign-byte download stays denied."
+    },
+    {
+      "command": "npx tsx scripts/check-workflow-gateway-callback.ts",
+      "result": "passed",
+      "evidence": "Actual mounted Express route with fixture transport/JWT issuer and real native handlers: wrong callback secret, completed-run zero files, concurrent/exact PDF retry one file/document/version, unsafe receipt/tamper/cap/current actor denial. Actual gateway forwards platform proof only after the file write and still retains one file/document/version for concurrent callbacks."
+    },
+    {
+      "command": "npm run test:pathway-framework",
+      "result": "passed",
+      "evidence": "Registry/graph/input branches, frozen evidence, independent current review, manual/uploaded receipt/certificate gates, trusted adapter concurrent CAS, uncertain-outcome no automatic retry, readonly backup restore."
+    },
+    {
+      "command": "npm run test:annual-filings && npm run test:filing-preparation-integration",
+      "result": "passed",
+      "evidence": "Annual calculations, real native/local BC packets, official manual handoffs, jurisdiction/type/form/charity/year/role/tenant and service-resource gates; deadline clamping."
+    },
+    {
+      "command": "npx tsx scripts/check-generated-document-access.ts",
+      "result": "passed",
+      "evidence": "Current authenticated actor/document ACL, verified issuer and platform proof required; same-key foreign local versions deny otherwise readable own versions, foreign nonlocal-provider controls retain legitimate local access."
+    }
+  ],
+  "browser": {
+    "widths": [
+      320,
+      390,
+      768,
+      1440
+    ],
+    "engine": "Chromium emulation",
+    "ledger": {
+      "passed": 4,
+      "failed": 0,
+      "mode": "Fresh real local workspace via public guided setup; saved detailed filing, explicit link, validation error retaining modal, manual evidence, reload and duplicate-save containment."
+    },
+    "pathway": {
+      "passed": 4,
+      "failed": 0,
+      "mode": "Real IndexedDB pathway transactions: frozen branch inputs, owned draft evidence, independent reviewer, official manual outbox handoff, reload persistence and viewport containment."
+    }
+  },
+  "limits": [
+    "No government/CRA submission, real message delivery or enterprise SSO was performed. Formal incorporation facts never derive from prepared/completed workflow steps or self-reported ledger status.",
+    "Native tests use Convex-test identity/transaction fixtures; mounted HTTP gateway uses explicit transport and JWT issuer adapters. Actual deployment/provider/SSO qualification remains separate.",
+    "Production n8n still requires reviewed operator recipe endpoints, callback configuration, provider deployment and credentials. Tenant-custom destinations cannot receive the shared callback credential.",
+    "A file write whose native commit/authority cannot be rechecked remains private for operator reconciliation; cleanup does not delete a possibly committed file.",
+    "Phone/tablet emulation does not establish physical-device, Safari/Firefox or signed-installer behavior."
+  ]
+}

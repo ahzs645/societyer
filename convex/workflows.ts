@@ -1,4 +1,5 @@
 import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
+import { assertApiPlatformServiceToken, serviceTokenValidator } from "./lib/serviceAuth";
 import { v } from "convex/values";
 import {
   query,
@@ -37,7 +38,11 @@ import {
   removeNodePortable,
   listNodeTypesPortable,
 } from "../shared/functions/workflows";
-import { hasPermission } from "../shared/functions/permissions";
+import { hasPermission, requirePermissionPortable } from "../shared/functions/permissions";
+import type { PortableQueryCtx } from "../shared/portable/ctx";
+import { requireDocumentAccess } from "../shared/functions/documents";
+import { assertSafeProviderReceipt, submissionPayloadSha256 } from "../shared/pathways/submissions";
+import { normalizeModuleSettings } from "../src/lib/modules";
 import { getOwned, isActiveMembership, principalUserId, requireSocietyMembership } from "../shared/functions/access";
 
 import {
@@ -654,17 +659,36 @@ export const receiveExternalCallback = authorizedMutation("workflows:receiveExte
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    for (const value of [args.output, args.note, args.externalRunId]) {
+      if (value !== undefined) assertSafeProviderReceipt(value, [env("SOCIETYER_WORKFLOW_CALLBACK_SECRET") ?? ""]);
+    }
     const run = await ctx.db.get(args.runId);
     if (!run || run.workflowId !== args.workflowId) {
       throw new Error("Workflow run not found.");
     }
 
     const portable = await toPortableQueryCtx(ctx);
+    if (!normalizeModuleSettings(await ctx.db.get(run.societyId)).workflows) throw new Error("Workflow execution is disabled for this organization.");
     const actor = await requireSocietyMembership(portable, run.societyId);
     if (run.triggeredByUserId !== actor._id) throw new Error("Workflow callback principal does not match this run.");
-    if (!["queued", "running"].includes(run.status)) throw new Error("Workflow run is already complete.");
+
     const workflow = await getOwned(portable, "workflows", args.workflowId, run.societyId);
     if (workflow.status !== "active") throw new Error("Workflow execution authority has been revoked.");
+    if (args.generatedDocument) {
+      await requirePermissionPortable(portable, run.societyId, "documents:write");
+      const version = await getOwned(portable, "documentVersions", args.generatedDocument.versionId, run.societyId);
+      await requireDocumentAccess(portable, args.generatedDocument.documentId);
+      if (run.generatedDocumentId !== args.generatedDocument.documentId || run.generatedDocumentVersionId !== args.generatedDocument.versionId
+        || version.documentId !== args.generatedDocument.documentId || version.storageKey !== args.generatedDocument.storageKey || version.fileName !== args.generatedDocument.fileName) {
+        throw new Error("Generated document does not belong to this workflow run.");
+      }
+    }
+    if (!["queued", "running"].includes(run.status)) {
+      const fingerprint = await submissionPayloadSha256(JSON.stringify({ event: args.event, externalRunId: args.externalRunId,
+        stepKey: args.stepKey, note: args.note, output: args.output, generatedDocument: args.generatedDocument }));
+      if (fingerprint === run.lastCallbackFingerprint) return { duplicate: true };
+      throw new Error("Workflow run is already complete.");
+    }
     const now = new Date().toISOString();
     const isFailure = args.event === "run.failed" || args.event === "step.failed";
     let steps = run.steps ?? [];
@@ -711,6 +735,8 @@ export const receiveExternalCallback = authorizedMutation("workflows:receiveExte
       output,
       externalRunId: args.externalRunId ?? run.externalRunId,
       externalStatus: args.event,
+      lastCallbackFingerprint: await submissionPayloadSha256(JSON.stringify({ event: args.event, externalRunId: args.externalRunId,
+        stepKey: args.stepKey, note: args.note, output: args.output, generatedDocument: args.generatedDocument })),
     };
 
     if (args.generatedDocument) {
@@ -741,6 +767,36 @@ export const receiveExternalCallback = authorizedMutation("workflows:receiveExte
 // effective `to` address, and we skip ones already enqueued for this run so
 // retries don't duplicate drafts.
 
+async function generatedDocumentContext(ctx: PortableQueryCtx, args: { workflowId: string; runId: string; sha256: string; fileName: string; fileSizeBytes: number }) {
+  const run = await ctx.db.get(args.runId, "workflowRuns");
+  if (!run?.societyId || run.workflowId !== args.workflowId) throw new Error("Workflow run not found.");
+  const society = await ctx.db.get(run.societyId, "societies");
+  if (!normalizeModuleSettings({ disabledModules: society?.disabledModules, modules: society?.modules }).workflows) throw new Error("Workflow execution is disabled for this organization.");
+  await requirePermissionPortable(ctx, run.societyId, "tasks:write");
+  await requirePermissionPortable(ctx, run.societyId, "documents:write");
+  const actorId = await principalUserId(ctx, run.societyId);
+  if (actorId !== run.triggeredByUserId) throw new Error("Workflow callback principal does not match this run.");
+  const workflow = await getOwned(ctx, "workflows", args.workflowId, run.societyId);
+  if (workflow.status !== "active") throw new Error("Workflow execution authority has been revoked.");
+  if (!/^[a-f0-9]{64}$/.test(args.sha256) || !Number.isSafeInteger(args.fileSizeBytes) || args.fileSizeBytes < 1 || args.fileSizeBytes > 20 * 1024 * 1024) throw new Error("Invalid generated PDF fingerprint or size.");
+  if (run.generatedDocumentId && run.generatedDocumentVersionId) {
+    const document = await getOwned(ctx, "documents", run.generatedDocumentId, run.societyId);
+    await requireDocumentAccess(ctx, document._id);
+    const version = await getOwned(ctx, "documentVersions", run.generatedDocumentVersionId, run.societyId);
+    if (version.documentId !== document._id || version.sha256 !== args.sha256 || version.fileName !== args.fileName || version.fileSizeBytes !== args.fileSizeBytes) throw new Error("Generated PDF differs from the document already recorded for this run.");
+    return { run, workflow, existing: { documentId: document._id, versionId: version._id, fileName: version.fileName, storageKey: version.storageKey } };
+  }
+  if (!["queued", "running"].includes(run.status)) throw new Error("Workflow run is already complete.");
+  return { run, workflow, existing: null };
+}
+
+/** Validate current callback authority and retry identity before the gateway writes bytes. */
+export const generatedDocumentPreflight = authorizedQuery("workflows:generatedDocumentPreflight", query)({
+  args: { workflowId: v.id("workflows"), runId: v.id("workflowRuns"), sha256: v.string(), fileName: v.string(), fileSizeBytes: v.number() },
+  returns: v.any(),
+  handler: async (ctx, args) => (await generatedDocumentContext(await toPortableQueryCtx(ctx), args)).existing,
+});
+
 export const recordGeneratedDocument = authorizedMutation("workflows:recordGeneratedDocument", mutation)({
   args: {
     societyId: v.id("societies"),
@@ -750,15 +806,19 @@ export const recordGeneratedDocument = authorizedMutation("workflows:recordGener
     fileName: v.string(),
     mimeType: v.string(),
     fileSizeBytes: v.number(),
+    sha256: v.string(),
+    serviceToken: serviceTokenValidator,
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    const run = await ctx.db.get(args.runId);
-    if (!run || run.workflowId !== args.workflowId || run.societyId !== args.societyId) {
-      throw new Error("Workflow run not found.");
-    }
-    const wf = await ctx.db.get(args.workflowId);
-    if (!wf) throw new Error("Workflow not found.");
+    // The platform gateway must attest to the file write; a tenant actor cannot mint file claims.
+    await assertApiPlatformServiceToken(args.serviceToken);
+    const { run, workflow: wf, existing } = await generatedDocumentContext(await toPortableQueryCtx(ctx), args);
+    if (run.societyId !== args.societyId) throw new Error("Workflow run not found.");
+    if (existing) return existing;
+    const collisions = await ctx.db.query("documentVersions")
+      .withIndex("by_storage_key", (q) => q.eq("storageKey", args.storageKey)).collect();
+    if (collisions.length) throw new Error("Generated document storage key is already claimed.");
     const saveNode = findWorkflowNode(wf, "document_create");
     const documentConfig = effectiveDocumentConfig(saveNode?.config ?? {}, wf.config ?? {});
     const templateContext = await buildWorkflowTemplateContext(ctx, wf, run, {
@@ -801,6 +861,7 @@ export const recordGeneratedDocument = authorizedMutation("workflows:recordGener
       fileSizeBytes: args.fileSizeBytes,
       uploadedAtISO: new Date().toISOString(),
       uploadedByName: "n8n workflow",
+      sha256: args.sha256,
       changeNote: documentConfig.changeNote ?? "Generated by workflow.",
       isCurrent: true,
     });
@@ -817,7 +878,8 @@ export const recordGeneratedDocument = authorizedMutation("workflows:recordGener
       createdAtISO: new Date().toISOString(),
     });
 
-    return { documentId, versionId };
+    await ctx.db.patch(args.runId, { generatedDocumentId: documentId, generatedDocumentVersionId: versionId });
+    return { documentId, versionId, fileName: args.fileName, storageKey: args.storageKey };
   },
 });
 
@@ -841,6 +903,14 @@ export const _createRun = internalMutation({
     if (args.triggeredByUserId && String(triggeredByUserId) !== String(args.triggeredByUserId)) {
       throw new Error("Authenticated actor does not match the current principal.");
     }
+    if (args.provider === "n8n") {
+      const prior = await ctx.db.query("workflowRuns")
+        .withIndex("by_workflow", (q) => q.eq("workflowId", args.workflowId)).collect();
+      if (prior.some(run => run.status === "queued" || run.status === "running")) {
+        throw new Error("This workflow already has an unfinished external run. Review its status before launching another run.");
+      }
+    }
+    if (!normalizeModuleSettings(await ctx.db.get(args.societyId)).workflows) throw new Error("Workflow execution is disabled for this organization.");
     const steps = stepsForRun(args.recipe, args.nodePreview);
     return await ctx.db.insert("workflowRuns", {
       societyId: args.societyId,
@@ -865,6 +935,7 @@ export const _requireRunAuthority = internalQuery({
     const workflow = run ? await ctx.db.get(run.workflowId) : null;
     const actorId = run?.triggeredByUserId ?? workflow?.createdByUserId;
     const actor = actorId ? await ctx.db.get(actorId) : null;
+    if (run && !normalizeModuleSettings(await ctx.db.get(run.societyId)).workflows) throw new Error("Workflow execution is disabled for this organization.");
     if (!run || !workflow || run.societyId !== workflow.societyId || workflow.status !== "active" ||
         !actor || actor.societyId !== run.societyId || !isActiveMembership(actor) || !hasPermission(actor.role, "tasks:write")) {
       throw new Error("Workflow execution authority has been revoked.");
@@ -888,7 +959,7 @@ export const _updateStep = internalMutation({
   returns: v.any(),
   handler: async (ctx, { id, stepIndex, status, note, output }) => {
     const run = await ctx.db.get(id);
-    if (!run) return;
+    if (!run || !["queued", "running"].includes(run.status)) return;
     const steps = run.steps.map((s, i) =>
       i === stepIndex
         ? { ...s, status, atISO: new Date().toISOString(), note: note ?? s.note, output: output ?? (s as any).output }
@@ -912,7 +983,7 @@ export const _markExternalQueued = internalMutation({
   returns: v.any(),
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.id);
-    if (!run) return;
+    if (!run || !["queued", "running"].includes(run.status)) return;
     await ctx.db.patch(args.id, {
       status: "running",
       externalRunId: args.externalRunId,
@@ -932,8 +1003,9 @@ export const _completeRun = internalMutation({
   returns: v.any(),
   handler: async (ctx, { id, status, output }) => {
     const run = await ctx.db.get(id);
+    if (!run || !["queued", "running"].includes(run.status)) return;
     const now = new Date().toISOString();
-    let steps = run?.steps ?? [];
+    let steps = run.steps ?? [];
     if (status === "failed" && steps.length > 0) {
       const errorNote =
         (output && typeof output === "object" && typeof (output as any).error === "string"
@@ -1208,8 +1280,10 @@ export const run = authorizedAction("workflows:run", action)({
         await sleep(400);
         await ctx.runQuery(internal.workflows._requireRunAuthority, { id: runId });
         const result = await handleStep(ctx, wf, i, rawIntake, nodes[i], args.actingUserId);
-        const manualRequired = typeof result === "object" && result?.manualRequired === true;
-        const note = typeof result === "string" ? result : result?.note;
+        const manualRequired = result === undefined || (typeof result === "object" && result?.manualRequired === true);
+        const note = result === undefined
+          ? "No internal executor is configured for this step. Complete the action manually or use a reviewed external recipe."
+          : typeof result === "string" ? result : result?.note;
         if (manualRequired) manualSteps.push(note ?? steps[i]?.label ?? `Step ${i + 1}`);
         await ctx.runMutation(internal.workflows._updateStep, {
           id: runId,

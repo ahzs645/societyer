@@ -992,6 +992,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "secrets:remove", handler: secretsFns.removePortable }),
 
   // aiAgents
+  definePortableQuery({ name: "aiAgents:listRuns", handler: aiAgentsFns.listRunsPortable }),
+  definePortableQuery({ name: "aiAgents:auditForRun", handler: aiAgentsFns.auditForRunPortable }),
   definePortableQuery({ name: "aiAgents:listDefinitions", handler: aiAgentsFns.listDefinitionsPortable }),
   definePortableQuery({ name: "aiAgents:listSkills", handler: aiAgentsFns.listSkillsPortable }),
   definePortableQuery({ name: "aiAgents:listAllSkills", handler: aiAgentsFns.listAllSkillsPortable }),

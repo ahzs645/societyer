@@ -17,11 +17,12 @@ export async function createCheckoutSession(args: {
   email: string;
   priceId?: string;
   metadata?: Record<string, string>;
+  demo?: boolean;
 }): Promise<CheckoutSession> {
   const p = providers.billing();
   const id = `cs_${Math.random().toString(36).slice(2, 10)}`;
   const expiresAtISO = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-  if (p.id === "demo") {
+  if (args.demo === true) {
     // Demo returns a deep-link the browser treats as "click-through and we're
     // done" — the Checkout page itself emulates the hosted-checkout UX.
     const meta = args.metadata ? `&meta=${encodeURIComponent(JSON.stringify(args.metadata))}` : "";
@@ -32,6 +33,8 @@ export async function createCheckoutSession(args: {
       expiresAtISO,
     };
   }
+
+  if (p.id === "demo") throw new Error("Membership checkout requires configured STRIPE_SECRET_KEY. Simulation is available only in an explicit demo workspace.");
 
   const secretKey = (globalThis as any)?.process?.env?.STRIPE_SECRET_KEY;
   if (!secretKey) {
@@ -67,6 +70,7 @@ export async function createCheckoutSession(args: {
 
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
+    signal: AbortSignal.timeout(15_000),
     headers: {
       Authorization: `Bearer ${secretKey}`,
       "Content-Type": "application/x-www-form-urlencoded",
@@ -75,12 +79,11 @@ export async function createCheckoutSession(args: {
   });
 
   if (!response.ok) {
-    const detail = (await response.text().catch(() => "")).trim();
-    throw new Error(detail || `Stripe checkout failed with status ${response.status}.`);
+    throw new Error(`Stripe checkout failed with status ${response.status}.`);
   }
 
   const data = await response.json().catch(() => ({}));
-  if (!(data as any)?.url) {
+  if (typeof (data as any)?.id !== "string" || typeof (data as any)?.url !== "string" || !String((data as any).url).startsWith("https://checkout.stripe.com/")) {
     throw new Error("Stripe checkout did not return a hosted URL.");
   }
 

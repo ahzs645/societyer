@@ -117,9 +117,16 @@ export const beginCheckout = authorizedAction("subscriptions:beginCheckout", act
   returns: v.any(),
   handler: async (ctx, args) => {
     const plan = await ctx.runQuery(api.subscriptions.getPlan, { id: args.planId });
-    if (!plan) throw new Error("Plan not found.");
+    if (!plan || String(plan.societyId) !== String(args.societyId)) throw new Error("Plan not found.");
+    if (!plan.active) throw new Error("This membership plan is inactive.");
+    if (!Number.isSafeInteger(plan.priceCents) || plan.priceCents < 0 || !["month", "year", "one_time"].includes(plan.interval)) throw new Error("This membership plan has invalid payment terms.");
+    const societies = await ctx.runQuery(api.society.list, {});
+    const society = societies.find((row: any) => row._id === args.societyId);
+    if (!society || society.disabledModules?.includes("membershipBilling")) throw new Error("Membership billing is disabled for this workspace.");
+    const demo = society.demoMode === true;
 
     const session = await createCheckoutSession({
+      demo,
       priceCents: plan.priceCents,
       currency: plan.currency,
       interval: plan.interval as any,
@@ -167,6 +174,8 @@ export const _createPending = internalMutation({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const plan = await ctx.db.get(args.planId);
+    if (!plan || plan.societyId !== args.societyId) throw new Error("Plan not found.");
     return await ctx.db.insert("memberSubscriptions", {
       societyId: args.societyId,
       planId: args.planId,
@@ -191,7 +200,11 @@ export const simulateActivation = authorizedMutation("subscriptions:simulateActi
   returns: v.any(),
   handler: async (ctx, args) => {
     const plan = await ctx.db.get(args.planId);
-    if (!plan) throw new Error("Plan not found.");
+    if (!plan || plan.societyId !== args.societyId) throw new Error("Plan not found.");
+    const society = await ctx.db.get(args.societyId);
+    if (society?.disabledModules?.includes("membershipBilling")) throw new Error("Membership billing is disabled for this workspace.");
+    if (society?.demoMode !== true) throw new Error("Payment simulation is available only in an explicit demo workspace.");
+    if (!plan.active) throw new Error("This membership plan is inactive.");
 
     const event = simulateWebhookFromCheckout({
       email: args.email,
@@ -205,8 +218,10 @@ export const simulateActivation = authorizedMutation("subscriptions:simulateActi
       .withIndex("by_email", (q) => q.eq("email", args.email))
       .collect();
     const match = pending.find(
-      (p) => p.planId === args.planId && p.status === "pending",
+      (p) => p.societyId === args.societyId && p.planId === args.planId && p.status === "pending" && p.demo === true,
     );
+
+    if (!match) throw new Error("No pending demo checkout is available to activate.");
 
     const periodEnd = new Date();
     if (plan.interval === "month") periodEnd.setMonth(periodEnd.getMonth() + 1);
@@ -250,26 +265,57 @@ export const handleStripeEvent = internalMutation({
   args: {
     type: v.string(),
     payload: v.string(),
+    eventId: v.string(),
   },
   returns: v.null(),
-  handler: async (ctx, { type, payload }) => {
+  handler: async (ctx, { type, payload, eventId }) => {
+    if (!eventId.trim()) throw new Error("Stripe event identifier is required.");
     const object = JSON.parse(payload);
+    let targetSocietyId: Id<"societies"> | undefined;
+    const checkout = ["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(type);
+    if (checkout) {
+      if (!["paid", "no_payment_required"].includes(object?.payment_status)) return null;
+      if (typeof object?.id !== "string" || !object.id.trim()) return null;
+      const email = object?.customer_email ?? object?.customer_details?.email;
+      if (typeof email !== "string" || !email.trim()) return null;
+      const metadata = object?.metadata ?? {};
+      let plan: any;
+      try { plan = await ctx.db.get(metadata.planId); } catch { return null; }
+      if (!plan || plan.societyId !== metadata.societyId) return null;
+      targetSocietyId = plan.societyId;
+    } else if (["invoice.paid", "invoice.payment_failed", "customer.subscription.deleted", "customer.subscription.updated"].includes(type)) {
+      const subscriptionId = type.startsWith("invoice.") ? object?.subscription : object?.id;
+      if (!subscriptionId) return null;
+      const matches = (await ctx.db.query("memberSubscriptions").collect()).filter(row => row.stripeSubscriptionId === subscriptionId && row.demo === false);
+      if (matches.length !== 1) return null;
+      targetSocietyId = matches[0].societyId;
+    }
+    if (!targetSocietyId) return null;
+    const receipts = await ctx.db.query("integrationSyncStates")
+      .withIndex("by_society_provider_resource", q => q.eq("societyId", targetSocietyId!).eq("provider", "stripe").eq("resourceType", "billing_event")).collect();
+    if (receipts.some(row => row.resourceId === eventId || (checkout && row.externalResourceId === object.id))) return null;
+    const now = new Date().toISOString();
+    await ctx.db.insert("integrationSyncStates", {
+      societyId: targetSocietyId, provider: "stripe", resourceType: "billing_event",
+      resourceId: eventId, externalResourceId: checkout ? object.id : undefined,
+      status: "processed", createdAtISO: now, updatedAtISO: now,
+    });
 
-    if (type === "checkout.session.completed") {
+    if (checkout) {
       const metadata = object?.metadata ?? {};
       const societyId = metadata.societyId as Id<"societies"> | undefined;
       const planId = metadata.planId as Id<"subscriptionPlans"> | undefined;
       const email = object?.customer_email ?? object?.customer_details?.email;
       if (!societyId || !planId || !email) return null;
       const plan = await ctx.db.get(planId);
-      if (!plan) return null;
+      if (!plan || plan.societyId !== societyId) return null;
 
       const pending = await ctx.db
         .query("memberSubscriptions")
         .withIndex("by_email", (q) => q.eq("email", email))
         .collect();
       const match = pending.find(
-        (row) => row.societyId === societyId && row.planId === planId && row.status === "pending",
+        (row) => row.societyId === societyId && row.planId === planId && row.status === "pending" && row.demo === false,
       );
       const members = await ctx.db
         .query("members")
@@ -328,7 +374,7 @@ export const handleStripeEvent = internalMutation({
       if (!subscriptionId) return null;
       const subscriptions = await ctx.db.query("memberSubscriptions").collect();
       const match = subscriptions.find(
-        (row) => row.stripeSubscriptionId === subscriptionId,
+        (row) => row.stripeSubscriptionId === subscriptionId && row.societyId === targetSocietyId && row.demo === false,
       );
       if (!match) return null;
       const patch: Record<string, unknown> = {
@@ -373,7 +419,7 @@ export const handleStripeEvent = internalMutation({
       if (!subscriptionId) return null;
       const subscriptions = await ctx.db.query("memberSubscriptions").collect();
       const match = subscriptions.find(
-        (row) => row.stripeSubscriptionId === subscriptionId,
+        (row) => row.stripeSubscriptionId === subscriptionId && row.societyId === targetSocietyId && row.demo === false,
       );
       if (!match) return null;
       const status =

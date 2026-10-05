@@ -1,0 +1,42 @@
+{
+  "kind": "actual-unsigned-unpublished-linux-directory-package",
+  "platform": "linux",
+  "arch": "x64",
+  "electronVersion": "42.3.0",
+  "cases": [
+    {
+      "name": "Linux electron-builder directory package produced",
+      "passed": true
+    },
+    {
+      "name": "ASAR contains bundled renderer, native main, camera policy and assets",
+      "passed": true
+    },
+    {
+      "name": "ASAR excludes qualification harness, environment files and test certificates",
+      "passed": true
+    },
+    {
+      "name": "Actual packaged app boots bundled desktop screen",
+      "passed": true
+    },
+    {
+      "name": "Production userData/migration is isolated inside disposable appData",
+      "passed": true
+    },
+    {
+      "name": "Packaged native vault writes and reads file bytes",
+      "passed": true
+    },
+    {
+      "name": "Bundled screen reloads offline",
+      "passed": true
+    }
+  ],
+  "limits": [
+    "Directory package only; AppImage installer not qualified",
+    "No macOS or Windows execution, signing or notarization",
+    "No public release or deployment",
+    "No physical camera or enterprise SSO qualification"
+  ]
+}

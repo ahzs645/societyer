@@ -183,6 +183,7 @@ export function RecordTable({
   const viewType = useRecordTableState((s) => s.type);
   const kanbanFieldMetadataId = useRecordTableState((s) => s.kanbanFieldMetadataId);
   const calendarFieldMetadataId = useRecordTableState((s) => s.calendarFieldMetadataId);
+  const calendarLayout = useRecordTableState((s) => s.calendarLayout);
   const filtered = useFilteredRecords();
   const { objectMetadata, onRecordClick, onUpdate, onCreate, onReorder } = useRecordTableContextOrThrow();
   const handle = useRecordTableStoreHandle();
@@ -508,6 +509,8 @@ export function RecordTable({
       <div className="record-table__view-surface">
         <CalendarView<any>
           items={filtered}
+          layout={calendarLayout}
+          onLayoutChange={(layout) => handle.get().setCalendarLayout(layout)}
           getId={(record) => String(record._id)}
           getDate={(record) => record[dateColumn.field.name]}
           getLabel={(record) => String(record[labelColumn?.field.name ?? "_id"] ?? "Untitled")}

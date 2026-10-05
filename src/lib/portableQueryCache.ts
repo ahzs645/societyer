@@ -79,6 +79,15 @@ export class PortableQueryCache {
     // timing — a hydration that completes between a component's render and its
     // onUpdate subscription would otherwise leave that query stale.
     this.store.onUpdate(() => {
+      // Retained snapshots bridge render/subscription churn only while the
+      // store is unchanged. An inactive miss must not be consumed before a
+      // fresh authorized query after the missing record has been created.
+      for (const cacheKey of this.portableCache.keys()) {
+        if (this.portableWatchSpecs.has(cacheKey)) continue;
+        this.portableCache.delete(cacheKey);
+        this.portableErrors.delete(cacheKey);
+        this.paginatedSnapshots.delete(cacheKey);
+      }
       for (const [cacheKey, spec] of this.portableWatchSpecs) {
         if (spec.pagination) this.recomputePortablePaginated(cacheKey, spec);
         else this.recomputePortable(cacheKey, spec.name, spec.args);

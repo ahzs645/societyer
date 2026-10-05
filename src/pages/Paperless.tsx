@@ -26,7 +26,7 @@ export function PaperlessPage() {
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const [autoCreateTags, setAutoCreateTags] = useState(true);
-  const [autoUpload, setAutoUpload] = useState(false);
+  const [, setAutoUpload] = useState(false);
   const [tagPrefix, setTagPrefix] = useState("societyer");
   const [busy, setBusy] = useState(false);
 
@@ -44,18 +44,20 @@ export function PaperlessPage() {
   const connection = status?.connection;
   const runtime = status?.runtime;
   const connected = connection?.status === "connected";
+  const demoAvailable = society.demoMode === true || isStaticDemoRuntime();
+  const providerAvailable = runtime?.live === true || demoAvailable;
 
   const save = async () => {
-    if (!canConfigure || busy) return;
+    if (!canConfigure || !providerAvailable || busy) return;
     setBusy(true);
     try {
       await upsertConnection({
         societyId: society._id,
         autoCreateTags,
-        autoUpload,
+        autoUpload: false,
         tagPrefix,
       });
-      toast.success("Paperless-ngx connection enabled");
+      toast.success(demoAvailable ? "Paperless demo connection enabled" : "Paperless-ngx connection enabled");
     } catch (error: any) {
       toast.error(error?.message ?? "Couldn't save Paperless-ngx settings");
     } finally {
@@ -92,13 +94,14 @@ export function PaperlessPage() {
             <button className="btn-action" disabled={busy || !canConfigure} onClick={runTest}>
               <RefreshCw size={12} /> Test
             </button>
-            <button className="btn-action btn-action--primary" disabled={busy || !canConfigure} onClick={save}>
+            <button className="btn-action btn-action--primary" disabled={busy || !canConfigure || !providerAvailable} onClick={save}>
               <UploadCloud size={12} /> {connected ? "Save connection" : "Enable connection"}
             </button>
           </>
         }
       />
 
+      {!localOnly && !providerAvailable && <p className="muted" role="status">Paperless is not configured on this server. An administrator must configure its server address and API token before enabling synchronization. Test reports missing configuration.</p>}
       {localOnly && <p className="muted" role="status">Paperless connections and OCR synchronization require a connected workspace. Local document records and files remain available in Documents and Library.</p>}
       <div className="grid two" style={{ marginBottom: 16 }}>
         <div className="card">
@@ -110,13 +113,13 @@ export function PaperlessPage() {
             <div className="row" style={{ justifyContent: "space-between" }}>
               <span className="muted">Status</span>
               <Badge tone={connected ? "success" : connection?.status === "error" ? "danger" : "warn"}>
-                {localOnly ? "Unavailable locally" : connected ? "Connected" : connection?.status ?? "Not enabled"}
+                {localOnly ? "Unavailable locally" : connected ? connection?.demo ? "Demo connection" : "Connected" : connection?.status ?? "Not enabled"}
               </Badge>
             </div>
             <div className="row" style={{ justifyContent: "space-between" }}>
               <span className="muted">Runtime</span>
               <Badge tone={runtime?.live ? "success" : "info"}>
-                {localOnly ? "Local records" : runtime?.live ? "Live Paperless-ngx" : "Demo adapter"}
+                {localOnly ? "Local records" : demoAvailable ? "Demo adapter" : runtime?.live ? "Live Paperless-ngx" : "Not configured"}
               </Badge>
             </div>
             <div className="muted">
@@ -134,7 +137,7 @@ export function PaperlessPage() {
             {connection?.lastError && <div className="alert alert--danger">{connection.lastError}</div>}
             {isLocalDataRuntime() && <p className="muted">This local adapter previews Paperless records. Disconnect the external provider from its connected server workspace.</p>}
             <div className="row">
-              <button className="btn btn--accent" disabled={busy || !canConfigure} onClick={save}>
+              <button className="btn btn--accent" disabled={busy || !canConfigure || !providerAvailable} onClick={save}>
                 {connected ? "Save settings" : "Enable connection"}
               </button>
               {connection && (
@@ -172,11 +175,11 @@ export function PaperlessPage() {
               hint="When enabled, Societyer creates any tags that don't already exist in Paperless before uploading a document."
             />
             <Toggle
-              disabled={!canConfigure}
-              checked={autoUpload}
+              disabled
+              checked={false}
               onChange={setAutoUpload}
               label="Auto-upload new document versions"
-              hint="New uploads from Documents and Versions are sent to Paperless-ngx after local storage succeeds."
+              hint="Automatic uploads are not available yet. Use Sync to Paperless on a stored document or version; existing automatic-upload settings do not start background jobs."
             />
             <Field label="Tag prefix">
               <input

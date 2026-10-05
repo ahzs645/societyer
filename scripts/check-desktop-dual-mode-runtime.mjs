@@ -18,6 +18,12 @@ assert.ok(existsSync(path.join(root, "dist-electron/electron/desktopMode.js")), 
 await mkdir(path.join(root, "tmp"), { recursive: true });
 const temporary = await mkdtemp(path.join(root, "tmp/desktop-mode-runtime-"));
 await mkdir(path.join(temporary, "user-data"));
+const cameraTag = "CAMERA-QUALIFICATION-QR";
+const qrImage = path.join(temporary, "camera-qr.png");
+const qrVideo = path.join(temporary, "camera-qr.y4m");
+await writeFile(qrImage, await require("qrcode").toBuffer(cameraTag, { width: 180, margin: 2, errorCorrectionLevel: "M" }));
+execFileSync("ffmpeg", ["-y", "-threads", "1", "-filter_threads", "1", "-loop", "1", "-i", qrImage, "-vf", "pad=640:480:230:150:color=white",
+  "-pix_fmt", "yuv420p", "-r", "15", "-t", "1", "-f", "yuv4mpegpipe", qrVideo], { stdio: "ignore", timeout: 10000 });
 const certificate = path.join(temporary, "certificate.pem");
 const privateKey = path.join(temporary, "private-key.pem");
 execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", privateKey,
@@ -56,6 +62,8 @@ import { configureApplicationMenu } from "./menu.js";
 app.setPath("userData", process.env.SOCIETYER_QUALIFICATION_USER_DATA);
 app.commandLine.appendSwitch("ignore-certificate-errors-spki-list", process.env.SOCIETYER_QUALIFICATION_CERTIFICATE_PIN);
 app.commandLine.appendSwitch("no-proxy-server");
+app.commandLine.appendSwitch("use-fake-device-for-media-stream");
+app.commandLine.appendSwitch("use-file-for-fake-video-capture", process.env.SOCIETYER_QUALIFICATION_CAMERA_VIDEO);
 registerDesktopProtocolPrivileges();
 const environment = createDesktopEnvironment(import.meta.dirname);
 environment.distIndexPath = process.env.SOCIETYER_QUALIFICATION_DIST_INDEX;
@@ -69,7 +77,16 @@ configureDesktopModes(async () => {
 registerIpc(environment);
 globalThis.__desktopQualification = {getDesktopModeState, openHostedMode, returnToLocalMode};
 globalThis.__blockedNavigation = 0;
-dialog.showMessageBox = async () => { globalThis.__blockedNavigation += 1; return {response:0, checkboxChecked:false}; };
+globalThis.__cameraChoice = 0;
+globalThis.__cameraPrompts = 0;
+dialog.showMessageBox = async (_window, options) => {
+ if (options?.title === "Camera access") {
+  globalThis.__cameraPrompts += 1;
+  if (globalThis.__cameraChoice === "pending") return new Promise((resolve) => { globalThis.__pendingCameraResolve = resolve; });
+  return {response:globalThis.__cameraChoice, checkboxChecked:false};
+ }
+ globalThis.__blockedNavigation += 1; return {response:0, checkboxChecked:false};
+};
 app.on("window-all-closed", () => app.quit());
 app.whenReady().then(async () => {
  registerDesktopAppProtocol(environment);
@@ -99,12 +116,14 @@ try {
     env: { ...process.env, DISPLAY: display, VITE_DEV_SERVER_URL: "", SOCIETYER_ELECTRON_DEV: "",
       SOCIETYER_QUALIFICATION_USER_DATA: path.join(temporary, "user-data"),
       SOCIETYER_QUALIFICATION_CERTIFICATE_PIN: pin,
+      SOCIETYER_QUALIFICATION_CAMERA_VIDEO: qrVideo,
       SOCIETYER_QUALIFICATION_DIST_INDEX: path.join(distRoot, "index.html"),
       SOCIETYER_WORKSPACE_DIR: path.join(temporary, "local-vault"),
     } });
   application = await launch();
   const local = await application.firstWindow();
   await local.waitForFunction(() => !!window.societyerDesktop);
+  await local.getByRole("region", { name: "Desktop workspace modes" }).waitFor({ timeout: 30000 });
   const file = await local.evaluate(async () => {
     localStorage.setItem("desktop-qualification-local", "retained");
     const bridge = window.societyerDesktop;
@@ -114,6 +133,77 @@ try {
   });
   assert.ok(file.workspace.rootPath);
   record("Bundled local renderer and native workspace/file APIs");
+  const copyText = async (page) => {
+    await application.evaluate(({ BrowserWindow }, url) => {
+      BrowserWindow.getAllWindows().find((window) => window.webContents.getURL() === url)?.focus();
+    }, page.url());
+    await page.evaluate(() => {
+      const button = document.createElement("button"); button.id = "qualification-copy"; button.textContent = "Qualification copy";
+      button.onclick = () => { window.__copyQualification = navigator.clipboard.writeText("Societyer qualification clipboard copy")
+        .then(() => true, () => false); }; document.body.append(button);
+    });
+    await page.locator("#qualification-copy").click();
+    const copied = await page.evaluate(() => window.__copyQualification);
+    await page.locator("#qualification-copy").evaluate((element) => element.remove());
+    return copied;
+  };
+  assert.equal(await copyText(local), true);
+  record("Trusted bundled renderer retains user-initiated clipboard copy");
+  const capture = (page, constraints = { video: true }) => page.evaluate(async (constraints) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const tracks = stream.getTracks(); tracks.forEach((track) => track.stop());
+      return { allowed: true, kinds: tracks.map((track) => track.kind) };
+    } catch (error) { return { allowed: false, name: error.name }; }
+  }, constraints);
+  assert.equal((await capture(local)).allowed, false);
+  await application.evaluate(() => { globalThis.__cameraChoice = 1; });
+  assert.deepEqual(await capture(local), { allowed: true, kinds: ["video"] });
+  assert.equal((await capture(local, { video: true, audio: true })).allowed, false);
+  await local.evaluate(() => { location.hash = "#/app/society/new"; });
+  await local.getByRole("button", { name: "This is my first workspace", exact: true }).click();
+  await local.getByRole("button", { name: "No, prepare a new incorporation", exact: true }).click();
+  await local.getByLabel("Act you plan to incorporate under", { exact: true }).click();
+  await local.getByRole("option", { name: /^BC society \(nonprofit\)/ }).click();
+  await local.getByRole("button", { name: "Continue", exact: true }).click();
+  await local.getByRole("textbox", { name: "Proposed name / working name", exact: true }).fill("Disposable camera qualification society");
+  await local.getByRole("button", { name: "Continue", exact: true }).click();
+  await local.getByRole("button", { name: "Continue", exact: true }).click();
+  await local.getByRole("button", { name: "Create workspace", exact: true }).click();
+  await local.waitForURL(/\/app\/workflows\//);
+  await local.evaluate(() => { location.hash = "#/app/assets"; });
+  await local.getByRole("button", { name: "Scan", exact: true }).click();
+  const scanner = local.getByRole("dialog", { name: "Scan an asset", exact: true });
+  await scanner.locator("video").waitFor();
+  await scanner.locator("video").evaluate((video) => new Promise((resolve, reject) => {
+    const check = () => video.readyState >= 2 ? resolve() : setTimeout(check, 50); check();
+    setTimeout(() => reject(new Error("Fake scanner video did not become ready.")), 10000);
+  }));
+  assert.equal(await scanner.locator("video").evaluate((video) => {
+    window.__scannerQualificationTracks = video.srcObject.getTracks();
+    return window.__scannerQualificationTracks.every((track) => track.readyState === "live");
+  }), true);
+  await local.getByText("No asset found for that code", { exact: true }).waitFor({ timeout: 15000 });
+  assert.equal(await local.getByText(cameraTag, { exact: true }).count() > 0, true);
+  await scanner.getByRole("button", { name: "Close", exact: true }).click();
+  await local.waitForFunction(() => window.__scannerQualificationTracks.every((track) => track.readyState === "ended"));
+  await local.getByRole("button", { name: "New asset", exact: true }).click();
+  const newAsset = local.getByRole("dialog", { name: "New asset", exact: true });
+  await newAsset.getByRole("textbox", { name: "Name", exact: true }).fill("Disposable camera-scanned asset");
+  await newAsset.getByRole("textbox", { name: "Asset tag", exact: true }).fill(cameraTag);
+  await newAsset.getByRole("button", { name: /^(Create|Save asset)$/ }).click();
+  await newAsset.waitFor({ state: "hidden" });
+  await local.getByRole("button", { name: "Scan", exact: true }).click();
+  await local.waitForURL(/\/app\/assets\/[^/]+$/);
+  await local.getByRole("heading", { name: cameraTag, exact: true }).waitFor();
+  record("Actual bundled scanner decodes fake QR, resolves a genuinely created local asset and releases camera on close");
+  await local.evaluate(() => { location.hash = "#/app/setup"; });
+  await local.getByRole("region", { name: "Desktop workspace modes" }).waitFor();
+  await local.evaluate(async () => {
+    const video = document.createElement("video"); video.id = "qualification-camera";
+    video.srcObject = await navigator.mediaDevices.getUserMedia({ video: true }); document.body.append(video);
+  });
+  record("Bundled local camera requires consent and rejects microphone with fake device");
   await assert.rejects(local.evaluate(() => window.societyerDesktop.openHostedMode({ origin: "http://example.com", authenticationOrigins: [] })));
   record("HTTP hosted origin rejected before navigation");
   await local.evaluate(async ({ origin, authenticationOrigin }) => {
@@ -133,6 +223,25 @@ try {
   assert.ok(!preferences.preload);
   await hosted.evaluate(() => { localStorage.setItem("desktop-qualification-hosted", "retained"); document.cookie = "qualification=retained; Secure; SameSite=Lax; Path=/"; });
   record("HTTPS hosted mode sandboxed without native bridge");
+  assert.equal(await copyText(hosted), true);
+  record("Main hosted renderer supports user-initiated clipboard copy without clipboard-read grant");
+  assert.equal(await local.evaluate(() => document.querySelector("#qualification-camera").srcObject.getTracks().every((track) => track.readyState === "ended")), true);
+  await application.evaluate(() => { globalThis.__cameraChoice = 0; });
+  assert.equal((await capture(local)).allowed, false);
+  assert.equal((await capture(hosted)).allowed, false);
+  await application.evaluate(() => { globalThis.__cameraChoice = 1; });
+  assert.deepEqual(await capture(hosted), { allowed: true, kinds: ["video"] });
+  assert.equal((await capture(hosted, { audio: true })).allowed, false);
+  assert.equal((await capture(hosted, { audio: true, video: true })).allowed, false);
+  record("Hosted camera is consent-only and local mode switch ends local video tracks");
+  const frame = await hosted.evaluateHandle((url) => {
+    const iframe = document.createElement("iframe"); iframe.src = url; iframe.allow = "camera"; document.body.append(iframe); return iframe;
+  }, `${origin}/camera-frame`);
+  const nested = await frame.asElement().contentFrame();
+  await nested.waitForLoadState();
+  assert.equal((await capture(nested)).allowed, false);
+  await frame.dispose();
+  record("Same-origin embedded frames cannot reuse main-app camera consent");
   await hosted.evaluate(() => new Promise((resolve, reject) => {
     window.__qualificationSocket = new WebSocket(location.origin.replace("https:", "wss:"));
     window.__qualificationSocket.onopen = () => resolve(true);
@@ -143,8 +252,13 @@ try {
   const popup = await popupPromise;
   await popup.waitForLoadState();
   assert.equal(await popup.evaluate(() => typeof window.societyerDesktop), "undefined");
+  const promptsBeforePopup = await application.evaluate(() => globalThis.__cameraPrompts);
+  assert.equal((await capture(popup)).allowed, false);
   await popup.evaluate((url) => { window.location.href = `${url}/api/auth/callback?code=fixture`; }, origin);
   await popup.waitForURL(`${origin}/api/auth/callback?code=fixture`);
+  assert.equal((await capture(popup)).allowed, false);
+  assert.equal(await application.evaluate(() => globalThis.__cameraPrompts), promptsBeforePopup);
+  record("SSO popup and same-origin callback cannot request or inherit camera consent");
   record("Explicit HTTPS SSO popup and callback isolated from native APIs");
   await popup.close();
   await hosted.evaluate(() => { window.location.href = "https://untrusted-qualification.invalid/?code=fixture"; });
@@ -170,6 +284,25 @@ try {
   assert.equal(await hosted.evaluate(() => localStorage.getItem("desktop-qualification-hosted")), "retained");
   assert.match(await hosted.evaluate(() => document.cookie), /qualification=retained/);
   record("Reopening hosted mode retains origin-scoped web session");
+  await application.evaluate(() => { globalThis.__cameraChoice = 0; });
+  assert.equal((await capture(hosted)).allowed, false);
+  record("Closing and reopening hosted mode revokes camera grant despite durable web session");
+  await application.evaluate(() => { globalThis.__cameraChoice = "pending"; });
+  await hosted.evaluate(() => {
+    void navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => stream.getTracks().forEach((track) => track.stop())).catch(() => {});
+  });
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (await application.evaluate(() => typeof globalThis.__pendingCameraResolve === "function")) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal(await application.evaluate(() => typeof globalThis.__pendingCameraResolve), "function");
+  await application.evaluate(() => globalThis.__desktopQualification.returnToLocalMode());
+  await application.evaluate(() => { globalThis.__pendingCameraResolve({ response: 1, checkboxChecked: false }); globalThis.__cameraChoice = 0; });
+  await assertMode(application, "local");
+  await application.evaluate(() => globalThis.__desktopQualification.openHostedMode());
+  hosted = application.windows().find((page) => page.url().startsWith(origin));
+  assert.equal((await capture(hosted)).allowed, false);
+  record("Switching locally cancels pending camera consent and rejects its late approval callback");
   await application.close(); application = undefined;
   application = await launch();
   await application.firstWindow();
@@ -203,7 +336,7 @@ try {
   await mkdir(path.join(root, "artifacts/offline"), { recursive: true });
   await writeFile(path.join(root, "artifacts/offline/desktop-dual-mode-runtime.json"), `${JSON.stringify({
     kind: "actual-electron-main-and-bundled-renderer-with-disposable-https-fixture", electronVersion: "42.3.0", cases,
-    limits: ["Hosted fixture is not live Convex or enterprise SSO", "No signed macOS or Windows installer qualification", "Local and hosted datasets are separate"],
+    limits: ["Hosted fixture is not live Convex or enterprise SSO", "Camera uses Chromium fake device, not physical webcam or macOS/Windows OS permission", "No signed macOS or Windows installer qualification", "Local and hosted datasets are separate"],
   }, null, 2)}\n`);
   console.log(`Desktop dual-mode runtime checks passed (${cases.length}/${cases.length}).`);
 } finally {

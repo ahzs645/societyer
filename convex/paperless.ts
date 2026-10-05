@@ -1,8 +1,8 @@
 import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
-import { action, mutation, query } from "./lib/untypedServer";
+import { action, internalMutation, mutation, query } from "./lib/untypedServer";
 import type { ActionCtx } from "./_generated/server";
 import { v } from "convex/values";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { requireRole } from "./users";
 import {
@@ -25,9 +25,23 @@ import {
   sourcePullContextPortable,
   authorizeMeetingImportPortable,
   getSyncPortable,
-  recordConnectionTestPortable,
+  recordVerifiedConnectionTestPortable,
 } from "../shared/functions/paperless";
+import { requireDocumentAccess } from "../shared/functions/documents";
+import { requirePermissionPortable } from "../shared/functions/permissions";
+import { requireOperatorPaperlessWorkspace, providerDeploymentEnv } from "../shared/providerWorkspaceBindings";
+import { requireFunctionAction } from "../shared/functions/actionPolicy";
+import { requireEnabledModule } from "./lib/moduleSettings";
 import { claimStorageId, getOwned, getOwnedChild, requireSocietyMembership } from "../shared/functions/access";
+
+async function paperlessDemoForWorkspace(ctx: ActionCtx, societyId: string) {
+  const societies = await ctx.runQuery(api.society.list, {});
+  const society = societies.find((row: any) => row._id === societyId);
+  if (!society || society.disabledModules?.includes("paperless")) throw new Error("Paperless is disabled for this workspace.");
+  const demo = society.demoMode === true;
+  if (!demo) requireOperatorPaperlessWorkspace(societyId, providerDeploymentEnv("PAPERLESS_SOCIETY_ID"));
+  return demo;
+}
 
 async function authorizePaperlessAction(
   ctx: ActionCtx,
@@ -248,7 +262,7 @@ export const pullSourceDocument = authorizedAction("paperless:pullSourceDocument
       throw new Error("This source document is not linked to a Paperless document id.");
     }
 
-    const pulled = await downloadPaperlessDocument(paperlessId, args.original ?? false);
+    const pulled = await downloadPaperlessDocument(paperlessId, args.original ?? false, { demo: await paperlessDemoForWorkspace(ctx, args.societyId) });
     const storageId = await ctx.storage.store(pulled.blob);
     await ctx.runMutation(api.paperless.recordPulledSourceDocument, {
       societyId: args.societyId,
@@ -292,6 +306,8 @@ export const recordPulledSourceDocument = authorizedMutation("paperless:recordPu
     const portableCtx = await toPortableMutationCtx(ctx);
     await requireSocietyMembership(portableCtx, args.societyId);
     const document = await getOwned(portableCtx, "documents", args.documentId, args.societyId);
+    await requirePermissionPortable(portableCtx, args.societyId, "settings:write");
+    await requireDocumentAccess(portableCtx, String(args.documentId), "edit");
     await claimStorageId(portableCtx, args.storageId, args.societyId);
     const existingContent = parseJsonObject(document.content);
     await ctx.db.patch(args.documentId, {
@@ -329,6 +345,7 @@ export const createMeetingMinutesImportSession = authorizedAction("paperless:cre
   handler: async (ctx, args) => {
     await authorizePaperlessAction(ctx, args.societyId, args.actingUserId);
     const docs = await listPaperlessDocuments({
+      demo: await paperlessDemoForWorkspace(ctx, args.societyId),
       query: args.query,
       maxDocuments: args.maxDocuments ?? 500,
     });
@@ -398,6 +415,7 @@ export const createDiscoveryImportSession = authorizedAction("paperless:createDi
     await authorizePaperlessAction(ctx, args.societyId, args.actingUserId);
 
     const docs = await listPaperlessDocuments({
+      demo: await paperlessDemoForWorkspace(ctx, args.societyId),
       query: args.query,
       maxDocuments: args.maxDocuments ?? 1179,
     });
@@ -462,6 +480,7 @@ export const createTransposedImportSession = authorizedAction("paperless:createT
     await authorizePaperlessAction(ctx, args.societyId, args.actingUserId);
 
     const docs = await listPaperlessDocuments({
+      demo: await paperlessDemoForWorkspace(ctx, args.societyId),
       query: args.query,
       maxDocuments: args.maxDocuments ?? 1179,
     });
@@ -514,6 +533,7 @@ export const createBylawsHistoryImportSession = authorizedAction("paperless:crea
 
     const query = args.query?.trim() || "bylaws by-laws constitution special resolution form 10";
     const docs = await listPaperlessDocuments({
+      demo: await paperlessDemoForWorkspace(ctx, args.societyId),
       query,
       maxDocuments: args.maxDocuments ?? 500,
     });
@@ -580,15 +600,21 @@ export const upsertConnection = authorizedMutation("paperless:upsertConnection",
       .collect()
       .then((rows) => rows[0] ?? null);
     const runtime = paperlessRuntimeStatus();
+    const society = await ctx.db.get(args.societyId);
+    if (!society || society.disabledModules?.includes("paperless")) throw new Error("Paperless is disabled for this workspace.");
+    const demo = society.demoMode === true;
+    if (args.autoUpload) throw new Error("Automatic Paperless uploads are not available. Save the connection and sync document versions manually.");
+    if (!demo) requireOperatorPaperlessWorkspace(args.societyId, providerDeploymentEnv("PAPERLESS_SOCIETY_ID"));
+    if (!runtime.live && !demo) throw new Error("Paperless connection requires PAPERLESS_NGX_URL and PAPERLESS_NGX_TOKEN.");
     const patch = {
-      status: "connected",
+      status: demo ? "connected" : "configured",
       baseUrl: runtime.baseUrl,
       autoCreateTags: args.autoCreateTags,
       autoUpload: args.autoUpload,
       tagPrefix: normalizeTagPrefix(args.tagPrefix),
       connectedAtISO: new Date().toISOString(),
       lastError: undefined,
-      demo: !runtime.live,
+      demo,
     };
 
     if (existing) {
@@ -631,8 +657,8 @@ export const testConnection = authorizedAction("paperless:testConnection", actio
   returns: v.any(),
   handler: async (ctx, { societyId }) => {
     await ctx.runQuery(api.paperless.listConnection, { societyId });
-    const result = await testPaperlessConnection();
-    await ctx.runMutation(api.paperless.recordConnectionTest, {
+    const result = await testPaperlessConnection({ demo: await paperlessDemoForWorkspace(ctx, societyId) });
+    await ctx.runMutation(internal.paperless.recordConnectionTest, {
       societyId,
       ok: result.ok,
       baseUrl: result.baseUrl,
@@ -646,7 +672,7 @@ export const testConnection = authorizedAction("paperless:testConnection", actio
 });
 
 
-export const recordConnectionTest = authorizedMutation("paperless:recordConnectionTest", mutation)({
+export const recordConnectionTest = internalMutation({
   args: {
     societyId: v.id("societies"),
     ok: v.boolean(),
@@ -657,7 +683,11 @@ export const recordConnectionTest = authorizedMutation("paperless:recordConnecti
     demo: v.boolean(),
   },
   returns: v.any(),
-  handler: async (ctx, args) => recordConnectionTestPortable(await toPortableMutationCtx(ctx), args),
+  handler: async (ctx, args) => {
+    const portableCtx = await toPortableMutationCtx(ctx);
+    await requireFunctionAction(portableCtx, "paperless:testConnection", "action", { societyId: args.societyId });
+    return recordVerifiedConnectionTestPortable(portableCtx, args);
+  },
 });
 
 
@@ -678,6 +708,8 @@ export const syncContext = authorizedQuery("paperless:syncContext", query)({
       required: "Director",
     });
     const document = await getOwned(portableCtx, "documents", args.documentId, args.societyId);
+    await requireDocumentAccess(portableCtx, String(args.documentId), "edit");
+    await requireDocumentAccess(portableCtx, String(args.documentId), "download");
     const connection = await ctx.db
       .query("paperlessConnections")
       .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
@@ -740,6 +772,7 @@ export const syncDocument = authorizedAction("paperless:syncDocument", action)({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const demo = await paperlessDemoForWorkspace(ctx, args.societyId);
     const syncCtx = await ctx.runQuery(api.paperless.syncContext, args);
     if (!syncCtx.source) {
       throw new Error("This document has no stored file or version to send to Paperless-ngx.");
@@ -751,6 +784,7 @@ export const syncDocument = authorizedAction("paperless:syncDocument", action)({
 
     if (syncCtx.source.kind === "version") {
       if (syncCtx.source.provider === "demo") {
+        if (!demo) throw new Error("Simulated document versions cannot be uploaded to a live Paperless archive.");
         blob = new Blob([`Demo Paperless document for ${title}`], {
           type: syncCtx.source.mimeType ?? "text/plain",
         });
@@ -779,6 +813,7 @@ export const syncDocument = authorizedAction("paperless:syncDocument", action)({
 
     try {
       const result = await uploadDocumentToPaperless({
+        demo,
         blob,
         fileName,
         title,
@@ -787,7 +822,7 @@ export const syncDocument = authorizedAction("paperless:syncDocument", action)({
         autoCreateTags: syncCtx.connection.autoCreateTags,
       });
       const status = result.documentId ? "complete" : "queued";
-      await ctx.runMutation(api.paperless.recordSyncResult, {
+      await ctx.runMutation(internal.paperless.recordSyncResult, {
         societyId: args.societyId,
         documentId: args.documentId,
         versionId: args.versionId ?? syncCtx.version?._id,
@@ -802,7 +837,7 @@ export const syncDocument = authorizedAction("paperless:syncDocument", action)({
       });
       return { ...result, status, tags: syncCtx.tags };
     } catch (error: any) {
-      await ctx.runMutation(api.paperless.recordSyncResult, {
+      await ctx.runMutation(internal.paperless.recordSyncResult, {
         societyId: args.societyId,
         documentId: args.documentId,
         versionId: args.versionId ?? syncCtx.version?._id,
@@ -825,8 +860,8 @@ export const refreshSync = authorizedAction("paperless:refreshSync", action)({
   handler: async (ctx, { syncId }) => {
     const sync = await ctx.runQuery(api.paperless.getSync, { id: syncId });
     if (!sync?.paperlessTaskId) return null;
-    const task = await getPaperlessTask(sync.paperlessTaskId);
-    await ctx.runMutation(api.paperless.recordSyncRefresh, {
+    const task = await getPaperlessTask(sync.paperlessTaskId, { demo: await paperlessDemoForWorkspace(ctx, sync.societyId) });
+    await ctx.runMutation(internal.paperless.recordSyncRefresh, {
       syncId,
       status: task.status,
       paperlessDocumentId: task.documentId,
@@ -838,7 +873,7 @@ export const refreshSync = authorizedAction("paperless:refreshSync", action)({
 });
 
 
-export const recordSyncResult = authorizedMutation("paperless:recordSyncResult", mutation)({
+export const recordSyncResult = internalMutation({
   args: {
     societyId: v.id("societies"),
     documentId: v.id("documents"),
@@ -856,8 +891,11 @@ export const recordSyncResult = authorizedMutation("paperless:recordSyncResult",
   returns: v.any(),
   handler: async (ctx, args) => {
     const portableCtx = await toPortableMutationCtx(ctx);
+    await requireFunctionAction(portableCtx, "paperless:syncDocument", "action", { societyId: args.societyId, documentId: args.documentId, versionId: args.versionId });
+    await requireEnabledModule(ctx, args.societyId, "paperless");
     await requireSocietyMembership(portableCtx, args.societyId);
     await getOwned(portableCtx, "documents", args.documentId, args.societyId);
+    await requireDocumentAccess(portableCtx, String(args.documentId), "edit");
     if (args.versionId) {
       await getOwnedChild(portableCtx, "documentVersions", args.versionId, "documents", "documentId", args.societyId);
     }
@@ -906,7 +944,7 @@ export const recordSyncResult = authorizedMutation("paperless:recordSyncResult",
 });
 
 
-export const recordSyncRefresh = authorizedMutation("paperless:recordSyncRefresh", mutation)({
+export const recordSyncRefresh = internalMutation({
   args: {
     syncId: v.id("paperlessDocumentSyncs"),
     status: v.string(),
@@ -919,6 +957,9 @@ export const recordSyncRefresh = authorizedMutation("paperless:recordSyncRefresh
     const portableCtx = await toPortableMutationCtx(ctx);
     const candidate = await ctx.db.get(args.syncId);
     if (!candidate || typeof candidate.societyId !== "string") throw new Error("paperlessDocumentSyncs not found.");
+    await requireFunctionAction(portableCtx, "paperless:refreshSync", "action", { syncId: args.syncId });
+    await requireEnabledModule(ctx, candidate.societyId, "paperless");
+    await requireDocumentAccess(portableCtx, String(candidate.documentId), "edit");
     await requireSocietyMembership(portableCtx, candidate.societyId);
     await getOwned(portableCtx, "paperlessDocumentSyncs", args.syncId, candidate.societyId);
     const now = new Date().toISOString();

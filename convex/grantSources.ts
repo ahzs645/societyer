@@ -222,6 +222,9 @@ export const discoverFromSource = authorizedAction("grantSources:discoverFromSou
   args: { societyId: v.id("societies"), sourceId: v.id("grantSources"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx: any, { societyId, sourceId }: any) => {
+    const societies = await ctx.runQuery(api.society.list, {});
+    const society = societies.find((row: any) => row._id === societyId);
+    if (!society || society.disabledModules?.includes("grants")) throw new Error("Grants is disabled for this workspace.");
     const source = await ctx.runQuery(api.grantSources.getSource, { sourceId });
     if (!source || source.societyId !== societyId) throw new Error("Grant source not found.");
     const profile = source.profile;
@@ -256,6 +259,7 @@ export const discoverFromSource = authorizedAction("grantSources:discoverFromSou
       }
       items = parseJsonFeedOpportunities(json, profile?.fieldMappings, profile?.listSelector);
     } else if (kind === "rss" || /<rss\b|<feed\b/i.test(body)) {
+      if (!/<rss\b|<feed\b/i.test(body)) throw new Error("Source is configured as an RSS feed but did not return an RSS or Atom document.");
       items = parseRssOpportunities(body);
     } else {
       throw new Error(

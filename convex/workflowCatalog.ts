@@ -416,6 +416,18 @@ function computeNextRunAt(
 }
 
 
+function safeExternalRunId(value: unknown): string | undefined {
+  const text = typeof value === "number" && Number.isSafeInteger(value) ? String(value) : value;
+  return typeof text === "string" && /^[a-zA-Z0-9_.-]{1,160}$/.test(text) ? text : undefined;
+}
+
+function safeWorkflowDispatchError(error: unknown): Error {
+  const text = error instanceof Error ? error.message : "";
+  // Retain only our bounded setup/status messages, never transport or provider bodies.
+  if (/^(n8n webhook URL is missing\.|SOCIETYER_WORKFLOW_CALLBACK_SECRET is missing\.|This workflow endpoint is not an operator-configured|Workflow execution authority has been revoked\.|n8n webhook returned HTTP \d{3}\.)/.test(text)) return new Error(text);
+  return new Error("Workflow dispatch could not be confirmed. Review the claimed run and provider execution log before launching another run; no automatic retry was sent.");
+}
+
 async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
   if (wf.recipe === "ote_keycard_access_request" || wf.config?.workflowTemplateKey === "ote_keycard_access_request") {
     return await runExternalNotificationWorkflow(ctx, wf, runId, args);
@@ -438,6 +450,9 @@ async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
     }
     if (!callbackSecret) {
       throw new Error("SOCIETYER_WORKFLOW_CALLBACK_SECRET is missing.");
+    }
+    if (!env("N8N_WEBHOOK_BASE_URL") || workflowEndpointSource(wf, webhookUrl) !== "operator") {
+      throw new Error("This workflow endpoint is not an operator-configured recipe destination. Configure the reviewed n8n route on the deployment before running.");
     }
 
     await ctx.runMutation(internal.workflows._updateStep, {
@@ -485,6 +500,7 @@ async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
       },
     };
 
+    await ctx.runQuery(internal.workflows._requireRunAuthority, { id: runId });
     const response = await fetchConvexOutbound(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -492,19 +508,16 @@ async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
     }, {
       source: workflowEndpointSource(wf, webhookUrl),
       operation: "workflow_webhook_delivery",
+      maxRedirects: 0,
       maxResponseBytes: 512_000,
       timeoutMs: 8_000,
     });
     const text = response.text;
     if (!response.ok) {
-      throw new Error(`n8n webhook returned ${response.status}: ${text.slice(0, 240)}`);
+      throw new Error(`n8n webhook returned HTTP ${response.status}. Check the provider execution log; its response body is not retained.`);
     }
     const responseJson = safeJson(text);
-    const externalRunId =
-      responseJson?.executionId ??
-      responseJson?.id ??
-      responseJson?.data?.executionId ??
-      undefined;
+    const externalRunId = safeExternalRunId(responseJson?.executionId ?? responseJson?.id ?? responseJson?.data?.executionId);
 
     await ctx.runMutation(internal.workflows._markExternalQueued, {
       id: runId,
@@ -514,8 +527,8 @@ async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
         intake: rawIntake,
         fieldValues,
         n8n: {
-          webhookUrl,
-          response: responseJson ?? text.slice(0, 400),
+          httpStatus: response.status,
+          executionId: externalRunId,
         },
       },
     });
@@ -531,7 +544,8 @@ async function runExternalWorkflow(ctx: any, wf: any, runId: any, args: any) {
       linkHref: "/app/workflow-runs",
     });
     return { runId, status: "running", externalRunId };
-  } catch (err: any) {
+  } catch (error: unknown) {
+    const err = safeWorkflowDispatchError(error);
     await ctx.runMutation(internal.workflows._completeRun, {
       id: runId,
       status: "failed",
@@ -564,6 +578,9 @@ async function runExternalGovernanceRecipe(ctx: any, wf: any, runId: any, args: 
     if (!callbackSecret) {
       throw new Error("SOCIETYER_WORKFLOW_CALLBACK_SECRET is missing.");
     }
+    if (!env("N8N_WEBHOOK_BASE_URL") || workflowEndpointSource(wf, webhookUrl) !== "operator") {
+      throw new Error("This workflow endpoint is not an operator-configured recipe destination. Configure the reviewed n8n route on the deployment before running.");
+    }
 
     const steps = stepsForRun(wf.recipe, wf.nodePreview);
     if (steps.length > 0) {
@@ -590,6 +607,7 @@ async function runExternalGovernanceRecipe(ctx: any, wf: any, runId: any, args: 
       },
     };
 
+    await ctx.runQuery(internal.workflows._requireRunAuthority, { id: runId });
     const response = await fetchConvexOutbound(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -597,19 +615,16 @@ async function runExternalGovernanceRecipe(ctx: any, wf: any, runId: any, args: 
     }, {
       source: workflowEndpointSource(wf, webhookUrl),
       operation: "workflow_webhook_delivery",
+      maxRedirects: 0,
       maxResponseBytes: 512_000,
       timeoutMs: 8_000,
     });
     const text = response.text;
     if (!response.ok) {
-      throw new Error(`n8n webhook returned ${response.status}: ${text.slice(0, 240)}`);
+      throw new Error(`n8n webhook returned HTTP ${response.status}. Check the provider execution log; its response body is not retained.`);
     }
     const responseJson = safeJson(text);
-    const externalRunId =
-      responseJson?.executionId ??
-      responseJson?.id ??
-      responseJson?.data?.executionId ??
-      undefined;
+    const externalRunId = safeExternalRunId(responseJson?.executionId ?? responseJson?.id ?? responseJson?.data?.executionId);
 
     await ctx.runMutation(internal.workflows._markExternalQueued, {
       id: runId,
@@ -618,8 +633,8 @@ async function runExternalGovernanceRecipe(ctx: any, wf: any, runId: any, args: 
       output: {
         intake: rawIntake,
         n8n: {
-          webhookUrl,
-          response: responseJson ?? text.slice(0, 400),
+          httpStatus: response.status,
+          executionId: externalRunId,
         },
       },
     });
@@ -635,7 +650,8 @@ async function runExternalGovernanceRecipe(ctx: any, wf: any, runId: any, args: 
       linkHref: "/app/workflow-runs",
     });
     return { runId, status: "running", externalRunId };
-  } catch (err: any) {
+  } catch (error: unknown) {
+    const err = safeWorkflowDispatchError(error);
     await ctx.runMutation(internal.workflows._completeRun, {
       id: runId,
       status: "failed",
@@ -667,6 +683,9 @@ async function runExternalNotificationWorkflow(ctx: any, wf: any, runId: any, ar
     }
     if (!callbackSecret) {
       throw new Error("SOCIETYER_WORKFLOW_CALLBACK_SECRET is missing.");
+    }
+    if (!env("N8N_WEBHOOK_BASE_URL") || workflowEndpointSource(wf, webhookUrl) !== "operator") {
+      throw new Error("This workflow endpoint is not an operator-configured recipe destination. Configure the reviewed n8n route on the deployment before running.");
     }
 
     await ctx.runMutation(internal.workflows._updateStep, {
@@ -704,6 +723,7 @@ async function runExternalNotificationWorkflow(ctx: any, wf: any, runId: any, ar
       },
     };
 
+    await ctx.runQuery(internal.workflows._requireRunAuthority, { id: runId });
     const response = await fetchConvexOutbound(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -711,19 +731,16 @@ async function runExternalNotificationWorkflow(ctx: any, wf: any, runId: any, ar
     }, {
       source: workflowEndpointSource(wf, webhookUrl),
       operation: "workflow_webhook_delivery",
+      maxRedirects: 0,
       maxResponseBytes: 512_000,
       timeoutMs: 8_000,
     });
     const text = response.text;
     if (!response.ok) {
-      throw new Error(`n8n webhook returned ${response.status}: ${text.slice(0, 240)}`);
+      throw new Error(`n8n webhook returned HTTP ${response.status}. Check the provider execution log; its response body is not retained.`);
     }
     const responseJson = safeJson(text);
-    const externalRunId =
-      responseJson?.executionId ??
-      responseJson?.id ??
-      responseJson?.data?.executionId ??
-      undefined;
+    const externalRunId = safeExternalRunId(responseJson?.executionId ?? responseJson?.id ?? responseJson?.data?.executionId);
 
     await ctx.runMutation(internal.workflows._markExternalQueued, {
       id: runId,
@@ -734,8 +751,8 @@ async function runExternalNotificationWorkflow(ctx: any, wf: any, runId: any, ar
         fieldValues: rawIntake,
         emailDraft,
         n8n: {
-          webhookUrl,
-          response: responseJson ?? text.slice(0, 400),
+          httpStatus: response.status,
+          executionId: externalRunId,
         },
       },
     });
@@ -751,7 +768,8 @@ async function runExternalNotificationWorkflow(ctx: any, wf: any, runId: any, ar
       linkHref: "/app/workflow-runs",
     });
     return { runId, status: "running", externalRunId };
-  } catch (err: any) {
+  } catch (error: unknown) {
+    const err = safeWorkflowDispatchError(error);
     await ctx.runMutation(internal.workflows._completeRun, {
       id: runId,
       status: "failed",
@@ -792,6 +810,7 @@ async function handleStep(
     ];
     return notes[stepIndex];
   }
+  if (node?.type === "manual_trigger") return "Workflow trigger accepted by Societyer.";
   if (node?.type === "ai_agent") {
     const cfg = node.config ?? {};
     const agentKey = String(cfg.agentKey ?? "compliance_analyst");

@@ -32,7 +32,9 @@ export const aiTables = {
     unavailableTools: v.optional(v.array(v.string())),
   })
     .index("by_society", ["societyId"])
-    .index("by_society_agent", ["societyId", "agentKey"]),
+    .index("by_society_agent", ["societyId", "agentKey"])
+    .index("by_society_creator", ["societyId", "triggeredByUserId"])
+    .index("by_society_creator_agent", ["societyId", "triggeredByUserId", "agentKey"]),
 
   aiAgentAuditEvents: defineTable({
     societyId: v.id("societies"),
@@ -97,7 +99,8 @@ export const aiTables = {
     lastMessageAtISO: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
-    .index("by_society_status", ["societyId", "status"]),
+    .index("by_society_status", ["societyId", "status"])
+    .index("by_society_creator", ["societyId", "createdByUserId"]),
 
   aiMessages: defineTable({
     societyId: v.id("societies"),

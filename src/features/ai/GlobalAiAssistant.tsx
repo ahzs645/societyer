@@ -41,7 +41,8 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "@/lib/convexApi";
-import { streamChatMessage } from "../../lib/aiChatStream";
+import { streamChatMessage, isChatStreamUnavailable } from "../../lib/aiChatStream";
+import { AI_ATTACHMENT_ACCEPT, AI_ATTACHMENT_MAX_FILES, readAiTextAttachment, type AiTextAttachment } from "../../../shared/aiAttachments";
 import { resolveRouteIdentity } from "../../lib/routeIdentity";
 import { useCurrentUserId } from "../../hooks/useCurrentUser";
 import { useSociety } from "../../hooks/useSociety";
@@ -129,24 +130,41 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   ) as any | undefined;
   const threads = useQuery(
     api.aiChat.listThreads,
-    open && canRead && society ? { societyId: society._id, limit: 30 } : "skip",
+    open && canWrite && society ? { societyId: society._id, limit: 30 } : "skip",
   ) as any[] | undefined;
   const toolDrafts = useQuery(
     api.aiAgents.listToolDrafts,
-    open && canRead && society ? { societyId: society._id, limit: 12 } : "skip",
+    open && canWrite && society ? { societyId: society._id, limit: 12 } : "skip",
   ) as any[] | undefined;
 
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
+  const [creatingNewThread, setCreatingNewThread] = useState(false);
   const [input, setInput] = useState("");
   const [streamingText, setStreamingText] = useState("");
   const [busy, setBusy] = useState(false);
   const [pickedModelId, setPickedModelId] = useState<string | undefined>();
   const [modelCatalog, setModelCatalog] = useState<ModelOption[] | undefined>();
   const [catalogLoaded, setCatalogLoaded] = useState(false);
-  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [attachedFiles, setAttachedFiles] = useState<AiTextAttachment[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+
+  const authorityKey = `${society?._id ?? ""}:${actingUserId ?? ""}:${localOnly}:${canWrite}`;
+  const authorityRef = useRef(authorityKey);
+  authorityRef.current = authorityKey;
+  const [loadedDraftKey, setLoadedDraftKey] = useState<string | undefined>();
+  useEffect(() => {
+    if (!localOnly || !society?._id) return;
+    const key = `societyer:ai-draft:${society._id}`;
+    try { setInput(localStorage.getItem(key) ?? ""); } catch { /* Storage unavailable: keep the in-memory draft. */ }
+    setLoadedDraftKey(key);
+  }, [localOnly, society?._id]);
+  useEffect(() => {
+    if (!localOnly || !society?._id || loadedDraftKey !== `societyer:ai-draft:${society._id}`) return;
+    try { localStorage.setItem(loadedDraftKey, input); } catch { /* Preserve the in-memory draft. */ }
+  }, [localOnly, society?._id, input, loadedDraftKey]);
 
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -155,7 +173,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
 
   const messages = useQuery(
     api.aiChat.messagesForThread,
-    open && canRead && selectedThreadId && threads?.some((thread) => thread._id === selectedThreadId && thread.societyId === society?._id) ? { threadId: selectedThreadId as any } : "skip",
+    open && canWrite && selectedThreadId && threads?.some((thread) => thread._id === selectedThreadId && thread.societyId === society?._id) ? { threadId: selectedThreadId as any } : "skip",
   ) as any[] | undefined;
 
   const browsingContext = useMemo(
@@ -168,9 +186,9 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   );
 
   const effectiveProvider = aiSettings?.effective;
-  const draftCount = (toolDrafts ?? []).filter((draft) => draft.status === "draft").length;
-  const hasMessages = (messages?.length ?? 0) > 0 || Boolean(streamingText);
-  const threadsLoading = threads === undefined;
+  const draftCount = canWrite ? (toolDrafts ?? []).filter((draft) => draft.status === "draft").length : 0;
+  const hasMessages = canWrite && ((messages?.length ?? 0) > 0 || Boolean(streamingText));
+  const threadsLoading = canWrite && threads === undefined;
   const messagesLoading = Boolean(selectedThreadId) && messages === undefined;
 
   const selectedThread = useMemo(
@@ -182,7 +200,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   const currentModelId =
     lockedModelId ?? pickedModelId ?? effectiveProvider?.modelId ?? undefined;
 
-  const threadGroups = useMemo(() => groupThreadsByDate(threads ?? []), [threads]);
+  const threadGroups = useMemo(() => groupThreadsByDate(canWrite ? threads ?? [] : []), [threads, canWrite]);
   const pendingDraftsForThread = useMemo(() => {
     if (!selectedThreadId) return [];
     return (toolDrafts ?? []).filter(
@@ -227,8 +245,22 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   }, [open]);
 
   useEffect(() => {
-    if (!selectedThreadId && threads?.[0]?._id) setSelectedThreadId(threads[0]._id);
-  }, [selectedThreadId, threads]);
+    setSelectedThreadId(undefined);
+    setCreatingNewThread(false);
+    setAttachedFiles([]);
+    setStreamingText("");
+    setLastError(null);
+    setBusy(false);
+    setFilesLoading(false);
+    setPickedModelId(undefined);
+    setModelCatalog(undefined);
+    setCatalogLoaded(false);
+    if (!localOnly || !canWrite) setInput("");
+  }, [society?._id, actingUserId, localOnly, canWrite]);
+
+  useEffect(() => {
+    if (canWrite && !creatingNewThread && !selectedThreadId && threads?.[0]?._id) setSelectedThreadId(threads[0]._id);
+  }, [selectedThreadId, threads, creatingNewThread, canWrite]);
 
   useEffect(() => {
     if (!scrollerRef.current) return;
@@ -257,6 +289,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
   const startNewThread = () => {
     if (!canWrite) return;
     setSelectedThreadId(undefined);
+    setCreatingNewThread(true);
     setInput("");
     setStreamingText("");
     setAttachedFiles([]);
@@ -267,14 +300,10 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
-    if (!canSend || !open || !society || !input.trim()) return;
+    if (!canSend || busy || filesLoading || !open || !society || !input.trim()) return;
+    const submissionAuthority = authorityKey;
     const trimmed = input.trim();
-    const filesNote = attachedFiles.length
-      ? `\n\n[File references (names and sizes only; file contents are not attached): ${attachedFiles
-          .map((file) => `${file.name} (${formatBytes(file.size)})`)
-          .join(", ")}]`
-      : "";
-    const content = `${trimmed}${filesNote}`;
+    const content = trimmed;
     // Per-thread model lock: only send a modelId hint when starting a new thread.
     // For existing threads, the backend reads the thread's locked modelId itself.
     const modelIdForRequest = selectedThreadId ? undefined : pickedModelId;
@@ -282,32 +311,41 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     setStreamingText("");
     setLastError(null);
     try {
-      const result = await streamChatMessage({
+      const sendAction = () => sendChatMessage({
+        societyId: society._id,
+        threadId: selectedThreadId as any,
+        content,
+        attachments: attachedFiles,
+        browsingContext,
+        modelId: modelIdForRequest,
+      });
+      const result = isStaticDemoRuntime() ? await sendAction() : await streamChatMessage({
         societyId: society._id,
         threadId: selectedThreadId,
         content,
+        attachments: attachedFiles,
         browsingContext,
         modelId: modelIdForRequest,
-        onToken: (token) => setStreamingText((text) => text + token),
-      }).catch(() =>
-        sendChatMessage({
-          societyId: society._id,
-          threadId: selectedThreadId as any,
-          content,
-          browsingContext,
-          modelId: modelIdForRequest,
-        }),
-      );
+        onThreadReady: (id) => { if (authorityRef.current === submissionAuthority) { setSelectedThreadId(id); setCreatingNewThread(false); } },
+        onToken: (token) => { if (authorityRef.current === submissionAuthority) setStreamingText((text) => text + token); },
+      }).catch((error) => {
+        if (!isChatStreamUnavailable(error) || authorityRef.current !== submissionAuthority) throw error;
+        return sendAction();
+      });
+      if (authorityRef.current !== submissionAuthority) return;
       setSelectedThreadId(result.threadId);
+      setCreatingNewThread(false);
+      if (result.provider === "deterministic_fallback" || result.status === "error") throw new Error("Live AI did not complete this request. Your draft is retained; check AI provider setup and the saved conversation before retrying.");
       setInput("");
       setStreamingText("");
       setAttachedFiles([]);
     } catch (error: any) {
+      if (authorityRef.current !== submissionAuthority) return;
       const message = error?.message ?? "Couldn't send AI message";
       setLastError(message);
       toast.error(message);
     } finally {
-      setBusy(false);
+      if (authorityRef.current === submissionAuthority) setBusy(false);
     }
   };
 
@@ -329,6 +367,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
 
   const onSelectThread = (id: string) => {
     setSelectedThreadId(id);
+    setCreatingNewThread(false);
     setStreamingText("");
     setLastError(null);
   };
@@ -384,10 +423,22 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     }
   };
 
-  const handleFilesPicked = (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const next = Array.from(files).slice(0, 8);
-    setAttachedFiles((prev) => [...prev, ...next].slice(0, 8));
+  const handleFilesPicked = async (files: FileList | null) => {
+    if (!canWrite || busy || filesLoading || !files?.length) return;
+    const fileAuthority = authorityKey;
+    setFilesLoading(true);
+    try {
+      if (attachedFiles.length + files.length > AI_ATTACHMENT_MAX_FILES) throw new Error(`Attach at most ${AI_ATTACHMENT_MAX_FILES} text files.`);
+      const next = await Promise.all(Array.from(files).map(readAiTextAttachment));
+      if (authorityRef.current !== fileAuthority) return;
+      setAttachedFiles((prev) => [...prev, ...next]);
+      setLastError(null);
+    } catch (error) {
+      if (authorityRef.current !== fileAuthority) return;
+      setLastError(error instanceof Error ? error.message : "Couldn't read attached text.");
+    } finally {
+      if (authorityRef.current === fileAuthority) setFilesLoading(false);
+    }
   };
 
   const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
@@ -405,7 +456,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
     event.preventDefault();
     dragDepthRef.current = 0;
     setIsDraggingFile(false);
-    handleFilesPicked(event.dataTransfer?.files ?? null);
+    void handleFilesPicked(event.dataTransfer?.files ?? null);
   };
 
   const providerActive = effectiveProvider?.status === "active";
@@ -505,11 +556,11 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                       </div>
                     </div>
                   ) : (
-                    (messages ?? []).map((message) => (
+                    (canWrite ? messages ?? [] : []).map((message) => (
                       <GlobalAiMessage key={message._id} message={message} />
                     ))
                   )}
-                  {streamingText && (
+                  {canWrite && streamingText && (
                     <GlobalAiMessage
                       message={{
                         _id: "streaming",
@@ -542,21 +593,25 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                 )}
 
                 <form className="global-ai-composer" onSubmit={submit}>
-                  {localOnly && <p className="muted" role="status">Live AI requires a connected workspace. Saved conversations and drafts remain available locally.</p>}
+                  {!canWrite && <p className="muted" role="status">Private AI conversations require current AI chat write permission and belong to their creator.</p>}
+                  {localOnly && <p className="muted" role="status">Live AI requires a connected workspace. Saved conversations remain available locally. Typed drafts stay on this device; selected files must be attached again after reload.</p>}
                   {isStaticDemoRuntime() && <p className="muted" role="status">Demo replies are simulated; no AI provider is contacted.</p>}
                   <ContextChipRow context={browsingContext} />
-                  {attachedFiles.length > 0 && <p className="muted" role="status">Only file names and sizes are included in your message. File contents are not uploaded or analyzed.</p>}
-                  {attachedFiles.length > 0 && (
+                  <p className="muted">Attach up to four UTF-8 TXT, Markdown, CSV or JSON files, 32 KiB each. PDF, images and office files require an extraction service.</p>
+                  {filesLoading && <p className="muted" role="status">Reading text files on this device…</p>}
+                  {canWrite && attachedFiles.length > 0 && <p className="muted" role="status">Sending includes extracted file contents for the configured AI provider and saves selected text in this workspace’s chat history. Review the text below before sending.</p>}
+                  {canWrite && attachedFiles.length > 0 && (
                     <div className="global-ai-files">
                       {attachedFiles.map((file, index) => (
                         <span key={`${file.name}-${index}`} className="global-ai-file-chip">
                           <Paperclip size={11} />
                           <span className="global-ai-file-chip__name">{file.name}</span>
-                          <span className="global-ai-file-chip__size">{formatBytes(file.size)}</span>
+                          <span className="global-ai-file-chip__size">{formatBytes(new TextEncoder().encode(file.text).byteLength)}</span>
                           <button
                             type="button"
                             className="global-ai-file-chip__remove"
                             aria-label={`Remove ${file.name}`}
+                            disabled={busy || filesLoading}
                             onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== index))}
                           >
                             <X size={10} />
@@ -565,10 +620,11 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                       ))}
                     </div>
                   )}
+                  {canWrite && attachedFiles.map((file, index) => <details key={`preview-${index}`}><summary>Review extracted text: {file.name}</summary><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: "10rem", overflow: "auto" }}>{file.text}</pre></details>)}
                   <div className="global-ai-composer__box">
                     <textarea
                       ref={composerRef}
-                      readOnly={!canSend}
+                      readOnly={!canWrite || busy}
                       value={input}
                       onChange={(event) => setInput(event.target.value)}
                       placeholder="Ask the assistant to inspect this page, find records, draft tasks, or use workspace tools."
@@ -582,10 +638,10 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                         <button
                           type="button"
                           className="global-ai-icon-btn"
-                          aria-label="Add file references"
-                          title="Add file references (names and sizes only)"
+                          aria-label="Attach text files"
+                          title="Attach text files"
                           onClick={() => fileInputRef.current?.click()}
-                          disabled={!canWrite}
+                          disabled={!canWrite || busy || filesLoading}
                         >
                           <Paperclip size={13} />
                         </button>
@@ -593,9 +649,10 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                           ref={fileInputRef}
                           type="file"
                           multiple
+                          accept={AI_ATTACHMENT_ACCEPT}
                           hidden
                           onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                            handleFilesPicked(event.target.files);
+                            void handleFilesPicked(event.target.files);
                             event.target.value = "";
                           }}
                         />
@@ -611,7 +668,7 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                       <button
                         type="submit"
                         className="global-ai-send"
-                        disabled={!canSend || busy || !input.trim() || !society}
+                        disabled={!canSend || busy || filesLoading || !input.trim() || !society}
                         aria-label="Send message"
                         title="Send (⌘/Ctrl + Enter)"
                       >
@@ -689,13 +746,14 @@ function GlobalAiMessage({ message }: { message: any }) {
   );
 }
 
-function MarkdownView({ text }: { text: string }) {
+export function MarkdownView({ text }: { text: string }) {
   return (
     <div className="global-ai-markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+          img: ({ src, alt }) => src ? <a href={src} target="_blank" rel="noopener noreferrer">View image: {alt || "attached image"}</a> : <span>{alt || "Image unavailable"}</span>,
         }}
       >
         {text}
@@ -1096,7 +1154,7 @@ type ErrorKind = "rate_limit" | "no_credits" | "no_key" | "network" | "unknown";
 
 function classifyError(message: string): ErrorKind {
   const lower = message.toLowerCase();
-  if (lower.includes("rate") || lower.includes("429")) return "rate_limit";
+  if (/\brate[ -]?limit(?:ed)?\b/.test(lower) || lower.includes("429")) return "rate_limit";
   if (lower.includes("credit") || lower.includes("quota") || lower.includes("billing")) return "no_credits";
   if (lower.includes("api key") || lower.includes("not configured") || lower.includes("provider")) return "no_key";
   if (lower.includes("network") || lower.includes("fetch") || lower.includes("connection")) return "network";
@@ -1126,7 +1184,8 @@ function ErrorBanner({
       <div className="global-ai-error__icon">{cfg.icon}</div>
       <div className="global-ai-error__body">
         <strong>{cfg.title}</strong>
-        <span>{cfg.hint ?? message}</span>
+        <span>{message}</span>
+        {cfg.hint && <span>{cfg.hint}</span>}
       </div>
       <div className="global-ai-error__actions">
         <button type="button" onClick={onRetry}>Retry</button>

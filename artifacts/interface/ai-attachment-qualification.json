@@ -1,0 +1,162 @@
+{
+  "baseline": "66b8dcdaed953e93637be15d400c2f5bf09339fb",
+  "qualifiedAt": "2026-10-05T02:57:33.820968+00:00",
+  "browser": {
+    "passed": 16,
+    "viewports": [
+      320,
+      390,
+      768,
+      1440
+    ],
+    "cases": [
+      {
+        "project": "narrow-phone",
+        "width": 320,
+        "case": "local AI text attachments are extracted and reviewed without uploads; drafts persist at every viewport",
+        "status": "passed"
+      },
+      {
+        "project": "narrow-phone",
+        "width": 320,
+        "case": "pending attachment extraction cannot follow a user into another local workspace",
+        "status": "passed"
+      },
+      {
+        "project": "phone",
+        "width": 390,
+        "case": "local AI text attachments are extracted and reviewed without uploads; drafts persist at every viewport",
+        "status": "passed"
+      },
+      {
+        "project": "phone",
+        "width": 390,
+        "case": "pending attachment extraction cannot follow a user into another local workspace",
+        "status": "passed"
+      },
+      {
+        "project": "tablet",
+        "width": 768,
+        "case": "local AI text attachments are extracted and reviewed without uploads; drafts persist at every viewport",
+        "status": "passed"
+      },
+      {
+        "project": "tablet",
+        "width": 768,
+        "case": "pending attachment extraction cannot follow a user into another local workspace",
+        "status": "passed"
+      },
+      {
+        "project": "desktop",
+        "width": 1440,
+        "case": "local AI text attachments are extracted and reviewed without uploads; drafts persist at every viewport",
+        "status": "passed"
+      },
+      {
+        "project": "desktop",
+        "width": 1440,
+        "case": "pending attachment extraction cannot follow a user into another local workspace",
+        "status": "passed"
+      },
+      {
+        "project": "narrow-phone",
+        "width": 320,
+        "case": "a real local workspace keeps live AI, Paperless and browser sessions unavailable without outbound requests",
+        "status": "passed"
+      },
+      {
+        "project": "phone",
+        "width": 390,
+        "case": "a real local workspace keeps live AI, Paperless and browser sessions unavailable without outbound requests",
+        "status": "passed"
+      },
+      {
+        "project": "tablet",
+        "width": 768,
+        "case": "a real local workspace keeps live AI, Paperless and browser sessions unavailable without outbound requests",
+        "status": "passed"
+      },
+      {
+        "project": "desktop",
+        "width": 1440,
+        "case": "a real local workspace keeps live AI, Paperless and browser sessions unavailable without outbound requests",
+        "status": "passed"
+      },
+      {
+        "project": "narrow-phone",
+        "width": 320,
+        "case": "demo chat saves creator-scoped source text and renders image syntax without automatic external requests",
+        "status": "passed"
+      },
+      {
+        "project": "phone",
+        "width": 390,
+        "case": "demo chat saves creator-scoped source text and renders image syntax without automatic external requests",
+        "status": "passed"
+      },
+      {
+        "project": "tablet",
+        "width": 768,
+        "case": "demo chat saves creator-scoped source text and renders image syntax without automatic external requests",
+        "status": "passed"
+      },
+      {
+        "project": "desktop",
+        "width": 1440,
+        "case": "demo chat saves creator-scoped source text and renders image syntax without automatic external requests",
+        "status": "passed"
+      }
+    ],
+    "scope": "Real local workspace and explicit demo UI. Synthetic production Markdown renderer fixture verifies no automatic image loads. No live external provider was used."
+  },
+  "checks": [
+    {
+      "script": "scripts/check-ai-file-ingestion.ts",
+      "status": "passed",
+      "scope": "Bounded extraction; actual native action/HTTP and installed SDK with loopback-only synthetic provider; role, tenant, thread and document ACL checks; role downgrade during generation stops late output and persistence; MemoryDb and LocalStoreDb checks."
+    },
+    {
+      "script": "scripts/check-ai-chat-privacy.ts",
+      "status": "passed",
+      "scope": "Native and portable five-role creator privacy for chat and AI run/audit history, same-workspace different creator, missing creator, current downgrade, denied late writes, service scope and tenant."
+    },
+    {
+      "script": "scripts/check-ai-chat-stream.ts",
+      "status": "passed",
+      "scope": "Actual authenticated client request carries text; only missing endpoints are safe fallback; incomplete/failing streams retain saved-thread identity."
+    },
+    {
+      "script": "scripts/check-ai-demo-chat.ts",
+      "status": "passed",
+      "scope": "Actual portable creator-attributed demo conversation persists source/replies; real local client rejects unavailable inference."
+    },
+    {
+      "script": "convex:typecheck and tsc -b",
+      "status": "passed"
+    },
+    {
+      "script": "focused ESLint",
+      "status": "passed",
+      "errors": 0,
+      "notes": "Existing size and hook-dependency/style warnings remain."
+    }
+  ],
+  "resolved": [
+    "UTF-8 text-file contents now reach connected AI requests instead of only names/sizes",
+    "Creator/current-role privacy for chat/run/audit history",
+    "Current authority before provider output and completion persistence",
+    "Per-document ACL and no global fallback scans in AI tools",
+    "Resource permissions compose with AI tool permissions",
+    "Pending extraction/request responses cannot move protected state into a different workspace/actor",
+    "Local typed drafts persist and no live inference is implied",
+    "Explicit demo persists truthful simulated conversations",
+    "Preview/composer controls remain reachable on phones",
+    "AI Markdown images require an explicit link click"
+  ],
+  "remaining": [
+    "PDF/image/office/OCR extraction is not implemented by this text pathway",
+    "On-device inference is not configured or bundled; a connected OpenAI-compatible server is an existing adapter option",
+    "Real model/provider credentials, inference quality and production reliability require separate external-provider qualification",
+    "Missing-creator legacy chat/run history is inaccessible and is not automatically claimed"
+  ]
+}

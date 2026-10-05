@@ -1,0 +1,261 @@
+{
+  "measuredAt": "2026-10-05T04:07:17.812Z",
+  "method": "Deduplicated transitive static-import closure per scenario, including JavaScript and CSS. gzip level 9 per asset; excludes HTML, fonts, WASM, external provider scripts, and optional dynamic feature chunks. This is build transfer size, not a network or Lighthouse timing score.",
+  "budgetsGzipBytes": {
+    "bootstrap": 400000,
+    "landing": 425000,
+    "betterAuthDashboard": 550000,
+    "clerkDashboard": 625000,
+    "localDashboard": 900000
+  },
+  "current": {
+    "scenarios": {
+      "bootstrap": {
+        "rawBytes": 884678,
+        "gzipBytes": 197377,
+        "assetCount": 6,
+        "assets": [
+          "assets/convex-vendor.js",
+          "assets/icons-vendor.js",
+          "assets/index.css",
+          "assets/index.js",
+          "assets/react-vendor.js",
+          "assets/router-vendor.js"
+        ]
+      },
+      "landing": {
+        "rawBytes": 904884,
+        "gzipBytes": 203664,
+        "assetCount": 9,
+        "assets": [
+          "assets/InstallAppPrompt.js",
+          "assets/Landing.js",
+          "assets/convex-vendor.js",
+          "assets/icons-vendor.js",
+          "assets/index.css",
+          "assets/index.js",
+          "assets/react-vendor.js",
+          "assets/router-vendor.js",
+          "assets/useThemePreference.js"
+        ]
+      },
+      "betterAuthDashboard": {
+        "rawBytes": 1283800,
+        "gzipBytes": 316322,
+        "assetCount": 35,
+        "assets": [
+          "assets/Dashboard.js",
+          "assets/GlobalAssetCreate.js",
+          "assets/Layout.js",
+          "assets/Tooltip.js",
+          "assets/_helpers.js",
+          "assets/authClient.js",
+          "assets/convex-vendor.js",
+          "assets/convex.js",
+          "assets/demoMode.js",
+          "assets/desktopBackup.js",
+          "assets/desktopBridge.js",
+          "assets/documentDownload.js",
+          "assets/documentStorage.js",
+          "assets/format.js",
+          "assets/icons-vendor.js",
+          "assets/index.css",
+          "assets/index.js",
+          "assets/jurisdictionWorkspace.js",
+          "assets/meetingDetailHelpers.js",
+          "assets/minutesMotions.js",
+          "assets/motionGovernance.js",
+          "assets/onboarding.js",
+          "assets/organizationDomain.js",
+          "assets/proceduralMotions.js",
+          "assets/react-vendor.js",
+          "assets/react.js",
+          "assets/registry.js",
+          "assets/router-vendor.js",
+          "assets/schemas.js",
+          "assets/societyDocumentPackets.js",
+          "assets/store.js",
+          "assets/ui.js",
+          "assets/useAiChatVisibility.js",
+          "assets/useThemePreference.js",
+          "assets/zip.js"
+        ]
+      },
+      "clerkDashboard": {
+        "rawBytes": 1290359,
+        "gzipBytes": 315740,
+        "assetCount": 36,
+        "assets": [
+          "assets/ClerkAuthProvider.js",
+          "assets/Dashboard.js",
+          "assets/GlobalAssetCreate.js",
+          "assets/Layout.js",
+          "assets/Tooltip.js",
+          "assets/_helpers.js",
+          "assets/convex-vendor.js",
+          "assets/convex.js",
+          "assets/demoMode.js",
+          "assets/desktopBackup.js",
+          "assets/desktopBridge.js",
+          "assets/documentDownload.js",
+          "assets/documentStorage.js",
+          "assets/format.js",
+          "assets/icons-vendor.js",
+          "assets/index.css",
+          "assets/index.js",
+          "assets/index2.js",
+          "assets/jurisdictionWorkspace.js",
+          "assets/meetingDetailHelpers.js",
+          "assets/minutesMotions.js",
+          "assets/motionGovernance.js",
+          "assets/onboarding.js",
+          "assets/organizationDomain.js",
+          "assets/proceduralMotions.js",
+          "assets/react-vendor.js",
+          "assets/react.js",
+          "assets/registry.js",
+          "assets/router-vendor.js",
+          "assets/schemas.js",
+          "assets/societyDocumentPackets.js",
+          "assets/store.js",
+          "assets/ui.js",
+          "assets/useAiChatVisibility.js",
+          "assets/useThemePreference.js",
+          "assets/zip.js"
+        ]
+      },
+      "localDashboard": {
+        "rawBytes": 2673729,
+        "gzipBytes": 666182,
+        "assetCount": 50,
+        "assets": [
+          "assets/Dashboard.js",
+          "assets/GlobalAssetCreate.js",
+          "assets/Layout.js",
+          "assets/Tooltip.js",
+          "assets/_helpers.js",
+          "assets/aiAttachments.js",
+          "assets/annualFilings2.js",
+          "assets/bylawBaselines.js",
+          "assets/convex-vendor.js",
+          "assets/corporationSettings.js",
+          "assets/define.js",
+          "assets/demoMode.js",
+          "assets/desktopBackup.js",
+          "assets/desktopBridge.js",
+          "assets/dividends2.js",
+          "assets/documentDownload.js",
+          "assets/documentStorage.js",
+          "assets/electionValidation.js",
+          "assets/entitySetup.js",
+          "assets/equityLedger.js",
+          "assets/filingPreparation.js",
+          "assets/format.js",
+          "assets/icons-vendor.js",
+          "assets/ids.js",
+          "assets/index.css",
+          "assets/index.js",
+          "assets/integrationCatalog.js",
+          "assets/jurisdictionWorkspace.js",
+          "assets/localDataClient.js",
+          "assets/meetingDetailHelpers.js",
+          "assets/meetings2.js",
+          "assets/minutesMotions.js",
+          "assets/motionGovernance.js",
+          "assets/onboarding.js",
+          "assets/organizationDomain.js",
+          "assets/proceduralMotions.js",
+          "assets/programStatement.js",
+          "assets/react-vendor.js",
+          "assets/react.js",
+          "assets/recordTableMetadataDefinitions.js",
+          "assets/registry.js",
+          "assets/router-vendor.js",
+          "assets/schemas.js",
+          "assets/societyDocumentPackets.js",
+          "assets/store.js",
+          "assets/structuredAddress.js",
+          "assets/ui.js",
+          "assets/useAiChatVisibility.js",
+          "assets/useThemePreference.js",
+          "assets/zip.js"
+        ]
+      }
+    },
+    "largestJavaScriptChunks": [
+      {
+        "name": "MarkdownEditorImpl",
+        "asset": "assets/MarkdownEditorImpl.js",
+        "rawBytes": 1374006,
+        "gzipBytes": 435659
+      },
+      {
+        "name": "localDataClient",
+        "asset": "assets/localDataClient.js",
+        "rawBytes": 1225927,
+        "gzipBytes": 312316
+      },
+      {
+        "name": "bwip-js",
+        "asset": "assets/bwip-js.js",
+        "rawBytes": 948960,
+        "gzipBytes": 257223
+      },
+      {
+        "name": "pdfVectorRenderer",
+        "asset": "assets/pdfVectorRenderer.js",
+        "rawBytes": 434695,
+        "gzipBytes": 180021
+      },
+      {
+        "name": "ResearchLibrary",
+        "asset": "assets/ResearchLibrary.js",
+        "rawBytes": 599436,
+        "gzipBytes": 131261
+      },
+      {
+        "name": "AssetScanner",
+        "asset": "assets/AssetScanner.js",
+        "rawBytes": 362220,
+        "gzipBytes": 111121
+      },
+      {
+        "name": "BrowserConnectors",
+        "asset": "assets/BrowserConnectors.js",
+        "rawBytes": 327274,
+        "gzipBytes": 86719
+      },
+      {
+        "name": "style",
+        "asset": "assets/style.js",
+        "rawBytes": 176811,
+        "gzipBytes": 57805
+      },
+      {
+        "name": "docx-preview",
+        "asset": "assets/docx-preview.js",
+        "rawBytes": 172805,
+        "gzipBytes": 50521
+      },
+      {
+        "name": "react-vendor",
+        "asset": "assets/react-vendor.js",
+        "rawBytes": 142608,
+        "gzipBytes": 45675
+      },
+      {
+        "name": "index",
+        "asset": "assets/index.js",
+        "rawBytes": 153626,
+        "gzipBytes": 44404
+      },
+      {
+        "name": "MeetingDetail",
+        "asset": "assets/MeetingDetail.js",
+        "rawBytes": 156975,
+        "gzipBytes": 43784
+      }
+    ]
+  },
+  "failures": []
+}

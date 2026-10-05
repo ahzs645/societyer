@@ -234,24 +234,9 @@ export const recordUploadedVersion = authorizedMutation("documentVersions:record
       createdAtISO: new Date().toISOString(),
     });
 
-    // Honor the connection's "auto-upload new versions" toggle: mirror the new
-    // version to Paperless-ngx after local storage succeeds. Best-effort and
-    // scheduled (the sync is an HTTP action) so it never blocks the upload.
-    const connection = (
-      await ctx.db
-        .query("paperlessConnections")
-        .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
-        .collect()
-    )
-      .sort((a, b) => String(b.connectedAtISO).localeCompare(String(a.connectedAtISO)))[0];
-    if (connection && connection.autoUpload && connection.status === "connected") {
-      await ctx.scheduler.runAfter(0, api.paperless.syncDocument, {
-        societyId: args.societyId,
-        documentId: args.documentId,
-        versionId: id,
-        actingUserId: uploaderId,
-      });
-    }
+    // Provider sync is currently an explicit, authorized user action. A scheduled
+    // public action would lose the user's JWT and cannot safely impersonate them.
+    // Keep legacy autoUpload settings readable until an actor-aware worker exists.
 
     return { versionId: id, version: nextVersion };
   },

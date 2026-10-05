@@ -1,0 +1,133 @@
+{
+  "completedAt": "2026-10-05T04:33:27.857840+00:00",
+  "reconciledBaseline": "66b8dcdaed953e93637be15d400c2f5bf09339fb",
+  "requiredAncestor": "cc52e24487f42c19f81b2d22385091006bc70b44",
+  "remoteMainMatchesBaseline": true,
+  "mergeConflicts": 0,
+  "implementationFingerprintSha256": "1083b96ebd8d0c248b48fa2fc47d7a11081a71bceaf12bf6458809afcf1c5b91",
+  "implementationFileCount": 118,
+  "preserved": [
+    "Clerk sign-in and profiles",
+    "tenant-restricted Better Auth Microsoft configuration",
+    "Societyer fixed workspace roles and last-active-Owner protections",
+    "React Router and Convex"
+  ],
+  "checks": {
+    "gapContracts": "passed final repeat after desktop/cache fixes",
+    "reconciledSecurity": "passed: 926 hosted and 823 portable classifications",
+    "interfaceApiAndPortableContracts": "passed",
+    "frontendConvexGatewayConnectorElectronTypechecks": "passed",
+    "combinedWebPagesBuild": "passed",
+    "combinedElectronBuild": "passed",
+    "electronArchitectureAndDualMode": "passed",
+    "allFiveFrontendBundleBudgets": "passed",
+    "knownSecretScan": "passed: zero public file/bundle matches",
+    "diffWhitespace": "passed"
+  },
+  "runtimeQualification": [
+    {
+      "area": "Native Convex/Better Auth",
+      "passed": 113,
+      "unit": "scenario groups",
+      "extraInternalVisibilityPassed": 4,
+      "evidence": "artifacts/interface/final-native-gap-qualification.json"
+    },
+    {
+      "area": "Actual HTTP web interface",
+      "passed": 112,
+      "unit": "unique browser cases",
+      "widths": [
+        320,
+        390,
+        768,
+        1440
+      ],
+      "memberPermittedRouteVisits": 272,
+      "memberRestrictedEntryChecks": 232,
+      "evidence": "artifacts/interface/final-live-gap-qualification.json"
+    },
+    {
+      "area": "PowerSync production transport in isolated HTTPS lab",
+      "passed": 24,
+      "unit": "actual two-client browser cases",
+      "mocks": false,
+      "originalAuthorityBindingsRestored": 8,
+      "actualPostRestoreActiveIdentities": 6,
+      "actualPostRestoreInactiveDenials": 2,
+      "evidence": "artifacts/offline/final-powersync-transport-qualification.json"
+    },
+    {
+      "area": "Actual Linux Electron",
+      "passed": 21,
+      "unit": "runtime cases",
+      "evidence": "artifacts/offline/desktop-dual-mode-runtime.json"
+    },
+    {
+      "area": "Unsigned Linux directory package",
+      "passed": 7,
+      "unit": "package/runtime cases",
+      "published": false,
+      "evidence": "artifacts/offline/desktop-linux-package.json"
+    },
+    {
+      "area": "Camera/clipboard permission policy",
+      "passed": 7,
+      "unit": "policy groups",
+      "evidence": "artifacts/offline/desktop-camera-consent.json"
+    },
+    {
+      "area": "Demo web camera denied/manual lookup",
+      "passed": 8,
+      "unit": "browser cases",
+      "evidence": "artifacts/offline/desktop-camera-fallback.json"
+    },
+    {
+      "area": "Calendar/editor/PDF/views",
+      "passed": 62,
+      "unit": "unique responsive browser cases",
+      "browsers": [
+        "Chromium",
+        "Firefox"
+      ],
+      "evidence": "artifacts/interface/calendar-views-performance-gap-qualification.json"
+    },
+    {
+      "area": "AI text files/privacy/drafts",
+      "passed": 16,
+      "unit": "responsive browser cases",
+      "evidence": "artifacts/interface/ai-attachment-qualification.json"
+    },
+    {
+      "area": "Filing ledgers and saved pathways",
+      "passed": 8,
+      "unit": "responsive local browser cases",
+      "evidence": "artifacts/interface/filing-workflow-gap-qualification.json"
+    },
+    {
+      "area": "Providers",
+      "nativeHttpFixtureGroups": 33,
+      "runnerProtocolGroups": 6,
+      "mountedGatewayGroups": 5,
+      "localResponsiveBrowserCases": 8,
+      "externalAccountWrites": false,
+      "evidence": "docs/provider-gap-qualification.md"
+    },
+    {
+      "area": "Recovery",
+      "actualIndexedDbBrowserCases": 12,
+      "actualPowerSyncSdkRecoveryBrowserCases": 24,
+      "sdkTransportOutcomesInjected": true,
+      "evidence": "artifacts/offline/gap-offline-recovery-audit.json"
+    }
+  ],
+  "scopeLimits": [
+    "PowerSync remains selected-meeting preparation; no all-module synchronization, local-to-hosted vault migration or fully offline hosted authentication.",
+    "Real provider credentials/accounts, public production TLS/origins and real Clerk/Microsoft enterprise SSO require deployment qualification.",
+    "Paperless automatic upload is disabled pending an actor-aware worker; manual sync is qualified with protocol fixtures.",
+    "Government/CRA submissions remain manual and filing status self-reported.",
+    "AI supports bounded UTF-8 text formats; no PDF/image/office extraction or on-device inference.",
+    "No signed/notarized macOS/Windows, physical-camera/device, Safari or AppImage qualification.",
+    "Deferred editor/local-engine chunks and unvisited PWA route/auth caches remain limitations."
+  ],
+  "report": "docs/gap-closure-qualification.md"
+}

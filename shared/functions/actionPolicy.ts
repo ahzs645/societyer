@@ -74,6 +74,8 @@ const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
   "waveCache:sync": ["businessId"],
   "waveCache:healthCheck": ["businessId"],
   "waveCache:invoicePaymentProbe": ["businessId"],
+  // The provider adapter independently verifies the operator-bound Wave business.
+  "financialHub:importBrowserWaveTransactions": ["businessId"],
   "aiSettings:upsert": ["modelId"],
   "aiChat:createThread": ["modelId"],
   "aiChatActions:sendChatMessage": ["modelId"],
@@ -110,6 +112,7 @@ export function actionPermission(name: string, kind: "query" | "mutation" | "act
   if (name === "files:generateLogoUploadUrl") return "society:write";
   if (name === "calendarFeed:getFeedToken") return "settings:write";
   if (name === "documents:recordOpen") return "documents:read";
+  if (name === "workflows:generatedDocumentPreflight") return "tasks:write";
   if (["documentVersions:getDownloadTarget", "documentVersions:getDownloadUrl", "workflows:inspectPdfTemplate"].includes(name)) return "documents:read";
   if (name === "minutes:approve") return "minutes:approve";
   if (resource === "exports") return kind === "query" && action === "list" ? "exports:read" : "exports:download";

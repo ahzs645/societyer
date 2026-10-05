@@ -87,6 +87,8 @@ export const sharedRegisterTables = {
     year: v.string(),
     filed: v.boolean(),
     filedOn: v.optional(v.string()),
+    // Explicit operator link; a reported filing is not government verification.
+    sourceFilingId: v.optional(v.id("filings")),
     regnNature: v.optional(v.string()),
     regnLegislation: v.optional(v.string()),
     createdAtISO: v.string(),

@@ -153,6 +153,7 @@ async function waveGraphQL<T>(query: string, variables: Record<string, unknown> 
 
   const response = await fetch(waveGraphQLEndpoint(), {
     method: "POST",
+    signal: AbortSignal.timeout(15_000),
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
@@ -180,13 +181,13 @@ async function waveGraphQL<T>(query: string, variables: Record<string, unknown> 
   return payload.data as T;
 }
 
-export async function waveFetchSnapshot(args?: { businessId?: string; allowDemo?: boolean }): Promise<WaveSnapshotPayload> {
+export async function waveFetchSnapshot(args?: { businessId?: string; allowDemo?: boolean; restrictToBusiness?: boolean }): Promise<WaveSnapshotPayload> {
   if (!waveEnv("WAVE_ACCESS_TOKEN")) {
     if (args?.allowDemo) return demoWaveSnapshot(args?.businessId ?? waveEnv("WAVE_BUSINESS_ID"));
     throw new Error("Wave data cache requires WAVE_ACCESS_TOKEN.");
   }
 
-  const businesses = await waveListBusinesses();
+  const businesses = args?.restrictToBusiness ? [await waveBusiness(args.businessId!)] : await waveListBusinesses();
   const businessId = args?.businessId ?? waveEnv("WAVE_BUSINESS_ID") ?? businesses[0]?.id;
   if (!businessId) {
     throw new Error("Wave data cache requires WAVE_BUSINESS_ID or at least one accessible Wave business.");
@@ -410,6 +411,7 @@ function demoWaveSnapshot(businessId = "demo_wave_business"): WaveSnapshotPayloa
 export async function waveInvoicePaymentProbe(args: {
   businessId?: string;
   allAccessibleBusinesses?: boolean;
+  restrictToBusiness?: boolean;
   maxInvoices?: number;
   maxPayments?: number;
 } = {}): Promise<WaveInvoicePaymentProbeResult> {
@@ -418,7 +420,7 @@ export async function waveInvoicePaymentProbe(args: {
   }
 
   const checkedAtISO = new Date().toISOString();
-  const businesses = await waveListBusinesses();
+  const businesses = args.restrictToBusiness ? [await waveBusiness(args.businessId!)] : await waveListBusinesses();
   const configuredBusinessId = waveEnv("WAVE_BUSINESS_ID")?.trim();
   const selectedBusinessId = args.businessId?.trim() ?? configuredBusinessId ?? businesses[0]?.id;
   const targets = args.allAccessibleBusinesses
@@ -512,14 +514,14 @@ function demoWaveStructures(): WaveSnapshotStructure[] {
   });
 }
 
-export async function waveHealthCheck(args: { businessId?: string } = {}): Promise<WaveHealthCheckResult> {
+export async function waveHealthCheck(args: { businessId?: string; restrictToBusiness?: boolean } = {}): Promise<WaveHealthCheckResult> {
   const checkedAtISO = new Date().toISOString();
   const env = waveEnvironmentStatus();
   const steps: WaveHealthStep[] = [];
   const token = waveEnv("WAVE_ACCESS_TOKEN")?.trim();
   const configuredBusinessId = waveEnv("WAVE_BUSINESS_ID")?.trim();
   const argumentBusinessId = args.businessId?.trim();
-  const missingRequired = env.filter((row) => row.required && !row.present);
+  const missingRequired = env.filter((row) => row.required && !row.present && !(row.name === "WAVE_BUSINESS_ID" && argumentBusinessId));
 
   steps.push({
     id: "environment",
@@ -566,7 +568,7 @@ export async function waveHealthCheck(args: { businessId?: string } = {}): Promi
 
   let businesses: any[] = [];
   try {
-    businesses = await waveListBusinesses();
+    businesses = args.restrictToBusiness ? [await waveBusiness(args.businessId!)] : await waveListBusinesses();
     steps.push({
       id: "api-probe",
       label: "Wave API probe",

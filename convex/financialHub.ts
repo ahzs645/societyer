@@ -1,3 +1,4 @@
+import { operatorWaveBusinessId, providerDeploymentEnv } from "../shared/providerWorkspaceBindings";
 import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { query, internalMutation, mutation, action } from "./lib/untypedServer";
@@ -192,6 +193,8 @@ export const markConnectionConnected = authorizedMutation("financialHub:markConn
       required: "Admin",
     });
     const society = await ctx.db.get(args.societyId);
+    if (args.provider !== "wave") throw new Error("This connection setup supports the Wave provider only.");
+    if (!args.demo) operatorWaveBusinessId(String(args.societyId), args.externalBusinessId, providerDeploymentEnv("SOCIETYER_WAVE_WORKSPACE_BINDINGS_JSON"));
     if (args.demo && society?.demoMode !== true) {
       throw new Error("Demo Wave data can only be connected to a demo society.");
     }
@@ -444,6 +447,7 @@ export const importBrowserWaveTransactions = authorizedMutation("financialHub:im
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    operatorWaveBusinessId(String(args.societyId), args.businessId, providerDeploymentEnv("SOCIETYER_WAVE_WORKSPACE_BINDINGS_JSON"));
     await requireRole(ctx, {
       actingUserId: args.actingUserId,
       societyId: args.societyId,
@@ -590,9 +594,10 @@ export const sync = authorizedAction("financialHub:sync", action)({
     }
     const society = await ctx.runQuery(api.society.getById, { id: conn.societyId });
     const allowDemo = conn.demo === true && society?.demoMode === true;
+    const businessId = allowDemo ? undefined : operatorWaveBusinessId(String(conn.societyId), conn.externalBusinessId, providerDeploymentEnv("SOCIETYER_WAVE_WORKSPACE_BINDINGS_JSON"));
     try {
-      const accountResult = await waveListAccounts({ allowDemo });
-      const transactionResult = await waveListTransactions({ allowDemo });
+      const accountResult = await waveListAccounts({ allowDemo, businessId });
+      const transactionResult = await waveListTransactions({ allowDemo, businessId });
       const { accounts } = accountResult;
       const { transactions } = transactionResult;
       if ((accountResult.provider === "demo" || transactionResult.provider === "demo") && !allowDemo) {

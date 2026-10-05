@@ -22,7 +22,7 @@ export function validateSetupBackup(snapshot: any): void {
     if (!Array.isArray(snapshot.attachments) || snapshot.attachments.length > 50_000) throw new Error("The backup has invalid or excessive attachment references.");
     const keys = new Set<string>();
     for (const attachment of snapshot.attachments) {
-      if (!attachment || typeof attachment !== "object" || typeof attachment.key !== "string" || !attachment.key || keys.has(attachment.key) || typeof attachment.provider !== "string" || typeof attachment.storageKey !== "string" || (attachment.fileSizeBytes !== undefined && (!Number.isSafeInteger(attachment.fileSizeBytes) || attachment.fileSizeBytes < 0))) throw new Error("The backup contains an invalid attachment reference.");
+      if (!attachment || typeof attachment !== "object" || Array.isArray(attachment) || typeof attachment.key !== "string" || !attachment.key || keys.has(attachment.key) || typeof attachment.provider !== "string" || !attachment.provider || typeof attachment.storageKey !== "string" || !attachment.storageKey || (attachment.fileSizeBytes !== undefined && (!Number.isSafeInteger(attachment.fileSizeBytes) || attachment.fileSizeBytes < 0))) throw new Error("The backup contains an invalid attachment reference.");
       keys.add(attachment.key);
     }
   }

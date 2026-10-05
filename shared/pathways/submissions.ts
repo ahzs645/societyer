@@ -206,6 +206,14 @@ export async function dispatchSubmission(
   return { submissionId: record._id, status: outcome.status, receiptJson, error };
 }
 
+/** Shared bounded provider-output validation; credentials never belong in browser-readable history. */
+export function assertSafeProviderReceipt(value: unknown, secrets: readonly string[] = []) {
+  const serialized = JSON.stringify(value);
+  if (!serialized || new TextEncoder().encode(serialized).byteLength > MAX_SUBMISSION_RECEIPT_BYTES
+    || secrets.some(secret => secret && serialized.includes(secret))) throw new Error("Unsafe provider callback receipt.");
+  validateReceiptValue(value);
+}
+
 function validateReceiptValue(value: unknown, depth = 0, budget = { nodes: 0 }) {
   if (depth > 8 || ++budget.nodes > 1000) throw new Error("Receipt structure is too large.");
   if (value === null || typeof value === "boolean") return;

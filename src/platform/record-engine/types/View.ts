@@ -141,7 +141,7 @@ export function hydrateView(raw: any): View {
     calendarFieldMetadataId: raw.calendarFieldMetadataId
       ? String(raw.calendarFieldMetadataId)
       : undefined,
-    calendarLayout: (raw.calendarLayout ?? null) as ViewCalendarLayout | null,
+    calendarLayout: raw.calendarLayout === "week" || raw.calendarLayout === "list" ? raw.calendarLayout : "month",
     filters: parseJsonArray<ViewFilter>(raw.filtersJson),
     filterGroups: parseJsonArray<ViewFilterGroup>(raw.viewFilterGroupsJson ?? raw.filterGroupsJson),
     sorts: parseJsonArray<ViewSort>(raw.sortsJson),

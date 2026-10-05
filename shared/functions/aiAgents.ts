@@ -22,6 +22,33 @@ import {
   requireRolePortable,
   requireSocietyMembership,
 } from "./access";
+import { hasPermission, requirePermissionPortable } from "./permissions";
+
+export async function requireAiRunAccess(ctx: PortableQueryCtx, runId: string) {
+  const candidate = await ctx.db.get(runId, "aiAgentRuns");
+  if (!candidate?.societyId) throw new Error("AI run is not available to this account.");
+  await requirePermissionPortable(ctx, String(candidate.societyId), "tasks:write");
+  const userId = await principalUserId(ctx, String(candidate.societyId));
+  if (!candidate.triggeredByUserId || candidate.triggeredByUserId !== userId) throw new Error("AI run is not available to this account.");
+  return candidate;
+}
+
+export async function listRunsPortable(ctx: PortableQueryCtx, { societyId, agentKey, limit }: { societyId: string; agentKey?: string; limit?: number }) {
+  const user = await requireSocietyMembership(ctx, societyId);
+  if (!hasPermission(String(user.role), "tasks:write")) return [];
+  await requirePermissionPortable(ctx, societyId, "tasks:write");
+  const userId = await principalUserId(ctx, societyId);
+  const query = ctx.db.query("aiAgentRuns");
+  const scoped = agentKey
+    ? query.withIndex("by_society_creator_agent", q => q.eq("societyId", societyId).eq("triggeredByUserId", userId).eq("agentKey", agentKey))
+    : query.withIndex("by_society_creator", q => q.eq("societyId", societyId).eq("triggeredByUserId", userId));
+  return scoped.order("desc").take(Math.min(100, Math.max(1, Math.floor(limit ?? 30))));
+}
+
+export async function auditForRunPortable(ctx: PortableQueryCtx, { runId }: { runId: string }) {
+  await requireAiRunAccess(ctx, runId);
+  return ctx.db.query("aiAgentAuditEvents").withIndex("by_run", q => q.eq("runId", runId)).order("asc").collect();
+}
 
 export type SkillDefinition = {
   _id?: string;
@@ -369,7 +396,7 @@ export async function listToolDraftsPortable(
   ctx: PortableQueryCtx,
   args: { societyId: string; status?: string; limit?: number },
 ) {
-  await requireSocietyMembership(ctx, args.societyId);
+  await requirePermissionPortable(ctx, args.societyId, "tasks:write");
   const rows = await ctx.db
     .query("aiToolDrafts")
     .withIndex("by_society", (q: any) => q.eq("societyId", args.societyId))

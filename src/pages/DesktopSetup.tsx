@@ -424,7 +424,7 @@ export function DesktopSetupPage() {
         <div className="card__head">
           <div>
             <h2 className="card__title">Start local workspace</h2>
-            <span className="card__subtitle">Create a workspace record now, or enter the demo data after confirming the vault.</span>
+            <span className="card__subtitle">Create a workspace record now, or open an existing local workspace after confirming the vault.</span>
           </div>
           <Badge tone={setupComplete ? "success" : requiredReady ? "info" : "warn"}>
             {setupComplete ? "Complete" : requiredReady ? "Ready" : "Needs setup"}
@@ -442,7 +442,7 @@ export function DesktopSetupPage() {
               <CheckCircle2 size={12} /> Create new society
             </button>
             <button className="btn" disabled={!requiredReady || busy === "workspace"} onClick={() => completeSetup("/app")}>
-              Use demo data
+              Open local workspace
             </button>
           </div>
         </div>

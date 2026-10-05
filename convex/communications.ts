@@ -6,7 +6,6 @@ import type { Id } from "./_generated/dataModel";
 import { api, internal } from "./_generated/api";
 import { sendEmail } from "./providers/email";
 import { sendSms } from "./providers/sms";
-import { requireEnabledModule } from "./lib/moduleSettings";
 import {
   listTemplatesPortable,
   getTemplatePortable,
@@ -621,6 +620,7 @@ async function sendCampaignInternal(
 
   const society = (societies ?? []).find((row: any) => row._id === args.societyId);
   if (!society) throw new Error("Society not found.");
+  if (society.disabledModules?.includes("communications")) throw new Error("Communications is disabled for this workspace.");
 
   const recipients = await resolveAudienceRecipients(ctx, {
     societyId: args.societyId,
@@ -784,6 +784,7 @@ async function sendCampaignInternal(
 
       try {
         const sent = await sendSms({
+        demo: society.demoMode === true,
           to: recipient.phone,
           body: bodyText,
           tag: args.kind,
@@ -861,6 +862,7 @@ async function sendCampaignInternal(
 
     try {
       const sent = await sendEmail({
+        demo: society.demoMode === true,
         to: recipient.email,
         subject,
         text: bodyText,
@@ -983,7 +985,6 @@ export const sendCampaign = authorizedAction("communications:sendCampaign", acti
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    await requireEnabledModule(ctx, args.societyId, "communications");
     return sendCampaignInternal(ctx, {
       societyId: args.societyId as any,
       templateId: args.templateId as any,
@@ -1007,7 +1008,6 @@ export const sendMeetingNotice = authorizedAction("communications:sendMeetingNot
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    await requireEnabledModule(ctx, args.societyId, "communications");
     const templates = await ctx.runQuery(api.communications.listTemplates, {
       societyId: args.societyId,
     });

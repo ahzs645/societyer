@@ -1,0 +1,99 @@
+{
+  "completedAt": "2026-10-05T03:07:18.944662+00:00",
+  "baselineCommit": "66b8dcdaed953e93637be15d400c2f5bf09339fb",
+  "source": "Final shared working tree after local native deployment and auth/web restart; uncommitted source changes are reviewed by root.",
+  "passedScenarioGroups": 113,
+  "failedScenarioGroups": 0,
+  "suites": [
+    {
+      "suite": "roles",
+      "passed": 84,
+      "failed": 0,
+      "scenarioGroups": 84,
+      "actualPublicCalls": {
+        "queries": 406,
+        "mutations": 316,
+        "completed": 294,
+        "rejected": 428
+      }
+    },
+    {
+      "suite": "uploads",
+      "passed": 8,
+      "failed": 0,
+      "scenarioGroups": 8
+    },
+    {
+      "suite": "publicIntake",
+      "passed": 6,
+      "failed": 0,
+      "scenarioGroups": 6,
+      "actualPublicCalls": {
+        "queries": 6,
+        "mutations": 13,
+        "completed": 7,
+        "rejected": 12
+      }
+    },
+    {
+      "suite": "vault",
+      "passed": 9,
+      "failed": 0,
+      "scenarioGroups": 9
+    },
+    {
+      "suite": "resourceProjections",
+      "passed": 6,
+      "failed": 0,
+      "scenarioGroups": 6
+    }
+  ],
+  "paperlessInternalVisibility": {
+    "passed": 4,
+    "failed": 0,
+    "cases": [
+      {
+        "principal": "Owner",
+        "path": "paperless:recordSyncResult",
+        "passed": true,
+        "visibilityDenied": true,
+        "stateUnchanged": true
+      },
+      {
+        "principal": "Owner",
+        "path": "paperless:recordSyncRefresh",
+        "passed": true,
+        "visibilityDenied": true,
+        "stateUnchanged": true
+      },
+      {
+        "principal": "anonymous",
+        "path": "paperless:recordSyncResult",
+        "passed": true,
+        "visibilityDenied": true,
+        "stateUnchanged": true
+      },
+      {
+        "principal": "anonymous",
+        "path": "paperless:recordSyncRefresh",
+        "passed": true,
+        "visibilityDenied": true,
+        "stateUnchanged": true
+      }
+    ],
+    "actualHttpMutationAttempts": 4,
+    "qualification": "Actual public /api/mutation endpoint with real authenticated Better Auth Owner and anonymous caller; server rejects internal visibility before validation/handler execution; complete visible sync and connection snapshots unchanged.",
+    "limitations": [
+      "No existing Paperless sync fixture; refresh visibility is rejected before validating supplied ID. This does not qualify internal handler network integration."
+    ]
+  },
+  "oracle": "Actual isolated local Convex public HTTP API, actual Better Auth email session and broker JWT verification; no mocked database, principal, or transport. Operator-only local fixture wrappers supply synthetic records and perform cleanup.",
+  "boundaries": [
+    "Scenario groups contain multiple role, hostile-principal, and mutation assertions; group counts are not individual assertion counts.",
+    "Local configured Better Auth exercised on network; Clerk identity parity and tenant-restricted Microsoft SSO are qualified by separate native identity oracles, not a real remote sign-in here.",
+    "Storage tests upload/download synthetic native bytes; deterministic external-provider adapters, browser views, PowerSync replication, and external production credentials are separate qualifications.",
+    "Projection batch-finance and scoped-service details are native-oracle-only; these live projections use real broker user principals.",
+    "Paperless visibility tests prove internal endpoints cannot be called publicly; they do not invoke a production Paperless server.",
+    "Browser viewport and Electron runtime/package qualification are reported separately."
+  ]
+}

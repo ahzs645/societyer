@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { updatePortable as updateFilingPortable } from "../shared/functions/filings";
 import { authorizedAction, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
 import { query, internalMutation, mutation, action } from "./_generated/server";
@@ -172,7 +173,7 @@ export const _patchFiling = internalMutation({
     const { filingId, ...rest } = args;
     const patch: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(rest)) if (v !== undefined) patch[k] = v;
-    await ctx.db.patch(filingId, patch);
+    await updateFilingPortable(portable, { id: String(filingId), patch });
   },
 });
 

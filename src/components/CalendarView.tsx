@@ -1,51 +1,27 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { ToneVariant } from "./ui";
+import { calendarDate, calendarDateKey, calendarWeekDays } from "../lib/calendarDates";
+
+export type CalendarLayout = "month" | "week" | "list";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-function startOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth(), 1); }
-function addMonths(d: Date, n: number) { return new Date(d.getFullYear(), d.getMonth() + n, 1); }
-
-function gridDays(month: Date): Date[] {
-  const first = startOfMonth(month);
-  // Start grid on Monday.
-  const weekday = (first.getDay() + 6) % 7;
-  const start = new Date(first);
-  start.setDate(first.getDate() - weekday);
-  const days: Date[] = [];
-  for (let i = 0; i < 42; i += 1) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    days.push(d);
-  }
-  return days;
+function monthDays(anchor: Date): Date[] {
+  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const start = calendarWeekDays(first)[0];
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + index);
+    return day;
+  });
 }
 
-function sameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
+export type CalendarEvent = { id: string; label: string; tone?: ToneVariant; date: string };
 
-function dateKey(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-export type CalendarEvent = {
-  id: string;
-  label: string;
-  tone?: ToneVariant;
-  date: string; // ISO-ish; first 10 chars used
-};
-
-/** Month grid calendar. Purely presentational — caller owns data + onSelect. */
+/** Shared month/week/agenda presentation. Callers retain data, authorization and selection. */
 export function CalendarView<T>({
-  items,
-  getDate,
-  getLabel,
-  getTone,
-  getId,
-  onSelect,
-  initialMonth,
+  items, getDate, getLabel, getTone, getId, onSelect, initialMonth, layout, onLayoutChange,
 }: {
   items: T[];
   getDate: (item: T) => string | null | undefined;
@@ -54,78 +30,80 @@ export function CalendarView<T>({
   getId: (item: T) => string;
   onSelect?: (item: T) => void;
   initialMonth?: Date;
+  layout?: CalendarLayout;
+  onLayoutChange?: (layout: CalendarLayout) => void;
 }) {
-  const [month, setMonth] = useState(() => startOfMonth(initialMonth ?? new Date()));
-  const today = new Date();
-
-  const byDay = useMemo(() => {
+  const [anchor, setAnchor] = useState(() => initialMonth ?? new Date());
+  const [localLayout, setLocalLayout] = useState<CalendarLayout>("month");
+  const mode = layout ?? localLayout;
+  const changeLayout = (next: CalendarLayout) => onLayoutChange ? onLayoutChange(next) : setLocalLayout(next);
+  const todayKey = calendarDateKey(new Date());
+  const { byDay, undated } = useMemo(() => {
     const map = new Map<string, { item: T; label: string; tone?: ToneVariant; id: string }[]>();
+    let missing = 0;
     for (const item of items) {
-      const iso = getDate(item);
-      if (!iso) continue;
-      const key = iso.slice(0, 10);
+      const date = calendarDate(getDate(item));
+      if (!date) { missing += 1; continue; }
+      const key = calendarDateKey(date);
       const list = map.get(key) ?? [];
-      list.push({
-        item,
-        label: getLabel(item),
-        tone: getTone?.(item),
-        id: getId(item),
-      });
+      list.push({ item, label: getLabel(item), tone: getTone?.(item), id: getId(item) });
       map.set(key, list);
     }
-    return map;
+    return { byDay: map, undated: missing };
   }, [items, getDate, getLabel, getTone, getId]);
-
-  const days = gridDays(month);
-  const monthLabel = month.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-
-  return (
-    <div className="calendar-view">
-      <div className="calendar-view__head">
-        <div className="calendar-view__title">{monthLabel}</div>
-        <div className="calendar-view__nav">
-          <button className="btn btn--ghost btn--sm btn--icon" aria-label="Previous month" onClick={() => setMonth(addMonths(month, -1))}>
-            <ChevronLeft size={14} />
-          </button>
-          <button className="btn btn--ghost btn--sm" onClick={() => setMonth(startOfMonth(new Date()))}>Today</button>
-          <button className="btn btn--ghost btn--sm btn--icon" aria-label="Next month" onClick={() => setMonth(addMonths(month, 1))}>
-            <ChevronRight size={14} />
-          </button>
-        </div>
+  const days = mode === "week" ? calendarWeekDays(anchor) : monthDays(anchor);
+  const listDays = days.filter((day) => day.getMonth() === anchor.getMonth() && (byDay.get(calendarDateKey(day))?.length ?? 0) > 0);
+  const monthLabel = anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const title = mode === "week"
+    ? `${days[0].toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} – ${days[6].toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
+    : monthLabel;
+  const period = mode === "week" ? "week" : "month";
+  const move = (direction: number) => {
+    if (mode === "week") {
+      const next = new Date(anchor);
+      next.setDate(next.getDate() + direction * 7);
+      setAnchor(next);
+    } else setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() + direction, 1));
+  };
+  const events = (day: Date, limit?: number) => {
+    const rows = byDay.get(calendarDateKey(day)) ?? [];
+    const visible = limit ? rows.slice(0, limit) : rows;
+    return <div className="calendar-view__events">
+      {visible.map((event) => <button key={event.id} type="button"
+        className={`calendar-view__event${event.tone ? ` calendar-view__event--${event.tone}` : ""}`}
+        title={event.label} onClick={() => onSelect?.(event.item)}>{event.label}</button>)}
+      {rows.length > visible.length && <button type="button" className="calendar-view__more"
+        aria-label={`Show all ${rows.length} events on ${calendarDateKey(day)}`}
+        onClick={() => { setAnchor(day); changeLayout("list"); }}>+{rows.length - visible.length} more</button>}
+    </div>;
+  };
+  return <div className={`calendar-view calendar-view--${mode}`}>
+    <div className="calendar-view__head">
+      <div className="calendar-view__title" aria-live="polite">{title}</div>
+      <div className="calendar-view__nav">
+        <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Previous ${period}`} onClick={() => move(-1)}><ChevronLeft size={14} /></button>
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => setAnchor(new Date())}>Today</button>
+        <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={`Next ${period}`} onClick={() => move(1)}><ChevronRight size={14} /></button>
       </div>
-      <div className="calendar-view__weekdays">
-        {WEEKDAYS.map((w) => <div key={w} className="calendar-view__weekday">{w}</div>)}
-      </div>
-      <div className="calendar-view__grid">
-        {days.map((day) => {
-          const inMonth = day.getMonth() === month.getMonth();
-          const events = byDay.get(dateKey(day)) ?? [];
-          const visible = events.slice(0, 3);
-          const extra = events.length - visible.length;
-          return (
-            <div
-              key={day.toISOString()}
-              className={`calendar-view__cell${inMonth ? "" : " is-outside"}${sameDay(day, today) ? " is-today" : ""}`}
-            >
-              <div className="calendar-view__date">{day.getDate()}</div>
-              <div className="calendar-view__events">
-                {visible.map((e) => (
-                  <button
-                    key={e.id}
-                    type="button"
-                    className={`calendar-view__event${e.tone ? ` calendar-view__event--${e.tone}` : ""}`}
-                    title={e.label}
-                    onClick={() => onSelect?.(e.item)}
-                  >
-                    {e.label}
-                  </button>
-                ))}
-                {extra > 0 && <div className="calendar-view__more">+{extra} more</div>}
-              </div>
-            </div>
-          );
-        })}
+      <div className="record-table__segmented" role="group" aria-label="Calendar layout">
+        {(["month", "week", "list"] as const).map((value) => <button key={value} type="button" aria-pressed={mode === value}
+          className={mode === value ? "is-active" : ""} onClick={() => changeLayout(value)}>{value[0].toUpperCase() + value.slice(1)}</button>)}
       </div>
     </div>
-  );
+    {mode === "list" ? <div className="calendar-view__agenda" role="region" aria-label={`${monthLabel} events`}>
+      {listDays.length === 0 && <p className="muted">No dated records this month.</p>}
+      {listDays.map((day) => <section key={calendarDateKey(day)} data-calendar-date={calendarDateKey(day)}>
+        <h3 className="calendar-view__date">{day.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</h3>
+        {events(day)}
+      </section>)}
+    </div> : <div className="calendar-view__scroll" role="region" aria-label={`${mode === "week" ? "Week" : "Month"} calendar`} tabIndex={0}>
+      <div className="calendar-view__weekdays">{WEEKDAYS.map((day) => <div key={day} className="calendar-view__weekday">{day}</div>)}</div>
+      <div className="calendar-view__grid">{days.map((day) => <div key={calendarDateKey(day)} data-calendar-date={calendarDateKey(day)}
+        className={`calendar-view__cell${day.getMonth() === anchor.getMonth() ? "" : " is-outside"}${calendarDateKey(day) === todayKey ? " is-today" : ""}`}>
+        <div className="calendar-view__date">{mode === "week" ? day.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : day.getDate()}</div>
+        {events(day, mode === "month" ? 3 : undefined)}
+      </div>)}</div>
+    </div>}
+    {undated > 0 && <p className="muted calendar-view__undated">{undated} {undated === 1 ? "record without a valid date is" : "records without valid dates are"} not shown.</p>}
+  </div>;
 }

@@ -33,6 +33,7 @@ import {
   jurisdictionModuleContract,
 } from "../../shared/jurisdictionWorkspace";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { calendarDateKey } from "../lib/calendarDates";
 
 const TAX_FILING_KINDS = ["T2", "T1044", "T3010", "T4", "GSTHST"] as const;
 
@@ -60,6 +61,8 @@ export function FilingsPage() {
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
   const [importingRegistry, setImportingRegistry] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [markingFiled, setMarkingFiled] = useState(false);
   const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const filingGuidance = useQuery(
@@ -92,7 +95,7 @@ export function FilingsPage() {
       jurisdictionCode: filing.jurisdictionCode,
       contextKind: filing.contextKind,
       sourceRegistrationId: filing.sourceRegistrationId,
-      filedAt: new Date().toISOString().slice(0, 10),
+      filedAt: calendarDateKey(new Date()),
       submissionMethod: filing.submissionMethod ?? "ManualPortal",
       confirmationNumber: filing.confirmationNumber ?? "",
       feePaidDollars: centsToDollarInput(filing.feePaidCents),
@@ -145,7 +148,7 @@ export function FilingsPage() {
     setForm({
       kind: jurisdictionFilingKinds[0]?.kind ?? "AnnualReport",
       periodLabel: "",
-      dueDate: new Date().toISOString().slice(0, 10),
+      dueDate: calendarDateKey(new Date()),
       status: "Upcoming",
       jurisdictionCode: society.jurisdictionCode,
       contextKind: "home",
@@ -161,7 +164,7 @@ export function FilingsPage() {
     setForm({
       kind: jurisdictionFilingKinds[0]?.kind ?? "AnnualReport",
       periodLabel: "",
-      dueDate: new Date().toISOString().slice(0, 10),
+      dueDate: calendarDateKey(new Date()),
       status: "Upcoming",
       jurisdictionCode: society.jurisdictionCode,
       contextKind: "home",
@@ -169,9 +172,15 @@ export function FilingsPage() {
     setOpen(true);
   };
   const save = async () => {
-    if (!canWrite) return;
-    await create({ societyId: society._id, ...form, submittedByUserId: actingUserId });
-    setOpen(false);
+    if (!canWrite || saving) return;
+    setSaving(true);
+    try {
+      await create({ societyId: society._id, ...form, submittedByUserId: actingUserId });
+      setOpen(false);
+      toast.success("Filing obligation saved");
+    } catch (error: any) {
+      toast.error("Could not save filing", error?.message ?? String(error));
+    } finally { setSaving(false); }
   };
 
   const importRegistryHistory = async () => {
@@ -330,7 +339,7 @@ export function FilingsPage() {
 
       <Drawer
         open={open} onClose={() => setOpen(false)} title="Add filing"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite}>Save</button></>}
+        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite || saving}>{saving ? "Saving…" : "Save"}</button></>}
       >
         {form && (
           <div>
@@ -402,7 +411,7 @@ export function FilingsPage() {
             <button
               className="btn btn--accent"
               onClick={async () => {
-                if (!canWrite) return;
+                if (!canWrite || markingFiled) return;
                 const hasEvidence =
                   !!completeDraft.confirmationNumber?.trim() ||
                   !!completeDraft.receiptDocumentId ||
@@ -412,6 +421,8 @@ export function FilingsPage() {
                   toast.error("Add filed date, method, and at least one evidence item before marking filed");
                   return;
                 }
+                setMarkingFiled(true);
+                try {
                 await markFiled({
                   id: completeDraft.id,
                   filedAt: completeDraft.filedAt,
@@ -427,10 +438,13 @@ export function FilingsPage() {
                 });
                 toast.success("Filing marked as filed");
                 setCompleteDraft(null);
+                } catch (error: any) {
+                  toast.error("Could not mark filing as filed", error?.message ?? String(error));
+                } finally { setMarkingFiled(false); }
               }}
-            disabled={!canWrite}
+            disabled={!canWrite || markingFiled}
            >
-              Save
+              {markingFiled ? "Saving…" : "Save"}
             </button>
           </>
         }
@@ -439,7 +453,7 @@ export function FilingsPage() {
           <div>
             <InspectorNote tone="warn" title="Only mark filed with evidence">
               Capture the filed date, method, confirmation number, and receipt once the submission
-              is actually complete so audit trails stay defensible.
+              is actually complete so audit trails stay defensible. This records your attestation; it does not independently verify government acceptance.
             </InspectorNote>
             {(completeDraft.registryUrl || filingGuidance?.registryUrl) && (
               <div className="muted" style={{ fontSize: 13, marginBottom: 10 }}>

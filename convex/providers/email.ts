@@ -17,16 +17,17 @@ export async function sendEmail(args: {
   html?: string;
   text?: string;
   tag?: string;
+  demo?: boolean;
 }): Promise<SentEmail> {
   const p = providers.email();
   const sentAtISO = new Date().toISOString();
   const bodyPreview = (args.text ?? args.html ?? "").slice(0, 140);
 
-  if (p.id === "demo") {
+  if (args.demo === true) {
     // Demo mode logs but also returns a fake id — the caller can surface the
     // "email sent" state in the notification center without actually reaching
     // out over SMTP.
-    console.log(`[email:demo] → ${args.to} | ${args.subject}`);
+    // Explicit simulation never sends to an external provider.
     return {
       provider: "demo",
       accepted: true,
@@ -38,21 +39,24 @@ export async function sendEmail(args: {
     };
   }
 
+  if (p.id === "demo") throw new Error("Email delivery requires RESEND_API_KEY and RESEND_FROM_EMAIL (or RESEND_FROM). Simulation is available only in an explicit demo workspace.");
+
   const apiKey = (globalThis as any)?.process?.env?.RESEND_API_KEY;
   const from =
     (globalThis as any)?.process?.env?.RESEND_FROM_EMAIL ??
     (globalThis as any)?.process?.env?.RESEND_FROM ??
-    "Societyer <noreply@example.com>";
+    undefined;
   const endpoint =
     (globalThis as any)?.process?.env?.RESEND_API_BASE_URL ??
     "https://api.resend.com/emails";
 
-  if (!apiKey) {
-    throw new Error("Live email send requires RESEND_API_KEY.");
+  if (!apiKey || !from) {
+    throw new Error("Live email send requires RESEND_API_KEY and RESEND_FROM_EMAIL (or RESEND_FROM).");
   }
 
   const response = await fetch(endpoint, {
     method: "POST",
+    signal: AbortSignal.timeout(15_000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
@@ -68,15 +72,15 @@ export async function sendEmail(args: {
   });
 
   if (!response.ok) {
-    const detail = (await response.text().catch(() => "")).trim();
-    throw new Error(detail || `Resend request failed with status ${response.status}.`);
+    throw new Error(`Resend request failed with status ${response.status}.`);
   }
 
   const data = await response.json().catch(() => ({}));
+  if (typeof (data as any)?.id !== "string" || !(data as any).id.trim()) throw new Error("Resend did not return a delivery identifier; acceptance is unconfirmed.");
   return {
     provider: "resend" as const,
     accepted: true,
-    id: String((data as any)?.id ?? `resend-${Date.now()}`),
+    id: String((data as any).id),
     to: args.to,
     subject: args.subject,
     bodyPreview,

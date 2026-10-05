@@ -1,5 +1,7 @@
 // Import-session apply layer: ctx-taking writes, meeting merge, and record insertion.
 
+import { validateFiledFacts } from "../filings";
+import { requirePermissionPortable } from "../permissions";
 import { transactionImportMappingCandidates } from "../../accountingMappingCandidates";
 import { reconcileDividend } from "../../dividends";
 import {
@@ -302,7 +304,8 @@ type SectionRecordHandler = (h: SectionRecordContext) => Promise<any>;
 // logic formerly inlined in insertSectionRecord's if-chain; dispatch is now a lookup.
 const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
   filing: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {
-    return await ctx.db.insert("filings", {
+    await requirePermissionPortable(ctx, societyId, "filings:write");
+    const filing = {
       societyId,
       kind: cleanText(payload.kind) || "Other",
       periodLabel: cleanText(payload.periodLabel),
@@ -318,7 +321,9 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       evidenceNotes: sourceNote,
       status: cleanText(payload.status) || "NeedsReview",
       notes: cleanText(payload.notes),
-    });
+    };
+    validateFiledFacts(filing);
+    return await ctx.db.insert("filings", filing);
   },
 
   deadline: async ({ ctx, societyId, record, payload, sourceDocumentIds, firstSourceDocumentId, sourceNote }: SectionRecordContext) => {

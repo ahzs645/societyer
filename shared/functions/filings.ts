@@ -12,8 +12,34 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { requireDocumentAccess } from "./documents";
+import { requirePermissionPortable } from "./permissions";
 import { filingKindDefinition } from "../jurisdictionWorkspace";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
+
+/** These are user-recorded filing facts, never registry verification. */
+export function validateFiledFacts(record: Record<string, any>) {
+  if (record.status !== "Filed") return;
+  const date = record.filedAt;
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)
+    || Number.isNaN(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date
+    || !record.submissionMethod?.trim()) {
+    throw new Error("A valid filed date and submission method are required.");
+  }
+  if (!record.confirmationNumber?.trim() && !record.receiptDocumentId
+    && !record.stagedPacketDocumentId && !record.evidenceNotes?.trim()) {
+    throw new Error("Add a confirmation number, evidence document, packet, or evidence note before marking filed.");
+  }
+  if (record.feePaidCents !== undefined && (!Number.isSafeInteger(record.feePaidCents) || record.feePaidCents < 0)) {
+    throw new Error("The filing fee must be a nonnegative whole number of cents.");
+  }
+}
+
+async function readableEvidence(ctx: PortableQueryCtx, documentId: string, societyId: string) {
+  await requirePermissionPortable(ctx, societyId, "documents:read");
+  await getOwned(ctx, "documents", documentId, societyId);
+  await requireDocumentAccess(ctx, documentId);
+}
 
 function filingDefaults(kind: string, jurisdictionCode?: string | null) {
   const definition = filingKindDefinition(kind, jurisdictionCode);
@@ -70,6 +96,7 @@ export async function createPortable(
   if (args.submittedByUserId && args.submittedByUserId !== submittedByUserId) {
     throw new Error("Authenticated actor does not match the current principal.");
   }
+  validateFiledFacts(args);
   const defaults = filingDefaults(
     args.kind,
     args.jurisdictionCode ?? await jurisdictionCodeForSociety(ctx, args.societyId),
@@ -101,10 +128,10 @@ export async function markFiledPortable(
   const existing = await requireOwnedRow(ctx, "filings", id);
   const societyId = String(existing.societyId);
   if (rest.receiptDocumentId) {
-    await getOwned(ctx, "documents", rest.receiptDocumentId, societyId);
+    await readableEvidence(ctx, rest.receiptDocumentId, societyId);
   }
   if (rest.stagedPacketDocumentId) {
-    await getOwned(ctx, "documents", rest.stagedPacketDocumentId, societyId);
+    await readableEvidence(ctx, rest.stagedPacketDocumentId, societyId);
   }
   const submittedByUserId = rest.submittedByUserId
     ? await principalUserId(ctx, societyId)
@@ -126,16 +153,10 @@ export async function markFiledPortable(
   void clientSubmittedByUserId;
   void clientAttestedByUserId;
   const jurisdictionCode = await jurisdictionCodeForSociety(ctx, societyId);
-  if (!rest.filedAt || !rest.submissionMethod) {
-    throw new Error("Filed date and submission method are required.");
-  }
-  const hasEvidence =
-    !!rest.confirmationNumber ||
-    !!rest.receiptDocumentId ||
-    !!rest.stagedPacketDocumentId ||
-    !!rest.evidenceNotes?.trim();
-  if (!hasEvidence) {
-    throw new Error("Add a confirmation number, evidence document, packet, or evidence note before marking filed.");
+  const filedFacts = { ...existing, ...rest, status: "Filed" };
+  validateFiledFacts(filedFacts);
+  for (const documentId of [filedFacts.receiptDocumentId, filedFacts.stagedPacketDocumentId]) {
+    if (documentId) await readableEvidence(ctx, documentId, societyId);
   }
   await ctx.db.patch(id, {
     ...safeRest,
@@ -185,13 +206,13 @@ export async function updatePortable(
   const existing = await requireOwnedRow(ctx, "filings", id);
   const societyId = String(existing.societyId);
   if (patch.receiptDocumentId) {
-    await getOwned(ctx, "documents", patch.receiptDocumentId, societyId);
+    await readableEvidence(ctx, patch.receiptDocumentId, societyId);
   }
   if (patch.stagedPacketDocumentId) {
-    await getOwned(ctx, "documents", patch.stagedPacketDocumentId, societyId);
+    await readableEvidence(ctx, patch.stagedPacketDocumentId, societyId);
   }
   for (const documentId of patch.sourceDocumentIds ?? []) {
-    await getOwned(ctx, "documents", documentId, societyId);
+    await readableEvidence(ctx, documentId, societyId);
   }
   const submittedByUserId = patch.submittedByUserId
     ? await principalUserId(ctx, societyId)
@@ -212,6 +233,13 @@ export async function updatePortable(
   } = patch;
   void clientSubmittedByUserId;
   void clientAttestedByUserId;
+  const nextFacts = { ...existing, ...safePatch };
+  validateFiledFacts(nextFacts);
+  if (nextFacts.status === "Filed") {
+    for (const documentId of [nextFacts.receiptDocumentId, nextFacts.stagedPacketDocumentId]) {
+      if (documentId) await readableEvidence(ctx, documentId, societyId);
+    }
+  }
   const defaults = filingDefaults(
     safePatch.kind ?? existing.kind,
     safePatch.jurisdictionCode ?? existing.jurisdictionCode ?? await jurisdictionCodeForSociety(ctx, societyId),
@@ -257,6 +285,12 @@ export async function importBcRegistryHistoryPortable(
   },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
+  for (const record of args.records) {
+    validateFiledFacts(record);
+    for (const documentId of [record.receiptDocumentId, record.stagedPacketDocumentId, ...(record.sourceDocumentIds ?? [])]) {
+      if (documentId) await readableEvidence(ctx, documentId, args.societyId);
+    }
+  }
   const existing = await ctx.db
     .query("filings")
     .withIndex("by_society", (q) => q.eq("societyId", args.societyId))

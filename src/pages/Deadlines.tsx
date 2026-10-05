@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
@@ -7,6 +7,7 @@ import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { CalendarView } from "../components/CalendarView";
+import { calendarDate, calendarDateKey } from "../lib/calendarDates";
 import { Segmented } from "../components/primitives";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -25,7 +26,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
-import { MarkdownEditor } from "../components/MarkdownEditor";
+import { MarkdownEditor, type MarkdownEditorHandle } from "../components/MarkdownEditor";
 
 type DeadlineStatus = "open" | "complete" | "closed";
 type StatusFilter = "open" | "complete" | "closed" | "all";
@@ -56,6 +57,9 @@ export function DeadlinesPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<Id<"deadlines"> | null>(null);
+  const [saving, setSaving] = useState(false);
+  const descriptionEditor = useRef<MarkdownEditorHandle>(null);
   const [form, setForm] = useState<any>(null);
   const [view, setView] = useState<"list" | "calendar">("list");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
@@ -79,21 +83,31 @@ export function DeadlinesPage() {
 
   const openNew = () => {
     if (!canWrite) return;
-    setForm({ title: "", dueDate: new Date().toISOString().slice(0, 10), category: "Governance", recurrence: "None" });
+    setEditingId(null);
+    setForm({ title: "", dueDate: calendarDateKey(new Date()), category: "Governance", recurrence: "None" });
+    setOpen(true);
+  };
+  const openRecord = (record: any) => {
+    setEditingId(record._id);
+    setForm({ title: record.title, description: record.description, dueDate: record.dueDate,
+      category: record.category, recurrence: record.recurrence ?? "None", recurrenceEndDate: record.recurrenceEndDate });
     setOpen(true);
   };
   const save = async () => {
-    if (!canWrite) return;
-    const { recurrenceEndDate, ...rest } = form;
-    await create({
-      societyId: society._id,
-      ...rest,
-      // Only send a bound when the deadline actually recurs and one was picked.
-      ...(rest.recurrence && rest.recurrence !== "None" && recurrenceEndDate
-        ? { recurrenceEndDate }
-        : {}),
-    });
-    setOpen(false);
+    if (!canWrite || saving || !form.title?.trim()) return;
+    setSaving(true);
+    try {
+      const { recurrenceEndDate, ...rest } = { ...form, description: descriptionEditor.current?.getMarkdown() ?? form.description };
+      const values = { ...rest, title: rest.title.trim(),
+        ...(editingId ? { recurrenceEndDate: rest.recurrence !== "None" ? recurrenceEndDate ?? "" : "" }
+          : rest.recurrence && rest.recurrence !== "None" && recurrenceEndDate ? { recurrenceEndDate } : {}) };
+      if (editingId) await update({ id: editingId, patch: values });
+      else await create({ societyId: society._id, ...values });
+      setOpen(false);
+      toast.success(editingId ? "Deadline updated" : "Deadline created");
+    } catch (error) {
+      toast.error("Couldn't save deadline", error instanceof Error ? error.message : undefined);
+    } finally { setSaving(false); }
   };
 
   const handleDelete = async (record: any) => {
@@ -197,6 +211,7 @@ export function DeadlinesPage() {
           getId={(r) => r._id}
           getLabel={(r) => r.title}
           getDate={(r) => r.dueDate}
+          onSelect={openRecord}
           getTone={(r) => {
             const s = statusOf(r);
             if (s === "complete") return "success";
@@ -216,6 +231,7 @@ export function DeadlinesPage() {
             objectMetadata={tableData.objectMetadata}
             hydratedView={tableData.hydratedView}
             records={records}
+            onRecordClick={(_id, record) => openRecord(record)}
             onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
               if (fieldName === "status") {
                 const nextStatus = value as DeadlineStatus;
@@ -276,7 +292,7 @@ export function DeadlinesPage() {
                   if (!record.dueDate) return <span className="record-cell__empty">—</span>;
                   return (
                     <span style={isOverdue ? { color: "var(--danger)", fontWeight: 600 } : undefined}>
-                      {new Date(record.dueDate).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                      {(calendarDate(record.dueDate) ?? new Date(record.dueDate)).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
                       {isOverdue && " · Overdue"}
                     </span>
                   );
@@ -339,16 +355,16 @@ export function DeadlinesPage() {
       )}
 
       <Drawer
-        open={open} onClose={() => setOpen(false)} title="Add deadline"
-        footer={<><button className="btn" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite}>Save</button></>}
+        open={open} onClose={() => { if (!saving) setOpen(false); }} title={editingId ? canWrite ? "Edit deadline" : "View deadline" : "Add deadline"}
+        footer={<><button className="btn" onClick={() => setOpen(false)} disabled={saving}>Cancel</button><button className="btn btn--accent" onClick={save} disabled={!canWrite || saving || !form?.title?.trim()}>{saving ? "Saving…" : "Save"}</button></>}
       >
         {form && (
-          <div>
+          <fieldset disabled={!canWrite || saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <p className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 0, marginBottom: 12 }}>
               Use a deadline for dates imposed by law or regulation. Internal work belongs in Tasks; promises to funders or partners belong in Commitments.
             </p>
             <Field label="Title"><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
-            <Field label="Description"><MarkdownEditor rows={4} value={form.description ?? ""} onChange={(markdown) => setForm({ ...form, description: markdown })} /></Field>
+            <Field label="Description"><MarkdownEditor ref={descriptionEditor} readOnly={!canWrite || saving} rows={4} value={form.description ?? ""} onChange={(markdown) => setForm({ ...form, description: markdown })} /></Field>
             <div className="row" style={{ gap: 12 }}>
               <Field label="Category">
                 <Select
@@ -388,7 +404,7 @@ export function DeadlinesPage() {
                 </p>
               </Field>
             )}
-          </div>
+          </fieldset>
         )}
       </Drawer>
     </div>

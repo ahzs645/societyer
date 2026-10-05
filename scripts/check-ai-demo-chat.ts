@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { StaticConvexClient } from "../src/lib/staticConvex";
+
+const demo = new StaticConvexClient();
+const [society] = await demo.query("society:list", {});
+const source = { name: "synthetic.md", mediaType: "text/markdown", text: "Synthetic demo file contents" };
+const result = await demo.action("aiChatActions:sendChatMessage", { societyId: society._id, content: "Synthetic private demo request", attachments: [source] });
+assert.equal(result.provider, "demo_simulation");
+const history = await demo.query("aiChat:messagesForThread", { threadId: result.threadId });
+assert.equal(history.length, 2);
+assert.ok(history[0].content.includes(source.text));
+assert.ok(history[0].createdByUserId);
+assert.equal(history[0].createdByUserId, history[1].createdByUserId);
+assert.match(history[1].content, /Simulated demo reply\. No AI provider was contacted/);
+assert.ok((await demo.query("aiChat:listThreads", { societyId: society._id })).some((thread: any) => thread._id === result.threadId));
+await demo.action("aiChatActions:sendChatMessage", { societyId: society._id, threadId: result.threadId, content: "Continue the same synthetic demo conversation" });
+assert.equal((await demo.query("aiChat:messagesForThread", { threadId: result.threadId })).length, 4);
+const local = new StaticConvexClient({ url: "local://societyer-workspace" });
+await assert.rejects(local.action("aiChatActions:sendChatMessage", { societyId: society._id, content: "Real local runtime must not pretend to run inference" }), /No local inference engine is configured/);
+console.log("PASS explicit demo chat persists creator-attributed source and simulated replies through portable records; real local runtime rejects unavailable inference.");

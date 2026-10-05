@@ -57,6 +57,7 @@ export function usePersistView({
         type: state.type,
         kanbanFieldMetadataId: state.kanbanFieldMetadataId as Id<"fieldMetadata"> | undefined,
         calendarFieldMetadataId: state.calendarFieldMetadataId as Id<"fieldMetadata"> | undefined,
+        calendarLayout: state.calendarLayout,
         filtersJson: JSON.stringify(state.filters),
         viewFilterGroupsJson: JSON.stringify(state.filterGroups),
         sortsJson: JSON.stringify(state.sorts),
@@ -93,7 +94,7 @@ export function usePersistView({
     });
     // Promote live state into `savedView` so isDirty flips back to false.
     requireCurrentAuthority();
-    handle.get().markSaved();
+    handle.get().markSaved(state);
   }, [updateField, updateView, reorderFields, handle, requireCurrentAuthority]);
 
   const saveAsNewView = useCallback(
@@ -107,6 +108,7 @@ export function usePersistView({
         type: state.type,
         kanbanFieldMetadataId: state.kanbanFieldMetadataId as Id<"fieldMetadata"> | undefined,
         calendarFieldMetadataId: state.calendarFieldMetadataId as Id<"fieldMetadata"> | undefined,
+        calendarLayout: state.calendarLayout,
         density: state.density,
         filtersJson: JSON.stringify(state.filters),
         viewFilterGroupsJson: JSON.stringify(state.filterGroups),
@@ -142,7 +144,7 @@ export function usePersistView({
       // Future saves must target the newly-created view and its fields.
       requireCurrentAuthority();
       handle.set({ viewId: String(viewId), columns: newColumns });
-      handle.get().markSaved();
+      handle.get().markSaved({ ...state, viewId: String(viewId), columns: newColumns });
       return viewId;
     },
     [createView, addField, societyId, objectMetadataId, handle, requireCurrentAuthority],

@@ -1,5 +1,5 @@
 {
-  "completedAt": "2026-10-04T21:22:11.217Z",
+  "completedAt": "2026-10-05T03:05:25.649Z",
   "endpoint": "http://127.0.0.1:43230",
   "auth": "Real Better Auth email sessions and /api/auth/token JWTs verified by actual self-hosted Convex",
   "readEndpoints": [

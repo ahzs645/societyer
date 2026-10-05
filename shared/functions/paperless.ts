@@ -13,7 +13,9 @@
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
+import { requireDocumentAccess, filterDocumentLinkedRows } from "./documents";
 import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
+import { requirePermissionPortable } from "./permissions";
 
 export async function tagProfilesPortable() {
   return [
@@ -58,7 +60,8 @@ export async function recentSyncsPortable(
     .query("paperlessDocumentSyncs")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
     .collect();
-  const sorted = rows
+  const visible = await filterDocumentLinkedRows(ctx, societyId, rows);
+  const sorted = visible
     .sort((a: any, b: any) => b.queuedAtISO.localeCompare(a.queuedAtISO))
     .slice(0, limit ?? 20);
   return await Promise.all(
@@ -78,6 +81,7 @@ export async function syncForDocumentPortable(ctx: PortableQueryCtx, { documentI
   if (!document || typeof document.societyId !== "string") throw new Error("documents not found.");
   await requireSocietyMembership(ctx, document.societyId);
   await getOwned(ctx, "documents", documentId, document.societyId);
+  await requireDocumentAccess(ctx, documentId);
   const rows = await ctx.db
     .query("paperlessDocumentSyncs")
     .withIndex("by_document", (q) => q.eq("documentId", documentId))
@@ -90,12 +94,14 @@ export async function sourcePullContextPortable(
   args: { societyId: string; documentId: string; actingUserId?: string },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
+  await requirePermissionPortable(ctx, args.societyId, "settings:write");
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
     required: "Director",
   });
   const document = await getOwned(ctx, "documents", args.documentId, args.societyId);
+  await requireDocumentAccess(ctx, args.documentId, "edit");
   return { document };
 }
 
@@ -104,6 +110,7 @@ export async function authorizeMeetingImportPortable(
   args: { societyId: string; actingUserId: string },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
+  await requirePermissionPortable(ctx, args.societyId, "settings:write");
   await requireRolePortable(ctx, {
     actingUserId: args.actingUserId,
     societyId: args.societyId,
@@ -116,10 +123,33 @@ export async function getSyncPortable(ctx: PortableQueryCtx, { id }: { id: strin
   const candidate = await ctx.db.get(id, "paperlessDocumentSyncs");
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("paperlessDocumentSyncs not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
-  return getOwned(ctx, "paperlessDocumentSyncs", id, candidate.societyId);
+  const sync = await getOwned(ctx, "paperlessDocumentSyncs", id, candidate.societyId);
+  await requireDocumentAccess(ctx, String(sync.documentId));
+  return sync;
 }
 
 export async function recordConnectionTestPortable(
+  ctx: PortableMutationCtx,
+  args: {
+    societyId: string;
+    ok: boolean;
+    baseUrl?: string;
+    apiVersion?: string;
+    serverVersion?: string;
+    error?: string;
+    demo: boolean;
+  },
+) {
+  await requireSocietyMembership(ctx, args.societyId);
+  const society = await ctx.db.get(args.societyId, "societies");
+  if (ctx.principal.kind !== "user" || ctx.principal.assurance !== "trusted-workspace" || args.demo !== true || society?.demoMode !== true) {
+    throw new Error("Live Paperless test results can be recorded only by the configured server adapter. Local simulations require an explicit demo workspace.");
+  }
+  return recordVerifiedConnectionTestPortable(ctx, args);
+}
+
+/** Server-only helper: never register this as a public runtime mutation. */
+export async function recordVerifiedConnectionTestPortable(
   ctx: PortableMutationCtx,
   args: {
     societyId: string;

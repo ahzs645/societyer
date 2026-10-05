@@ -78,20 +78,18 @@ async function parseResponse(response: Response) {
   try {
     return JSON.parse(text);
   } catch {
-    return text;
+    throw new Error("Paperless-ngx returned invalid JSON.");
   }
 }
 
 async function paperlessFetch(path: string, init?: RequestInit) {
   const response = await fetch(buildUrl(path), {
     ...init,
+    signal: init?.signal ?? AbortSignal.timeout(15_000),
     headers: liveHeaders(init?.headers),
   });
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(
-      `Paperless-ngx ${response.status}: ${body || response.statusText}`,
-    );
+    throw new Error(`Paperless-ngx request failed with status ${response.status}.`);
   }
   return response;
 }
@@ -106,9 +104,8 @@ export function paperlessRuntimeStatus() {
   };
 }
 
-export async function testPaperlessConnection(): Promise<PaperlessConnectionTest> {
-  const provider = providers.paperless();
-  if (provider.id === "demo") {
+export async function testPaperlessConnection(options?: { demo?: boolean }): Promise<PaperlessConnectionTest> {
+  if (options?.demo === true) {
     return {
       ok: true,
       provider: "demo",
@@ -123,6 +120,7 @@ export async function testPaperlessConnection(): Promise<PaperlessConnectionTest
   try {
     const response = await paperlessFetch("/api/documents/?page_size=1");
     const data = await parseResponse(response);
+    if (!data || !Array.isArray(data.results) || typeof data.count !== "number") throw new Error("Paperless-ngx returned an invalid documents response.");
     return {
       ok: true,
       provider: "paperlessngx",
@@ -144,12 +142,12 @@ export async function testPaperlessConnection(): Promise<PaperlessConnectionTest
 }
 
 export async function listPaperlessDocuments(args: {
+  demo?: boolean;
   maxDocuments?: number;
   pageSize?: number;
   query?: string;
 } = {}): Promise<PaperlessDocumentSummary[]> {
-  const provider = providers.paperless();
-  if (provider.id === "demo") {
+  if (args.demo === true) {
     return [
       {
         id: 1001,
@@ -180,10 +178,14 @@ export async function listPaperlessDocuments(args: {
 
   let path: string | null = `/api/documents/?${params.toString()}`;
   const docs: PaperlessDocumentSummary[] = [];
+  const visited = new Set<string>();
   while (path && docs.length < maxDocuments) {
+    if (visited.has(path)) throw new Error("Paperless-ngx returned a repeating pagination link.");
+    visited.add(path);
     const response = await paperlessFetch(path);
     const data = await parseResponse(response);
-    const results = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+    if (!Array.isArray(data?.results) && !Array.isArray(data)) throw new Error("Paperless-ngx returned an invalid documents response.");
+    const results = Array.isArray(data?.results) ? data.results : data;
     docs.push(...results.slice(0, maxDocuments - docs.length));
     path = data?.next ? pathFromPaperlessUrl(String(data.next)) : null;
   }
@@ -198,9 +200,9 @@ export function paperlessDocumentUrl(documentId: number) {
 export async function downloadPaperlessDocument(
   documentId: number,
   original = false,
+  options?: { demo?: boolean },
 ): Promise<PaperlessDownloadedDocument> {
-  const provider = providers.paperless();
-  if (provider.id === "demo") {
+  if (options?.demo === true) {
     const fileName = `paperless-${documentId}.txt`;
     const blob = new Blob(
       [`Demo Paperless source document ${documentId}\n\nSet PAPERLESS_NGX_URL and PAPERLESS_NGX_TOKEN to pull the live file.`],
@@ -211,7 +213,7 @@ export async function downloadPaperlessDocument(
       fileName,
       mimeType: "text/plain",
       sizeBytes: blob.size,
-      documentUrl: paperlessDocumentUrl(documentId),
+      documentUrl: `demo://paperless/${documentId}`,
       metadata: {
         id: documentId,
         title: `Paperless source ${documentId}`,
@@ -249,19 +251,19 @@ export async function downloadPaperlessDocument(
 
 export async function uploadDocumentToPaperless(args: {
   blob: Blob;
+  demo?: boolean;
   fileName: string;
   title: string;
   createdISO?: string;
   tags: string[];
   autoCreateTags: boolean;
 }): Promise<PaperlessUploadResult> {
-  const provider = providers.paperless();
-  if (provider.id === "demo") {
+  if (args.demo === true) {
     const documentId = Math.floor(Date.now() % 900000) + 1000;
     return {
       taskId: `demo-paperless-task-${documentId}`,
       documentId,
-      documentUrl: paperlessDocumentUrl(documentId),
+      documentUrl: `demo://paperless/${documentId}`,
       demo: true,
     };
   }
@@ -287,8 +289,8 @@ export async function uploadDocumentToPaperless(args: {
   };
 }
 
-export async function getPaperlessTask(taskId: string) {
-  if (providers.paperless().id === "demo") {
+export async function getPaperlessTask(taskId: string, options?: { demo?: boolean }) {
+  if (options?.demo === true) {
     const documentId = Number(taskId.match(/(\d+)$/)?.[1] ?? 1001);
     return {
       status: "complete",
@@ -307,6 +309,7 @@ export async function getPaperlessTask(taskId: string) {
     : Array.isArray(data)
       ? data[0]
       : data;
+  if (!task || typeof task !== "object" || !String(task.status ?? task.state ?? "").trim()) throw new Error("Paperless-ngx task is not available yet; retry the status check.");
   const documentId = extractDocumentId(task);
   return {
     status: normalizeTaskStatus(task),
@@ -359,13 +362,15 @@ async function listPaperlessTags(): Promise<any[]> {
 function pathFromPaperlessUrl(value: string) {
   if (!value.startsWith("http://") && !value.startsWith("https://")) return value;
   const url = new URL(value);
+  if (url.origin !== new URL(paperlessBaseUrl()).origin) throw new Error("Paperless-ngx returned a pagination link for another server.");
   return `${url.pathname}${url.search}`;
 }
 
 function normalizeTaskId(data: any) {
-  if (typeof data === "string") return data;
-  const value = data?.task_id ?? data?.taskId ?? data?.uuid ?? data?.id ?? data;
-  return String(value);
+  if (typeof data === "string" && data.trim()) return data;
+  const value = data?.task_id ?? data?.taskId ?? data?.uuid ?? data?.id;
+  if (typeof value !== "string" || !value.trim()) throw new Error("Paperless-ngx did not return a task identifier; upload acceptance is unconfirmed.");
+  return value;
 }
 
 function filenameFromDisposition(value: string | null) {

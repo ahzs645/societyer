@@ -96,4 +96,33 @@ before = queryCount;
 updateStore();
 await settle();
 assert.equal(queryCount, before, "Unsubscribed cache keys must not execute on store changes");
-console.log("Portable cache checks passed: single pagination invalidation, shared subscribers, loaded pages, unsubscribe, principal changes and denied-result clearing.");
+
+// A scanned tag can miss, leave the screen, then become a real asset. The next
+// React snapshot must wait for the fresh authorized lookup instead of consuming
+// the retained null and immediately unsubscribing before that lookup resolves.
+const assetListeners = new Set<() => void>();
+const assets = new Map<string, { _id: string; assetTag: string }>();
+let assetLookups = 0;
+const assetCache = new PortableQueryCache({
+  async runQuery(_name: string, args: { code: string }) { assetLookups += 1; return assets.get(args.code) ?? null; },
+} as unknown as PortableRuntime, {
+  onUpdate(callback: () => void) { assetListeners.add(callback); return () => assetListeners.delete(callback); },
+} as unknown as StaticDemoDexieStore, () => { throw new Error("A synchronous fallback must never supply lookup authority"); });
+const tag = { code: "CAMERA-QUALIFICATION-QR" };
+const missing = assetCache.watchQuery("assets:resolveScan", tag);
+const stopMissing = missing.onUpdate(() => undefined);
+await settle();
+assert.equal(missing.localQueryResult(), null, "Authorized missing-record lookup returns null");
+stopMissing();
+assert.equal(missing.localQueryResult(), null, "An unchanged store retains its synchronous last snapshot");
+const beforeCreate = assetLookups;
+assets.set(tag.code, { _id: "created-local-asset", assetTag: tag.code });
+for (const listener of [...assetListeners]) listener();
+assert.equal(assetLookups, beforeCreate, "Store changes must not execute inactive lookups");
+const created = assetCache.watchQuery("assets:resolveScan", tag);
+assert.equal(created.localQueryResult(), undefined, "Reopening the scan must not consume a stale inactive miss");
+const stopCreated = created.onUpdate(() => undefined);
+await settle();
+assert.deepEqual(created.localQueryResult(), assets.get(tag.code), "A fresh authorized lookup resolves the actually created asset");
+stopCreated();
+console.log("Portable cache checks passed: shared pagination, loaded pages, unsubscribe, principal/denied guards, and inactive miss→create→resubscribe lookup.");

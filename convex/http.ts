@@ -1,3 +1,4 @@
+import { composeAiMessage } from "../shared/aiAttachments";
 import { authorizedQuery } from "./lib/authorizedServer";
 import { httpRouter } from "convex/server";
 import { httpAction, query } from "./_generated/server";
@@ -183,9 +184,12 @@ export const gatewayGeneratedDocumentAccess = authorizedQuery("http:gatewayGener
       .query("documentVersions")
       .withIndex("by_storage_key", (q) => q.eq("storageKey", storageKey))
       .collect();
+    // Local generated files share one server directory. Historical duplicate
+    // claims across tenants cannot establish authority over those bytes.
+    const localVersions = versions.filter(version => version.storageProvider === "local");
+    if (localVersions.some(version => version.societyId !== societyId)) return false;
     const portable = await toPortableQueryCtx(ctx);
-    for (const version of versions) {
-      if (version.societyId !== societyId || version.storageProvider !== "local") continue;
+    for (const version of localVersions) {
       try {
         const document = await requireDocumentAccess(portable, String(version.documentId));
         if (document.societyId === String(societyId)) return true;
@@ -212,21 +216,22 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const body = await request.json().catch(() => ({}));
     const societyId = body.societyId;
-    const content = String(body.content ?? "").trim();
-    if (!societyId || !content) {
-      return new Response("Missing societyId or content", { status: 400 });
-    }
+    let content: string;
+    try { content = composeAiMessage(body.content, body.attachments); }
+    catch (error) { return new Response(error instanceof Error ? error.message : "Invalid message", { status: 400, headers: corsHeaders() }); }
+    if (!societyId) return new Response("Missing societyId", { status: 400, headers: corsHeaders() });
     const membershipLookup = await ctx.runQuery(api.http.currentPrincipalMemberships, {});
     const membership = membershipLookup?.memberships?.find(
       (candidate: { society?: { _id?: string } }) => candidate.society?._id === societyId,
     );
-    if (!membership?.userId) {
-      return new Response("Workspace membership required", { status: 403 });
+    if (!membership?.userId || !hasPermission(membership.user?.role, "tasks:write")) {
+      return new Response("AI chat write permission required", { status: 403, headers: corsHeaders() });
     }
     const principalUserId = membership.userId;
     let lockedModelId: string | undefined;
     if (body.threadId) {
       const existingThread = await ctx.runQuery((api as any).aiChat.getThread, { threadId: body.threadId });
+      if (!existingThread || existingThread.societyId !== societyId) return new Response("Chat thread does not belong to this workspace", { status: 403, headers: corsHeaders() });
       lockedModelId = existingThread?.modelId ?? undefined;
     }
     const runtimeConfig = await resolveAiRuntimeConfig(
@@ -275,6 +280,9 @@ http.route({
               .map((message: any) => ({ role: message.role, content: message.content })),
           } as any);
           for await (const chunk of result.textStream) {
+            // A membership/role change must stop protected output while a provider
+            // is still generating, not only when the final message is persisted.
+            await ctx.runQuery((api as any).aiChat.getThread, { threadId });
             text += chunk;
             controller.enqueue(encoder.encode(sse({ text: chunk }, "token")));
           }
@@ -288,7 +296,10 @@ http.route({
                 .map((message: any) => ({ role: message.role, content: message.content })),
             } as any);
             text = retry.text ?? "";
-            if (text) controller.enqueue(encoder.encode(sse({ text }, "token")));
+            if (text) {
+              await ctx.runQuery((api as any).aiChat.getThread, { threadId });
+              controller.enqueue(encoder.encode(sse({ text }, "token")));
+            }
           }
           if (!text.trim()) throw new Error("The model returned an empty response.");
           const messageId = await ctx.runMutation((internal as any).aiChat._appendMessage, {
@@ -304,16 +315,18 @@ http.route({
           controller.enqueue(encoder.encode(sse({ threadId, messageId }, "done")));
         } catch (error: any) {
           const fallback = `Live streaming is not available: ${error?.message ?? "unknown error"}`;
-          await ctx.runMutation((internal as any).aiChat._appendMessage, {
-            societyId,
-            threadId,
-            role: "assistant",
-            content: fallback,
-            status: "error",
-            modelId,
-            parts: { provider: "sse_fallback" },
-            createdByUserId: principalUserId,
-          });
+          try {
+            await ctx.runMutation((internal as any).aiChat._appendMessage, {
+              societyId,
+              threadId,
+              role: "assistant",
+              content: fallback,
+              status: "error",
+              modelId,
+              parts: { provider: "sse_fallback" },
+              createdByUserId: principalUserId,
+            });
+          } catch { /* Revoked authority cannot write an error record either. */ }
           controller.enqueue(encoder.encode(sse({ error: fallback, threadId }, "error")));
         } finally {
           controller.close();
@@ -598,9 +611,12 @@ http.route({
       return new Response("Invalid Stripe signature", { status: 400 });
     }
 
-    const event = JSON.parse(body);
+    let event: any;
+    try { event = JSON.parse(body); } catch { return new Response("Invalid Stripe payload", { status: 400 }); }
+    if (typeof event?.id !== "string" || !event.id.trim()) return new Response("Missing Stripe event identifier", { status: 400 });
     await ctx.runMutation(internal.subscriptions.handleStripeEvent, {
       type: String(event?.type ?? "unknown"),
+      eventId: event.id,
       payload: JSON.stringify(event?.data?.object ?? {}),
     });
 

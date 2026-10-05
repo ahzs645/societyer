@@ -307,6 +307,11 @@
 }
 
 .global-ai-composer {
+  max-height: 60vh;
+  max-height: 60dvh;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 8px 14px 12px;
   @include flex-column;
   gap: 8px;

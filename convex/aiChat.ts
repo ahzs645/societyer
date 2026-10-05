@@ -9,9 +9,11 @@ import {
   archiveThreadPortable,
   renameThreadPortable,
   deleteThreadPortable,
+  requireAiThreadAccess,
 } from "../shared/functions/aiChat";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
-import { getOwned, principalUserId, requireSocietyMembership } from "../shared/functions/access";
+import { getOwned, principalUserId } from "../shared/functions/access";
+import { requirePermissionPortable } from "../shared/functions/permissions";
 
 export const listThreads = authorizedQuery("aiChat:listThreads", query)({
   args: {
@@ -92,11 +94,10 @@ export const _appendMessage = internalMutation({
   returns: v.id("aiMessages"),
   handler: async (ctx, args) => {
     const portable = await toPortableMutationCtx(ctx);
-    await requireSocietyMembership(portable, args.societyId);
+    await requirePermissionPortable(portable, args.societyId, "tasks:write");
     await getOwned(portable, "aiChatThreads", args.threadId, args.societyId);
-    const createdByUserId = args.createdByUserId
-      ? await principalUserId(portable, args.societyId)
-      : undefined;
+    await requireAiThreadAccess(portable, args.threadId);
+    const createdByUserId = await principalUserId(portable, args.societyId);
     if (args.createdByUserId && args.createdByUserId !== createdByUserId) {
       throw new Error("Authenticated actor does not match the current principal.");
     }

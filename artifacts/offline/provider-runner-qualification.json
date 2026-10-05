@@ -1,0 +1,20 @@
+{
+  "sourceBaseline": "66b8dcd",
+  "executedAt": "2026-10-05T04:14:07.923Z",
+  "fixtureOnly": true,
+  "actualRunnerHttp": true,
+  "realBrowserProviderContacted": false,
+  "cases": [
+    "Blitz health validates protocol and receives a real local WebSocket CDP response",
+    "closed, malformed and timed-out CDP fail readiness; subsequent read-only retry recovers",
+    "unauthorized readiness cannot allocate a browser connection; cheap liveness stays public",
+    "actual runner HTTP readiness reports 503 for unavailable provider and 200 after recovery",
+    "actual runner secret, tenant namespace and unknown/foreign session checks fail closed",
+    "real runner CDP login failure creates no active session and hides provider URL/credentials"
+  ],
+  "count": 6,
+  "remaining": [
+    "Configured BlitzBrowser runtime and authenticated external provider session qualification",
+    "No physical browser/login or external account operation was exercised"
+  ]
+}

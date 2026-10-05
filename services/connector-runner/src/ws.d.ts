@@ -3,10 +3,13 @@ declare module "ws" {
   import type { Duplex } from "node:stream";
 
   export class WebSocket {
+    constructor(url: string | URL);
     static readonly CONNECTING: number;
     static readonly OPEN: number;
     readonly readyState: number;
     close(code?: number, reason?: string): void;
+    terminate(): void;
+    once(event: "open" | "error" | "close", listener: () => void): this;
     send(data: string | Uint8Array): void;
     on(event: "message", listener: (data: WebSocket.RawData) => void): this;
     on(event: "error" | "close", listener: () => void): this;

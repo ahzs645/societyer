@@ -1,0 +1,36 @@
+{
+  "kind": "actual-permission-controller-with-deterministic-session-fixtures",
+  "cases": [
+    {
+      "name": "Camera defaults denied; explicit main-app approval enables video only",
+      "passed": true
+    },
+    {
+      "name": "SSO popups, callbacks, frames and lookalike origins cannot request or reuse grant",
+      "passed": true
+    },
+    {
+      "name": "Denial and concurrent requests settle once without persisting a grant",
+      "passed": true
+    },
+    {
+      "name": "Revoke, replacement/failure and renderer destruction reject pending consent",
+      "passed": true
+    },
+    {
+      "name": "Navigating to sign-in or another document invalidates old and pending grants",
+      "passed": true
+    },
+    {
+      "name": "Trusted bundled and exact development renderers use consent; reset revokes without losing records",
+      "passed": true
+    },
+    {
+      "name": "Only trusted main frames may copy sanitized text; clipboard reads and popup/frame writes stay denied",
+      "passed": true
+    }
+  ],
+  "limits": [
+    "Policy checks do not exercise actual OS/device permissions; see separate Electron runtime qualification"
+  ]
+}

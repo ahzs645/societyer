@@ -1,0 +1,817 @@
+{
+  "sourceBaseline": "66b8dcdaed953e93637be15d400c2f5bf09339fb",
+  "executedAt": "2026-10-05T03:06:46.661877+00:00",
+  "sourceFreeze": "Final frontend changes including editable Markdown fallback; parent build:pages passed after freeze. Shared dist read only for final measurement.",
+  "qualifiedUniqueBrowserCases": 62,
+  "qualifiedCalendarCases": 40,
+  "qualifiedChunkFailureCases": 8,
+  "qualifiedExistingDeferredEditorCases": 14,
+  "calendarBrowsers": [
+    "Chromium",
+    "Firefox"
+  ],
+  "calendarWidths": [
+    320,
+    390,
+    768,
+    1440
+  ],
+  "chunkFailureWidths": [
+    320,
+    1440
+  ],
+  "existingDeferredEditorBrowser": "Chromium",
+  "existingDeferredEditorWidths": [
+    320,
+    1440
+  ],
+  "runtime": "Actual local web application, fresh-local setup and demo-local seeded records, real portable authorized mutations and persisted local data. No mocked calendar queries. Rich-editor failure cases deliberately abort only the rich-editor module request.",
+  "hostedConvexAndPowerSyncQualifiedByThisSuite": false,
+  "changes": [
+    "Reusable controlled month/week/list calendar, accessible internal month scrolling and stacked phone week layout, real source event selection.",
+    "Saved-view calendar mode hydration/save/save-as/discard and captured persisted snapshots; stable store handle prevents ordinary query refresh from falsely invalidating a legitimate save while original scope/creator/role checks remain.",
+    "Tasks phone list honors calendar/kanban choices; existing saved Task view opens actual edit drawer.",
+    "Deadline calendar/table event handoff to permissioned detail/edit drawer; immediate rich text save reads authoritative editor handle.",
+    "Rich Milkdown/Crepe editor lazy split preserves public types, ref, draft, readOnly and queued focus/set text; failed chunk import offers editable Markdown textarea or read-only text.",
+    "Existing web vector PDF renderer and pdf-lib deferred until export; native print bridge and existing fallback retained."
+  ],
+  "checks": {
+    "typescript": "passed: npx tsc --noEmit",
+    "changedSourceEslint": {
+      "errors": 0,
+      "warnings": 10,
+      "note": "Existing size/complexity warnings and Deadlines allRecords memo-dependency warning; editor wrapper/calendar component lint clean."
+    },
+    "calendarDateChecks": "passed: strict date-only parsing, invalid dates, offset timestamps, Monday week boundaries through DST in Vancouver, Toronto and UTC",
+    "parentProductionPagesBuild": "passed"
+  },
+  "actualPdfAssertions": [
+    "Renderer module absent before export and loaded on demand",
+    "Browser download starts with %PDF- and parses into at least one page",
+    "pdftotext contains the existing AGM title and persisted Adopted the agenda decision"
+  ],
+  "initialHarnessCorrections": [
+    "Three original Firefox calendar lifecycle cases completed functionality but reported cancelled Layout dynamic import during test navigation before setup shell settled; awaiting initialized shell before full navigation produced 3/3 clean reruns with no page errors.",
+    "One strengthened Task check assumed a preview Open button; recorded saved Task view actually opens Edit task directly. Interrupted that suite, asserted the configured enabled drawer, then reran all 8 projects successfully."
+  ],
+  "runStats": {
+    "gap-calendar-results": {
+      "startTime": "2026-10-05T02:35:49.845Z",
+      "duration": 307552.02499999997,
+      "expected": 37,
+      "skipped": 0,
+      "unexpected": 3,
+      "flaky": 0
+    },
+    "gap-calendar-firefox-rerun": {
+      "startTime": "2026-10-05T02:58:07.167Z",
+      "duration": 66262.754,
+      "expected": 3,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "gap-task-calendar-qualified": {
+      "startTime": "2026-10-05T03:02:02.105Z",
+      "duration": 59980.462,
+      "expected": 8,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "gap-fallback-results": {
+      "startTime": "2026-10-05T02:54:50.676Z",
+      "duration": 79891.474,
+      "expected": 8,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "gap-deferred-results": {
+      "startTime": "2026-10-05T03:03:14.930Z",
+      "duration": 77059.64,
+      "expected": 14,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    }
+  },
+  "cases": [
+    {
+      "project": "chromium-1440",
+      "title": "Viewer can change the presentation and inspect a deadline while save and edit remain denied",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-1440",
+      "title": "a failed rich-editor import keeps Viewer fallback text read-only",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-fallback-results"
+    },
+    {
+      "project": "chromium-1440",
+      "title": "an unavailable rich-editor chunk leaves a real local deadline draft editable and persistent",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-fallback-results"
+    },
+    {
+      "project": "chromium-1440",
+      "title": "approved minutes download a valid searchable PDF after loading the deferred web renderer",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-1440",
+      "title": "calendar layouts save, discard and reload while dated records open their actual detail",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-1440",
+      "title": "task phone cards honor calendar and kanban selection and retain the record handoff",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-task-calendar-qualified"
+    },
+    {
+      "project": "chromium-1440",
+      "title": "timestamp events use the viewer's day across DST and open only their owned meeting",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-320",
+      "title": "Viewer can change the presentation and inspect a deadline while save and edit remain denied",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-320",
+      "title": "a failed rich-editor import keeps Viewer fallback text read-only",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-fallback-results"
+    },
+    {
+      "project": "chromium-320",
+      "title": "an unavailable rich-editor chunk leaves a real local deadline draft editable and persistent",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-fallback-results"
+    },
+    {
+      "project": "chromium-320",
+      "title": "approved minutes download a valid searchable PDF after loading the deferred web renderer",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-320",
+      "title": "calendar layouts save, discard and reload while dated records open their actual detail",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-320",
+      "title": "task phone cards honor calendar and kanban selection and retain the record handoff",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-task-calendar-qualified"
+    },
+    {
+      "project": "chromium-320",
+      "title": "timestamp events use the viewer's day across DST and open only their owned meeting",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-390",
+      "title": "Viewer can change the presentation and inspect a deadline while save and edit remain denied",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-390",
+      "title": "approved minutes download a valid searchable PDF after loading the deferred web renderer",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-390",
+      "title": "calendar layouts save, discard and reload while dated records open their actual detail",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-390",
+      "title": "task phone cards honor calendar and kanban selection and retain the record handoff",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-task-calendar-qualified"
+    },
+    {
+      "project": "chromium-390",
+      "title": "timestamp events use the viewer's day across DST and open only their owned meeting",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-768",
+      "title": "Viewer can change the presentation and inspect a deadline while save and edit remain denied",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-768",
+      "title": "approved minutes download a valid searchable PDF after loading the deferred web renderer",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-768",
+      "title": "calendar layouts save, discard and reload while dated records open their actual detail",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "chromium-768",
+      "title": "task phone cards honor calendar and kanban selection and retain the record handoff",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-task-calendar-qualified"
+    },
+    {
+      "project": "chromium-768",
+      "title": "timestamp events use the viewer's day across DST and open only their owned meeting",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "desktop",
+      "title": "a cold assistant open event survives its deferred renderer import",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "desktop",
+      "title": "a cold shortcut opens the deferred palette and subsequent shortcuts still toggle it",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "desktop",
+      "title": "cold New asset event loads its form once and remains usable",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "desktop",
+      "title": "cold New commitment event loads its form once and remains usable",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "desktop",
+      "title": "cold New task event loads its form once and remains usable",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "desktop",
+      "title": "cold Schedule meeting event loads its form once and remains usable",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "desktop",
+      "title": "motion library loads cold, creates, edits and confirms deletion",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "firefox-1440",
+      "title": "Viewer can change the presentation and inspect a deadline while save and edit remain denied",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "firefox-1440",
+      "title": "a failed rich-editor import keeps Viewer fallback text read-only",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-fallback-results"
+    },
+    {
+      "project": "firefox-1440",
+      "title": "an unavailable rich-editor chunk leaves a real local deadline draft editable and persistent",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-fallback-results"
+    },
+    {
+      "project": "firefox-1440",
+      "title": "approved minutes download a valid searchable PDF after loading the deferred web renderer",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "firefox-1440",
+      "title": "calendar layouts save, discard and reload while dated records open their actual detail",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "firefox-1440",
+      "title": "task phone cards honor calendar and kanban selection and retain the record handoff",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-task-calendar-qualified"
+    },
+    {
+      "project": "firefox-1440",
+      "title": "timestamp events use the viewer's day across DST and open only their owned meeting",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "firefox-320",
+      "title": "Viewer can change the presentation and inspect a deadline while save and edit remain denied",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "firefox-320",
+      "title": "a failed rich-editor import keeps Viewer fallback text read-only",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-fallback-results"
+    },
+    {
+      "project": "firefox-320",
+      "title": "an unavailable rich-editor chunk leaves a real local deadline draft editable and persistent",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-fallback-results"
+    },
+    {
+      "project": "firefox-320",
+      "title": "approved minutes download a valid searchable PDF after loading the deferred web renderer",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "firefox-320",
+      "title": "calendar layouts save, discard and reload while dated records open their actual detail",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-firefox-rerun"
+    },
+    {
+      "project": "firefox-320",
+      "title": "task phone cards honor calendar and kanban selection and retain the record handoff",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-task-calendar-qualified"
+    },
+    {
+      "project": "firefox-320",
+      "title": "timestamp events use the viewer's day across DST and open only their owned meeting",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "firefox-390",
+      "title": "Viewer can change the presentation and inspect a deadline while save and edit remain denied",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "firefox-390",
+      "title": "approved minutes download a valid searchable PDF after loading the deferred web renderer",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "firefox-390",
+      "title": "calendar layouts save, discard and reload while dated records open their actual detail",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-firefox-rerun"
+    },
+    {
+      "project": "firefox-390",
+      "title": "task phone cards honor calendar and kanban selection and retain the record handoff",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-task-calendar-qualified"
+    },
+    {
+      "project": "firefox-390",
+      "title": "timestamp events use the viewer's day across DST and open only their owned meeting",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "firefox-768",
+      "title": "Viewer can change the presentation and inspect a deadline while save and edit remain denied",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "firefox-768",
+      "title": "approved minutes download a valid searchable PDF after loading the deferred web renderer",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "firefox-768",
+      "title": "calendar layouts save, discard and reload while dated records open their actual detail",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-firefox-rerun"
+    },
+    {
+      "project": "firefox-768",
+      "title": "task phone cards honor calendar and kanban selection and retain the record handoff",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-task-calendar-qualified"
+    },
+    {
+      "project": "firefox-768",
+      "title": "timestamp events use the viewer's day across DST and open only their owned meeting",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-calendar-results"
+    },
+    {
+      "project": "narrow-phone",
+      "title": "a cold assistant open event survives its deferred renderer import",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "narrow-phone",
+      "title": "a cold shortcut opens the deferred palette and subsequent shortcuts still toggle it",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "narrow-phone",
+      "title": "cold New asset event loads its form once and remains usable",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "narrow-phone",
+      "title": "cold New commitment event loads its form once and remains usable",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "narrow-phone",
+      "title": "cold New task event loads its form once and remains usable",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "narrow-phone",
+      "title": "cold Schedule meeting event loads its form once and remains usable",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    },
+    {
+      "project": "narrow-phone",
+      "title": "motion library loads cold, creates, edits and confirms deletion",
+      "status": "expected",
+      "results": [
+        "passed"
+      ],
+      "qualifiedBy": "gap-deferred-results"
+    }
+  ],
+  "bundle": {
+    "baseline": "66b8dcdaed953e93637be15d400c2f5bf09339fb",
+    "measurement": "Vite manifest static import closure, JavaScript only; gzip estimated per chunk using Python gzip; excludes dynamic imports, CSS and local backend initialization",
+    "routes": {
+      "index.html": {
+        "before": {
+          "rawBytes": 500124,
+          "gzipBytes": 139731,
+          "staticChunkCount": 5,
+          "includesRichEditor": false,
+          "includesWebVectorPdfRenderer": false
+        },
+        "after": {
+          "rawBytes": 499537,
+          "gzipBytes": 139676,
+          "staticChunkCount": 5,
+          "includesRichEditor": false,
+          "includesWebVectorPdfRenderer": false
+        },
+        "final": {
+          "rawBytes": 496253,
+          "gzipBytes": 136644,
+          "staticChunkCount": 5,
+          "includesRichEditor": false,
+          "includesWebVectorPdfRenderer": false
+        }
+      },
+      "src/pages/Meetings.tsx": {
+        "before": {
+          "rawBytes": 2287976,
+          "gzipBytes": 707557,
+          "staticChunkCount": 32,
+          "includesRichEditor": true,
+          "includesWebVectorPdfRenderer": false
+        },
+        "after": {
+          "rawBytes": 805486,
+          "gzipBytes": 241493,
+          "staticChunkCount": 31,
+          "includesRichEditor": false,
+          "includesWebVectorPdfRenderer": false
+        },
+        "final": {
+          "rawBytes": 801813,
+          "gzipBytes": 237444,
+          "staticChunkCount": 31,
+          "includesRichEditor": false,
+          "includesWebVectorPdfRenderer": false
+        }
+      },
+      "src/pages/MeetingDetail.tsx": {
+        "before": {
+          "rawBytes": 3205133,
+          "gzipBytes": 1018217,
+          "staticChunkCount": 45,
+          "includesRichEditor": true,
+          "includesWebVectorPdfRenderer": false
+        },
+        "after": {
+          "rawBytes": 1286400,
+          "gzipBytes": 371745,
+          "staticChunkCount": 44,
+          "includesRichEditor": false,
+          "includesWebVectorPdfRenderer": false
+        },
+        "final": {
+          "rawBytes": 1282418,
+          "gzipBytes": 367400,
+          "staticChunkCount": 44,
+          "includesRichEditor": false,
+          "includesWebVectorPdfRenderer": false
+        }
+      },
+      "src/pages/Deadlines.tsx": {
+        "before": {
+          "rawBytes": 2274305,
+          "gzipBytes": 701184,
+          "staticChunkCount": 27,
+          "includesRichEditor": true,
+          "includesWebVectorPdfRenderer": false
+        },
+        "after": {
+          "rawBytes": 790947,
+          "gzipBytes": 234678,
+          "staticChunkCount": 25,
+          "includesRichEditor": false,
+          "includesWebVectorPdfRenderer": false
+        },
+        "final": {
+          "rawBytes": 787563,
+          "gzipBytes": 230857,
+          "staticChunkCount": 25,
+          "includesRichEditor": false,
+          "includesWebVectorPdfRenderer": false
+        }
+      },
+      "src/pages/Members.tsx": {
+        "before": {
+          "rawBytes": 2277387,
+          "gzipBytes": 703041,
+          "staticChunkCount": 32,
+          "includesRichEditor": true,
+          "includesWebVectorPdfRenderer": false
+        },
+        "after": {
+          "rawBytes": 793288,
+          "gzipBytes": 236239,
+          "staticChunkCount": 30,
+          "includesRichEditor": false,
+          "includesWebVectorPdfRenderer": false
+        },
+        "final": {
+          "rawBytes": 789669,
+          "gzipBytes": 232220,
+          "staticChunkCount": 30,
+          "includesRichEditor": false,
+          "includesWebVectorPdfRenderer": false
+        }
+      }
+    },
+    "remaining": [
+      "Deferred rich editor still weighs about 1.375MB raw when used.",
+      "LocalDataClient portable backend chunk remains about 1.2MB raw and is required for offline data.",
+      "DOCX preview and other large feature modules remain; no blanket bundle-budget/CoreWebVitals qualification.",
+      "Missing uncached rich editor chunks now fall back to editable Markdown text; other uncached web/PWA routes/features still have cache boundaries. Packaged Electron has all build chunks on disk."
+    ],
+    "baselineDescription": "Working tree based on 66b8dcd; before/after snapshots captured around bounded editor/vector-PDF lazy-loading changes while other agents worked on unrelated gaps.",
+    "finalBuild": "Root build:pages shared dist, read-only measurement 2026-10-05 after final frontend freeze"
+  },
+  "limitations": [
+    "Linux desktop engines with viewport/touch emulation; no physical mobile hardware qualification.",
+    "Downloaded WebKit cannot launch because this runtime lacks its native libraries; Safari/iOS and WebKit remain unqualified.",
+    "Selected calendar/editor/PDF surfaces only; this does not qualify every module in Firefox.",
+    "Fallback test intercepts one unavailable module asset, not whole-site network-offline execution; writes and reload persistence use actual local data.",
+    "Uncached web/PWA routes and other deferred feature assets can still require prior online loading. Rich editor import failure now remains usable as plain Markdown. Electron packaged assets remain on disk.",
+    "No live hosted provider, Convex or PowerSync replication assertion in this local browser suite; parent live/auth/role suites supply separate coverage.",
+    "Bundle numbers estimate JavaScript static import closures, exclude dynamic imports/CSS/portable backend initialization and do not prove network timing or CoreWebVitals."
+  ],
+  "missingWebKitLibraries": [
+    "libgtk-4.so.1",
+    "libgraphene-1.0.so.0",
+    "libharfbuzz-icu.so.0",
+    "libmanette-0.2.so.0",
+    "libhyphen.so.0",
+    "libwoff2dec.so.1.0.2",
+    "libGLESv2.so.2"
+  ],
+  "privateEvidence": "Raw traces, fixture data, PDF files, test outputs and production snapshots remain in ignored tmp; this artifact contains summaries only.",
+  "finalBuildRecheck": {
+    "completedAt": "2026-10-05T04:08:03.869210+00:00",
+    "source": "Final root build:pages after inactive-query cache fix; private frozen web build snapshot",
+    "staticRouteMeasurementsMatched": true,
+    "meetingDetailRawBytes": 1282418,
+    "meetingDetailGzipBytes": 367400,
+    "meetingsGzipBytes": 237444,
+    "membersGzipBytes": 232220,
+    "deadlinesGzipBytes": 230857
+  }
+}

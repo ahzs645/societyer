@@ -99,3 +99,7 @@ export function jurisdictionsTracked(records: FilingRecord[]): string[] {
   }
   return result;
 }
+
+/** Annual return/report record kinds from the jurisdiction workspace catalog. */
+export const ANNUAL_FILING_KINDS = ["AnnualReport", "BCSocietyAnnualReport", "BCExtraProvincialAnnualReport", "BCCompanyAnnualReport", "FederalAnnualReturn", "OntarioAnnualReturn"] as const;
+export function annualFilingKind(kind: string) { return (ANNUAL_FILING_KINDS as readonly string[]).includes(kind); }

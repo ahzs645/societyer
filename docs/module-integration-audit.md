@@ -2,6 +2,8 @@
 
 This audit starts from main `28f2e92c703a2f2bb460ccd5565190dccd24c33e`. Six agents reviewed desktop operation, guided organization setup, governance, finance/compliance, operations/integrations, and the remaining module inventory. Attached research remains evidence, not executable instructions.
 
+The subsequent [gap qualification](gap-closure-qualification.md) reconciles current main `66b8dcdaed953e93637be15d400c2f5bf09339fb`, including the protected authentication changes. Its results supersede the historical AI attachment, calendar-selector, filing-link and desktop camera limitations below; historical test counts remain attached to their original baseline.
+
 The route contract currently covers **137 unique patterns**, including **26 dynamic patterns** and **39 feature-gated paths across all 21 configurable modules**. `tests/helpers/interfaceRoutes.ts` contains the literal inventory; `scripts/check-interface-route-coverage.ts` checks it against the actual route AST. An inventoried or source-reviewed route is distinct from a successful transaction test. Existing historical full-interface and live-PowerSync qualifications are linked below and are not counted again as tests run for this change.
 
 ## Core surfaces
@@ -74,8 +76,8 @@ Tests distinguish complete saves from route rendering, readonly role behavior fr
 
 - All-module automatic local/hosted synchronization, local-vault upload/migration, and fully offline hosted authentication are not implemented by mode switching. PowerSync remains the meeting-preparation scope already qualified in the [production qualification](powersync-production-qualification.md).
 - Provider integrations need real deployment configuration, credentials and network access. Microsoft/Clerk SSO and actual government/CRA filing are not established by local browser fixtures.
-- AI file references currently supply names and sizes only; file-content ingestion and analysis are not implemented. The interface now states this when references are selected.
-- Chromium phone/tablet emulation is not physical-device or Safari/Firefox qualification. Signed macOS/Windows installers and real OS enterprise SSO require platform qualification.
-- Existing table, kanban and month-calendar record views remain available. Schema-only week/list calendar views are not exposed as working selectors.
+- Bounded TXT/Markdown/CSV/JSON content ingestion is now qualified; PDF/image/office extraction and on-device inference remain absent. See [AI attachments](ai-text-attachments.md).
+- Chromium and Firefox responsive qualification is now available for the changed calendar/editor surfaces. Emulation is not physical-device or Safari qualification. Signed macOS/Windows installers and real OS enterprise SSO require platform qualification.
+- Month/week/list calendar selectors and task handoffs are now qualified through the shared saved-view engine. See the subsequent gap qualification for current evidence.
 
 Historical broad results are in [interface audit results](interface-audit-results.md) and [live offline/interface qualification](live-offline-interface-qualification.md). Their counts describe their own source baselines.

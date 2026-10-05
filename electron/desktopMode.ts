@@ -1,9 +1,10 @@
-import { app, BrowserWindow, dialog, session, type Event, type Session } from "electron";
+import { app, BrowserWindow, dialog, session, systemPreferences, type Event, type Session } from "electron";
 import { createHash } from "node:crypto";
 import { readDesktopConfig, updateDesktopConfig } from "./config.js";
 import { isAllowedHostedNavigation, normalizeHostedConfiguration, type HostedDesktopConfiguration } from "./desktopModePolicy.js";
 import { openExternal } from "./shell.js";
 import type { DesktopModeState } from "../src/lib/desktopBridge";
+import { installCameraPermissions } from "./mediaPermissions.js";
 
 let localWindow: (() => Promise<BrowserWindow>) | undefined;
 let hostedWindow: BrowserWindow | undefined;
@@ -12,6 +13,7 @@ let quitting = false;
 let attempt = 0;
 let lastError: string | undefined;
 let opening: Promise<DesktopModeState> | undefined;
+let revokeCameraConsent: (() => void) | undefined;
 const networking = new WeakMap<Session, { enabled: boolean }>();
 
 function setHostedNetworking(hostedSession: Session, enabled: boolean) {
@@ -45,6 +47,8 @@ export async function getDesktopModeState(): Promise<DesktopModeState> {
 
 export async function returnToLocalMode(): Promise<DesktopModeState> {
   const localAttempt = ++attempt;
+  revokeCameraConsent?.();
+  revokeCameraConsent = undefined;
   const previous = hostedWindow;
   hostedWindow = undefined;
   const previousSession = previous && !previous.isDestroyed() ? previous.webContents.session : undefined;
@@ -92,6 +96,8 @@ async function loadHostedMode(configuration?: HostedDesktopConfiguration): Promi
   }
   const previous = hostedWindow;
   hostedWindow = undefined;
+  revokeCameraConsent?.();
+  revokeCameraConsent = undefined;
   if (previous && !previous.isDestroyed()) {
     const previousSession = previous.webContents.session;
     setHostedNetworking(previousSession, false);
@@ -104,8 +110,6 @@ async function loadHostedMode(configuration?: HostedDesktopConfiguration): Promi
   const partition = `persist:societyer-hosted-${createHash("sha256").update(next.origin).digest("hex").slice(0, 24)}`;
   const hostedSession = session.fromPartition(partition);
   setHostedNetworking(hostedSession, true);
-  hostedSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-  hostedSession.setPermissionCheckHandler(() => false);
   const window = new BrowserWindow({
     title: "Societyer — Online workspace",
     width: 1320, height: 900, minWidth: 360, minHeight: 480,
@@ -113,10 +117,22 @@ async function loadHostedMode(configuration?: HostedDesktopConfiguration): Promi
     webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
   });
   hostedWindow = window;
+  revokeCameraConsent = installCameraPermissions(hostedSession, window.webContents, { kind: "hosted", origin: next.origin }, async () => {
+    const result = await dialog.showMessageBox(window, {
+      type: "question", title: "Camera access", message: "Allow this Societyer workspace to use your camera?",
+      detail: `${next.origin} can use the camera to scan asset tags while this online window remains open. Microphone and screen capture stay blocked. Return to the local workspace to end camera access.`,
+      buttons: ["Keep camera blocked", "Allow camera"], defaultId: 0, cancelId: 0, noLink: true,
+    });
+    if (result.response !== 1 || window.isDestroyed() || hostedWindow !== window) return false;
+    // macOS requires the operating-system camera consent in addition to the app prompt.
+    return process.platform !== "darwin" || await systemPreferences.askForMediaAccess("camera");
+  }, () => !quitting && hostedWindow === window && window.isVisible());
   hardenHostedWindow(window, next, partition);
   window.on("closed", () => {
     if (hostedWindow !== window) return;
     hostedWindow = undefined;
+    revokeCameraConsent?.();
+    revokeCameraConsent = undefined;
     setHostedNetworking(hostedSession, false);
     const closedAttempt = attempt;
     for (const child of signInWindows) child.destroy();
@@ -184,7 +200,7 @@ function hardenHostedWindow(window: BrowserWindow, configuration: HostedDesktopC
     hardenHostedWindow(child, configuration, partition);
     child.once("closed", () => signInWindows.delete(child));
   });
-  // Subframes cannot invoke native IPC; web permissions are denied at the session boundary.
+  // Subframes cannot invoke native IPC; only the main app may request camera consent.
   window.webContents.on("will-attach-webview", (event) => event.preventDefault());
 }
 

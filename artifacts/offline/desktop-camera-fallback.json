@@ -1,0 +1,56 @@
+{
+  "kind": "actual-chromium-browser-camera-denial-and-manual-scanner-fallback",
+  "views": [
+    "320px phone",
+    "390px phone",
+    "768px tablet",
+    "1440px desktop"
+  ],
+  "cases": [
+    {
+      "name": "camera denial still lets an asset tag resolve through the existing register",
+      "view": "narrow-phone",
+      "passed": true
+    },
+    {
+      "name": "camera denial retains inventory manual bin lookup and rejects unknown codes",
+      "view": "narrow-phone",
+      "passed": true
+    },
+    {
+      "name": "camera denial still lets an asset tag resolve through the existing register",
+      "view": "phone",
+      "passed": true
+    },
+    {
+      "name": "camera denial retains inventory manual bin lookup and rejects unknown codes",
+      "view": "phone",
+      "passed": true
+    },
+    {
+      "name": "camera denial still lets an asset tag resolve through the existing register",
+      "view": "tablet",
+      "passed": true
+    },
+    {
+      "name": "camera denial retains inventory manual bin lookup and rejects unknown codes",
+      "view": "tablet",
+      "passed": true
+    },
+    {
+      "name": "camera denial still lets an asset tag resolve through the existing register",
+      "view": "desktop",
+      "passed": true
+    },
+    {
+      "name": "camera denial retains inventory manual bin lookup and rejects unknown codes",
+      "view": "desktop",
+      "passed": true
+    }
+  ],
+  "limits": [
+    "Demo browser data; genuine Owner/Viewer native cases qualified separately",
+    "Browser camera permission explicitly denied via CDP, real getUserMedia remains unchanged",
+    "No physical camera or OS permission qualification"
+  ]
+}

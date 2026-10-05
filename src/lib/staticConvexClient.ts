@@ -1,6 +1,7 @@
 import { getStoredUserId } from "../hooks/useCurrentUser";
 import { RECORD_TABLE_OBJECTS } from "../../convex/recordTableMetadataDefinitions";
-import { definePortableQuery, PortableRuntime } from "../../shared/portable/define";
+import { definePortableMutation, definePortableQuery, PortableRuntime } from "../../shared/portable/define";
+import { simulateDemoChatPortable } from "../../shared/functions/aiChat";
 import type { PortableDoc, PortablePrincipal, RuntimeKind } from "../../shared/portable/ctx";
 import { LocalStoreDb } from "../../shared/portable/localRowStore";
 import { PORTABLE_FUNCTIONS } from "../../shared/functions/registry";
@@ -86,6 +87,9 @@ export class StaticConvexClient {
           });
       },
     }).registerAll(PORTABLE_FUNCTIONS);
+    if (this.clientUrl === "static://societyer-demo") {
+      this.portable.registerAll([definePortableMutation({ name: "aiChatActions:sendChatMessage", applicationPolicy: true, handler: simulateDemoChatPortable })]);
+    }
     this.portableQueries = new PortableQueryCache(
       this.portable,
       this.store,
@@ -242,6 +246,10 @@ export class StaticConvexClient {
 
   action(action: any, args?: StaticArgs) {
     const name = functionName(action);
+    if (name === "aiChatActions:sendChatMessage") {
+      if (this.clientUrl !== "static://societyer-demo") return Promise.reject(new Error("Live AI requires a connected workspace. No local inference engine is configured."));
+      return this.portable.runMutation(name, args ?? {});
+    }
     warnLegacyFallback(name, this.portable.kind(name), "action");
     return this.portable.authorizeFunction(name, "action", args ?? {}).then(async () => {
       const { mutationResult } = await import("./staticLegacyDispatch");

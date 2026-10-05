@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeTheme } from "electron";
+import { BrowserWindow, dialog, nativeTheme, systemPreferences } from "electron";
 import path from "node:path";
 
 import { showDefaultContextMenu } from "./contextMenu.js";
@@ -8,6 +8,7 @@ import { makeDesktopLogger } from "./observability.js";
 import { SOCIETYER_APP_PROTOCOL } from "./protocol.js";
 import { hardenWindowNavigation } from "./shell.js";
 import { registerLocalRendererAuthority } from "./ipcAuthority.js";
+import { installCameraPermissions } from "./mediaPermissions.js";
 
 export type CreateMainWindowOptions = {
   environment: DesktopEnvironment;
@@ -38,6 +39,29 @@ export async function createMainWindow(options: CreateMainWindowOptions) {
   registerLocalRendererAuthority(mainWindow.webContents, environment.isDev
     ? new URL(environment.devServerUrl || "http://127.0.0.1:5173").origin
     : undefined);
+  const revokeCameraConsent = installCameraPermissions(mainWindow.webContents.session, mainWindow.webContents,
+    { kind: "local", ...(environment.isDev ? { devOrigin: new URL(environment.devServerUrl || "http://127.0.0.1:5173").origin } : {}) },
+    async () => {
+      const result = await dialog.showMessageBox(mainWindow, {
+        type: "question", title: "Camera access", message: "Allow your local Societyer workspace to use the camera?",
+        detail: "The camera scans asset tags. Microphone and screen capture stay blocked. Closing this local window ends camera access.",
+        buttons: ["Keep camera blocked", "Allow camera"], defaultId: 0, cancelId: 0, noLink: true,
+      });
+      if (result.response !== 1 || mainWindow.isDestroyed()) return false;
+      return process.platform !== "darwin" || await systemPreferences.askForMediaAccess("camera");
+    }, () => mainWindow.isVisible());
+  // An inactive local renderer must not retain a camera stream while online mode is visible.
+  mainWindow.on("hide", () => {
+    revokeCameraConsent.reset();
+    // The trusted bundled scanner attaches its stream to a video element. Stop
+    // those tracks without discarding unsaved local form state when changing mode.
+    if (!mainWindow.isDestroyed()) void mainWindow.webContents.executeJavaScript(`
+      for (const video of document.querySelectorAll("video")) {
+        const stream = video.srcObject;
+        if (stream && typeof stream.getTracks === "function") for (const track of stream.getTracks()) track.stop();
+      }
+    `).catch(() => { /* Closing the renderer already ends its streams. */ });
+  });
 
   mainWindow.once("ready-to-show", () => {
     if (!mainWindow.isDestroyed()) mainWindow.show();

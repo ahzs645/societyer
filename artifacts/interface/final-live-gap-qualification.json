@@ -1,0 +1,868 @@
+{
+  "completedAt": "2026-10-05T04:26:24.079868+00:00",
+  "baselineCommit": "66b8dcdaed953e93637be15d400c2f5bf09339fb",
+  "source": "Final shared working tree with portable-query inactive-cache fix; frozen local HTTP auth/web restart. No product changes made by this final browser qualification.",
+  "passed": 112,
+  "failed": 0,
+  "uniqueCaseCount": 112,
+  "viewports": [
+    {
+      "project": "narrow-phone",
+      "width": 320,
+      "passed": 28
+    },
+    {
+      "project": "phone",
+      "width": 390,
+      "passed": 28
+    },
+    {
+      "project": "tablet",
+      "width": 768,
+      "passed": 28
+    },
+    {
+      "project": "desktop",
+      "width": 1440,
+      "passed": 28
+    }
+  ],
+  "specs": [
+    {
+      "file": "live-interface-workflows.spec.ts",
+      "passed": 92
+    },
+    {
+      "file": "live-interface-global-create.spec.ts",
+      "passed": 12
+    },
+    {
+      "file": "live-interface-camera-fallback.spec.ts",
+      "passed": 8
+    }
+  ],
+  "memberPermittedRouteChecks": 272,
+  "memberRestrictedEntryChecks": 232,
+  "nativeOracle": "Actual isolated local Convex and actual Better Auth cookies/brokerJWT verification through regular production app routes; no demo/local-runtime or mocked API/auth transport.",
+  "cameraOracle": "Full installed Chromium, actual Browser.setPermission(camera=denied) at test origin, strict real blocked-state text, real rendered asset detail tag, actual authorized native scan resolution and record navigation.",
+  "attemptDiagnostics": {
+    "initialFullSuite": {
+      "startTime": "2026-10-05T04:10:52.632Z",
+      "duration": 923298.955,
+      "expected": 104,
+      "skipped": 0,
+      "unexpected": 8,
+      "flaky": 0
+    },
+    "permissionCorrectedButReadinessRaceCameraSuite": {
+      "startTime": "2026-10-05T04:20:36.798Z",
+      "duration": 144524.24699999997,
+      "expected": 0,
+      "skipped": 0,
+      "unexpected": 8,
+      "flaky": 0
+    },
+    "finalCameraSuite": {
+      "startTime": "2026-10-05T04:23:28.207Z",
+      "duration": 46888.571,
+      "expected": 8,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "resolution": "Initial camera oracle used chrome-headless-shell, which lacks getUserMedia support before permission. Full Chromium with true CDP camera denial corrected that fixture. Native route guard temporarily rendered an Authorizing H1; the camera test now waits actual asset PageHeader .page__title-text before reading a tag. Final eight unique camera cases supersede earlier invalid fixture/readiness attempts. No product change was made to force those attempts to pass."
+  },
+  "limitations": [
+    "This is Chromium web qualification at four widths; Firefox, offline/demonstration, Electron runtime/package, and PowerSync transport are separate suites.",
+    "Workflow spec qualifies login, role/read-write module controls, native persistence/reload, public form submission, permitted Member reads, and denied auxiliary subscriptions; it does not claim every possible field combination or all legal filing pathways.",
+    "Camera fallback uses synthetic native asset fixtures and genuine browser permission denial; real physical cameras are outside this headless environment.",
+    "Layout oracle checks contained horizontal overflow and modal frame/content bounds; it is not a full visual/accessibility audit.",
+    "No production external credentials, remote SSO interaction, third-party AI provider, or production filings/submissions were invoked."
+  ],
+  "cases": [
+    {
+      "spec": "live-interface-camera-fallback.spec.ts",
+      "case": "Owner can use camera-denied manual asset lookup with genuine workspace authorization",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 5263
+    },
+    {
+      "spec": "live-interface-camera-fallback.spec.ts",
+      "case": "Viewer can use camera-denied manual asset lookup with genuine workspace authorization",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 5272
+    },
+    {
+      "spec": "live-interface-camera-fallback.spec.ts",
+      "case": "Owner can use camera-denied manual asset lookup with genuine workspace authorization",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 4914
+    },
+    {
+      "spec": "live-interface-camera-fallback.spec.ts",
+      "case": "Viewer can use camera-denied manual asset lookup with genuine workspace authorization",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 5176
+    },
+    {
+      "spec": "live-interface-camera-fallback.spec.ts",
+      "case": "Owner can use camera-denied manual asset lookup with genuine workspace authorization",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 5145
+    },
+    {
+      "spec": "live-interface-camera-fallback.spec.ts",
+      "case": "Viewer can use camera-denied manual asset lookup with genuine workspace authorization",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 5488
+    },
+    {
+      "spec": "live-interface-camera-fallback.spec.ts",
+      "case": "Owner can use camera-denied manual asset lookup with genuine workspace authorization",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 5596
+    },
+    {
+      "spec": "live-interface-camera-fallback.spec.ts",
+      "case": "Viewer can use camera-denied manual asset lookup with genuine workspace authorization",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 5559
+    },
+    {
+      "spec": "live-interface-global-create.spec.ts",
+      "case": "Owner global task dialog still creates a native task after conditional mounting",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 4213
+    },
+    {
+      "spec": "live-interface-global-create.spec.ts",
+      "case": "Member can read the global assistant without a settings subscription or write controls",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 2615
+    },
+    {
+      "spec": "live-interface-global-create.spec.ts",
+      "case": "Viewer meeting read routes do not seed meeting templates",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 2387
+    },
+    {
+      "spec": "live-interface-global-create.spec.ts",
+      "case": "Owner global task dialog still creates a native task after conditional mounting",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 4741
+    },
+    {
+      "spec": "live-interface-global-create.spec.ts",
+      "case": "Member can read the global assistant without a settings subscription or write controls",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 2548
+    },
+    {
+      "spec": "live-interface-global-create.spec.ts",
+      "case": "Viewer meeting read routes do not seed meeting templates",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 3054
+    },
+    {
+      "spec": "live-interface-global-create.spec.ts",
+      "case": "Owner global task dialog still creates a native task after conditional mounting",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 5483
+    },
+    {
+      "spec": "live-interface-global-create.spec.ts",
+      "case": "Member can read the global assistant without a settings subscription or write controls",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 2718
+    },
+    {
+      "spec": "live-interface-global-create.spec.ts",
+      "case": "Viewer meeting read routes do not seed meeting templates",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 2727
+    },
+    {
+      "spec": "live-interface-global-create.spec.ts",
+      "case": "Owner global task dialog still creates a native task after conditional mounting",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 5520
+    },
+    {
+      "spec": "live-interface-global-create.spec.ts",
+      "case": "Member can read the global assistant without a settings subscription or write controls",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 2952
+    },
+    {
+      "spec": "live-interface-global-create.spec.ts",
+      "case": "Viewer meeting read routes do not seed meeting templates",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 2704
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "production login rejects an incorrect password",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 1159
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "production login form authenticates the real workspace account",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 2468
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "anonymous production routes require login before mounting the app shell",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 1837
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live people directory validates and persists a created person and edit",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 4074
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live document metadata and review comments persist through reload",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 6126
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live annual filing validates evidence and persists a pending record",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 3729
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live governance motion template creates, edits and deletes with confirmation",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 5098
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Owner live module access and read/write controls match their workspace authority",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 6502
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Admin live module access and read/write controls match their workspace authority",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 7663
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Director live module access and read/write controls match their workspace authority",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 7605
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member live module access and read/write controls match their workspace authority",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 7917
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Viewer live module access and read/write controls match their workspace authority",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 8559
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member live guards cover every restricted module entry before mounting its data page",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 41812
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "anonymous live volunteer intake validates then submits without a membership",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 1480
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "anonymous live grant intake validates then submits without a membership",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 1864
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native cold shell rejects forged global create events",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 4753
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 1-10 do not subscribe to restricted auxiliary resources",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 12140
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 11-20 do not subscribe to restricted auxiliary resources",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 10104
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 21-30 do not subscribe to restricted auxiliary resources",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 11658
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 31-40 do not subscribe to restricted auxiliary resources",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 10645
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 41-50 do not subscribe to restricted auxiliary resources",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 8862
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 51-60 do not subscribe to restricted auxiliary resources",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 10018
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 61-68 do not subscribe to restricted auxiliary resources",
+      "project": "narrow-phone",
+      "passed": true,
+      "durationMs": 7110
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "production login rejects an incorrect password",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 1158
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "production login form authenticates the real workspace account",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 1719
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "anonymous production routes require login before mounting the app shell",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 1951
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live people directory validates and persists a created person and edit",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 4694
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live document metadata and review comments persist through reload",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 6281
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live annual filing validates evidence and persists a pending record",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 3842
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live governance motion template creates, edits and deletes with confirmation",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 5317
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Owner live module access and read/write controls match their workspace authority",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 6554
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Admin live module access and read/write controls match their workspace authority",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 6288
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Director live module access and read/write controls match their workspace authority",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 6659
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member live module access and read/write controls match their workspace authority",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 5692
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Viewer live module access and read/write controls match their workspace authority",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 6616
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member live guards cover every restricted module entry before mounting its data page",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 40456
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "anonymous live volunteer intake validates then submits without a membership",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 2002
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "anonymous live grant intake validates then submits without a membership",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 1818
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native cold shell rejects forged global create events",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 5922
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 1-10 do not subscribe to restricted auxiliary resources",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 12281
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 11-20 do not subscribe to restricted auxiliary resources",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 10355
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 21-30 do not subscribe to restricted auxiliary resources",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 11597
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 31-40 do not subscribe to restricted auxiliary resources",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 9635
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 41-50 do not subscribe to restricted auxiliary resources",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 8869
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 51-60 do not subscribe to restricted auxiliary resources",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 9576
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 61-68 do not subscribe to restricted auxiliary resources",
+      "project": "phone",
+      "passed": true,
+      "durationMs": 7198
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "production login rejects an incorrect password",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 998
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "production login form authenticates the real workspace account",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 1810
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "anonymous production routes require login before mounting the app shell",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 2010
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live people directory validates and persists a created person and edit",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 4119
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live document metadata and review comments persist through reload",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 5666
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live annual filing validates evidence and persists a pending record",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 4045
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live governance motion template creates, edits and deletes with confirmation",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 5244
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Owner live module access and read/write controls match their workspace authority",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 7279
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Admin live module access and read/write controls match their workspace authority",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 6852
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Director live module access and read/write controls match their workspace authority",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 6392
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member live module access and read/write controls match their workspace authority",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 6048
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Viewer live module access and read/write controls match their workspace authority",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 6939
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member live guards cover every restricted module entry before mounting its data page",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 41776
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "anonymous live volunteer intake validates then submits without a membership",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 2245
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "anonymous live grant intake validates then submits without a membership",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 2003
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native cold shell rejects forged global create events",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 5975
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 1-10 do not subscribe to restricted auxiliary resources",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 12509
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 11-20 do not subscribe to restricted auxiliary resources",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 10698
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 21-30 do not subscribe to restricted auxiliary resources",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 11057
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 31-40 do not subscribe to restricted auxiliary resources",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 11164
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 41-50 do not subscribe to restricted auxiliary resources",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 9263
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 51-60 do not subscribe to restricted auxiliary resources",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 9979
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 61-68 do not subscribe to restricted auxiliary resources",
+      "project": "tablet",
+      "passed": true,
+      "durationMs": 8638
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "production login rejects an incorrect password",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 1703
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "production login form authenticates the real workspace account",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 1965
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "anonymous production routes require login before mounting the app shell",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 2747
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live people directory validates and persists a created person and edit",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 4699
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live document metadata and review comments persist through reload",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 6174
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live annual filing validates evidence and persists a pending record",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 3847
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "live governance motion template creates, edits and deletes with confirmation",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 5175
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Owner live module access and read/write controls match their workspace authority",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 8248
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Admin live module access and read/write controls match their workspace authority",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 8346
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Director live module access and read/write controls match their workspace authority",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 8233
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member live module access and read/write controls match their workspace authority",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 7236
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Viewer live module access and read/write controls match their workspace authority",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 9182
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member live guards cover every restricted module entry before mounting its data page",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 42859
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "anonymous live volunteer intake validates then submits without a membership",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 1808
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "anonymous live grant intake validates then submits without a membership",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 2629
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native cold shell rejects forged global create events",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 5733
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 1-10 do not subscribe to restricted auxiliary resources",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 12739
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 11-20 do not subscribe to restricted auxiliary resources",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 10189
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 21-30 do not subscribe to restricted auxiliary resources",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 13723
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 31-40 do not subscribe to restricted auxiliary resources",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 10908
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 41-50 do not subscribe to restricted auxiliary resources",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 9892
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 51-60 do not subscribe to restricted auxiliary resources",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 10973
+    },
+    {
+      "spec": "live-interface-workflows.spec.ts",
+      "case": "Member native permitted reads 61-68 do not subscribe to restricted auxiliary resources",
+      "project": "desktop",
+      "passed": true,
+      "durationMs": 8041
+    }
+  ]
+}

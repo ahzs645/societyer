@@ -178,7 +178,10 @@ export async function cancelSubscriptionPortable(
     throw new Error("Authenticated actor does not match the current principal.");
   }
   const sub = await getOwned(ctx, "memberSubscriptions", id, candidate.societyId);
-  // Member can cancel their own subscription; admin can cancel any.
+  if (sub.demo !== true && sub.stripeSubscriptionId) {
+    throw new Error("Cancel live recurring billing in Stripe. Societyer will update this record after the verified Stripe webhook; a local record edit cannot stop provider charges.");
+  }
+  // The action policy and membership checks above govern record-only cancellation.
   await ctx.db.patch(id, {
     status: "canceled",
     canceledAtISO: new Date().toISOString(),
@@ -201,6 +204,15 @@ export async function getPlanPortable(ctx: PortableQueryCtx, { id }: { id: strin
   return getOwned(ctx, "subscriptionPlans", id, candidate.societyId);
 }
 
+function validateMembershipTerms(args: Record<string, any>, feePeriod = false) {
+  if (!Number.isSafeInteger(args.priceCents) || args.priceCents < 0) throw new Error("Enter a non-negative membership fee in whole cents.");
+  if (typeof args.currency !== "string" || !/^[A-Z]{3}$/.test(args.currency)) throw new Error("Use a three-letter uppercase currency code.");
+  const intervals = feePeriod ? ["month", "year", "one_time", "semester"] : ["month", "year", "one_time"];
+  if (!intervals.includes(args.interval)) throw new Error("Unsupported membership fee interval.");
+  const label = feePeriod ? args.label : args.name;
+  if (typeof label !== "string" || !label.trim()) throw new Error("Enter a membership fee name.");
+}
+
 export async function upsertPlanPortable(ctx: PortableMutationCtx, args: Record<string, any>) {
   await requireSocietyMembership(ctx, String(args.societyId));
   await requireRolePortable(ctx, {
@@ -208,6 +220,7 @@ export async function upsertPlanPortable(ctx: PortableMutationCtx, args: Record<
     societyId: args.societyId,
     required: "Admin",
   });
+  validateMembershipTerms(args);
   const { id, actingUserId, ...rest } = args;
   void actingUserId;
   if (id) {
@@ -238,6 +251,7 @@ export async function upsertFeePeriodPortable(ctx: PortableMutationCtx, args: Re
     societyId: args.societyId,
     required: "Admin",
   });
+  validateMembershipTerms(args, true);
   const { id, actingUserId, ...rest } = args;
   void actingUserId;
   if (rest.planId) {

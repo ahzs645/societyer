@@ -1,3 +1,4 @@
+import { operatorWaveBusinessId, providerDeploymentEnv } from "../shared/providerWorkspaceBindings";
 // @ts-nocheck
 import { authorizedAction, authorizedQuery } from "./lib/authorizedServer";
 import { v } from "convex/values";
@@ -95,10 +96,12 @@ export const sync = authorizedAction("waveCache:sync", action)({
       : await findWaveConnection(ctx, societyId);
     const society = await ctx.runQuery(api.society.getById, { id: societyId });
     const allowDemo = connection?.demo === true && society?.demoMode === true;
+    const assignedBusinessId = allowDemo ? undefined : operatorWaveBusinessId(String(societyId), businessId ?? connection?.externalBusinessId, providerDeploymentEnv("SOCIETYER_WAVE_WORKSPACE_BINDINGS_JSON"));
     try {
       const snapshot = await waveFetchSnapshot({
-        businessId: businessId ?? connection?.externalBusinessId,
+        businessId: allowDemo ? connection?.externalBusinessId : assignedBusinessId,
         allowDemo,
+        restrictToBusiness: !allowDemo,
       });
       const snapshotId = await ctx.runMutation(internal.waveCache._replaceSnapshot, {
         societyId,
@@ -132,12 +135,14 @@ export const sync = authorizedAction("waveCache:sync", action)({
 
 export const healthCheck = authorizedAction("waveCache:healthCheck", action)({
   args: {
+    societyId: v.id("societies"),
     businessId: v.optional(v.string()),
   },
   returns: v.any(),
-  handler: async (_ctx, { businessId }) => {
+  handler: async (_ctx, { societyId, businessId }) => {
+    const assignedBusinessId = operatorWaveBusinessId(String(societyId), businessId, providerDeploymentEnv("SOCIETYER_WAVE_WORKSPACE_BINDINGS_JSON"));
     try {
-      return await waveHealthCheck({ businessId });
+      return await waveHealthCheck({ businessId: assignedBusinessId, restrictToBusiness: true });
     } catch (err: any) {
       const env = waveEnvironmentStatus();
       const live = env.some((row) => row.name === "WAVE_ACCESS_TOKEN" && row.present);
@@ -163,6 +168,7 @@ export const healthCheck = authorizedAction("waveCache:healthCheck", action)({
 
 export const invoicePaymentProbe = authorizedAction("waveCache:invoicePaymentProbe", action)({
   args: {
+    societyId: v.id("societies"),
     businessId: v.optional(v.string()),
     allAccessibleBusinesses: v.optional(v.boolean()),
     maxInvoices: v.optional(v.number()),
@@ -170,8 +176,10 @@ export const invoicePaymentProbe = authorizedAction("waveCache:invoicePaymentPro
   },
   returns: v.any(),
   handler: async (_ctx, args) => {
+    if (args.allAccessibleBusinesses) throw new Error("Workspace Wave probes cannot enumerate other businesses.");
+    const businessId = operatorWaveBusinessId(String(args.societyId), args.businessId, providerDeploymentEnv("SOCIETYER_WAVE_WORKSPACE_BINDINGS_JSON"));
     try {
-      return await waveInvoicePaymentProbe(args);
+      return await waveInvoicePaymentProbe({ ...args, businessId, allAccessibleBusinesses: false, restrictToBusiness: true });
     } catch (err: any) {
       return {
         provider: "wave",

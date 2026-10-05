@@ -20,12 +20,14 @@ Start the optional stack:
 npm run docker:connectors
 ```
 
-Check health:
+Check authenticated readiness (200 only after a successful read-only CDP browser probe; 503 when the browser is unavailable):
 
 ```bash
 curl -H "x-connector-runner-secret: $CONNECTOR_RUNNER_SECRET" \
   http://127.0.0.1:8890/healthz
 ```
+
+Use public `/livez` for a cheap process-liveness probe. `/healthz` requires the runner secret and opens/closes a bounded browser protocol connection; it does not log into a provider account. Deployment readiness probes must supply the secret, or use `/livez` if they only need process liveness.
 
 Authenticated runner calls require `CONNECTOR_RUNNER_SECRET`:
 

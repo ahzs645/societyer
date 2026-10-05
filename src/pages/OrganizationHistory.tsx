@@ -1868,7 +1868,7 @@ function SourceDocumentList({
 
 function SourceDocumentRow({ source, societyId }: { source: any; societyId: any }) {
   const { loaded, can } = usePermissions();
-  const canWrite = loaded && can("documents:write");
+  const canWrite = loaded && can("documents:write") && can("settings:write");
   const downloadUrl = useQuery(api.files.getUrl, source?.storageId ? { storageId: source.storageId } : "skip");
   const pullSourceDocument = useAction(api.paperless.pullSourceDocument);
   const toast = useToast();

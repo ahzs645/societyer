@@ -399,7 +399,9 @@ export const sendDigest = authorizedAction("notifications:sendDigest", action)({
     // Reach delivery providers through the injected capability bag instead of
     // importing them directly. A runtime without email/sms wired gets a
     // structured CAPABILITY_UNAVAILABLE rather than a silent send.
-    const capabilities = buildConvexCapabilities();
+    const societies = await ctx.runQuery(api.society.list, {});
+    const demo = societies.some((society: any) => society._id === societyId && society.demoMode === true);
+    const capabilities = buildConvexCapabilities(undefined, { demo });
     let emailsSent = 0;
     let smsSent = 0;
     for (const u of users) {

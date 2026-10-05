@@ -26,7 +26,7 @@ test("Owner global task dialog still creates a native task after conditional mou
 
 test("Member can read the global assistant without a settings subscription or write controls", async ({ page }) => {
   const errors: string[] = [];
-  const settingsQueries: string[] = [];
+  const protectedQueries: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("websocket", (socket) => socket.on("framesent", (frame) => {
     // Keep only public function names; authentication frames are never recorded.
@@ -34,7 +34,7 @@ test("Member can read the global assistant without a settings subscription or wr
       const message = JSON.parse(String(frame.payload));
       if (message.type === "ModifyQuerySet") {
         for (const query of message.modifications ?? []) {
-          if (query.type === "Add" && query.udfPath === "aiSettings:getEffective") settingsQueries.push(query.udfPath);
+          if (query.type === "Add" && ["aiSettings:getEffective", "aiChat:listThreads", "aiChat:messagesForThread", "aiAgents:listRuns", "aiAgents:listToolDrafts"].includes(query.udfPath)) protectedQueries.push(query.udfPath);
         }
       }
     } catch { /* Binary/non-JSON transport frame. */ }
@@ -48,8 +48,10 @@ test("Member can read the global assistant without a settings subscription or wr
   await expect(dialog.getByRole("button", { name: "Send message", exact: true })).toBeDisabled();
   await expect(dialog.getByRole("button", { name: "AI settings", exact: true })).toBeDisabled();
   await expect(dialog.getByRole("button", { name: "New chat", exact: true })).toBeDisabled();
-  await expect(dialog.locator(".global-ai-thread-list__empty").or(dialog.locator(".global-ai-thread"))).not.toHaveCount(0);
-  expect(settingsQueries).toEqual([]);
+  await expect(dialog.locator(".global-ai-thread-list__empty")).toHaveText("No chats yet");
+  await expect(dialog.locator(".global-ai-thread")).toHaveCount(0);
+  await expect(dialog.getByRole("status").filter({ hasText: "Private AI conversations require current AI chat write permission" })).toBeVisible();
+  expect(protectedQueries).toEqual([]);
   expect(errors).toEqual([]);
 });
 

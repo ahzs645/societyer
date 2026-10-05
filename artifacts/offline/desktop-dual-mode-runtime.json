@@ -7,11 +7,39 @@
       "passed": true
     },
     {
+      "name": "Trusted bundled renderer retains user-initiated clipboard copy",
+      "passed": true
+    },
+    {
+      "name": "Actual bundled scanner decodes fake QR, resolves a genuinely created local asset and releases camera on close",
+      "passed": true
+    },
+    {
+      "name": "Bundled local camera requires consent and rejects microphone with fake device",
+      "passed": true
+    },
+    {
       "name": "HTTP hosted origin rejected before navigation",
       "passed": true
     },
     {
       "name": "HTTPS hosted mode sandboxed without native bridge",
+      "passed": true
+    },
+    {
+      "name": "Main hosted renderer supports user-initiated clipboard copy without clipboard-read grant",
+      "passed": true
+    },
+    {
+      "name": "Hosted camera is consent-only and local mode switch ends local video tracks",
+      "passed": true
+    },
+    {
+      "name": "Same-origin embedded frames cannot reuse main-app camera consent",
+      "passed": true
+    },
+    {
+      "name": "SSO popup and same-origin callback cannot request or inherit camera consent",
       "passed": true
     },
     {
@@ -35,6 +63,14 @@
       "passed": true
     },
     {
+      "name": "Closing and reopening hosted mode revokes camera grant despite durable web session",
+      "passed": true
+    },
+    {
+      "name": "Switching locally cancels pending camera consent and rejects its late approval callback",
+      "passed": true
+    },
+    {
       "name": "Restart resumes configured online mode and persistent session",
       "passed": true
     },
@@ -53,6 +89,7 @@
   ],
   "limits": [
     "Hosted fixture is not live Convex or enterprise SSO",
+    "Camera uses Chromium fake device, not physical webcam or macOS/Windows OS permission",
     "No signed macOS or Windows installer qualification",
     "Local and hosted datasets are separate"
   ]

@@ -50,5 +50,6 @@ test("saved pathway branches, freezes inputs, requires independent review and re
   expect(state.runs[0].inputs.namedCompany).toBe(false);
   expect(state.runs[0].inputsFrozen).toBe(true);
   expect(state.runs[0].submissions[0].status).toBe("manual_required");
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   expect(errors).toEqual([]);
 });

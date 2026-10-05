@@ -63,6 +63,7 @@ export const upsert = authorizedMutation("annualFilings:upsert", mutation)({
     filedOn: v.optional(v.string()),
     regnNature: v.optional(v.string()),
     regnLegislation: v.optional(v.string()),
+    sourceFilingId: v.optional(v.id("filings")),
     nowISO: v.string(),
   },
   returns: v.any(),

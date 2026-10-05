@@ -66,10 +66,12 @@ export function AssetScanner({
             // Per-frame decode failures are normal; ignore them.
           },
         );
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (!cancelled) {
+          // html5-qrcode wraps getUserMedia DOMExceptions in a string.
+          const description = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
           setCameraError(
-            error?.message?.includes("Permission") || error?.name === "NotAllowedError"
+            /NotAllowedError|permission|denied/i.test(description)
               ? "Camera access was blocked. Enter the asset tag below instead."
               : "No camera available. Enter the asset tag below instead.",
           );

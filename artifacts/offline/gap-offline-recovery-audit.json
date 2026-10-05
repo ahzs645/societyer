@@ -1,0 +1,159 @@
+{
+  "baselineCommit": "66b8dcdaed953e93637be15d400c2f5bf09339fb",
+  "completedAt": "2026-10-05T02:20:41.679744+00:00",
+  "scope": "Offline/local recovery and meeting-scoped hosted preparation; no migration, wider replication or new hosted identity authority added.",
+  "fixes": [
+    {
+      "problem": "Restore raced startup hydration, mixing previous seed rows into the restored vault.",
+      "change": "Validate first, then await startup hydration before beginning the destructive IndexedDB transaction.",
+      "evidence": "Blocked startup, immediate restore, persisted attachment references and reopen checked with real IndexedDB at all four widths."
+    },
+    {
+      "problem": "Direct storage imports silently accepted missing/duplicate record IDs and malformed attachment references even though file preflight rejected them.",
+      "change": "Reject unsafe table names, missing/duplicate IDs, duplicate attachment keys, empty provider/storage keys and invalid byte sizes before replacing records.",
+      "evidence": "Five malformed imports reject without changing the existing vault; restored historical roles remain local, hosted identity bindings are stripped and imported pathway execution is quarantined."
+    }
+  ],
+  "initialFindings": {
+    "runtime": "Existing frozen frontend served the pre-fix storage module.",
+    "tests": 36,
+    "passed": 28,
+    "failed": 8,
+    "failedCases": "Startup restore and malformed direct-import contracts failed at 320, 390, 768 and 1440 pixels.",
+    "otherResults": "Existing atomic transaction rollback passed 4/4; PowerSync durable recovery passed 24/24."
+  },
+  "finalResults": [
+    {
+      "command": "OFFLINE_ROLLOUT_URL=http://127.0.0.1:43501 npx playwright test -c playwright.offline-rollout.config.ts offline-rollout-local-recovery.spec.ts",
+      "runtime": "New-source frozen Vite and actual IndexedDB; no mocked storage.",
+      "passed": 12,
+      "failed": 0,
+      "widths": [
+        320,
+        390,
+        768,
+        1440
+      ]
+    },
+    {
+      "command": "npx playwright test -c playwright.offline-rollout.config.ts offline-rollout-recovery.spec.ts",
+      "runtime": "Actual PowerSync 2.4.2 WASM/SQLite/outbox with deliberately injected transport outcomes.",
+      "passed": 24,
+      "failed": 0,
+      "widths": [
+        320,
+        390,
+        768,
+        1440
+      ],
+      "covers": [
+        "permanent and dependent quarantine",
+        "transient retry",
+        "interrupted accepted acknowledgement",
+        "authorization rejection",
+        "revocable downloaded content versus authored recovery",
+        "offline upload fence"
+      ]
+    },
+    {
+      "command": "npm run test:powersync-invalidation",
+      "runtime": "Convex transaction oracle executing actual production handlers and scheduled mutations. Identity transport injected.",
+      "passed": 12,
+      "failed": 0
+    },
+    {
+      "command": "npm run test:powersync-credentials",
+      "runtime": "Actual mounted gateway and Better Auth cookie/session/token APIs in disposable test fixtures; native identity responses controlled by the credential suite.",
+      "passed": 12,
+      "failed": 0
+    },
+    {
+      "command": "npm run test:convex --prefix experiments/offline-convex",
+      "runtime": "Convex transaction/policy oracles and local fixture-broker HTTP boundary tests; no live replication claimed.",
+      "passed": 39,
+      "failed": 0
+    },
+    {
+      "command": "npx tsx scripts/check-hosted-identity.ts",
+      "passed": true,
+      "covers": "Exact issuer/subject, legacy/ambiguous denial, disabled identity, local compatibility, imported auth stripping and broker configuration."
+    },
+    {
+      "command": "npx tsx scripts/check-local-snapshot-roundtrip.ts",
+      "passed": true,
+      "covers": "Records, document metadata, corporate rights, legacy migrations and stable references across local snapshot restoration."
+    },
+    {
+      "command": "npx tsx scripts/check-guided-onboarding.ts",
+      "passed": true,
+      "covers": "Bounded file preflight, initial answers, legal boundaries and restore."
+    },
+    {
+      "command": "npx tsx scripts/check-pathway-pipeline.ts",
+      "passed": true,
+      "covers": "Frozen evidence, current approval, idempotent handoff and read-only imported pathway authority."
+    },
+    {
+      "command": "npx eslint src/lib/localDexieRowStore.ts shared/onboardingBackup.ts tests/offline-rollout-local-recovery.spec.ts",
+      "errors": 0,
+      "warnings": "Existing store file-length warning; shared/test files are outside this scoped ESLint configuration."
+    }
+  ],
+  "remainingContracts": [
+    {
+      "feature": "Local vault upload or hosted tenant migration",
+      "status": "Not implemented. Local JSON preview and restore were qualified; mode switching does not upload anything.",
+      "needed": [
+        "Authenticated target workspace authorization and reviewed identity mapping; local Owner history is not hosted identity proof.",
+        "Tenant/resource-aware import allowlist and dependency closure with stable source-to-target ID mapping.",
+        "Dry-run conflicts, bounded idempotent batches, atomic record stages and recoverable failures.",
+        "Document byte/provider remapping with hashes, explicit attachment coverage and audit receipts.",
+        "Preserve legal evidence provenance, last Active Owner and read-only imported pathway history."
+      ]
+    },
+    {
+      "feature": "Automatic offline replication of every module",
+      "status": "Not implemented. Existing scope remains selected meeting preparation.",
+      "needed": [
+        "Domain-specific approved replication schema and tenant/resource ACL projection for each added module.",
+        "Versioned write commands, permissions, conflict rules, dependency gates and idempotent server receipts.",
+        "Role/identity/module/ACL invalidation hooks and revocable cache purge for each scope.",
+        "Real two-client transport qualification, workspace limits and attachment recovery before enablement."
+      ]
+    },
+    {
+      "feature": "Fully offline hosted authentication or startup",
+      "status": "Not implemented or newly qualified. Existing hosted auth must initialize while connected; reload may require online sign-in.",
+      "needed": [
+        "A separately designed device unlock and local-read policy with bounded authorization lifetime.",
+        "Explicit revocation-latency and secure key/session persistence policy across browser and Electron.",
+        "An offline shell/bootstrap without promoting cached actors, roles or JWTs into verified hosted principals.",
+        "Expired-session, sign-out, switched-account, revoked-role and hard-reload qualification against that design."
+      ]
+    },
+    {
+      "feature": "Automatic reimport of meeting recovery JSON",
+      "status": "Not implemented. Authored commands and bytes remain exportable for manual review; the export is not a second outbox.",
+      "needed": [
+        "Read-only recovery preview and version validation.",
+        "Reconcile against current authorized canonical revisions with fresh reviewed operations.",
+        "Never blindly replay exported commands, cached authorization or adopted minutes."
+      ]
+    },
+    {
+      "feature": "External production PowerSync activation",
+      "status": "Blocked by unavailable configured production endpoints/service identities and external deployment qualification.",
+      "needed": [
+        "Public HTTPS routing, deployment export credential and verified-TLS PostgreSQL storage.",
+        "Actual external origin, storage and production-size checks; existing local evidence is not an external deployment."
+      ]
+    }
+  ],
+  "limits": [
+    "The durable SDK recovery matrix injects transport results; it is not a fresh live-replication browser run.",
+    "No external Clerk/Microsoft provider login, signed Electron release, physical device or Safari check is claimed.",
+    "JSON backup preserves records and attachment references, not independent physical file bytes.",
+    "No native authorization or workspace roles were weakened; no shared lab issuer or production tenant was changed."
+  ],
+  "privateEvidence": "Detailed logs, browser reports and traces remain under ignored tmp/gap-* paths."
+}

@@ -58,18 +58,18 @@ function convexStorageCapability(ctx: ConvexStorageCtx): StorageCapability {
  * the storage capability to Convex's `_storage` (logos/files/images); without it,
  * storage falls back to the rustfs provider for upload/download URLs.
  */
-export function buildConvexCapabilities(ctx?: ConvexStorageCtx): PortableCapabilities {
+export function buildConvexCapabilities(ctx?: ConvexStorageCtx, options?: { demo?: boolean }): PortableCapabilities {
   return makeCapabilities(
     {
       email: {
         async sendEmail(input) {
-          const res = await sendEmail(input);
+          const res = await sendEmail({ ...input, demo: options?.demo === true });
           return { id: String(res.id), accepted: Boolean(res.accepted) };
         },
       },
       sms: {
         async sendSms(input) {
-          const res = await sendSms(input);
+          const res = await sendSms({ ...input, demo: options?.demo === true });
           return { id: String((res as { id?: unknown }).id ?? ""), accepted: Boolean((res as { accepted?: unknown }).accepted ?? true) };
         },
       },

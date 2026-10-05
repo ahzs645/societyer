@@ -7,6 +7,7 @@ import { api, internal } from "./_generated/api";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
+import { composeAiMessage } from "../shared/aiAttachments";
 
 function env(name: string): string | undefined {
   return process.env[name];
@@ -19,16 +20,19 @@ export const sendChatMessage = authorizedAction("aiChatActions:sendChatMessage",
     societyId: v.id("societies"),
     threadId: v.optional(v.id("aiChatThreads")),
     content: v.string(),
+    attachments: v.optional(v.array(v.object({ name: v.string(), mediaType: v.string(), text: v.string() }))),
     actingUserId: v.optional(v.id("users")),
     browsingContext: v.optional(v.any()),
     modelId: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (ctx, args) => {
+    const content = composeAiMessage(args.content, args.attachments);
     // If continuing an existing thread, the thread's locked modelId wins over the caller's hint.
     let lockedModelId: string | undefined;
     if (args.threadId) {
       const existingThread = await ctx.runQuery((api as any).aiChat.getThread, { threadId: args.threadId });
+      if (!existingThread || existingThread.societyId !== args.societyId) throw new Error("Chat thread does not belong to this workspace.");
       lockedModelId = existingThread?.modelId ?? undefined;
     }
     const runtimeConfig = await resolveAiRuntimeConfig(
@@ -52,7 +56,7 @@ export const sendChatMessage = authorizedAction("aiChatActions:sendChatMessage",
       societyId: args.societyId,
       threadId,
       role: "user",
-      content: args.content,
+      content,
       createdByUserId: args.actingUserId,
     });
 
@@ -159,14 +163,14 @@ export const sendChatMessage = authorizedAction("aiChatActions:sendChatMessage",
       threadId,
       role: "assistant",
       content: assistantText,
-      status: "complete",
+      status: provider === "deterministic_fallback" ? "error" : "complete",
       modelId,
       usage,
       parts: { provider },
       createdByUserId: args.actingUserId,
     });
 
-    return { threadId, messageId, content: assistantText, provider, modelId };
+    return { threadId, messageId, content: assistantText, provider, modelId, status: provider === "deterministic_fallback" ? "error" : "complete" };
   },
 });
 
@@ -295,7 +299,7 @@ function fallbackResponse({ error, content, context }: { error?: string; content
     .slice(0, 12);
   const skills = (context?.skillCatalog ?? []).map((skill: any) => skill.name).slice(0, 8);
   return [
-    "I can route this through Societyer skills and permissioned tools, but the live model provider is not configured.",
+    "Live AI did not complete this request. The following is a capability summary, not an analysis of your message or attachments.",
     "",
     `Request: ${content}`,
     `Provider: ${error ?? "No provider available"}`,

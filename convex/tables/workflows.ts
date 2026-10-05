@@ -100,6 +100,8 @@ export const workflowTables = {
     provider: v.optional(v.string()), // internal | n8n
     externalRunId: v.optional(v.string()),
     externalStatus: v.optional(v.string()),
+    // Exact callback retry identity; completion does not replay document or outbox writes.
+    lastCallbackFingerprint: v.optional(v.string()),
     generatedDocumentId: v.optional(v.id("documents")),
     generatedDocumentVersionId: v.optional(v.id("documentVersions")),
     output: v.optional(v.any()),

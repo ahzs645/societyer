@@ -262,7 +262,7 @@ export function SourceDocumentRow({
     document.storageId ? { storageId: document.storageId } : "skip",
   );
   const { can } = usePermissions();
-  const canPullSource = can("documents:write");
+  const canPullSource = can("documents:write") && can("settings:write");
   const pullSourceDocument = useAction(api.paperless.pullSourceDocument);
   const toast = useToast();
   const [busy, setBusy] = useState(false);

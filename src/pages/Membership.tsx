@@ -113,6 +113,7 @@ export function MembershipPage() {
   } | null>(null);
   const [signupForm, setSignupForm] = useState({ fullName: "", email: "" });
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [levyImportOpen, setLevyImportOpen] = useState(false);
 
   if (society === undefined) return <PageLoading />;
@@ -159,6 +160,7 @@ export function MembershipPage() {
         }
       />
 
+      <p className="muted">Live recurring subscriptions are managed in Stripe. Payment and cancellation records update after verified provider webhooks. Unconfigured services cannot accept a payment; simulation requires a demo workspace.</p>
       {isLocalDataRuntime() && <p className="muted" role="status">Checkout and subscription activation require a connected server. Plans and fee history can still be maintained locally.</p>}
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Active plans" value={String(activePlans.length)} />
@@ -216,7 +218,7 @@ export function MembershipPage() {
               <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
                 <button
                   className="btn btn--accent btn--sm"
-                  disabled={!paymentsAvailable}
+                  disabled={!paymentsAvailable || !p.active}
                   onClick={() =>
                     setSignup({
                       planId: p._id,
@@ -390,11 +392,16 @@ export function MembershipPage() {
                   <td className="mono">{s.currentPeriodEndISO ? formatDate(s.currentPeriodEndISO) : "—"}</td>
                   <td className="mono">{s.lastPaymentCents != null ? money(s.lastPaymentCents) : "—"}</td>
                   <td>
-                    {s.status !== "canceled" && (
+                    {s.status !== "canceled" && !s.demo && s.stripeSubscriptionId ? (
+                      <a className="btn btn--ghost btn--sm" href="https://dashboard.stripe.com/subscriptions" target="_blank" rel="noopener noreferrer">Manage in Stripe</a>
+                    ) : s.status !== "canceled" && (
                       <button
                         className="btn btn--ghost btn--sm"
                         disabled={!canManage}
-                        onClick={() => cancelSub({ id: s._id })}
+                        onClick={async () => {
+                          try { await cancelSub({ id: s._id }); toast.success("Subscription record canceled"); }
+                          catch (error) { toast.error("Could not cancel subscription", error instanceof Error ? error.message : "Please try again."); }
+                        }}
                       >
                         Cancel
                       </button>
@@ -426,12 +433,14 @@ export function MembershipPage() {
               disabled={!canManage}
               onClick={async () => {
                 if (!canManage) return;
+                try {
                 await upsertPlan({
                   ...planDraft,
                   societyId: society._id,
                 });
                 toast.success("Plan saved");
                 setPlanDraft(null);
+                } catch (error) { toast.error("Could not save plan", error instanceof Error ? error.message : "Please try again."); }
               }}
             >
               Save
@@ -645,9 +654,11 @@ export function MembershipPage() {
               </button>
               <button
                 className="btn btn--accent"
-                disabled={!paymentsAvailable}
+                disabled={!paymentsAvailable || checkoutBusy}
                 onClick={async () => {
-                  if (!signup || !paymentsAvailable) return;
+                  if (!signup || !paymentsAvailable || checkoutBusy) return;
+                  setCheckoutBusy(true);
+                  try {
                   await simulateActivation({
                     societyId: society._id,
                     planId: signup.planId,
@@ -658,6 +669,8 @@ export function MembershipPage() {
                   setCheckoutUrl(null);
                   setSignup(null);
                   setSignupForm({ fullName: "", email: "" });
+                  } catch (error) { toast.error("Could not simulate payment", error instanceof Error ? error.message : "Please try again."); }
+                  finally { setCheckoutBusy(false); }
                 }}
               >
                 <CheckCircle2 size={12} /> Simulate payment
@@ -676,9 +689,11 @@ export function MembershipPage() {
               </button>
               <button
                 className="btn btn--accent"
-                disabled={!paymentsAvailable || !signupForm.fullName || !signupForm.email}
+                disabled={!paymentsAvailable || checkoutBusy || !signupForm.fullName || !signupForm.email}
                 onClick={async () => {
-                  if (!signup) return;
+                  if (!signup || !paymentsAvailable || checkoutBusy) return;
+                  setCheckoutBusy(true);
+                  try {
                   const { url, demo } = await beginCheckout({
                     societyId: society._id,
                     planId: signup.planId,
@@ -690,6 +705,8 @@ export function MembershipPage() {
                   } else {
                     window.location.href = url;
                   }
+                  } catch (error) { toast.error("Could not start checkout", error instanceof Error ? error.message : "Please try again."); }
+                  finally { setCheckoutBusy(false); }
                 }}
               >
                 Continue to checkout

@@ -14,6 +14,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
+import { useRecordTableState } from "../platform/record-engine/record-table/state/recordTableStore";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
 import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
@@ -770,6 +771,8 @@ function TaskPhoneList({
   onStatusChange: (task: TaskRecord, status: string) => Promise<void>;
 }) {
   const records = useFilteredRecords() as TaskRecord[];
+  const viewType = useRecordTableState((state) => state.type);
+  if (viewType !== "table") return <RecordTable selectable={false} />;
 
   if (records.length === 0) {
     return (

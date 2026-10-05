@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { WebSocket } from "ws";
 import type {
   BrowserBackend,
   BrowserBackendHealth,
@@ -53,12 +54,32 @@ export class BlitzBrowserBackend implements BrowserBackend {
       if (url.protocol !== "ws:" && url.protocol !== "wss:") {
         return { ok: false, provider: this.provider, detail: "BLITZBROWSER_CDP_URL must be ws:// or wss://." };
       }
-      return { ok: true, provider: this.provider };
+      return await new Promise<BrowserBackendHealth>((resolve) => {
+        const socket = new WebSocket(url);
+        let settled = false;
+        const finish = (ok: boolean, detail?: string) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          socket.terminate();
+          resolve({ ok, provider: this.provider, detail });
+        };
+        const timeout = setTimeout(() => finish(false, "Browser endpoint did not answer the CDP health probe."), 3_000);
+        socket.once("open", () => socket.send(JSON.stringify({ id: 1, method: "Browser.getVersion" })));
+        socket.on("message", (raw: WebSocket.RawData) => {
+          let payload: any;
+          try { payload = JSON.parse(raw.toString()); } catch { finish(false, "Browser endpoint returned an invalid CDP response."); return; }
+          if (payload?.id !== 1) return;
+          finish(typeof payload?.result?.product === "string", payload?.result?.product ? undefined : "Browser endpoint rejected the CDP health probe.");
+        });
+        socket.once("error", () => finish(false, "Browser endpoint is unavailable or rejected the connection."));
+        socket.once("close", () => finish(false, "Browser endpoint closed before answering the CDP health probe."));
+      });
     } catch (error: unknown) {
       return {
         ok: false,
         provider: this.provider,
-        detail: error instanceof Error ? error.message : "Invalid BlitzBrowser URL.",
+        detail: "Invalid BlitzBrowser endpoint configuration.",
       };
     }
   }

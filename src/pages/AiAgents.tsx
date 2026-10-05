@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useAction, useQuery } from "convex/react";
 import { Bot, BrainCircuit, CheckCircle2, History, KeyRound, ListTree, MessageSquare, Play, RefreshCw, Save, Search, ShieldCheck, SlidersHorizontal, Trash2, Wrench, XCircle } from "lucide-react";
@@ -11,7 +11,7 @@ import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field, SettingsShell } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
-import { streamChatMessage } from "../lib/aiChatStream";
+import { streamChatMessage, isChatStreamUnavailable } from "../lib/aiChatStream";
 
 type AgentDefinition = {
   key: string;
@@ -89,10 +89,10 @@ export function AiAgentsPage() {
   ) as ToolCatalog | undefined;
   const runs = useQuery(
     api.aiAgents.listRuns,
-    society ? { societyId: society._id, limit: 20 } : "skip",
+    society && canWriteTasks ? { societyId: society._id, limit: 20 } : "skip",
   ) as any[] | undefined;
-  const threads = useQuery(api.aiChat.listThreads, society ? { societyId: society._id, limit: 12 } : "skip") as any[] | undefined;
-  const toolDrafts = useQuery(api.aiAgents.listToolDrafts, society ? { societyId: society._id, limit: 20 } : "skip") as any[] | undefined;
+  const threads = useQuery(api.aiChat.listThreads, society && canWriteTasks ? { societyId: society._id, limit: 12 } : "skip") as any[] | undefined;
+  const toolDrafts = useQuery(api.aiAgents.listToolDrafts, society && canWriteTasks ? { societyId: society._id, limit: 20 } : "skip") as any[] | undefined;
   const aiSettings = useQuery(api.aiSettings.getEffective, society && loaded && can("settings:read") ? { societyId: society._id } : "skip") as any | undefined;
   const runAgent = useAction(api.aiChatActions.runAgentLive);
   const sendChatMessage = useAction(api.aiChatActions.sendChatMessage);
@@ -109,6 +109,9 @@ export function AiAgentsPage() {
 
   const [selectedKey, setSelectedKey] = useState("compliance_analyst");
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
+  const authorityKey = `${society?._id ?? ""}:${actingUserId ?? ""}:${canWriteTasks}`;
+  const authorityRef = useRef(authorityKey);
+  authorityRef.current = authorityKey;
   const [input, setInput] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [streamingText, setStreamingText] = useState("");
@@ -140,9 +143,16 @@ export function AiAgentsPage() {
     content: "",
     isActive: true,
   });
+  useEffect(() => {
+    setSelectedThreadId(undefined);
+    setChatInput("");
+    setStreamingText("");
+    setChatBusy(false);
+    setLastResult(null);
+  }, [society?._id, actingUserId, canWriteTasks]);
   const messages = useQuery(
     api.aiChat.messagesForThread,
-    selectedThreadId ? { threadId: selectedThreadId as any } : "skip",
+    canWriteTasks && selectedThreadId && threads?.some(thread => thread._id === selectedThreadId && thread.societyId === society?._id) ? { threadId: selectedThreadId as any } : "skip",
   ) as any[] | undefined;
 
   const agentList = agents ?? [];
@@ -209,32 +219,39 @@ export function AiAgentsPage() {
 
   const submitChat = async () => {
     if (!canRunLive) return;
-    if (!society || !chatInput.trim()) return;
+    if (!canRunLive || chatBusy || !society || !chatInput.trim()) return;
+    const submissionAuthority = authorityKey;
     setChatBusy(true);
     setStreamingText("");
     try {
-      const result = await streamChatMessage({
+      const sendAction = () => sendChatMessage({
+        societyId: society._id,
+        threadId: selectedThreadId as any,
+        content: chatInput.trim(),
+        browsingContext: { route: window.location.pathname, surface: "ai-agents-chat" },
+      });
+      const result = isStaticDemoRuntime() ? await sendAction() : await streamChatMessage({
         societyId: society._id,
         threadId: selectedThreadId,
         content: chatInput.trim(),
         browsingContext: { route: window.location.pathname, surface: "ai-agents-chat" },
-        onToken: (token) => setStreamingText((text) => text + token),
-      }).catch(async () =>
-        sendChatMessage({
-          societyId: society._id,
-          threadId: selectedThreadId as any,
-          content: chatInput.trim(),
-          browsingContext: { route: window.location.pathname, surface: "ai-agents-chat" },
-        }),
-      );
+        onThreadReady: id => { if (authorityRef.current === submissionAuthority) setSelectedThreadId(id); },
+        onToken: token => { if (authorityRef.current === submissionAuthority) setStreamingText(text => text + token); },
+      }).catch(error => {
+        if (!isChatStreamUnavailable(error) || authorityRef.current !== submissionAuthority) throw error;
+        return sendAction();
+      });
+      if (authorityRef.current !== submissionAuthority) return;
       setSelectedThreadId(result.threadId);
+      if (result.status === "error" || result.provider === "deterministic_fallback") throw new Error("Live AI did not complete this request. Your draft is retained; check provider setup and the saved conversation before retrying.");
       setChatInput("");
       setStreamingText("");
       toast.success(result.provider === "sse" ? "AI reply streamed" : result.provider === "vercel_ai_sdk" ? "AI reply saved" : "AI fallback reply saved");
     } catch (error: any) {
+      if (authorityRef.current !== submissionAuthority) return;
       toast.error(error?.message ?? "Couldn't send chat message");
     } finally {
-      setChatBusy(false);
+      if (authorityRef.current === submissionAuthority) setChatBusy(false);
     }
   };
 
@@ -516,17 +533,17 @@ export function AiAgentsPage() {
             </div>
             <div className="card__body col" style={{ gap: 12 }}>
               <div className="col" style={{ gap: 8, maxHeight: 360, overflow: "auto" }}>
-                {(messages ?? []).length === 0 ? (
+                {(!canWriteTasks || (messages ?? []).length === 0) ? (
                   <div className="muted">Start a thread to send a test message to the assistant.</div>
                 ) : (
-                  (messages ?? []).map((message) => (
+                  (canWriteTasks ? messages ?? [] : []).map((message) => (
                     <div key={message._id} className="col" style={{ gap: 4, padding: 10, border: "1px solid var(--border)", borderRadius: 8 }}>
                       <Badge tone={message.role === "assistant" ? "info" : "neutral"}>{message.role}</Badge>
                       <div style={{ whiteSpace: "pre-wrap", fontSize: "var(--fs-sm)" }}>{message.content}</div>
                     </div>
                   ))
                 )}
-                {streamingText && (
+                {canWriteTasks && streamingText && (
                   <div className="col" style={{ gap: 4, padding: 10, border: "1px solid var(--border)", borderRadius: 8 }}>
                     <Badge tone="info">assistant</Badge>
                     <div style={{ whiteSpace: "pre-wrap", fontSize: "var(--fs-sm)" }}>{streamingText}</div>
@@ -550,13 +567,13 @@ export function AiAgentsPage() {
           <div className="card">
             <div className="card__head">
               <h2 className="card__title">Threads</h2>
-              <span className="card__subtitle">Persisted AI conversations for this workspace.</span>
+              <span className="card__subtitle">Private conversations belong to their creator and require current AI chat write permission.</span>
             </div>
             <div className="card__body col" style={{ gap: 8 }}>
               <button type="button" className="btn btn--ghost btn--sm" onClick={() => setSelectedThreadId(undefined)}>
                 New thread
               </button>
-              {(threads ?? []).map((thread) => (
+              {(canWriteTasks ? threads ?? [] : []).map((thread) => (
                 <button
                   key={thread._id}
                   type="button"
@@ -577,10 +594,10 @@ export function AiAgentsPage() {
             <span className="card__subtitle">Human approval queue for actions produced by chat or agents.</span>
           </div>
           <div className="card__body col" style={{ gap: 10 }}>
-            {(toolDrafts ?? []).length === 0 ? (
+            {(!canWriteTasks || (toolDrafts ?? []).length === 0) ? (
               <div className="muted">No AI tool drafts yet.</div>
             ) : (
-              (toolDrafts ?? []).map((draft) => (
+              (canWriteTasks ? toolDrafts ?? [] : []).map((draft) => (
                 <div key={draft._id} className="row" style={{ alignItems: "flex-start", justifyContent: "space-between", gap: 12, paddingBottom: 10, borderBottom: "1px solid var(--border)" }}>
                   <div className="col" style={{ gap: 4, minWidth: 0 }}>
                     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
@@ -896,10 +913,10 @@ export function AiAgentsPage() {
             <span className="card__subtitle">Run records are also mirrored into the main audit log.</span>
           </div>
           <div className="card__body col" style={{ gap: 10 }}>
-            {(runs ?? []).length === 0 ? (
+            {(!canWriteTasks || (runs ?? []).length === 0) ? (
               <div className="muted">No agent runs yet.</div>
             ) : (
-              (runs ?? []).map((run) => (
+              (canWriteTasks ? runs ?? [] : []).map((run) => (
                 <div
                   key={run._id}
                   className="row"

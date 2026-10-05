@@ -28,11 +28,11 @@ test("a real local workspace keeps live AI, Paperless and browser sessions unava
   await fits(page);
   await page.evaluate(() => dispatchEvent(new Event("societyer-ai:open")));
   const assistant = page.getByRole("dialog", { name: "Societyer AI assistant", exact: true });
-  await expect(assistant.getByText("Live AI requires a connected workspace. Saved conversations and drafts remain available locally.", { exact: true })).toBeVisible();
+  await expect(assistant.getByText("Live AI requires a connected workspace. Saved conversations remain available locally. Typed drafts stay on this device; selected files must be attached again after reload.", { exact: true })).toBeVisible();
   await expect(assistant.getByRole("button", { name: "Send message", exact: true })).toBeDisabled();
-  await expect(assistant.getByRole("button", { name: "Add file references", exact: true })).toBeVisible();
+  await expect(assistant.getByRole("button", { name: "Attach text files", exact: true })).toBeVisible();
   await assistant.locator('input[type="file"]').setInputFiles({ name: "audit-reference.txt", mimeType: "text/plain", buffer: Buffer.from("Synthetic reference only") });
-  await expect(assistant.getByText("Only file names and sizes are included in your message. File contents are not uploaded or analyzed.", { exact: true })).toBeVisible();
+  await expect(assistant.getByText("Review extracted text: audit-reference.txt", { exact: true })).toBeVisible();
   await assistant.getByRole("button", { name: "Close AI assistant", exact: true }).last().click();
   await page.goto("/app/paperless");
   await expect(page.getByText("Unavailable locally", { exact: true })).toBeVisible();

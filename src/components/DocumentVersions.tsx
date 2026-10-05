@@ -35,8 +35,6 @@ export function DocumentVersionsDrawer({
   const recordUpload = useMutation(api.documentVersions.recordUploadedVersion);
   const rollback = useMutation(api.documentVersions.rollback);
   const getDownloadTarget = useAction(api.documentVersions.getDownloadTarget);
-  const paperlessConnection = useQuery(api.paperless.listConnection, { societyId });
-  const syncDocument = useAction(api.paperless.syncDocument);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
   const permissions = usePermissions();
@@ -47,16 +45,6 @@ export function DocumentVersionsDrawer({
   const nativeStorage = isNativeFileStorageEnabled();
 
   if (!documentId) return null;
-
-  const maybeSyncVersionToPaperless = async (versionId: Id<"documentVersions">) => {
-    if (!paperlessConnection?.autoUpload || paperlessConnection.status !== "connected") return;
-    try {
-      await syncDocument({ societyId, documentId, versionId });
-      toast.success("Sent version to Paperless-ngx");
-    } catch (error: any) {
-      toast.error(error?.message ?? "Uploaded version, but Paperless-ngx sync failed");
-    }
-  };
 
   const handleFile = async (file: File) => {
     if (!documentId || !canEdit || busy) return;
@@ -72,11 +60,6 @@ export function DocumentVersionsDrawer({
         recordUploadedVersion: recordUpload,
         completeUpload,
       });
-      if (result.provider === "local-filesystem") {
-        if (paperlessConnection?.autoUpload) toast.info("Paperless sync is skipped for local filesystem versions.");
-      } else {
-        await maybeSyncVersionToPaperless(result.versionId);
-      }
       if (result.provider === "demo") {
         toast.success(`Uploaded as v${result.version} (demo)`);
       } else {

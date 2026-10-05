@@ -1,4 +1,3 @@
-import { isLocalDataRuntime, isStaticDemoRuntime } from "../lib/staticRuntime";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -25,7 +24,7 @@ import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, History, 
 import { formatDate, formatDateTime } from "../lib/format";
 import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
-import { getDocumentStorageProvider, isNativeFileStorageEnabled } from "../lib/runtimeMode";
+import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { openDocumentDownloadTarget } from "../lib/documentStorage";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
@@ -52,9 +51,7 @@ export function DocumentsPage() {
   const beginVersionUpload = useAction(api.documentVersions.beginUpload);
   const completeUpload = useAction(api.documentVersions.completeUpload);
   const recordVersionUpload = useMutation(api.documentVersions.recordUploadedVersion);
-  const syncDocument = useAction(api.paperless.syncDocument);
   const committees = useQuery(api.committees.list, society && permissions.loaded && permissions.can("committees:read") ? { societyId: society._id } : "skip");
-  const paperlessConnection = useQuery(api.paperless.listConnection, society ? { societyId: society._id } : "skip");
   const confirm = useConfirm();
   const toast = useToast();
   const navigate = useNavigate();
@@ -108,21 +105,6 @@ export function DocumentsPage() {
     return result.versionId;
   };
 
-  const maybeSyncToPaperless = async (documentId: any) => {
-    if (isLocalDataRuntime() && !isStaticDemoRuntime()) return;
-    if (!paperlessConnection?.autoUpload || paperlessConnection.status !== "connected") return;
-    if (getDocumentStorageProvider() === "local-filesystem") {
-      toast.info("Paperless sync is skipped for local filesystem documents.");
-      return;
-    }
-    try {
-      await syncDocument({ societyId: society._id, documentId });
-      toast.success("Uploaded and sent to Paperless-ngx");
-    } catch (error: any) {
-      toast.error(error?.message ?? "Uploaded locally, but Paperless-ngx sync failed");
-    }
-  };
-
   const save = async () => {
     if (!canEdit || busy) return;
     setBusy(true);
@@ -130,7 +112,6 @@ export function DocumentsPage() {
       const newDocId = await create({ societyId: society._id, ...documentPayload(form) });
       if (form._file) {
         await uploadFile(newDocId, form._file);
-        await maybeSyncToPaperless(newDocId);
       }
       setOpen(false);
       toast.success("Document saved");
@@ -147,7 +128,6 @@ export function DocumentsPage() {
     try {
       const docId = await create({ societyId: society._id, title: file.name, category: "Other", tags: [], retentionYears: 10 });
       await uploadFile(docId, file);
-      await maybeSyncToPaperless(docId);
       toast.success("Document uploaded");
     } catch (error: any) {
       toast.error(error?.message ?? "Upload failed");

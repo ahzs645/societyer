@@ -79,7 +79,7 @@ type View = "timeline" | "current";
 export function BylawsHistoryPage() {
   const society = useSociety();
   const { loaded, can } = usePermissions();
-  const canScanPaperless = loaded && can("documents:write");
+  const canScanPaperless = loaded && can("documents:write") && can("settings:write");
   const canStageRegistry = loaded && can("settings:manage");
   const toast = useToast();
   const amendments = useQuery(
