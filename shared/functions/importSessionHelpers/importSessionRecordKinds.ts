@@ -176,6 +176,10 @@ function riskFlagsFor(recordKind: string, targetModule: string, payload: any) {
 
 function staticValidationFlagsFor(recordKind: string, payload: any) {
   const flags: string[] = [];
+  if (recordKind === "motion" || recordKind === "meetingMinutes") {
+    try { toMeetingDateTime(payload?.meetingDate); }
+    catch { flags.push("meeting date needs review"); }
+  }
   if ([
     "organizationAddress",
     "organizationRegistration",
@@ -262,10 +266,17 @@ function inferMeetingType(title: string) {
 
 function toMeetingDateTime(date: unknown) {
   const value = cleanText(date) ?? "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value}T12:00:00.000Z`;
-  if (/^\d{4}-\d{2}$/.test(value)) return `${value}-01T12:00:00.000Z`;
-  if (/^\d{4}$/.test(value)) return `${value}-01-01T12:00:00.000Z`;
-  return new Date().toISOString();
+  const calendar = value.slice(0, 10);
+  const calendarTime = Date.parse(`${calendar}T12:00:00.000Z`);
+  const calendarValid = /^\d{4}-\d{2}-\d{2}$/.test(calendar) && Number.isFinite(calendarTime) &&
+    new Date(calendarTime).toISOString().slice(0, 10) === calendar;
+  if (calendarValid && value === calendar) return `${calendar}T12:00:00.000Z`;
+  const timestamp = value.match(/^\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})$/);
+  if (calendarValid && timestamp && Number(timestamp[1]) < 24 && Number(timestamp[2]) < 60 &&
+      Number(timestamp[3] ?? 0) < 60 && Number.isFinite(Date.parse(value))) {
+    return new Date(value).toISOString();
+  }
+  throw new Error("Review the source meeting date: a full valid YYYY-MM-DD date or timezone-qualified ISO timestamp is required before creating minutes.");
 }
 
 function bylawImportHistory(payload: any, status: string, sourceExternalIds: string[]) {

@@ -133,6 +133,7 @@ const agmDetails = v.object({
 });
 
 const structuredMinutesFields = {
+  quorumStatus: v.optional(v.union(v.literal("confirmed"), v.literal("not_met"), v.literal("not_recorded"))),
   chairName: v.optional(v.string()),
   secretaryName: v.optional(v.string()),
   recorderName: v.optional(v.string()),
@@ -324,4 +325,3 @@ export const generateDraft = authorizedAction("minutes:generateDraft", action)({
     });
   },
 });
-

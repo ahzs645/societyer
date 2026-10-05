@@ -1,6 +1,8 @@
+import { checkpointResult, decisionReadiness } from "../../../../shared/evidenceReview";
 import { formatDateTime } from "../../../lib/format";
 import { minutesMotionsForDisplay } from "../../../../shared/minutesMotions";
 import { motionCompletionGaps } from "../../../lib/motionGovernance";
+import { recordedMinutesQuorum } from "../../../../shared/minutesQuorum";
 
 export type MeetingAgendaItemEntry = { title: string; depth: 0 | 1 };
 
@@ -97,8 +99,13 @@ export function formalMinutesExportBlockers({
   motions: any[];
 }): string[] {
   const blockers: string[] = [];
+  if ((minutes?.quorumCheckpoints ?? []).some((row: any) => checkpointResult(row) === 'conflict')) blockers.push('Resolve conflicting decision-time quorum evidence.');
+  for (const row of minutes?.conditionalDecisions ?? []) if (row.outcome === 'Carried' && decisionReadiness(row, minutes.decisionRequirements ?? [], minutes.quorumCheckpoints ?? []) !== 'Effective') blockers.push(`Review conditional decision ${row.title ?? row.id} before formal export.`);
   if (meeting?.status !== "Held") blockers.push("Mark the meeting held.");
   if (!minutes) return [...blockers, "Create or record the minutes."];
+  if (minutes.quorumStatus && recordedMinutesQuorum(minutes) !== true && motions.some(motion =>
+    String(motion.outcome).toLowerCase() === "carried" && String(motion.resolutionType).toLowerCase() !== "procedural" && !/\badjourn/i.test(String(motion.text)),
+  )) blockers.push("Review carried business motions against the source quorum evidence before final export.");
   if ((minutes.attendees?.length ?? 0) === 0) blockers.push("Record at least one attendee present.");
   if (agendaItemCount === 0 && (minutes.sections?.length ?? 0) === 0) {
     blockers.push("Record an agenda or minutes section.");

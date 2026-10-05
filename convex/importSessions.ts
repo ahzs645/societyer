@@ -124,13 +124,13 @@ export const removeSession = authorizedMutation("importSessions:removeSession", 
 });
 
 export const applyApprovedToOrgHistory = authorizedMutation("importSessions:applyApprovedToOrgHistory", mutation)({
-  args: { sessionId: v.id("documents") },
+  args: { sessionId: v.id("documents"), recordIds: v.optional(v.array(v.id("documents"))) },
   returns: v.any(),
   handler: async (ctx, args) => applyApprovedToOrgHistoryPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const applyApprovedMeetings = authorizedMutation("importSessions:applyApprovedMeetings", mutation)({
-  args: { sessionId: v.id("documents") },
+  args: { sessionId: v.id("documents"), recordIds: v.optional(v.array(v.id("documents"))) },
   returns: v.any(),
   handler: async (ctx, args) => applyApprovedMeetingsPortable(await toPortableMutationCtx(ctx), args),
 });
@@ -142,13 +142,13 @@ export const backfillApprovedMeetingReferences = authorizedMutation("importSessi
 });
 
 export const applyApprovedDocuments = authorizedMutation("importSessions:applyApprovedDocuments", mutation)({
-  args: { sessionId: v.id("documents") },
+  args: { sessionId: v.id("documents"), recordIds: v.optional(v.array(v.id("documents"))) },
   returns: v.any(),
   handler: async (ctx, args) => applyApprovedDocumentsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const applyApprovedSectionRecords = authorizedMutation("importSessions:applyApprovedSectionRecords", mutation)({
-  args: { sessionId: v.id("documents") },
+  args: { sessionId: v.id("documents"), recordIds: v.optional(v.array(v.id("documents"))) },
   returns: v.any(),
   handler: async (ctx, args) => applyApprovedSectionRecordsPortable(await toPortableMutationCtx(ctx), args),
 });

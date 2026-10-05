@@ -12,9 +12,7 @@ import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 
 /**
- * Cross-tenant people directory. The directory is GLOBAL — its queries take no
- * societyId — but the page lives inside the app shell, so it still renders the
- * standard society loading/seed guards for layout consistency.
+ * Permission-scoped people directory with linked person history profiles.
  */
 export function PeopleDirectoryPage() {
   const society = useSociety();
@@ -141,7 +139,7 @@ export function PeopleDirectoryPage() {
 
       <p className="muted" style={{ marginBottom: 12, fontSize: "var(--fs-sm)" }}>
         Create and maintain people for this workspace. Shared legacy records remain available through this organization's existing role links. To manage governance roles, see{" "}
-        <Link to="/app/directors">Directors</Link> or <Link to="/app/role-holders">Role holders</Link>.
+        <Link to="/app/people-history">Review source identities and history</Link>. See <Link to="/app/directors">Directors</Link> or <Link to="/app/role-holders">Role holders</Link>.
       </p>
 
       <div className="card">
@@ -197,7 +195,7 @@ export function PeopleDirectoryPage() {
                     className="row"
                     style={{ gap: 8, justifyContent: "space-between" }}
                   >
-                    <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{p.fullName}</span>
+                    <Link style={{ minWidth: 0, overflowWrap: "anywhere" }} to={`/app/people-directory/${p.id}`}>{p.fullName}</Link>
                     {p.dob && <span style={{ opacity: 0.6 }}>{p.dob}</span>}
                   </div>
                 ))}
@@ -212,7 +210,7 @@ export function PeopleDirectoryPage() {
         {people === undefined ? (
           <p>Loading…</p>
         ) : people.length === 0 ? (
-          <p>No people in the directory yet.</p>
+          <p>No people in the directory yet. <Link to="/app/people-history">Review source identities</Link></p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
             {people.map((p) => (
@@ -221,7 +219,7 @@ export function PeopleDirectoryPage() {
                 className="row"
                 style={{ gap: 8, justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}
               >
-                <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{p.fullName}</span>
+                <Link style={{ minWidth: 0, overflowWrap: "anywhere" }} to={`/app/people-directory/${p._id}`}>{p.fullName}</Link>
                 <span style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   {p.dob && <span style={{ opacity: 0.6 }}>{p.dob}</span>}
                   {p.isIndividual === false && <span style={{ opacity: 0.6 }}>Organization</span>}

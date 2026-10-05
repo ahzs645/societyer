@@ -1,0 +1,8 @@
+import {sourceRoleLabel} from '../../shared/personHistory';
+import {Link} from 'react-router-dom';import {useQuery} from 'convex/react';import {api} from '@/lib/convexApi';import {usePermissions} from '@/hooks/usePermissions';
+export function SourceRoleObservations({societyId}:{societyId:string}){
+ const {can}=usePermissions();const data=useQuery(api.personHistory.overview,can('members:read')&&can('directors:read')?{societyId}:'skip') as any;
+ const observations=(data?.occurrences??[]).filter((o:any)=>o.recordTable==='organizationSeats');
+ if(!observations.length)return null;
+ return <details className="card" style={{marginBottom:16}}><summary className="card__head">Source board and committee observations ({observations.length})</summary><div className="card__body"><p>These source observations preserve people, organizations and roles at their recorded periods. Appointment dates, current status and legal membership require separate evidence.</p><Link to="/app/people-history">Review identities and dated history</Link><div style={{overflowX:'auto'}}><table className="table"><thead><tr><th>Source person</th><th>Role / committee</th><th>Affiliation at source date</th><th>Observed period</th><th>Identity review</th></tr></thead><tbody>{observations.map((o:any)=><tr key={o._id}><td>{o.personId?<Link to={`/app/people-directory/${o.personId}`}>{o.personName}</Link>:o.personName||'Unknown'}</td><td>{sourceRoleLabel(o.roleTitle)} · {o.context}</td><td>{o.affiliation||'Unknown'}</td><td>{o.observedDate||'Unknown'}</td><td>{o.matchStatus} · <a href={o.sourceUrl} target="_blank" rel="noreferrer">{o.sourceReference}</a></td></tr>)}</tbody></table></div></div></details>;
+}

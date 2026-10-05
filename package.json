@@ -97,6 +97,7 @@
     "test:ycn-date-codec": "tsx scripts/check-ycn-date-codec.ts",
     "test:ycn-access-import": "tsx scripts/check-ycn-access-import.ts",
     "test:versioned-register": "tsx scripts/check-versioned-register.ts",
+    "test:member-history": "tsx scripts/check-member-history.ts",
     "test:role-holder-history": "tsx scripts/check-role-holder-history.ts",
     "test:role-holder-revision-flow": "tsx scripts/check-role-holder-revision-flow.ts",
     "test:reference-field": "tsx scripts/check-reference-field-constraint.ts",
@@ -228,7 +229,19 @@
     "test:ai-demo-chat": "tsx scripts/check-ai-demo-chat.ts",
     "test:provider-workspace-gateway": "tsx scripts/check-provider-workspace-gateway.ts",
     "test:import-section-authority": "tsx scripts/check-import-section-authority.ts",
-    "test:calendar-views": "playwright test -c playwright.calendar-views.config.ts"
+    "test:calendar-views": "playwright test -c playwright.calendar-views.config.ts",
+    "test:minutes-metadata-editor": "tsx scripts/check-minutes-metadata-editor.ts",
+    "test:accounting-statements": "tsx scripts/check-accounting-statements.ts",
+    "test:accounting-program-tracking": "tsx scripts/check-accounting-program-tracking.ts",
+    "test:insurance-history": "tsx scripts/check-insurance-history.ts",
+    "test:import-source-provenance": "tsx scripts/check-import-source-provenance.ts",
+    "test:import-session-completion": "tsx scripts/check-import-session-completion.ts",
+    "test:drive-staging": "tsx scripts/check-drive-staging.ts",
+    "test:import-meeting-date-preflight": "tsx scripts/check-import-meeting-date-preflight.ts",
+    "test:pgair-review-workflows": "tsx scripts/check-pgair-review-workflows.ts",
+    "test:pgair-convex-schema": "tsx scripts/check-pgair-convex-schema.ts",
+    "test:person-history": "tsx scripts/check-person-history.ts",
+    "test:person-history-convex": "tsx scripts/check-person-history-convex.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

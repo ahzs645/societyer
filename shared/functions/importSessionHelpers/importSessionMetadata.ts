@@ -17,6 +17,7 @@ import {
 import {
   normalizeReviewStatus,
 } from "./importSessionRecordKinds";
+import { approvedImportRecordNeedsApply } from "../../importSessionState";
 
 function sourceExternalIdsFor(recordKind: string, payload: any) {
   if (recordKind === "source" && payload.externalId) return [payload.externalId];
@@ -128,6 +129,7 @@ function summarizeRecords(records: any[]) {
   let meetingsApplied = 0;
   let documentsApplied = 0;
   let sectionsApplied = 0;
+  let approvedUnapplied = 0;
   for (const record of records) {
     byKind[record.recordKind] = (byKind[record.recordKind] ?? 0) + 1;
     byStatus[record.status] = (byStatus[record.status] ?? 0) + 1;
@@ -137,6 +139,7 @@ function summarizeRecords(records: any[]) {
     if (record.importedTargets?.meetings) meetingsApplied += 1;
     if (record.importedTargets?.documents) documentsApplied += 1;
     if (record.importedTargets?.sections) sectionsApplied += 1;
+    if (approvedImportRecordNeedsApply(record)) approvedUnapplied += 1;
   }
   return {
     total: records.length,
@@ -148,6 +151,7 @@ function summarizeRecords(records: any[]) {
     meetingsApplied,
     documentsApplied,
     sectionsApplied,
+    approvedUnapplied,
   };
 }
 
@@ -164,6 +168,7 @@ function summaryForSession(session: any) {
       meetingsApplied: Number(summary.meetingsApplied) || 0,
       documentsApplied: Number(summary.documentsApplied) || 0,
       sectionsApplied: Number(summary.sectionsApplied) || 0,
+      ...(Number.isFinite(summary.approvedUnapplied) ? { approvedUnapplied: Number(summary.approvedUnapplied) } : {}),
     };
   }
   return summarizeFromSessionMetadata(session);

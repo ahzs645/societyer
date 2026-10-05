@@ -1,7 +1,7 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { membersList, memberGet, memberCreate, memberUpdate, memberRemove, memberMerge } from "../shared/functions/members";
+import { membersList, memberGet, memberCreate, memberUpdate, memberRemove, memberMerge, memberImport } from "../shared/functions/members";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 export const list = authorizedQuery("members:list", query)({
@@ -28,6 +28,7 @@ export const create = authorizedMutation("members:create", mutation)({
     membershipClass: v.string(),
     status: v.string(),
     joinedAt: v.string(),
+    leftAt: v.optional(v.string()),
     votingRights: v.boolean(),
     notes: v.optional(v.string()),
   },
@@ -90,4 +91,14 @@ export const merge = authorizedMutation("members:merge", mutation)({
   },
   returns: v.any(),
   handler: async (ctx, args) => memberMerge(await toPortableMutationCtx(ctx), args),
+});
+
+export const importMember = authorizedMutation("members:importMember", mutation)({
+  args: {
+    societyId: v.id("societies"), firstName: v.string(), lastName: v.string(),
+    email: v.optional(v.string()), aliases: v.optional(v.array(v.string())),
+    phone: v.optional(v.string()), address: v.optional(v.string()),
+    membershipClass: v.string(), status: v.string(), joinedAt: v.string(),
+    leftAt: v.optional(v.string()), votingRights: v.boolean(), notes: v.optional(v.string()),
+  }, returns: v.any(), handler: async (ctx, args) => memberImport(await toPortableMutationCtx(ctx), args),
 });

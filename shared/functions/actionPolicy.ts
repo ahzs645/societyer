@@ -8,15 +8,15 @@ import { assertWorkspaceCreator } from "./society";
 
 const RESOURCE_GROUPS: Record<string, readonly string[]> = {
   society: ["society", "dashboard", "organizationDetails", "organizationHistory", "firm"],
-  members: ["members", "peopleDirectory", "roleHolderHistory", "registerHistory", "orgChartAssignments"],
+  members: ["members", "memberHistory", "memberGovernance", "personHistory", "peopleDirectory", "roleHolderHistory", "registerHistory", "orgChartAssignments"],
   directors: ["directors"], employees: ["employees", "remuneration"], committees: ["committees"],
   meetings: ["meetings", "meetingTemplates", "meetingMaterials", "agm", "calendarSync", "transcripts"],
-  minutes: ["minutes", "minuteBook"], agendas: ["agendas"], motions: ["motions", "motionBacklog", "motionTemplates", "writtenResolutions", "memberProposals"],
+  minutes: ["minutes", "minuteBook", "minutesReview"], agendas: ["agendas"], motions: ["motions", "motionBacklog", "motionTemplates", "writtenResolutions", "memberProposals"],
   proxies: ["proxies"], conflicts: ["conflicts"], attestations: ["attestations", "pipaTraining"], auditors: ["auditors"], courtOrders: ["courtOrders"],
   filings: ["filings", "annualFilings", "filingExports", "filingBot"],
   deadlines: ["deadlines", "complianceObligations", "postIncorporation", "significantIndividualSteps", "annualCycle", "dashboardRemediation", ],
   commitments: ["commitments", "goals"],
-  financials: ["financials", "accounting", "treasury", "financialHub", "reconciliation", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd"],
+  financials: ["financials", "accounting", "financialReview", "treasury", "financialHub", "reconciliation", "receipts", "expenseReports", "assets", "insurance", "inventoryHub", "fundingSources", "dividends", "yearEnd"],
   elections: ["elections"], grants: ["grants", "grantSources"],
   documents: ["documents", "documentVersions", "documentComments", "files", "paperless", "library", "policies", "starterPolicyTemplates", "constating", "bylawAmendments", "bylawRules", "evidenceRegisters", "shareCertificates", "signatures", "entitySigners", "retention", "recordsLocation", "inspections", "legalOperations"],
   users: ["users", "invitations"], tasks: ["pathways", "tasks", "workflows", "workflowPackages", "workflowCatalog", "notifications", "notes", "aiChat", "aiChatActions", "aiAgents"],

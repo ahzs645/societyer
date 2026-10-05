@@ -180,6 +180,10 @@ export async function taskUpdate(
   // `undefined` fields are stripped from the wire, so unlinking arrives as an
   // explicit flag and is converted to an unset here.
   if (clearMeetingId) next.meetingId = undefined;
+  if (patch.status && patch.status !== task.status) next.statusHistory = [...(task.statusHistory ?? []), {
+    from: task.status, to: patch.status, recordedAtISO: new Date().toISOString(), actorUserId: await principalUserId(ctx, candidate.societyId),
+    completionNote: patch.completionNote ?? task.completionNote, priorCompletedAt: task.completedAt,
+  }];
   if (patch.status === "Done" && !task.completedAt) {
     next.completedAt = new Date().toISOString();
   }
@@ -213,4 +217,46 @@ export async function taskRemove(ctx: PortableMutationCtx, { id }: { id: string 
   await requireSocietyMembership(ctx, candidate.societyId);
   await getOwned(ctx, "tasks", id, candidate.societyId);
   await ctx.db.delete(id);
+}
+
+/** A rolling source action reuses the canonical task, scoped to its register. */
+export async function observeAction(ctx: PortableMutationCtx, args: { societyId: string; registerKey: string; externalActionId: string; title: string; observation: any }) {
+  await requireSocietyMembership(ctx, args.societyId);
+  const { requirePermissionPortable } = await import('./permissions');
+  await requirePermissionPortable(ctx, args.societyId, 'tasks:write');
+  const { requireEvidence, partialDate, exactDay } = await import('../evidenceReview');
+  const row = args.observation;
+  requireEvidence(row);
+  if (!row.id || !partialDate(row.observedDate) || !row.observedDate) throw new Error('A stable observation ID and source date are required.');
+  if (!['pending','verified','rejected'].includes(row.reviewStatus)) throw new Error('Invalid observation review status.');
+  if (row.mappedStatus && !['Todo','InProgress','Blocked','Done'].includes(row.mappedStatus)) throw new Error('Invalid mapped task status.');
+  const registerKey = args.registerKey.trim(); const externalActionId = args.externalActionId.trim();
+  if (!registerKey || !externalActionId || !args.title.trim()) throw new Error('Register, external action ID and title are required.');
+  const tasks = await ctx.db.query('tasks').withIndex('by_society', q => q.eq('societyId', args.societyId)).collect();
+  let task: any = tasks.find(item => item.actionRegisterKey === registerKey && item.externalActionId === externalActionId);
+  const history = task?.sourceObservations ?? [];
+  const duplicate = history.find((item: any) => item.id === row.id);
+  if (duplicate) {
+    if (JSON.stringify(duplicate) !== JSON.stringify(row)) throw new Error('Conflicting observation ID. Append a new observation instead.');
+    return task._id;
+  }
+  if (row.meetingId) await getOwned(ctx, 'meetings', row.meetingId, args.societyId);
+  if (!task) {
+    const id = await taskCreate(ctx, { societyId: args.societyId, title: args.title.trim(), status: 'Todo', priority: 'Medium', tags: ['source-action-register'] });
+    task = await ctx.db.get(id, 'tasks');
+  }
+  const observations = [...history, row];
+  const verified = observations.filter((item: any) => item.reviewStatus === 'verified' && exactDay(item.observedDate) && item.mappedStatus);
+  const latest = verified.map((item: any) => item.observedDate).sort().at(-1);
+  const latestRows = verified.filter((item: any) => item.observedDate === latest);
+  const unambiguous = latestRows.length && new Set(latestRows.map((item: any) => item.mappedStatus)).size === 1;
+  const patch: any = { actionRegisterKey: registerKey, externalActionId, sourceObservations: observations, sourceStatusReview: unambiguous ? 'verified' : 'needs_review' };
+  if (unambiguous) {
+    patch.status = latestRows[0].mappedStatus;
+    patch.sourceStatusDate = latest;
+    patch.completedAt = patch.status === 'Done' ? latest : undefined;
+    patch.completedByUserId = patch.status === 'Done' ? await principalUserId(ctx, args.societyId) : undefined;
+  }
+  await ctx.db.patch(task._id, patch);
+  return task._id;
 }

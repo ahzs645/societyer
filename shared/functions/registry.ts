@@ -1,3 +1,7 @@
+import * as personHistoryFns from './personHistory';
+import * as financialReviewFns from "./financialReview";
+import * as memberGovernanceFns from "./memberGovernance";
+import * as minutesReviewFns from "./minutesReview";
 /**
  * The set of functions ported to the portable `ctx.db` contract.
  *
@@ -17,6 +21,7 @@ import {
   removeRightsClassPortable,
 } from "./rightsholdingTransfers";
 import { membersList, memberGet, memberCreate, memberUpdate, memberRemove } from "./members";
+import * as memberHistoryFns from "./memberHistory";
 import * as directorsFns from "./directors";
 import * as employeesFns from "./employees";
 import * as notesFns from "./notes";
@@ -142,6 +147,33 @@ import * as seedRecordTableMetadataFns from "./seedRecordTableMetadata";
 import * as filesFns from "./files";
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
+  definePortableQuery({ name: "personHistory:overview", handler: personHistoryFns.overview }),
+  definePortableQuery({ name: "personHistory:profile", handler: personHistoryFns.profile }),
+  definePortableQuery({ name: "personHistory:forRecord", handler: personHistoryFns.forRecord }),
+  definePortableMutation({ name: "personHistory:createContact", handler: personHistoryFns.createContact }),
+  definePortableMutation({ name: "personHistory:setAliases", handler: personHistoryFns.setAliases }),
+  definePortableMutation({ name: "personHistory:observe", handler: personHistoryFns.observe }),
+  definePortableMutation({ name: "personHistory:reviewMatch", handler: personHistoryFns.reviewMatch }),
+  definePortableMutation({ name: "personHistory:addContactPoint", handler: personHistoryFns.addContactPoint }),
+  definePortableMutation({ name: "personHistory:stageRecord", handler: personHistoryFns.stageRecord }),
+  definePortableMutation({ name: "personHistory:reviewEvent", handler: personHistoryFns.reviewEvent }),
+  definePortableMutation({ name: "personHistory:addEvent", handler: personHistoryFns.addEvent }),
+
+  definePortableMutation({ name: "financialReview:reviewVersion", handler: financialReviewFns.reviewVersion }),
+  definePortableMutation({ name: "financialReview:selectVersion", handler: financialReviewFns.selectVersion }),
+  definePortableMutation({ name: "financialReview:mapCashAccount", handler: financialReviewFns.mapCashAccount }),
+  definePortableQuery({ name: "financialReview:versions", handler: financialReviewFns.versions }),
+  definePortableQuery({ name: "financialReview:cashMovements", handler: financialReviewFns.cashMovements }),
+  definePortableMutation({ name: "memberGovernance:observeSeat", handler: memberGovernanceFns.observeSeat }),
+  definePortableMutation({ name: "memberGovernance:authorizeSeatProxy", handler: memberGovernanceFns.authorizeSeatProxy }),
+  definePortableMutation({ name: "memberGovernance:createRule", handler: memberGovernanceFns.createRule }),
+  definePortableMutation({ name: "memberGovernance:assess", handler: memberGovernanceFns.assess }),
+  definePortableMutation({ name: "memberGovernance:transition", handler: memberGovernanceFns.transition }),
+  definePortableQuery({ name: "memberGovernance:list", handler: memberGovernanceFns.list }),
+  definePortableMutation({ name: "minutesReview:saveEvidence", handler: minutesReviewFns.saveEvidence }),
+  definePortableMutation({ name: "minutesReview:scheduleSuggestions", handler: minutesReviewFns.scheduleSuggestions }),
+  definePortableQuery({ name: "memberHistory:list", handler: memberHistoryFns.list }),
+  definePortableMutation({ name: "memberHistory:add", handler: memberHistoryFns.add }),
   definePortableQuery({ name: "legalOperations:votingPower", handler: votingPowerPortable }),
   definePortableMutation({ name: "legalOperations:upsertRightsClass", handler: upsertRightsClassPortable }),
   // Cap-table transfer domain. Safe to run live: the demo seed has no rights-ledger
@@ -153,6 +185,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "members:list", handler: membersList }),
   definePortableQuery({ name: "members:get", handler: memberGet }),
   definePortableMutation({ name: "members:create", handler: memberCreate }),
+  definePortableMutation({ name: "members:importMember", handler: membersFns.memberImport }),
   definePortableMutation({ name: "members:update", handler: memberUpdate }),
   definePortableMutation({ name: "members:remove", handler: memberRemove }),
 
@@ -366,6 +399,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "tasks:byCommittee", handler: tasksFns.tasksByCommittee }),
   definePortableQuery({ name: "tasks:byGoal", handler: tasksFns.tasksByGoal }),
   definePortableQuery({ name: "tasks:byMeeting", handler: tasksFns.tasksByMeeting }),
+  definePortableMutation({ name: "tasks:observeAction", handler: tasksFns.observeAction }),
   definePortableMutation({ name: "tasks:create", handler: tasksFns.taskCreate }),
   definePortableMutation({ name: "tasks:update", handler: tasksFns.taskUpdate }),
   definePortableMutation({ name: "tasks:remove", handler: tasksFns.taskRemove }),
@@ -437,6 +471,9 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   // insurance
   definePortableQuery({ name: "insurance:list", handler: insuranceFns.listPortable }),
   definePortableMutation({ name: "insurance:create", handler: insuranceFns.createPortable }),
+  definePortableMutation({ name: "insurance:appendOperations", handler: insuranceFns.appendOperations }),
+  definePortableMutation({ name: "insurance:ensureRenewalTasks", handler: insuranceFns.ensureRenewalTasks }),
+  definePortableMutation({ name: "insurance:createRenewal", handler: insuranceFns.createRenewalPortable }),
   definePortableMutation({ name: "insurance:update", handler: insuranceFns.updatePortable }),
   definePortableMutation({ name: "insurance:remove", handler: insuranceFns.removePortable }),
 

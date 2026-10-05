@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { minutesMotionsForDisplay } from "../../shared/minutesMotions";
+import { minutesQuorumLabel, recordedMinutesQuorum } from "../../shared/minutesQuorum";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, RecordChip } from "../components/ui";
@@ -52,7 +53,7 @@ export function MinutesPage() {
         notHeldYet,
         motionCount: minutesMotionsForDisplay(m).length,
         pendingActions: (m.actionItems ?? []).filter((a: any) => !a.done).length,
-        quorum: notHeldYet ? "Not held yet" : m.quorumMet ? "Met" : "Not met",
+        quorum: notHeldYet ? "Not held yet" : minutesQuorumLabel(m),
         actions: (m.actionItems ?? []).filter((a: any) => !a.done).length > 0 ? "Open" : "Done",
         approved: m.approvedAt ? formatDate(m.approvedAt) : notHeldYet ? "—" : "Pending",
       };
@@ -128,7 +129,8 @@ export function MinutesPage() {
               if (field.name === "heldAt") return <span className="mono">{formatDate(record.heldAt)}</span>;
               if (field.name === "quorum") {
                 if (record.notHeldYet) return <Badge tone="neutral">Not held yet</Badge>;
-                return record.quorumMet ? <Badge tone="success">Met</Badge> : <Badge tone="danger">Not met</Badge>;
+                const quorum = recordedMinutesQuorum(record);
+                return <Badge tone={quorum === null ? "neutral" : quorum ? "success" : "danger"}>{minutesQuorumLabel(record)}</Badge>;
               }
               if (field.name === "actions") return record.pendingActions > 0 ? <Badge tone="warn">{record.pendingActions} open</Badge> : <Badge tone="success">All done</Badge>;
               if (field.name === "approved") {

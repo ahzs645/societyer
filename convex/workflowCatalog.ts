@@ -843,17 +843,8 @@ async function handleStep(
     };
   }
   if (wf.recipe === "insurance_renewal" && stepIndex === 0) {
-    const policies = await ctx.runQuery(api.insurance.list, {
-      societyId: wf.societyId,
-    });
-    const soon = (policies ?? []).filter((p: any) => {
-      if (!p.renewalDate) return false;
-      const days = (new Date(p.renewalDate).getTime() - Date.now()) / 86_400_000;
-      return days >= 0 && days <= 60;
-    });
-    return soon.length
-      ? `${soon.length} policy/policies renewing within 60 days`
-      : "No policies renewing in the next 60 days";
+    const result = await ctx.runMutation(api.insurance.ensureRenewalTasks, { societyId: wf.societyId, asOf: new Date().toISOString().slice(0,10) });
+    return `${result.currentDue} current policies require renewal review (${result.overdue} overdue); ${result.created} dated review tasks created.`;
   }
   if (wf.recipe === "agm_prep" && stepIndex === 2) {
     // No internal-provider integration actually dispatches the notice. Report

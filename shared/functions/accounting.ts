@@ -683,6 +683,7 @@ export async function upsertJournalEntryPortable(
       amountCents: number;
       side: string;
       description?: string;
+      programCode?: string;
       counterpartyId?: string;
       grantId?: string;
       fundRestrictionId?: string;
@@ -867,6 +868,7 @@ export async function postTransactionCandidateAllocationPortable(
       accountId: string;
       amountCents: number;
       description?: string;
+      programCode?: string;
       counterpartyId?: string;
       grantId?: string;
       fundRestrictionId?: string;
@@ -960,6 +962,7 @@ export async function postTransactionCandidateAllocationPortable(
       amountCents: allocation.amountCents,
       side: offsetSide,
       description: allocation.description ?? candidate.category ?? candidate.description,
+      programCode: allocation.programCode?.trim() || undefined,
       counterpartyId: allocation.counterpartyId,
       grantId: allocation.grantId,
       fundRestrictionId: allocation.fundRestrictionId,
@@ -1176,6 +1179,7 @@ export async function createReconciliationRunPortable(
   ]);
   const entryById = new Map(entries.filter((entry) => entry.date <= args.statementDate).map((entry) => [String(entry._id), entry]));
   const includedLines = lines.filter((line) => entryById.has(String(line.journalEntryId)));
+  const ledgerFingerprint = reconciliationLedgerFingerprint(includedLines, entryById);
   const bookBalanceCents = includedLines.reduce((sum: number, line: any) => sum + (line.side === "debit" ? line.amountCents : -line.amountCents), 0);
   const now = new Date().toISOString();
   const runId = await ctx.db.insert("reconciliationRuns", {
@@ -1184,6 +1188,7 @@ export async function createReconciliationRunPortable(
     statementDate: args.statementDate,
     statementBalanceCents: args.statementBalanceCents,
     bookBalanceCents,
+    ledgerFingerprint,
     status: bookBalanceCents === args.statementBalanceCents ? "ready" : "draft",
     sourceDocumentIds: args.sourceDocumentIds,
     notes: args.notes,
@@ -1230,6 +1235,29 @@ export async function setReconciliationRunStatusPortable(
   const run = await requireOwnedRow(ctx, "reconciliationRuns", id);
   const societyId = String(run.societyId);
   await requireRolePortable(ctx, { actingUserId, societyId, required: "Director" });
+  if (status === "ready" || status === "reconciled") {
+    await getOwned(ctx, "financialAccounts", String(run.financialAccountId), societyId);
+    const [entries, lines, captured] = await Promise.all([
+      ctx.db.query("journalEntries").withIndex("by_society_status", q => q.eq("societyId", societyId).eq("status", "posted")).collect(),
+      ctx.db.query("journalLines").withIndex("by_account", q => q.eq("accountId", run.financialAccountId)).collect(),
+      ctx.db.query("reconciliationRunLines").withIndex("by_run", q => q.eq("reconciliationRunId", id)).collect(),
+    ]);
+    const entryById = new Map(entries.filter(entry => entry.date <= run.statementDate).map(entry => [String(entry._id), entry]));
+    const current = lines.filter(line => entryById.has(String(line.journalEntryId)));
+    const capturedLines = captured.filter(line => line.journalLineId);
+    const sameLines = current.length === capturedLines.length && current.every(line => capturedLines.some(snapshot =>
+      String(snapshot.journalLineId) === String(line._id) && snapshot.status === "included" &&
+      snapshot.amountCents === (line.side === "debit" ? line.amountCents : -line.amountCents)));
+    if (!sameLines || (run.ledgerFingerprint && run.ledgerFingerprint !== reconciliationLedgerFingerprint(current, entryById))) {
+      throw new Error("The posted ledger has changed. Create a new reconciliation from current evidence.");
+    }
+    const balance = current.reduce((sum: number, line: any) => sum + (line.side === "debit" ? line.amountCents : -line.amountCents), 0);
+    if (!Number.isSafeInteger(balance) || !Number.isSafeInteger(run.statementBalanceCents) ||
+        balance !== run.bookBalanceCents || balance !== run.statementBalanceCents ||
+        captured.some(line => line.status === "difference" && line.amountCents !== 0)) {
+      throw new Error("Unresolved statement/book difference blocks reconciliation. Record evidenced outstanding items before closing.");
+    }
+  }
   await ctx.db.patch(id, {
     status,
     reconciledAtISO: status === "reconciled" ? new Date().toISOString() : run.reconciledAtISO,
@@ -1239,4 +1267,12 @@ export async function setReconciliationRunStatusPortable(
     updatedAtISO: new Date().toISOString(),
   });
   return id;
+}
+
+function reconciliationLedgerFingerprint(lines: any[], entries: Map<string, any>): string {
+  return JSON.stringify(lines.map(line => {
+    const entry = entries.get(String(line.journalEntryId));
+    return [String(line._id), String(line.journalEntryId), line.side, line.amountCents,
+      line.currency, line.programCode, entry?.date, entry?.updatedAtISO];
+  }).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
 }

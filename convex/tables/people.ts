@@ -5,7 +5,16 @@ import { v } from "convex/values";
  * People & governance tables (members, directors, board role assignments/changes, signing authorities, committees, committee members, org-chart assignments), extracted from convex/schema.ts. Spread back into defineSchema; byte-identical.
  */
 export const peopleTables = {
+  memberHistoryEvents: defineTable({
+    societyId: v.id("societies"), memberId: v.id("members"),
+    effectiveDate: v.string(), endDate: v.optional(v.string()),
+    kind: v.string(), title: v.string(), details: v.optional(v.string()),
+    reviewStatus: v.string(), sourceUrl: v.optional(v.string()),
+    sourceReference: v.optional(v.string()), sourceExternalId: v.optional(v.string()),
+    createdAtISO: v.string(), createdByUserId: v.string(),
+  }).index("by_society", ["societyId"]).index("by_member", ["societyId", "memberId"]),
   members: defineTable({
+    directoryPersonId: v.optional(v.id("peopleDirectory")),
     societyId: v.id("societies"),
     firstName: v.string(),
     lastName: v.string(),
@@ -24,6 +33,7 @@ export const peopleTables = {
     .index("by_society_status", ["societyId", "status"]),
 
   directors: defineTable({
+    directoryPersonId: v.optional(v.id("peopleDirectory")),
     societyId: v.id("societies"),
     memberId: v.optional(v.id("members")),
     firstName: v.string(),

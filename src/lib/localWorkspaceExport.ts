@@ -50,7 +50,7 @@ export function defaultBackupFilename(now = new Date()) {
 
 /** Parse and validate a backup file without writing anything. */
 export async function readWorkspaceBackupFile(file: File) {
-  if (file.size > MAX_SETUP_BACKUP_BYTES) throw new Error("Device setup accepts backups up to 100 MB. Use a smaller workspace backup or the administrator migration tools.");
+  if (file.size > MAX_SETUP_BACKUP_BYTES) throw new Error("Device setup accepts backups up to 256 MB. Use a smaller workspace backup or the administrator migration tools.");
   let snapshot: any;
   try {
     snapshot = JSON.parse(await file.text());

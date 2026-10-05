@@ -3,6 +3,11 @@ import { v } from "convex/values";
 
 export const treasuryTables = {
   financialStatementImports: defineTable({
+    currency: v.optional(v.string()),
+    programCode: v.optional(v.string()),
+    sourceIssuedDate: v.optional(v.string()),
+    predecessorId: v.optional(v.string()),
+    versionReviewSource: v.optional(v.any()),
     societyId: v.id("societies"),
     title: v.string(),
     fiscalYear: v.string(),
@@ -24,6 +29,9 @@ export const treasuryTables = {
     .index("by_society_fy", ["societyId", "fiscalYear"]),
 
   financialStatementImportLines: defineTable({
+    sourceCells: v.optional(v.array(v.any())),
+    formulaText: v.optional(v.string()),
+    cachedResultStatus: v.optional(v.string()),
     societyId: v.id("societies"),
     statementImportId: v.id("financialStatementImports"),
     section: v.string(),

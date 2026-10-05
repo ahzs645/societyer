@@ -1,3 +1,5 @@
+import {personHistoryTables} from './tables/personHistory';
+import { reviewEvidenceTables } from "./tables/reviewEvidence";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { integrationSettingsValidator } from "./lib/integrationSettings";
@@ -35,6 +37,8 @@ import { pathwayTables } from "./tables/pathways";
 import { offlineMeetingTables } from "./tables/offlineMeetings";
 
 export default defineSchema({
+  ...reviewEvidenceTables,
+  ...personHistoryTables,
   ...offlineMeetingTables,
   ...pathwayTables,
   societies: defineTable({

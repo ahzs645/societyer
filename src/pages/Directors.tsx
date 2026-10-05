@@ -1,3 +1,5 @@
+import {SourceRoleObservations} from "../components/SourceRoleObservations";
+import {PersonRecordLinks} from "../components/PersonRecordLinks";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -88,14 +90,16 @@ export function DirectorsPage() {
 
   const save = async () => {
     if (!selected || !canManage) return;
+    try {
     if (selected._id) {
-      const { _id, _creationTime, societyId, ...patch } = selected;
+      const { _id, _creationTime, societyId, directoryPersonId, entityId, ...patch } = selected;
       patch.aliases = cleanAliases(patch.aliases);
       await update({ id: _id, patch });
     } else {
       await create({ societyId: society._id, ...selected, aliases: cleanAliases(selected.aliases) });
     }
     setOpen(false);
+    } catch(error:any){toast.error(error.message);}
   };
 
   const records = (directors ?? []) as any[];
@@ -142,6 +146,7 @@ export function DirectorsPage() {
         <Link to="/app/role-holders">Role holders</Link>.
       </p>
 
+      <SourceRoleObservations societyId={society._id}/>
       <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Active directors</div>
@@ -268,6 +273,7 @@ export function DirectorsPage() {
       >
         {selected && (
           <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {selected._id&&<PersonRecordLinks societyId={society._id} recordTable="directors" recordId={selected._id} personName={`${selected.firstName} ${selected.lastName}`} observedDate={selected.termStart}/>}
             <InspectorNote tone="warn" title="Director register">
               Keep this register current. Changes to directors normally need to be reflected in your
               filing workflow within 30 days.
@@ -298,6 +304,12 @@ export function DirectorsPage() {
                 ]}
               />
             </Field>
+            {selected._id&&selected.position!==(directors??[]).find((d:any)=>d._id===selected._id)?.position&&<div className="card__body col" style={{gap:8}}>
+              <p>Record this position change with its effective day and reviewed evidence. The previous register values are retained in person history.</p>
+              <Field label="Position effective day"><input className="input" type="date" value={selected.positionChangeEvidence?.effectiveDate??''} onChange={e=>setSelected({...selected,positionChangeEvidence:{...selected.positionChangeEvidence,effectiveDate:e.target.value,reviewStatus:'verified'}})}/></Field>
+              <Field label="Position change source URL"><input className="input" value={selected.positionChangeEvidence?.sourceUrl??''} onChange={e=>setSelected({...selected,positionChangeEvidence:{...selected.positionChangeEvidence,sourceUrl:e.target.value,reviewStatus:'verified'}})}/></Field>
+              <Field label="Position change citation"><input className="input" value={selected.positionChangeEvidence?.sourceReference??''} onChange={e=>setSelected({...selected,positionChangeEvidence:{...selected.positionChangeEvidence,sourceReference:e.target.value,reviewStatus:'verified'}})}/></Field>
+            </div>}
             <Field label="Position">
               <Select
                 value={selected.position}

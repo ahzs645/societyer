@@ -388,8 +388,8 @@ export function RecordsArchivePage() {
         restricted={data?.restrictedResources?.includes("documents")}
         rows={evidence}
         empty="Approved section imports automatically create source evidence links here."
-        columns={["Source", "Kind", "Target", "Access", "Status"]}
-        render={(row) => [row.sourceTitle, row.evidenceKind, row.targetTable ?? "-", <Badge key="a" tone={row.accessLevel === "restricted" ? "danger" : "info"}>{row.accessLevel}</Badge>, <Status key="s" value={row.status} />]}
+        columns={["Source", "Kind", "Model destination", "Access", "Status"]}
+        render={(row) => [row.sourceDocumentId ? <Link to={`/app/documents/${row.sourceDocumentId}`}>{row.sourceTitle}</Link> : row.sourceTitle, row.evidenceKind, row.targetTable ?? "-", <Badge key="a" tone={row.accessLevel === "restricted" ? "danger" : "info"}>{row.accessLevel}</Badge>, <Status key="s" value={row.status} />]}
       />
     </div>
   );
@@ -419,12 +419,15 @@ function RegisterTable({
   empty: ReactNode;
   restricted?: boolean;
 }) {
+  const [page,setPage]=useState(0);const [search,setSearch]=useState("");
+  const filtered=rows.filter(row=>[row.sourceTitle,row.personName,row.meetingTitle,row.title,row.motionText,row.targetTable,row.summary,row.notes].join(" ").toLocaleLowerCase().includes(search.toLocaleLowerCase()));
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card__head">
         <h2 className="card__title">{title}</h2>
         <span className="card__subtitle">{restricted ? "Access limited" : `${rows.length} row${rows.length === 1 ? "" : "s"}`}</span>
       </div>
+      {rows.length>25&&<div className="card__body"><input className="input" aria-label={`Search ${title}`} placeholder="Search this evidence register" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/></div>}
       {rows.length === 0 ? (
         <div className="card__body muted">{restricted ? "This section requires additional access." : empty}</div>
       ) : (
@@ -433,7 +436,7 @@ function RegisterTable({
             <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
           </thead>
           <tbody>
-            {rows.slice(0, 25).map((row) => (
+            {filtered.slice(page*25,page*25+25).map((row) => (
               <tr key={row._id}>
                 {render(row).map((cell, index) => <td key={index}>{cell}</td>)}
               </tr>
@@ -441,6 +444,7 @@ function RegisterTable({
           </tbody>
         </table>
       )}
+      {filtered.length>25&&<div className="card__body row" style={{gap:12}}><button className="btn" disabled={!page} onClick={()=>setPage(page-1)}>Previous</button><span>Page {page+1} of {Math.ceil(filtered.length/25)} · {filtered.length} matching rows</span><button className="btn" disabled={(page+1)*25>=filtered.length} onClick={()=>setPage(page+1)}>Next</button></div>}
     </div>
   );
 }
@@ -471,13 +475,14 @@ function PromoteAction({ row, onPromote, disabled }: { row: any; onPromote: () =
 
 function PersonCell({ row, name, people }: { row: any; name?: string; people?: PersonLinkCandidate[] }) {
   const label = name || "-";
+  if(row.directoryPersonId)return <Link to={`/app/people-directory/${row.directoryPersonId}`}>{label} <Badge tone="success">Reviewed identity</Badge></Link>;
   const fallback = findPersonLink(name, people ?? []);
-  const linked = Boolean(row.directorId || row.memberId || fallback);
+  const linked = Boolean(row.directorId || row.memberId);
   const to = row.directorId || fallback?.kind === "director" ? "/app/directors" : row.memberId || fallback?.kind === "member" ? "/app/members" : null;
   const content = (
     <span className="row" style={{ gap: 4, flexWrap: "wrap" }}>
       <span>{label}</span>
-      {linked && <Badge tone="success">Linked</Badge>}
+      {linked && <Badge tone="success">Linked</Badge>}{!linked&&fallback&&<Badge tone="warn">Name suggestion</Badge>}
     </span>
   );
   return to ? <Link to={to}>{content}</Link> : content;
@@ -510,9 +515,8 @@ function personLinkCandidates(members: any[] | undefined, directors: any[] | und
 function findPersonLink(name: string | undefined, people: PersonLinkCandidate[]) {
   const key = normalizePersonName(name ?? "");
   if (!key) return null;
-  return people.find((person) =>
-    [person.name, ...person.aliases].some((candidate) => normalizePersonName(candidate) === key),
-  ) ?? null;
+  const matches=people.filter(person=>[person.name,...person.aliases].some(candidate=>normalizePersonName(candidate)===key));
+  return matches.length===1?matches[0]:null;
 }
 
 function normalizePersonName(value: string) {

@@ -132,6 +132,9 @@ const WorkflowPackagesPage = React.lazy(() => import("./pages/WorkflowPackages")
 const RoleHoldersPage = React.lazy(() => import("./pages/LegalOperations").then((m) => ({ default: m.RoleHoldersPage })));
 const PointInTimeRegisterPage = React.lazy(() => import("./pages/PointInTimeRegister").then((m) => ({ default: m.PointInTimeRegisterPage })));
 const SignificantIndividualsPage = React.lazy(() => import("./pages/SignificantIndividuals").then((m) => ({ default: m.SignificantIndividualsPage })));
+const SourceModelCoveragePage = React.lazy(()=>import("./pages/SourceModelCoverage").then(m=>({default:m.SourceModelCoveragePage})));
+const PersonReviewPage = React.lazy(() => import("./pages/PersonHistory").then(m => ({default:m.PersonReviewPage})));
+const PersonProfilePage = React.lazy(() => import("./pages/PersonHistory").then(m => ({default:m.PersonProfilePage})));
 const PeopleDirectoryPage = React.lazy(() => import("./pages/PeopleDirectory").then((m) => ({ default: m.PeopleDirectoryPage })));
 const DividendsPage = React.lazy(() => import("./pages/Dividends").then((m) => ({ default: m.DividendsPage })));
 const ServiceProvidersPage = React.lazy(() => import("./pages/ServiceProviders").then((m) => ({ default: m.ServiceProvidersPage })));
@@ -390,6 +393,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="point-in-time-register" element={<PointInTimeRegisterPage />} />
             <Route path="significant-individuals" element={<SignificantIndividualsPage />} />
             <Route path="people-directory" element={<PeopleDirectoryPage />} />
+            <Route path="people-history" element={<PersonReviewPage />} />
+            <Route path="source-model-coverage" element={<SourceModelCoveragePage />} />
+            <Route path="people-directory/:id" element={<PersonProfilePage />} />
             <Route path="dividends" element={<DividendsPage />} />
             <Route path="service-providers" element={<ServiceProvidersPage />} />
             <Route path="compliance-settings" element={<ComplianceSettingsPage />} />

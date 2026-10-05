@@ -1,0 +1,11 @@
+import { authorizedMutation,authorizedQuery } from './lib/authorizedServer';
+import {mutation,query} from './lib/untypedServer';
+import {v} from 'convex/values';
+import * as handlers from '../shared/functions/memberGovernance';
+import {toPortableMutationCtx,toPortableQueryCtx} from './lib/portable';
+export const list=authorizedQuery('memberGovernance:list',query)({args:{societyId:v.id('societies'),memberId:v.optional(v.id('members'))},returns:v.any(),handler:async(ctx,args)=>handlers.list(await toPortableQueryCtx(ctx),args)});
+export const observeSeat=authorizedMutation('memberGovernance:observeSeat',mutation)({args:{societyId:v.id('societies'),seatKey:v.string(),organizationName:v.string(),observation:v.any()},returns:v.any(),handler:async(ctx,args)=>handlers.observeSeat(await toPortableMutationCtx(ctx),args)});
+export const authorizeSeatProxy=authorizedMutation('memberGovernance:authorizeSeatProxy',mutation)({args:{seatId:v.id('organizationSeats'),meetingId:v.id('meetings'),principalName:v.string(),proxyName:v.string(),authority:v.any(),source:v.any()},returns:v.any(),handler:async(ctx,args)=>handlers.authorizeSeatProxy(await toPortableMutationCtx(ctx),args)});
+export const createRule=authorizedMutation('memberGovernance:createRule',mutation)({args:{societyId:v.id('societies'),ruleKey:v.string(),effectiveDate:v.string(),requirements:v.array(v.any()),authority:v.any(),reviewStatus:v.string()},returns:v.any(),handler:async(ctx,args)=>handlers.createRule(await toPortableMutationCtx(ctx),args)});
+export const assess=authorizedMutation('memberGovernance:assess',mutation)({args:{memberId:v.id('members'),ruleVersionId:v.id('membershipRuleVersions'),asOf:v.string(),results:v.array(v.any())},returns:v.any(),handler:async(ctx,args)=>handlers.assess(await toPortableMutationCtx(ctx),args)});
+export const transition=authorizedMutation('memberGovernance:transition',mutation)({args:{memberId:v.id('members'),assessmentId:v.id('memberAssessments'),status:v.string(),votingRights:v.optional(v.boolean()),source:v.any()},returns:v.any(),handler:async(ctx,args)=>handlers.transition(await toPortableMutationCtx(ctx),args)});

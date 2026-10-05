@@ -1,3 +1,4 @@
+import { minutesEvidenceOptions } from "../minutesExportEvidence";
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
 /**
  * PORTABLE FUNCTIONS: the minutes domain
@@ -330,6 +331,31 @@ export async function syncMotionsForMinutes(
   }
 }
 
+/** Adopted wording, attendance, appendices and metadata never resolve from later live edits. */
+export function adoptedMinutesView(minutes: any) {
+  return minutes?.approvedAt && minutes?.adoptedSnapshot
+    ? { ...minutes, ...minutes.adoptedSnapshot, _id: minutes._id, adoptedSnapshot: minutes.adoptedSnapshot, adoptionHistory: minutes.adoptionHistory, adoptedRevision: minutes.adoptedRevision }
+    : minutes;
+}
+
+async function minutesSnapshot(ctx: PortableMutationCtx, record: any, motions: any[]) {
+  const societyId = String(record.societyId);
+  for (const permission of ['documents:read', 'conflicts:read', 'proxies:read', 'directors:read'] as const) await requirePermissionPortable(ctx, societyId, permission);
+  const [signatures, conflicts, proxies, directors, meeting, agenda] = await Promise.all([
+    ctx.db.query('signatures').withIndex('by_entity', q => q.eq('entityType', 'minutes').eq('entityId', record._id)).collect(),
+    ctx.db.query('conflicts').withIndex('by_meeting', q => q.eq('meetingId', record.meetingId)).collect(),
+    ctx.db.query('proxies').withIndex('by_meeting', q => q.eq('meetingId', record.meetingId)).collect(),
+    ctx.db.query('directors').withIndex('by_society', q => q.eq('societyId', societyId)).collect(),
+    getOwned(ctx, 'meetings', String(record.meetingId), societyId),
+    ctx.db.query('agendas').withIndex('by_meeting', q => q.eq('meetingId', record.meetingId)).first(),
+  ]);
+  const { _id, _creationTime, adoptedSnapshot, adoptionHistory, displayMotions, ...snapshot } = record;
+  return JSON.parse(JSON.stringify({ ...snapshot, motionSnapshots: motions,
+    adoptedExportEvidence: minutesEvidenceOptions(signatures.filter(row => row.societyId === societyId && !row.revokedAtISO), conflicts, proxies, directors, motions),
+    adoptedMeeting: meeting, adoptedAgenda: agenda,
+  }));
+}
+
 // ----- queries --------------------------------------------------------------
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
@@ -343,7 +369,7 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
   // table-sourced transparently. The live embedded `motions[]` stays untouched on
   // the row for the editor's write path. See docs/motions-migration-finish-scope.md.
   return Promise.all(
-    rows.map(async (m) => ({ ...m, displayMotions: await resolveMinutesMotions(ctx, m) })),
+    rows.map(async (m) => ({ ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) })),
   );
 }
 
@@ -358,7 +384,7 @@ export async function getByMeetingPortable(
     .collect();
   const m = rows[0];
   if (!m) return null;
-  return { ...m, displayMotions: await resolveMinutesMotions(ctx, m) };
+  return { ...adoptedMinutesView(m), displayMotions: await resolveMinutesMotions(ctx, m) };
 }
 
 /**
@@ -479,6 +505,8 @@ async function applyAdoptionApprovals(
     if (!target.motionSnapshots) {
       targetPatch.motionSnapshots = await resolveMinutesMotions(ctx, target);
       targetPatch.motionSnapshotAtISO = now;
+      targetPatch.adoptedSnapshot = await minutesSnapshot(ctx, { ...target, ...targetPatch }, targetPatch.motionSnapshots as any[]);
+      targetPatch.adoptedRevision = target.adoptedRevision || 1;
     }
     await ctx.db.patch(target._id, targetPatch);
     const targetMeeting = target.meetingId
@@ -503,6 +531,9 @@ export async function updatePortable(
   { id, patch: rawPatch }: { id: string; patch: any },
 ) {
   const minutes = await requireOwnedRow(ctx, "minutes", id);
+  if (["adoptedSnapshot", "adoptedRevision", "adoptionHistory", "motionSnapshots", "motionSnapshotAtISO"].some(key => Object.prototype.hasOwnProperty.call(rawPatch, key))) throw new Error("Adopted snapshots are managed by approval and amendment operations.");
+  const approvalMetadata = new Set(["clearApproval", "clearApprovedInMeeting", "approvedAt", "approvedInMeetingId", "motions"]);
+  if (minutes.approvedAt && !rawPatch.clearApproval && Object.keys(rawPatch).some(key => !approvalMetadata.has(key))) throw new Error("Adopted minutes are frozen. Start an amendment to change recorded content.");
   const societyId = String(minutes.societyId);
   await assertMinutesForeignKeys(ctx, societyId, rawPatch);
   const adoptionTargets = Array.isArray(rawPatch.motions)
@@ -530,6 +561,11 @@ export async function updatePortable(
     // Invariant: motionSnapshots exists iff the minutes are approved.
     patch.motionSnapshots = undefined;
     patch.motionSnapshotAtISO = undefined;
+    if (minutes.adoptedSnapshot) {
+      patch.adoptionHistory = [...(minutes.adoptionHistory ?? []), { revision: minutes.adoptedRevision ?? 1, snapshot: minutes.adoptedSnapshot, supersededAtISO: new Date().toISOString(), amendedByUserId: await principalUserId(ctx, societyId) }];
+    }
+    patch.adoptedSnapshot = undefined;
+    patch.adoptedRevision = (minutes.adoptedRevision ?? 0) + 1;
   } else if (clearApprovedInMeeting) {
     patch.approvedInMeetingId = undefined;
   }
@@ -538,6 +574,9 @@ export async function updatePortable(
   }
   // `motions` is NOT written back to the minutes row (Phase 4C) — it flows only
   // to syncMotionsForMinutes below, which materializes the table + motionIds.
+  const willApprove = !!patch.approvedAt && !minutes.approvedAt;
+  const frozenForApproval = willApprove ? submittedMotions ?? (await resolveMinutesMotions(ctx, minutes)) : null;
+  const adoptedForApproval = willApprove ? await minutesSnapshot(ctx, { ...minutes, ...patch }, frozenForApproval!) : null;
   await ctx.db.patch(id, patch);
 
   // Snapshot-on-approval: the first time minutes become approved, freeze the
@@ -550,6 +589,8 @@ export async function updatePortable(
     const frozen = submittedMotions ?? (await resolveMinutesMotions(ctx, minutes));
     await ctx.db.patch(id, {
       motionSnapshots: frozen,
+      adoptedSnapshot: adoptedForApproval,
+      adoptedRevision: minutes.adoptedRevision || 1,
       motionSnapshotAtISO: new Date().toISOString(),
     });
   }
@@ -595,7 +636,9 @@ export async function upsertFromDraftPortable(ctx: PortableMutationCtx, args: an
       : undefined,
     ...minutesSnapshotFields(args, snapshot),
     quorumMet:
-      quorumRequired == null
+      args.quorumStatus
+        ? args.quorumStatus === "confirmed"
+        : quorumRequired == null
         ? args.quorumMet
         : args.attendees.length >= quorumRequired,
   };

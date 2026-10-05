@@ -7,6 +7,9 @@ import { v } from "convex/values";
  */
 export const electionsMiscTables = {
   insurancePolicies: defineTable({
+    moneyEntries: v.optional(v.array(v.any())),
+    amendments: v.optional(v.array(v.any())),
+    requirementChecks: v.optional(v.array(v.any())),
     societyId: v.id("societies"),
     kind: v.string(), // DirectorsOfficers | GeneralLiability | PropertyCasualty | CyberLiability | Other
     insurer: v.string(),
@@ -18,6 +21,8 @@ export const electionsMiscTables = {
     renewalOfPolicyNumber: v.optional(v.string()),
     coverageCents: v.optional(v.number()),
     premiumCents: v.optional(v.number()),
+    policyFeeCents: v.optional(v.number()),
+    totalCostCents: v.optional(v.number()),
     deductibleCents: v.optional(v.number()),
     coverageSummary: v.optional(v.string()),
     additionalInsureds: v.optional(v.array(v.string())),
@@ -51,6 +56,26 @@ export const electionsMiscTables = {
     policyDefinitions: v.optional(v.array(v.object({
       term: v.string(),
       definition: v.string(),
+      sourceExternalIds: v.optional(v.array(v.string())),
+      citationId: v.optional(v.string()),
+    }))),
+    assessmentRates: v.optional(v.array(v.object({
+      classificationCode: v.string(),
+      assessmentYear: v.string(),
+      effectiveDate: v.optional(v.string()),
+      netRatePer100PayrollCents: v.optional(v.number()),
+      baseRatePer100PayrollCents: v.optional(v.number()),
+      experienceDiscountPercent: v.optional(v.number()),
+      assessedPayrollCents: v.optional(v.number()),
+      sourceExternalIds: v.optional(v.array(v.string())),
+      citationId: v.optional(v.string()),
+      notes: v.optional(v.string()),
+    }))),
+    policyExclusions: v.optional(v.array(v.object({
+      label: v.string(),
+      endorsementNumber: v.optional(v.string()),
+      summary: v.optional(v.string()),
+      effectiveDate: v.optional(v.string()),
       sourceExternalIds: v.optional(v.array(v.string())),
       citationId: v.optional(v.string()),
     }))),

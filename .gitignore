@@ -27,6 +27,9 @@ tmp/
 .claude/worktrees/
 .claude/settings.local.json
 
+# Source audits and private organization review artifacts generated locally.
+/work/
+
 .DS_STORE
 node_modules
 scripts/flow/*/.flowconfig

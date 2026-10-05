@@ -1,3 +1,4 @@
+import {PersonRecordLinks} from "../components/PersonRecordLinks";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -151,6 +152,7 @@ export function DocumentWorkbenchPage() {
         <ArrowLeft size={12} /> Documents
       </Link>
 
+      {document&&society&&<PersonRecordLinks societyId={society._id} recordTable="documents" recordId={document._id}/>}
       <PageHeader
         title={document.title}
         icon={<FileText size={16} />}

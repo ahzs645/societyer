@@ -9,6 +9,8 @@ import { v } from "convex/values";
  */
 export const accountingTables = {
   financialAccounts: defineTable({
+    cashFlowClass: v.optional(v.string()),
+    cashMappingReview: v.optional(v.any()),
     societyId: v.id("societies"),
     connectionId: v.id("financialConnections"),
     externalId: v.string(),
@@ -132,6 +134,7 @@ export const accountingTables = {
     amountCents: v.number(),
     side: v.string(), // debit | credit
     description: v.optional(v.string()),
+    programCode: v.optional(v.string()), // Organization program/project cost centre
     counterpartyId: v.optional(v.id("accountingCounterparties")),
     grantId: v.optional(v.id("grants")),
     fundRestrictionId: v.optional(v.id("fundRestrictions")),
@@ -186,6 +189,7 @@ export const accountingTables = {
     statementDate: v.string(),
     statementBalanceCents: v.number(),
     bookBalanceCents: v.optional(v.number()),
+    ledgerFingerprint: v.optional(v.string()),
     status: v.string(), // draft | ready | reconciled | reopened
     reconciledAtISO: v.optional(v.string()),
     reconciledByUserId: v.optional(v.id("users")),
@@ -219,6 +223,9 @@ export const accountingTables = {
     fiscalYear: v.string(),
     category: v.string(),
     plannedCents: v.number(),
+    programCode: v.optional(v.string()),
+    accountId: v.optional(v.id("financialAccounts")),
+    currency: v.optional(v.string()),
     notes: v.optional(v.string()),
   }).index("by_society_fy", ["societyId", "fiscalYear"]),
 
@@ -240,6 +247,12 @@ export const accountingTables = {
     .index("by_society_status", ["societyId", "status"]),
 
   budgetSnapshots: defineTable({
+    programCode: v.optional(v.string()),
+    periodStart: v.optional(v.string()),
+    periodEnd: v.optional(v.string()),
+    sourceIssuedDate: v.optional(v.string()),
+    predecessorId: v.optional(v.string()),
+    versionReviewSource: v.optional(v.any()),
     societyId: v.id("societies"),
     title: v.string(),
     fiscalYear: v.string(),
@@ -265,6 +278,9 @@ export const accountingTables = {
     .index("by_society_fy", ["societyId", "fiscalYear"]),
 
   budgetSnapshotLines: defineTable({
+    sourceCells: v.optional(v.array(v.any())),
+    formulaText: v.optional(v.string()),
+    cachedResultStatus: v.optional(v.string()),
     societyId: v.id("societies"),
     snapshotId: v.id("budgetSnapshots"),
     lineType: v.string(), // income | expense | balance | note

@@ -113,6 +113,7 @@ export const EXPORTABLE_TABLES = [
   "viewFields",
   "commandMenuItems",
   "members",
+  "memberHistoryEvents",
   "directors",
   "boardRoleAssignments",
   "boardRoleChanges",

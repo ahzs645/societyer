@@ -398,7 +398,7 @@ export async function finishSafePaperlessReviewPortable(
     .collect();
   const visibleEvidence = await filterRegisterSourceRows(ctx, societyId, evidenceRows, "sourceEvidence");
   for (const row of visibleEvidence) {
-    if (row.status !== "NeedsReview" || sourceEvidenceKeepReview.has(row._id)) continue;
+    if (row.status !== "NeedsReview" || sourceEvidenceKeepReview.has(row._id) || String(row.externalSystem).toLowerCase() !== "paperless") continue;
     await ctx.db.patch(row._id, {
       status: "Verified",
       notes: appendReviewNote(

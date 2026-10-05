@@ -1,3 +1,4 @@
+import { checkpointResult, decisionReadiness } from "../../../../shared/evidenceReview";
 // Meeting-minutes domain renderer. Takes structured minutes data + a chosen
 // style (Standard / Formal AGM / Executive Agenda / Numbered Agenda / Action
 // Table / Board Public) and produces an HTML body string that the generic
@@ -8,6 +9,7 @@ import { escapeHtml } from "../../../lib/html";
 import { renderMarkdownInline } from "../../../lib/markdown";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "./minutesExportStyles";
 import { agendaSequenceLabel } from "./agendaNumbering";
+import { minutesQuorumLabel, recordedMinutesQuorum } from "../../../../shared/minutesQuorum";
 
 export type { MinutesExportStyleId };
 export { MINUTES_EXPORT_STYLES };
@@ -106,6 +108,12 @@ type MinutesRenderArgs = {
     agendaItemTree?: { title: string; depth: 0 | 1 }[];
   };
   minutes: {
+    consentItems?: any[];
+    conditionalDecisions?: any[];
+    decisionRequirements?: any[];
+    attendanceEvents?: any[];
+    quorumCheckpoints?: any[];
+    futureMeetingSuggestions?: any[];
     heldAt: string;
     chairName?: string | null;
     secretaryName?: string | null;
@@ -122,6 +130,7 @@ type MinutesRenderArgs = {
     attendees: string[];
     absent: string[];
     quorumMet: boolean;
+    quorumStatus?: "confirmed" | "not_met" | "not_recorded";
     quorumRequired?: number;
     quorumSourceLabel?: string;
     discussion: string;
@@ -218,7 +227,7 @@ export function renderMinutesHtml(args: MinutesRenderArgs): string {
   else if (styleId === "board-public") body = renderBoardPublicMinutes(args, options);
   else body = renderStandardMinutes(args, options);
 
-  return renderDocumentHeader(args.society) + body;
+  return renderDocumentHeader(args.society) + body + (styleId === "board-public" ? "" : renderSourceDecisionEvidence(args.minutes));
 }
 
 /**
@@ -426,7 +435,7 @@ function renderStandardMinutes({
 
     <h2>Attendance</h2>
     ${renderAttendance(minutes)}
-    <p>Quorum: ${minutes.quorumMet ? "Met" : "Not met"}${
+    <p>Quorum: ${minutesQuorumLabel(minutes)}${
       minutes.quorumRequired != null ? ` · ${minutes.attendees.length} present / ${minutes.quorumRequired} required` : ""
     }${minutes.quorumSourceLabel ? ` · Rule: ${eh(minutes.quorumSourceLabel)}` : ""}</p>
 
@@ -481,7 +490,7 @@ function renderFormalAgmMinutes({
     ${renderAttendance(minutes)}
 
     <h2>1. Call the Meeting to Order</h2>
-    <p>The ${eh(meetingKind)} of the Members of the Society was convened at ${eh(callTime)} by ${eh(chair)}, who acted as Chair of the meeting. ${meeting.noticeSentAt ? `Notice of meeting was sent on ${eh(formatLongDate(meeting.noticeSentAt))}.` : placeholderSentence("Notice date", options)} ${minutes.quorumMet ? "Quorum was declared present and the meeting was properly called and constituted." : "Quorum was not recorded as present."} ${eh(secretary)} acted as Secretary of the Meeting.</p>
+    <p>The ${eh(meetingKind)} of the Members of the Society was convened at ${eh(callTime)} by ${eh(chair)}, who acted as Chair of the meeting. ${meeting.noticeSentAt ? `Notice of meeting was sent on ${eh(formatLongDate(meeting.noticeSentAt))}.` : placeholderSentence("Notice date", options)} ${recordedMinutesQuorum(minutes) === true ? "Quorum was declared present." : recordedMinutesQuorum(minutes) === false ? "Quorum was not met." : "Quorum was not recorded in the source."} ${eh(secretary)} acted as Secretary of the Meeting.</p>
 
     ${renderAgendaAdoption(meeting.agendaItems ?? [], options, meeting.agendaItemTree)}
 
@@ -618,7 +627,7 @@ function renderNumberedAgendaMinutes({
     <h2>Attendees:</h2>
     <p><strong>Present:</strong> ${eh(presentLine)}</p>
     ${absentLine ? `<p><strong>Absent / Regrets:</strong> ${eh(absentLine)}</p>` : ""}
-    <p>Quorum: ${minutes.quorumMet ? "Met" : "Not recorded as met"}${minutes.quorumRequired != null ? ` (${minutes.attendees.length} present / ${minutes.quorumRequired} required)` : ""}${minutes.quorumSourceLabel ? `; ${eh(minutes.quorumSourceLabel)}` : ""}</p>
+    <p>Quorum: ${minutesQuorumLabel(minutes)}${minutes.quorumRequired != null ? ` (${minutes.attendees.length} present / ${minutes.quorumRequired} required)` : ""}${minutes.quorumSourceLabel ? `; ${eh(minutes.quorumSourceLabel)}` : ""}</p>
     ${renderOfficialLine(minutes, options)}
     ${renderRemoteParticipation(minutes.remoteParticipation)}
 
@@ -960,7 +969,7 @@ function renderActionTableCell(
   if (index === 0) {
     return [
       `Meeting started at ${eh(formatTime(minutes.heldAt))}`,
-      minutes.quorumMet ? "Quorum achieved" : "Quorum not recorded as achieved",
+      `Quorum: ${minutesQuorumLabel(minutes)}`,
     ].join("<br/>");
   }
   if (index === 1) {
@@ -1721,4 +1730,16 @@ function formatTime(value: string) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function renderSourceDecisionEvidence(minutes: MinutesRenderArgs["minutes"]) {
+  const groups: [string, any[], (row:any)=>string][] = [
+    ['Consent adoption', minutes.consentItems ?? [], row => `${row.title ?? row.id}: ${row.outcome}; pinned version ${row.documentVersionId ?? row.targetMinutesId ?? 'unknown'}`],
+    ['Conditional decisions', minutes.conditionalDecisions ?? [], row => `${row.title ?? row.id}: source ${row.outcome}; ${decisionReadiness(row, minutes.decisionRequirements ?? [], minutes.quorumCheckpoints ?? [])}`],
+    ['Condition and ratification observations', minutes.decisionRequirements ?? [], row => `${row.observedDate ?? 'unknown date'}: ${row.title ?? row.requirementKey ?? row.id}; ${row.kind}; ${row.state}`],
+    ['Attendance observations', minutes.attendanceEvents ?? [], row => `${row.personName}: ${row.kind}; ${row.boundary ?? 'unknown time'}`],
+    ['Decision-time quorum', minutes.quorumCheckpoints ?? [], row => `${row.boundary}: ${checkpointResult(row)}; count ${row.eligibleCount ?? 'unknown'}, threshold ${row.required ?? 'unknown'}`],
+    ['Future meeting suggestions', minutes.futureMeetingSuggestions ?? [], row => `${row.title ?? row.committee ?? 'Meeting'}: ${row.date ?? 'unknown date'}; ${row.status}; ${row.venue ?? 'unknown venue'}`],
+  ];
+  return groups.filter(([,rows])=>rows.length).map(([title,rows,label])=>`<section><h2>${escapeHtml(title)}</h2><ul>${rows.map(row=>`<li>${escapeHtml(label(row))} <span class="meta">${escapeHtml(row.sourceReference ?? '')} · ${escapeHtml(row.sourceUrl ?? '')}</span></li>`).join('')}</ul></section>`).join('');
 }

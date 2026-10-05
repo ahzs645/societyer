@@ -45,6 +45,8 @@ import {
   normalizeInsuranceRequirements,
   normalizePayload,
   normalizePolicyDefinitions,
+  normalizePolicyExclusions,
+  normalizeAssessmentRates,
   normalizeSourcePayload,
   structuredMinutesPatchFromPayload,
 } from "./importSessionNormalize";
@@ -116,11 +118,17 @@ async function mergeExistingMeetingImport(
   const motions = arrayOf(payload.motions).map(minutesMotionFromPayload);
   if ((!Array.isArray(minutesRow.attendees) || minutesRow.attendees.length === 0) && attendees.length > 0) minutesPatch.attendees = attendees;
   if ((!Array.isArray(minutesRow.absent) || minutesRow.absent.length === 0) && absent.length > 0) minutesPatch.absent = absent;
-  if (!minutesRow.quorumMet && payload.quorumMet) minutesPatch.quorumMet = true;
+  if ((!minutesRow.quorumStatus && !minutesRow.quorumMet) || minutesRow.quorumStatus === "not_recorded") {
+    if (["confirmed", "not_met", "not_recorded"].includes(payload.quorumStatus)) {
+      minutesPatch.quorumStatus = payload.quorumStatus;
+      minutesPatch.quorumMet = payload.quorumStatus === "confirmed";
+    } else if (!minutesRow.quorumMet && payload.quorumMet) minutesPatch.quorumMet = true;
+  }
   if (isGenericImportedDiscussion(minutesRow.discussion) && cleanText(payload.discussion)) minutesPatch.discussion = cleanText(payload.discussion);
   if ((!Array.isArray(minutesRow.motions) || minutesRow.motions.length === 0) && motions.length > 0) minutesPatch.motions = motions;
   const structuredPatch = structuredMinutesPatchFromPayload(payload);
   for (const [key, value] of Object.entries(structuredPatch)) {
+    if (key === "quorumStatus" && !minutesRow.quorumStatus && minutesRow.quorumMet) continue;
     const current = (minutesRow as any)[key];
     const currentIsBlank = Array.isArray(current)
       ? current.length === 0
@@ -266,6 +274,8 @@ async function ensureImportSourceDocuments(
         sourceDate: cleanText(source?.sourceDate),
         localPath: cleanText(source?.localPath),
         sha256: cleanText(source?.sha256),
+        extractedText: cleanText(source?.extractedText),
+        extractionMethod: cleanText(source?.extractionMethod),
         sensitivity: cleanText(source?.sensitivity),
         tags: arrayOf(source?.tags).map(String),
         confidence: cleanText(source?.confidence) || "Review",
@@ -400,6 +410,8 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       renewalOfPolicyNumber: cleanText(payload.renewalOfPolicyNumber),
       coverageCents: numberOrUndefined(payload.coverageCents),
       premiumCents: numberOrUndefined(payload.premiumCents),
+    policyFeeCents: numberOrUndefined(payload.policyFeeCents),
+    totalCostCents: numberOrUndefined(payload.totalCostCents),
       deductibleCents: numberOrUndefined(payload.deductibleCents),
       coverageSummary: cleanText(payload.coverageSummary),
       additionalInsureds: arrayOf(payload.additionalInsureds).map(String).map(cleanText).filter(Boolean),
@@ -407,6 +419,8 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       coverageItems: normalizeCoverageItems(payload.coverageItems),
       coveredLocations: normalizeCoveredLocations(payload.coveredLocations),
       policyDefinitions: normalizePolicyDefinitions(payload.policyDefinitions),
+      policyExclusions: normalizePolicyExclusions(payload.policyExclusions),
+      assessmentRates: normalizeAssessmentRates(payload.assessmentRates),
       declinedCoverages: normalizeDeclinedCoverages(payload.declinedCoverages),
       certificatesOfInsurance: normalizeCertificatesOfInsurance(payload.certificatesOfInsurance),
       insuranceRequirements: normalizeInsuranceRequirements(payload.insuranceRequirements),
@@ -414,16 +428,16 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       claimIncidents: normalizeClaimIncidents(payload.claimIncidents),
       annualReviews: normalizeAnnualReviews(payload.annualReviews),
       complianceChecks: normalizeComplianceChecks(payload.complianceChecks),
-      startDate: cleanDate(payload.startDate) || cleanDate(payload.sourceDate) || todayDate(),
+      startDate: cleanDate(payload.startDate) || "",
       endDate: cleanDate(payload.endDate),
-      renewalDate: cleanDate(payload.renewalDate) || cleanDate(payload.endDate) || cleanDate(payload.sourceDate) || todayDate(),
+      renewalDate: cleanDate(payload.renewalDate) || cleanDate(payload.endDate) || "",
       sourceDocumentIds,
       sourceExternalIds: unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]),
       confidence: confidenceFor(payload),
       sensitivity: cleanText(payload.sensitivity) || (riskFlags.includes("restricted") ? "restricted" : undefined),
       riskFlags,
       notes: sourceNote,
-      status: cleanText(payload.status) || "Active",
+      status: cleanText(payload.status) || "NeedsReview",
       createdAtISO: new Date().toISOString(),
       updatedAtISO: new Date().toISOString(),
     });
@@ -451,6 +465,9 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       societyId,
       title: cleanText(payload.title) || record.title || "Imported financial statement",
       fiscalYear: cleanText(payload.fiscalYear) || fiscalYearFromDate(payload.periodEnd ?? payload.sourceDate),
+      currency: cleanText(payload.currency),
+      programCode: cleanText(payload.programCode),
+      sourceIssuedDate: cleanDate(payload.sourceIssuedDate),
       statementType: cleanText(payload.statementType) || "full_statement",
       periodStart: cleanDate(payload.periodStart),
       periodEnd: cleanDate(payload.periodEnd) || cleanDate(payload.sourceDate) || todayDate(),
@@ -471,7 +488,10 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
         statementImportId: statementId,
         section: cleanText(line?.section) || "Unclassified",
         label: cleanText(line?.label) || cleanText(line?.description) || "Imported line",
-        amountCents: numberOrUndefined(line?.amountCents),
+        amountCents: line?.cachedResultStatus === "missing" ? undefined : numberOrUndefined(line?.amountCents),
+        sourceCells: Array.isArray(line?.sourceCells) ? line.sourceCells : undefined,
+        formulaText: cleanText(line?.formulaText),
+        cachedResultStatus: cleanText(line?.cachedResultStatus),
         confidence: confidenceFor(line),
         notes: cleanText(line?.notes),
       });
@@ -669,9 +689,13 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       societyId,
       title: cleanText(payload.title) || record.title || "Imported budget snapshot",
       fiscalYear: cleanText(payload.fiscalYear) || fiscalYearFromDate(payload.sourceDate),
+      programCode: cleanText(payload.programCode),
+      periodStart: cleanDate(payload.periodStart),
+      periodEnd: cleanDate(payload.periodEnd),
+      sourceIssuedDate: cleanDate(payload.sourceIssuedDate),
       periodLabel: cleanText(payload.periodLabel),
       sourceDate: cleanDate(payload.sourceDate),
-      currency: cleanText(payload.currency) || "CAD",
+      currency: cleanText(payload.currency) || "Unknown",
       totalIncomeCents: numberOrUndefined(payload.totalIncomeCents),
       totalExpenseCents: numberOrUndefined(payload.totalExpenseCents),
       netCents: numberOrUndefined(payload.netCents),
@@ -697,7 +721,10 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
         rowKind: cleanText(line?.rowKind) || cleanText(line?.lineType),
         sortOrder: numberOrUndefined(line?.sortOrder),
         description: cleanText(line?.description),
-        amountCents: numberOrUndefined(line?.amountCents),
+        amountCents: line?.cachedResultStatus === "missing" ? undefined : numberOrUndefined(line?.amountCents),
+        sourceCells: Array.isArray(line?.sourceCells) ? line.sourceCells : undefined,
+        formulaText: cleanText(line?.formulaText),
+        cachedResultStatus: cleanText(line?.cachedResultStatus),
         projectedCents: numberOrUndefined(line?.projectedCents),
         ytdCents: numberOrUndefined(line?.ytdCents),
         sourcePage: cleanText(line?.sourcePage),
@@ -1616,8 +1643,12 @@ async function resolvePersonLinks(ctx: any, societyId: string, value: unknown) {
     ctx.db.query("members").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
     ctx.db.query("directors").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect(),
   ]);
-  const member = members.find((row: any) => personLookupKeys(row).includes(key));
-  const director = directors.find((row: any) => personLookupKeys(row).includes(key));
+  const memberMatches = members.filter((row: any) => personLookupKeys(row).includes(key));
+  const directorMatches = directors.filter((row: any) => personLookupKeys(row).includes(key));
+  // A same-name collision needs review; never link the first row arbitrarily.
+  const member = memberMatches.length === 1 ? memberMatches[0] : undefined;
+  const director = directorMatches.length === 1 ? directorMatches[0] : undefined;
+  if(member&&director&&director.memberId!==member._id&&(!member.directoryPersonId||director.directoryPersonId!==member.directoryPersonId))return {};
   return { memberId: member?._id, directorId: director?._id };
 }
 

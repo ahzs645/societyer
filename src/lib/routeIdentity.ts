@@ -223,6 +223,8 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   "/app/org-chart": { icon: Network, group: "people", label: "Org chart" },
   "/app/role-holders": { icon: UsersRound, group: "people", label: "Role holders" },
   "/app/point-in-time-register": { icon: History, group: "people", label: "Point-in-time register" },
+  "/app/source-model-coverage": {icon:FileText,group:"compliance",label:"Source model coverage"},
+  "/app/people-history": {icon:Contact,group:"people",label:"People and source history"},
   "/app/people-directory": { icon: Contact, group: "people", label: "People directory" },
   "/app/committees": { icon: Network, group: "people", label: "Committees" },
   "/app/volunteers": { icon: HandHeart, group: "people", label: "Volunteers", module: "volunteers" },

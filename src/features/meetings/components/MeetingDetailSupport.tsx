@@ -13,6 +13,7 @@ import { Checkbox } from "../../../components/Controls";
 import { formatDate } from "../../../lib/format";
 import { isNativeFileStorageEnabled } from "../../../lib/runtimeMode";
 import { type StructuredMinutesEdit } from "../lib/structuredMinutes";
+import { minutesQuorumLabel } from "../../../../shared/minutesQuorum";
 import { materialEffectiveStatus } from "../lib/meetingMaterialAccess";
 
 export function AttendanceDetails({
@@ -54,6 +55,7 @@ export function AttendanceDetails({
 
 export function StructuredMinutesSummary({ minutes }: { minutes: any }) {
   const chips = [
+    minutes.quorumStatus && `Quorum: ${minutesQuorumLabel(minutes)}`,
     minutes.chairName && `Chair: ${minutes.chairName}`,
     minutes.secretaryName && `Secretary: ${minutes.secretaryName}`,
     minutes.recorderName && `Recorder: ${minutes.recorderName}`,
@@ -89,14 +91,23 @@ export function StructuredMinutesEditor({
   value,
   onChange,
   isAgm,
+  includeRecordArrays = true,
 }: {
   value: StructuredMinutesEdit;
   onChange: (value: StructuredMinutesEdit) => void;
   isAgm: boolean;
+  includeRecordArrays?: boolean;
 }) {
   const patch = (diff: Partial<StructuredMinutesEdit>) => onChange({ ...value, ...diff });
   return (
     <div className="structured-minutes-editor">
+      <Field label="Quorum evidence" hint="Record what the source establishes; missing evidence is kept distinct from quorum not being met.">
+        <select className="input" value={value.quorumStatus} onChange={event => patch({ quorumStatus: event.target.value as StructuredMinutesEdit["quorumStatus"] })}>
+          <option value="confirmed">Quorum confirmed</option>
+          <option value="not_met">Quorum not met</option>
+          <option value="not_recorded">Not recorded in source</option>
+        </select>
+      </Field>
       <div className="structured-minutes-editor__grid">
         <Field label="Chair">
           <input className="input" value={value.chairName} onChange={(event) => patch({ chairName: event.target.value })} />
@@ -134,13 +145,13 @@ export function StructuredMinutesEditor({
         <MarkdownEditor rows={2} value={value.remoteInstructions} onChange={(markdown) => patch({ remoteInstructions: markdown })} />
       </Field>
 
-      <Field label="Detailed attendance" hint="One row per person: status | name | role | affiliation | member ID | proxy for | quorum yes/no | notes">
+      {includeRecordArrays && <><Field label="Detailed attendance" hint="One row per person: status | name | role | affiliation | member ID | proxy for | quorum yes/no | notes">
         <textarea className="textarea" rows={5} value={value.detailedAttendance} onChange={(event) => patch({ detailedAttendance: event.target.value })} />
       </Field>
 
       <Field label="Agenda record / per-topic notes" hint="One row per section: type | title | presenter | discussion | report yes/no | decisions ; separated | action items ; separated">
         <textarea className="textarea" rows={10} value={value.sections} onChange={(event) => patch({ sections: event.target.value })} />
-      </Field>
+      </Field></>}
 
       <Field label="Session segments" hint="One row per segment: type | title | started | ended | notes">
         <textarea className="textarea" rows={3} value={value.sessionSegments} onChange={(event) => patch({ sessionSegments: event.target.value })} />

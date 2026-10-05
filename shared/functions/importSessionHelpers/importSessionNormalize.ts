@@ -45,6 +45,8 @@ function normalizeSourcePayload(source: any) {
     mimeType: cleanText(source?.mimeType),
     fileSizeBytes: numberOrUndefined(source?.fileSizeBytes),
     sha256: cleanText(source?.sha256),
+    extractedText: cleanText(source?.extractedText),
+    extractionMethod: cleanText(source?.extractionMethod),
     sensitivity: cleanText(source?.sensitivity),
     tags: arrayOf(source?.tags).map(String),
   };
@@ -85,7 +87,8 @@ function normalizeMeetingMinutesPayload(minutes: any) {
     detailedAttendance: normalizeDetailedAttendancePayload(minutes?.detailedAttendance),
     attendees: compactStrings(arrayOf(minutes?.attendees)),
     absent: compactStrings(arrayOf(minutes?.absent)),
-    quorumMet: Boolean(minutes?.quorumMet),
+    quorumMet: normalizeQuorumStatus(minutes) === "confirmed",
+    quorumStatus: normalizeQuorumStatus(minutes),
     agendaItems: compactStrings(arrayOf(minutes?.agendaItems)),
     discussion: cleanText(minutes?.discussion),
     sections: normalizeMinuteSectionsPayload(minutes?.sections),
@@ -110,6 +113,7 @@ function normalizeMeetingMinutesPayload(minutes: any) {
 
 function structuredMinutesPatchFromPayload(payload: any) {
   return compactRecord({
+    quorumStatus: normalizeQuorumStatus(payload),
     chairName: cleanText(payload?.chairName),
     secretaryName: cleanText(payload?.secretaryName),
     recorderName: cleanText(payload?.recorderName),
@@ -125,6 +129,11 @@ function structuredMinutesPatchFromPayload(payload: any) {
     appendices: normalizeAppendicesPayload(payload?.appendices),
     agmDetails: normalizeAgmDetailsPayload(payload?.agmDetails),
   }) ?? {};
+}
+
+function normalizeQuorumStatus(value: any) {
+  if (["confirmed", "not_met", "not_recorded"].includes(value?.quorumStatus)) return value.quorumStatus;
+  return typeof value?.quorumMet === "boolean" ? (value.quorumMet ? "confirmed" : "not_met") : "not_recorded";
 }
 
 function normalizeRemoteParticipationPayload(value: any) {
@@ -277,6 +286,8 @@ function normalizeSectionPayload(payload: any) {
     feePaidCents: numberOrUndefined(payload?.feePaidCents),
     coverageCents: numberOrUndefined(payload?.coverageCents),
     premiumCents: numberOrUndefined(payload?.premiumCents),
+    policyFeeCents: numberOrUndefined(payload?.policyFeeCents),
+    totalCostCents: numberOrUndefined(payload?.totalCostCents),
     deductibleCents: numberOrUndefined(payload?.deductibleCents),
     revenueCents: numberOrUndefined(payload?.revenueCents),
     expensesCents: numberOrUndefined(payload?.expensesCents),
@@ -300,6 +311,8 @@ function normalizeSectionPayload(payload: any) {
     coverageItems: normalizeCoverageItems(payload?.coverageItems),
     coveredLocations: normalizeCoveredLocations(payload?.coveredLocations),
     policyDefinitions: normalizePolicyDefinitions(payload?.policyDefinitions),
+    policyExclusions: normalizePolicyExclusions(payload?.policyExclusions),
+    assessmentRates: normalizeAssessmentRates(payload?.assessmentRates),
     declinedCoverages: normalizeDeclinedCoverages(payload?.declinedCoverages),
     certificatesOfInsurance: normalizeCertificatesOfInsurance(payload?.certificatesOfInsurance),
     insuranceRequirements: normalizeInsuranceRequirements(payload?.insuranceRequirements),
@@ -335,8 +348,10 @@ function isImportableInsurancePolicy(policy: any) {
     policy?.premiumCents != null ||
     policy?.coverageSummary ||
     arrayOf(policy?.coverageItems).length ||
+    arrayOf(policy?.policyExclusions).length ||
+    arrayOf(policy?.assessmentRates).length ||
     arrayOf(policy?.coveredParties).length ||
-    arrayOf(policy?.sourceExternalIds).some((id) => /^local:|^paperless:/i.test(String(id))),
+    arrayOf(policy?.sourceExternalIds).some((id) => /^local:|^paperless:|^google-drive:/i.test(String(id))),
   );
   return (hasKnownPolicy || hasKnownInsurer) && hasInsuranceEvidence;
 }
@@ -455,6 +470,29 @@ function normalizePolicyDefinitions(value: unknown) {
       citationId: cleanText(definition?.citationId),
     }))
     .filter((definition): definition is any => Boolean(definition?.term && definition?.definition));
+}
+
+function normalizeAssessmentRates(value: unknown) {
+  return arrayOf(value).map((item: any) => compactRecord({
+    classificationCode: cleanText(item?.classificationCode), assessmentYear: cleanText(item?.assessmentYear),
+    effectiveDate: cleanDate(item?.effectiveDate),
+    netRatePer100PayrollCents: numberOrUndefined(item?.netRatePer100PayrollCents),
+    baseRatePer100PayrollCents: numberOrUndefined(item?.baseRatePer100PayrollCents),
+    experienceDiscountPercent: numberOrUndefined(item?.experienceDiscountPercent),
+    assessedPayrollCents: numberOrUndefined(item?.assessedPayrollCents),
+    sourceExternalIds: unique(arrayOf(item?.sourceExternalIds)), citationId: cleanText(item?.citationId), notes: cleanText(item?.notes),
+  })).filter((item): item is any => Boolean(item?.classificationCode && item?.assessmentYear));
+}
+
+function normalizePolicyExclusions(value: unknown) {
+  return arrayOf(value).map((item: any) => compactRecord({
+    label: cleanText(item?.label),
+    endorsementNumber: cleanText(item?.endorsementNumber),
+    summary: cleanText(item?.summary),
+    effectiveDate: cleanDate(item?.effectiveDate),
+    sourceExternalIds: unique(arrayOf(item?.sourceExternalIds)),
+    citationId: cleanText(item?.citationId),
+  })).filter((item): item is any => Boolean(item?.label));
 }
 
 function normalizeDeclinedCoverages(value: unknown) {
@@ -608,6 +646,8 @@ export {
   normalizeCoverageItems,
   normalizeCoveredLocations,
   normalizePolicyDefinitions,
+  normalizePolicyExclusions,
+  normalizeAssessmentRates,
   normalizeDeclinedCoverages,
   normalizeCertificatesOfInsurance,
   normalizeInsuranceRequirements,

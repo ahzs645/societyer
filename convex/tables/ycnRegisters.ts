@@ -21,6 +21,10 @@ export const sharedRegisterTables = {
   peopleDirectory: defineTable({
     societyId: v.optional(v.id("societies")), // Hosted tenant owner; absent on legacy/local reusable records.
     fullName: v.string(),
+    aliases: v.optional(v.array(v.string())),
+    aliasEvidence: v.optional(v.array(v.any())),
+    identityReviewStatus: v.optional(v.string()),
+    sourceKey: v.optional(v.string()),
     searchName: v.string(), // normalizeSearchName(fullName)
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),

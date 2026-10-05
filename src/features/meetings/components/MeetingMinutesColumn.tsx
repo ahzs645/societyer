@@ -47,6 +47,7 @@ import {
 } from "./MeetingMinutesColumn.internal";
 import { agendaSequenceLabel } from "../lib/agendaNumbering";
 import { computedQuorumMet } from "../lib/meetingDetailHelpers";
+import { minutesQuorumLabel, recordedMinutesQuorum } from "../../../../shared/minutesQuorum";
 import type {
   AgendaNumberingMode,
   SectionDraft,
@@ -569,8 +570,8 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                 ) : (
                   <div className="col" style={{ gap: 8 }}>
                     <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                      <Badge tone={minutes.quorumMet ? "success" : "warn"}>
-                        Quorum {minutes.quorumMet ? "met" : "not met"}
+                      <Badge tone={recordedMinutesQuorum(minutes) === null ? "neutral" : recordedMinutesQuorum(minutes) ? "success" : "warn"}>
+                        Quorum: {minutesQuorumLabel(minutes)}
                       </Badge>
                       {quorumSnapshot.label && (
                         <span className="muted" style={{ flexBasis: "100%", fontSize: "var(--fs-sm)" }}>

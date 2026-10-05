@@ -1,3 +1,6 @@
+import { EvidenceRowsEditor, type EvidenceColumn } from "../components/EvidenceRowsEditor";
+import { InsuranceOperationsCard } from "../components/InsuranceOperationsCard";
+import { currentRenewalPolicies } from "../../shared/insuranceOperations";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { type ReactNode, useMemo, useState } from "react";
@@ -21,6 +24,7 @@ import {
   RecordTableFilterPopover,
   useObjectRecordTableData,
 } from "@/platform/record-engine";
+import { policyHistory, policyCostChange, estimatePayrollAssessment, policyCoverageChanges } from "../../shared/insuranceHistory";
 import type { Id } from "../../convex/_generated/dataModel";
 
 const KINDS = ["DirectorsOfficers", "GeneralLiability", "PropertyCasualty", "CyberLiability", "Other"];
@@ -75,6 +79,8 @@ export function InsurancePage() {
       renewalOfPolicyNumber: "",
       coverageDollars: "",
       premiumDollars: "",
+      policyFeeDollars: "",
+      totalCostDollars: "",
       deductibleDollars: "",
       coverageSummary: "",
       additionalInsuredsInput: "",
@@ -82,6 +88,8 @@ export function InsurancePage() {
       coverageItemsInput: "",
       coveredLocationsInput: "",
       policyDefinitionsInput: "",
+      policyExclusions: [],
+      assessmentRates: [],
       declinedCoveragesInput: "",
       certificatesInput: "",
       insuranceRequirementsInput: "",
@@ -113,6 +121,8 @@ export function InsurancePage() {
     renewalOfPolicyNumber: row.renewalOfPolicyNumber ?? "",
     coverageDollars: centsToDollarInput(row.coverageCents),
     premiumDollars: centsToDollarInput(row.premiumCents),
+    policyFeeDollars: centsToDollarInput(row.policyFeeCents),
+    totalCostDollars: centsToDollarInput(row.totalCostCents),
     deductibleDollars: centsToDollarInput(row.deductibleCents),
     coverageSummary: row.coverageSummary ?? "",
     additionalInsuredsInput: (row.additionalInsureds ?? []).join(", "),
@@ -120,6 +130,8 @@ export function InsurancePage() {
     coverageItemsInput: serializeCoverageItems(row.coverageItems),
     coveredLocationsInput: serializeCoveredLocations(row.coveredLocations),
     policyDefinitionsInput: serializePolicyDefinitions(row.policyDefinitions),
+    policyExclusions: row.policyExclusions ?? [],
+    assessmentRates: row.assessmentRates ?? [],
     declinedCoveragesInput: serializeDeclinedCoverages(row.declinedCoverages),
     certificatesInput: serializeCertificates(row.certificatesOfInsurance),
     insuranceRequirementsInput: serializeInsuranceRequirements(row.insuranceRequirements),
@@ -127,9 +139,9 @@ export function InsurancePage() {
     claimIncidentsInput: serializeClaimIncidents(row.claimIncidents),
     annualReviewsInput: serializeAnnualReviews(row.annualReviews),
     complianceChecksInput: serializeComplianceChecks(row.complianceChecks),
-    startDate: dateInput(row.startDate) || todayDate(),
+    startDate: dateInput(row.startDate),
     endDate: dateInput(row.endDate),
-    renewalDate: dateInput(row.renewalDate) || dateInput(row.endDate) || todayDate(),
+    renewalDate: dateInput(row.renewalDate) || dateInput(row.endDate),
     status: row.status ?? "Active",
     sourceExternalIdsInput: (row.sourceExternalIds ?? []).join(", "),
     confidence: row.confidence ?? "",
@@ -279,41 +291,25 @@ export function InsurancePage() {
               <Field label="Premium" hint="Dollars, only when explicit"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.premiumDollars ?? ""} onChange={(e) => setForm({ ...form, premiumDollars: e.target.value })} /></Field>
               <Field label="Deductible" hint="Dollars"><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={form.deductibleDollars ?? ""} onChange={(e) => setForm({ ...form, deductibleDollars: e.target.value })} /></Field>
             </div>
+            <div className="row" style={{ gap: 12 }}>
+              <Field label="Policy fee" hint="Dollars, from invoice"><input className="input" type="number" min="0" step="0.01" value={form.policyFeeDollars ?? ""} onChange={(e) => setForm({ ...form, policyFeeDollars: e.target.value })} /></Field>
+              <Field label="Total invoiced cost" hint="Dollars, including documented fees/taxes"><input className="input" type="number" min="0" step="0.01" value={form.totalCostDollars ?? ""} onChange={(e) => setForm({ ...form, totalCostDollars: e.target.value })} /></Field>
+            </div>
             <Field label="Coverage summary"><MarkdownEditor rows={4} value={form.coverageSummary ?? ""} onChange={(markdown) => setForm({ ...form, coverageSummary: markdown })} /></Field>
             <Field label="Additional insureds" hint="Comma-separated"><input className="input" value={form.additionalInsuredsInput ?? ""} onChange={(e) => setForm({ ...form, additionalInsuredsInput: e.target.value })} /></Field>
-            <Field label="Covered parties/classes" hint="One per line: name | type | class | source IDs | citation ID | notes">
-              <textarea className="textarea" value={form.coveredPartiesInput ?? ""} onChange={(e) => setForm({ ...form, coveredPartiesInput: e.target.value })} />
-            </Field>
-            <Field label="Coverage items and limits" hint="One per line: label | type | class | limit dollars | deductible dollars | summary | source IDs | citation ID">
-              <textarea className="textarea" value={form.coverageItemsInput ?? ""} onChange={(e) => setForm({ ...form, coverageItemsInput: e.target.value })} />
-            </Field>
-            <Field label="Covered rooms/locations" hint="One per line: label | address | room | coverage dollars | source IDs | citation ID | notes">
-              <textarea className="textarea" value={form.coveredLocationsInput ?? ""} onChange={(e) => setForm({ ...form, coveredLocationsInput: e.target.value })} />
-            </Field>
-            <Field label="Policy definitions" hint="One per line: term | definition | source IDs | citation ID">
-              <textarea className="textarea" value={form.policyDefinitionsInput ?? ""} onChange={(e) => setForm({ ...form, policyDefinitionsInput: e.target.value })} />
-            </Field>
-            <Field label="Declined coverages" hint="One per line: label | reason | offered limit dollars | premium dollars | declined date | source IDs | citation ID | notes">
-              <textarea className="textarea" value={form.declinedCoveragesInput ?? ""} onChange={(e) => setForm({ ...form, declinedCoveragesInput: e.target.value })} />
-            </Field>
-            <Field label="Certificates of insurance" hint="One per line: holder | additional insured legal name | event | event date | required limit dollars | issued | expires | status | source IDs | citation ID | notes">
-              <textarea className="textarea" value={form.certificatesInput ?? ""} onChange={(e) => setForm({ ...form, certificatesInput: e.target.value })} />
-            </Field>
-            <Field label="Event / room insurance requirements" hint="One per line: context | type | coverage source | required CGL dollars | confirmed CGL dollars | additional insured? | legal name | COI status | COI due | tenants legal liability dollars | liquor | indemnity? | waiver? | vendor COI? | checklist? | risk triggers | source IDs | citation ID | notes">
-              <textarea className="textarea" value={form.insuranceRequirementsInput ?? ""} onChange={(e) => setForm({ ...form, insuranceRequirementsInput: e.target.value })} />
-            </Field>
-            <Field label="D&O claims-made terms" hint="Single line: retroactive date | continuity date | reporting deadline | extended reporting | defence costs inside limit? | territory | retention dollars | claims notice contact | source IDs | citation ID | notes">
-              <textarea className="textarea" value={form.claimsMadeTermsInput ?? ""} onChange={(e) => setForm({ ...form, claimsMadeTermsInput: e.target.value })} />
-            </Field>
-            <Field label="Claims / incident register" hint="One per line: incident date | claim notice date | status | privacy? | insurer notified | broker notified | source IDs | citation ID | notes">
-              <textarea className="textarea" value={form.claimIncidentsInput ?? ""} onChange={(e) => setForm({ ...form, claimIncidentsInput: e.target.value })} />
-            </Field>
-            <Field label="Annual insurance reviews" hint="One per line: review date | board meeting date | reviewer | outcome | next review | source IDs | citation ID | notes">
-              <textarea className="textarea" value={form.annualReviewsInput ?? ""} onChange={(e) => setForm({ ...form, annualReviewsInput: e.target.value })} />
-            </Field>
-            <Field label="Compliance checks" hint="One per line: label | status | due date | completed date | source IDs | citation ID | notes">
-              <textarea className="textarea" value={form.complianceChecksInput ?? ""} onChange={(e) => setForm({ ...form, complianceChecksInput: e.target.value })} />
-            </Field>
+            <EvidenceRowsEditor title="Covered parties/classes" rows={form.coveredParties ?? parseCoveredParties(form.coveredPartiesInput)} columns={INSURANCE_ROW_COLUMNS.coveredParties} onChange={rows => setForm({ ...form, coveredParties: rows })} />
+            <EvidenceRowsEditor title="Coverage items and limits" rows={form.coverageItems ?? parseCoverageItems(form.coverageItemsInput)} columns={INSURANCE_ROW_COLUMNS.coverageItems} onChange={rows => setForm({ ...form, coverageItems: rows })} />
+            <EvidenceRowsEditor title="Covered rooms/locations" rows={form.coveredLocations ?? parseCoveredLocations(form.coveredLocationsInput)} columns={INSURANCE_ROW_COLUMNS.coveredLocations} onChange={rows => setForm({ ...form, coveredLocations: rows })} />
+            <EvidenceRowsEditor title="Policy definitions" rows={form.policyDefinitions ?? parsePolicyDefinitions(form.policyDefinitionsInput)} columns={INSURANCE_ROW_COLUMNS.policyDefinitions} onChange={rows => setForm({ ...form, policyDefinitions: rows })} />
+            <AssessmentRatesEditor rows={form.assessmentRates ?? []} onChange={(assessmentRates) => setForm({ ...form, assessmentRates })} />
+            <PolicyExclusionsEditor rows={form.policyExclusions ?? []} onChange={(policyExclusions) => setForm({ ...form, policyExclusions })} />
+            <EvidenceRowsEditor title="Declined coverages" rows={form.declinedCoverages ?? parseDeclinedCoverages(form.declinedCoveragesInput)} columns={INSURANCE_ROW_COLUMNS.declinedCoverages} onChange={rows => setForm({ ...form, declinedCoverages: rows })} />
+            <EvidenceRowsEditor title="Certificates of insurance" rows={form.certificatesOfInsurance ?? parseCertificates(form.certificatesInput)} columns={INSURANCE_ROW_COLUMNS.certificatesOfInsurance} onChange={rows => setForm({ ...form, certificatesOfInsurance: rows })} />
+            <EvidenceRowsEditor title="Event / room insurance requirements" rows={form.insuranceRequirements ?? parseInsuranceRequirements(form.insuranceRequirementsInput)} columns={INSURANCE_ROW_COLUMNS.insuranceRequirements} onChange={rows => setForm({ ...form, insuranceRequirements: rows })} />
+            <EvidenceRowsEditor title="D&O claims-made terms" rows={form.claimsMadeTermsRows ?? (parseClaimsMadeTerms(form.claimsMadeTermsInput) ? [parseClaimsMadeTerms(form.claimsMadeTermsInput)] : [])} columns={INSURANCE_ROW_COLUMNS.claimsMadeTerms} onChange={rows => setForm({ ...form, claimsMadeTermsRows: rows })} />
+            <EvidenceRowsEditor title="Claims / incident register" rows={form.claimIncidents ?? parseClaimIncidents(form.claimIncidentsInput)} columns={INSURANCE_ROW_COLUMNS.claimIncidents} onChange={rows => setForm({ ...form, claimIncidents: rows })} />
+            <EvidenceRowsEditor title="Annual insurance reviews" rows={form.annualReviews ?? parseAnnualReviews(form.annualReviewsInput)} columns={INSURANCE_ROW_COLUMNS.annualReviews} onChange={rows => setForm({ ...form, annualReviews: rows })} />
+            <EvidenceRowsEditor title="Compliance checks" rows={form.complianceChecks ?? parseComplianceChecks(form.complianceChecksInput)} columns={INSURANCE_ROW_COLUMNS.complianceChecks} onChange={rows => setForm({ ...form, complianceChecks: rows })} />
             <div className="row" style={{ gap: 12 }}>
               <Field label="Start"><DatePicker value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></Field>
               <Field label="End"><DatePicker value={form.endDate ?? ""} onChange={(value) => setForm({ ...form, endDate: value })} /></Field>
@@ -349,6 +345,12 @@ export function InsurancePage() {
 }
 
 export function InsurancePolicyDetailPage() {
+  const { canWrite } = useFinancePermissions();
+  const createRenewal = useMutation(api.insurance.createRenewal);
+  const navigate = useNavigate();
+  const [renewal, setRenewal] = useState<any>(null);
+  const [renewalError, setRenewalError] = useState("");
+  const [savingRenewal, setSavingRenewal] = useState(false);
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
   const items = useQuery(api.insurance.list, society ? { societyId: society._id } : "skip");
@@ -371,9 +373,7 @@ export function InsurancePolicyDetailPage() {
     );
   }
 
-  const versions = rows
-    .filter((row) => row.policySeriesKey && row.policySeriesKey === policy.policySeriesKey)
-    .sort((a, b) => String(b.startDate ?? "").localeCompare(String(a.startDate ?? "")));
+  const versions = policyHistory(policy, rows);
   const sourceIds = sourceIdsForPolicy(policy);
   const noteSummary = displayPolicyNotes(policy.notes);
 
@@ -389,11 +389,34 @@ export function InsurancePolicyDetailPage() {
         subtitle={[policy.insurer, policy.policyTermLabel, policy.broker].filter(Boolean).join(" · ")}
         actions={
           <>
+            <button className="btn-action" disabled={!canWrite} onClick={() => { setRenewalError(""); setRenewal({ policyNumber: "", startDate: dateInput(policy.endDate || policy.renewalDate), endDate: "", premiumDollars: "", policyFeeDollars: "", totalCostDollars: "" }); }}><Plus size={12} /> Record renewal</button>
             <Badge tone={statusTone(policy.status)}>{policy.status}</Badge>
             {policy.sensitivity === "restricted" && <Badge tone="danger">restricted</Badge>}
           </>
         }
       />
+      <Drawer open={Boolean(renewal)} onClose={() => setRenewal(null)} title="Record renewal" footer={<>
+        <button className="btn" onClick={() => setRenewal(null)}>Cancel</button>
+        <button className="btn btn--accent" disabled={!canWrite || savingRenewal} onClick={async () => {
+          setSavingRenewal(true); setRenewalError("");
+          try {
+            const renewalId = await createRenewal({ id: policy._id, policyNumber: renewal.policyNumber, startDate: renewal.startDate, endDate: renewal.endDate,
+              premiumCents: dollarInputToCents(renewal.premiumDollars), policyFeeCents: dollarInputToCents(renewal.policyFeeDollars), totalCostCents: dollarInputToCents(renewal.totalCostDollars) });
+            setRenewal(null); navigate(`/app/insurance/${renewalId}`);
+          } catch (error) { setRenewalError(error instanceof Error ? error.message : "Unable to record renewal."); }
+          finally { setSavingRenewal(false); }
+        }}>Save renewal</button>
+      </>}>
+        {renewal && <>
+          <p>The prior term stays in history. The new term starts as NeedsReview; add its coverage, exclusions and evidence from the new policy documents.</p>
+          <Field label="Renewal policy number"><input className="input" value={renewal.policyNumber} onChange={(e) => setRenewal({ ...renewal, policyNumber: e.target.value })} /></Field>
+          <Field label="Start"><DatePicker value={renewal.startDate} onChange={(startDate) => setRenewal({ ...renewal, startDate })} /></Field>
+          <Field label="End"><DatePicker value={renewal.endDate} onChange={(endDate) => setRenewal({ ...renewal, endDate })} /></Field>
+          {[["Premium", "premiumDollars"], ["Policy fee", "policyFeeDollars"], ["Total invoiced cost", "totalCostDollars"]].map(([label, key]) => <Field key={key} label={label} hint="Dollars, only when explicit"><input className="input" type="number" min="0" step="0.01" value={renewal[key]} onChange={(e) => setRenewal({ ...renewal, [key]: e.target.value })} /></Field>)}
+          {renewalError && <p role="alert">{renewalError}</p>}
+        </>}
+      </Drawer>
+      <InsuranceOperationsCard policy={policy} />
       <InsuranceInsightCards policy={policy} />
 
       <div className="insurance-full-layout">
@@ -416,20 +439,7 @@ export function InsurancePolicyDetailPage() {
             </div>
           </div>
 
-          {versions.length > 1 && (
-            <div className="card">
-              <div className="card__head"><h2 className="card__title">Renewal history</h2></div>
-              <div className="card__body col">
-                {versions.map((version) => (
-                  <Link key={version._id} to={`/app/insurance/${version._id}`} className="insurance-version-link">
-                    <span>{version.policyTermLabel || formatDate(version.startDate)}</span>
-                    <Badge tone={statusTone(version.status)}>{version.status}</Badge>
-                    <span className="muted">{money(version.premiumCents)} premium</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
+          <PolicyHistoryCard versions={versions} />
 
           <div className="card">
             <div className="card__head"><h2 className="card__title">Sources</h2></div>
@@ -527,6 +537,8 @@ function PolicyStructuredDetails({ row }: { row: any }) {
   const items = row.coverageItems ?? [];
   const locations = row.coveredLocations ?? [];
   const definitions = row.policyDefinitions ?? [];
+  const exclusions = row.policyExclusions ?? [];
+  const assessments = row.assessmentRates ?? [];
   const declined = row.declinedCoverages ?? [];
   const certificates = row.certificatesOfInsurance ?? [];
   const requirements = row.insuranceRequirements ?? [];
@@ -535,7 +547,7 @@ function PolicyStructuredDetails({ row }: { row: any }) {
   const reviews = row.annualReviews ?? [];
   const checks = row.complianceChecks ?? [];
   const allSourceIds = sourceIdsForPolicy(row);
-  const hasDetails = parties.length || items.length || locations.length || definitions.length || declined.length || certificates.length || requirements.length || claimsTerms || incidents.length || reviews.length || checks.length;
+  const hasDetails = parties.length || items.length || locations.length || definitions.length || assessments.length || exclusions.length || declined.length || certificates.length || requirements.length || claimsTerms || incidents.length || reviews.length || checks.length;
   if (!hasDetails) {
     return (
       <div className="insurance-brief">
@@ -555,7 +567,7 @@ function PolicyStructuredDetails({ row }: { row: any }) {
       <div className="insurance-brief__grid">
         <BriefMetric label="Policy" value={row.policyNumber || "Not set"} sub={[row.policyTermLabel, row.versionType].filter(Boolean).join(" · ")} />
         <BriefMetric label="Coverage" value={money(row.coverageCents)} sub={row.deductibleCents != null ? `Deductible ${money(row.deductibleCents)}` : ""} />
-        <BriefMetric label="Premium" value={money(row.premiumCents)} sub={row.broker || "Broker not set"} />
+        <BriefMetric label="Premium" value={money(row.premiumCents)} sub={`Fee ${money(row.policyFeeCents)} · Total invoiced ${money(row.totalCostCents)}`} />
         <BriefMetric label="Renewal" value={formatDate(row.renewalDate)} sub={`${formatDate(row.startDate)} to ${formatDate(row.endDate)}`} />
       </div>
 
@@ -598,6 +610,19 @@ function PolicyStructuredDetails({ row }: { row: any }) {
           citationId={definition.citationId}
           notes={definition.definition}
         />
+      )} />
+      <DetailSection title="Payroll assessment rate history" rows={assessments} render={(assessment) => (
+        <BriefItem title={`${assessment.assessmentYear} · Classification ${assessment.classificationCode}`}
+          meta={[assessment.effectiveDate && `Effective ${formatDate(assessment.effectiveDate)}`, assessment.experienceDiscountPercent != null ? `Experience discount ${assessment.experienceDiscountPercent}%` : undefined]}
+          amount={assessment.netRatePer100PayrollCents != null ? `${money(assessment.netRatePer100PayrollCents)} per $100 assessable payroll` : "Net rate unknown"}
+          subAmount={estimatePayrollAssessment(assessment.assessedPayrollCents, assessment.netRatePer100PayrollCents) != null ? `Estimated assessment ${money(estimatePayrollAssessment(assessment.assessedPayrollCents, assessment.netRatePer100PayrollCents))}` : "Assessment estimate unavailable: payroll or net rate not recorded"}
+          sourceIds={assessment.sourceExternalIds} citationId={assessment.citationId}
+          notes={[assessment.baseRatePer100PayrollCents != null ? `Base rate ${money(assessment.baseRatePer100PayrollCents)} per $100` : undefined, assessment.assessedPayrollCents != null ? `Assessable payroll ${money(assessment.assessedPayrollCents)}` : undefined, assessment.notes].filter(Boolean).join(" · ")} />
+      )} />
+      <DetailSection title="Exclusions and limiting endorsements" rows={exclusions} render={(exclusion) => (
+        <BriefItem title={exclusion.label}
+          meta={[exclusion.endorsementNumber, exclusion.effectiveDate && `Effective ${formatDate(exclusion.effectiveDate)}`]}
+          sourceIds={exclusion.sourceExternalIds} citationId={exclusion.citationId} notes={exclusion.summary} />
       )} />
       <DetailSection title="Declined coverages" rows={declined} render={(coverage) => (
         <BriefItem
@@ -832,7 +857,7 @@ function collectPolicySourceIds(value: any, ids: Set<string>) {
       if (cleanId) ids.add(cleanId);
     }
   }
-  for (const key of ["coveredParties", "coverageItems", "coveredLocations", "policyDefinitions", "declinedCoverages", "certificatesOfInsurance", "insuranceRequirements", "claimsMadeTerms", "claimIncidents", "annualReviews", "complianceChecks"]) {
+  for (const key of ["coveredParties", "coverageItems", "coveredLocations", "policyDefinitions", "policyExclusions", "assessmentRates", "declinedCoverages", "certificatesOfInsurance", "insuranceRequirements", "claimsMadeTerms", "claimIncidents", "annualReviews", "complianceChecks"]) {
     collectPolicySourceIds(value[key], ids);
   }
 }
@@ -875,12 +900,13 @@ function RenewalCell({ date }: { date?: string }) {
 }
 
 function summarizePolicies(rows: any[]) {
+  const current = new Set(currentRenewalPolicies(rows, new Date().toISOString().slice(0,10)).map(row => row._id));
   return rows.reduce(
     (summary, row) => {
       const days = daysUntil(row.renewalDate);
       summary.total += 1;
       if (row.status === "Active") summary.active += 1;
-      if (days != null && days <= 60) summary.renewalDue += 1;
+      if (current.has(row._id) && days != null && days <= 60) summary.renewalDue += 1;
       if (riskFlagsForPolicy(row).includes("restricted")) summary.restricted += 1;
       return summary;
     },
@@ -903,23 +929,27 @@ function normalizePolicyDraft(form: any) {
     renewalOfPolicyNumber: cleanOptional(form.renewalOfPolicyNumber),
     coverageCents: dollarInputToCents(form.coverageDollars),
     premiumCents: dollarInputToCents(form.premiumDollars),
+    policyFeeCents: dollarInputToCents(form.policyFeeDollars),
+    totalCostCents: dollarInputToCents(form.totalCostDollars),
     deductibleCents: dollarInputToCents(form.deductibleDollars),
     coverageSummary: cleanOptional(form.coverageSummary),
     additionalInsureds: splitList(form.additionalInsuredsInput),
-    coveredParties: parseCoveredParties(form.coveredPartiesInput),
-    coverageItems: parseCoverageItems(form.coverageItemsInput),
-    coveredLocations: parseCoveredLocations(form.coveredLocationsInput),
-    policyDefinitions: parsePolicyDefinitions(form.policyDefinitionsInput),
-    declinedCoverages: parseDeclinedCoverages(form.declinedCoveragesInput),
-    certificatesOfInsurance: parseCertificates(form.certificatesInput),
-    insuranceRequirements: parseInsuranceRequirements(form.insuranceRequirementsInput),
-    claimsMadeTerms: parseClaimsMadeTerms(form.claimsMadeTermsInput),
-    claimIncidents: parseClaimIncidents(form.claimIncidentsInput),
-    annualReviews: parseAnnualReviews(form.annualReviewsInput),
-    complianceChecks: parseComplianceChecks(form.complianceChecksInput),
-    startDate: dateInput(form.startDate) || todayDate(),
+    coveredParties: form.coveredParties ? form.coveredParties.map(stripEditorId) : parseCoveredParties(form.coveredPartiesInput),
+    coverageItems: form.coverageItems ? form.coverageItems.map(stripEditorId) : parseCoverageItems(form.coverageItemsInput),
+    coveredLocations: form.coveredLocations ? form.coveredLocations.map(stripEditorId) : parseCoveredLocations(form.coveredLocationsInput),
+    policyDefinitions: form.policyDefinitions ? form.policyDefinitions.map(stripEditorId) : parsePolicyDefinitions(form.policyDefinitionsInput),
+    assessmentRates: (form.assessmentRates ?? []).filter((item: any) => item.classificationCode?.trim() && item.assessmentYear?.trim()).map((item: any) => compact(item)),
+    policyExclusions: (form.policyExclusions ?? []).filter((item: any) => item.label?.trim()).map((item: any) => compact({ ...item, label: item.label.trim() })),
+    declinedCoverages: form.declinedCoverages ? form.declinedCoverages.map(stripEditorId) : parseDeclinedCoverages(form.declinedCoveragesInput),
+    certificatesOfInsurance: form.certificatesOfInsurance ? form.certificatesOfInsurance.map(stripEditorId) : parseCertificates(form.certificatesInput),
+    insuranceRequirements: form.insuranceRequirements ? form.insuranceRequirements.map(stripEditorId) : parseInsuranceRequirements(form.insuranceRequirementsInput),
+    claimsMadeTerms: form.claimsMadeTermsRows ? stripEditorId(form.claimsMadeTermsRows[0]) : parseClaimsMadeTerms(form.claimsMadeTermsInput),
+    claimIncidents: form.claimIncidents ? form.claimIncidents.map(stripEditorId) : parseClaimIncidents(form.claimIncidentsInput),
+    annualReviews: form.annualReviews ? form.annualReviews.map(stripEditorId) : parseAnnualReviews(form.annualReviewsInput),
+    complianceChecks: form.complianceChecks ? form.complianceChecks.map(stripEditorId) : parseComplianceChecks(form.complianceChecksInput),
+    startDate: dateInput(form.startDate),
     endDate: dateInput(form.endDate),
-    renewalDate: dateInput(form.renewalDate) || dateInput(form.endDate) || dateInput(form.startDate) || todayDate(),
+    renewalDate: dateInput(form.renewalDate) || dateInput(form.endDate),
     sourceExternalIds: splitList(form.sourceExternalIdsInput),
     confidence: cleanOptional(form.confidence),
     sensitivity: cleanOptional(form.sensitivity),
@@ -1239,6 +1269,8 @@ function searchableStructuredPolicyText(row: any) {
     ...(row.coverageItems ?? []).flatMap((item: any) => [item.label, item.coverageType, item.coveredClass, item.summary]),
     ...(row.coveredLocations ?? []).flatMap((item: any) => [item.label, item.address, item.room, item.notes]),
     ...(row.policyDefinitions ?? []).flatMap((item: any) => [item.term, item.definition]),
+    ...(row.assessmentRates ?? []).flatMap((item: any) => [item.classificationCode, item.assessmentYear, item.notes]),
+    ...(row.policyExclusions ?? []).flatMap((item: any) => [item.label, item.endorsementNumber, item.summary]),
     ...(row.declinedCoverages ?? []).flatMap((item: any) => [item.label, item.reason, item.notes]),
     row.policySeriesKey,
     row.policyTermLabel,
@@ -1306,3 +1338,535 @@ function statusTone(status: string): any {
   if (status === "NeedsReview") return "warn";
   return "neutral";
 }
+
+function PolicyExclusionsEditor({ rows, onChange }: { rows: any[]; onChange: (rows: any[]) => void }) {
+  const change = (index: number, patch: Record<string, any>) => onChange(rows.map((row, i) => i === index ? { ...row, ...patch } : row));
+  return (
+    <section aria-label="Exclusions and limiting endorsements">
+      <h3>Exclusions and limiting endorsements</h3>
+      <p className="muted">Record the policy wording and source for each restriction. Confirm whether each endorsement applies to this term.</p>
+      {rows.map((row, index) => (
+        <div className="card" key={index} style={{ padding: 12, marginBottom: 12 }}>
+          <Field label="Exclusion label"><input className="input" value={row.label ?? ""} onChange={(e) => change(index, { label: e.target.value })} /></Field>
+          <Field label="Endorsement number"><input className="input" value={row.endorsementNumber ?? ""} onChange={(e) => change(index, { endorsementNumber: e.target.value })} /></Field>
+          <Field label="Restriction / wording summary"><textarea className="textarea" value={row.summary ?? ""} onChange={(e) => change(index, { summary: e.target.value })} /></Field>
+          <Field label="Effective date"><DatePicker value={row.effectiveDate ?? ""} onChange={(effectiveDate) => change(index, { effectiveDate })} /></Field>
+          <Field label="Source IDs" hint="Comma-separated"><input className="input" value={(row.sourceExternalIds ?? []).join(", ")} onChange={(e) => change(index, { sourceExternalIds: splitList(e.target.value) })} /></Field>
+          <Field label="Citation ID"><input className="input" value={row.citationId ?? ""} onChange={(e) => change(index, { citationId: e.target.value })} /></Field>
+          <button className="btn btn--ghost" onClick={() => onChange(rows.filter((_, i) => i !== index))}>Remove exclusion</button>
+        </div>
+      ))}
+      <button className="btn" onClick={() => onChange([...rows, { label: "" }])}><Plus size={12} /> Add exclusion</button>
+    </section>
+  );
+}
+
+function PolicyHistoryCard({ versions }: { versions: any[] }) {
+  return (
+    <div className="card">
+      <div className="card__head"><h2 className="card__title">Cost and coverage history</h2></div>
+      <div className="card__body col">
+        <p className="muted" style={{ margin: 0 }}>Compare recorded premiums, limits, and deductibles for this policy series. Premiums are policy costs; payment records belong in Finance.</p>
+        {versions.length < 2 && <p className="muted">Add earlier or renewal records with the same policy series key to compare changes.</p>}
+        {versions.map((version, index) => {
+          const previous = versions[index - 1];
+          return (
+            <div key={version._id} className="insurance-version-link" style={{ flexWrap: "wrap" }}>
+              <Link to={`/app/insurance/${version._id}`}>{version.policyTermLabel || formatDate(version.startDate)}</Link>
+              <Badge tone={statusTone(version.status)}>{version.status}</Badge>
+              <span>Premium {money(version.premiumCents)}</span>
+              <span>Fee {money(version.policyFeeCents)} · Total invoiced {money(version.totalCostCents)}</span>
+              <span>Coverage {money(version.coverageCents)}</span>
+              <span>Deductible {money(version.deductibleCents)}</span>
+              {previous && <div style={{ width: "100%" }} className="muted">
+                Changes from prior record: premium {changeLabel(version.premiumCents, previous.premiumCents)}, total invoiced {changeLabel(version.totalCostCents, previous.totalCostCents)}, coverage {changeLabel(version.coverageCents, previous.coverageCents)}, deductible {changeLabel(version.deductibleCents, previous.deductibleCents)}.
+                <div>Coverage items in the recorded schedules:</div>
+                {policyCoverageChanges(previous.coverageItems, version.coverageItems).length === 0 ? <div>Known item limits unchanged.</div> :
+                  policyCoverageChanges(previous.coverageItems, version.coverageItems).map((change, changeIndex) => <div key={changeIndex}>
+                    {change.label}: {change.status === "changed" ? `${money(change.previousCents)} → ${money(change.currentCents)} (${changeLabel(change.currentCents, change.previousCents)})` :
+                      change.status === "added" ? `added to schedule; limit ${change.currentCents == null ? "unknown" : money(change.currentCents)}` :
+                      change.status === "removed" ? `removed from schedule; prior limit ${change.previousCents == null ? "unknown" : money(change.previousCents)}` : "comparison unknown; missing or ambiguous item limits"}.
+                  </div>)}
+              </div>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function changeLabel(current?: number, previous?: number) {
+  const change = policyCostChange(current, previous);
+  if (!change) return "unknown";
+  if (change.cents === 0) return "unchanged";
+  return `${change.cents > 0 ? "+" : "−"}${money(Math.abs(change.cents))}${change.percent == null ? "" : ` (${change.percent > 0 ? "+" : ""}${change.percent.toFixed(1)}%)`}`;
+}
+
+function AssessmentRatesEditor({ rows, onChange }: { rows: any[]; onChange: (rows: any[]) => void }) {
+  const change = (index: number, patch: Record<string, any>) => onChange(rows.map((row, i) => i === index ? { ...row, ...patch } : row));
+  return <section aria-label="Payroll assessment rate history">
+    <h3>Payroll assessment rate history</h3>
+    <p className="muted">Keep yearly rate notices separate from flat premiums. Estimates need an explicit net rate and assessable payroll.</p>
+    {rows.map((row, index) => <div className="card" key={index} style={{ padding: 12, marginBottom: 12 }}>
+      <Field label="Classification code"><input className="input" value={row.classificationCode ?? ""} onChange={(e) => change(index, { classificationCode: e.target.value })} /></Field>
+      <Field label="Assessment year"><input className="input" value={row.assessmentYear ?? ""} onChange={(e) => change(index, { assessmentYear: e.target.value })} /></Field>
+      <Field label="Effective date" hint="Only when documented"><DatePicker value={row.effectiveDate ?? ""} onChange={(effectiveDate) => change(index, { effectiveDate })} /></Field>
+      {[["Net rate per $100 payroll", "netRatePer100PayrollCents"], ["Base rate per $100 payroll", "baseRatePer100PayrollCents"], ["Assessable payroll", "assessedPayrollCents"]].map(([label, key]) => <Field key={key} label={label} hint="Dollars; leave blank if unknown"><input className="input" type="number" min="0" step="0.01" value={centsToDollarInput(row[key])} onChange={(e) => change(index, { [key]: dollarInputToCents(e.target.value) })} /></Field>)}
+      <Field label="Experience discount (%)"><input className="input" type="number" min="0" max="100" step="0.01" value={row.experienceDiscountPercent ?? ""} onChange={(e) => change(index, { experienceDiscountPercent: e.target.value === "" ? undefined : Number(e.target.value) })} /></Field>
+      <Field label="Source IDs" hint="Comma-separated"><input className="input" value={(row.sourceExternalIds ?? []).join(", ")} onChange={(e) => change(index, { sourceExternalIds: splitList(e.target.value) })} /></Field>
+      <Field label="Citation ID"><input className="input" value={row.citationId ?? ""} onChange={(e) => change(index, { citationId: e.target.value })} /></Field>
+      <Field label="Notes"><textarea className="textarea" value={row.notes ?? ""} onChange={(e) => change(index, { notes: e.target.value })} /></Field>
+      <p className="muted">{estimatePayrollAssessment(row.assessedPayrollCents, row.netRatePer100PayrollCents) == null ? "Assessment estimate unavailable: payroll or net rate not recorded." : `Estimated assessment ${money(estimatePayrollAssessment(row.assessedPayrollCents, row.netRatePer100PayrollCents))} from recorded assessable payroll and net rate.`}</p>
+      <button className="btn btn--ghost" onClick={() => onChange(rows.filter((_, i) => i !== index))}>Remove assessment rate</button>
+    </div>)}
+    <button className="btn" onClick={() => onChange([...rows, { classificationCode: "", assessmentYear: "" }])}><Plus size={12} /> Add assessment rate</button>
+  </section>;
+}
+
+const INSURANCE_ROW_COLUMNS: Record<string, EvidenceColumn[]> = {
+  "coveredParties": [
+    {
+      "key": "name",
+      "label": "Name"
+    },
+    {
+      "key": "partyType",
+      "label": "Party type"
+    },
+    {
+      "key": "coveredClass",
+      "label": "Covered class"
+    },
+    {
+      "key": "sourceExternalIds",
+      "label": "Source external ids",
+      "type": "list"
+    },
+    {
+      "key": "citationId",
+      "label": "Citation id"
+    },
+    {
+      "key": "notes",
+      "label": "Notes"
+    }
+  ],
+  "coverageItems": [
+    {
+      "key": "label",
+      "label": "Label"
+    },
+    {
+      "key": "coverageType",
+      "label": "Coverage type"
+    },
+    {
+      "key": "coveredClass",
+      "label": "Covered class"
+    },
+    {
+      "key": "limitCents",
+      "label": "Limit cents",
+      "type": "number"
+    },
+    {
+      "key": "deductibleCents",
+      "label": "Deductible cents",
+      "type": "number"
+    },
+    {
+      "key": "summary",
+      "label": "Summary"
+    },
+    {
+      "key": "sourceExternalIds",
+      "label": "Source external ids",
+      "type": "list"
+    },
+    {
+      "key": "citationId",
+      "label": "Citation id"
+    }
+  ],
+  "coveredLocations": [
+    {
+      "key": "label",
+      "label": "Label"
+    },
+    {
+      "key": "address",
+      "label": "Address"
+    },
+    {
+      "key": "room",
+      "label": "Room"
+    },
+    {
+      "key": "coverageCents",
+      "label": "Coverage cents",
+      "type": "number"
+    },
+    {
+      "key": "sourceExternalIds",
+      "label": "Source external ids",
+      "type": "list"
+    },
+    {
+      "key": "citationId",
+      "label": "Citation id"
+    },
+    {
+      "key": "notes",
+      "label": "Notes"
+    }
+  ],
+  "policyDefinitions": [
+    {
+      "key": "term",
+      "label": "Term"
+    },
+    {
+      "key": "definition",
+      "label": "Definition"
+    },
+    {
+      "key": "sourceExternalIds",
+      "label": "Source external ids",
+      "type": "list"
+    },
+    {
+      "key": "citationId",
+      "label": "Citation id"
+    }
+  ],
+  "declinedCoverages": [
+    {
+      "key": "label",
+      "label": "Label"
+    },
+    {
+      "key": "reason",
+      "label": "Reason"
+    },
+    {
+      "key": "offeredLimitCents",
+      "label": "Offered limit cents",
+      "type": "number"
+    },
+    {
+      "key": "premiumCents",
+      "label": "Premium cents",
+      "type": "number"
+    },
+    {
+      "key": "declinedAt",
+      "label": "Declined at"
+    },
+    {
+      "key": "sourceExternalIds",
+      "label": "Source external ids",
+      "type": "list"
+    },
+    {
+      "key": "citationId",
+      "label": "Citation id"
+    },
+    {
+      "key": "notes",
+      "label": "Notes"
+    }
+  ],
+  "certificatesOfInsurance": [
+    {
+      "key": "holderName",
+      "label": "Holder name"
+    },
+    {
+      "key": "additionalInsuredLegalName",
+      "label": "Additional insured legal name"
+    },
+    {
+      "key": "eventName",
+      "label": "Event name"
+    },
+    {
+      "key": "eventDate",
+      "label": "Event date"
+    },
+    {
+      "key": "requiredLimitCents",
+      "label": "Required limit cents",
+      "type": "number"
+    },
+    {
+      "key": "issuedAt",
+      "label": "Issued at"
+    },
+    {
+      "key": "expiresAt",
+      "label": "Expires at"
+    },
+    {
+      "key": "status",
+      "label": "Status"
+    },
+    {
+      "key": "sourceExternalIds",
+      "label": "Source external ids",
+      "type": "list"
+    },
+    {
+      "key": "citationId",
+      "label": "Citation id"
+    },
+    {
+      "key": "notes",
+      "label": "Notes"
+    }
+  ],
+  "insuranceRequirements": [
+    {
+      "key": "context",
+      "label": "Context"
+    },
+    {
+      "key": "requirementType",
+      "label": "Requirement type"
+    },
+    {
+      "key": "coverageSource",
+      "label": "Coverage source"
+    },
+    {
+      "key": "cglLimitRequiredCents",
+      "label": "Cgl limit required cents",
+      "type": "number"
+    },
+    {
+      "key": "cglLimitConfirmedCents",
+      "label": "Cgl limit confirmed cents",
+      "type": "number"
+    },
+    {
+      "key": "additionalInsuredRequired",
+      "label": "Additional insured required",
+      "type": "boolean"
+    },
+    {
+      "key": "additionalInsuredLegalName",
+      "label": "Additional insured legal name"
+    },
+    {
+      "key": "coiStatus",
+      "label": "Coi status"
+    },
+    {
+      "key": "coiDueDate",
+      "label": "Coi due date"
+    },
+    {
+      "key": "tenantLegalLiabilityLimitCents",
+      "label": "Tenant legal liability limit cents",
+      "type": "number"
+    },
+    {
+      "key": "hostLiquorLiability",
+      "label": "Host liquor liability"
+    },
+    {
+      "key": "indemnityRequired",
+      "label": "Indemnity required",
+      "type": "boolean"
+    },
+    {
+      "key": "waiverRequired",
+      "label": "Waiver required",
+      "type": "boolean"
+    },
+    {
+      "key": "vendorCoiRequired",
+      "label": "Vendor coi required",
+      "type": "boolean"
+    },
+    {
+      "key": "studentEventChecklistRequired",
+      "label": "Student event checklist required",
+      "type": "boolean"
+    },
+    {
+      "key": "riskTriggers",
+      "label": "Risk triggers",
+      "type": "list"
+    },
+    {
+      "key": "sourceExternalIds",
+      "label": "Source external ids",
+      "type": "list"
+    },
+    {
+      "key": "citationId",
+      "label": "Citation id"
+    },
+    {
+      "key": "notes",
+      "label": "Notes"
+    }
+  ],
+  "claimsMadeTerms": [
+    {
+      "key": "retroactiveDate",
+      "label": "Retroactive date"
+    },
+    {
+      "key": "continuityDate",
+      "label": "Continuity date"
+    },
+    {
+      "key": "reportingDeadline",
+      "label": "Reporting deadline"
+    },
+    {
+      "key": "extendedReportingPeriod",
+      "label": "Extended reporting period"
+    },
+    {
+      "key": "defenseCostsInsideLimit",
+      "label": "Defense costs inside limit",
+      "type": "boolean"
+    },
+    {
+      "key": "territory",
+      "label": "Territory"
+    },
+    {
+      "key": "retentionCents",
+      "label": "Retention cents",
+      "type": "number"
+    },
+    {
+      "key": "claimsNoticeContact",
+      "label": "Claims notice contact"
+    },
+    {
+      "key": "sourceExternalIds",
+      "label": "Source external ids",
+      "type": "list"
+    },
+    {
+      "key": "citationId",
+      "label": "Citation id"
+    },
+    {
+      "key": "notes",
+      "label": "Notes"
+    }
+  ],
+  "claimIncidents": [
+    {
+      "key": "incidentDate",
+      "label": "Incident date"
+    },
+    {
+      "key": "claimNoticeDate",
+      "label": "Claim notice date"
+    },
+    {
+      "key": "status",
+      "label": "Status"
+    },
+    {
+      "key": "privacyFlag",
+      "label": "Privacy flag",
+      "type": "boolean"
+    },
+    {
+      "key": "insurerNotifiedAt",
+      "label": "Insurer notified at"
+    },
+    {
+      "key": "brokerNotifiedAt",
+      "label": "Broker notified at"
+    },
+    {
+      "key": "sourceExternalIds",
+      "label": "Source external ids",
+      "type": "list"
+    },
+    {
+      "key": "citationId",
+      "label": "Citation id"
+    },
+    {
+      "key": "notes",
+      "label": "Notes"
+    }
+  ],
+  "annualReviews": [
+    {
+      "key": "reviewDate",
+      "label": "Review date"
+    },
+    {
+      "key": "boardMeetingDate",
+      "label": "Board meeting date"
+    },
+    {
+      "key": "reviewer",
+      "label": "Reviewer"
+    },
+    {
+      "key": "outcome",
+      "label": "Outcome"
+    },
+    {
+      "key": "nextReviewDate",
+      "label": "Next review date"
+    },
+    {
+      "key": "sourceExternalIds",
+      "label": "Source external ids",
+      "type": "list"
+    },
+    {
+      "key": "citationId",
+      "label": "Citation id"
+    },
+    {
+      "key": "notes",
+      "label": "Notes"
+    }
+  ],
+  "complianceChecks": [
+    {
+      "key": "label",
+      "label": "Label"
+    },
+    {
+      "key": "status",
+      "label": "Status"
+    },
+    {
+      "key": "dueDate",
+      "label": "Due date"
+    },
+    {
+      "key": "completedAt",
+      "label": "Completed at"
+    },
+    {
+      "key": "sourceExternalIds",
+      "label": "Source external ids",
+      "type": "list"
+    },
+    {
+      "key": "citationId",
+      "label": "Citation id"
+    },
+    {
+      "key": "notes",
+      "label": "Notes"
+    }
+  ]
+};
+function stripEditorId(row: any) { if (!row) return undefined; const { id, ...record } = row; return record; }

@@ -118,7 +118,7 @@ export async function budgetVariancePortable(
     actualByCategory.set(cat, (actualByCategory.get(cat) ?? 0) + Math.abs(txn.amountCents));
   }
 
-  return budgets.map((b: any) => ({
+  return budgets.filter((b: any) => !b.programCode && !b.accountId).map((b: any) => ({
     category: b.category,
     plannedCents: b.plannedCents,
     actualCents: actualByCategory.get(b.category) ?? 0,

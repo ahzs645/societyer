@@ -1,3 +1,4 @@
+import { exactDay } from "../../evidenceReview";
 // Import-session pre-promotion validation and issue collection.
 
 import { invalidOptionIssue, invalidOptionListIssues } from "../../orgHubOptions";
@@ -14,6 +15,20 @@ import {
 
 async function importPromotionIssues(ctx: any, societyId: string, record: any) {
   const kind = record.recordKind;
+  const safeIssues: string[] = [];
+  const raw = record.payload ?? {};
+  const requiredDays: Record<string, string[]> = {
+    filing: ["dueDate", "filedAt", "sourceDate"], deadline: ["dueDate", "sourceDate"], financialStatement: ["periodEnd", "sourceDate"],
+    financialStatementImport: ["periodEnd", "sourceDate"], boardRoleAssignment: ["startDate", "sourceDate"], boardRoleChange: ["effectiveDate", "sourceDate"],
+    signingAuthority: ["effectiveDate", "sourceDate"], meetingAttendance: ["meetingDate", "sourceDate"], motionEvidence: ["meetingDate", "sourceDate"],
+    treasurerReport: ["reportDate", "sourceDate"], transactionCandidate: ["transactionDate", "sourceDate"], employee: ["startDate", "sourceDate"], pipaTraining: ["completedAtISO", "sourceDate"],
+  };
+  const dateFields = requiredDays[kind];
+  if (dateFields && !exactDay(String(dateFields.map(key => raw[key]).find(value => value != null && value !== "") ?? "").slice(0, 10))) safeIssues.push("A reviewed exact source day is required; import day and partial-date placeholders cannot be promoted.");
+  if (kind === "financialStatement") for (const key of ["revenueCents", "expensesCents", "netAssetsCents"]) if (!Number.isSafeInteger(raw[key])) safeIssues.push(`${key} is unknown. Do not post a financial statement with invented zero totals.`);
+  if (kind === "rightsholdingTransfer" && (!Number.isFinite(raw.quantity ?? raw.shares) || (raw.quantity ?? raw.shares) <= 0)) safeIssues.push("A source-supported positive transfer quantity is required.");
+  if (kind === "insurancePolicy") for (const key of ["startDate", "renewalDate"]) if (raw[key] != null && !exactDay(raw[key])) safeIssues.push(`${key} requires an exact day or must remain in review.`);
+
   if (![
     "organizationAddress",
     "organizationRegistration",
@@ -37,11 +52,11 @@ async function importPromotionIssues(ctx: any, societyId: string, record: any) {
     "jurisdictionMetadata",
     "supportLog",
   ].includes(kind)) {
-    return [];
+    return safeIssues;
   }
 
   const payload = normalizePayload(kind, record.payload ?? {});
-  const issues: string[] = [];
+  const issues: string[] = [...safeIssues];
   if (confidenceFor(payload) === "Review" && !cleanText(record.reviewNotes)) {
     issues.push("Review-confidence records need reviewer notes before promotion.");
   }

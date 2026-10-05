@@ -163,6 +163,14 @@ export const policyTables = {
     .index("by_committee", ["committeeId"]),
 
   tasks: defineTable({
+    insurancePolicyId: v.optional(v.id("insurancePolicies")),
+    insuranceRenewalKey: v.optional(v.string()),
+    actionRegisterKey: v.optional(v.string()),
+    externalActionId: v.optional(v.string()),
+    sourceObservations: v.optional(v.array(v.any())),
+    sourceStatusDate: v.optional(v.string()),
+    sourceStatusReview: v.optional(v.string()),
+    statusHistory: v.optional(v.array(v.any())),
     societyId: v.id("societies"),
     title: v.string(),
     description: v.optional(v.string()),

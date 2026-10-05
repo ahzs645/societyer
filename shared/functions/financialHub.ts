@@ -327,6 +327,9 @@ export async function upsertBudgetPortable(
     fiscalYear: string;
     category: string;
     plannedCents: number;
+    programCode?: string;
+    accountId?: string;
+    currency?: string;
     notes?: string;
     actingUserId?: string;
   },
@@ -337,6 +340,14 @@ export async function upsertBudgetPortable(
     societyId: args.societyId,
     required: "Director",
   });
+  if (!Number.isSafeInteger(args.plannedCents)) throw new Error("Budget amount must be integer cents.");
+  if (args.programCode && !args.accountId) throw new Error("A program budget needs a ledger account.");
+  if (args.accountId) {
+    const account = await getOwned(ctx, "financialAccounts", args.accountId, args.societyId);
+    if (!["Income", "Expense"].includes(account.accountType)) throw new Error("Program budgets use income or expense accounts.");
+    if (args.currency && args.currency !== account.currency) throw new Error("Budget currency must match its account.");
+    args = { ...args, currency: account.currency, programCode: args.programCode?.trim() || undefined };
+  }
   const { id, actingUserId, ...rest } = args;
   if (id) {
     await getOwned(ctx, "budgets", id, args.societyId);
@@ -475,7 +486,7 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
     actualsByCategory[t.category] = (actualsByCategory[t.category] ?? 0) + Math.abs(t.amountCents);
   }
 
-  const budgetRows = budgets.map((b) => ({
+  const budgetRows = budgets.filter((b: any) => !b.programCode && !b.accountId).map((b) => ({
     ...b,
     actualCents: actualsByCategory[b.category] ?? 0,
   }));

@@ -1,3 +1,5 @@
+import {PersonRecordLinks} from "../components/PersonRecordLinks";
+import { MembershipEvidenceCard } from "../components/MembershipEvidenceCard";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -9,6 +11,7 @@ import { RecordShowPage } from "../components/RecordShowPage";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { NotesPanel } from "../components/NotesPanel";
 import { ActivityTimeline } from "../components/ActivityTimeline";
+import { MemberHistoryPanel } from "../components/MemberHistoryPanel";
 import { useTrackRecentRecord } from "../hooks/useTrackRecentRecord";
 import { ArrowLeft, Users, MessageSquare, Activity, Sparkles } from "lucide-react";
 import { formatDate } from "../lib/format";
@@ -106,6 +109,7 @@ export function MemberDetailPage() {
         }
         tabs={[
           { id: "overview", label: "Overview", content: overview },
+          { id: "history", label: "History", icon: <Activity size={12} />, content: <><PersonRecordLinks societyId={society._id} recordTable="members" recordId={member._id} personName={fullName} observedDate={member.joinedAt} /><MemberHistoryPanel societyId={society._id} memberId={member._id} /><MembershipEvidenceCard societyId={society._id} memberId={member._id} /></> },
           {
             id: "custom",
             label: "Custom fields",

@@ -12,6 +12,7 @@ import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
 import { ArrowLeft, BookOpen, CalendarPlus, ChevronDown, Copy, MinusCircle, Pencil, Plus, Save, Sparkles, Star, Trash2, X } from "lucide-react";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { MeetingTemplateImportButton } from "../features/meetings/components/MeetingTemplateImportButton";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { Modal, useConfirm } from "../components/Modal";
 import { toDateTimeLocalValue } from "../lib/format";
@@ -330,6 +331,7 @@ export function MeetingTemplatesPage() {
         subtitle="Reusable agenda patterns for new meetings."
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <MeetingTemplateImportButton societyId={society._id} existingNames={(templates ?? []).map(template => template.name)} />
             {(templates?.length ?? 0) === 0 && (
               <button
                 className="btn-action"

@@ -1,3 +1,4 @@
+import { minutesEvidenceOptions } from "../lib/minutesEvidence";
 import { usePermissions } from "../../../hooks/usePermissions";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -46,6 +47,9 @@ export function MeetingMinutesPreviewPage() {
   // page's exports match the meeting-detail Export tab output.
   const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip");
   const directors = useQuery(api.directors.list, society && loaded && can("directors:read") ? { societyId: society._id } : "skip");
+  const minutesSignatures = useQuery(api.signatures.listForEntity, loaded && can("documents:read") && minutes ? { entityType: "minutes", subjectId: minutes._id as string } : "skip");
+  const meetingConflicts = useQuery(api.conflicts.forMeeting, loaded && can("conflicts:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const meetingProxies = useQuery(api.proxies.forMeeting, loaded && can("proxies:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
@@ -87,7 +91,7 @@ export function MeetingMinutesPreviewPage() {
   }
   if (!minutes) return <div className="page">No minutes recorded for this meeting.</div>;
 
-  const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? [];
+  const agendaTree = agendaEntriesFromRecord(minutes?.adoptedAgenda ?? agendaRecord) ?? [];
   const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
   const motionPeople = personLinkCandidates(members, directors);
   const selectedMinutesExportStyle =
@@ -116,9 +120,17 @@ export function MeetingMinutesPreviewPage() {
       noticeSentAt: meeting.noticeSentAt ?? null,
       agendaItems: agendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
       agendaItemTree: agendaTree,
+      ...(minutes.adoptedMeeting ?? {}),
     },
     minutes: {
       heldAt: minutes.heldAt,
+      consentItems: minutes.consentItems,
+      conditionalDecisions: minutes.conditionalDecisions,
+      decisionRequirements: minutes.decisionRequirements,
+      attendanceEvents: minutes.attendanceEvents,
+      quorumCheckpoints: minutes.quorumCheckpoints,
+      futureMeetingSuggestions: minutes.futureMeetingSuggestions,
+
       chairName: minutes.chairName ?? null,
       secretaryName: minutes.secretaryName ?? null,
       recorderName: minutes.recorderName ?? null,
@@ -129,6 +141,7 @@ export function MeetingMinutesPreviewPage() {
       attendees: minutes.attendees,
       absent: minutes.absent,
       quorumMet: minutes.quorumMet,
+      quorumStatus: minutes.quorumStatus,
       quorumRequired: quorumSnapshot.required,
       quorumSourceLabel: quorumSnapshot.label,
       discussion: minutes.discussion,
@@ -160,6 +173,7 @@ export function MeetingMinutesPreviewPage() {
       // Match the agenda editor's numbering preference so exported headings
       // read the same as the on-screen section list.
       agendaNumberingMode: readStoredAgendaNumberingMode(),
+      ...(minutes.adoptedExportEvidence ?? minutesEvidenceOptions(minutesSignatures ?? [], meetingConflicts ?? [], meetingProxies ?? [], directors ?? [], displayMotions)),
     },
   });
 

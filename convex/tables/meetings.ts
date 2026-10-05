@@ -73,6 +73,15 @@ export const meetingTables = {
     .index("by_society_default", ["societyId", "isDefault"]),
 
   minutes: defineTable({
+    consentItems: v.optional(v.array(v.any())),
+    conditionalDecisions: v.optional(v.array(v.any())),
+    decisionRequirements: v.optional(v.array(v.any())),
+    attendanceEvents: v.optional(v.array(v.any())),
+    quorumCheckpoints: v.optional(v.array(v.any())),
+    futureMeetingSuggestions: v.optional(v.array(v.any())),
+    adoptedSnapshot: v.optional(v.any()),
+    adoptedRevision: v.optional(v.number()),
+    adoptionHistory: v.optional(v.array(v.any())),
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
     heldAt: v.string(),
@@ -106,6 +115,7 @@ export const meetingTables = {
     attendees: v.array(v.string()),
     absent: v.array(v.string()),
     quorumMet: v.boolean(),
+    quorumStatus: v.optional(v.union(v.literal("confirmed"), v.literal("not_met"), v.literal("not_recorded"))),
     quorumRequired: v.optional(v.number()),
     bylawRuleSetId: v.optional(v.id("bylawRuleSets")),
     quorumRuleVersion: v.optional(v.number()),
@@ -290,6 +300,8 @@ export const meetingTables = {
     .index("by_meeting", ["meetingId"]),
 
   meetingAttendanceRecords: defineTable({
+    directoryPersonId:v.optional(v.id("peopleDirectory")),
+    identityReviewStatus:v.optional(v.string()),
     societyId: v.id("societies"),
     meetingId: v.optional(v.id("meetings")),
     minutesId: v.optional(v.id("minutes")),

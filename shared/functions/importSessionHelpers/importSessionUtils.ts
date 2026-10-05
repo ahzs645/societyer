@@ -18,9 +18,9 @@ function cleanDate(value: unknown) {
   const date = text.match(/\d{4}-\d{2}-\d{2}/)?.[0];
   if (date) return date;
   const month = text.match(/\d{4}-\d{2}/)?.[0];
-  if (month) return `${month}-01`;
+  if (month) return month;
   const year = text.match(/\b(19|20)\d{2}\b/)?.[0];
-  if (year) return `${year}-01-01`;
+  if (year) return year;
   return undefined;
 }
 
@@ -111,6 +111,7 @@ function sourceSystemFromExternalId(externalId: unknown) {
   if (text.startsWith("local:")) return "local";
   if (text.startsWith("file:")) return "local";
   if (text.startsWith("onedrive:")) return "onedrive";
+  if (text.startsWith("google-drive:") || text.startsWith("drive:")) return "google-drive";
   return "paperless";
 }
 
@@ -118,6 +119,7 @@ function sourceSystemLabel(externalSystem: unknown) {
   const system = cleanText(externalSystem)?.toLowerCase();
   if (system === "local") return "Local file";
   if (system === "onedrive") return "OneDrive file";
+  if (system === "google-drive" || system === "drive") return "Google Drive";
   if (system === "paperless") return "Paperless";
   return cleanText(externalSystem) || "External source";
 }

@@ -1,3 +1,4 @@
+import { ActionRegisterCard } from "../components/ActionRegisterCard";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -499,6 +500,7 @@ export function TasksPage() {
         }
       />
 
+      <ActionRegisterCard societyId={society._id} tasks={records} />
       <div className="row" style={{ marginBottom: 16, gap: 8, flexWrap: "wrap" }}>
         {isMobile && (
           <button

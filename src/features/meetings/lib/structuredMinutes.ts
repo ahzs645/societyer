@@ -1,4 +1,5 @@
 export type StructuredMinutesEdit = {
+  quorumStatus: "confirmed" | "not_met" | "not_recorded";
   chairName: string;
   secretaryName: string;
   recorderName: string;
@@ -24,6 +25,7 @@ export type StructuredMinutesEdit = {
 
 export function structuredEditFromMinutes(minutes: any): StructuredMinutesEdit {
   return {
+    quorumStatus: minutes.quorumStatus ?? (minutes.quorumMet ? "confirmed" : "not_met"),
     chairName: minutes.chairName ?? "",
     secretaryName: minutes.secretaryName ?? "",
     recorderName: minutes.recorderName ?? "",
@@ -78,6 +80,69 @@ export function structuredPatchFromEdit(edit: StructuredMinutesEdit) {
     appendices: parseAppendices(edit.appendices),
     agmDetails,
   };
+}
+
+/** Metadata editing must never replace the section/attendance collections:
+ * their dedicated editors preserve motion links, task links and action status.
+ * Explicit blank values also survive Convex JSON transport when clearing data. */
+export function structuredMetadataPatchFromEdit(edit: StructuredMinutesEdit) {
+  const patch = structuredPatchFromEdit(edit);
+  const { sections: _sections, detailedAttendance: _attendance, ...metadata } = patch;
+  return {
+    ...metadata,
+    quorumStatus: edit.quorumStatus,
+    quorumMet: edit.quorumStatus === "confirmed",
+    chairName: edit.chairName.trim(),
+    secretaryName: edit.secretaryName.trim(),
+    recorderName: edit.recorderName.trim(),
+    calledToOrderAt: edit.calledToOrderAt.trim(),
+    adjournedAt: edit.adjournedAt.trim(),
+    nextMeetingAt: edit.nextMeetingAt.trim(),
+    nextMeetingLocation: edit.nextMeetingLocation.trim(),
+    nextMeetingNotes: edit.nextMeetingNotes.trim(),
+    remoteParticipation: {
+      url: edit.remoteUrl.trim(),
+      meetingId: edit.remoteMeetingId.trim(),
+      passcode: edit.remotePasscode.trim(),
+      instructions: edit.remoteInstructions.trim(),
+    },
+    agmDetails: {
+      ...patch.agmDetails,
+      financialStatementsPresented: edit.financialStatementsPresented,
+      financialStatementsNotes: edit.financialStatementsNotes.trim(),
+      directorElectionNotes: edit.directorElectionNotes.trim(),
+      directorAppointments: parseDirectorAppointments(edit.directorAppointments),
+      specialResolutionExhibits: parseSpecialResolutionExhibits(edit.specialResolutionExhibits),
+    },
+  };
+}
+
+export function structuredMetadataChanges(edit: StructuredMinutesEdit, original: StructuredMinutesEdit) {
+  const rowFields = [
+    ["sessionSegments", "Session segments", 5, 0],
+    ["appendices", "Appendices", 4, 0],
+    ["directorAppointments", "Director appointments", 9, 1],
+    ["specialResolutionExhibits", "Special-resolution exhibits", 3, 0],
+  ] as const;
+  for (const [field, label, columns, required] of rowFields) {
+    if (edit[field] === original[field]) continue;
+    for (const [index, row] of parsePipeRows(edit[field]).entries()) {
+      if (row.length !== columns || !row[required]) {
+        throw new Error(`${label}, row ${index + 1}: enter ${columns} columns separated by |, including empty columns, with a ${required === 1 ? "name" : "title or type"}. Keep each record on one line and remove extra | characters from notes.`);
+      }
+      if (field === "directorAppointments") {
+        for (const booleanIndex of [5, 7]) {
+          if (row[booleanIndex] && parseOptionalBoolean(row[booleanIndex]) === undefined) throw new Error(`${label}, row ${index + 1}: consent and elected values must be yes, no or blank.`);
+        }
+        if (row[6] && (!Number.isInteger(Number(row[6])) || Number(row[6]) < 0)) throw new Error(`${label}, row ${index + 1}: votes must be a non-negative whole number or blank.`);
+      }
+    }
+  }
+  const next = structuredMetadataPatchFromEdit(edit);
+  const before = structuredMetadataPatchFromEdit(original);
+  return Object.fromEntries(Object.entries(next).filter(([field, value]) =>
+    JSON.stringify(value) !== JSON.stringify(before[field as keyof typeof before]),
+  ));
 }
 
 function cleanOptional(value: string | undefined | null) {

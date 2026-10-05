@@ -97,3 +97,8 @@ export const remove = authorizedMutation("tasks:remove", mutation)({
   returns: v.any(),
   handler: async (ctx, args) => taskRemove(await toPortableMutationCtx(ctx), args),
 });
+
+export const observeAction = authorizedMutation('tasks:observeAction', mutation)({
+  args: { societyId: v.id('societies'), registerKey: v.string(), externalActionId: v.string(), title: v.string(), observation: v.any() }, returns: v.any(),
+  handler: async (ctx, args) => (await import('../shared/functions/tasks')).observeAction(await toPortableMutationCtx(ctx), args),
+});

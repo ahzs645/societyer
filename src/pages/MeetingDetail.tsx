@@ -1,3 +1,4 @@
+import { MeetingEvidenceCard } from "../features/meetings/components/MeetingEvidenceCard";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { bylawBaselineForOrganization } from "../../shared/bylawBaselines";
@@ -54,7 +55,7 @@ import {
   slugifyFilePart,
 } from "../features/meetings/lib/meetingDetailHelpers";
 import { renderMeetingPackHtml } from "../features/meetings/lib/meetingPackExport";
-import { resolveConflictMotion } from "../features/meetings/lib/conflictMotions";
+import { minutesEvidenceOptions } from "../features/meetings/lib/minutesEvidence";
 import { readStoredAgendaNumberingMode } from "../features/meetings/lib/agendaNumbering";
 import { meetingTypeCategory } from "../../shared/functions/meetings";
 import { minutesMotionsForDisplay, motionRowToEmbedded } from "../../shared/minutesMotions";
@@ -63,6 +64,7 @@ import type { MotionAdoptionTarget } from "../components/MotionEditor";
 import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMaterialDrawer";
 import { MeetingPackageHub } from "../features/meetings/components/MeetingPackageHub";
 import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMinutesColumn";
+import { MinutesMetadataCard } from "../features/meetings/components/MinutesMetadataCard";
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
 import { MinutesDraftEmptyState } from "../features/meetings/components/MinutesDraftEmptyState";
 import { MinutesDocumentPreview } from "../features/meetings/components/MinutesDocumentPreview";
@@ -496,7 +498,7 @@ export function MeetingDetailPage() {
     );
   }
 
-  const agendaTree = agendaEntriesFromRecord(agendaRecord) ?? [];
+  const agendaTree = agendaEntriesFromRecord(minutes?.adoptedAgenda ?? agendaRecord) ?? [];
   const canonicalAgendaItems = agendaItemsFromRecord(agendaRecord);
   const agenda = agendaTree.map((entry) => entry.title);
   const businessMotions = displayMotions.filter((motion) => !isAdjournmentMotion(motion));
@@ -594,6 +596,7 @@ export function MeetingDetailPage() {
       attendees: minutes?.attendees ?? [],
       absent: minutes?.absent ?? [],
       quorumMet: minutes?.quorumMet ?? false,
+      quorumStatus: minutes?.quorumStatus,
       quorumRequired: quorumSnapshot.required,
       quorumSourceLabel: quorumSnapshot.label,
       discussion: minutes?.discussion ?? "",
@@ -909,6 +912,13 @@ export function MeetingDetailPage() {
       : displayMotions;
     return {
       heldAt: minutes.heldAt,
+      consentItems: minutes.consentItems,
+      conditionalDecisions: minutes.conditionalDecisions,
+      decisionRequirements: minutes.decisionRequirements,
+      attendanceEvents: minutes.attendanceEvents,
+      quorumCheckpoints: minutes.quorumCheckpoints,
+      futureMeetingSuggestions: minutes.futureMeetingSuggestions,
+
       chairName: tx(minutes.chairName),
       secretaryName: tx(minutes.secretaryName),
       recorderName: tx(minutes.recorderName),
@@ -932,6 +942,7 @@ export function MeetingDetailPage() {
       attendees: redact ? minutes.attendees.map(redact) : minutes.attendees,
       absent: redact ? minutes.absent.map(redact) : minutes.absent,
       quorumMet: minutes.quorumMet,
+      quorumStatus: minutes.quorumStatus,
       quorumRequired: quorumSnapshot.required,
       quorumSourceLabel: quorumSnapshot.label,
       discussion: tx(minutes.discussion) ?? "",
@@ -1032,6 +1043,7 @@ export function MeetingDetailPage() {
   const renderExportBody = (redact?: (value: string) => string, publicOnly = false) => {
     const payload = minutesRenderPayload(redact, publicOnly);
     if (!payload || !hasExportableContent) return "";
+    if (redact || publicOnly) for (const field of ["consentItems", "conditionalDecisions", "decisionRequirements", "attendanceEvents", "quorumCheckpoints", "futureMeetingSuggestions"] as const) payload[field] = [];
     // Sections and agendaTree are seeded in lockstep (index N in sections maps
     // to entry N in agendaTree), so we reuse the section-hide set to strip
     // matching agenda entries. Without this filter, the "Agenda Items" header
@@ -1059,6 +1071,7 @@ export function MeetingDetailPage() {
         noticeSentAt: meeting.noticeSentAt ?? null,
         agendaItems: visibleAgendaTree.filter((entry) => entry.depth === 0).map((entry) => entry.title),
         agendaItemTree: visibleAgendaTree,
+        ...(minutes.adoptedMeeting ?? {}),
       },
       minutes: payload,
       styleId: minutesExportStyle,
@@ -1072,40 +1085,7 @@ export function MeetingDetailPage() {
         // Match the agenda editor's numbering preference so exported headings
         // read the same as the on-screen section list.
         agendaNumberingMode: readStoredAgendaNumberingMode(),
-        signatures: (minutesSignatures ?? []).map((signature: any) => ({
-          signerName: signature.signerName,
-          signerRole: signature.signerRole,
-          signedAtISO: signature.signedAtISO,
-          imageDataUrl: signature.imageDataUrl,
-        })),
-        conflicts: (meetingConflicts ?? []).map((conflict: any) => {
-          const director = (directors ?? []).find((d: any) => d._id === conflict.directorId);
-          // Resolve by text snapshot, not raw index — the motions array gets
-          // reordered/deleted, and exported minutes are a legal record.
-          const resolution = resolveConflictMotion(conflict, displayMotions as any[]);
-          const motionLabel =
-            resolution?.kind === "resolved"
-              ? resolution.motion.name || resolution.motion.text
-              : resolution?.kind === "stale"
-                ? `[motion no longer on record: "${resolution.motionText}"]`
-                : undefined;
-          return {
-            directorName: director
-              ? `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim()
-              : "Director",
-            contractOrMatter: conflict.contractOrMatter,
-            natureOfInterest: conflict.natureOfInterest,
-            abstainedFromVote: conflict.abstainedFromVote,
-            leftRoom: conflict.leftRoom,
-            motionLabel,
-          };
-        }),
-        proxies: (meetingProxies ?? []).map((proxy: any) => ({
-          grantorName: proxy.grantorName,
-          proxyHolderName: proxy.proxyHolderName,
-          instructions: proxy.instructions,
-          revoked: !!proxy.revokedAtISO,
-        })),
+        ...(minutes.adoptedExportEvidence ?? minutesEvidenceOptions(minutesSignatures ?? [], meetingConflicts ?? [], meetingProxies ?? [], directors ?? [], displayMotions)),
       },
     });
   };
@@ -1629,7 +1609,7 @@ export function MeetingDetailPage() {
         .filter(Boolean);
       await updateMinutes({
         id: minutes._id,
-        patch: { attendees, absent, detailedAttendance, quorumMet },
+        patch: { attendees, absent, detailedAttendance, quorumMet: minutes.quorumStatus ? minutes.quorumStatus === "confirmed" : quorumMet },
       });
       await updateMeeting({
         id: meeting._id,
@@ -2375,6 +2355,7 @@ export function MeetingDetailPage() {
         )}
 
         {activeTab === "minutes" && (
+          <>
           <MeetingMinutesColumn
             minutes={minutes}
             agenda={agendaTree.map((entry) => entry.title)}
@@ -2408,6 +2389,9 @@ export function MeetingDetailPage() {
             saveTranscriptEditText={saveTranscriptEditText}
             savingTranscript={savingTranscript}
           />
+          <MeetingEvidenceCard key={minutes?._id ?? "no-evidence"} minutes={minutes} />
+          <MinutesMetadataCard key={minutes?._id ?? "no-minutes"} minutes={minutes} meetingType={meeting.type} />
+          </>
         )}
 
         {activeTab === "motions" && (

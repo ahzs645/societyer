@@ -1,3 +1,4 @@
+import { importSectionPermission } from "../../shared/importPromotionPermissions";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -11,7 +12,10 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Segmented } from "../components/primitives";
 import { useToast } from "../components/Toast";
 import { ImportWizard } from "../components/ImportWizard";
+import { isMemberHistoryDate } from "../../shared/memberHistory";
 import { Select } from "../components/Select";
+import { inspectImportBundle, prepareImportBundle } from "../lib/importBundleIntake";
+import { isActiveImportSession } from "../../shared/importSessionState";
 import {
   Archive,
   Check,
@@ -126,7 +130,7 @@ export function ImportSessionsPage() {
   const detail = useQuery(api.importSessions.get, activeSessionId ? { sessionId: activeSessionId } : "skip");
 
   const createSession = useMutation(api.importSessions.createFromBundle);
-  const createMember = useMutation(api.members.create);
+  const importMember = useMutation(api.members.importMember);
   const updateRecord = useMutation(api.importSessions.updateRecord);
   const bulkSetStatus = useMutation(api.importSessions.bulkSetStatus);
   const removeSession = useMutation(api.importSessions.removeSession);
@@ -141,9 +145,12 @@ export function ImportSessionsPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
-  const [createName, setCreateName] = useState("Paperless import");
+  const [createName, setCreateName] = useState("Reviewed records import");
   const [importText, setImportText] = useState("");
   const [importError, setImportError] = useState("");
+  const [importFileName, setImportFileName] = useState("");
+  const [importOwnershipReviewed, setImportOwnershipReviewed] = useState(false);
+  const [importCreating, setImportCreating] = useState(false);
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
   const [kindFilter, setKindFilter] = useState("all");
   const [targetFilter, setTargetFilter] = useState("all");
@@ -158,6 +165,19 @@ export function ImportSessionsPage() {
   const [transposeQuery, setTransposeQuery] = useState("");
   const [transposeLimit, setTransposeLimit] = useState(100);
   const [transposeBusy, setTransposeBusy] = useState(false);
+
+  const importPreview = useMemo(() => {
+    if (!importText.trim() || !society) return null;
+    try {
+      return { data: inspectImportBundle(JSON.parse(importText), society), error: "" };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error.message : "Invalid JSON bundle" };
+    }
+  }, [importText, society]);
+
+  useEffect(() => {
+    setImportOwnershipReviewed(false);
+  }, [importText, society?._id]);
 
   useEffect(() => {
     if (!requestedSessionId) return;
@@ -221,8 +241,10 @@ export function ImportSessionsPage() {
   if (society === null) return <SeedPrompt />;
 
   const createFromJson = async () => {
+    if (!canWrite || importCreating) return;
+    setImportCreating(true);
     try {
-      const parsed = JSON.parse(importText);
+      const parsed = prepareImportBundle(JSON.parse(importText), society, importOwnershipReviewed, importFileName || undefined);
       const sessionId = await createSession({
         societyId: society._id,
         name: createName,
@@ -230,11 +252,31 @@ export function ImportSessionsPage() {
       });
       setSelectedId(sessionId);
       setImportText("");
+      setImportFileName("");
       setImportError("");
       setCreateOpen(false);
       toast.success("Import session created", createName);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Could not create session");
+    } finally {
+      setImportCreating(false);
+    }
+  };
+
+  const loadImportFile = async (file: File) => {
+    try {
+      if (file.size > 16 * 1024 * 1024) throw new Error("Choose a JSON bundle smaller than 16 MB. Split larger archives into review batches.");
+      const contents = await file.text();
+      const parsed = JSON.parse(contents);
+      inspectImportBundle(parsed, society);
+      setImportText(contents);
+      setImportFileName(file.name);
+      setCreateName(parsed.metadata?.name || parsed.name || file.name.replace(/\.json$/i, ""));
+      setImportError("");
+    } catch (error) {
+      setImportText("");
+      setImportFileName("");
+      setImportError(error instanceof Error ? error.message : "Could not read JSON bundle");
     }
   };
 
@@ -278,10 +320,14 @@ export function ImportSessionsPage() {
     }
   };
 
+  const [applyScope, setApplyScope] = useState("visible");
+  const applyRecords = applyScope === "all" ? records : filteredRecords;
+  const applyRecordIds = applyRecords.map((row: any) => row._id);
+  const canPromote = (...permissions: string[]) => canWrite && permissions.every(permission => can(permission as any));
   const runOrgHistoryApply = async () => {
     if (!session) return;
     try {
-      const result = await applyToOrgHistory({ sessionId: session._id });
+      const result = await applyToOrgHistory({ sessionId: session._id, recordIds: applyRecordIds });
       toast.success("Approved records applied", `${result.sources} source records, ${result.items} history records`);
     } catch (error: any) {
       toast.error(error?.message ?? "Could not apply org history imports");
@@ -291,7 +337,7 @@ export function ImportSessionsPage() {
   const runMeetingApply = async () => {
     if (!session) return;
     try {
-      const result = await applyMeetings({ sessionId: session._id });
+      const result = await applyMeetings({ sessionId: session._id, recordIds: applyRecordIds });
       toast.success("Meeting drafts created", `${result.meetings} meetings, ${result.motions} motions${result.existing ? `, ${result.existing} already existed` : ""}`);
     } catch (error: any) {
       toast.error(error?.message ?? "Could not create meeting drafts");
@@ -311,7 +357,7 @@ export function ImportSessionsPage() {
   const runDocumentApply = async () => {
     if (!session) return;
     try {
-      const result = await applyDocuments({ sessionId: session._id });
+      const result = await applyDocuments({ sessionId: session._id, recordIds: applyRecordIds });
       toast.success("Document candidates created", `${result.documents} metadata records`);
     } catch (error: any) {
       toast.error(error?.message ?? "Could not create document candidates");
@@ -321,7 +367,7 @@ export function ImportSessionsPage() {
   const runSectionApply = async () => {
     if (!session) return;
     try {
-      const result = await applySections({ sessionId: session._id });
+      const result = await applySections({ sessionId: session._id, recordIds: applyRecordIds });
       const byKind = Object.entries(result.byKind ?? {})
         .map(([kind, count]) => `${count} ${kind}`)
         .join(", ");
@@ -402,7 +448,7 @@ export function ImportSessionsPage() {
         title="Import sessions"
         icon={<FileJson size={16} />}
         iconColor="purple"
-        subtitle="Stage converted Paperless records, review each item, then apply approved records into app modules."
+        subtitle="Stage reviewed source bundles, review each item, then apply approved records into app modules."
         actions={
           <>
           <button className="btn-action" onClick={() => setCsvOpen(true)} disabled={!canWrite}>
@@ -426,21 +472,30 @@ export function ImportSessionsPage() {
             { id: "lastName", label: "Last name", required: true },
             { id: "email", label: "Email", validate: (v) => (/.+@.+\..+/.test(v) ? null : "Not an email") },
             { id: "phone", label: "Phone" },
-            { id: "membershipClass", label: "Class" },
-            { id: "status", label: "Status" },
-            { id: "joinedAt", label: "Joined (YYYY-MM-DD)" },
+            { id: "address", label: "Address" },
+            { id: "aliases", label: "Aliases", type: "multiSelect" },
+            { id: "membershipClass", label: "Class", required: true },
+            { id: "status", label: "Status", required: true },
+            { id: "joinedAt", label: "Joined (YYYY-MM-DD)", required: true, validate: value => isMemberHistoryDate(value) ? null : "Use a real YYYY-MM-DD date" },
+            { id: "leftAt", label: "Left (YYYY-MM-DD)", validate: value => isMemberHistoryDate(value) ? null : "Use a real YYYY-MM-DD date" },
+            { id: "votingRights", label: "Voting rights", type: "boolean", required: true },
+            { id: "notes", label: "Notes / source citation" },
           ],
           onImportRow: async (row) => {
-            await createMember({
+            await importMember({
               societyId: society._id,
               firstName: row.firstName,
               lastName: row.lastName,
               email: row.email || undefined,
               phone: row.phone || undefined,
-              membershipClass: row.membershipClass || "Regular",
-              status: row.status || "Active",
-              joinedAt: row.joinedAt || new Date().toISOString().slice(0, 10),
-              votingRights: true,
+              address: row.address || undefined,
+              aliases: row.aliases,
+              membershipClass: row.membershipClass,
+              status: row.status,
+              joinedAt: row.joinedAt,
+              leftAt: row.leftAt || undefined,
+              votingRights: row.votingRights,
+              notes: row.notes || undefined,
             });
           },
         }}
@@ -561,6 +616,7 @@ export function ImportSessionsPage() {
                 <span className="import-session-row__counts">
                   <Badge tone="info">{item.summary.total}</Badge>
                   {(item.summary.byStatus?.Pending ?? 0) > 0 && <Badge tone="warn">{item.summary.byStatus.Pending} pending</Badge>}
+                  {(item.summary.approvedUnapplied ?? 0) > 0 && <Badge tone="info">{item.summary.approvedUnapplied} to apply</Badge>}
                   {isCompletedImportSession(item) && <Badge tone="success">Complete</Badge>}
                   {(item.summary.riskCount ?? 0) > 0 && <Badge tone="warn">{item.summary.riskCount} flags</Badge>}
                 </span>
@@ -591,19 +647,20 @@ export function ImportSessionsPage() {
             </div>
             {session && (
               <div className="import-review-actions">
-                <button className="btn-action" onClick={runOrgHistoryApply} disabled={!canWrite}>
+                <Select value={applyScope} onChange={setApplyScope} options={[{ value: "visible", label: `Apply visible rows (${filteredRecords.length})` }, { value: "all", label: `Apply whole session (${records.length})` }]} />
+                <button className="btn-action" onClick={runOrgHistoryApply} disabled={!canPromote("society:write", "documents:write")}>
                   <History size={12} /> Apply history
                 </button>
-                <button className="btn-action" onClick={runMeetingApply} disabled={!canWrite}>
+                <button className="btn-action" onClick={runMeetingApply} disabled={!canPromote("meetings:write", "minutes:write", "motions:write", "documents:write")}>
                   <FileText size={12} /> Create minutes
                 </button>
                 <button className="btn-action" onClick={runMeetingBackfill} disabled={!canWrite}>
                   <History size={12} /> Refresh links
                 </button>
-                <button className="btn-action" onClick={runDocumentApply} disabled={!canWrite}>
+                <button className="btn-action" onClick={runDocumentApply} disabled={!canPromote("documents:write")}>
                   <FolderOpen size={12} /> Create docs
                 </button>
-                <button className="btn-action" onClick={runSectionApply} disabled={!canWrite}>
+                <button className="btn-action" onClick={runSectionApply} disabled={!canPromote("documents:write") || !applyRecords.filter((row: any) => row.status === "Approved").every((row: any) => can(importSectionPermission(row.recordKind) as any))}>
                   <Archive size={12} /> Apply sections
                 </button>
                 <button className="btn-action" onClick={deleteSession} disabled={!canWrite}>
@@ -751,13 +808,24 @@ export function ImportSessionsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setCreateOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={createFromJson} disabled={!canWrite}>
-              <Upload size={14} /> Create session
+            <button className="btn btn--accent" onClick={createFromJson} disabled={!canWrite || importCreating || !importPreview?.data || importPreview.data.mixedOrganizations || (importPreview.data.needsReview && !importOwnershipReviewed)}>
+              <Upload size={14} /> {importCreating ? "Creating..." : "Create session"}
             </button>
           </>
         }
       >
         <div className="col" style={{ gap: 12 }}>
+          <InspectorNote title="Destination organization">
+            Records will be staged for <strong>{society.name}</strong>. They remain pending until reviewed and applied. Use one organization per bundle.
+          </InspectorNote>
+          <Field label="JSON bundle file" hint="Upload a converted Drive, Office, or Paperless bundle. Original PDFs, spreadsheets and Word files need conversion first.">
+            <input className="input" type="file" accept=".json,application/json" onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void loadImportFile(file);
+              event.target.value = "";
+            }} />
+            {importFileName && <span className="muted">Loaded {importFileName}</span>}
+          </Field>
           <Field label="Session name">
             <input className="input" value={createName} onChange={(event) => setCreateName(event.target.value)} />
           </Field>
@@ -766,10 +834,25 @@ export function ImportSessionsPage() {
               className="textarea"
               rows={18}
               value={importText}
-              onChange={(event) => setImportText(event.target.value)}
+              onChange={(event) => { setImportText(event.target.value); setImportFileName(""); setImportError(""); }}
               placeholder='{"sources":[],"documentMap":[],"meetingMinutes":[],"budgetSnapshots":[],"transactionCandidates":[]}'
             />
           </Field>
+          {importPreview?.error && <Badge tone="danger">{importPreview.error}</Badge>}
+          {importPreview?.data && (
+            <InspectorNote title="Bundle preview">
+              <p>{importPreview.data.total} staged records: {Object.entries(importPreview.data.byKind).map(([kind, count]) => `${count} ${KIND_LABELS[kind] || kind}`).join(", ")}.</p>
+              <p>Declared source organization: {importPreview.data.organizations.join(", ") || "Not declared"}. {importPreview.data.sourceCount} source records; {importPreview.data.linkedSources} original source links; {importPreview.data.missingEvidence} records without source IDs.</p>
+              {importPreview.data.mixedOrganizations ? (
+                <p role="alert">This bundle declares multiple organizations. Split it by organization before importing.</p>
+              ) : importPreview.data.needsReview ? (
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <input type="checkbox" checked={importOwnershipReviewed} onChange={(event) => setImportOwnershipReviewed(event.target.checked)} />
+                  <span>I reviewed the source ownership and evidence gaps. These records belong in {society.name}.</span>
+                </label>
+              ) : <p>Declared ownership matches the selected organization.</p>}
+            </InspectorNote>
+          )}
           {importError && <Badge tone="danger">{importError}</Badge>}
         </div>
       </Drawer>
@@ -1367,19 +1450,6 @@ function firstString(...values: unknown[]) {
 
 function uniqueStrings(values: unknown[]) {
   return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
-}
-
-function isActiveImportSession(session: any) {
-  const summary = session?.summary ?? {};
-  const pending = Number(summary.byStatus?.Pending ?? 0);
-  const approved = Number(summary.byStatus?.Approved ?? 0);
-  const applied =
-    Number(summary.documentsApplied ?? 0) +
-    Number(summary.meetingsApplied ?? 0) +
-    Number(summary.orgHistoryApplied ?? 0) +
-    Number(summary.sectionsApplied ?? 0);
-
-  return pending > 0 || (approved > 0 && applied === 0);
 }
 
 function isCompletedImportSession(session: any) {

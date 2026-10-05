@@ -1,3 +1,4 @@
+import { existingImportTarget, rememberImportTarget } from "./importTargetIdentity";
 /**
  * PORTABLE FUNCTIONS: the import-session review domain.
  *
@@ -114,14 +115,26 @@ async function requireSectionPromotionPermissions(ctx: PortableMutationCtx, soci
   for (const permission of permissions) await requirePermissionPortable(ctx, societyId, permission);
 }
 
+async function selectedImportRecords(ctx: PortableMutationCtx, societyId: string, sessionId: string, records: any[], recordIds?: string[]) {
+  await requirePermissionPortable(ctx, societyId, "settings:write");
+  await requireDocumentAccess(ctx, sessionId, "manage");
+  const selected = recordIds == null ? records : records.filter(row => recordIds.includes(String(row._id)));
+  if (recordIds && new Set(recordIds).size !== selected.length) throw new Error("Selected records must belong to this import session.");
+  for (const row of selected) await requireDocumentAccess(ctx, row._id, "manage");
+  return new Set(selected.map(row => String(row._id)));
+}
+
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   const sessions = await docsByCategory(ctx, societyId, SESSION_CATEGORY);
   const rows: any[] = [];
   for (const doc of sessions.filter(isImportSession)) {
     const session = hydrateSession(doc);
+    const summary = Number.isFinite(session.summary?.approvedUnapplied)
+      ? summaryForSession(session)
+      : summarizeRecords(await sessionRecords(ctx, societyId, doc._id));
     rows.push({
       ...session,
-      summary: summaryForSession(session),
+      summary,
     });
   }
 
@@ -365,17 +378,20 @@ export async function removeSessionPortable(ctx: PortableMutationCtx, { sessionI
   await ctx.db.delete(sessionId);
 }
 
-export async function applyApprovedToOrgHistoryPortable(ctx: PortableMutationCtx, { sessionId }: { sessionId: string }) {
+export async function applyApprovedToOrgHistoryPortable(ctx: PortableMutationCtx, { sessionId, recordIds }: { sessionId: string; recordIds?: string[] }) {
   const session = await ctx.db.get<any>(sessionId);
   if (!isImportSession(session)) return { sources: 0, items: 0 };
+  await requirePermissionPortable(ctx, String(session.societyId), "society:write");
+  await requirePermissionPortable(ctx, String(session.societyId), "documents:write");
   const records = await sessionRecords(ctx, session.societyId, sessionId);
+  const selected = await selectedImportRecords(ctx, String(session.societyId), sessionId, records, recordIds);
   const approvedItems = records.filter(
     (record: any) =>
-      record.status === "Approved" &&
+      selected.has(String(record._id)) && record.status === "Approved" &&
       HISTORY_KINDS.includes(record.recordKind) &&
       !record.importedTargets?.orgHistory,
   );
-  const approvedSourceRecords = records.filter((record: any) => record.status === "Approved" && record.recordKind === "source");
+  const approvedSourceRecords = records.filter((record: any) => selected.has(String(record._id)) && record.status === "Approved" && record.recordKind === "source");
   const referencedExternalIds = new Set<string>();
   for (const record of approvedItems) {
     for (const externalId of record.sourceExternalIds ?? []) referencedExternalIds.add(externalId);
@@ -390,6 +406,8 @@ export async function applyApprovedToOrgHistoryPortable(ctx: PortableMutationCtx
   const sourceIdByExternalId = await upsertHistorySources(ctx, session.societyId, sourceRecords, referencedExternalIds);
   let items = 0;
   for (const record of approvedItems) {
+    const existingTarget = await existingImportTarget(ctx, String(session.societyId), record);
+    if (existingTarget) { await patchRecordImportTarget(ctx, record, "orgHistory", existingTarget); continue; }
     const payload = {
       ...record.payload,
       sourceIds: (record.sourceExternalIds ?? [])
@@ -397,6 +415,7 @@ export async function applyApprovedToOrgHistoryPortable(ctx: PortableMutationCtx
         .filter(Boolean),
     };
     const itemId = await insertHistoryItem(ctx, session.societyId, record.recordKind, payload);
+    await rememberImportTarget(ctx, String(session.societyId), record, String(itemId));
     await patchRecordImportTarget(ctx, record, "orgHistory", itemId);
     items += 1;
   }
@@ -411,23 +430,28 @@ export async function applyApprovedToOrgHistoryPortable(ctx: PortableMutationCtx
   return { sources: sourceRecords.length, items };
 }
 
-export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { sessionId }: { sessionId: string }) {
+export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { sessionId, recordIds }: { sessionId: string; recordIds?: string[] }) {
   const session = await ctx.db.get<any>(sessionId);
   if (!isImportSession(session)) return { meetings: 0, minutes: 0, motions: 0 };
+  for (const permission of ["meetings:write", "minutes:write", "motions:write", "documents:write"] as const) await requirePermissionPortable(ctx, String(session.societyId), permission);
   const records = await sessionRecords(ctx, session.societyId, sessionId);
+  const selected = await selectedImportRecords(ctx, String(session.societyId), sessionId, records, recordIds);
   const sourceCatalog = sourceCatalogForRecords(records);
   const motions = records.filter(
     (record: any) =>
       record.recordKind === "motion" &&
-      record.status === "Approved" &&
+      selected.has(String(record._id)) && record.status === "Approved" &&
       !record.importedTargets?.meetings,
   );
   const minuteRecords = records.filter(
     (record: any) =>
       record.recordKind === "meetingMinutes" &&
-      record.status === "Approved" &&
+      selected.has(String(record._id)) && record.status === "Approved" &&
       !record.importedTargets?.meetings,
   );
+  // Validate the entire selection before creating source placeholders or any
+  // meeting. Portable callers can catch failures without transaction rollback.
+  for (const record of [...motions, ...minuteRecords]) toMeetingDateTime(record.payload?.meetingDate);
   const groups = new Map<string, any[]>();
   for (const record of motions) {
     const payload = normalizeMotionPayload(record.payload);
@@ -657,21 +681,25 @@ export async function backfillApprovedMeetingReferencesPortable(ctx: PortableMut
 
 export async function applyApprovedDocumentsPortable(
   ctx: PortableMutationCtx,
-  { sessionId }: { sessionId: string },
+  { sessionId, recordIds }: { sessionId: string; recordIds?: string[] },
 ) {
   const session = await ctx.db.get(sessionId);
   if (!isImportSession(session)) return { documents: 0 };
   const societyId = String(session.societyId);
+  await requirePermissionPortable(ctx, societyId, "documents:write");
   const records = await sessionRecords(ctx, societyId, sessionId);
+  const selected = await selectedImportRecords(ctx, String(session.societyId), sessionId, records, recordIds);
   const candidates = records.filter(
     (record: any) =>
       record.recordKind === "documentCandidate" &&
-      record.status === "Approved" &&
+      selected.has(String(record._id)) && record.status === "Approved" &&
       !record.importedTargets?.documents,
   );
 
   let documents = 0;
   for (const record of candidates) {
+    const existingTarget = await existingImportTarget(ctx, societyId, record);
+    if (existingTarget) { await patchRecordImportTarget(ctx, record, "documents", existingTarget); continue; }
     const payload = record.payload ?? {};
     const sourceExternalIds = unique([
       ...(record.sourceExternalIds ?? []),
@@ -687,10 +715,11 @@ export async function applyApprovedDocumentsPortable(
     const docId = await ctx.db.insert("documents", {
       societyId,
       title: cleanText(payload.title) || record.title || externalId || "Imported document candidate",
-      category: cleanText(record.targetModule) || cleanText(sections[0]) || "Imported Document",
+      category: cleanText(payload.category) || cleanText(record.targetModule) || cleanText(sections[0]) || "Imported Document",
       fileName: cleanText(payload.fileName),
       mimeType: cleanText(payload.mimeType),
       fileSizeBytes: numberOrUndefined(payload.fileSizeBytes),
+      url: cleanText(payload.url),
       content: JSON.stringify({
         importedFrom: `${sourceSystemLabel(externalSystem)} import session`,
         importSessionId: sessionId,
@@ -700,6 +729,8 @@ export async function applyApprovedDocumentsPortable(
         paperlessId,
         localPath: cleanText(payload.localPath),
         sha256: cleanText(payload.sha256),
+        extractedText: cleanText(payload.extractedText),
+        extractionMethod: cleanText(payload.extractionMethod),
         sections,
         confidence: payload.confidence,
         why: payload.why,
@@ -719,6 +750,7 @@ export async function applyApprovedDocumentsPortable(
         ...sourceTags.map(tagValue).slice(0, 8),
       ]),
     });
+    await rememberImportTarget(ctx, societyId, record, String(docId));
     await patchRecordImportTarget(ctx, record, "documents", docId);
     documents += 1;
   }
@@ -729,7 +761,7 @@ export async function applyApprovedDocumentsPortable(
 
 export async function applyApprovedSectionRecordsPortable(
   ctx: PortableMutationCtx,
-  { sessionId }: { sessionId: string },
+  { sessionId, recordIds }: { sessionId: string; recordIds?: string[] },
 ) {
   const session = await ctx.db.get(sessionId);
   if (!isImportSession(session)) return { total: 0, byKind: {} };
@@ -738,12 +770,13 @@ export async function applyApprovedSectionRecordsPortable(
   await requirePermissionPortable(ctx, societyId, "documents:read");
   await requireDocumentAccess(ctx, sessionId, "manage");
   const records = await sessionRecords(ctx, societyId, sessionId);
-  for (const record of records) {
+  const selected = await selectedImportRecords(ctx, String(session.societyId), sessionId, records, recordIds);
+  for (const record of records.filter(row => selected.has(String(row._id)))) {
     const candidate = await ctx.db.get(record._id, "documents");
     if (String(candidate?.societyId) !== societyId) throw new Error("documents not found.");
     const document = await requireDocumentAccess(ctx, record._id, "manage");
     if (String(document.societyId) !== societyId) throw new Error("documents not found.");
-    if (record.status === "Approved" && !SECTION_RECORD_KINDS.includes(record.recordKind) &&
+    if (selected.has(String(record._id)) && record.status === "Approved" && !SECTION_RECORD_KINDS.includes(record.recordKind) &&
         ![...HISTORY_KINDS, "source", "meetingMinutes", "documentCandidate"].includes(record.recordKind)) {
       throw new Error(`Unsupported import section kind: ${record.recordKind}.`);
     }
@@ -752,7 +785,7 @@ export async function applyApprovedSectionRecordsPortable(
   const sectionRecords = records.filter(
     (record: any) =>
       SECTION_RECORD_KINDS.includes(record.recordKind) &&
-      record.status === "Approved" &&
+      selected.has(String(record._id)) && record.status === "Approved" &&
       !record.importedTargets?.sections,
   );
 
@@ -779,9 +812,22 @@ export async function applyApprovedSectionRecordsPortable(
     }
   }
 
+  const blocked: { record: any; issues: string[] }[] = [];
+  for (const record of sectionRecords) {
+    if (await existingImportTarget(ctx, societyId, record)) continue;
+    const issues = await importPromotionIssues(ctx, societyId, record);
+    if (issues.length) blocked.push({ record, issues });
+  }
+  if (blocked.length) {
+    for (const { record, issues } of blocked) await patchRecordPromotionBlocked(ctx, record, issues);
+    return { total: 0, byKind: { blocked: blocked.length }, preflightBlocked: true, blockedRecordIds: blocked.map(item => item.record._id) };
+  }
+
   const byKind: Record<string, number> = {};
   let total = 0;
   for (const record of sectionRecords) {
+    const existingTarget = await existingImportTarget(ctx, societyId, record);
+    if (existingTarget) { await patchRecordImportTarget(ctx, record, "sections", existingTarget); continue; }
     const sourceDocumentIds = await ensureImportSourceDocuments(
       ctx,
       societyId,
@@ -800,6 +846,7 @@ export async function applyApprovedSectionRecordsPortable(
     if (record.recordKind !== "sourceEvidence") {
       await insertSourceEvidenceForAppliedRecord(ctx, societyId, record, target, sourceDocumentIds);
     }
+    await rememberImportTarget(ctx, societyId, record, String(target));
     await patchRecordImportTarget(ctx, record, "sections", target);
     byKind[record.recordKind] = (byKind[record.recordKind] ?? 0) + 1;
     total += 1;

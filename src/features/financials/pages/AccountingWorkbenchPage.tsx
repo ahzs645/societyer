@@ -1,3 +1,5 @@
+import { FinancialVersionCard } from "../../../components/FinancialVersionCard";
+import { AccountingStatementsCard } from "../components/AccountingStatementsCard";
 import { useFinancePermissions } from "@/hooks/useFinancePermissions";
 import { useState } from "react";
 import type { ReactNode } from "react";
@@ -151,6 +153,7 @@ export function AccountingWorkbenchPage() {
     candidateId: "",
     cashAccountId: "",
     allocationAccountId: "",
+    programCode: "",
     amount: "",
     description: "",
     counterpartyId: "",
@@ -252,6 +255,7 @@ export function AccountingWorkbenchPage() {
             side: line.side,
             amountCents: centsFromInput(line.amount),
             description: line.description || undefined,
+            programCode: line.programCode?.trim() || undefined,
             counterpartyId: (line.counterpartyId || undefined) as any,
             fundRestrictionId: (line.fundRestrictionId || undefined) as any,
             grantId: (line.grantId || undefined) as any,
@@ -268,6 +272,7 @@ export function AccountingWorkbenchPage() {
         allocations: [
           {
             accountId: candidateForm.allocationAccountId as any,
+            programCode: candidateForm.programCode.trim() || undefined,
             amountCents: centsFromInput(candidateForm.amount),
             description: candidateForm.description || undefined,
             counterpartyId: (candidateForm.counterpartyId || undefined) as any,
@@ -365,6 +370,9 @@ export function AccountingWorkbenchPage() {
         subtitle="Internal ledger setup, journal posting, candidate allocation, reconciliation, and audit exports."
         actions={<Link className="btn-action" to="/app/financials"><ArrowLeft size={12} /> Financials</Link>}
       />
+
+      <FinancialVersionCard societyId={society._id} />
+      <AccountingStatementsCard societyId={society._id} />
 
       <div className="accounting-action-panel">
         <div className="accounting-action-panel__heading">
@@ -616,6 +624,7 @@ export function AccountingWorkbenchPage() {
           <Field label="Offset account"><AccountSelect accounts={accounts ?? []} value={candidateForm.allocationAccountId} onChange={(allocationAccountId) => setCandidateForm({ ...candidateForm, allocationAccountId })} /></Field>
           <Field label="Amount"><input className="input" type="number" value={candidateForm.amount} onChange={(e) => setCandidateForm({ ...candidateForm, amount: e.target.value })} /></Field>
           <Field label="Description"><input className="input" value={candidateForm.description} onChange={(e) => setCandidateForm({ ...candidateForm, description: e.target.value })} /></Field>
+          <Field label="Program / project code"><input className="input" value={candidateForm.programCode} onChange={(e) => setCandidateForm({ ...candidateForm, programCode: e.target.value })} /></Field>
           <Field label="Counterparty" hint="Optional — tag the vendor/customer for reporting."><LinkSelect placeholder="No counterparty" value={candidateForm.counterpartyId} onChange={(counterpartyId) => setCandidateForm({ ...candidateForm, counterpartyId })} options={(counterparties ?? []).map((row: any) => ({ value: row._id, label: row.name }))} /></Field>
           <Field label="Restricted fund" hint="Optional — track against a donor/grant restriction."><LinkSelect placeholder="No fund restriction" value={candidateForm.fundRestrictionId} onChange={(fundRestrictionId) => setCandidateForm({ ...candidateForm, fundRestrictionId })} options={(fundRestrictions ?? []).map((row: any) => ({ value: row._id, label: row.name }))} /></Field>
           <Field label="Grant" hint="Optional — link to a grant."><LinkSelect placeholder="No grant" value={candidateForm.grantId} onChange={(grantId) => setCandidateForm({ ...candidateForm, grantId })} options={(grants ?? []).map((row: any) => ({ value: row._id, label: row.title }))} /></Field>
@@ -689,6 +698,7 @@ function AccountingLines({
           <Field label="Account"><AccountSelect accounts={accounts} value={row.accountId} onChange={(accountId) => update(index, { accountId })} /></Field>
           <Field label="Side"><Select value={row.side} onChange={(value) => update(index, { side: value })} options={[{ value: "debit", label: "Debit" }, { value: "credit", label: "Credit" }]} /></Field>
           <Field label="Amount"><input className="input" type="number" value={row.amount} onChange={(e) => update(index, { amount: e.target.value })} /></Field>
+          {includeDescription && <Field label="Program / project code" hint="Use a consistent code, for example 100 - OPERATIONS. Blank lines appear as Unallocated."><input className="input" value={row.programCode ?? ""} onChange={(e) => update(index, { programCode: e.target.value })} /></Field>}
           {includeDescription && <Field label="Description"><input className="input" value={row.description ?? ""} onChange={(e) => update(index, { description: e.target.value })} /></Field>}
           {links && <Field label="Counterparty"><LinkSelect placeholder="No counterparty" value={row.counterpartyId ?? ""} onChange={(counterpartyId) => update(index, { counterpartyId })} options={links.counterparties} /></Field>}
           {links && <Field label="Restricted fund"><LinkSelect placeholder="No fund restriction" value={row.fundRestrictionId ?? ""} onChange={(fundRestrictionId) => update(index, { fundRestrictionId })} options={links.fundRestrictions} /></Field>}

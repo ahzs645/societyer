@@ -1,0 +1,8 @@
+import {authorizedMutation,authorizedQuery} from './lib/authorizedServer';
+import {mutation,query} from './lib/untypedServer';import {v} from 'convex/values';
+import * as h from '../shared/functions/financialReview';import {toPortableMutationCtx,toPortableQueryCtx} from './lib/portable';
+export const versions=authorizedQuery('financialReview:versions',query)({args:{societyId:v.id('societies')},returns:v.any(),handler:async(ctx,args)=>h.versions(await toPortableQueryCtx(ctx),args)});
+export const reviewVersion=authorizedMutation('financialReview:reviewVersion',mutation)({args:{societyId:v.id('societies'),table:v.string(),id:v.string(),currency:v.string(),programCode:v.optional(v.string()),sourceIssuedDate:v.optional(v.string()),predecessorId:v.optional(v.string()),source:v.any()},returns:v.any(),handler:async(ctx,args)=>h.reviewVersion(await toPortableMutationCtx(ctx),args)});
+export const selectVersion=authorizedMutation('financialReview:selectVersion',mutation)({args:{societyId:v.id('societies'),table:v.string(),id:v.string(),source:v.any()},returns:v.any(),handler:async(ctx,args)=>h.selectVersion(await toPortableMutationCtx(ctx),args)});
+export const cashMovements=authorizedQuery('financialReview:cashMovements',query)({args:{societyId:v.id('societies'),from:v.string(),to:v.string()},returns:v.any(),handler:async(ctx,args)=>h.cashMovements(await toPortableQueryCtx(ctx),args)});
+export const mapCashAccount=authorizedMutation('financialReview:mapCashAccount',mutation)({args:{societyId:v.id('societies'),accountId:v.id('financialAccounts'),classification:v.string(),source:v.any()},returns:v.any(),handler:async(ctx,args)=>h.mapCashAccount(await toPortableMutationCtx(ctx),args)});

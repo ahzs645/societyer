@@ -2,7 +2,7 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { listPortable, createPortable, updatePortable, removePortable } from "../shared/functions/insurance";
+import { listPortable, createPortable, updatePortable, removePortable, createRenewalPortable } from "../shared/functions/insurance";
 import { toPortableQueryCtx, toPortableMutationCtx } from "./lib/portable";
 
 const coveredParty = v.object({
@@ -12,6 +12,15 @@ const coveredParty = v.object({
   sourceExternalIds: v.optional(v.array(v.string())),
   citationId: v.optional(v.string()),
   notes: v.optional(v.string()),
+});
+
+export const createRenewal = authorizedMutation("insurance:createRenewal", mutation)({
+  args: {
+    id: v.id("insurancePolicies"), policyNumber: v.string(), startDate: v.string(), endDate: v.string(),
+    premiumCents: v.optional(v.number()), policyFeeCents: v.optional(v.number()), totalCostCents: v.optional(v.number()),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => createRenewalPortable(await toPortableMutationCtx(ctx), args),
 });
 
 const coverageItem = v.object({
@@ -38,6 +47,28 @@ const coveredLocation = v.object({
 const policyDefinition = v.object({
   term: v.string(),
   definition: v.string(),
+  sourceExternalIds: v.optional(v.array(v.string())),
+  citationId: v.optional(v.string()),
+});
+
+const assessmentRate = v.object({
+  classificationCode: v.string(),
+  assessmentYear: v.string(),
+  effectiveDate: v.optional(v.string()),
+  netRatePer100PayrollCents: v.optional(v.number()),
+  baseRatePer100PayrollCents: v.optional(v.number()),
+  experienceDiscountPercent: v.optional(v.number()),
+  assessedPayrollCents: v.optional(v.number()),
+  sourceExternalIds: v.optional(v.array(v.string())),
+  citationId: v.optional(v.string()),
+  notes: v.optional(v.string()),
+});
+
+const policyExclusion = v.object({
+  label: v.string(),
+  endorsementNumber: v.optional(v.string()),
+  summary: v.optional(v.string()),
+  effectiveDate: v.optional(v.string()),
   sourceExternalIds: v.optional(v.array(v.string())),
   citationId: v.optional(v.string()),
 });
@@ -155,6 +186,8 @@ export const create = authorizedMutation("insurance:create", mutation)({
     renewalOfPolicyNumber: v.optional(v.string()),
     coverageCents: v.optional(v.number()),
     premiumCents: v.optional(v.number()),
+    policyFeeCents: v.optional(v.number()),
+    totalCostCents: v.optional(v.number()),
     deductibleCents: v.optional(v.number()),
     coverageSummary: v.optional(v.string()),
     additionalInsureds: v.optional(v.array(v.string())),
@@ -162,6 +195,8 @@ export const create = authorizedMutation("insurance:create", mutation)({
     coverageItems: v.optional(v.array(coverageItem)),
     coveredLocations: v.optional(v.array(coveredLocation)),
     policyDefinitions: v.optional(v.array(policyDefinition)),
+    policyExclusions: v.optional(v.array(policyExclusion)),
+    assessmentRates: v.optional(v.array(assessmentRate)),
     declinedCoverages: v.optional(v.array(declinedCoverage)),
     certificatesOfInsurance: v.optional(v.array(certificateOfInsurance)),
     insuranceRequirements: v.optional(v.array(insuranceRequirement)),
@@ -198,6 +233,8 @@ export const update = authorizedMutation("insurance:update", mutation)({
       renewalOfPolicyNumber: v.optional(v.string()),
       coverageCents: v.optional(v.number()),
       premiumCents: v.optional(v.number()),
+      policyFeeCents: v.optional(v.number()),
+      totalCostCents: v.optional(v.number()),
       deductibleCents: v.optional(v.number()),
       coverageSummary: v.optional(v.string()),
       additionalInsureds: v.optional(v.array(v.string())),
@@ -205,6 +242,8 @@ export const update = authorizedMutation("insurance:update", mutation)({
       coverageItems: v.optional(v.array(coverageItem)),
       coveredLocations: v.optional(v.array(coveredLocation)),
       policyDefinitions: v.optional(v.array(policyDefinition)),
+    policyExclusions: v.optional(v.array(policyExclusion)),
+    assessmentRates: v.optional(v.array(assessmentRate)),
       declinedCoverages: v.optional(v.array(declinedCoverage)),
       certificatesOfInsurance: v.optional(v.array(certificateOfInsurance)),
       insuranceRequirements: v.optional(v.array(insuranceRequirement)),
@@ -233,3 +272,6 @@ export const remove = authorizedMutation("insurance:remove", mutation)({
   returns: v.any(),
   handler: async (ctx, args) => removePortable(await toPortableMutationCtx(ctx), args),
 });
+
+export const appendOperations = authorizedMutation('insurance:appendOperations', mutation)({args:{id:v.id('insurancePolicies'),moneyEntries:v.optional(v.array(v.any())),amendments:v.optional(v.array(v.any())),requirementChecks:v.optional(v.array(v.any()))},returns:v.any(),handler:async(ctx,args)=>(await import('../shared/functions/insurance')).appendOperations(await toPortableMutationCtx(ctx),args)});
+export const ensureRenewalTasks = authorizedMutation('insurance:ensureRenewalTasks', mutation)({args:{societyId:v.id('societies'),asOf:v.string(),ownerUserId:v.optional(v.id('users'))},returns:v.any(),handler:async(ctx,args)=>(await import('../shared/functions/insurance')).ensureRenewalTasks(await toPortableMutationCtx(ctx),args)});

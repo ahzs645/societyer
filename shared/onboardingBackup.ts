@@ -1,4 +1,4 @@
-export const MAX_SETUP_BACKUP_BYTES = 100 * 1024 * 1024;
+export const MAX_SETUP_BACKUP_BYTES = 256 * 1024 * 1024;
 
 /** Validate and summarize local snapshot structure before asking to replace device records. */
 export function validateSetupBackup(snapshot: any): void {

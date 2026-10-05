@@ -11,11 +11,15 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireRolePortable, requireSocietyMembership } from "./access";
+import { requirePermissionPortable } from "./permissions";
+import { isMemberHistoryDate } from "../memberHistory";
 
 // FK columns that point at a member. `merge` rewires each onto the surviving
 // member before deleting the dropped rows.
 const MEMBER_FK_REFS: Array<[string, string]> = [
   ["directors", "memberId"],
+  ["memberHistoryEvents", "memberId"],
+  ["meetingAttendanceRecords", "memberId"],
   ["boardRoleAssignments", "memberId"],
   ["boardRoleChanges", "memberId"],
   ["boardRoleChanges", "previousMemberId"],
@@ -49,6 +53,7 @@ export interface MemberCreateArgs {
   membershipClass: string;
   status: string;
   joinedAt: string;
+  leftAt?: string;
   votingRights: boolean;
   notes?: string;
 }
@@ -83,6 +88,23 @@ export async function memberGet(ctx: PortableQueryCtx, { id }: { id: string }) {
 export async function memberCreate(ctx: PortableMutationCtx, args: MemberCreateArgs): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
   return ctx.db.insert("members", args);
+}
+
+/** CSV intake requires explicit historical dates and voting rights; never invent them. */
+export async function memberImport(ctx: PortableMutationCtx, args: MemberCreateArgs) {
+  await requirePermissionPortable(ctx, args.societyId, "members:write");
+  const row = { ...args, firstName: args.firstName.trim(), lastName: args.lastName.trim(), email: args.email?.trim() || undefined };
+  if (!row.firstName || !row.lastName || !row.membershipClass.trim() || !row.status.trim()) throw new Error("Name, membership class, and status are required.");
+  if (!isMemberHistoryDate(row.joinedAt)) throw new Error("Joined date must be a real YYYY-MM-DD date; unknown dates require review.");
+  if (row.leftAt && (!isMemberHistoryDate(row.leftAt) || row.leftAt < row.joinedAt)) throw new Error("Left date must be on or after the joined date.");
+  if (typeof row.votingRights !== "boolean") throw new Error("Voting rights must explicitly be true or false.");
+  if (row.email && !/.+@.+\..+/.test(row.email)) throw new Error("Invalid email.");
+  const members = await membersList(ctx, { societyId: row.societyId });
+  const norm = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase();
+  const candidates = members.filter(member => (row.email && norm(member.email) === norm(row.email)) || (norm(member.firstName) === norm(row.firstName) && norm(member.lastName) === norm(row.lastName)));
+  if (candidates.length === 1 && Object.entries(row).every(([key, value]) => JSON.stringify(candidates[0][key] ?? "") === JSON.stringify(value ?? ""))) return { id: candidates[0]._id, duplicate: true };
+  if (candidates.length) throw new Error("A member with this email or name already exists; review the register before importing. No record was overwritten.");
+  return { id: await ctx.db.insert("members", row), duplicate: false };
 }
 
 export async function memberUpdate(ctx: PortableMutationCtx, { id, patch }: { id: string; patch: MemberPatch }): Promise<void> {

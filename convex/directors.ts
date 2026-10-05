@@ -34,6 +34,7 @@ export const update = authorizedMutation("directors:update", mutation)({
   args: {
     id: v.id("directors"),
     patch: v.object({
+      positionChangeEvidence:v.optional(v.object({effectiveDate:v.string(),sourceUrl:v.string(),sourceReference:v.string(),reviewStatus:v.string()})),
       firstName: v.optional(v.string()),
       lastName: v.optional(v.string()),
       memberId: v.optional(v.id("members")),
