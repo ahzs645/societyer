@@ -39,6 +39,15 @@ export const RENDER_OPTIONS = {
 // zoom we apply for fit-to-width), and the caller resets that zoom to 1 before
 // calling so measurements are taken at natural size.
 export function paginateRenderedDocx(render: HTMLElement): void {
+  // docx-preview reads tblLayout's "val" rather than OOXML's standard "type",
+  // so it renders our fixed grids as auto-fit. Restore the intended layout
+  // before measuring rows or creating continuation pages.
+  for (const table of Array.from(render.querySelectorAll<HTMLTableElement>("table"))) {
+    if (table.querySelector(":scope > colgroup > col") && table.style.width) {
+      table.style.tableLayout = "fixed";
+      table.style.overflowWrap = "anywhere";
+    }
+  }
   const wrapper = render.querySelector<HTMLElement>(".docx-wrapper");
   const source = wrapper?.querySelector<HTMLElement>("section.docx");
   const sourceArticle = source?.querySelector<HTMLElement>("article");
@@ -87,6 +96,11 @@ export function paginateRenderedDocx(render: HTMLElement): void {
 
     startPage();
     const cont = table.cloneNode(false) as HTMLTableElement;
+    // Continuation pages must keep the original grid. Recomputing widths from
+    // only their remaining rows expands sparse source tables beyond the page.
+    for (const group of Array.from(table.children).filter(child => child.tagName === "COLGROUP")) {
+      cont.appendChild(group.cloneNode(true));
+    }
     if (headerRow) cont.appendChild(headerRow.cloneNode(true));
     article.appendChild(cont);
     for (const row of overflow) cont.appendChild(row);

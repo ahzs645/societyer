@@ -737,12 +737,13 @@ function docxList(node: HTMLElement, ordered: boolean, rels: DocxRels) {
 }
 
 function docxTable(table: HTMLElement, rels: DocxRels) {
-  const rows = Array.from(table.querySelectorAll("tr"));
+  const rows = Array.from(table.querySelectorAll("tr")).filter(row => row.closest("table") === table);
   if (!rows.length) return "";
   // A "statement" table renders as a clean financial statement: an outer box
   // with no internal gridlines (horizontal/vertical rules are added per-cell via
   // data-rule), fixed column widths, and right-aligned figures.
   const statement = table.getAttribute("data-variant") === "statement";
+  const source = table.getAttribute("data-variant") === "source";
 
   const borders = statement
     ? `<w:tblBorders>
@@ -773,6 +774,26 @@ function docxTable(table: HTMLElement, rels: DocxRels) {
     const autoWidth = autoCount > 0 ? Math.max(0, Math.round((STATEMENT_CONTENT_WIDTH_DXA - used) / autoCount)) : 0;
     const resolved = widths.map((w) => w ?? autoWidth);
     grid = `<w:tblGrid>${resolved.map((w) => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>`;
+    tblWidth = `<w:tblW w:w="${STATEMENT_CONTENT_WIDTH_DXA}" w:type="dxa"/>`;
+    layout = '<w:tblLayout w:type="fixed"/>';
+  }
+  if (source) {
+    // PDF-derived source tables can contain many sparse columns. Auto-fit
+    // expands them beyond the page and clips their final cells. Give the full
+    // grid a fixed printable width, allocating more room to populated columns.
+    const count = Math.max(...rows.map(row => Array.from(row.cells).reduce((sum, cell) => sum + cell.colSpan, 0)));
+    const weights = Array.from({ length: count }, () => 1);
+    for (const row of rows) {
+      let index = 0;
+      for (const cell of Array.from(row.cells)) {
+        const explicit = cssWidthToDxa(cellWidthValue(cell));
+        const weight = explicit ?? (cell.textContent?.trim() ? 12 + Math.sqrt(cell.textContent.trim().length) * 8 : 1);
+        for (let j = 0; j < cell.colSpan; j++) weights[index + j] = Math.max(weights[index + j], weight / cell.colSpan);
+        index += cell.colSpan;
+      }
+    }
+    const total = weights.reduce((sum, value) => sum + value, 0);
+    grid = `<w:tblGrid>${weights.map(weight => `<w:gridCol w:w="${Math.round(weight / total * STATEMENT_CONTENT_WIDTH_DXA)}"/>`).join("")}</w:tblGrid>`;
     tblWidth = `<w:tblW w:w="${STATEMENT_CONTENT_WIDTH_DXA}" w:type="dxa"/>`;
     layout = '<w:tblLayout w:type="fixed"/>';
   }
@@ -825,6 +846,7 @@ function docxTableCell(cell: HTMLTableCellElement, rels: DocxRels, statement = f
     : docxParagraphFromRuns(docxInlineRuns(cell, rels, isHeader ? "<w:b/>" : ""), undefined, undefined, jc);
   return `<w:tc>
     <w:tcPr>
+      ${cell.colSpan > 1 ? `<w:gridSpan w:val="${cell.colSpan}"/>` : ""}
       ${cssWidthToTcW(cellWidthValue(cell))}
       ${tcBorders}
       ${isHeader && !statement ? '<w:shd w:val="clear" w:color="auto" w:fill="F1F1F1"/>' : ""}

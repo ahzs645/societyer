@@ -4,6 +4,11 @@ import {
   pushGraphicsState,
   popGraphicsState,
   concatTransformationMatrix,
+  PDFOperator,
+  PDFOperatorNames,
+  PDFName,
+  PDFHexString,
+  endMarkedContent,
   rgb,
   type PDFFont,
   type PDFImage,
@@ -227,6 +232,20 @@ function drawTextNode(
   const symbols = new Set(fonts.symbols.getCharacterSet());
   const math = new Set(fonts.math.getCharacterSet());
   const underline = style.textDecorationLine.includes("underline");
+  const block = parent.closest("p,li,td,th,h1,h2,h3,h4,h5,h6");
+  const remainder = document.createRange();
+  let blockEnd = false;
+  if (block) {
+    remainder.selectNodeContents(block);
+    remainder.setStartAfter(textNode);
+    blockEnd = !remainder.toString().trim();
+  }
+  remainder.detach();
+  // Keep the logical text of a run intact for search, copying and accessible
+  // reading when its visible glyphs wrap within a table cell or long URL.
+  page.pushOperators(PDFOperator.of(PDFOperatorNames.BeginMarkedContentSequence, [
+    PDFName.of("Span"), `<< /ActualText ${PDFHexString.fromText(pdfSafeText(rawText).replace(/\s+/g, " ") + (blockEnd ? " " : ""))} >>`,
+  ]));
   for (const { text, rect } of renderedTextLines(textNode)) {
     if (!text.trim()) continue;
     if (
@@ -238,6 +257,9 @@ function drawTextNode(
       continue;
     }
     const box = rectToPdf(rect, geometry);
+    if (box.x < -0.5 || box.x + box.width > geometry.widthPt + 0.5) {
+      throw new Error("PDF source text extends beyond the page. Use Print or download the original source while the layout is corrected.");
+    }
     const safe = pdfSafeText(text);
     const runs: Array<{ text: string; font: PDFFont }> = [];
     for (const char of safe) {
@@ -269,6 +291,7 @@ function drawTextNode(
       });
     }
   }
+  page.pushOperators(endMarkedContent());
 }
 
 /**
