@@ -27,4 +27,14 @@ assert.throws(() => assertImportBundlePreflight({ grants: [{ sourceExternalIds: 
 assert.throws(() => assertImportBundlePreflight({ meetingMinutes: [{ motions: [{ motionText: "Motion", unsupportedVoteDetail: "x" }] }] }), /motions\[0\].unsupportedVoteDetail/);
 assert.throws(() => assertImportBundlePreflight({ meetingMinutes: [{ detailedAttendance: [{ roleTitle: "Chair" }] }] }), /detailedAttendance/);
 assert.equal(importBundlePreflightIssues({ grants: [{ title: " Example ", amountRequestedCents: "1200", sourceExternalIds: ["gdrive:1"] }] }).length, 0);
+const citation={sourceExternalIds:['drive:source'],sourceReference:'Source row'};
+assertImportBundlePreflight({meetingMinutes:[{
+ attendanceEvents:[{id:'a',kind:'present',personName:'Source person',boundary:'Opening',...citation}],
+ quorumCheckpoints:[{id:'q',scope:'meeting',assertion:'confirmed',eligibleCount:3,eligiblePopulation:5,...citation}],
+ consentItems:[{id:'c',outcome:'pending',...citation}],conditionalDecisions:[{id:'d',outcome:'Carried',...citation}],
+ decisionRequirements:[{id:'r',decisionId:'d',kind:'condition',state:'unknown',...citation}],
+ futureMeetingSuggestions:[{id:'s',status:'tbc',date:'2026-05',...citation}],
+}]});
+assert.throws(()=>assertImportBundlePreflight({meetingMinutes:[{attendanceEvents:[{id:'a',personName:'Missing event kind',boundary:'Opening',...citation}]}]}),/could not normalize/);
+assert.throws(()=>assertImportBundlePreflight({meetingMinutes:[{unknownEvidence:[{id:'unsupported'}]}]}),/unknownEvidence: normalization would discard/);
 console.log("Import bundle preflight checks passed.");

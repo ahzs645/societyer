@@ -55,7 +55,7 @@ export function importBundlePreflightIssues(bundle: unknown): string[] {
       }
       try {
         // Probe one record at a time to avoid deduplication masking field losses.
-        const normalized = recordsFromBundle({ [key]: [payload] });
+        const normalized = recordsFromBundle({ sources: bundle.sources, [key]: [payload] }).filter(record => key === "sources" || record.recordKind !== "source");
         if (normalized.length !== 1) {
           issues.push(`${location}: importer produced ${normalized.length} records; expected one`);
           return;

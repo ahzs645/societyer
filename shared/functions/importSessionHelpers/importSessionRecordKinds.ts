@@ -1,3 +1,4 @@
+import { evidenceUrl, normalizeImportedEvidence } from "../../evidenceReview";
 // Import-session record-kind semantics: risk flags, inference, and record construction.
 
 import {
@@ -28,7 +29,9 @@ function recordsFromBundle(bundle: any) {
   for (const event of arrayOf(bundle?.events)) records.push(makeRecord("event", "Org history", event));
   for (const term of arrayOf(bundle?.boardTerms)) records.push(makeRecord("boardTerm", "Directors and roles", term));
   for (const motion of arrayOf(bundle?.motions)) records.push(makeRecord("motion", "Meetings and minutes", motion));
-  for (const minutes of arrayOf(bundle?.meetingMinutes)) records.push(makeRecord("meetingMinutes", "Meetings and minutes", minutes));
+  const sourceUrls = new Map<string, string>();
+  for (const record of records) if (record.recordKind === 'source' && typeof record.payload.externalId === 'string' && evidenceUrl(record.payload.url)) sourceUrls.set(record.payload.externalId, String(record.payload.url));
+  for (const minutes of arrayOf(bundle?.meetingMinutes)) records.push(makeRecord("meetingMinutes", "Meetings and minutes", { ...minutes, ...normalizeImportedEvidence(minutes, sourceUrls) }));
   for (const budget of arrayOf(bundle?.budgets)) records.push(makeRecord("budget", "Budgets", budget));
   for (const filing of arrayOf(bundle?.filings)) records.push(makeRecord("filing", "filings", filing));
   for (const deadline of arrayOf(bundle?.deadlines)) records.push(makeRecord("deadline", "deadlines", deadline));

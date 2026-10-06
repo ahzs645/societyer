@@ -1,3 +1,4 @@
+import { EVIDENCE_FIELDS, mergeImportedEvidence, normalizeImportedEvidence } from "../../evidenceReview";
 import { mergeMeetingHistory, normalizeMeetingHistory } from "../../meetingHistory";
 import { assertMeetingHistoryReferences } from "../minutes";
 import { normalizeMeetingQuorum } from "../../minutesQuorum";
@@ -118,7 +119,7 @@ async function mergeExistingMeetingImport(
   }
   if (Object.keys(meetingPatch).length > 0) await ctx.db.patch(meeting._id, meetingPatch);
 
-  const minutesPatch: Record<string, unknown> = { ...historyPatch };
+  const minutesPatch: Record<string, unknown> = { ...historyPatch, ...mergeImportedEvidence(minutesRow, normalizeImportedEvidence(payload)) };
   const attendees = arrayOf(payload.attendees).map(String).map(cleanText).filter(Boolean);
   const absent = arrayOf(payload.absent).map(String).map(cleanText).filter(Boolean);
   const motions = arrayOf(payload.motions).map(minutesMotionFromPayload);
@@ -132,6 +133,7 @@ async function mergeExistingMeetingImport(
   if ((!Array.isArray(minutesRow.motions) || minutesRow.motions.length === 0) && motions.length > 0) minutesPatch.motions = motions;
   const structuredPatch = structuredMinutesPatchFromPayload(payload);
   for (const [key, value] of Object.entries(structuredPatch)) {
+    if (EVIDENCE_FIELDS.some(field => field === key)) continue;
     if (key === "quorumStatus" && !minutesRow.quorumStatus && minutesRow.quorumMet) continue;
     const current = (minutesRow as any)[key];
     const currentIsBlank = Array.isArray(current)

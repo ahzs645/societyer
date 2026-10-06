@@ -196,7 +196,7 @@ export function MeetingDetailPage() {
   const removeMeetingMaterial = usePermissionedMutation(api.meetingMaterials.remove, can("meetings:write"));
   const backfillMeetingQuorum = usePermissionedMutation(api.meetings.backfillQuorumSnapshot, can("meetings:write"));
   const updateMinutes = usePermissionedMutation(api.minutes.update, can("minutes:write"));
-  const carryHistoricalAction = usePermissionedMutation(api.minutes.carryForwardAction, can("minutes:write"));
+  const carryActionObservation = usePermissionedMutation(api.minutes.carryForwardAction, can("minutes:write"));
   const createMinutes = usePermissionedMutation(api.minutes.create, can("minutes:write"));
   const syncAgendaForMeeting = usePermissionedMutation(api.agendas.syncForMeeting, can("agendas:write"));
   const updateTask = usePermissionedMutation(api.tasks.update, can("tasks:write"));
@@ -1018,9 +1018,8 @@ export function MeetingDetailPage() {
             })),
           }
         : null,
-      historicalActions: redact || publicOnly ? [] : minutes.historicalActions,
-      quorumEvents: redact || publicOnly ? [] : minutes.quorumEvents,
-      sourceVersions: redact || publicOnly ? [] : minutes.sourceVersions,
+      actionObservations: redact || publicOnly ? [] : minutes.actionObservations,
+      importedSourceVersions: redact || publicOnly ? [] : minutes.importedSourceVersions,
       draftTranscript: redact || publicOnly ? null : minutes.draftTranscript ?? null,
     };
   };
@@ -1043,7 +1042,7 @@ export function MeetingDetailPage() {
       (section.actionItems ?? []).length > 0,
     )) return true;
     if (displayMotions.length > 0) return true;
-    if (minutes.historicalActions?.length || minutes.quorumEvents?.length || minutes.sourceVersions?.length) return true;
+    if (minutes.actionObservations?.length || minutes.quorumCheckpoints?.length || minutes.importedSourceVersions?.length) return true;
     if (((minutes.decisions ?? []) as string[]).some((d) => (d ?? "").trim())) return true;
     if (((minutes.actionItems ?? []) as any[]).length > 0) return true;
     return false;
@@ -2423,7 +2422,7 @@ export function MeetingDetailPage() {
             otherMinutes={(allMinutes ?? []) as unknown as HistoryMinutes[]}
             meetings={allMeetings ?? []}
             onSave={async (patch) => { await updateMinutes({ id: minutes._id, patch }); }}
-            onCarry={async (args) => { await carryHistoricalAction({ ...args, sourceMinutesId: args.sourceMinutesId as Id<"minutes">, targetMinutesId: args.targetMinutesId as Id<"minutes"> }); }}
+            onCarry={async (args) => { await carryActionObservation({ ...args, sourceMinutesId: args.sourceMinutesId as Id<"minutes">, targetMinutesId: args.targetMinutesId as Id<"minutes"> }); }}
           />
         )}
 

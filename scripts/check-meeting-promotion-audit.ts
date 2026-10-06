@@ -21,10 +21,19 @@ console.log("Audit matches shuffled source identities and rejects empty minutes 
 
 const historyReport = await auditMeetingPromotion({ name: "History promotion fixture", jurisdictionCode: "CA-BC", entityType: "society" }, { meetingMinutes: [{
   meetingTitle: "History board", meetingDate: "2020-07-14", discussion: "Historical observations", sourceExternalIds: ["fixture:history"],
-  historicalActions: [{ entryId: "h1", actionKey: "source-action-17", sourceActionId: "17", text: "Send report", assignee: "Secretary", status: "unknown", statusAsOf: "2020-07-14", sourceStatus: "C (unresolved)", sourceExternalIds: ["fixture:history"], sourceLocator: "Table 2 row 4", evidence: "Source code C" }],
-  quorumEvents: [{ eventId: "q1", status: "confirmed", atTime: "5:11 pm", scope: "session", scopeLabel: "AGM", presentCount: 13, sourceExternalIds: ["fixture:history"], evidence: "Quorum achieved" }, { eventId: "q2", status: "not_recorded", scope: "session", scopeLabel: "Business" }],
-  sourceVersions: [{ versionId: "v1", label: "Draft", status: "draft", sourceExternalIds: ["fixture:history"], contentJson: '{"source":"draft"}' }, { versionId: "v2", label: "Correction", status: "revised", supersedesVersionId: "v1", sourceExternalIds: ["fixture:history"], notes: "Correction without adoption claim" }],
+  actionObservations: [{ entryId: "h1", actionKey: "source-action-17", sourceActionId: "17", text: "Send report", assignee: "Secretary", status: "unknown", statusAsOf: "2020-07-14", sourceStatus: "C (unresolved)", sourceExternalIds: ["fixture:history"], sourceLocator: "Table 2 row 4", evidence: "Source code C" }],
+  quorumCheckpoints: [{ id: "q1", boundary: "Source boundary", sourceReference: "Source table row", sourceExternalIds: ["google-drive:a"], reviewStatus: "pending", assertion: "confirmed", atTime: "5:11 pm", scope: "session", scopeLabel: "AGM", eligibleCount: 13, evidence: "Quorum achieved" }, { id: "q2", boundary: "Source boundary", sourceReference: "Source table row", sourceExternalIds: ["google-drive:a"], reviewStatus: "pending", assertion: "not_recorded", scope: "session", scopeLabel: "Business" }],
+  importedSourceVersions: [{ versionId: "v1", label: "Draft", status: "draft", sourceExternalIds: ["fixture:history"], contentJson: '{"source":"draft"}' }, { versionId: "v2", label: "Correction", status: "revised", supersedesVersionId: "v1", sourceExternalIds: ["fixture:history"], notes: "Correction without adoption claim" }],
 }] });
 assert.equal(historyReport.nativeDifferenceCount, 0, JSON.stringify(historyReport));
 assert.equal(historyReport.editorDifferenceCount, 0, JSON.stringify(historyReport));
+const citation={sourceExternalIds:['drive:audit'],sourceReference:'Source table',reviewStatus:'verified'};
+const evidenceReport=await auditMeetingPromotion({name:'Evidence audit',jurisdictionCode:'CA-BC',entityType:'society'},{meetingMinutes:[{meetingTitle:'Evidence board',meetingDate:'2025-06-12',sourceExternalIds:['drive:audit'],
+ attendanceEvents:[{id:'a',kind:'departed',personName:'Source attendee',boundary:'Item 4',...citation}],
+ quorumCheckpoints:[{id:'q',boundary:'Item 4',eligibleCount:2,eligiblePopulation:5,required:3,assertion:'not_met',...citation}],
+ consentItems:[{id:'c',outcome:'deferred',...citation}],conditionalDecisions:[{id:'d',outcome:'Carried',...citation}],
+ decisionRequirements:[{id:'r',decisionId:'d',kind:'condition',state:'unknown',observedDate:'2025-06',...citation}],
+ futureMeetingSuggestions:[{id:'s',status:'tentative',date:'2025-08',...citation}],
+}]});
+assert.equal(evidenceReport.nativeDifferenceCount,0,JSON.stringify(evidenceReport));
 console.log("Promotion audit compares all three native history arrays, including source evidence and version snapshots.");

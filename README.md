@@ -354,7 +354,7 @@ The meeting detail UI already uploads audio, tracks transcription jobs, stores t
 ### Document archive intake
 
 For public Drive archives, use the [source collector](docs/public-drive-inventory.md),
-[subagent task and merge workflow](docs/drive-transposition.md), and
+[subagent task and merge workflow](docs/intake-extraction-pipeline.md), and
 [review-workspace backup builder](docs/document-intake-backups.md).
 `npm run intake:plan -- ...`, `npm run intake:merge -- ...`, and
 `npm run intake:backup -- ...` prepare Pending records for later review.

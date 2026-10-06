@@ -1,6 +1,7 @@
 import { resolveSourceMeetingRecord, changedSourceMinuteSections, type SourceMeetingRecord, type SourceMeetingBlock } from "../../../../shared/sourceMeetingRecord";
 import { checkpointResult, decisionReadiness } from "../../../../shared/evidenceReview";
-import type { HistoricalAction, QuorumEvent, SourceVersion } from "../../../../shared/meetingHistory";
+import type { QuorumCheckpoint } from "../../../../shared/evidenceReview";
+import type { ActionObservation, ImportedSourceVersion } from "../../../../shared/meetingHistory";
 // Meeting-minutes domain renderer. Takes structured minutes data + a chosen
 // style (Standard / Formal AGM / Executive Agenda / Numbered Agenda / Action
 // Table / Board Public) and produces an HTML body string that the generic
@@ -122,7 +123,7 @@ export type MinutesRenderArgs = {
     conditionalDecisions?: any[];
     decisionRequirements?: any[];
     attendanceEvents?: any[];
-    quorumCheckpoints?: any[];
+    quorumCheckpoints?: QuorumCheckpoint[];
     futureMeetingSuggestions?: any[];
     heldAt: string;
     chairName?: string | null;
@@ -214,9 +215,8 @@ export type MinutesRenderArgs = {
         notes?: string;
       }[];
     } | null;
-    historicalActions?: HistoricalAction[] | null;
-    quorumEvents?: QuorumEvent[] | null;
-    sourceVersions?: SourceVersion[] | null;
+    actionObservations?: ActionObservation[] | null;
+    importedSourceVersions?: ImportedSourceVersion[] | null;
     draftTranscript?: string | null;
   };
   styleId?: MinutesExportStyleId;
@@ -261,7 +261,7 @@ export function renderMinutesHtml(args: MinutesRenderArgs): string {
   else if (styleId === "board-public") body = renderBoardPublicMinutes(args, options);
   else body = renderStandardMinutes(args, options);
 
-  return renderDocumentHeader(args.society) + body + renderUnrepresentedSectionDetails(args.minutes,body,options) + renderMeetingHistory(args.minutes, options) + (styleId === "board-public" || options.publicCopy ? "" : renderSourceDecisionEvidence(args.minutes)) + renderFooter(options);
+  return renderDocumentHeader(args.society) + body + renderUnrepresentedSectionDetails(args.minutes,body,options) + renderMeetingHistory(args.minutes, options) + (options.publicOnly || options.publicCopy ? "" : renderSourceDecisionEvidence(args.minutes, styleId === "board-public")) + renderFooter(options);
 }
 
 /**
@@ -1774,16 +1774,16 @@ function formatTime(value: string) {
   });
 }
 
-function renderSourceDecisionEvidence(minutes: MinutesRenderArgs["minutes"]) {
+function renderSourceDecisionEvidence(minutes: MinutesRenderArgs["minutes"], quorumOnly = false) {
   const groups: [string, any[], (row:any)=>string][] = [
     ['Consent adoption', minutes.consentItems ?? [], row => `${row.title ?? row.id}: ${row.outcome}; pinned version ${row.documentVersionId ?? row.targetMinutesId ?? 'unknown'}`],
     ['Conditional decisions', minutes.conditionalDecisions ?? [], row => `${row.title ?? row.id}: source ${row.outcome}; ${decisionReadiness(row, minutes.decisionRequirements ?? [], minutes.quorumCheckpoints ?? [])}`],
     ['Condition and ratification observations', minutes.decisionRequirements ?? [], row => `${row.observedDate ?? 'unknown date'}: ${row.title ?? row.requirementKey ?? row.id}; ${row.kind}; ${row.state}`],
     ['Attendance observations', minutes.attendanceEvents ?? [], row => `${row.personName}: ${row.kind}; ${row.boundary ?? 'unknown time'}`],
-    ['Decision-time quorum', minutes.quorumCheckpoints ?? [], row => `${row.boundary}: ${checkpointResult(row)}; count ${row.eligibleCount ?? 'unknown'}, threshold ${row.required ?? 'unknown'}`],
+    ['Quorum observations', minutes.quorumCheckpoints ?? [], row => `${row.scope === 'session' ? 'Session' : row.scope === 'item' ? 'Item' : 'Meeting'}${row.scopeLabel ? `: ${row.scopeLabel}` : ''}; boundary ${row.boundary}; source assertion ${row.assertion ?? 'not recorded'}; review ${row.reviewStatus ?? 'pending'}; result ${checkpointResult(row)}; time ${row.atTime ?? 'not recorded'}; present count ${row.eligibleCount ?? 'unknown'}, eligible population ${row.eligiblePopulation ?? 'unknown'}, threshold ${row.required ?? 'unknown'}; ${row.reason ?? ''}; ${row.evidence ?? ''}; ${(row.sourceExternalIds ?? []).join(', ')}`],
     ['Future meeting suggestions', minutes.futureMeetingSuggestions ?? [], row => `${row.title ?? row.committee ?? 'Meeting'}: ${row.date ?? 'unknown date'}; ${row.status}; ${row.venue ?? 'unknown venue'}`],
   ];
-  return groups.filter(([,rows])=>rows.length).map(([title,rows,label])=>`<section><h2>${escapeHtml(title)}</h2><ul>${rows.map(row=>`<li>${escapeHtml(label(row))} <span class="meta">${escapeHtml(row.sourceReference ?? '')} · ${escapeHtml(row.sourceUrl ?? '')}</span></li>`).join('')}</ul></section>`).join('');
+  return groups.filter(([title,rows])=>rows.length && (!quorumOnly || title === 'Quorum observations')).map(([title,rows,label])=>`<section><h2>${escapeHtml(title)}</h2><ul>${rows.map(row=>`<li>${escapeHtml(label(row))} <span class="meta">${escapeHtml(row.sourceReference ?? '')} · ${escapeHtml(row.sourceUrl ?? '')}</span></li>`).join('')}</ul></section>`).join('');
 }
 
 function isImportMetadataTranscript(value:unknown):boolean {
@@ -1901,11 +1901,11 @@ function renderMeetingHistory(minutes: MinutesRenderArgs["minutes"], options: Re
     row.sourceExternalIds?.length ? paragraph("Sources", row.sourceExternalIds.join("; ")) : "",
     paragraph("Source location", row.sourceLocator), paragraph("Evidence", row.evidence), paragraph("Notes", row.notes),
   ].join("");
-  const actionLabels: Record<HistoricalAction["status"], string> = { unknown: "Unknown", open: "Open", in_progress: "In progress", ongoing: "Ongoing", on_hold: "On hold", completed: "Completed", cancelled: "Cancelled" };
-  const actions = options.includeActionItems && minutes.historicalActions?.length ? `
-    <section class="minutes-history"><h2>Historical action observations</h2>
+  const actionLabels: Record<ActionObservation["status"], string> = { unknown: "Unknown", open: "Open", in_progress: "In progress", ongoing: "Ongoing", on_hold: "On hold", completed: "Completed", cancelled: "Cancelled" };
+  const actions = options.includeActionItems && minutes.actionObservations?.length ? `
+    <section class="minutes-history"><h2>Action observations</h2>
     <p>Statuses are observations as of the recorded source date. They do not establish current completion. Separate observations may refer to the same action.</p>
-    ${minutes.historicalActions.map((row) => `<div class="historical-action">
+    ${minutes.actionObservations.map((row) => `<div class="historical-action">
       <h3>${eh(row.text)}</h3>
       <p><strong>Status:</strong> ${eh(actionLabels[row.status] ?? "Unknown")} · <strong>As of:</strong> ${unknown(row.statusAsOf)}</p>
       <p><strong>Assignee:</strong> ${unknown(row.assignee)} · <strong>Assigned:</strong> ${unknown(row.dateAssigned)} · <strong>Due:</strong> ${unknown(row.dueDate)}</p>
@@ -1915,21 +1915,12 @@ function renderMeetingHistory(minutes: MinutesRenderArgs["minutes"], options: Re
       ${row.carriedFromMinutesId ? paragraph("Carried from", `Minutes ${row.carriedFromMinutesId}, observation ${row.carriedFromEntryId ?? "not recorded"}`) : ""}
       ${sources(row)}
     </div>`).join("")}</section>` : "";
-  const quorum = minutes.quorumEvents?.length ? `
-    <section class="minutes-history"><h2>Quorum observations</h2>
-    <p>Observations appear in source order and apply only to the stated meeting, session, or item. No legal validity is inferred.</p>
-    ${minutes.quorumEvents.map((row) => `<div class="quorum-observation">
-      <h3>${eh(row.scope === "meeting" ? "Meeting" : row.scope === "session" ? "Session" : "Item")}${row.scopeLabel ? `: ${eh(row.scopeLabel)}` : ""}</h3>
-      <p><strong>Quorum:</strong> ${eh(minutesQuorumLabel({ quorumStatus: row.status }))} · <strong>Time:</strong> ${unknown(row.atTime)}</p>
-      <p><strong>Present count:</strong> ${unknown(row.presentCount)} · <strong>Eligible count:</strong> ${unknown(row.eligibleCount)}</p>
-      ${paragraph("Reason", row.reason)}${sources(row)}
-    </div>`).join("")}</section>` : "";
-  const versionLabels: Record<SourceVersion["status"], string> = { unknown: "Unknown", draft: "Draft", revised: "Revised", adopted: "Adopted" };
-  const versionById = new Map((minutes.sourceVersions ?? []).map((row) => [row.versionId, row]));
-  const versions = minutes.sourceVersions?.length ? `
-    <section class="minutes-history"><h2>Source versions</h2>
-    <p>Source-version status is separate from import review and approval of this minutes record. An unknown status does not establish adoption.</p>
-    ${minutes.sourceVersions.map((row) => `<div class="source-version">
+  const versionLabels: Record<ImportedSourceVersion["status"], string> = { unknown: "Unknown", draft: "Draft", revised: "Revised", adopted: "Adopted" };
+  const versionById = new Map((minutes.importedSourceVersions ?? []).map((row) => [row.versionId, row]));
+  const versions = minutes.importedSourceVersions?.length ? `
+    <section class="minutes-history"><h2>Imported source versions</h2>
+    <p>Imported source document versions / external adoption assertions are distinct from the app’s approved minutes revision. An unknown status does not establish adoption.</p>
+    ${minutes.importedSourceVersions.map((row) => `<div class="source-version">
       <h3>${eh(row.label)}</h3>
       <p><strong>Source status:</strong> ${eh(versionLabels[row.status] ?? "Unknown")} · <strong>Source date:</strong> ${unknown(row.sourceDate)}</p>
       ${paragraph("Version reference", row.versionId)}
@@ -1940,5 +1931,5 @@ function renderMeetingHistory(minutes: MinutesRenderArgs["minutes"], options: Re
       ${paragraph("Adoption motion reference", row.adoptionMotionId)}
       ${sources(row)}
     </div>`).join("")}</section>` : "";
-  return actions + quorum + versions;
+  return actions + versions;
 }

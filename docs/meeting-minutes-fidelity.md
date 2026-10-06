@@ -1,6 +1,6 @@
 # Meeting minutes transposition fidelity
 
-**History upgrade:** the new optional `historicalActions`, `quorumEvents` and `sourceVersions` fields now address the history gaps identified below. See [meeting-history.md](meeting-history.md) for the implemented model, interface, import, ownership and immutability behavior. The table below still describes limitations of the original scalar quorum, legacy action items and source references; those legacy fields are retained for compatibility. Precise meeting timestamps, person authority and embedded attachment restoration remain follow-up work.
+**History upgrade:** the new optional `actionObservations`, `quorumCheckpoints` and `importedSourceVersions` fields now address the history gaps identified below. See [meeting-history.md](meeting-history.md) for the implemented model, interface, import, ownership and immutability behavior. The table below still describes limitations of the original scalar quorum, legacy action items and source references; those legacy fields are retained for compatibility. Precise meeting timestamps, person authority and embedded attachment restoration remain follow-up work.
 
 Review of the current import, native model and display paths, 2026-09-21. A restorable review backup preserves staged candidates; it does not mean every source field has a native equivalent or appears in every export template. These distinctions matter for historical minutes and combined AGM/Board documents.
 

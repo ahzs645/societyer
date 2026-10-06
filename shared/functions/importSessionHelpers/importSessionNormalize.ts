@@ -1,3 +1,4 @@
+import { normalizeImportedEvidence } from "../../evidenceReview";
 import { normalizeMeetingHistory } from "../../meetingHistory";
 // Import-session payload normalization, including insurance-policy dedupe/merge.
 import { normalizeMeetingQuorum } from "../../minutesQuorum";
@@ -79,6 +80,7 @@ function normalizeMotionPayload(motion: any) {
 function normalizeMeetingMinutesPayload(minutes: any) {
   return {
     ...normalizeMeetingHistory(minutes ?? {}),
+    ...normalizeImportedEvidence(minutes ?? {}),
     meetingDate: cleanText(minutes?.meetingDate),
     meetingTitle: cleanText(minutes?.meetingTitle),
     meetingType: cleanText(minutes?.meetingType),
@@ -135,7 +137,7 @@ function structuredMinutesPatchFromPayload(payload: any) {
     agmDetails: normalizeAgmDetailsPayload(payload?.agmDetails),
   }) ?? {};
   // Empty history arrays are explicit reviewed data, not an absent payload.
-  return { ...structured, ...normalizeMeetingHistory(payload ?? {}) };
+  return { ...structured, ...normalizeMeetingHistory(payload ?? {}), ...normalizeImportedEvidence(payload ?? {}) };
 }
 
 

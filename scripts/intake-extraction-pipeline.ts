@@ -49,7 +49,7 @@ export function planTransposition(manifest: Manifest, batchSize = 8): Plan {
       "Outcome is extracted, evidence-only, unsupported, unreadable, or excluded. Report every unsupported detail and uncertainty, with page/sheet/row references where possible. Evidence-only means content actually read without supported native facts.",
       `Every extracted record needs sourceExternalIds containing '${`google-drive:${entry.id}`}'; preserve quotations and precise page/sheet references in supported evidence/notes fields. Do not infer legal adoption, payment, attendance, or approval from document existence.`,
       "Use ISO dates and integer cents. Do not expose raw secrets, credentials, bank account identifiers, screening data, or payroll identifiers in general notes. Describe restricted evidence by reference.",
-      "Do not set reviewStatus=Approved. All records will stage Pending. Keep unknown facts unknown. An extracted result must include actual supported facts beyond source/document catalog entries.",
+      "All records stage Pending, and evidence rows get reviewStatus=pending. Never import adopted consent items or adoption pins. Quorum checkpoints use id, assertion, boundary, eligibleCount for eligible people present, eligiblePopulation for the total eligible population, and sourceReference for the locator. Keep unknown facts unknown. An extracted result must include actual supported facts beyond source/document catalog entries.",
     ].join("\n"),
   }));
   const batches: string[][] = [];
@@ -163,6 +163,6 @@ async function main() {
     }
     await writeFile(resolve(extra, "import-bundle.json"), JSON.stringify(merged.bundle, null, 2));
     console.log("Wrote reviewed-import candidate and coverage report. Records still require human review.");
-  } else throw new Error("Usage: tsx scripts/transposition-pipeline.ts plan INVENTORY TASK_DIR [BATCH_SIZE] | merge PLAN RESULTS_DIR OUTPUT_DIR");
+  } else throw new Error("Usage: tsx scripts/intake-extraction-pipeline.ts plan INVENTORY TASK_DIR [BATCH_SIZE] | merge PLAN RESULTS_DIR OUTPUT_DIR");
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main().catch((error) => { console.error(error.message); process.exitCode = 1; });

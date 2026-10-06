@@ -29,5 +29,12 @@ for(const engine of ['memory','local-store'] as const){
  await assert.rejects(()=>runtime.runMutation('minutes:completeSourceRecords',{societyId,entries:[{id:'atomic'},{id:'atomic_bad',sourceSelection:[{documentId:'unlinked'}]}]}),/already be linked/);
  assert.equal((await db.get('atomic'))!.sourceMeetingRecord,undefined,'A later invalid linked source cannot partially complete the batch');
  assert.equal((await db.get('frozen'))!.sourceMeetingRecord,undefined);
+ const evidenceFields=['attendanceEvents','quorumCheckpoints','consentItems','conditionalDecisions','decisionRequirements','futureMeetingSuggestions'] as const;
+ await db.transaction(async()=>{await db.patch('edited',Object.fromEntries(evidenceFields.map(field=>[field,[{id:'secret',sourceReference:'Private wording'}]])));
+ await db.delete('source');});
+ const restricted=(await runtime.runQuery('minutes:list',{societyId}) as Array<Record<string,unknown>>).find(row=>row._id==='edited')!;
+ for(const field of evidenceFields) assert.deepEqual(restricted[field],[],`Restricted view redacts ${field}`);
+ assert.deepEqual(restricted.sections,[]);assert.deepEqual(restricted.attendees,[]);assert.equal(restricted.quorumStatus,"not_recorded");assert.equal(restricted.sourceMeetingRecord,undefined);
+ await assert.rejects(()=>runtime.runMutation('minutes:update',{id:'edited',patch:{attendees:[]}}),/restricted by document access/,'A restricted view cannot be saved back over source content');
  console.log(engine+': complete source coverage, unchanged user edits, frozen records, idempotence and atomic failures passed');
 }

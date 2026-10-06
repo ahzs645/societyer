@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mergeTransposition, planTransposition, type Manifest, type Result } from "./transposition-pipeline";
+import { mergeTransposition, planTransposition, type Manifest, type Result } from "./intake-extraction-pipeline";
 const manifest: Manifest = { schemaVersion: 1, rootFolderId: "folder", completeness: "unverified-public-html", entries: [
   { id: "a", name: "Minutes.pdf", mimeType: "application/pdf", path: "Minutes.pdf", kind: "file", excluded: false, sha256: "abcd", sizeBytes: 42 },
   { id: "b", name: "Notes.pdf", mimeType: "application/pdf", path: "Notes.pdf", kind: "file", excluded: false },

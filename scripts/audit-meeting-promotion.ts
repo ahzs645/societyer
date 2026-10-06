@@ -1,3 +1,4 @@
+import { evidenceUrl, normalizeImportedEvidence } from "../shared/evidenceReview";
 import type { PortableDoc } from "../shared/portable/ctx";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
@@ -21,6 +22,8 @@ function differences(expected: unknown, actual: unknown, path = ""): { path: str
 /** Approvals exist only inside a fresh in-memory verification runtime. Never exports an approved backup. */
 export async function auditMeetingPromotion(organization: Record<string, unknown>, bundle: Record<string, unknown> & { meetingMinutes?: Record<string, unknown>[] }) {
   const built = await buildIntakeBackup(organization, [bundle]);
+  const sourceUrls = new Map<string, string>();
+  for (const source of Array.isArray(bundle.sources) ? bundle.sources as Record<string, unknown>[] : []) if (typeof source.externalId === 'string' && evidenceUrl(source.url)) sourceUrls.set(source.externalId, String(source.url));
   const client = new StaticConvexClient({ seed: { societies: [] }, databaseName: `audit-only-${randomUUID()}` });
   await client.importLocalWorkspaceSnapshot(JSON.parse(JSON.stringify(built.snapshot)));
   const sessionId = built.sessionIds[0];
@@ -46,8 +49,9 @@ export async function auditMeetingPromotion(organization: Record<string, unknown
     const minutes = tables.minutes?.find((row) => row._id === target?.minutesId);
     const meeting = tables.meetings?.find((row) => row._id === target?.meetingId);
     if (!minutes || !meeting) throw new Error(`Missing native promotion target for ${record.title}`);
-    const fields = ["chairName", "secretaryName", "recorderName", "calledToOrderAt", "adjournedAt", "remoteParticipation", "detailedAttendance", "attendees", "absent", "quorumStatus", "discussion", "sections", "decisions", "actionItems", "nextMeetingAt", "nextMeetingLocation", "nextMeetingNotes", "sessionSegments", "appendices", "agmDetails", "historicalActions", "quorumEvents", "sourceVersions", "sourceExternalIds"];
-    const nativeDifferences = fields.flatMap((key) => differences(source[key], minutes[key], key));
+    const fields = ["chairName", "secretaryName", "recorderName", "calledToOrderAt", "adjournedAt", "remoteParticipation", "detailedAttendance", "attendees", "absent", "quorumStatus", "discussion", "sections", "decisions", "actionItems", "nextMeetingAt", "nextMeetingLocation", "nextMeetingNotes", "sessionSegments", "appendices", "agmDetails", "actionObservations", "attendanceEvents", "quorumCheckpoints", "consentItems", "conditionalDecisions", "decisionRequirements", "futureMeetingSuggestions", "importedSourceVersions", "sourceExternalIds"];
+    const expected: Record<string, unknown> = { ...source, ...normalizeImportedEvidence(source, sourceUrls) };
+    const nativeDifferences = fields.flatMap((key) => differences(expected[key], minutes[key], key));
     for (const [sourceKey, nativeKey] of [["meetingTitle", "title"], ["meetingType", "type"], ["location", "location"], ["electronic", "electronic"]]) nativeDifferences.push(...differences(source[sourceKey], meeting[nativeKey], `meeting.${nativeKey}`));
     const nativeMotions = (minutes.motionIds ?? []).map((id: string) => tables.motions?.find((row) => row._id === id));
     const motions = Array.isArray(source.motions) ? source.motions as Record<string, unknown>[] : [];

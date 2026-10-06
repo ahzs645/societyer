@@ -178,7 +178,7 @@ The target ID is stored as a string because one mapping table cannot use a polym
   sourceAttachmentKey,
   sourceStorageKey,
   sourceDocumentId?,
-  sourceVersionId?,
+  importedSourceVersionId?,
   expectedSha256?,
   observedSha256?,
   expectedSize?,

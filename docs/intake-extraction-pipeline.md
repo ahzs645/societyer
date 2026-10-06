@@ -1,9 +1,11 @@
-# Drive archive transposition with host subagents
+# Offline intake extraction pipeline
 
 This offline pipeline creates read-only extraction tasks for the host's subagents,
 validates their results, and produces an `/app/imports` candidate bundle. It does
 not call an LLM service, modify Drive, approve records, or apply them to an organization.
 Keep downloaded source documents and task results outside the source repository.
+
+Upstream `minutes:transposeSource*` is native in-app transposition. This script performs the offline extraction stage before import; it does not replace native transposition.
 
 ## Plan from an inventory
 
@@ -14,7 +16,7 @@ not extraction tasks. Public HTML listings can be incomplete; completeness and
 folder errors remain visible in the final coverage report.
 
 ```sh
-node --import tsx scripts/transposition-pipeline.ts plan /data/inventory.json /data/tasks 8
+node --import tsx scripts/intake-extraction-pipeline.ts plan /data/inventory.json /data/tasks 8
 ```
 
 This writes plan.json and one task JSON per source, with bounded scheduling batches.
@@ -45,11 +47,13 @@ its task's exact sourceId through sourceExternalIds. Cross-source reconciliation
 is a later, explicit review step, not an extraction agent's identity override.
 Avoid raw credentials and restricted identifiers in general notes or reports.
 
+Use checkpoint `id`, source `assertion`, `boundary`, `eligibleCount` for eligible people present, `eligiblePopulation` for the total eligible population, and `sourceReference` for the locator. Imports force evidence review to pending and reject adopted consent items or pins. Source catalog HTTP(S) URLs populate row citations when available; external IDs plus a locator can support pending evidence when no URL exists.
+
 ## Merge and review
 
 ```sh
-node --import tsx scripts/transposition-pipeline.ts merge /data/tasks/plan.json /data/results /data/output
-node --import tsx scripts/check-transposition-pipeline.ts
+node --import tsx scripts/intake-extraction-pipeline.ts merge /data/tasks/plan.json /data/results /data/output
+node --import tsx scripts/check-intake-extraction-pipeline.ts
 ```
 
 Use a new output directory for each merge; the CLI refuses to overwrite an existing directory. Merge requires every planned task exactly once. It checks plan/source identity,

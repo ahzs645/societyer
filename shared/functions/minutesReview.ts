@@ -1,9 +1,9 @@
 import type { PortableMutationCtx } from '../portable/ctx';
 import { getOwned, requireOwnedRow } from './access';
 import { requirePermissionPortable } from './permissions';
-import { checkpointResult, decisionReadiness, exactDay, partialDate, requireEvidence, uniqueRows } from '../evidenceReview';
+import { checkpointResult, decisionReadiness, exactDay, requireEvidence, validateMeetingEvidence, EVIDENCE_FIELDS } from '../evidenceReview';
 
-const FIELDS = ['consentItems', 'conditionalDecisions', 'decisionRequirements', 'attendanceEvents', 'quorumCheckpoints', 'futureMeetingSuggestions'] as const;
+const FIELDS = EVIDENCE_FIELDS;
 export async function saveEvidence(ctx: PortableMutationCtx, { id, evidence }: { id: string; evidence: Record<string, any[]> }) {
   const minutes = await requireOwnedRow(ctx, 'minutes', id);
   const societyId = String(minutes.societyId);
@@ -11,31 +11,13 @@ export async function saveEvidence(ctx: PortableMutationCtx, { id, evidence }: {
   if (minutes.approvedAt) throw new Error('Start an amendment before changing adopted evidence.');
   if (Object.keys(evidence).some(key => !FIELDS.includes(key as any))) throw new Error('Unsupported evidence field.');
   const next: any = { ...minutes, ...evidence };
-  for (const field of FIELDS) {
-    const rows = next[field] ?? [];
-    if (!Array.isArray(rows) || rows.length > 500) throw new Error('Evidence must be a bounded row list.');
-    uniqueRows(rows);
-    for (const row of rows) {
-      requireEvidence(row);
-      if (row.reviewStatus && !['pending', 'verified', 'rejected'].includes(row.reviewStatus)) throw new Error('Invalid evidence review status.');
-      if (row.observedDate && !partialDate(row.observedDate)) throw new Error('Invalid evidence date.');
-    }
-  }
-  for (const row of next.quorumCheckpoints ?? []) {
-    for (const key of ['eligibleCount', 'required']) if (row[key] != null && (!Number.isSafeInteger(row[key]) || row[key] < 0)) throw new Error('Quorum counts must be nonnegative whole numbers or unknown.');
-    if (!String(row.boundary ?? '').trim()) throw new Error('A quorum checkpoint needs a source time or agenda boundary.');
-  }
-  for (const row of next.attendanceEvents ?? []) {
-    if (!['arrived', 'departed', 'present', 'absent', 'proxy'].includes(row.kind)) throw new Error('Invalid attendance event.');
-    if (!row.personName || !row.boundary) throw new Error('Attendance needs a person and a source time or agenda boundary.');
-  }
+  validateMeetingEvidence(next);
   for (const old of minutes.consentItems ?? []) {
     if (old.outcome !== 'adopted') continue;
     const replacement = (next.consentItems ?? []).find((row: any) => row.id === old.id);
     if (!replacement || JSON.stringify(replacement) !== JSON.stringify(old)) throw new Error('Adopted consent items are pinned. Preserve the original and append an amendment.');
   }
   for (const row of next.consentItems ?? []) {
-    if (!['adopted', 'deferred', 'excluded', 'pending'].includes(row.outcome)) throw new Error('Invalid consent item outcome.');
     if (row.documentVersionId) await getOwned(ctx, 'documentVersions', row.documentVersionId, societyId);
     if (row.targetMinutesId) await getOwned(ctx, 'minutes', row.targetMinutesId, societyId);
     if (row.outcome === 'adopted') {
@@ -60,18 +42,12 @@ export async function saveEvidence(ctx: PortableMutationCtx, { id, evidence }: {
       }
     }
   }
-  for (const row of next.decisionRequirements ?? []) {
-    if (!(next.conditionalDecisions ?? []).some((decision: any) => decision.id === row.decisionId)) throw new Error('A requirement must link to a recorded decision.');
-    if (!['condition', 'ratification'].includes(row.kind) || !['met', 'not_met', 'unknown'].includes(row.state)) throw new Error('Invalid condition or ratification.');
-  }
   // Requirements remain append-only: later ratification must retain the original observation.
   for (const old of minutes.decisionRequirements ?? []) {
     const replacement = (next.decisionRequirements ?? []).find((row: any) => row.id === old.id);
     if (!replacement || JSON.stringify(replacement) !== JSON.stringify(old)) throw new Error('Keep earlier condition observations and append a new dated observation.');
   }
   for (const row of next.futureMeetingSuggestions ?? []) {
-    if (!partialDate(row.date)) throw new Error('Future meeting dates must retain day/month/year precision.');
-    if (!['tentative', 'tbc', 'confirmed'].includes(row.status)) throw new Error('Invalid suggestion status.');
     if (row.committeeId) await getOwned(ctx, 'committees', row.committeeId, societyId);
     const old = (minutes.futureMeetingSuggestions ?? []).find((item: any) => item.id === row.id);
     if (old?.scheduledMeetingId && JSON.stringify(row) !== JSON.stringify(old)) throw new Error('A scheduled suggestion is pinned to its target.');
