@@ -347,7 +347,7 @@ export class LocalDexieRowStore implements LocalRowStore {
 
   exportAttachmentReferences() { return cloneLocalRows(this.attachmentsCache); }
 
-  async importSnapshot(snapshot: LocalWorkspaceSnapshot | { tables?: LocalSeed; attachments?: LocalAttachmentEnvelope[]; workspace?: Partial<LocalWorkspaceMeta> }, files: LocalWorkspaceBinaryFile[] = []) {
+  async importSnapshot(snapshot: LocalWorkspaceSnapshot | { tables?: LocalSeed; attachments?: LocalAttachmentEnvelope[]; workspace?: Partial<LocalWorkspaceMeta> }, files: LocalWorkspaceBinaryFile[] = [], preserveFiles = false) {
     const importedTables = quarantineImportedPathways(stripImportedAuthBindings(validateSnapshotTables(snapshot?.tables)));
     const importedAttachments = validateSnapshotAttachments(snapshot?.attachments);
     if (files.some(file => !file.key || !/^[a-f0-9]{64}$/.test(file.sha256) || (file.blob !== undefined && !(file.blob instanceof Blob)))) throw new Error("Invalid restored file data.");
@@ -387,7 +387,7 @@ export class LocalDexieRowStore implements LocalRowStore {
           await this.db!.attachments.clear();
           await this.db!.meetings.clear();
           await this.db!.minutes.clear();
-          await this.db!.files.clear();
+          if (!preserveFiles) await this.db!.files.clear();
 
           if (records.length) await this.db!.records.bulkPut(records);
           if (importedAttachments.length) await this.db!.attachments.bulkPut(cloneLocalRows(importedAttachments));
@@ -407,7 +407,7 @@ export class LocalDexieRowStore implements LocalRowStore {
 
     this.cache = importedCache;
     this.attachmentsCache = importedAttachments;
-    this.filesCache = files;
+    if (!preserveFiles) this.filesCache = files;
     this.changesCache = [...history, committedImportChange];
     this.workspaceMeta = importedMeta;
     this.notify();

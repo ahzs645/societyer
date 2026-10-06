@@ -65,8 +65,8 @@ export class StaticDemoDexieStore {
     await this.rowsStore.reseed();
   }
 
-  async importSnapshot(snapshot: LocalWorkspaceSnapshot, files?: LocalWorkspaceBinaryFile[]) {
-    await this.rowsStore.importSnapshot(snapshot, files);
+  async importSnapshot(snapshot: LocalWorkspaceSnapshot, files?: LocalWorkspaceBinaryFile[], preserveFiles = false) {
+    await this.rowsStore.importSnapshot(snapshot, files, preserveFiles);
   }
 
   readRestoredFile(args: { sha256?: string; provider?: string; storageKey?: string; documentId?: string; versionId?: string }) {

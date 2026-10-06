@@ -22,6 +22,8 @@ assert.equal(await (await local.readRestoredFile({ provider: "local-filesystem",
 assert.equal(await (await local.readRestoredFile({ documentId: "d1" }))!.text(), "Exact original file bytes");
 assert.equal(await (await local.readRestoredFile({ versionId: "v1" }))!.text(), "Exact original file bytes");
 assert.deepEqual(local.exportSnapshot().changes[0].snapshot, database.changes[0].snapshot);
+await local.importSnapshot(local.exportSnapshot(), undefined, true);
+assert.equal(await (await local.readRestoredFile({ documentId: "d1" }))!.text(), "Exact original file bytes");
 const before = local.exportSnapshot().tables;
 await assert.rejects(local.importSnapshot({ ...database, changes: [{ bad: true }] } as any), /change history/); assert.deepEqual(local.exportSnapshot().tables, before);
 const legacy = new JSZip(); legacy.file("legacy-backup.json", JSON.stringify(database)); legacy.file("summary.json", "{}");

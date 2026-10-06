@@ -337,4 +337,7 @@ export class StaticConvexClient {
   }
 
   getLocalWorkspaceAttachmentReferences() { return this.store.exportAttachmentReferences(); }
+
+  /** In-place record migrations retain already saved binary files. */
+  replaceLocalWorkspaceRecords(snapshot: LocalWorkspaceSnapshot) { return this.store.importSnapshot(snapshot, undefined, true); }
 }
