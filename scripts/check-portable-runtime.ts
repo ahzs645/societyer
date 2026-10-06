@@ -225,6 +225,14 @@ async function holdingsAndClass(db: TransactionalDb) {
   const suppliedEntityId = factory.mint("meeting");
   const suppliedId = await local.transaction(() => local.insert("meetings", { entityId: suppliedEntityId, title: "Supplied identity" }));
   assert.equal((await local.get(suppliedId))?.entityId, suppliedEntityId, "local inserts preserve a caller-provided entityId");
+  for (const db of [new MemoryDb({ now: () => t }), new LocalStoreDb(new MemoryRowStore(), { now: () => t })]) {
+    const id = await db.transaction(() => db.insert("meetings", { title: "Injected identity clock" }));
+    const row = await db.get(id);
+    assert.ok(row?.entityId && looksLikeEntityId(row.entityId, "meetings"), "both engines mint application identities");
+    assert.equal(row.entityId.split("_")[1].slice(0, 10), c.split("_")[1].slice(0, 10), "entity identity honors the injected clock");
+    const preservedId = await db.transaction(() => db.insert("meetings", { entityId: suppliedEntityId }));
+    assert.equal((await db.get(preservedId))?.entityId, suppliedEntityId, "both engines preserve supplied application identities");
+  }
   console.log("✓ ids: monotonic sortable entityIds + map + local insert mint/preserve");
 }
 

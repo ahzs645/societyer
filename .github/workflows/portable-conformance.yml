@@ -35,10 +35,18 @@ jobs:
       - name: Portable conformance suites
         run: |
           npm run test:portable-runtime
+          npm run test:portable-principal
+          npm run test:portable-query-cache
           npm run test:portable-live-runtime
           npm run test:portable-convex-oracle
           npm run test:portable-captable
           npm run test:portable-conformance-matrix
+
+      - name: Authorization and pathway registry gates
+        run: |
+          npm run test:pathway-registry
+          npm run test:authorization-policy
+          npm run test:permissioned-mutation
 
       - name: Static-mirror parity gate
         run: npm run test:static-parity

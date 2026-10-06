@@ -1079,6 +1079,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
 
   // permissions
   definePortableQuery({ name: "permissions:myPermissions", handler: permissionsFns.myPermissionsPortable }),
+  definePortableQuery({ name: "permissions:check", handler: permissionsFns.checkPermissionPortable }),
+  definePortableQuery({ name: "http:workspaceCreationAccess", handler: societyFns.workspaceCreationAccessPortable }),
 
   // documentVersions
   definePortableQuery({ name: "documentVersions:listForDocument", handler: documentVersionsFns.listForDocumentPortable }),

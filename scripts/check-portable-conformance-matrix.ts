@@ -3,8 +3,8 @@
 // docs/portable-functions-architecture.md item 2: the convex-test oracle proves
 // a handful of domains against real Convex, but nothing exercised the *breadth*
 // of the registry across the two dependency-free local engines. This harness
-// does: it takes the generated manifest's work-list (every registered portable
-// function — the authoritative PORTABLE_FUNCTIONS array) and runs each one on
+// does: it takes every registered portable function in the authoritative
+// PORTABLE_FUNCTIONS array and runs each one on
 //   - MemoryDb      (the reference engine), and
 //   - LocalStoreDb  (the real browser/Electron adapter, over MemoryRowStore)
 // from an IDENTICAL, realistically-seeded workspace, then asserts the two engines
@@ -18,6 +18,9 @@
 // against real Convex stays the job of check-portable-convex-oracle.ts.
 
 import assert from "node:assert/strict";
+import { performance } from "node:perf_hooks";
+import { inspect } from "node:util";
+const startedAt = performance.now();
 
 // Freeze wall-clock + randomness BEFORE any handler runs. Many portable handlers
 // stamp timestamps with `new Date()` / `Date.now()` and mint tokens with
@@ -29,7 +32,7 @@ import assert from "node:assert/strict";
 const FROZEN_MS = 1_700_000_000_000;
 const RealDate = Date;
 class FrozenDate extends RealDate {
-  constructor(...args: any[]) {
+  constructor(...args: unknown[]) {
     super(...((args.length === 0 ? [FROZEN_MS] : args) as []));
   }
   static now() {
@@ -45,10 +48,14 @@ import {
   MemoryRowStore,
   PortableRuntime,
   type PortableDoc,
+  type PortablePrincipal,
 } from "../shared/portable/index";
 import { PORTABLE_FUNCTIONS } from "../shared/functions/registry";
 import { runPortable as seedDemoSociety } from "../shared/functions/seed";
+import { PERMISSIONS } from "../shared/functions/permissions";
 import { buildLocalCapabilities } from "../src/lib/localCapabilities";
+
+import { portableTestPrincipal, seedPortableTestMembership } from "./portable-test-fixture";
 
 type Fixture = Record<string, PortableDoc[]>;
 
@@ -56,9 +63,9 @@ const FIXED_NOW = 1_700_000_000_000;
 const fixedNow = () => FIXED_NOW;
 // Each engine gets its OWN counter so the two produce an identical id sequence
 // for any writes a mutation makes (a shared closure would interleave them).
-const makeMintId = () => {
+const makeMintId = (scope = "smoke") => {
   let n = 0;
-  return (table: string) => `${table}__smoke_${n++}`;
+  return (table: string) => `${table}__${scope}_${n++}`;
 };
 const caps = buildLocalCapabilities({ runtimeLabel: "conformance-matrix" });
 const clone = <T>(v: T): T => structuredClone(v);
@@ -67,18 +74,23 @@ const clone = <T>(v: T): T => structuredClone(v);
 // runPortable seeds the demo society exclusively through ctx.db, so it runs on
 // the local engine unchanged. We seed once, then load the SAME rows into both
 // engines for every function under test.
-async function buildFixture(): Promise<{ fixture: Fixture; societyId: string }> {
+async function buildFixture(): Promise<{ fixture: Fixture; societyId: string; principal: PortablePrincipal }> {
   const store = new MemoryRowStore();
-  const db = new LocalStoreDb(store, { mintId: makeMintId(), now: fixedNow });
-  const runtime = new PortableRuntime({ db, capabilities: caps }).registerAll(PORTABLE_FUNCTIONS);
+  // Fixture ids cannot collide with a tested mutation's fresh id sequence.
+  const db = new LocalStoreDb(store, { mintId: makeMintId("seed"), now: fixedNow });
+  const fixturePrincipal = portableTestPrincipal();
+  assert(fixturePrincipal.kind === "user", "fixture must supply a workspace user");
+  const runtime = new PortableRuntime({ db, capabilities: caps, principalProvider: () => fixturePrincipal }).registerAll(PORTABLE_FUNCTIONS);
   // seed:run is intentionally unregistered (server-only), so call the handler
   // directly through a mutation transaction, exactly as the runtime would.
   const { societyId } = await db.transaction(() =>
-    seedDemoSociety({ db, capabilities: caps, runQuery: (n, a) => runtime.runQuery(n, a), runMutation: (n, a) => runtime.runMutation(n, a) }),
+    seedDemoSociety({ db, capabilities: caps, principal: fixturePrincipal, runQuery: (n, a) => runtime.runQuery(n, a), runMutation: (n, a) => runtime.runMutation(n, a) }),
   );
+  const userId = await db.transaction(() => seedPortableTestMembership({ db }, societyId));
+  const principal: PortablePrincipal = { ...fixturePrincipal, userId, societyId };
   const fixture: Fixture = {};
   for (const table of store.tableNames()) fixture[table] = store.rows(table);
-  return { fixture, societyId };
+  return { fixture, societyId, principal };
 }
 
 // --- state capture + normalisation for cross-engine comparison ----------------
@@ -103,6 +115,11 @@ function localState(store: MemoryRowStore): Record<string, PortableDoc[]> {
 }
 
 type Outcome = { threw: boolean; value?: unknown; error?: unknown };
+function errorValue(error: unknown): unknown {
+  return error instanceof Error
+    ? { name: error.name, message: error.message, ...Object.fromEntries(Object.entries(error)) }
+    : error;
+}
 async function settle(run: () => Promise<unknown>): Promise<Outcome> {
   try {
     return { threw: false, value: await run() };
@@ -112,20 +129,39 @@ async function settle(run: () => Promise<unknown>): Promise<Outcome> {
 }
 
 // --- the matrix ---------------------------------------------------------------
-const { fixture, societyId } = await buildFixture();
-const CANDIDATE_ARGS: Record<string, any>[] = [{ societyId }, {}];
+const { fixture, societyId, principal } = await buildFixture();
+const CANDIDATE_ARGS: Record<string, unknown>[] = [{ societyId }, {}];
 
 // Shared read engines: queries are read-only, so one pair serves every query.
 const queryMem = new MemoryDb({ seed: clone(fixture), mintId: makeMintId(), now: fixedNow });
 const queryLocal = new LocalStoreDb(new MemoryRowStore(clone(fixture)), { mintId: makeMintId(), now: fixedNow });
-const queryMemRt = new PortableRuntime({ db: queryMem, capabilities: caps }).registerAll(PORTABLE_FUNCTIONS);
-const queryLocalRt = new PortableRuntime({ db: queryLocal, capabilities: caps }).registerAll(PORTABLE_FUNCTIONS);
+const queryMemRt = new PortableRuntime({ db: queryMem, capabilities: caps, principalProvider: () => principal }).registerAll(PORTABLE_FUNCTIONS);
+const queryLocalRt = new PortableRuntime({ db: queryLocal, capabilities: caps, principalProvider: () => principal }).registerAll(PORTABLE_FUNCTIONS);
+assert.equal(principal.kind, "user");
+for (const runtime of [queryMemRt, queryLocalRt]) {
+  const authority = await runtime.runQuery<{ role: string; permissions: string[] }>("permissions:myPermissions", { societyId, userId: principal.kind === "user" ? principal.userId : undefined });
+  assert.equal(authority.role, "Owner");
+  assert.deepEqual(authority.permissions, PERMISSIONS, "fixture owner must have full current permissions");
+}
 
 const tally = {
   query: { total: 0, exercised: 0, consistentThrow: 0, divergent: 0 },
   mutation: { total: 0, exercised: 0, consistentThrow: 0, divergent: 0 },
 };
 const divergences: string[] = [];
+
+function compare(name: string, args: Record<string, unknown>, mem: Outcome, loc: Outcome, states?: { memory: Fixture; local: Fixture }): string {
+  try {
+    assert.equal(loc.threw, mem.threw, "throw/return outcome");
+    if (mem.threw) assert.deepEqual(errorValue(loc.error), errorValue(mem.error), "thrown error");
+    else assert.deepEqual(loc.value, mem.value, "return value");
+    if (states) assert.deepEqual(states.local, states.memory, "post-state (including rollback)");
+    return mem.threw ? "consistentThrow" : "exercised";
+  } catch (error) {
+    console.error(`${name} args=${inspect(args)}\n${error instanceof Error ? error.message : inspect(error)}`);
+    return "divergent";
+  }
+}
 
 function record(kind: "query" | "mutation", name: string, cells: string[]) {
   const t = tally[kind];
@@ -146,16 +182,7 @@ for (const def of PORTABLE_FUNCTIONS) {
     for (const args of CANDIDATE_ARGS) {
       const mem = await settle(() => queryMemRt.runQuery(def.name, args));
       const loc = await settle(() => queryLocalRt.runQuery(def.name, args));
-      if (mem.threw !== loc.threw) cells.push("divergent");
-      else if (mem.threw) cells.push("consistentThrow");
-      else {
-        try {
-          assert.deepEqual(loc.value, mem.value);
-          cells.push("exercised");
-        } catch {
-          cells.push("divergent");
-        }
-      }
+      cells.push(compare(def.name, args, mem, loc));
     }
     record("query", def.name, cells);
   } else {
@@ -165,21 +192,11 @@ for (const def of PORTABLE_FUNCTIONS) {
       const memDb = new MemoryDb({ seed: clone(fixture), mintId: makeMintId(), now: fixedNow });
       const locStore = new MemoryRowStore(clone(fixture));
       const locDb = new LocalStoreDb(locStore, { mintId: makeMintId(), now: fixedNow });
-      const memRt = new PortableRuntime({ db: memDb, capabilities: caps }).registerAll(PORTABLE_FUNCTIONS);
-      const locRt = new PortableRuntime({ db: locDb, capabilities: caps }).registerAll(PORTABLE_FUNCTIONS);
+      const memRt = new PortableRuntime({ db: memDb, capabilities: caps, principalProvider: () => principal }).registerAll(PORTABLE_FUNCTIONS);
+      const locRt = new PortableRuntime({ db: locDb, capabilities: caps, principalProvider: () => principal }).registerAll(PORTABLE_FUNCTIONS);
       const mem = await settle(() => memRt.runMutation(def.name, args));
       const loc = await settle(() => locRt.runMutation(def.name, args));
-      if (mem.threw !== loc.threw) cells.push("divergent");
-      else if (mem.threw) cells.push("consistentThrow");
-      else {
-        try {
-          assert.deepEqual(loc.value, mem.value, "return value");
-          assert.deepEqual(localState(locStore), memState(memDb), "post-state");
-          cells.push("exercised");
-        } catch {
-          cells.push("divergent");
-        }
-      }
+      cells.push(compare(def.name, args, mem, loc, { memory: memState(memDb), local: localState(locStore) }));
     }
     record("mutation", def.name, cells);
   }
@@ -200,4 +217,5 @@ if (divergences.length) {
   process.exit(1);
 }
 
+console.log(`  elapsed: ${((performance.now() - startedAt) / 1000).toFixed(2)}s`);
 console.log("\n✓ MemoryDb and LocalStoreDb agree across the entire portable surface.");

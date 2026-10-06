@@ -23,6 +23,7 @@ import type {
   SearchFilterBuilder,
   TableName,
 } from "./ctx";
+import { createEntityIdFactory } from "./ids";
 
 type Constraint = { op: "eq" | "gt" | "gte" | "lt" | "lte"; field: string; value: unknown };
 
@@ -218,12 +219,15 @@ export class MemoryDb implements PortableDbWriter {
   private tables = new Map<TableName, Map<string, PortableDoc>>();
   private idIndex = new Map<string, TableName>();
   private readonly mintId: (table: string) => string;
+  private readonly mintEntityId: (table: string) => string;
   private readonly now: () => number;
   private autoId = 0;
 
   constructor(options: MemoryDbOptions = {}) {
     this.mintId = options.mintId ?? ((table) => `${table}_${(++this.autoId).toString(36).padStart(6, "0")}`);
     this.now = options.now ?? (() => Date.now());
+    const factory = createEntityIdFactory({ now: this.now });
+    this.mintEntityId = (table) => factory.mint(table);
     for (const [table, rows] of Object.entries(options.seed ?? {})) {
       for (const row of rows) this.put(table, clone(row));
     }
@@ -256,7 +260,8 @@ export class MemoryDb implements PortableDbWriter {
 
   async insert(table: TableName, doc: Record<string, any>): Promise<string> {
     const _id = typeof doc._id === "string" && doc._id ? doc._id : this.mintId(table);
-    const row: PortableDoc = { _creationTime: this.now(), ...doc, _id };
+    const entityId = typeof doc.entityId === "string" && doc.entityId ? doc.entityId : this.mintEntityId(table);
+    const row: PortableDoc = { _creationTime: this.now(), ...doc, _id, entityId };
     this.put(table, clone(row));
     return _id;
   }

@@ -137,10 +137,10 @@ export class LocalStoreDb implements PortableDbWriter {
 
   constructor(store: LocalRowStore, options: LocalStoreDbOptions = {}) {
     this.store = store;
-    const factory = createEntityIdFactory();
+    this.now = options.now ?? (() => Date.now());
+    const factory = createEntityIdFactory({ now: this.now });
     this.mintId = options.mintId ?? ((table) => factory.mint(table));
     this.mintEntityId = (table) => factory.mint(table);
-    this.now = options.now ?? (() => Date.now());
   }
 
   /** Overlay-merged view of a table (read-your-writes inside a transaction). */

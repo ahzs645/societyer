@@ -36,98 +36,16 @@
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, basename } from "node:path";
+import { scanModule, LOCAL_RUNTIME_VARIANTS } from "./portable-convex-scan.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const convexDir = resolve(root, "convex");
 const manifestPath = resolve(root, "shared/functions/portable-manifest.json");
 const registryPath = resolve(root, "shared/functions/registry.ts");
+const docsPath = resolve(root, "docs/portable-functions-architecture.md");
 
 const args = new Set(process.argv.slice(2));
 const mode = args.has("--check") ? "check" : args.has("--report") ? "report" : "write";
-
-/**
- * Exports that delegate to a portable handler but are intentionally NOT part of
- * the local runtime surface, so they are classified server-only and NOT required
- * in the registry. Today: the bulk seed / demo-data maintenance mutations
- * (docs/portable-functions-architecture.md calls seed maintenance server-only).
- * The exclusion is per-function, not per-module — e.g. the same seed module's
- * `ensureForSociety` IS registered and portable. Keep this list small and
- * reviewed. Format: "module:exportName".
- */
-const EXPLICIT_SERVER_ONLY = new Set([
-  "seed:run",
-  "seed:reset",
-  "seedRecordTableMetadata:run",
-  "seedRecordTableMetadata:runForSociety",
-  "seedRecordTableMetadata:wipe",
-]);
-
-const KINDS = ["query", "mutation", "action", "internalQuery", "internalMutation", "internalAction"];
-// Longer names first so the alternation prefers `internalMutation` over `mutation`.
-const KIND_ALT = "internalMutation|internalQuery|internalAction|mutation|query|action";
-const SERVER_ONLY_KINDS = new Set(["action", "internalQuery", "internalMutation", "internalAction"]);
-
-/**
- * Split a module source into per-export blocks: { exportName, kind, block }.
- * Handles both `export const x = mutation({...})` and the cast form
- * `export const x = (query as any)({...})` used in a couple of modules.
- */
-function splitExports(source) {
-  const head = new RegExp(
-    `export\\s+const\\s+(\\w+)\\s*=\\s*\\(?\\s*(${KIND_ALT})\\b(?:\\s+as\\s+\\w+)?\\s*\\)?\\s*\\(`,
-    "g",
-  );
-  const boundaries = [];
-  let m;
-  while ((m = head.exec(source)) !== null) {
-    boundaries.push({ exportName: m[1], kind: m[2], index: m.index });
-  }
-  return boundaries.map((b, i) => ({
-    exportName: b.exportName,
-    kind: b.kind,
-    block: source.slice(b.index, i + 1 < boundaries.length ? boundaries[i + 1].index : source.length),
-  }));
-}
-
-/** Identifiers imported from `../shared/functions/<mod>` (named imports). */
-function sharedFunctionImports(source) {
-  const names = new Set();
-  const re = /import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*["']\.\.\/shared\/functions\/[\w-]+["']/g;
-  let m;
-  while ((m = re.exec(source)) !== null) {
-    for (const raw of m[1].split(",")) {
-      const id = raw.trim().split(/\s+as\s+/).pop()?.trim();
-      if (id) names.add(id);
-    }
-  }
-  return names;
-}
-
-/**
- * Detect a portable delegation anywhere in an export block. A Convex export is
- * portable when its handler delegates to a shared function. Three delegation
- * shapes appear in convex/:
- *   fn(toPortable{Query,Mutation}Ctx(ctx), ...)                     — portable
- *   fn(toPortable...Ctx(ctx, buildConvexCapabilities(ctx)), ...)    — capability-backed
- *   fn(withStorageCaps(ctx), ...)   // withStorageCaps == the caps form — capability-backed
- *   sharedFn()                      // pure, no ctx (catalog queries) — portable
- * Capabilities are threaded in via `buildConvexCapabilities(ctx)` or a
- * `with…Caps(ctx)` ctx wrapper. Returns { capability } or null.
- */
-function detectDelegation(block, sharedNames) {
-  const capability =
-    /buildConvexCapabilities\(\s*ctx/.test(block) || /with\w*Caps\(\s*ctx/.test(block);
-  if (/toPortable(?:Query|Mutation)Ctx\(\s*ctx/.test(block) || /with\w*Caps\(\s*ctx/.test(block)) {
-    return { capability };
-  }
-  // Pure delegation: a call to a shared-imported `*Portable` handler with no ctx.
-  for (const id of sharedNames) {
-    if (id.endsWith("Portable") && new RegExp(`\\b${id}\\(`).test(block)) {
-      return { capability };
-    }
-  }
-  return null;
-}
 
 /** Scan all top-level convex modules into a flat, classified function list. */
 function scanConvex() {
@@ -138,22 +56,8 @@ function scanConvex() {
   for (const file of files) {
     const module = basename(file, ".ts");
     const source = readFileSync(resolve(convexDir, file), "utf8");
-    const sharedNames = sharedFunctionImports(source);
-    for (const { exportName, kind, block } of splitExports(source)) {
-      const name = `${module}:${exportName}`;
-      const deleg = detectDelegation(block, sharedNames);
-      let classification;
-      if (EXPLICIT_SERVER_ONLY.has(name)) {
-        // Intentionally off the local surface even though it delegates.
-        classification = "server-only";
-      } else if (deleg) {
-        classification = deleg.capability ? "capability-backed" : "portable";
-      } else if (SERVER_ONLY_KINDS.has(kind)) {
-        classification = "server-only";
-      } else {
-        classification = "static-fallback";
-      }
-      functions.push({ name, module, export: exportName, kind, classification });
+    for (const { delegates: _delegates, ...fn } of scanModule(source, module)) {
+      functions.push(fn);
     }
   }
   functions.sort((a, b) => a.name.localeCompare(b.name));
@@ -165,6 +69,10 @@ function readRegistryNames() {
   const src = readFileSync(registryPath, "utf8");
   const names = new Set();
   for (const m of src.matchAll(/name:\s*"([^"]+)"/g)) names.add(m[1]);
+  for (const [name, { handler }] of LOCAL_RUNTIME_VARIANTS) {
+    const entry = src.match(new RegExp(`name:\\s*"${name}"[^}]*handler:\\s*([\\w.]+)`));
+    if (entry && entry[1] !== handler) throw new Error(`${name}: expected reviewed local variant ${handler}, got ${entry[1]}`);
+  }
   return names;
 }
 
@@ -178,8 +86,9 @@ function buildManifest() {
   // Portable buckets must be registered; the registry must not reference names
   // no convex export delegates to any more.
   const portableNames = new Set([...buckets.portable, ...buckets["capability-backed"]]);
-  const missingFromRegistry = [...portableNames].filter((n) => !registered.has(n)).sort();
-  const orphanedInRegistry = [...registered].filter((n) => !portableNames.has(n)).sort();
+  const expected = new Set([...portableNames, ...functions.filter((fn) => fn.localRuntimeVariant).map((fn) => fn.name)]);
+  const missingFromRegistry = [...expected].filter((n) => !registered.has(n)).sort();
+  const orphanedInRegistry = [...registered].filter((n) => !expected.has(n)).sort();
 
   const totals = {
     convexFunctions: functions.length,
@@ -188,6 +97,7 @@ function buildManifest() {
     serverOnly: buckets["server-only"].length,
     staticFallback: buckets["static-fallback"].length,
     registered: registered.size,
+    localRuntimeVariants: functions.filter((fn) => fn.localRuntimeVariant).length,
   };
 
   return {
@@ -210,11 +120,25 @@ function summarize(totals) {
     `  ─────────────────────────`,
     `  convex functions:  ${totals.convexFunctions}`,
     `  registry entries:  ${totals.registered}`,
+    `  local variants:    ${totals.localRuntimeVariants} (included in registry; hosted classification retained)`,
   ].join("\n");
 }
 
 const { manifest, drift } = buildManifest();
 const serialized = JSON.stringify(manifest, null, 2) + "\n";
+const countsBlock = [
+  "<!-- portable-manifest-counts:start -->",
+  "Generated by `node scripts/portable-manifest.mjs`; checked by `--check`.",
+  "",
+  "| Manifest total | Count |",
+  "| --- | ---: |",
+  ...Object.entries(manifest.totals).map(([name, count]) => `| \`${name}\` | ${count} |`),
+  "<!-- portable-manifest-counts:end -->",
+].join("\n");
+const docs = readFileSync(docsPath, "utf8");
+const countsPattern = /<!-- portable-manifest-counts:start -->[\s\S]*?<!-- portable-manifest-counts:end -->/;
+if (!countsPattern.test(docs)) throw new Error("Architecture doc is missing the generated manifest counts markers");
+const updatedDocs = docs.replace(countsPattern, countsBlock);
 
 if (mode === "report") {
   console.log(summarize(manifest.totals));
@@ -227,6 +151,7 @@ if (mode === "report") {
 
 if (mode === "write") {
   writeFileSync(manifestPath, serialized);
+  if (updatedDocs !== docs) writeFileSync(docsPath, updatedDocs);
   console.log(`Wrote ${manifestPath}`);
   console.log(summarize(manifest.totals));
   process.exit(0);
@@ -234,6 +159,7 @@ if (mode === "write") {
 
 // mode === "check"
 const errors = [];
+if (updatedDocs !== docs) errors.push("Architecture doc manifest counts are stale. Run `node scripts/portable-manifest.mjs`.");
 
 if (drift.missingFromRegistry.length) {
   errors.push(
