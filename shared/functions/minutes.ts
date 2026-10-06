@@ -3,6 +3,8 @@ import { buildSourceMeetingRecord, preflightSourceMeetingRecord, type SourceMeet
 import { requireDocumentAccess, documentAccessPredicate } from "./documents";
 import { minutesEvidenceOptions } from "../minutesExportEvidence";
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
+import { normalizeMeetingHistory, assertMeetingHistoryMutable, MEETING_HISTORY_FIELDS, type MeetingHistory, type HistoricalAction } from "../meetingHistory";
+import { normalizeMeetingQuorum } from "../minutesQuorum";
 /**
  * PORTABLE FUNCTIONS: the minutes domain
  * (list / getByMeeting / create / update / upsertFromDraft /
@@ -361,7 +363,7 @@ async function minutesSnapshot(ctx: PortableMutationCtx, record: any, motions: a
 
 /** Imported source copies obey the source document ACL as well as minutes access. */
 async function sourceMinutesView(ctx: PortableQueryCtx, minutes: any) {
-  if (!minutes?.sourceTransposition && !minutes?.sourceMeetingRecord) return minutes;
+  if (!minutes?.sourceTransposition && !minutes?.sourceMeetingRecord && !(minutes?.sourceDocumentIds?.length && MEETING_HISTORY_FIELDS.some(field => minutes[field]?.length))) return minutes;
   let visible = true;
   try {
     await requirePermissionPortable(ctx,String(minutes.societyId),"documents:read");
@@ -375,7 +377,7 @@ async function sourceMinutesView(ctx: PortableQueryCtx, minutes: any) {
   if (visible) return minutes;
   return {...minutes,discussion:"Source content is restricted by document access.",decisions:[],actionItems:[],displayMotions:[],
     sections:(minutes.sections ?? []).map((section:any) => ({title:section.title,depth:section.depth ?? 0,type:section.type,discussion:"Source content is restricted by document access."})),
-    sourceMeetingRecord:undefined,draftTranscript:undefined,motions:[],motionSnapshots:[],adoptedSnapshot:undefined,adoptionHistory:[],sourceTransposition:{version:1,reviewStatus:"restricted",note:"Open the source with an authorized document account to view imported evidence."}};
+    historicalActions:[],quorumEvents:[],sourceVersions:[],sourceMeetingRecord:undefined,draftTranscript:undefined,motions:[],motionSnapshots:[],adoptedSnapshot:undefined,adoptionHistory:[],sourceTransposition:{version:1,reviewStatus:"restricted",note:"Open the source with an authorized document account to view imported evidence."}};
 }
 
 // ----- queries --------------------------------------------------------------
@@ -581,6 +583,9 @@ export async function transposeSourcePortable(ctx: PortableMutationCtx, {id,sour
 // ----- mutations ------------------------------------------------------------
 
 export async function createPortable(ctx: PortableMutationCtx, args: any) {
+  args = { ...args, ...normalizeMeetingHistory(args) };
+  for (const key of MEETING_HISTORY_FIELDS) if (args[key] === undefined) delete args[key];
+  await assertMeetingHistoryReferences(ctx, args.societyId, args, undefined, args.heldAt);
   await requireSocietyMembership(ctx, args.societyId);
   if (args.sourceReviewedByUserId) {
     await getOwned(ctx, "users", args.sourceReviewedByUserId, args.societyId);
@@ -597,6 +602,7 @@ export async function createPortable(ctx: PortableMutationCtx, args: any) {
   const { motions: _motions, ...minutesFields } = args;
   const id = await ctx.db.insert("minutes", {
     ...minutesFields,
+    ...normalizeMeetingQuorum(args),
     sourceReviewedByUserId: args.sourceReviewedByUserId
       ? await principalUserId(ctx, args.societyId)
       : undefined,
@@ -698,6 +704,11 @@ export async function updatePortable(
   const approvalMetadata = new Set(["clearApproval", "clearApprovedInMeeting", "approvedAt", "approvedInMeetingId", "motions"]);
   if (minutes.approvedAt && !rawPatch.clearApproval && Object.keys(rawPatch).some(key => !approvalMetadata.has(key))) throw new Error("Adopted minutes are frozen. Start an amendment to change recorded content.");
   const societyId = String(minutes.societyId);
+  const historyPatch = normalizeMeetingHistory(rawPatch);
+  assertMeetingHistoryMutable(minutes, historyPatch, rawPatch.clearApproval === true);
+  await assertMeetingHistoryReferences(ctx, societyId, rawPatch.heldAt !== undefined ? { ...normalizeMeetingHistory(minutes), ...historyPatch } : historyPatch, id, rawPatch.heldAt);
+  rawPatch = { ...rawPatch, ...historyPatch };
+  for (const key of MEETING_HISTORY_FIELDS) if (rawPatch[key] === undefined) delete rawPatch[key];
   await assertMinutesForeignKeys(ctx, societyId, rawPatch);
   const adoptionTargets = Array.isArray(rawPatch.motions)
     ? await adoptionApprovalTargets(ctx, minutes, rawPatch.motions) : [];
@@ -710,6 +721,9 @@ export async function updatePortable(
   // `undefined` fields are stripped from the wire, so unsetting approval
   // arrives as explicit clear flags (mirrors meetings.clearNoticeSent).
   const { clearApproval, clearApprovedInMeeting, motions: submittedMotions, ...patch } = rawPatch;
+  if (Object.hasOwn(patch, "quorumMet") || Object.hasOwn(patch, "quorumStatus")) {
+    Object.assign(patch, normalizeMeetingQuorum(patch));
+  }
   if (patch.sourceReviewedByUserId) {
     patch.sourceReviewedByUserId = await principalUserId(ctx, societyId);
   }
@@ -778,6 +792,8 @@ export async function updatePortable(
 
 // Upsert a minutes row from an AI-generated draft (transcripts.runPipeline).
 export async function upsertFromDraftPortable(ctx: PortableMutationCtx, args: any) {
+  args = { ...args, ...normalizeMeetingHistory(args) };
+  for (const key of MEETING_HISTORY_FIELDS) if (args[key] === undefined) delete args[key];
   await requireSocietyMembership(ctx, args.societyId);
   if (args.sourceReviewedByUserId) {
     await getOwned(ctx, "users", args.sourceReviewedByUserId, args.societyId);
@@ -798,20 +814,19 @@ export async function upsertFromDraftPortable(ctx: PortableMutationCtx, args: an
       ? await principalUserId(ctx, args.societyId)
       : undefined,
     ...minutesSnapshotFields(args, snapshot),
-    quorumMet:
-      args.quorumStatus
-        ? args.quorumStatus === "confirmed"
-        : quorumRequired == null
-        ? args.quorumMet
-        : args.attendees.length >= quorumRequired,
+    ...normalizeMeetingQuorum(args.quorumStatus != null || quorumRequired == null
+      ? args
+      : { quorumMet: args.attendees.length >= quorumRequired }),
   };
   const existing = await ctx.db
     .query("minutes")
     .withIndex("by_meeting", (q) => q.eq("meetingId", args.meetingId))
     .collect();
+  await assertMeetingHistoryReferences(ctx, args.societyId, payload, existing[0]?._id, args.heldAt);
   if (existing[0]) {
     if (existing[0].approvedAt || existing[0].adoptedSnapshot || Array.isArray(existing[0].motionSnapshots)) throw new Error("Adopted minutes are frozen. Start an amendment before importing a draft.");
     if (hasRecordedMinuteSectionContent(existing[0].sections)) throw new Error("Existing minute sections contain recorded content. Review the new draft separately before replacing them.");
+    assertMeetingHistoryMutable(existing[0], normalizeMeetingHistory(payload));
     await ctx.db.patch(existing[0]._id, payload);
     await syncMotionsForMinutes(ctx, {
       societyId: args.societyId,
@@ -1097,4 +1112,92 @@ function normalizePersonLookupName(value: unknown) {
 
 function unique<T>(values: T[]) {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+/** Resolve every history reference against the owning society before native writes. */
+export async function assertMeetingHistoryReferences(ctx: PortableMutationCtx, societyId: string, fields: MeetingHistory, minutesId?: string, targetHeldAt?: unknown) {
+  for (const action of fields.historicalActions ?? []) {
+    if (!action.carriedFromMinutesId) continue;
+    if (action.carriedFromMinutesId === minutesId) throw new Error("An action cannot be carried from its own minutes");
+    const source = await getOwned(ctx, "minutes", action.carriedFromMinutesId, societyId);
+    const observation = (normalizeMeetingHistory(source).historicalActions ?? []).find((row) => row.entryId === action.carriedFromEntryId);
+    if (!observation) throw new Error("Carried action source entry does not exist");
+    if (observation.actionKey !== action.actionKey) throw new Error("Carried action identity must match its source observation");
+    if (minutesId || targetHeldAt !== undefined) {
+      const heldAt = targetHeldAt !== undefined ? targetHeldAt : (await getOwned(ctx, "minutes", minutesId!, societyId)).heldAt;
+      assertCarryChronology(source.heldAt, heldAt);
+    }
+    const seen = new Set<string>(minutesId ? [`${minutesId}::${action.entryId}`] : []);
+    let ancestorMinutes = source;
+    let ancestor: HistoricalAction | undefined = observation;
+    while (ancestor) {
+      const identity = `${ancestorMinutes._id}::${ancestor.entryId}`;
+      if (seen.has(identity)) throw new Error("Carried action ancestry contains a cycle");
+      seen.add(identity);
+      if (!ancestor.carriedFromMinutesId) break;
+      ancestorMinutes = await getOwned(ctx, "minutes", ancestor.carriedFromMinutesId, societyId);
+      const parentEntryId = ancestor.carriedFromEntryId;
+      const parent = (normalizeMeetingHistory(ancestorMinutes).historicalActions ?? []).find((row) => row.entryId === parentEntryId);
+      if (!parent) throw new Error("Carried action ancestor entry does not exist");
+      if (parent.actionKey !== action.actionKey) throw new Error("Carried action ancestor identity does not match");
+      ancestor = parent;
+    }
+  }
+  for (const version of fields.sourceVersions ?? []) {
+    if (version.adoptedInMeetingId) await getOwned(ctx, "meetings", version.adoptedInMeetingId, societyId);
+    const motion = version.adoptionMotionId ? await getOwned(ctx, "motions", version.adoptionMotionId, societyId) : undefined;
+    if (motion && version.adoptedInMeetingId && motion.primaryMeetingId !== version.adoptedInMeetingId) throw new Error("Adoption motion and adopting meeting do not match");
+    if (motion?.adoptsMinutesId && minutesId && motion.adoptsMinutesId !== minutesId) throw new Error("Adoption motion references different minutes");
+    if (version.status === "adopted" && !version.adoptionEvidence) {
+      if (!motion || !minutesId || motion.adoptsMinutesId !== minutesId || String(motion.outcome).toLowerCase() !== "carried") {
+        throw new Error("Adoption needs explicit evidence or a carried motion adopting these minutes");
+      }
+    }
+  }
+}
+
+/** Compare only valid source calendar dates; do not invent a missing date. */
+function assertCarryChronology(sourceDate: unknown, targetDate: unknown): void {
+  const calendar = (value: unknown): string | undefined => {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(value)) return undefined;
+    const day = value.slice(0, 10); const timestamp = Date.parse(`${day}T00:00:00Z`);
+    return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === day ? day : undefined;
+  };
+  const from = calendar(sourceDate); const to = calendar(targetDate);
+  if (from && to && from > to) throw new Error("Cannot carry an action from a later meeting into an earlier meeting");
+}
+
+/** Explicitly carry identity, never a historical completion assertion, forward. */
+export async function carryForwardActionPortable(ctx: PortableMutationCtx, args: {
+  sourceMinutesId: string; targetMinutesId: string; sourceEntryId: string; notes?: string;
+}): Promise<{ entryId: string; created: boolean }> {
+  const target = await requireOwnedRow(ctx, "minutes", args.targetMinutesId);
+  await requirePermissionPortable(ctx, String(target.societyId), "minutes:write");
+  await requirePermissionPortable(ctx, String(target.societyId), "minutes:read");
+  const source = await getOwned(ctx, "minutes", args.sourceMinutesId, String(target.societyId));
+  if ((await sourceMinutesView(ctx, source)).sourceTransposition?.reviewStatus === "restricted") throw new Error("Source content is restricted by document access.");
+  if (source._id === target._id) throw new Error("Choose a different target meeting for carry-forward");
+  if (target.approvedAt || target.adoptedSnapshot || Array.isArray(target.motionSnapshots)) throw new Error("Cannot carry actions into approved minutes");
+  assertCarryChronology(source.heldAt, target.heldAt);
+  const prior = (normalizeMeetingHistory(source).historicalActions ?? []).find((row) => row.entryId === args.sourceEntryId) as HistoricalAction | undefined;
+  if (!prior) throw new Error("Source action observation not found");
+  const existing = (normalizeMeetingHistory(target).historicalActions ?? []).find((row) => row.carriedFromMinutesId === source._id && row.carriedFromEntryId === prior.entryId);
+  if (existing) return { entryId: existing.entryId, created: false };
+  const entryId = `carry:${source._id}:${prior.entryId}`;
+  const next: HistoricalAction = {
+    entryId, actionKey: prior.actionKey, text: prior.text, status: "unknown",
+    carriedFromMinutesId: String(source._id), carriedFromEntryId: prior.entryId,
+    ...(prior.sourceActionId ? { sourceActionId: prior.sourceActionId } : {}),
+    ...(prior.assignee ? { assignee: prior.assignee } : {}),
+    ...(prior.dateAssigned ? { dateAssigned: prior.dateAssigned } : {}),
+    ...(prior.dueDate ? { dueDate: prior.dueDate } : {}),
+    ...(prior.sourceExternalIds ? { sourceExternalIds: prior.sourceExternalIds } : {}),
+    ...(prior.sourceLocator ? { sourceLocator: prior.sourceLocator } : {}),
+    notes: args.notes || "Carried forward by explicit review. Prior status remains at the source meeting; status at this meeting is not yet established.",
+  };
+  const patch = normalizeMeetingHistory({ historicalActions: [...(normalizeMeetingHistory(target).historicalActions ?? []), next] });
+  assertMeetingHistoryMutable(target, patch);
+  await assertMeetingHistoryReferences(ctx, String(target.societyId), patch, String(target._id));
+  await ctx.db.patch(target._id, patch);
+  return { entryId, created: true };
 }

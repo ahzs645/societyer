@@ -1,3 +1,6 @@
+import { mergeMeetingHistory, normalizeMeetingHistory } from "../../meetingHistory";
+import { assertMeetingHistoryReferences } from "../minutes";
+import { normalizeMeetingQuorum } from "../../minutesQuorum";
 // Import-session apply layer: ctx-taking writes, meeting merge, and record insertion.
 
 import { transposeSourcePortable } from "../minutes";
@@ -85,6 +88,8 @@ async function mergeExistingMeetingImport(
   const meeting = await ctx.db.get(target.meetingId);
   const minutesRow = await ctx.db.get(target.minutesId);
   if (!meeting || !minutesRow || minutesRow.approvedAt || minutesRow.adoptedSnapshot || Array.isArray(minutesRow.motionSnapshots)) return;
+  const historyPatch = mergeMeetingHistory(minutesRow, normalizeMeetingHistory(payload));
+  await assertMeetingHistoryReferences(ctx, String(session.societyId), historyPatch, String(minutesRow._id));
 
   const currentAgenda = await meetingAgendaItemTitles(ctx, meeting._id);
   const nextAgenda = arrayOf(payload.agendaItems).map(String).map(cleanText).filter((s): s is string => Boolean(s));
@@ -113,17 +118,15 @@ async function mergeExistingMeetingImport(
   }
   if (Object.keys(meetingPatch).length > 0) await ctx.db.patch(meeting._id, meetingPatch);
 
-  const minutesPatch: any = {};
+  const minutesPatch: Record<string, unknown> = { ...historyPatch };
   const attendees = arrayOf(payload.attendees).map(String).map(cleanText).filter(Boolean);
   const absent = arrayOf(payload.absent).map(String).map(cleanText).filter(Boolean);
   const motions = arrayOf(payload.motions).map(minutesMotionFromPayload);
   if ((!Array.isArray(minutesRow.attendees) || minutesRow.attendees.length === 0) && attendees.length > 0) minutesPatch.attendees = attendees;
   if ((!Array.isArray(minutesRow.absent) || minutesRow.absent.length === 0) && absent.length > 0) minutesPatch.absent = absent;
-  if ((!minutesRow.quorumStatus && !minutesRow.quorumMet) || minutesRow.quorumStatus === "not_recorded") {
-    if (["confirmed", "not_met", "not_recorded"].includes(payload.quorumStatus)) {
-      minutesPatch.quorumStatus = payload.quorumStatus;
-      minutesPatch.quorumMet = payload.quorumStatus === "confirmed";
-    } else if (!minutesRow.quorumMet && payload.quorumMet) minutesPatch.quorumMet = true;
+  // Fill an unknown observation only; conflicting known findings require review.
+  if (normalizeMeetingQuorum(minutesRow).quorumStatus === "not_recorded" && normalizeMeetingQuorum(payload).quorumStatus !== "not_recorded") {
+    Object.assign(minutesPatch, normalizeMeetingQuorum(payload));
   }
   if (isGenericImportedDiscussion(minutesRow.discussion) && cleanText(payload.discussion)) minutesPatch.discussion = cleanText(payload.discussion);
   if ((!Array.isArray(minutesRow.motions) || minutesRow.motions.length === 0) && motions.length > 0) minutesPatch.motions = motions;
@@ -164,7 +167,7 @@ async function mergeExistingMeetingImport(
       evidenceText: cleanText(motion.evidenceText),
       rawText: cleanText(motion.rawText),
     })),
-    note: "Converted from Paperless meeting-minute OCR; not an audio transcript.",
+    note: "Converted from imported meeting-minute source evidence; not an audio transcript.",
   });
 
   await ctx.db.patch(minutesRow._id, minutesPatch);
@@ -1581,6 +1584,7 @@ async function findExistingMeetingImport(
   sourceExternalIds: string[],
 ) {
   const dateKey = String(scheduledAt).slice(0, 10);
+  const normalizedTitle = cleanText(title)?.toLowerCase();
   const sources = new Set(sourceExternalIds.map((value) => String(value).toLowerCase()));
   const minutesRows = await ctx.db
     .query("minutes")
@@ -1590,7 +1594,12 @@ async function findExistingMeetingImport(
     const rowDate = String(row.heldAt ?? "").slice(0, 10);
     const rowSources = Array.isArray(row.sourceExternalIds) ? row.sourceExternalIds.map((value: string) => value.toLowerCase()) : [];
     if (rowDate === dateKey && rowSources.some((source: string) => sources.has(source))) {
-      return { meetingId: row.meetingId, minutesId: row._id };
+      // A board package can contain several bodies' minutes on the same date.
+      // Shared provenance alone is not a meeting identity.
+      const meeting = await ctx.db.get(row.meetingId);
+      if (cleanText(meeting?.title)?.toLowerCase() === normalizedTitle) {
+        return { meetingId: row.meetingId, minutesId: row._id };
+      }
     }
   }
 
@@ -1598,7 +1607,6 @@ async function findExistingMeetingImport(
     .query("meetings")
     .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
     .collect();
-  const normalizedTitle = cleanText(title)?.toLowerCase();
   const existing = meetings.find(
     (meeting: any) =>
       String(meeting.scheduledAt ?? "").slice(0, 10) === dateKey &&

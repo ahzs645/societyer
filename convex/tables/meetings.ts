@@ -1,3 +1,4 @@
+import { meetingHistoryFields } from "../validators/meetingHistory";
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -82,6 +83,7 @@ export const meetingTables = {
     adoptedSnapshot: v.optional(v.any()),
     adoptedRevision: v.optional(v.number()),
     adoptionHistory: v.optional(v.array(v.any())),
+    ...meetingHistoryFields,
     societyId: v.id("societies"),
     meetingId: v.id("meetings"),
     heldAt: v.string(),

@@ -371,6 +371,7 @@ export async function startMinutesFromAgendaPortable(
     attendees,
     absent: [],
     quorumMet: meeting.quorumRequired == null ? false : attendees.length >= meeting.quorumRequired,
+    quorumStatus: meeting.quorumRequired == null ? "not_recorded" : attendees.length >= meeting.quorumRequired ? "confirmed" : "not_met",
     discussion: "",
     sections: items.map(sectionFromAgendaItem),
     motions: motionsFromAgendaItems(items),

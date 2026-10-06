@@ -9,7 +9,7 @@ import { existingImportTarget, rememberImportTarget } from "./importTargetIdenti
  */
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
-import { syncMotionsForMinutes, transposeFreshImportedSourcePortable } from "./minutes";
+import { syncMotionsForMinutes, transposeFreshImportedSourcePortable, assertMeetingHistoryReferences } from "./minutes";
 import { actionPermission } from "./actionPolicy";
 import { requirePermissionPortable, type Permission } from "./permissions";
 import { requireDocumentAccess } from "./documents";
@@ -511,6 +511,7 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
       attendees: [],
       absent: [],
       quorumMet: false,
+      quorumStatus: "not_recorded",
       discussion: "Imported from converted Paperless meeting-minute motions. Review the source document before approving these minutes.",
       decisions: [],
       actionItems: [],
@@ -553,13 +554,19 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
       existing += 1;
       continue;
     }
+    await assertMeetingHistoryReferences(ctx, String(session.societyId), payload, undefined, payload.meetingDate);
 
     const meetingId = await ctx.db.insert("meetings", {
       societyId: session.societyId,
-      type: inferMeetingType(title),
+      type: payload.meetingType || inferMeetingType(title),
       title,
       scheduledAt,
-      electronic: false,
+      location: payload.location,
+      electronic: payload.electronic ?? false,
+      remoteUrl: payload.remoteParticipation?.url,
+      remoteMeetingId: payload.remoteParticipation?.meetingId,
+      remotePasscode: payload.remoteParticipation?.passcode,
+      remoteInstructions: payload.remoteParticipation?.instructions,
       status: "Held",
       attendeeIds: payload.attendees,
       sourceReviewStatus: "imported_needs_review",
@@ -583,6 +590,7 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
       attendees: payload.attendees,
       absent: payload.absent,
       quorumMet: payload.quorumMet,
+      quorumStatus: payload.quorumStatus,
       discussion: payload.discussion || "Imported from Paperless meeting minutes. Review the source document before approving these minutes.",
       ...structuredMinutesPatchFromPayload(payload),
       decisions: payload.decisions,

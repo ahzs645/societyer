@@ -1,4 +1,6 @@
+import { normalizeMeetingHistory } from "../../meetingHistory";
 // Import-session payload normalization, including insurance-policy dedupe/merge.
+import { normalizeMeetingQuorum } from "../../minutesQuorum";
 
 import {
   SECTION_RECORD_KINDS,
@@ -76,8 +78,12 @@ function normalizeMotionPayload(motion: any) {
 
 function normalizeMeetingMinutesPayload(minutes: any) {
   return {
+    ...normalizeMeetingHistory(minutes ?? {}),
     meetingDate: cleanText(minutes?.meetingDate),
     meetingTitle: cleanText(minutes?.meetingTitle),
+    meetingType: cleanText(minutes?.meetingType),
+    location: cleanText(minutes?.location),
+    electronic: optionalBoolean(minutes?.electronic),
     chairName: cleanText(minutes?.chairName),
     secretaryName: cleanText(minutes?.secretaryName),
     recorderName: cleanText(minutes?.recorderName),
@@ -87,8 +93,7 @@ function normalizeMeetingMinutesPayload(minutes: any) {
     detailedAttendance: normalizeDetailedAttendancePayload(minutes?.detailedAttendance),
     attendees: compactStrings(arrayOf(minutes?.attendees)),
     absent: compactStrings(arrayOf(minutes?.absent)),
-    quorumMet: normalizeQuorumStatus(minutes) === "confirmed",
-    quorumStatus: normalizeQuorumStatus(minutes),
+    ...normalizeMeetingQuorum(minutes),
     agendaItems: compactStrings(arrayOf(minutes?.agendaItems)),
     discussion: cleanText(minutes?.discussion),
     sections: normalizeMinuteSectionsPayload(minutes?.sections),
@@ -112,8 +117,8 @@ function normalizeMeetingMinutesPayload(minutes: any) {
 }
 
 function structuredMinutesPatchFromPayload(payload: any) {
-  return compactRecord({
-    quorumStatus: normalizeQuorumStatus(payload),
+  const structured = compactRecord({
+    quorumStatus: normalizeMeetingQuorum(payload).quorumStatus,
     chairName: cleanText(payload?.chairName),
     secretaryName: cleanText(payload?.secretaryName),
     recorderName: cleanText(payload?.recorderName),
@@ -129,12 +134,10 @@ function structuredMinutesPatchFromPayload(payload: any) {
     appendices: normalizeAppendicesPayload(payload?.appendices),
     agmDetails: normalizeAgmDetailsPayload(payload?.agmDetails),
   }) ?? {};
+  // Empty history arrays are explicit reviewed data, not an absent payload.
+  return { ...structured, ...normalizeMeetingHistory(payload ?? {}) };
 }
 
-function normalizeQuorumStatus(value: any) {
-  if (["confirmed", "not_met", "not_recorded"].includes(value?.quorumStatus)) return value.quorumStatus;
-  return typeof value?.quorumMet === "boolean" ? (value.quorumMet ? "confirmed" : "not_met") : "not_recorded";
-}
 
 function normalizeRemoteParticipationPayload(value: any) {
   if (!value || typeof value !== "object") return undefined;
@@ -168,6 +171,7 @@ function normalizeMinuteSectionsPayload(value: any) {
       title: cleanText(row?.title),
       type: cleanText(row?.type),
       presenter: cleanText(row?.presenter),
+      motionText: cleanText(row?.motionText),
       discussion: cleanText(row?.discussion),
       reportSubmitted: optionalBoolean(row?.reportSubmitted),
       decisions: arrayOf(row?.decisions).map(String).map(cleanText).filter(Boolean),

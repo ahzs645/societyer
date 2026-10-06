@@ -1,4 +1,5 @@
 import { bylawBaselineForOrganization, contextualBylawRules } from "../bylawBaselines";
+import { minutesQuorumLabel, recordedMinutesQuorum } from "../minutesQuorum";
 /**
  * PORTABLE FUNCTIONS: the annual-cycle domain (summary).
  *
@@ -269,11 +270,11 @@ export async function summaryPortable(
       phase: "during",
       title: "Record attendance and quorum",
       detail: minutes
-        ? `${minutes.attendees?.length ?? 0} attendee${(minutes.attendees?.length ?? 0) === 1 ? "" : "s"}; quorum ${minutes.quorumMet ? "met" : "not met"}.`
+        ? `${minutes.attendees?.length ?? 0} attendee${(minutes.attendees?.length ?? 0) === 1 ? "" : "s"}; quorum ${minutesQuorumLabel(minutes).toLowerCase()}.`
         : selectedAgm
           ? "Minutes have not captured attendance and quorum yet."
           : "Schedule the AGM before tracking attendance.",
-      status: minutes ? (minutes.quorumMet ? "complete" : "blocked") : agmHeld ? "blocked" : "upcoming",
+      status: minutes ? (recordedMinutesQuorum(minutes) === true ? "complete" : "blocked") : agmHeld ? "blocked" : "upcoming",
       evidence: ["Attendance list", "Quorum snapshot", "Proxy evidence if used"],
       dueDate: selectedAgm?.scheduledAt,
       to: selectedAgm ? `/meetings/${selectedAgm._id}` : "/meetings",

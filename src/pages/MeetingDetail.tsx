@@ -64,6 +64,7 @@ import { PendingAdoptionsCard, type PendingAdoption } from "../features/meetings
 import type { MotionAdoptionTarget } from "../components/MotionEditor";
 import { MeetingMaterialDrawer } from "../features/meetings/components/MeetingMaterialDrawer";
 import { MeetingPackageHub } from "../features/meetings/components/MeetingPackageHub";
+import { MeetingHistoryPanel, type HistoryMinutes } from "../features/meetings/components/MeetingHistoryPanel";
 import { MeetingMinutesColumn } from "../features/meetings/components/MeetingMinutesColumn";
 import { MinutesMetadataCard } from "../features/meetings/components/MinutesMetadataCard";
 import { MeetingSidebarColumn } from "../features/meetings/components/MeetingSidebarColumn";
@@ -195,6 +196,7 @@ export function MeetingDetailPage() {
   const removeMeetingMaterial = usePermissionedMutation(api.meetingMaterials.remove, can("meetings:write"));
   const backfillMeetingQuorum = usePermissionedMutation(api.meetings.backfillQuorumSnapshot, can("meetings:write"));
   const updateMinutes = usePermissionedMutation(api.minutes.update, can("minutes:write"));
+  const carryHistoricalAction = usePermissionedMutation(api.minutes.carryForwardAction, can("minutes:write"));
   const createMinutes = usePermissionedMutation(api.minutes.create, can("minutes:write"));
   const syncAgendaForMeeting = usePermissionedMutation(api.agendas.syncForMeeting, can("agendas:write"));
   const updateTask = usePermissionedMutation(api.tasks.update, can("tasks:write"));
@@ -1016,6 +1018,9 @@ export function MeetingDetailPage() {
             })),
           }
         : null,
+      historicalActions: redact || publicOnly ? [] : minutes.historicalActions,
+      quorumEvents: redact || publicOnly ? [] : minutes.quorumEvents,
+      sourceVersions: redact || publicOnly ? [] : minutes.sourceVersions,
       draftTranscript: redact || publicOnly ? null : minutes.draftTranscript ?? null,
     };
   };
@@ -1038,6 +1043,7 @@ export function MeetingDetailPage() {
       (section.actionItems ?? []).length > 0,
     )) return true;
     if (displayMotions.length > 0) return true;
+    if (minutes.historicalActions?.length || minutes.quorumEvents?.length || minutes.sourceVersions?.length) return true;
     if (((minutes.decisions ?? []) as string[]).some((d) => (d ?? "").trim())) return true;
     if (((minutes.actionItems ?? []) as any[]).length > 0) return true;
     return false;
@@ -1089,6 +1095,7 @@ export function MeetingDetailPage() {
       options: {
         sourceFidelity: sourceFidelityInExport && !redact && !restrictedCopy,
         publicOnly: restrictedCopy,
+        publicCopy: !!redact || restrictedCopy,
         includeTranscript: redact ? false : includeTranscriptInExport,
         includeActionItems: includeActionItemsInExport,
         includeDiscussionSummary: includeDiscussionSummaryInExport,
@@ -1219,6 +1226,7 @@ export function MeetingDetailPage() {
         attendees,
         absent: [],
         quorumMet: requiresLegalQuorumRegister || quorumRequired == null ? false : attendees.length >= quorumRequired,
+        quorumStatus: requiresLegalQuorumRegister || quorumRequired == null ? "not_recorded" : attendees.length >= quorumRequired ? "confirmed" : "not_met",
         quorumRequired: quorumRequired ?? undefined,
         discussion: "",
         sections: [],
@@ -1419,6 +1427,7 @@ export function MeetingDetailPage() {
         attendees,
         absent: [],
         quorumMet: requiresLegalQuorumRegister || quorumRequired == null ? false : attendees.length >= quorumRequired,
+        quorumStatus: requiresLegalQuorumRegister || quorumRequired == null ? "not_recorded" : attendees.length >= quorumRequired ? "confirmed" : "not_met",
         quorumRequired: quorumRequired ?? undefined,
         discussion: "",
         sections: next.map((entry) => {
@@ -1599,7 +1608,7 @@ export function MeetingDetailPage() {
         presentCount: attendees.length,
         activeProxyCount,
         required,
-      }) ?? false;
+      });
       const priorDetailedByName = new Map(
         ((minutes.detailedAttendance ?? []) as any[]).map((row) => [String(row.name).trim().toLowerCase(), row]),
       );
@@ -1618,7 +1627,7 @@ export function MeetingDetailPage() {
         .filter(Boolean);
       await updateMinutes({
         id: minutes._id,
-        patch: { attendees, absent, detailedAttendance, quorumMet: minutes.quorumStatus ? minutes.quorumStatus === "confirmed" : quorumMet },
+        patch: { attendees, absent, detailedAttendance, quorumMet: minutes.quorumStatus ? minutes.quorumStatus === "confirmed" : quorumMet ?? false, quorumStatus: minutes.quorumStatus ?? (quorumMet == null ? "not_recorded" : quorumMet ? "confirmed" : "not_met") },
       });
       await updateMeeting({
         id: meeting._id,
@@ -2404,6 +2413,18 @@ export function MeetingDetailPage() {
           <MeetingEvidenceCard key={minutes?._id ?? "no-evidence"} minutes={minutes} />
           <MinutesMetadataCard key={minutes?._id ?? "no-minutes"} minutes={minutes} meetingType={meeting.type} />
           </>
+        )}
+
+        {activeTab === "minutes" && minutes && (
+          <MeetingHistoryPanel
+            key={minutes._id}
+            readOnly={!canMinutesWrite || Boolean(minutes.adoptedSnapshot) || Array.isArray(minutes.motionSnapshots) || minutes.sourceTransposition?.reviewStatus === "restricted"}
+            minutes={minutes as unknown as HistoryMinutes}
+            otherMinutes={(allMinutes ?? []) as unknown as HistoryMinutes[]}
+            meetings={allMeetings ?? []}
+            onSave={async (patch) => { await updateMinutes({ id: minutes._id, patch }); }}
+            onCarry={async (args) => { await carryHistoricalAction({ ...args, sourceMinutesId: args.sourceMinutesId as Id<"minutes">, targetMinutesId: args.targetMinutesId as Id<"minutes"> }); }}
+          />
         )}
 
         {activeTab === "motions" && (

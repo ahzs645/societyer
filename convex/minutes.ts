@@ -1,4 +1,6 @@
+import { meetingTables } from "./tables/meetings";
 import { authorizedAction, authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
+import { meetingHistoryFields } from "./validators/meetingHistory";
 import { query, mutation, action } from "./lib/untypedServer";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
@@ -10,6 +12,7 @@ import {
   listPortable,
   getByMeetingPortable,
   createPortable,
+  carryForwardActionPortable,
   updatePortable,
   upsertFromDraftPortable,
   backfillMotionPersonLinksPortable,
@@ -141,6 +144,13 @@ const agmDetails = v.object({
 });
 
 const structuredMinutesFields = {
+  consentItems: meetingTables.minutes.validator.fields.consentItems,
+  conditionalDecisions: meetingTables.minutes.validator.fields.conditionalDecisions,
+  decisionRequirements: meetingTables.minutes.validator.fields.decisionRequirements,
+  attendanceEvents: meetingTables.minutes.validator.fields.attendanceEvents,
+  quorumCheckpoints: meetingTables.minutes.validator.fields.quorumCheckpoints,
+  futureMeetingSuggestions: meetingTables.minutes.validator.fields.futureMeetingSuggestions,
+
   quorumStatus: v.optional(v.union(v.literal("confirmed"), v.literal("not_met"), v.literal("not_recorded"))),
   chairName: v.optional(v.string()),
   secretaryName: v.optional(v.string()),
@@ -177,6 +187,7 @@ export const create = authorizedMutation("minutes:create", mutation)({
     meetingId: v.id("meetings"),
     heldAt: v.string(),
     ...structuredMinutesFields,
+    ...meetingHistoryFields,
     attendees: v.array(v.string()),
     absent: v.array(v.string()),
     quorumMet: v.boolean(),
@@ -208,6 +219,7 @@ export const update = authorizedMutation("minutes:update", mutation)({
     patch: v.object({
       heldAt: v.optional(v.string()),
       ...structuredMinutesFields,
+      ...meetingHistoryFields,
       attendees: v.optional(v.array(v.string())),
       absent: v.optional(v.array(v.string())),
       quorumMet: v.optional(v.boolean()),
@@ -247,6 +259,7 @@ export const upsertFromDraft = authorizedMutation("minutes:upsertFromDraft", mut
     meetingId: v.id("meetings"),
     heldAt: v.string(),
     ...structuredMinutesFields,
+    ...meetingHistoryFields,
     attendees: v.array(v.string()),
     absent: v.array(v.string()),
     quorumMet: v.boolean(),
@@ -333,6 +346,7 @@ export const generateDraft = authorizedAction("minutes:generateDraft", action)({
       absent: draft.absent,
       // Unknown quorum requirement means quorum is NOT established — every
       // other creation path treats it that way (see meetings createPortable).
+      quorumStatus: meeting.quorumRequired == null ? "not_recorded" : draft.attendees.length >= meeting.quorumRequired ? "confirmed" : "not_met",
       quorumMet:
         meeting.quorumRequired == null
           ? false
@@ -351,4 +365,11 @@ export const generateDraft = authorizedAction("minutes:generateDraft", action)({
       draftTranscript: transcript,
     });
   },
+});
+
+
+export const carryForwardAction = authorizedMutation("minutes:carryForwardAction", mutation)({
+  args: { sourceMinutesId: v.id("minutes"), targetMinutesId: v.id("minutes"), sourceEntryId: v.string(), notes: v.optional(v.string()) },
+  returns: v.object({ entryId: v.string(), created: v.boolean() }),
+  handler: async (ctx, args) => carryForwardActionPortable(await toPortableMutationCtx(ctx), args),
 });

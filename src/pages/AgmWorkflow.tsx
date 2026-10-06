@@ -1,3 +1,4 @@
+import { minutesQuorumLabel, recordedMinutesQuorum } from "../../shared/minutesQuorum";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { usePermissions } from "../hooks/usePermissions";
 import { useToast } from "../components/Toast";
@@ -190,8 +191,8 @@ export function AgmWorkflowPage() {
             tone={meeting.electronic ? "info" : "neutral"}
           />
           <Item label="Quorum"
-            value={minutes ? (minutes.quorumMet ? "Met" : "Not met") : "Not yet recorded"}
-            tone={minutes ? (minutes.quorumMet ? "success" : "danger") : "warn"}
+            value={minutes ? minutesQuorumLabel(minutes) : "Not yet recorded"}
+            tone={recordedMinutesQuorum(minutes ?? {}) === true ? "success" : recordedMinutesQuorum(minutes ?? {}) === false ? "danger" : "warn"}
           />
         </div>
       </div>

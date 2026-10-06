@@ -111,7 +111,7 @@ function sourceSystemFromExternalId(externalId: unknown) {
   if (text.startsWith("local:")) return "local";
   if (text.startsWith("file:")) return "local";
   if (text.startsWith("onedrive:")) return "onedrive";
-  if (text.startsWith("google-drive:") || text.startsWith("drive:")) return "google-drive";
+  if (text.startsWith("gdrive:") || text.startsWith("google-drive:") || text.startsWith("drive:")) return "google-drive";
   return "paperless";
 }
 
@@ -119,7 +119,7 @@ function sourceSystemLabel(externalSystem: unknown) {
   const system = cleanText(externalSystem)?.toLowerCase();
   if (system === "local") return "Local file";
   if (system === "onedrive") return "OneDrive file";
-  if (system === "google-drive" || system === "drive") return "Google Drive";
+  if (["google-drive", "drive", "gdrive"].includes(system ?? "")) return "Google Drive";
   if (system === "paperless") return "Paperless";
   return cleanText(externalSystem) || "External source";
 }
@@ -128,6 +128,7 @@ function sourceSystemTag(externalSystem: unknown) {
   const system = cleanText(externalSystem)?.toLowerCase() || "paperless";
   if (system === "local" || system === "file") return "local";
   if (system === "onedrive") return "onedrive";
+  if (system === "google-drive" || system === "gdrive" || system === "drive") return "google-drive";
   if (system === "paperless") return "paperless";
   return system.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "external";
 }

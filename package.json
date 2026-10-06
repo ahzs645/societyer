@@ -245,7 +245,16 @@
     "test:person-history": "tsx scripts/check-person-history.ts",
     "test:person-assumptions": "tsx scripts/check-person-assumptions.ts",
     "test:person-history-convex": "tsx scripts/check-person-history-convex.ts",
-    "test:source-meeting-record": "tsx scripts/check-source-meeting-record.ts && tsx scripts/check-complete-source-records.ts"
+    "test:source-meeting-record": "tsx scripts/check-source-meeting-record.ts && tsx scripts/check-complete-source-records.ts",
+    "intake:plan": "node --import tsx scripts/transposition-pipeline.ts plan",
+    "intake:merge": "node --import tsx scripts/transposition-pipeline.ts merge",
+    "intake:backup": "node --import tsx scripts/build-intake-backup.ts",
+    "test:intake-pipeline": "node --import tsx scripts/check-import-bundle-preflight.ts && node --import tsx scripts/check-transposition-pipeline.ts && node --import tsx scripts/check-intake-backup.ts && node --import tsx scripts/check-drive-provenance.ts",
+    "test:meeting-intake-fidelity": "node --import tsx scripts/check-meeting-import-context.ts && node --import tsx scripts/check-meeting-quorum-fidelity.ts && node --import tsx scripts/check-structured-minutes-fidelity.ts && node --import tsx scripts/check-meeting-promotion-audit.ts",
+    "intake:audit-meetings": "node --import tsx scripts/audit-meeting-promotion.ts",
+    "intake:render-minutes": "node --import tsx scripts/render-intake-minutes.ts",
+    "test:meeting-history": "node --import tsx scripts/check-meeting-history.ts && node --import tsx scripts/check-meeting-history-renderer.ts",
+    "test:meeting-history-ui": "playwright test --config playwright.meeting-history.config.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

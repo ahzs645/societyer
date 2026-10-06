@@ -608,6 +608,7 @@ export async function createPortable(
     attendees,
     absent: [],
     quorumMet: quorumRequired == null ? false : attendees.length >= quorumRequired,
+    quorumStatus: quorumRequired == null ? "not_recorded" : attendees.length >= quorumRequired ? "confirmed" : "not_met",
     quorumRequired: quorumRequired ?? undefined,
     bylawRuleSetId: args.bylawRuleSetId ?? snapshot.bylawRuleSetId,
     quorumRuleVersion: args.quorumRuleVersion ?? snapshot.quorumRuleVersion,

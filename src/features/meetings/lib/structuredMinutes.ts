@@ -16,7 +16,7 @@ export type StructuredMinutesEdit = {
   nextMeetingNotes: string;
   sessionSegments: string;
   appendices: string;
-  financialStatementsPresented: boolean;
+  financialStatementsPresented: boolean | undefined;
   financialStatementsNotes: string;
   directorElectionNotes: string;
   directorAppointments: string;
@@ -42,7 +42,7 @@ export function structuredEditFromMinutes(minutes: any): StructuredMinutesEdit {
     nextMeetingNotes: minutes.nextMeetingNotes ?? "",
     sessionSegments: serializeSessionSegments(minutes.sessionSegments ?? []),
     appendices: serializeAppendices(minutes.appendices ?? []),
-    financialStatementsPresented: !!minutes.agmDetails?.financialStatementsPresented,
+    financialStatementsPresented: minutes.agmDetails?.financialStatementsPresented,
     financialStatementsNotes: minutes.agmDetails?.financialStatementsNotes ?? "",
     directorElectionNotes: minutes.agmDetails?.directorElectionNotes ?? "",
     directorAppointments: serializeDirectorAppointments(minutes.agmDetails?.directorAppointments ?? []),
@@ -58,7 +58,7 @@ export function structuredPatchFromEdit(edit: StructuredMinutesEdit) {
     instructions: cleanOptional(edit.remoteInstructions),
   });
   const agmDetails = compactObject({
-    financialStatementsPresented: edit.financialStatementsPresented || undefined,
+    financialStatementsPresented: edit.financialStatementsPresented,
     financialStatementsNotes: cleanOptional(edit.financialStatementsNotes),
     directorElectionNotes: cleanOptional(edit.directorElectionNotes),
     directorAppointments: parseDirectorAppointments(edit.directorAppointments),
@@ -126,6 +126,18 @@ export function structuredMetadataChanges(edit: StructuredMinutesEdit, original:
   ] as const;
   for (const [field, label, columns, required] of rowFields) {
     if (edit[field] === original[field]) continue;
+    const jsonRows = parseStructuredRows(edit[field]);
+    if (jsonRows !== undefined) {
+      for (const [index, row] of jsonRows.entries()) {
+        const requiredField = field === "directorAppointments" ? "name" : field === "sessionSegments" ? "type" : "title";
+        if (typeof row[requiredField] !== "string" || !String(row[requiredField]).trim()) throw new Error(`${label}, row ${index + 1}: ${requiredField} is required.`);
+        if (field === "directorAppointments") {
+          for (const key of ["consentRecorded", "elected"]) if (row[key] !== undefined && typeof row[key] !== "boolean") throw new Error(`${label}, row ${index + 1}: consent and elected values must be Boolean or omitted.`);
+          if (row.votesReceived !== undefined && (typeof row.votesReceived !== "number" || !Number.isInteger(row.votesReceived) || row.votesReceived < 0)) throw new Error(`${label}, row ${index + 1}: votes must be a non-negative whole number or omitted.`);
+        }
+      }
+      continue;
+    }
     for (const [index, row] of parsePipeRows(edit[field]).entries()) {
       if (row.length !== columns || !row[required]) {
         throw new Error(`${label}, row ${index + 1}: enter ${columns} columns separated by |, including empty columns, with a ${required === 1 ? "name" : "title or type"}. Keep each record on one line and remove extra | characters from notes.`);
@@ -157,6 +169,8 @@ function compactObject<T extends Record<string, any>>(value: T): T | undefined {
 }
 
 function parseDetailedAttendance(value: string) {
+  const structured = parseStructuredRows(value);
+  if (structured !== undefined) return structured;
   return parsePipeRows(value).map((parts) => ({
     status: parts[0] || "present",
     name: parts[1] || parts[0] || "Unknown",
@@ -170,19 +184,12 @@ function parseDetailedAttendance(value: string) {
 }
 
 function serializeDetailedAttendance(rows: any[]) {
-  return rows.map((row) => [
-    row.status,
-    row.name,
-    row.roleTitle,
-    row.affiliation,
-    row.memberIdentifier,
-    row.proxyFor,
-    row.quorumCounted == null ? "" : row.quorumCounted ? "yes" : "no",
-    row.notes,
-  ].map((part) => part ?? "").join(" | ")).join("\n");
+  return rows.length ? JSON.stringify(rows, null, 2) : "";
 }
 
 function parseSections(value: string) {
+  const structured = parseStructuredRows(value);
+  if (structured !== undefined) return structured;
   return parsePipeRows(value).map((parts) => ({
     type: cleanOptional(parts[0]),
     title: parts[1] || parts[0] || "Section",
@@ -195,18 +202,12 @@ function parseSections(value: string) {
 }
 
 function serializeSections(rows: any[]) {
-  return rows.map((row) => [
-    row.type,
-    row.title,
-    row.presenter,
-    row.discussion,
-    row.reportSubmitted == null ? "" : row.reportSubmitted ? "yes" : "no",
-    (row.decisions ?? []).join("; "),
-    (row.actionItems ?? []).map((item: any) => item.text).join("; "),
-  ].map((part) => part ?? "").join(" | ")).join("\n");
+  return rows.length ? JSON.stringify(rows, null, 2) : "";
 }
 
 function parseSessionSegments(value: string) {
+  const structured = parseStructuredRows(value);
+  if (structured !== undefined) return structured;
   return parsePipeRows(value).map((parts) => ({
     type: parts[0] || "public",
     title: cleanOptional(parts[1]),
@@ -217,10 +218,12 @@ function parseSessionSegments(value: string) {
 }
 
 function serializeSessionSegments(rows: any[]) {
-  return rows.map((row) => [row.type, row.title, row.startedAt, row.endedAt, row.notes].map((part) => part ?? "").join(" | ")).join("\n");
+  return rows.length ? JSON.stringify(rows, null, 2) : "";
 }
 
 function parseAppendices(value: string) {
+  const structured = parseStructuredRows(value);
+  if (structured !== undefined) return structured;
   return parsePipeRows(value).map((parts) => ({
     title: parts[0] || "Appendix",
     type: cleanOptional(parts[1]),
@@ -230,10 +233,12 @@ function parseAppendices(value: string) {
 }
 
 function serializeAppendices(rows: any[]) {
-  return rows.map((row) => [row.title, row.type, row.reference, row.notes].map((part) => part ?? "").join(" | ")).join("\n");
+  return rows.length ? JSON.stringify(rows, null, 2) : "";
 }
 
 function parseDirectorAppointments(value: string) {
+  const structured = parseStructuredRows(value);
+  if (structured !== undefined) return structured;
   return parsePipeRows(value).map((parts) => ({
     status: cleanOptional(parts[0]),
     name: parts[1] || parts[0] || "Unknown",
@@ -248,20 +253,12 @@ function parseDirectorAppointments(value: string) {
 }
 
 function serializeDirectorAppointments(rows: any[]) {
-  return rows.map((row) => [
-    row.status,
-    row.name,
-    row.roleTitle,
-    row.affiliation,
-    row.term,
-    row.consentRecorded == null ? "" : row.consentRecorded ? "yes" : "no",
-    row.votesReceived,
-    row.elected == null ? "" : row.elected ? "yes" : "no",
-    row.notes,
-  ].map((part) => part ?? "").join(" | ")).join("\n");
+  return rows.length ? JSON.stringify(rows, null, 2) : "";
 }
 
 function parseSpecialResolutionExhibits(value: string) {
+  const structured = parseStructuredRows(value);
+  if (structured !== undefined) return structured;
   return parsePipeRows(value).map((parts) => ({
     title: parts[0] || "Exhibit",
     reference: cleanOptional(parts[1]),
@@ -270,7 +267,7 @@ function parseSpecialResolutionExhibits(value: string) {
 }
 
 function serializeSpecialResolutionExhibits(rows: any[]) {
-  return rows.map((row) => [row.title, row.reference, row.notes].map((part) => part ?? "").join(" | ")).join("\n");
+  return rows.length ? JSON.stringify(rows, null, 2) : "";
 }
 
 function parsePipeRows(value: string) {
@@ -301,4 +298,18 @@ function numberOrUndefined(value: string | undefined) {
   if (!text) return undefined;
   const number = Number(text);
   return Number.isFinite(number) ? number : undefined;
+}
+
+// JSON preserves nested action metadata and literal delimiters/newlines. Keep
+// accepting historical pipe input, but never reinterpret broken JSON as rows.
+function parseStructuredRows(value: string): Record<string, unknown>[] | undefined {
+  const text = value.trim();
+  if (!text.startsWith("[") && !text.startsWith("{")) return undefined;
+  let rows: unknown;
+  try { rows = JSON.parse(text); }
+  catch { throw new Error("Invalid structured minutes JSON. Correct it before saving."); }
+  if (!Array.isArray(rows) || rows.some((row) => !row || typeof row !== "object" || Array.isArray(row))) {
+    throw new Error("Structured minutes must be a JSON array of record objects.");
+  }
+  return rows;
 }

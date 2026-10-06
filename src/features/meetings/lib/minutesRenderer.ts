@@ -1,5 +1,6 @@
 import { resolveSourceMeetingRecord, changedSourceMinuteSections, type SourceMeetingRecord, type SourceMeetingBlock } from "../../../../shared/sourceMeetingRecord";
 import { checkpointResult, decisionReadiness } from "../../../../shared/evidenceReview";
+import type { HistoricalAction, QuorumEvent, SourceVersion } from "../../../../shared/meetingHistory";
 // Meeting-minutes domain renderer. Takes structured minutes data + a chosen
 // style (Standard / Formal AGM / Executive Agenda / Numbered Agenda / Action
 // Table / Board Public) and produces an HTML body string that the generic
@@ -46,6 +47,8 @@ export type MinutesExportOptions = {
   sourceFidelity?: boolean;
   publicOnly?: boolean;
   privateCopy?: boolean;
+  /** Public-copy export: omit history and source evidence until separately reviewed for publication. */
+  publicCopy?: boolean;
   includeTranscript?: boolean;
   includeActionItems?: boolean;
   includeDiscussionSummary?: boolean;
@@ -211,6 +214,9 @@ export type MinutesRenderArgs = {
         notes?: string;
       }[];
     } | null;
+    historicalActions?: HistoricalAction[] | null;
+    quorumEvents?: QuorumEvent[] | null;
+    sourceVersions?: SourceVersion[] | null;
     draftTranscript?: string | null;
   };
   styleId?: MinutesExportStyleId;
@@ -221,6 +227,7 @@ const DEFAULT_MINUTES_EXPORT_OPTIONS: Required<MinutesExportOptions> = {
   sourceFidelity: true,
   publicOnly: false,
   privateCopy: false,
+  publicCopy: false,
   includeTranscript: true,
   includeActionItems: true,
   includeDiscussionSummary: false,
@@ -240,8 +247,9 @@ export function renderMinutesHtml(args: MinutesRenderArgs): string {
   const styleId = normalizeMinutesStyleId(args.styleId);
   const options = { ...DEFAULT_MINUTES_EXPORT_OPTIONS, ...(args.options ?? {}) };
 
+  options.publicCopy = options.publicCopy || options.publicOnly;
   const sourceRecord = resolveSourceMeetingRecord(args.minutes);
-  if (sourceRecord && options.sourceFidelity && !options.publicOnly && (styleId !== "board-public" || options.privateCopy)) {
+  if (sourceRecord && options.sourceFidelity && !options.publicCopy && (styleId !== "board-public" || options.privateCopy)) {
     return renderDocumentHeader(args.society) + renderSourceFidelityMinutes(args, sourceRecord, styleId, options);
   }
 
@@ -253,7 +261,7 @@ export function renderMinutesHtml(args: MinutesRenderArgs): string {
   else if (styleId === "board-public") body = renderBoardPublicMinutes(args, options);
   else body = renderStandardMinutes(args, options);
 
-  return renderDocumentHeader(args.society) + body + renderUnrepresentedSectionDetails(args.minutes,body,options) + (styleId === "board-public" ? "" : renderSourceDecisionEvidence(args.minutes));
+  return renderDocumentHeader(args.society) + body + renderUnrepresentedSectionDetails(args.minutes,body,options) + renderMeetingHistory(args.minutes, options) + (styleId === "board-public" || options.publicCopy ? "" : renderSourceDecisionEvidence(args.minutes)) + renderFooter(options);
 }
 
 /**
@@ -494,7 +502,7 @@ function renderStandardMinutes({
       <p style="font-family: Consolas, 'Courier New', monospace; font-size: 9.5pt; white-space: pre-wrap;">${eh(minutes.draftTranscript)}</p>
     ` : ""}
 
-    ${renderFooter(options)}
+
   `;
 }
 
@@ -550,7 +558,7 @@ function renderFormalAgmMinutes({
     ${renderConflictsBlock(options.conflicts)}
     ${options.includeSignatures ? renderSignatureBlock(options.signatures, "Chair", "Secretary") : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
-    ${renderFooter(options)}
+
   `;
 }
 
@@ -600,7 +608,7 @@ function renderExecutiveAgendaMinutes({
     ${adjournedAt || options.includePlaceholders ? `<p><strong>The meeting adjourned at ${eh(adjournedAt ?? placeholder("adjournment time", options))}.</strong></p>` : ""}
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
-    ${renderFooter(options)}
+
   `;
 }
 
@@ -703,7 +711,7 @@ function renderNumberedAgendaMinutes({
     ${renderConflictsBlock(options.conflicts)}
     ${options.includeSignatures ? renderSignatureBlock(options.signatures) : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
-    ${renderFooter(options)}
+
   `;
 }
 
@@ -745,7 +753,7 @@ function renderActionTableMinutes({
     ${renderNextMeeting(minutes, options)}
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
-    ${renderFooter(options)}
+
   `;
 }
 
@@ -807,7 +815,7 @@ function renderBoardPublicMinutes({
 
     ${options.includeApprovalBlock ? renderApprovalBlock(minutes, options) : ""}
     ${options.includeTranscript && minutes.draftTranscript ? renderTranscript(minutes.draftTranscript) : ""}
-    ${renderFooter(options)}
+
   `;
 }
 
@@ -1838,7 +1846,7 @@ function renderSourceFidelityMinutes(args:MinutesRenderArgs,record:SourceMeeting
  const structuredExtras=renderNewStructuredMinuteInformation(args.minutes,record,options);
  return `<article data-minutes-style="${escapeHtml(styleId)}" data-source-fidelity="true" class="source-fidelity source-fidelity-${escapeHtml(styleId)}">
   <p class="meta">${escapeHtml(record.sourceKind==='recorded_minutes'?'Source recreation · imported minutes pending review':'Source recreation · proposed script, agenda or template wording')}${args.minutes.approvedAt?' · Adoption is recorded separately.':' · No approval is inferred.'}</p>
-  ${sourceDocuments}${supplements}${structuredExtras}
+  ${sourceDocuments}${supplements}${structuredExtras}${renderMeetingHistory(args.minutes, options)}
   ${options.includeApprovalBlock?renderApprovalBlock(args.minutes,options):''}
   ${options.includeSignatures&&options.signatures.length?renderSignatureBlock(options.signatures):''}
   ${renderFooter(options)}
@@ -1881,4 +1889,56 @@ function renderNewStructuredMinuteInformation(minutes:MinutesRenderArgs['minutes
  const fieldChanges=revisedFields.length?`<h2>Current record changes</h2><table>${revisedFields.map(field=>`<tr><th>${escapeHtml(humanizeLabel(field))}</th><td>${escapeHtml(displayField((minutes as any)[field]))}</td></tr>`).join('')}</table>`:'';
  const extras=[fieldChanges,removals.length?`<h2>Items changed or removed from the editable record</h2><p class="meta">The original source wording remains retained above.</p>${renderList(removals)}`:'',extraDecisions.length?`<h2>Current decisions</h2>${renderDecisionsList(extraDecisions,options)}`:'',extraActions.length?`<h2>Current actions</h2>${renderActionItemsTable(extraActions,options)}`:'',extraMotions.length?`<h2>Current motions</h2>${extraMotions.map(renderSampleMotion).join('')}`:'',renderSourceDecisionEvidence(minutes)];
  return extras.filter(Boolean).join('');
+}
+
+/** Shared history appendix: independent of layout style, and excluded from public copies. */
+function renderMeetingHistory(minutes: MinutesRenderArgs["minutes"], options: Required<MinutesExportOptions>): string {
+  if (options.publicCopy || options.publicOnly) return "";
+  const eh = escapeHtml;
+  const unknown = (value: string | number | undefined) => eh(value === undefined || value === "" ? "Not recorded" : String(value));
+  const paragraph = (label: string, value?: string) => value ? `<p><strong>${eh(label)}:</strong> ${eh(value)}</p>` : "";
+  const sources = (row: { sourceExternalIds?: string[]; sourceLocator?: string; evidence?: string; notes?: string }) => [
+    row.sourceExternalIds?.length ? paragraph("Sources", row.sourceExternalIds.join("; ")) : "",
+    paragraph("Source location", row.sourceLocator), paragraph("Evidence", row.evidence), paragraph("Notes", row.notes),
+  ].join("");
+  const actionLabels: Record<HistoricalAction["status"], string> = { unknown: "Unknown", open: "Open", in_progress: "In progress", ongoing: "Ongoing", on_hold: "On hold", completed: "Completed", cancelled: "Cancelled" };
+  const actions = options.includeActionItems && minutes.historicalActions?.length ? `
+    <section class="minutes-history"><h2>Historical action observations</h2>
+    <p>Statuses are observations as of the recorded source date. They do not establish current completion. Separate observations may refer to the same action.</p>
+    ${minutes.historicalActions.map((row) => `<div class="historical-action">
+      <h3>${eh(row.text)}</h3>
+      <p><strong>Status:</strong> ${eh(actionLabels[row.status] ?? "Unknown")} · <strong>As of:</strong> ${unknown(row.statusAsOf)}</p>
+      <p><strong>Assignee:</strong> ${unknown(row.assignee)} · <strong>Assigned:</strong> ${unknown(row.dateAssigned)} · <strong>Due:</strong> ${unknown(row.dueDate)}</p>
+      ${paragraph("Source action reference", row.sourceActionId)}
+      <p class="meta"><strong>Action identity:</strong> ${eh(row.actionKey)} · <strong>Observation:</strong> ${eh(row.entryId)}</p>
+      ${paragraph("Source status wording", row.sourceStatus)}
+      ${row.carriedFromMinutesId ? paragraph("Carried from", `Minutes ${row.carriedFromMinutesId}, observation ${row.carriedFromEntryId ?? "not recorded"}`) : ""}
+      ${sources(row)}
+    </div>`).join("")}</section>` : "";
+  const quorum = minutes.quorumEvents?.length ? `
+    <section class="minutes-history"><h2>Quorum observations</h2>
+    <p>Observations appear in source order and apply only to the stated meeting, session, or item. No legal validity is inferred.</p>
+    ${minutes.quorumEvents.map((row) => `<div class="quorum-observation">
+      <h3>${eh(row.scope === "meeting" ? "Meeting" : row.scope === "session" ? "Session" : "Item")}${row.scopeLabel ? `: ${eh(row.scopeLabel)}` : ""}</h3>
+      <p><strong>Quorum:</strong> ${eh(minutesQuorumLabel({ quorumStatus: row.status }))} · <strong>Time:</strong> ${unknown(row.atTime)}</p>
+      <p><strong>Present count:</strong> ${unknown(row.presentCount)} · <strong>Eligible count:</strong> ${unknown(row.eligibleCount)}</p>
+      ${paragraph("Reason", row.reason)}${sources(row)}
+    </div>`).join("")}</section>` : "";
+  const versionLabels: Record<SourceVersion["status"], string> = { unknown: "Unknown", draft: "Draft", revised: "Revised", adopted: "Adopted" };
+  const versionById = new Map((minutes.sourceVersions ?? []).map((row) => [row.versionId, row]));
+  const versions = minutes.sourceVersions?.length ? `
+    <section class="minutes-history"><h2>Source versions</h2>
+    <p>Source-version status is separate from import review and approval of this minutes record. An unknown status does not establish adoption.</p>
+    ${minutes.sourceVersions.map((row) => `<div class="source-version">
+      <h3>${eh(row.label)}</h3>
+      <p><strong>Source status:</strong> ${eh(versionLabels[row.status] ?? "Unknown")} · <strong>Source date:</strong> ${unknown(row.sourceDate)}</p>
+      ${paragraph("Version reference", row.versionId)}
+      ${row.supersedesVersionId ? paragraph("Supersedes", versionById.get(row.supersedesVersionId)?.label ?? row.supersedesVersionId) : ""}
+      ${row.status === "adopted" ? `<p><strong>Adopted:</strong> ${unknown(row.adoptedAt)}</p>` : ""}
+      ${paragraph("Adoption evidence", row.adoptionEvidence)}
+      ${paragraph("Adopting meeting reference", row.adoptedInMeetingId)}
+      ${paragraph("Adoption motion reference", row.adoptionMotionId)}
+      ${sources(row)}
+    </div>`).join("")}</section>` : "";
+  return actions + quorum + versions;
 }

@@ -351,6 +351,18 @@ The meeting detail UI already uploads audio, tracks transcription jobs, stores t
 
 ## Project status
 
+### Document archive intake
+
+For public Drive archives, use the [source collector](docs/public-drive-inventory.md),
+[subagent task and merge workflow](docs/drive-transposition.md), and
+[review-workspace backup builder](docs/document-intake-backups.md).
+`npm run intake:plan -- ...`, `npm run intake:merge -- ...`, and
+`npm run intake:backup -- ...` prepare Pending records for later review.
+Run `npm run test:intake-pipeline` to verify the handoff and restore contracts.
+The [coverage review](docs/transposition-coverage-review.md) distinguishes native
+records from evidence-only information. Public folder inventories may be partial;
+backup JSON does not embed originals, and local restore replaces the workspace.
+
 ### Current
 
 - BC society workspace records: society profile, members, directors, meetings, minutes, conflicts, filings, deadlines, documents, bylaws, privacy, financials, elections, grants, volunteers, transparency, and module settings.

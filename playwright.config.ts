@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: "tests",
   // These flows use their dedicated local-IndexedDB harness configurations.
   // The static demo preview intentionally does not install that harness.
-  testIgnore: ["corporation-mvp-flow.spec.ts", "pathway-pipeline.spec.ts", "interface-*.spec.ts"],
+  testIgnore: ["corporation-mvp-flow.spec.ts", "pathway-pipeline.spec.ts", "interface-*.spec.ts", "meeting-history.spec.ts"],
   timeout: 30_000,
   retries: 0,
   use: {

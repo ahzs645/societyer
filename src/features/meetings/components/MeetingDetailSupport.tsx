@@ -9,7 +9,6 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { useToast } from "../../../components/Toast";
 import { Badge, Field } from "../../../components/ui";
 import { MarkdownEditor } from "../../../components/MarkdownEditor";
-import { Checkbox } from "../../../components/Controls";
 import { formatDate } from "../../../lib/format";
 import { isNativeFileStorageEnabled } from "../../../lib/runtimeMode";
 import { type StructuredMinutesEdit } from "../lib/structuredMinutes";
@@ -145,19 +144,19 @@ export function StructuredMinutesEditor({
         <MarkdownEditor rows={2} value={value.remoteInstructions} onChange={(markdown) => patch({ remoteInstructions: markdown })} />
       </Field>
 
-      {includeRecordArrays && <><Field label="Detailed attendance" hint="One row per person: status | name | role | affiliation | member ID | proxy for | quorum yes/no | notes">
+      {includeRecordArrays && <><Field label="Detailed attendance" hint="JSON array preserves all fields and punctuation. Legacy input: one row per person: status | name | role | affiliation | member ID | proxy for | quorum yes/no | notes">
         <textarea className="textarea" rows={5} value={value.detailedAttendance} onChange={(event) => patch({ detailedAttendance: event.target.value })} />
       </Field>
 
-      <Field label="Agenda record / per-topic notes" hint="One row per section: type | title | presenter | discussion | report yes/no | decisions ; separated | action items ; separated">
+      <Field label="Agenda record / per-topic notes" hint="JSON array preserves all fields and punctuation. Legacy input: one row per section: type | title | presenter | discussion | report yes/no | decisions ; separated | action items ; separated">
         <textarea className="textarea" rows={10} value={value.sections} onChange={(event) => patch({ sections: event.target.value })} />
       </Field></>}
 
-      <Field label="Session segments" hint="One row per segment: type | title | started | ended | notes">
+      <Field label="Session segments" hint="JSON array preserves all fields and punctuation. Legacy input: one row per segment: type | title | started | ended | notes">
         <textarea className="textarea" rows={3} value={value.sessionSegments} onChange={(event) => patch({ sessionSegments: event.target.value })} />
       </Field>
 
-      <Field label="Appendices / attachments" hint="One row: title | type | reference | notes">
+      <Field label="Appendices / attachments" hint="JSON array preserves all fields and punctuation. Legacy input: one row: title | type | reference | notes">
         <textarea className="textarea" rows={3} value={value.appendices} onChange={(event) => patch({ appendices: event.target.value })} />
       </Field>
 
@@ -172,21 +171,23 @@ export function StructuredMinutesEditor({
 
       {isAgm && (
         <>
-          <Checkbox
-            checked={value.financialStatementsPresented}
-            onChange={(financialStatementsPresented) => patch({ financialStatementsPresented })}
-            label="Financial statements were presented"
-          />
+          <Field label="Financial statements presented">
+            <select className="input" value={value.financialStatementsPresented == null ? "" : String(value.financialStatementsPresented)} onChange={(event) => patch({ financialStatementsPresented: event.target.value === "" ? undefined : event.target.value === "true" })}>
+              <option value="">Not recorded</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </Field>
           <Field label="Financial statement notes">
             <MarkdownEditor rows={3} value={value.financialStatementsNotes} onChange={(markdown) => patch({ financialStatementsNotes: markdown })} />
           </Field>
           <Field label="Director election / appointment notes">
             <MarkdownEditor rows={3} value={value.directorElectionNotes} onChange={(markdown) => patch({ directorElectionNotes: markdown })} />
           </Field>
-          <Field label="Director appointments" hint="One row: status | name | role | affiliation | term | consent yes/no | votes | elected yes/no | notes">
+          <Field label="Director appointments" hint="JSON array preserves all fields and punctuation. Legacy input: one row: status | name | role | affiliation | term | consent yes/no | votes | elected yes/no | notes">
             <textarea className="textarea" rows={4} value={value.directorAppointments} onChange={(event) => patch({ directorAppointments: event.target.value })} />
           </Field>
-          <Field label="Special-resolution exhibits" hint="One row: title | reference | notes">
+          <Field label="Special-resolution exhibits" hint="JSON array preserves all fields and punctuation. Legacy input: one row: title | reference | notes">
             <textarea className="textarea" rows={3} value={value.specialResolutionExhibits} onChange={(event) => patch({ specialResolutionExhibits: event.target.value })} />
           </Field>
         </>

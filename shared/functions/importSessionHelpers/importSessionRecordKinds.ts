@@ -239,7 +239,7 @@ function sessionName(bundle: any) {
 }
 
 function sourceSystem(bundle: any) {
-  return cleanText(bundle?.metadata?.createdFrom) || cleanText(bundle?.sourceExport?.baseUrl) || "Paperless";
+  return cleanText(bundle?.metadata?.sourceSystem) || cleanText(bundle?.metadata?.createdFrom) || cleanText(bundle?.sourceExport?.baseUrl) || "Paperless";
 }
 
 function firstSection(doc: any) {

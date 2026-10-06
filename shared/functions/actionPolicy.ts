@@ -61,6 +61,8 @@ const PUBLIC_HANDLERS = new Set(["publicPortal:getSocietyBySlug", "publicPortal:
 // references. Keep the exceptions endpoint-specific: targetId and other row
 // references in the same request still require workspace ownership.
 const OPAQUE_IDENTIFIERS: Record<string, readonly string[]> = {
+  // Observation keys live within a minutes record; both minutes IDs remain owned references.
+  "minutes:carryForwardAction": ["sourceEntryId"],
   // Task handlers validate known source-correlation keys or actual completion IDs.
   "tasks:create": ["eventId"],
   "complianceObligations:markReviewed": ["ruleId"],

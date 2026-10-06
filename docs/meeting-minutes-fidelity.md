@@ -1,0 +1,56 @@
+# Meeting minutes transposition fidelity
+
+**History upgrade:** the new optional `historicalActions`, `quorumEvents` and `sourceVersions` fields now address the history gaps identified below. See [meeting-history.md](meeting-history.md) for the implemented model, interface, import, ownership and immutability behavior. The table below still describes limitations of the original scalar quorum, legacy action items and source references; those legacy fields are retained for compatibility. Precise meeting timestamps, person authority and embedded attachment restoration remain follow-up work.
+
+Review of the current import, native model and display paths, 2026-09-21. A restorable review backup preserves staged candidates; it does not mean every source field has a native equivalent or appears in every export template. These distinctions matter for historical minutes and combined AGM/Board documents.
+
+## Field mapping
+
+| Source structure | Staging and native representation | Remaining loss or limitation |
+| --- | --- | --- |
+| Meeting identity, date and venue | `normalizeMeetingMinutesPayload` feeds `applyApprovedMeetingsPortable`; supported meeting type, location and electronic participation feed the meeting row. | One candidate creates one meeting. A combined AGM/Board document needs separately reviewed meeting candidates or explicitly labelled segments; no composite meeting parent/child relation is inferred. Meeting grouping/merge is not entity-resolution review. |
+| Officers, call to order, adjournment | Chair, secretary, recorder and time strings flow through `structuredMinutesPatchFromPayload` into native minutes. | Local time text without a timezone remains source text, not a verified timezone conversion. |
+| Attendance and proxies | `detailedAttendance` preserves name, status, role, affiliation, member identifier, proxy-for, quorum-counted and notes. Detailed attendance renders through `renderDetailedAttendance`. | Names remain strings; imports do not establish legal membership, proxy appointment records, consent, or linked person identity. Missing detailed-attendance status currently defaults to present; extractors should supply an explicit source-supported status. A guest/proxy label does not prove eligibility to count for quorum. |
+| Quorum | New `quorumStatus` preserves `confirmed`, `not_met` or `not_recorded` alongside the legacy required Boolean. Import normalization, native promotion, restore, display and exports retain the explicit unknown. | Legacy rows with Boolean false and no status remain interpreted as not met; their original evidentiary meaning cannot be reconstructed automatically. The older Paperless heuristic can still emit a Boolean before this pipeline sees the record. Source review remains necessary. |
+| Agenda sections and narrative | Section title, type, presenter, discussion, report-submitted, decisions and nested actions survive the import normalizer and native promotion. | Native schema also has motion links, linked task IDs, depth and public visibility. Those fields are not yet exposed by the section import normalizer; preflight rejects them rather than silently preserving a false promise. No automatic section-to-motion/task link is created. |
+| Motions | Text, mover/seconder names, outcome, vote counts and resolution type become native motion rows via `minutesMotionFromPayload` and `syncMotionsForMinutes`. | Staged `voteSummary`, `pageRef`, `evidenceText` and `rawText` are retained in the minutes import transcript, not copied to native motion fields or ordinary exports. Import normalization does not support section index/title, person IDs, `decidedBy`, adopts-minutes links or motion-template IDs even though parts of the native model support them. Do not infer a carried resolution from a recommendation. |
+| Actions | Text, assignee string, due date and Boolean done survive into top-level or nested minute actions. | The native model requires `done`; normalization currently converts missing completion evidence to false. It cannot distinguish unknown, historical open, in-progress, ongoing or on-hold. Source action ID, date added, recurring/carryover linkage and task identity are unsupported. Preserve these in action text or surrounding source evidence, and label status as historical rather than current. |
+| Session segments | Type, title, start/end time and notes survive. Type is a string, so AGM/Board boundaries can be described alongside public/in-camera segments. | Segments have no attendance, motions, quorum or agenda references of their own. They do not create separately convened meetings. Only export templates that render segments show them; a successful export is not a full-field export guarantee. |
+| Appendices and reports | Title, type, reference and notes survive and are rendered by appendix-aware export templates. | References are strings, not resolved attachments, document versions, or guarantee that a report was supplied. Source binaries are not embedded in this review backup. |
+| AGM business | Optional financial-statements-presented, financial notes, election notes, director appointments and special-resolution exhibits survive. | These remain minutes evidence; they do not automatically update director registers or prove individual consent, election validity, auditor appointments or completed filings. |
+| Conflicts, abstentions and dissent | Vote counts and narrative may preserve the evidence. | No structured conflict disclosure/recusal event, item-specific attendance interval or dissent-report relationship is created by this bundle path. Do not collapse these into a generic absence or negative vote. |
+| Provenance | Staged payloads, `sourceExternalIds`, source document IDs and selected import transcript fields survive backup roundtrip. | Native subrecords do not uniformly carry field-level page/sheet/row locators, extraction revision or source hash. Backup integrity establishes persistence, not correctness of extraction. |
+
+## Quorum change and compatibility
+
+`shared/minutesQuorum.ts` defines the canonical interpretation. An explicitly unknown status overrides the compatibility Boolean. Omitted quorum in a new meeting-minute import becomes `{ quorumMet: false, quorumStatus: "not_recorded" }`; the string `"false"` is parsed as false rather than truthy. Unsupported strings and contradictory known statuses are rejected.
+
+The optional status is added to the native minutes schema and create/update/draft APIs. Existing Boolean-only API payloads continue to work. An explicit manual Boolean update records a known observation; unrelated editing preserves unknown. Draft synchronization cannot replace an explicit historical unknown with a count-based claim. Import merge fills an unknown status only; it no longer silently upgrades a known negative to a positive.
+
+Minutes tables, badges, AGM views, annual-cycle descriptions and renderer templates that show quorum use the shared interpretation. The compatibility Boolean still exists because older clients expect it. **Use the updated app for these backups**: an older app that ignores `quorumStatus` may display an unknown record as “not met.” No automatic retrospective migration of ambiguous historical Boolean-only rows is performed.
+
+## Historical date and status caveats
+
+Native meeting promotion uses `toMeetingDateTime` in `importSessionRecordKinds.ts`. A full calendar date `YYYY-MM-DD` becomes **12:00 UTC as a storage placeholder**; a valid timezone-qualified ISO timestamp retains the supplied instant. Partial or invalid dates are rejected before native promotion. These rules do not derive an actual meeting start time from a date-only source. Separate `calledToOrderAt` and `adjournedAt` strings preserve stated local times, but date precision and source timezone remain follow-up work.
+
+Extractors must use a verified full calendar date or timezone-qualified timestamp for a promotable meeting candidate; unknown dates should remain source evidence pending review. A rendered noon time must not be presented as recovered from the source.
+
+The reviewed March 18, 2025 AGM/Board candidate retains a source call-to-order time of 17:11 and adjournment of 18:52 separately from its date. Its positive quorum observation belongs to the AGM opening; the combined document does not establish a separate Board-segment quorum. Source notes preserve this scope, but the native scalar quorum field cannot encode it.
+
+Historical action assignments do not establish whether work is outstanding today. Likewise, source approval wording does not make newly staged minutes approved. The reviewed draft service-agreement evidence retains its `TBD` agreement number and `DATE` placeholder and does not assert execution. Outside minutes, the existing insurance promotion handler defaults omitted status to Active; historical policy candidates must receive an explicit reviewed status before application. The sampled policies end May 6, 2026, so their source terms alone cannot support current active coverage.
+
+## Verification
+
+`scripts/check-meeting-quorum-fidelity.ts` verifies strict normalization, actual candidate staging, isolated approval/promotion into native minutes, backup restore, all six export styles, unrelated and explicit edits, and draft synchronization with a known numeric threshold but unknown source quorum. Fixture approval is confined to an isolated test workspace; real extracted records stay Pending.
+
+The existing meeting-governance suite checks notice dates, templates, conflicts, export blockers, motion rendering and redaction. Passing these tests does not validate the legal correctness of a historical meeting, recover unsupported fields, validate current action status or prove attachments are present.
+
+During reconciliation onto `origin/main`, the Convex typecheck passed. App and server checks still report missing Clerk, PowerSync and fontkit dependencies in the stale local dependency tree; identical errors were reproduced from an isolated copy of `origin/main` using those same dependencies. No dependencies were installed.
+
+## Additional import and review fixes
+
+Meeting-minute imports now retain explicit meeting type, location and electronic participation, including supplied remote-connection fields. Shared provenance no longer merges different titles on the same date: a package can contain a separately convened AGM and Board meeting. This avoids collapsing distinct meetings merely because they cite the same source file.
+
+The structured-minutes editor conversion helpers use JSON for compound rows and still accept legacy pipe-delimited rows. They retain nested data, completion flags, and delimiter characters; this verifies helper fidelity, not a browser save workflow.
+
+Run `npm run test:meeting-intake-fidelity` for the focused regression checks. Run `npm run intake:audit-meetings -- organization.json import-bundle.json audit.json` to test a real bundle through isolated promotion. Run `npm run intake:render-minutes -- organization.json import-bundle.json minutes-preview.html` for a review preview using the app's standard renderer. The preview labels date-storage placeholders and keeps source references visible. Neither command approves the delivered review backup.
