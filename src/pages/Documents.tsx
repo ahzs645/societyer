@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -26,6 +26,8 @@ import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
 import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 import { openDocumentDownloadTarget } from "../lib/documentStorage";
+import { getRestoredFile } from "../lib/workspaceArchiveFiles";
+import { triggerBlobDownload } from "../lib/zip";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 
@@ -277,7 +279,7 @@ export function DocumentsPage() {
             renderRowActions={(r) => (
               <>
                 {(r.storageId || r.fileName) && (
-                  <CurrentDocumentDownload documentId={r._id} legacyStorageId={r.storageId} />
+                  <CurrentDocumentDownload documentId={r._id} legacyStorageId={r.storageId} fileName={r.fileName} />
                 )}
                 <Link className="btn btn--ghost btn--sm" to={`/app/documents/${r._id}`}>
                   <ClipboardCheck size={12} /> Review
@@ -451,13 +453,21 @@ function DocumentQueueCard({
   );
 }
 
-function CurrentDocumentDownload({ documentId, legacyStorageId }: { documentId: any; legacyStorageId?: any }) {
+function CurrentDocumentDownload({ documentId, legacyStorageId, fileName }: { documentId: any; legacyStorageId?: any; fileName?: string }) {
   const latest = useQuery(api.documentVersions.latest, { documentId });
   const legacyUrl = useQuery(api.files.getUrl, legacyStorageId ? { storageId: legacyStorageId } : "skip");
   const getDownloadTarget = useAction(api.documentVersions.getDownloadTarget);
   const toast = useToast();
+  const [restored, setRestored] = useState<Blob | undefined>();
+  useEffect(() => {
+    let active = true;
+    setRestored(undefined);
+    if (latest !== undefined) void getRestoredFile(latest ? { versionId: latest._id } : { documentId }).then(file => { if (active) setRestored(file); });
+    return () => { active = false; };
+  }, [documentId, latest?._id, latest === undefined]);
 
   const open = async () => {
+    if (restored) { triggerBlobDownload(restored, latest?.fileName ?? fileName ?? "document"); return; }
     if (latest) {
       const target = await getDownloadTarget({ versionId: latest._id });
       if (!target) return;
@@ -472,7 +482,7 @@ function CurrentDocumentDownload({ documentId, legacyStorageId }: { documentId: 
   };
 
   if (latest === undefined && !legacyUrl) return null;
-  if (!latest && !legacyUrl) return null;
+  if (!latest && !legacyUrl && !restored) return null;
   return (
     <button className="btn btn--ghost btn--sm" onClick={open}>
       <Download size={12} /> Open

@@ -219,6 +219,15 @@ export const EXPORTABLE_TABLES = [
   "bylawSections",
   "orgChartAssignmentRevisions",
   "partyPortals",
+  "financialVersionSelections",
+  "importTargets",
+  "memberAssessments",
+  "membershipRuleVersions",
+  "organizationSeats",
+  "personContactPoints",
+  "personHistoryEvents",
+  "personOccurrences",
+  "seatProxyAuthorizations",
 ] as const;
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);
@@ -312,7 +321,7 @@ export async function exportAttachmentPagePortable(
         mimeType: row.mimeType,
         fileSizeBytes: row.fileSizeBytes,
         sha256: row.sha256,
-        downloadUrl: await downloadUrlForVersion(row),
+        ...(await attachmentDownloadUrl(() => downloadUrlForVersion(row))),
       })),
     );
     return { ...page, page: attachments };
@@ -338,13 +347,19 @@ export async function exportAttachmentPagePortable(
         mimeType: row.mimeType,
         fileSizeBytes: row.fileSizeBytes,
         externalUrl: row.url,
-        downloadUrl: row.storageId ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(row.storageId) })).url : row.url,
+        ...(await attachmentDownloadUrl(async () => row.storageId ? (await ctx.capabilities.storage.getDownloadUrl({ storageKey: String(row.storageId) })).url : row.url)),
       })),
   );
   return { ...page, page: attachments };
 }
 
+async function attachmentDownloadUrl(resolve: () => Promise<string | null | undefined>) {
+  try { return { downloadUrl: await resolve() }; }
+  catch { return { downloadUrl: null, downloadError: "The storage provider could not supply a download URL." }; }
+}
+
 async function downloadUrlForVersion(row: any) {
+  if (row.storageProvider === "generated-inline") return row.storageKey;
   if (row.storageProvider === "local") {
     const base =
       (globalThis as any)?.process?.env?.SOCIETYER_API_PUBLIC_URL ??

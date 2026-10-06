@@ -28,7 +28,7 @@ import {
 } from "../lib/documentStorage";
 import { createDesktopBackup } from "../lib/desktopBackup";
 import {
-  downloadLocalWorkspaceSnapshot,
+  downloadLocalWorkspaceZip,
   getLocalWorkspaceSnapshot,
   importLocalWorkspaceSnapshotFile,
 } from "../lib/localWorkspaceExport";
@@ -125,11 +125,11 @@ export function DesktopSetupPage() {
     }
   };
 
-  const exportLocalData = () => {
+  const exportLocalData = async () => {
     setBusy("export");
     try {
-      downloadLocalWorkspaceSnapshot();
-      setStatusMessage("Local workspace data export created.");
+      const result = await downloadLocalWorkspaceZip(setStatusMessage);
+      setStatusMessage(result.manifest.completeStoredFiles ? `ZIP created with ${result.manifest.rowCount} records and ${result.manifest.includedFiles} saved files.` : `ZIP created with ${result.manifest.unavailableFiles} unavailable saved files. See manifest.json.`);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Local data export failed.");
     } finally {
@@ -380,7 +380,7 @@ export function DesktopSetupPage() {
                 <label className={`btn${!requiredReady || busy === "import" ? " is-disabled" : ""}`}>
                   <Upload size={12} /> {busy === "import" ? "Importing..." : "Import data"}
                   <input
-                    accept="application/json"
+                    accept="application/json,application/zip,.json,.zip"
                     disabled={!requiredReady || busy === "import"}
                     onChange={(event) => void importLocalData(event.currentTarget.files?.[0])}
                     style={{ display: "none" }}

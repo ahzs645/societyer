@@ -6,7 +6,7 @@ import type { PortableDoc, PortablePrincipal, RuntimeKind } from "../../shared/p
 import { LocalStoreDb } from "../../shared/portable/localRowStore";
 import { PORTABLE_FUNCTIONS } from "../../shared/functions/registry";
 import { buildLocalCapabilities } from "./localCapabilities";
-import type { LocalWorkspaceSnapshot } from "./localDexieRowStore";
+import type { LocalWorkspaceSnapshot, LocalWorkspaceBinaryFile } from "./localDexieRowStore";
 import { PortableQueryCache } from "./portableQueryCache";
 import {
   STATIC_DEMO_SEED,
@@ -328,7 +328,13 @@ export class StaticConvexClient {
     return this.store.exportSnapshot();
   }
 
-  importLocalWorkspaceSnapshot(snapshot: LocalWorkspaceSnapshot) {
-    return this.store.importSnapshot(snapshot);
+  importLocalWorkspaceSnapshot(snapshot: LocalWorkspaceSnapshot, files?: LocalWorkspaceBinaryFile[]) {
+    return this.store.importSnapshot(snapshot, files);
   }
+
+  readRestoredWorkspaceFile(args: { sha256?: string; provider?: string; storageKey?: string; documentId?: string; versionId?: string }) {
+    return this.store.readRestoredFile(args);
+  }
+
+  getLocalWorkspaceAttachmentReferences() { return this.store.exportAttachmentReferences(); }
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { useConvex, useQuery } from "convex/react";
-import { CheckCircle2, Database, Download, FileJson, ShieldAlert } from "lucide-react";
+import { CheckCircle2, Database, Download, FileJson, Archive, ShieldAlert } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
@@ -8,6 +9,12 @@ import { Badge } from "../components/ui";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { useToast } from "../components/Toast";
 import { escapeCsvCell } from "../lib/csv";
+import { buildWorkspaceArchive, readWorkspaceArchiveFile, archiveDatabaseSnapshot, type ArchiveManifest } from "../lib/workspaceArchive";
+import { collectWorkspaceFiles, type AttachmentDownload } from "../lib/workspaceArchiveFiles";
+import { triggerBlobDownload } from "../lib/zip";
+import { localWorkspaceRestoreSupported, restoreLocalWorkspaceBackup } from "../lib/localWorkspaceExport";
+import { useConfirm } from "../components/Modal";
+import { setStoredSocietyId } from "../hooks/useSociety";
 
 type TableSummary = {
   name: string;
@@ -29,6 +36,7 @@ type ImportPreview = {
   recoverySecretsIncluded: boolean;
   redactedFields: string[];
   issues: string[];
+  archive?: ArchiveManifest;
 };
 
 export function ExportsPage() {
@@ -37,6 +45,7 @@ export function ExportsPage() {
   const canDownload = loaded && can("exports:download");
   const convex = useConvex();
   const toast = useToast();
+  const confirm = useConfirm();
   const [format, setFormat] = useState<Format>("csv");
   const [busy, setBusy] = useState<string | null>(null);
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
@@ -47,6 +56,11 @@ export function ExportsPage() {
   const [includeRecoverySecrets, setIncludeRecoverySecrets] = useState(false);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importError, setImportError] = useState("");
+  const [progress, setProgress] = useState("");
+  const [lastArchive, setLastArchive] = useState<ArchiveManifest | null>(null);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [previewBusy, setPreviewBusy] = useState(false);
 
   const tableSummaries = useQuery(
     api.exports.listExportableTables,
@@ -91,14 +105,17 @@ export function ExportsPage() {
     }
   };
 
-  const downloadWorkspace = async () => {
+  const downloadWorkspace = async (archive = true) => {
     setWorkspaceBusy(true);
+    setLastArchive(null);
+    setProgress("Preparing records…");
     try {
       const tables: Record<string, Array<Record<string, unknown>>> = {};
       const summaries: TableSummary[] = [];
       let totalRows = 0;
 
       for (const table of tableSummaries ?? []) {
+        setProgress(`Records: ${summaries.length + 1} of ${tableSummaries?.length} tables · ${table.name}`);
         setBusy(table.name);
         const rows = await fetchTableRows(table.name);
         tables[table.name] = rows;
@@ -134,7 +151,25 @@ export function ExportsPage() {
         },
         tables,
       };
-      downloadBlob(
+      if (archive) {
+        const attachments: AttachmentDownload[] = [];
+        for (const source of ["documentVersions", "documents"] as const) {
+          let cursor: string | null = null;
+          const seen = new Set<string>();
+          do {
+            const result: any = await convex.query(api.exports.exportAttachmentPage, { societyId: society._id, source, paginationOpts: { cursor, numItems: 100 } });
+            attachments.push(...result.page);
+            cursor = result.isDone ? null : result.continueCursor;
+            if (cursor && seen.has(cursor)) throw new Error("The file listing did not advance.");
+            if (cursor) seen.add(cursor);
+          } while (cursor);
+        }
+        const result = await buildWorkspaceArchive(bundle, add => collectWorkspaceFiles(tables, attachments, add, (done, total, name) => setProgress(`Files: ${done} of ${total} · ${name}`)), percent => setProgress(`Creating ZIP: ${Math.round(percent)}%`));
+        setLastArchive(result.manifest);
+        triggerBlobDownload(result.blob, `${slug(society.name)}-workspace-${today()}${result.manifest.completeStoredFiles ? "" : "-incomplete"}.zip`);
+        if (result.manifest.completeStoredFiles) toast.success("ZIP export downloaded", `${totalRows.toLocaleString()} records and ${result.manifest.includedFiles} saved files.`);
+        else toast.warn("Export downloaded with missing files", `${result.manifest.unavailableFiles} saved files are unavailable. Their details are in manifest.json.`);
+      } else downloadBlob(
         JSON.stringify(bundle, null, 2),
         "application/json",
         `${slug(society.name)}-workspace-export-${today()}.json`,
@@ -144,6 +179,7 @@ export function ExportsPage() {
     } finally {
       setBusy(null);
       setWorkspaceBusy(false);
+      setProgress("");
     }
   };
 
@@ -200,18 +236,41 @@ export function ExportsPage() {
   const tablesReady = Boolean(tableSummaries?.length);
   const allTablesCounted = Boolean(tableSummaries?.length) && tableSummaries!.every((table) => tableCounts[table.name] != null);
   const totalRows = validation?.totalRows ?? (allTablesCounted ? countedRows : null);
+  const nonEmptyTableCount = allTablesCounted ? Object.values(tableCounts).filter(count => count > 0).length : validation?.nonEmptyTableCount;
   const redactedFields = includeRecoverySecrets ? ["storageId"] : ["secretEncrypted", "tokenHash", "storageId"];
 
   const inspectImportFile = async (file: File | undefined) => {
     setImportError("");
     setImportPreview(null);
+    setRestoreFile(null);
     if (!file) return;
+    setPreviewBusy(true);
     try {
-      const parsed = JSON.parse(await file.text());
-      setImportPreview(inspectWorkspaceExport(parsed, file.name));
+      const { database, manifest } = await readWorkspaceArchiveFile(file);
+      archiveDatabaseSnapshot(database);
+      const preview = inspectWorkspaceExport(database, file.name);
+      if (manifest) {
+        preview.binaryFilesIncluded = manifest.includedFiles > 0;
+        preview.issues = preview.issues.filter(issue => !issue.includes("document binaries"));
+        if (manifest.unavailableFiles) preview.issues.push(`${manifest.unavailableFiles} saved files were unavailable when exported.`);
+        if (manifest.externalFiles) preview.issues.push(`${manifest.externalFiles} files are external links; their bytes are not bundled.`);
+      }
+      setImportPreview({ ...preview, archive: manifest });
+      setRestoreFile(file);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Could not read export file.");
-    }
+    } finally { setPreviewBusy(false); }
+  };
+
+  const restorePreview = async () => {
+    if (!restoreFile || !await confirm({ title: "Restore this backup?", message: `Replace this device's current local workspace with "${restoreFile.name}"? Export its current records first if you need to keep them.`, confirmLabel: "Restore", tone: "danger" })) return;
+    setRestoreBusy(true);
+    try {
+      const summary = await restoreLocalWorkspaceBackup(restoreFile);
+      if (summary.societies[0]?._id) setStoredSocietyId(summary.societies[0]._id as any);
+      toast.success("Backup restored", `${summary.rowCount} records and ${summary.includedFiles} saved files.`);
+    } catch (error) { toast.error("Restore failed", error instanceof Error ? error.message : "Please try again."); }
+    finally { setRestoreBusy(false); }
   };
 
   return (
@@ -220,36 +279,44 @@ export function ExportsPage() {
         title="Data export"
         icon={<Database size={16} />}
         iconColor="blue"
-        subtitle="Download workspace records, choose recovery redaction, and inspect export files before restore."
+        subtitle="Export this organization's records and saved files, or inspect a backup before restoring it."
         actions={
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <label className="row" style={{ gap: 6, alignItems: "center" }}>
-              <span className="muted">Format</span>
+              <span className="muted">Table format</span>
               <select
                 value={format}
                 onChange={(e) => setFormat(e.target.value as Format)}
                 className="input"
+                disabled={workspaceBusy || busy !== null}
               >
                 <option value="csv">CSV</option>
                 <option value="json">JSON</option>
               </select>
             </label>
-            <button className="btn-action" disabled={countBusy || workspaceBusy || !tablesReady} onClick={validateCounts}>
+            <button className="btn-action" disabled={countBusy || workspaceBusy || busy !== null || !tablesReady} onClick={validateCounts}>
               <CheckCircle2 size={12} /> {countBusy ? "Validating..." : "Validate rows"}
             </button>
-            <button className="btn-action btn-action--primary" disabled={workspaceBusy || countBusy || !tablesReady} onClick={downloadWorkspace}>
-              <FileJson size={12} /> {workspaceBusy ? "Exporting..." : "Export workspace"}
+            <button className="btn-action" disabled={workspaceBusy || countBusy || busy !== null || !tablesReady} onClick={() => void downloadWorkspace(false)}><FileJson size={12} /> Records JSON</button>
+            <button className="btn-action btn-action--primary" disabled={workspaceBusy || countBusy || busy !== null || !tablesReady} onClick={() => void downloadWorkspace()}>
+              <Archive size={12} /> {workspaceBusy ? "Exporting…" : "Export ZIP"}
             </button>
           </div>
         }
       />
+      {progress && <div className="notice" role="status" aria-live="polite">{progress}</div>}
+      {lastArchive && <div className={`notice ${lastArchive.completeStoredFiles ? "notice--success" : "notice--warning"}`} role="status">
+        <strong>{lastArchive.completeStoredFiles ? "ZIP export ready" : "ZIP export has missing saved files"}</strong>
+        <div>{lastArchive.rowCount.toLocaleString()} records · {lastArchive.tableCount} tables · {lastArchive.includedFiles} saved files · {lastArchive.externalFiles} external links · {lastArchive.unavailableFiles} unavailable files.</div>
+        <div>Saved files include their checksum-verified bytes. External links remain in the records. The ZIP manifest lists every file's status.</div>
+      </div>}
 
       <div className="stat-grid stat-grid--3">
         <Stat
-          label="Validation"
-          value={validation ? (validationOk ? "OK" : "Review") : "..."}
+          label="Record coverage"
+          value={validation ? (validationOk ? "Ready" : "Review") : "..."}
           icon={validationOk ? <CheckCircle2 size={14} /> : <ShieldAlert size={14} />}
-          sub={validation ? `${validation.tableCount} schema tables covered` : "checking database coverage"}
+          sub={validation ? `${validation.tableCount} available tables; saved files are checked during ZIP export` : "checking database coverage"}
         />
         <Stat
           label="Export rows"
@@ -258,7 +325,7 @@ export function ExportsPage() {
           sub={
             totalRows == null
               ? "validate or export to count rows"
-              : `${formatNumber(Object.values(tableCounts).filter((count) => count > 0).length)} non-empty tables`
+              : `${formatNumber(nonEmptyTableCount ?? 0)} non-empty tables for this organization`
           }
         />
         <Stat
@@ -272,8 +339,8 @@ export function ExportsPage() {
       <div className="card">
         <div className="card__head">
           <div>
-            <h2 className="card__title">Export options</h2>
-            <span className="card__subtitle">Recovery exports include encrypted secret ciphertext and API token hashes. Store them like credentials.</span>
+            <h2 className="card__title">What's included</h2>
+            <span className="card__subtitle">ZIP includes every accessible record table, embedded source images, uploaded files, saved originals, a file inventory, and restore instructions.</span>
           </div>
         </div>
         <div className="card__body">
@@ -281,19 +348,22 @@ export function ExportsPage() {
             <input
               type="checkbox"
               checked={includeRecoverySecrets}
+              disabled={workspaceBusy || countBusy || busy !== null}
               onChange={(event) => setIncludeRecoverySecrets(event.target.checked)}
               style={{ marginTop: 3 }}
             />
             <span>
               <strong>Include recovery secrets</strong>
               <span className="muted" style={{ display: "block", fontSize: "var(--fs-sm)" }}>
-                Keeps encrypted vault values, webhook encrypted secrets, and API token hashes in JSON exports. Storage IDs remain redacted.
+                Keeps encrypted vault values, webhook encrypted secrets, and API token hashes in ZIP and JSON records. Storage IDs remain redacted in the records.
               </span>
             </span>
           </label>
           <div className="muted" style={{ marginTop: 10, fontSize: "var(--fs-sm)" }}>
             Current redaction: {redactedFields.join(", ") || "none"}
           </div>
+          <p className="muted">External-only links are retained; their files are not downloaded from the external service. Any saved file that cannot be read is clearly marked unavailable. For a full backup of every organization on this device and its retained change journal, use Settings → Workspace storage.</p>
+          {localWorkspaceRestoreSupported() && <Link className="btn-action" to="/app/settings?tab=runtime">Open full device backup</Link>}
         </div>
       </div>
 
@@ -317,18 +387,22 @@ export function ExportsPage() {
         <div className="card__head">
           <div>
             <h2 className="card__title">Import preview</h2>
-            <span className="card__subtitle">Choose a workspace export JSON to inspect tables, rows, file manifest flags, and recovery-secret status before restore.</span>
+            <span className="card__subtitle">Choose a ZIP or JSON backup to inspect records, saved files, and recovery settings. ZIP checksums are verified before restore.</span>
           </div>
         </div>
         <div className="card__body">
           <input
             className="input"
             type="file"
-            accept="application/json,.json"
+            accept="application/json,application/zip,.json,.zip"
+            disabled={previewBusy || restoreBusy || workspaceBusy}
             onChange={(event) => void inspectImportFile(event.target.files?.[0])}
-            aria-label="Workspace export JSON"
+            aria-label="Workspace backup ZIP or JSON"
             style={{ width: "100%", minWidth: 0, maxWidth: 420, boxSizing: "border-box" }}
           />
+          {previewBusy && <p role="status">Checking backup and saved-file checksums…</p>}
+          {importPreview?.archive && <p>{importPreview.archive.includedFiles} saved files · {importPreview.archive.externalFiles} external links · {importPreview.archive.unavailableFiles} unavailable files.</p>}
+          {restoreFile && localWorkspaceRestoreSupported() && <button className="btn" disabled={restoreBusy || previewBusy} onClick={() => void restorePreview()}>{restoreBusy ? "Restoring…" : "Restore on this device"}</button>}
           {importError && (
             <div className="notice notice--danger" style={{ marginTop: 12 }}>
               {importError}
@@ -342,7 +416,7 @@ export function ExportsPage() {
                 label="Recovery"
                 value={importPreview.recoverySecretsIncluded ? "Secrets" : "Redacted"}
                 icon={<ShieldAlert size={14} />}
-                sub={importPreview.binaryFilesIncluded ? "file manifest expected" : "JSON records only"}
+                sub={importPreview.archive ? `${importPreview.archive.includedFiles} saved files verified` : "JSON records only"}
               />
               {importPreview.issues.length > 0 && (
                 <div className="notice notice--warning" style={{ gridColumn: "1 / -1" }}>
@@ -489,7 +563,7 @@ function inspectWorkspaceExport(value: any, fileName: string): ImportPreview {
   if (!value || typeof value !== "object") {
     throw new Error("The selected file is not a workspace export JSON object.");
   }
-  if (value.kind !== "societyer.workspaceExport") {
+  if (!["societyer.workspaceExport", "societyer.localWorkspaceSnapshot"].includes(value.kind)) {
     throw new Error("The selected file is not a Societyer workspace export.");
   }
 
@@ -513,7 +587,7 @@ function inspectWorkspaceExport(value: any, fileName: string): ImportPreview {
   if (!manifest.binaryFilesIncluded) {
     issues.push("This JSON does not include document binaries.");
   }
-  if (!manifest.recoverySecretsIncluded) {
+  if (value.kind !== "societyer.localWorkspaceSnapshot" && !manifest.recoverySecretsIncluded) {
     issues.push("Encrypted secret values and API token hashes are redacted.");
   }
   if (redactedFields.includes("secretEncrypted") || redactedFields.includes("tokenHash")) {
@@ -526,13 +600,13 @@ function inspectWorkspaceExport(value: any, fileName: string): ImportPreview {
   return {
     fileName,
     kind: value.kind,
-    societyName: String(manifest.societyName ?? value.society?.name ?? "Unknown society"),
+    societyName: String(manifest.societyName ?? value.society?.name ?? value.tables?.societies?.map((row: any) => row.name).join(", ") ?? "Unknown society"),
     tableCount: Number(manifest.tableCount ?? validation.tableCount ?? exportedTableCount),
     exportedTableCount,
     totalRows,
     nonEmptyTables,
     binaryFilesIncluded: manifest.binaryFilesIncluded === true,
-    recoverySecretsIncluded: manifest.recoverySecretsIncluded === true,
+    recoverySecretsIncluded: value.kind === "societyer.localWorkspaceSnapshot" || manifest.recoverySecretsIncluded === true,
     redactedFields,
     issues,
   };

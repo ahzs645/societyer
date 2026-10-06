@@ -17,7 +17,7 @@ if (existsSync(tablesDir)) {
 const exportsSource = readFileSync(exportsPath, "utf8");
 
 const schemaTables = schemaSources.flatMap((src) =>
-  Array.from(src.matchAll(/^  ([A-Za-z0-9_]+): defineTable/gm)).map((match) => match[1]),
+  Array.from(src.matchAll(/^\s+([A-Za-z0-9_]+):\s*defineTable\b/gm)).map((match) => match[1]),
 );
 const exportList = exportsSource.match(/export const EXPORTABLE_TABLES = \[([\s\S]*?)\] as const;/);
 if (!exportList) {
@@ -25,11 +25,17 @@ if (!exportList) {
 }
 
 const exportTables = Array.from(exportList[1].matchAll(/"([^"]+)"/g)).map((match) => match[1]);
+const portableSource = readFileSync(path.join(root, "shared/functions/exports.ts"), "utf8");
+const portableList = portableSource.match(/export const EXPORTABLE_TABLES = \[([\s\S]*?)\] as const;/);
+const portableTables = Array.from((portableList?.[1] ?? "").matchAll(/"([^"]+)"/g)).map(match => match[1]);
+if (JSON.stringify(portableTables) !== JSON.stringify(exportTables)) {
+  throw new Error("Portable and Convex export table lists must match, including table order.");
+}
 // Authorization capabilities, synchronization receipts and derived projections
 // cannot be restored as business records. Native meetings/agendas/minutes remain
 // exportable; device-authored pending work uses the offline recovery export.
 const NON_WORKSPACE_EXPORT_TABLES = new Set([
-  "documentUploadHandles", "externalIdentities", "powersync_checkpoints",
+  "documentUploadHandles", "storageOwnership", "externalIdentities", "powersync_checkpoints",
   "offlineMeetingAggregates", "offlineMeetingReceipts", "offlineMeetingDownloads", "offlineMeetingScopes",
 ]);
 const forbidden = exportTables.filter(table => NON_WORKSPACE_EXPORT_TABLES.has(table));

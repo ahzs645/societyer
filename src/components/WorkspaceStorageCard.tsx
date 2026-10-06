@@ -9,6 +9,7 @@ import { setStoredSocietyId } from "../hooks/useSociety";
 import { resolveAppRuntime } from "../lib/appRuntime";
 import {
   downloadLocalWorkspaceSnapshot,
+  downloadLocalWorkspaceZip,
   localWorkspaceBackupSupported,
   localWorkspaceRestoreSupported,
   restoreLocalWorkspaceBackup,
@@ -26,19 +27,26 @@ export function WorkspaceStorageCard() {
   const toast = useToast();
   const confirm = useConfirm();
   const [busy, setBusy] = useState<"export" | "import" | null>(null);
+  const [progress, setProgress] = useState("");
 
   const canBackup = localWorkspaceBackupSupported();
   const canRestore = localWorkspaceRestoreSupported();
 
-  const exportBackup = () => {
+  const exportBackup = async (format: "zip" | "json" = "zip") => {
     setBusy("export");
+    setProgress("Preparing backup…");
     try {
-      const filename = downloadLocalWorkspaceSnapshot();
-      toast.success("Backup downloaded", filename);
+      if (format === "json") toast.success("Records downloaded", downloadLocalWorkspaceSnapshot());
+      else {
+        const { filename, manifest } = await downloadLocalWorkspaceZip(setProgress);
+        if (manifest.completeStoredFiles) toast.success("ZIP backup downloaded", `${manifest.rowCount} records and ${manifest.includedFiles} saved files. ${filename}`);
+        else toast.warn("Backup downloaded with missing files", `${manifest.unavailableFiles} saved files could not be read. See manifest.json in the ZIP.`);
+      }
     } catch (error: any) {
       toast.error("Backup failed", error?.message ?? "The workspace could not be exported.");
     } finally {
       setBusy(null);
+      setProgress("");
     }
   };
 
@@ -59,7 +67,7 @@ export function WorkspaceStorageCard() {
       if (restoredSocietyId) setStoredSocietyId(restoredSocietyId as any);
       toast.success(
         "Backup restored",
-        `${summary.rowCount} record${summary.rowCount === 1 ? "" : "s"} across ${summary.tableCount} table${summary.tableCount === 1 ? "" : "s"}.`,
+        `${summary.rowCount} records across ${summary.tableCount} tables, with ${summary.includedFiles} saved files.`,
       );
     } catch (error: any) {
       toast.error("Restore failed", error?.message ?? "The backup file could not be read.");
@@ -108,12 +116,13 @@ export function WorkspaceStorageCard() {
                 <div>
                   <strong>Download a backup</strong>
                   <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>
-                    Exports every record, attachment reference, and change entry as a single JSON file.
+                    ZIP includes every organization on this device, its records, retained change history, and saved files. External-only files are listed in the manifest. Includes local recovery secrets; keep this backup private.
                   </div>
                 </div>
-                <button className="btn" type="button" disabled={busy !== null} onClick={exportBackup}>
-                  <Download size={12} /> {busy === "export" ? "Exporting…" : "Download backup"}
-                </button>
+                <div className="row" style={{gap: 8, flexWrap: "wrap"}}>
+                  <button className="btn" type="button" disabled={busy !== null} onClick={() => void exportBackup()}><Download size={12} /> {busy === "export" ? "Exporting…" : "Download ZIP backup"}</button>
+                  <button className="btn" type="button" disabled={busy !== null} onClick={() => void exportBackup("json")}>Records JSON</button>
+                </div>
               </div>
             )}
             {canRestore && (
@@ -121,14 +130,14 @@ export function WorkspaceStorageCard() {
                 <div>
                   <strong>Restore a backup</strong>
                   <div className="muted" style={{ fontSize: "var(--fs-xs)" }}>
-                    Replaces this workspace with the contents of a backup file.
+                    Choose a ZIP or JSON backup. Replaces the local records and restores files bundled in a ZIP.
                   </div>
                 </div>
                 <label className={`btn${busy !== null ? " is-disabled" : ""}`}>
                   <Upload size={12} /> {busy === "import" ? "Restoring…" : "Choose file"}
                   <input
                     type="file"
-                    accept="application/json,.json"
+                    accept="application/json,application/zip,.json,.zip"
                     disabled={busy !== null}
                     style={{ display: "none" }}
                     onChange={(event) => void importBackup(event.currentTarget.files?.[0], event.currentTarget)}
@@ -138,6 +147,7 @@ export function WorkspaceStorageCard() {
             )}
           </div>
         )}
+        {progress && <div className="muted" role="status" aria-live="polite">{progress}</div>}
 
         {!isStandalonePwa() && <InstallAppPrompt />}
 

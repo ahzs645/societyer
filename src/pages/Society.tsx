@@ -101,7 +101,7 @@ function RestoreBackupCard({
       const preview = summarizeWorkspaceBackup(await readWorkspaceBackupFile(file));
       const ok = await confirm({
         title: "Restore this backup?",
-        message: `Replace this device's local workspace with ${preview.rowCount} records for ${preview.societies.slice(0, 5).map((society) => society.name).join(", ") + (preview.societies.length > 5 ? ` and ${preview.societies.length - 5} more organizations` : "")} from "${file.name}"? Export current records first if you need to keep them. ${preview.attachmentCount} attachment references are included; separate desktop files need their original file backup. This replaces local records and cannot be undone.`,
+        message: `Replace this device's local workspace with ${preview.rowCount} records for ${preview.societies.slice(0, 5).map((society) => society.name).join(", ") + (preview.societies.length > 5 ? ` and ${preview.societies.length - 5} more organizations` : "")} from "${file.name}"? Export current records first if you need to keep them. ${preview.includedFiles} saved files are bundled; ${preview.unavailableFiles} saved files are unavailable and ${preview.externalFiles} files remain external links. This replaces local records and cannot be undone.`,
         confirmLabel: "Restore", tone: "danger",
       });
       if (ok) onRestored(await restoreLocalWorkspaceBackup(file));
@@ -120,14 +120,14 @@ function RestoreBackupCard({
       </div>
       <div className="card__body">
         <p className="muted" style={{ marginTop: 0 }}>
-          Choose the <code className="mono">.json</code> backup exported from Societyer on another device or
-          from the desktop app. Records, attachment references, and change history are restored together. Files stored separately in a desktop folder need their original file backup.
+          Choose the <code className="mono">.zip</code> or <code className="mono">.json</code> backup exported from Societyer on another device or
+          from the desktop app. ZIP backups restore records, saved files, and retained change history together. JSON restores records and references only.
         </p>
         <label className={`btn btn--accent${restoring ? " is-disabled" : ""}`} style={{ justifySelf: "start" }}>
           <Upload size={14} /> {restoring ? "Restoring…" : "Choose backup file"}
           <input
             type="file"
-            accept="application/json,.json"
+            accept="application/json,application/zip,.json,.zip"
             disabled={restoring}
             style={{ display: "none" }}
             onChange={(event) => void restore(event.currentTarget.files?.[0], event.currentTarget)}

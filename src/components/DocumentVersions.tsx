@@ -9,6 +9,8 @@ import { usePermissions } from "../hooks/usePermissions";
 import { History, Upload, RotateCcw, Download } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { openDocumentDownloadTarget } from "../lib/documentStorage";
+import { getRestoredFile } from "../lib/workspaceArchiveFiles";
+import { triggerBlobDownload } from "../lib/zip";
 import { uploadDocumentVersion } from "../lib/documentVersionUpload";
 import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
 
@@ -75,6 +77,8 @@ export function DocumentVersionsDrawer({
   };
 
   const download = async (versionId: Id<"documentVersions">) => {
+    const restored = await getRestoredFile({ versionId });
+    if (restored) { triggerBlobDownload(restored, versions?.find((version: any) => version._id === versionId)?.fileName ?? title); return; }
     const target = await getDownloadTarget({ versionId });
     if (!target) return;
     if (target.kind === "url" && target.url?.startsWith("demo://")) {

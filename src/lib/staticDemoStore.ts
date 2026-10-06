@@ -1,4 +1,4 @@
-import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot } from "./localDexieRowStore";
+import { LocalDexieRowStore, type LocalSeed, type LocalWorkspaceSnapshot, type LocalWorkspaceBinaryFile } from "./localDexieRowStore";
 import { byId } from "./staticConvexUtils";
 import { society, tables, type StaticArgs } from "./staticConvexFixtures";
 
@@ -65,9 +65,15 @@ export class StaticDemoDexieStore {
     await this.rowsStore.reseed();
   }
 
-  async importSnapshot(snapshot: LocalWorkspaceSnapshot) {
-    await this.rowsStore.importSnapshot(snapshot);
+  async importSnapshot(snapshot: LocalWorkspaceSnapshot, files?: LocalWorkspaceBinaryFile[]) {
+    await this.rowsStore.importSnapshot(snapshot, files);
   }
+
+  readRestoredFile(args: { sha256?: string; provider?: string; storageKey?: string; documentId?: string; versionId?: string }) {
+    return this.rowsStore.readRestoredFile(args);
+  }
+
+  exportAttachmentReferences() { return this.rowsStore.exportAttachmentReferences(); }
 
   transaction<T>(mutate: () => T): T {
     return this.rowsStore.transaction(mutate);

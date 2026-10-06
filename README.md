@@ -31,6 +31,16 @@ No CSS framework — a small set of hand-rolled tokens in `src/theme/tokens.css`
 
 ---
 
+## Workspace export and backup
+
+**Data export → Export ZIP** downloads the active organization's accessible record tables and saved files. Table CSV/JSON and records-only JSON downloads remain available. Recovery secrets are redacted by default; the recovery option includes encrypted secrets and token hashes in the records. Document access rules still apply.
+
+For browser-local workspaces, **Settings → Workspace storage → Download ZIP backup** backs up every organization on the device and the retained change journal. Full device backups preserve local records without the organization export's redaction, so keep them privately. Restore accepts ZIP and earlier JSON backups and replaces the device workspace after confirmation.
+
+Each ZIP contains `workspace.json`, `manifest.json`, `RESTORE.txt`, and checksum-addressed saved files under `files/`. Embedded source images stay in the records. External-only documents remain links; unavailable saved files are explicitly inventoried and the download is labelled incomplete. Import preview verifies the database and saved-file checksums before restore. ZIP restore commits records and bundled file bytes together to IndexedDB, making saved originals available after a reload without their former server. Restore limits are 256 MiB of database JSON and 1 GiB of expanded archive contents.
+
+---
+
 ## Quick start — self-hosted Convex (local, Docker)
 
 The repo ships a `docker-compose.yml` that runs the official Convex backend/dashboard plus local support services. No need to clone anything else.

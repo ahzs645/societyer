@@ -3,6 +3,7 @@ import { getDocumentStorageProvider } from "./runtimeMode";
 import { requireDesktopBridge } from "./desktopBridge";
 import { fetchDocumentDownload, isAuthenticatedDocumentUrl } from "./documentDownload";
 import { triggerBlobDownload } from "./zip";
+import { getRestoredFile } from "./workspaceArchiveFiles";
 
 export type DocumentVersionRef = {
   provider: DocumentStorageProvider;
@@ -102,6 +103,8 @@ export async function writeLocalDocumentVersion(args: {
 }
 
 export async function openLocalDocumentVersion(ref: DocumentVersionRef) {
+  const restored = await getRestoredFile({ sha256: ref.sha256, provider: ref.provider, storageKey: ref.key });
+  if (restored) { triggerBlobDownload(restored, ref.fileName); return; }
   if (ref.provider !== "local-filesystem") {
     throw new Error(`Cannot open ${ref.provider} document through local filesystem storage.`);
   }
@@ -131,6 +134,8 @@ export async function readLocalWorkspaceSnapshot() {
 }
 
 export async function openDocumentDownloadTarget(target: DocumentDownloadTarget) {
+  const restored = await getRestoredFile({ provider: target.provider, storageKey: target.key });
+  if (restored) { triggerBlobDownload(restored, target.fileName ?? "document"); return; }
   if (target.kind === "local-filesystem") {
     await requireDesktopBridge().openDocumentVersion({ key: target.key });
     return;

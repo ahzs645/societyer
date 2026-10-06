@@ -62,6 +62,8 @@ export type LocalWorkspaceSnapshot = {
   changes: LocalChangeEnvelope[];
 };
 
+export type LocalWorkspaceBinaryFile = { key: string; sha256: string; blob?: Blob };
+
 const CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION = 3;
 
 // Keep a useful diagnostic window without treating the journal as durable history.
@@ -75,6 +77,7 @@ export class LocalDexieDatabase extends Dexie {
   attachments!: Table<any, string>;
   meetings!: Table<any, string>;
   minutes!: Table<any, string>;
+  files!: Table<LocalWorkspaceBinaryFile, string>;
 
   constructor(databaseName: string) {
     super(databaseName);
@@ -95,6 +98,7 @@ export class LocalDexieDatabase extends Dexie {
       meetings: "_id, societyId, scheduledAt, status",
       minutes: "_id, meetingId, societyId, heldAt, status",
     });
+    this.version(4).stores({ files: "&key, sha256" });
   }
 }
 
@@ -103,6 +107,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   private cache: LocalSeed;
   private seed: LocalSeed;
   private attachmentsCache: LocalAttachmentEnvelope[] = [];
+  private filesCache: LocalWorkspaceBinaryFile[] = [];
   private changesCache: LocalChangeEnvelope[] = [];
   private workspaceMeta: LocalWorkspaceMeta;
   private listeners = new Set<() => void>();
@@ -331,16 +336,33 @@ export class LocalDexieRowStore implements LocalRowStore {
     };
   }
 
-  async importSnapshot(snapshot: LocalWorkspaceSnapshot | { tables?: LocalSeed; attachments?: LocalAttachmentEnvelope[]; workspace?: Partial<LocalWorkspaceMeta> }) {
+  async readRestoredFile(args: { sha256?: string; provider?: string; storageKey?: string; documentId?: string; versionId?: string }) {
+    await this.whenHydrated();
+    const key = args.sha256 ? `sha256:${args.sha256}` : args.versionId ? `version:${args.versionId}` : args.documentId ? `document:${args.documentId}` : JSON.stringify([args.provider, args.storageKey]);
+    const reference = this.db ? await this.db.files.get(key) : this.filesCache.find(file => file.key === key);
+    if (!reference) return undefined;
+    const file = reference.blob ? reference : this.db ? await this.db.files.get(`sha256:${reference.sha256}`) : this.filesCache.find(file => file.key === `sha256:${reference.sha256}`);
+    return file?.blob;
+  }
+
+  exportAttachmentReferences() { return cloneLocalRows(this.attachmentsCache); }
+
+  async importSnapshot(snapshot: LocalWorkspaceSnapshot | { tables?: LocalSeed; attachments?: LocalAttachmentEnvelope[]; workspace?: Partial<LocalWorkspaceMeta> }, files: LocalWorkspaceBinaryFile[] = []) {
     const importedTables = quarantineImportedPathways(stripImportedAuthBindings(validateSnapshotTables(snapshot?.tables)));
     const importedAttachments = validateSnapshotAttachments(snapshot?.attachments);
+    if (files.some(file => !file.key || !/^[a-f0-9]{64}$/.test(file.sha256) || (file.blob !== undefined && !(file.blob instanceof Blob)))) throw new Error("Invalid restored file data.");
+    const importedChanges = Array.isArray((snapshot as any).changes) ? (snapshot as any).changes : [];
+    if (importedChanges.length > 10_000 || importedChanges.some((change: any) => !change || typeof change.table !== "string" || typeof change.id !== "string" || !["upsert", "delete", "seed"].includes(change.op) || typeof change.createdAtISO !== "string")) throw new Error("Invalid backup change history.");
+    const history = importedChanges.map((change: any) => { const { seq, ...value } = cloneLocalRow(change); return value; });
     // Startup may still be reading the previous vault or writing its seed. A
     // restore must finish after that work, otherwise hydration can overwrite
     // the restored cache, metadata or attachment references after we report
     // success. Validate first so invalid backups never wait for or write storage.
     await this.whenHydrated();
     const normalizedMeta = normalizeWorkspaceMeta(snapshot?.workspace, this.workspaceMeta);
-    const importedCache = migrateLocalWorkspaceSnapshotTables(importedTables);
+    // Validation already owns a deep copy. Migration and IndexedDB's structured
+    // writes need no additional JSON copies of large embedded source images.
+    const importedCache = migrateLocalWorkspaceSnapshotTables(importedTables, false);
     const importedMeta: LocalWorkspaceMeta = {
       ...normalizedMeta,
       schemaVersion: Math.max(normalizedMeta.schemaVersion, CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION),
@@ -354,10 +376,10 @@ export class LocalDexieRowStore implements LocalRowStore {
 
     if (this.db) {
       await this.db.open();
-      const records = localRecordsForSeed(importedCache);
+      const records = localRecordsForSeed(importedCache, false);
       await this.db.transaction(
         "rw",
-        [this.db.meta, this.db.records, this.db.changes, this.db.attachments, this.db.meetings, this.db.minutes],
+        [this.db.meta, this.db.records, this.db.changes, this.db.attachments, this.db.meetings, this.db.minutes, this.db.files],
         async () => {
           await this.db!.meta.clear();
           await this.db!.records.clear();
@@ -365,11 +387,14 @@ export class LocalDexieRowStore implements LocalRowStore {
           await this.db!.attachments.clear();
           await this.db!.meetings.clear();
           await this.db!.minutes.clear();
+          await this.db!.files.clear();
 
           if (records.length) await this.db!.records.bulkPut(records);
           if (importedAttachments.length) await this.db!.attachments.bulkPut(cloneLocalRows(importedAttachments));
-          if (importedCache.meetings?.length) await this.db!.meetings.bulkPut(cloneLocalRows(importedCache.meetings));
-          if (importedCache.minutes?.length) await this.db!.minutes.bulkPut(cloneLocalRows(importedCache.minutes));
+          if (files.length) await this.db!.files.bulkPut(files);
+          if (history.length) await this.db!.changes.bulkAdd(history);
+          if (importedCache.meetings?.length) await this.db!.meetings.bulkPut(importedCache.meetings);
+          if (importedCache.minutes?.length) await this.db!.minutes.bulkPut(importedCache.minutes);
           await this.db!.meta.bulkPut([
             { key: "schemaVersion", value: importedMeta.schemaVersion },
             { key: "workspace", value: importedMeta },
@@ -382,7 +407,8 @@ export class LocalDexieRowStore implements LocalRowStore {
 
     this.cache = importedCache;
     this.attachmentsCache = importedAttachments;
-    this.changesCache = [committedImportChange];
+    this.filesCache = files;
+    this.changesCache = [...history, committedImportChange];
     this.workspaceMeta = importedMeta;
     this.notify();
   }
@@ -422,7 +448,9 @@ export class LocalDexieRowStore implements LocalRowStore {
       this.db.attachments.clear(),
       this.db.meetings.clear(),
       this.db.minutes.clear(),
+      this.db.files.clear(),
     ]);
+    this.filesCache = [];
     await this.writeSeed(this.seed);
     this.notify();
   }
@@ -662,9 +690,9 @@ function validateSnapshotAttachments(value: unknown): LocalAttachmentEnvelope[] 
   return cloneLocalRows(value as LocalAttachmentEnvelope[]);
 }
 
-function localRecordsForSeed(seed: LocalSeed): LocalRecordEnvelope[] {
+function localRecordsForSeed(seed: LocalSeed, copy = true): LocalRecordEnvelope[] {
   return Object.entries(seed).flatMap(([table, rows]) =>
-    Array.isArray(rows) ? rows.filter((row) => row?._id).map((row) => localRecord(table, row)) : [],
+    Array.isArray(rows) ? rows.filter((row) => row?._id).map((row) => localRecord(table, row, copy)) : [],
   );
 }
 
@@ -686,8 +714,8 @@ function createLocalChange(
   };
 }
 
-export function migrateLocalWorkspaceSnapshotTables(seed: LocalSeed): LocalSeed {
-  const migrated = cloneLocalSeed(seed);
+export function migrateLocalWorkspaceSnapshotTables(seed: LocalSeed, copy = true): LocalSeed {
+  const migrated = copy ? cloneLocalSeed(seed) : { ...seed };
   const now = new Date().toISOString();
   const hasRegistrationTable = Array.isArray(seed.organizationRegistrations);
   migrated.societies = (migrated.societies ?? []).map((row) => migrateSocietyWorkspaceRow(row, now));
@@ -778,7 +806,7 @@ export function localRecordKey(table: string, id: string) {
   return `${table}:${id}`;
 }
 
-export function localRecord(table: string, row: any): LocalRecordEnvelope {
+export function localRecord(table: string, row: any, copy = true): LocalRecordEnvelope {
   return {
     key: localRecordKey(table, row._id),
     table,
@@ -786,7 +814,7 @@ export function localRecord(table: string, row: any): LocalRecordEnvelope {
     societyId: row.societyId,
     updatedAtISO: row.updatedAtISO,
     deletedAtISO: row.deletedAtISO,
-    value: cloneLocalRow(row),
+    value: copy ? cloneLocalRow(row) : row,
   };
 }
 

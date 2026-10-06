@@ -189,7 +189,6 @@ export const EXPORTABLE_TABLES = [
   "recordsLocation",
   "sourceEvidence",
   "secretVaultItems",
-  "storageOwnership",
   "archiveAccessions",
   "assetReceiptLinks",
   "inventoryConnections",
@@ -218,6 +217,15 @@ export const EXPORTABLE_TABLES = [
   "bylawSections",
   "orgChartAssignmentRevisions",
   "partyPortals",
+  "financialVersionSelections",
+  "importTargets",
+  "memberAssessments",
+  "membershipRuleVersions",
+  "organizationSeats",
+  "personContactPoints",
+  "personHistoryEvents",
+  "personOccurrences",
+  "seatProxyAuthorizations",
 ] as const;
 
 export const listExportableTables = authorizedQuery("exports:listExportableTables", query)({

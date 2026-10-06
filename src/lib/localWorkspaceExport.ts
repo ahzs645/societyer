@@ -1,9 +1,12 @@
-import { MAX_SETUP_BACKUP_BYTES, validateSetupBackup } from "../../shared/onboardingBackup";
 import { localDataClient } from "./localDataClient";
+import { archiveDatabaseSnapshot, buildWorkspaceArchive, readWorkspaceArchiveFile, type ArchiveManifest } from "./workspaceArchive";
+import { archiveFileRows, collectWorkspaceFiles, type AttachmentDownload } from "./workspaceArchiveFiles";
+import { triggerBlobDownload } from "./zip";
+import { isLocalDataRuntime } from "./staticRuntime";
 
 type LocalExportCapableClient = {
   exportLocalWorkspaceSnapshot?: () => unknown;
-  importLocalWorkspaceSnapshot?: (snapshot: any) => Promise<unknown> | unknown;
+  importLocalWorkspaceSnapshot?: (snapshot: any, files?: ReturnType<typeof archiveFileRows>) => Promise<unknown> | unknown;
 };
 
 export type WorkspaceBackupSummary = {
@@ -11,6 +14,9 @@ export type WorkspaceBackupSummary = {
   tableCount: number;
   rowCount: number;
   attachmentCount: number;
+  includedFiles: number;
+  unavailableFiles: number;
+  externalFiles: number;
   societies: Array<{ _id: string; name: string }>;
 };
 
@@ -21,12 +27,12 @@ export function getLocalWorkspaceSnapshot() {
 
 export function localWorkspaceBackupSupported() {
   const client = localDataClient as unknown as LocalExportCapableClient;
-  return typeof client.exportLocalWorkspaceSnapshot === "function";
+  return isLocalDataRuntime() && typeof client.exportLocalWorkspaceSnapshot === "function";
 }
 
 export function localWorkspaceRestoreSupported() {
   const client = localDataClient as unknown as LocalExportCapableClient;
-  return typeof client.importLocalWorkspaceSnapshot === "function";
+  return isLocalDataRuntime() && typeof client.importLocalWorkspaceSnapshot === "function";
 }
 
 export function downloadLocalWorkspaceSnapshot(filename = defaultBackupFilename()) {
@@ -48,21 +54,56 @@ export function defaultBackupFilename(now = new Date()) {
   return `societyer-backup-${stamp}.json`;
 }
 
+export async function downloadLocalWorkspaceZip(onProgress?: (message: string) => void) {
+  await localDataClient.whenLocalWorkspaceReady?.();
+  const snapshot: any = getLocalWorkspaceSnapshot();
+  if (!snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
+  const attachments: AttachmentDownload[] = [];
+  for (const society of snapshot.tables.societies ?? []) {
+    for (const source of ["documentVersions", "documents"] as const) {
+      let cursor: string | null = null;
+      const seen = new Set<string>();
+      do {
+        const result: any = await localDataClient.query("exports:exportAttachmentPage", { societyId: society._id, source, paginationOpts: { cursor, numItems: 100 } });
+        attachments.push(...result.page);
+        cursor = result.isDone ? null : result.continueCursor;
+        if (cursor && seen.has(cursor)) throw new Error("The file listing did not advance.");
+        if (cursor) seen.add(cursor);
+      } while (cursor);
+    }
+  }
+  // Physical local backups also retain detached attachment references.
+  const keys = new Set(attachments.map(file => JSON.stringify([file.storageProvider, file.storageKey])));
+  for (const ref of snapshot.attachments ?? []) if (!keys.has(JSON.stringify([ref.provider, ref.storageKey]))) attachments.push({ ...ref, storageProvider: ref.provider, id: ref.versionId });
+  const result = await buildWorkspaceArchive(snapshot, add => collectWorkspaceFiles(snapshot.tables, attachments, add, (done, total, name) => onProgress?.(`Files ${done} of ${total}: ${name}`)), percent => onProgress?.(`Creating ZIP: ${Math.round(percent)}%`));
+  const filename = defaultBackupFilename().replace(/\.json$/, result.manifest.completeStoredFiles ? ".zip" : "-incomplete.zip");
+  triggerBlobDownload(result.blob, filename);
+  return { filename, manifest: result.manifest };
+}
+
 /** Parse and validate a backup file without writing anything. */
 export async function readWorkspaceBackupFile(file: File) {
-  if (file.size > MAX_SETUP_BACKUP_BYTES) throw new Error("Device setup accepts backups up to 256 MB. Use a smaller workspace backup or the administrator migration tools.");
-  let snapshot: any;
-  try {
-    snapshot = JSON.parse(await file.text());
-  } catch {
-    throw new Error(`"${file.name}" is not readable JSON. Choose a Societyer backup file.`);
-  }
-  if (!snapshot || typeof snapshot !== "object" || !snapshot.tables || typeof snapshot.tables !== "object") {
-    throw new Error(`"${file.name}" is not a Societyer workspace backup.`);
-  }
-  validateSetupBackup(snapshot);
+  const archive = await readWorkspaceArchiveFile(file);
+  const snapshot = restorableSnapshot(archive);
+  backupManifests.set(snapshot, archive.manifest);
   return snapshot;
 }
+function restorableSnapshot(archive: Awaited<ReturnType<typeof readWorkspaceArchiveFile>>) {
+  const snapshot = archiveDatabaseSnapshot(archive.database);
+  // Organization exports redact legacy storage IDs. Keep their bundled file
+  // references separately so the next full device backup still includes them.
+  const references = new Set((snapshot.attachments ?? []).map((ref: any) => JSON.stringify([ref.provider, ref.storageKey])));
+  for (const saved of archive.manifest?.files ?? []) {
+    if (saved.status !== "included" || !saved.provider || !saved.storageKey) continue;
+    const key = JSON.stringify([saved.provider, saved.storageKey]);
+    if (references.has(key)) continue;
+    references.add(key);
+    const stamp = archive.manifest!.generatedAtISO;
+    (snapshot.attachments ??= []).push({ key: `backup-file:${key}`, provider: saved.provider, storageKey: saved.storageKey, documentId: saved.documentId, versionId: saved.versionId, fileName: saved.fileName, mimeType: saved.mimeType, sha256: saved.sha256, fileSizeBytes: saved.bytes, createdAtISO: stamp, updatedAtISO: stamp });
+  }
+  return snapshot;
+}
+const backupManifests = new WeakMap<object, ArchiveManifest | undefined>();
 
 export function summarizeWorkspaceBackup(snapshot: any): WorkspaceBackupSummary {
   const tables = (snapshot?.tables ?? {}) as Record<string, unknown[]>;
@@ -73,6 +114,9 @@ export function summarizeWorkspaceBackup(snapshot: any): WorkspaceBackupSummary 
     tableCount: entries.filter(([, rows]) => (rows as unknown[]).length > 0).length,
     rowCount: entries.reduce((total, [, rows]) => total + (rows as unknown[]).length, 0),
     attachmentCount: Array.isArray(snapshot?.attachments) ? snapshot.attachments.length : 0,
+    includedFiles: backupManifests.get(snapshot)?.includedFiles ?? 0,
+    unavailableFiles: backupManifests.get(snapshot)?.unavailableFiles ?? 0,
+    externalFiles: backupManifests.get(snapshot)?.externalFiles ?? 0,
     societies: societies
       .filter((row) => typeof row?._id === "string")
       .map((row) => ({ _id: String(row._id), name: String(row.name ?? "Untitled organization") })),
@@ -80,12 +124,14 @@ export function summarizeWorkspaceBackup(snapshot: any): WorkspaceBackupSummary 
 }
 
 export async function importLocalWorkspaceSnapshotFile(file: File) {
-  const snapshot = await readWorkspaceBackupFile(file);
+  const archive = await readWorkspaceArchiveFile(file);
+  const snapshot = restorableSnapshot(archive);
   const client = localDataClient as unknown as LocalExportCapableClient;
   if (!client.importLocalWorkspaceSnapshot) {
     throw new Error("Local workspace import is unavailable in this runtime.");
   }
-  await client.importLocalWorkspaceSnapshot(snapshot);
+  await client.importLocalWorkspaceSnapshot(snapshot, archiveFileRows(archive.manifest, archive.files));
+  backupManifests.set(snapshot, archive.manifest);
   return snapshot;
 }
 
