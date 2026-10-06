@@ -353,7 +353,24 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
   );
 }
 
-type PreviewStatus = "loading" | "pdf" | "docx" | "unsupported" | "unavailable" | "error";
+type PreviewStatus = "loading" | "pdf" | "docx" | "unsupported" | "not-a-file" | "unavailable" | "error";
+
+const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/** PDF readers accept the `%PDF-` header anywhere in the first 1024 bytes. */
+function hasPdfSignature(bytes: ArrayBuffer) {
+  const head = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 1024));
+  for (let i = 0; i + 4 < head.length; i++) {
+    if (head[i] === 0x25 && head[i + 1] === 0x50 && head[i + 2] === 0x44 && head[i + 3] === 0x46 && head[i + 4] === 0x2d) return true;
+  }
+  return false;
+}
+
+/** DOCX is a ZIP container: local file header `PK\x03\x04`. */
+function hasZipSignature(bytes: ArrayBuffer) {
+  const head = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 4));
+  return head.length === 4 && head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04;
+}
 
 /**
  * Renders the real file inline where possible instead of a static placeholder:
@@ -418,8 +435,22 @@ function DocumentPreviewPane({
         // remote storage URLs (hosted deployments).
         const response = await fetchDocumentDownload(url);
         if (!response.ok) throw new Error("Couldn't load the file");
-        const blob = await response.blob();
+        const bytes = await response.arrayBuffer();
         if (cancelled) return;
+        // Never trust the filename or the response's content type: a sharing
+        // link (e.g. a Drive viewer URL) can return an HTML page, and a blob:
+        // URL inherits this origin, so framing it would run that page's scripts
+        // with the app's privileges. Only render bytes that really are a PDF or
+        // DOCX, and re-type the blob explicitly.
+        if (isPdf && !hasPdfSignature(bytes)) {
+          setStatus("not-a-file");
+          return;
+        }
+        if (isDocx && !hasZipSignature(bytes)) {
+          setStatus("not-a-file");
+          return;
+        }
+        const blob = new Blob([bytes], { type: isPdf ? "application/pdf" : DOCX_MIME_TYPE });
         if (isPdf) {
           createdBlobUrl = URL.createObjectURL(blob);
           setPdfBlobUrl(createdBlobUrl);
@@ -453,6 +484,11 @@ function DocumentPreviewPane({
       )}
       {status === "pdf" && pdfBlobUrl && (
         <iframe src={pdfBlobUrl} title="Document preview" className="document-preview-pane__pdf" />
+      )}
+      {status === "not-a-file" && (
+        <div className="minutes-docx-preview__status">
+          <span>This link didn't return the document file itself (it may be a sharing or viewer page), so it isn't previewed here. Use "Open file" above to view it at its source.</span>
+        </div>
       )}
       {status === "unsupported" && (
         <div className="minutes-docx-preview__status">
