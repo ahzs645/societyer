@@ -14,11 +14,14 @@
  * families are reported as not visible rather than as missing records.
  */
 
+import { todayDateOnly } from "../dateOnly";
 import type { PortableDoc, PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId, requireSocietyMembership } from "./access";
 import { requirePermissionPortable, type Permission } from "./permissions";
 import { documentAccessPredicate } from "./documents";
 import {
+  committeeCadenceExpectations,
+  committeeExpectationKey,
   countStatuses,
   CROSS_REFERENCE_EXPECTATION_KEY,
   defaultRange,
@@ -31,6 +34,7 @@ import {
   resolveCrossReferences,
   type ContinuitySnapshot,
   type EffectiveExpectation,
+  type SnapshotCommittee,
   type SnapshotMinutesText,
 } from "../continuity";
 import {
@@ -58,7 +62,8 @@ async function readAccess(ctx: PortableQueryCtx, societyId: string) {
 }
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  // Local calendar day: the UTC day is already "tomorrow" on a BC evening.
+  return todayDateOnly();
 }
 
 function bySociety(ctx: PortableQueryCtx, table: string, societyId: string) {
@@ -124,6 +129,7 @@ function toEffective(row: StoredExpectation): EffectiveExpectation {
     severity: row.severity,
     origin: row.origin,
     ruleKey: row.ruleKey,
+    ...(row.ruleKey ? { implicitKey: row.ruleKey } : row.bodyKind === "committee" && row.committeeId && row.kind === "meeting" ? { implicitKey: committeeExpectationKey(String(row.committeeId)) } : {}),
     citation: row.citation ?? template?.citation,
     caveat: template?.caveat,
     status: row.status,
@@ -137,6 +143,24 @@ function rulePackTemplate(ruleKey: string) {
     if (rule) return rule;
   }
   return undefined;
+}
+
+/** Committee as the continuity engine sees it, including when its structured cadence starts. */
+function snapshotCommittee(row: any, meetings: any[]): SnapshotCommittee {
+  const out: SnapshotCommittee = { _id: String(row._id), name: String(row.name ?? "Committee"), status: row.status };
+  if (row.cadenceRule?.frequency) {
+    out.cadenceRule = row.cadenceRule;
+    const mandateStarts = (Array.isArray(row.mandateVersions) ? row.mandateVersions : []).map((version: any) => String(version?.effectiveFrom ?? "")).filter((date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort();
+    const meetingDates = meetings.filter((meeting) => String(meeting.committeeId ?? "") === String(row._id)).map((meeting) => String(meeting.scheduledAt ?? "").slice(0, 10)).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort();
+    const from = mandateStarts[0] ?? meetingDates[0] ?? String(row.createdAtISO ?? "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(from)) out.cadenceFrom = from;
+    // A committee whose every mandate version has ended (e.g. replaced by another body) stops being expected to meet.
+    const versions = (Array.isArray(row.mandateVersions) ? row.mandateVersions : []).filter((version: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(version?.effectiveFrom ?? "")));
+    if (versions.length && versions.every((version: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(version.effectiveTo ?? "")))) {
+      out.cadenceTo = versions.map((version: any) => String(version.effectiveTo)).sort().at(-1);
+    }
+  }
+  return out;
 }
 
 async function loadSnapshot(ctx: PortableQueryCtx, societyId: string): Promise<{ snapshot: ContinuitySnapshot; stored: StoredExpectation[]; minutesTexts: SnapshotMinutesText[] }> {
@@ -161,7 +185,7 @@ async function loadSnapshot(ctx: PortableQueryCtx, societyId: string): Promise<{
   const snapshot: ContinuitySnapshot = {
     today: todayISO(),
     society: society ? { incorporationDate: society.incorporationDate, jurisdictionCode: society.jurisdictionCode, entityType: society.entityType, isMemberFunded: society.isMemberFunded, fiscalYearEnd: society.fiscalYearEnd } : null,
-    committees: committees.map((row: any) => ({ _id: String(row._id), name: String(row.name ?? "Committee"), status: row.status })),
+    committees: committees.map((row: any) => snapshotCommittee(row, meetings)),
     meetings: meetings.map((row: any) => ({ _id: String(row._id), type: row.type, title: row.title, scheduledAt: String(row.scheduledAt ?? ""), status: row.status, committeeId: row.committeeId ? String(row.committeeId) : undefined, minutesId: row.minutesId ? String(row.minutesId) : undefined })),
     minutes: minutes.map((row: any) => ({ _id: String(row._id), meetingId: String(row.meetingId), heldAt: row.heldAt, approvedAt: row.approvedAt, approvedInMeetingId: row.approvedInMeetingId ? String(row.approvedInMeetingId) : undefined, status: row.status })),
     adoptedMinutesIds: motions.map((row: any) => row.adoptsMinutesId).filter(Boolean).map(String),
@@ -290,11 +314,17 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
 
 export async function listExpectationsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
-  const [society, stored, bylawRuleSets] = await Promise.all([
+  const [society, stored, bylawRuleSets, committees, meetings] = await Promise.all([
     ctx.db.get(societyId, "societies"),
     bySociety(ctx, "governanceExpectations", societyId),
     bySociety(ctx, "bylawRuleSets", societyId),
+    bySociety(ctx, "committees", societyId),
+    bySociety(ctx, "meetings", societyId),
   ]);
+  const committeeCadences = committeeCadenceExpectations(
+    committees.filter((row: any) => row.cadenceRule?.frequency).map((row: any) => snapshotCommittee(row, meetings)),
+    stored.map((row: any) => ({ bodyKind: row.bodyKind, committeeId: row.committeeId ? String(row.committeeId) : undefined })),
+  );
   const pack = rulePackForSociety(society as any);
   const storedKeys = new Set(stored.map((row: any) => row.ruleKey).filter(Boolean));
   return {
@@ -303,6 +333,7 @@ export async function listExpectationsPortable(ctx: PortableQueryCtx, { societyI
       ? { packId: pack.packId, title: pack.title, sources: pack.sources, rules: pack.rules.map((rule) => ({ ...rule, stored: storedKeys.has(rule.ruleKey) })) }
       : null,
     hasActiveBylawRules: bylawRuleSets.some((row: any) => row.status === "Active"),
+    committeeCadences: committeeCadences.map((row) => ({ key: row.key, title: row.title, committeeId: row.committeeId, rule: row.rule, effectiveFrom: row.effectiveFrom, effectiveTo: row.effectiveTo })),
   };
 }
 
@@ -461,6 +492,7 @@ export async function seedRulePackPortable(ctx: PortableMutationCtx, { societyId
   if (!pack) throw new Error("No record-continuity rule pack exists for this organization's jurisdiction and type yet.");
   const stored = await bySociety(ctx, "governanceExpectations", societyId);
   const meetings = await bySociety(ctx, "meetings", societyId);
+  const marks = await bySociety(ctx, "continuityPeriodMarks", societyId);
   const existing = new Set(stored.map((row: any) => row.ruleKey).filter(Boolean));
   const implicit = effectiveExpectations([], {
     today: todayISO(),
@@ -491,6 +523,10 @@ export async function seedRulePackPortable(ctx: PortableMutationCtx, { societyId
       updatedAtISO: nowISO,
     });
     await logActivity(ctx, societyId, id, "created", `Added rule-pack expectation "${rule.title}"`);
+    // Period marks made while the rule applied implicitly move to the stored row.
+    for (const mark of marks.filter((row: any) => row.expectationKey === rule.ruleKey)) {
+      await ctx.db.patch(mark._id, { expectationKey: String(id), updatedAtISO: nowISO });
+    }
     created += 1;
   }
   return { created };
@@ -554,6 +590,11 @@ async function assertExpectationKey(ctx: PortableQueryCtx, societyId: string, ex
   if (expectationKey === CROSS_REFERENCE_EXPECTATION_KEY) return;
   const pack = rulePackForSociety((await ctx.db.get(societyId, "societies")) as any);
   if (pack?.rules.some((rule) => rule.ruleKey === expectationKey)) return;
+  if (expectationKey.startsWith("committee:")) {
+    const committee: any = await getOwned(ctx, "committees", expectationKey.slice("committee:".length), societyId);
+    if (!committee?.cadenceRule?.frequency) throw new Error("This committee has no structured cadence to track.");
+    return;
+  }
   await getOwned(ctx, "governanceExpectations", expectationKey, societyId);
 }
 

@@ -194,6 +194,16 @@ assert.deepEqual(findMinutesReferences("adopt the previous minutes dated 28 Nove
 const inferred = findMinutesReferences("Approval of the minutes of November 20", "2019-05-14");
 assert.deepEqual(inferred.map((r) => [r.referencedDate, r.yearInferred]), [["2018-11-20", true]]);
 assert.deepEqual(findMinutesReferences("minutes of 2021-04-20", "2021-05-18").map((r) => r.referencedDate), ["2021-04-20"]);
+// "November 2018" is a month, never "November 20" with an inferred year.
+assert.deepEqual(findMinutesReferences("3. Adoption of Minutes of November 2018 Meeting", "2019-05-28").map((r) => [r.referencedDate, Boolean(r.monthOnly)]), [["2018-11", true]]);
+assert.deepEqual(findMinutesReferences("Adoption of Minutes of November 2018 Meeting. MOTION: To adopt the previous minutes dated 28 November 2018", "2019-05-28").map((r) => r.referencedDate), ["2018-11-28"], "a dated citation covers the month reference");
+assert.deepEqual(findMinutesReferences("Adoption of the Minutes of the May 2019 Meeting", "2020-06-23").map((r) => r.referencedDate), ["2019-05"]);
+assert.deepEqual(findMinutesReferences("Draft minutes from the June 2020 Board Meeting approved", "2020-09-15").map((r) => r.referencedDate), ["2020-06"]);
+const monthRefs = resolveCrossReferences([
+  { minutesId: "m21", meetingId: "agm21", heldAt: "2021-05-18", text: "Adoption of the Minutes of the May 2019 meeting. Adoption of minutes of August 2020." },
+], snapshot);
+assert.deepEqual(monthRefs.map((gap) => [gap.referencedDate, gap.matchedMeetingId ?? "-"]), [["2019-05", "agm19"], ["2020-08", "-"]], "May 2019 meeting exists without minutes; no meeting at all in August 2020");
+assert.match(monthRefs[1].note, /recorded in 2020-08/);
 const xrefs = resolveCrossReferences([
   { minutesId: "mb10", meetingId: "board-2010", heldAt: "2010-10-26", text: "Moved to adopt the minutes of September 28, 2010. Carried." },
   { minutesId: "m21", meetingId: "agm21", heldAt: "2021-05-18", text: "Adopt the minutes of May 14, 2019 and the minutes of May 10, 2016" },
@@ -308,5 +318,63 @@ assert.equal(committee.mandateVersions.length, 2);
 await assert.rejects(() => owner.runMutation("committees:updateStructure", { id: "c1", kind: "secret" }), /Unsupported committee kind/);
 await assert.rejects(() => owner.runMutation("committees:updateStructure", { id: "c1", mandateVersions: [{ id: "a", effectiveFrom: "2021-01-01", effectiveTo: "2022-06-01" }, { id: "b", effectiveFrom: "2022-01-01" }] }), /overlap/);
 await assert.rejects(() => owner.runMutation("committees:updateStructure", { id: "c1", parentCommitteeId: "c1" }), /own parent/);
+
+/* ------------- committee cadence → tracked expectation (retest) ------------ */
+
+{
+  const cdb = new MemoryDb({
+    seed: {
+      societies: [{ _id: "soc2", name: "Synthetic Air Society", jurisdictionCode: "CA-BC", entityType: "society", incorporationDate: "2018-02-01", isMemberFunded: false }],
+      users: [{ _id: "owner2", societyId: "soc2", role: "Owner", status: "Active", displayName: "Owner" }],
+      committees: [
+        { _id: "ops2", societyId: "soc2", name: "Operations Committee", cadence: "Unknown", color: "blue", status: "NeedsReview", createdAtISO: "2019-01-01" },
+        { _id: "adhoc2", societyId: "soc2", name: "Event Working Group", cadence: "Ad-hoc", color: "blue", status: "Active", createdAtISO: "2019-01-01" },
+      ],
+      meetings: [
+        { _id: "o1", societyId: "soc2", type: "Committee", committeeId: "ops2", title: "Ops Jan", scheduledAt: "2022-01-11", status: "Held", electronic: false, attendeeIds: [] },
+        { _id: "o2", societyId: "soc2", type: "Committee", committeeId: "ops2", title: "Ops Feb", scheduledAt: "2022-02-08", status: "Held", electronic: false, attendeeIds: [] },
+      ],
+      minutes: [
+        { _id: "om1", societyId: "soc2", meetingId: "o1", heldAt: "2022-01-11", approvedAt: "2022-02-08", attendees: [], absent: [], quorumMet: true, discussion: "", decisions: [], actionItems: [] },
+        { _id: "om2", societyId: "soc2", meetingId: "o2", heldAt: "2022-02-08", approvedAt: "2022-03-08", attendees: [], absent: [], quorumMet: true, discussion: "", decisions: [], actionItems: [] },
+      ],
+    },
+  });
+  const run = new PortableRuntime({ db: cdb, capabilities: makeCapabilities({}), principalProvider: () => ({ kind: "user" as const, runtime: "test" as const, assurance: "trusted-workspace" as const, subject: "owner2", userId: "owner2", societyId: "soc2" }) }).registerAll(PORTABLE_FUNCTIONS);
+  const before: any = await run.runQuery("continuity:gaps", { societyId: "soc2" });
+  assert.equal(before.rows.some((row: any) => row.expectation.committeeId === "ops2"), false, "no cadence rule, no committee expectation");
+  await assert.rejects(() => run.runMutation("continuity:markPeriod", { societyId: "soc2", expectationKey: "committee:ops2", periodKey: "2022-03", status: "never_held", reason: "x" }), /no structured cadence/);
+
+  // Setting the structured cadence (committee page) starts tracking from the first mandate version.
+  await run.runMutation("committees:updateStructure", { id: "ops2", cadenceRule: { frequency: "monthly" }, mandateVersions: [{ id: "tor", effectiveFrom: "2022-01-01", title: "TOR" }] });
+  await run.runMutation("committees:updateStructure", { id: "adhoc2", cadenceRule: { frequency: "ad_hoc" } });
+  const listed: any = await run.runQuery("continuity:listExpectations", { societyId: "soc2" });
+  assert.deepEqual(listed.committeeCadences.map((row: any) => [row.key, row.effectiveFrom]), [["committee:ops2", "2022-01-01"]], "ad hoc cadence is not tracked");
+  const tracked: any = await run.runQuery("continuity:gaps", { societyId: "soc2" });
+  const opsTracked = tracked.rows.find((row: any) => row.expectation.key === "committee:ops2");
+  assert.ok(opsTracked, "committee cadence becomes an expectation");
+  assert.equal(opsTracked.expectation.origin, "committee_structure");
+  assert.equal(opsTracked.periods[0].periodKey, "2022-01");
+  assert.deepEqual(opsTracked.periods.slice(0, 3).map((p: any) => p.status), ["satisfied", "satisfied", "record_missing"]);
+  await run.runMutation("continuity:markPeriod", { societyId: "soc2", expectationKey: "committee:ops2", periodKey: "2022-03", status: "never_held", reason: "Spring break; no meeting called" });
+  const marked: any = await run.runQuery("continuity:gaps", { societyId: "soc2" });
+  assert.equal(marked.rows.find((row: any) => row.expectation.key === "committee:ops2").periods[2].status, "never_held");
+
+  // A mark made on an implicit rule-pack row survives "Store rule pack".
+  await run.runMutation("continuity:markPeriod", { societyId: "soc2", expectationKey: "BC-SOC-AGM-ANNUAL", periodKey: "2020", status: "never_held", reason: "No AGM called in 2020" });
+  await run.runMutation("continuity:seedRulePack", { societyId: "soc2" });
+  const storedAgm2 = cdb.dump("governanceExpectations").find((row: any) => row.ruleKey === "BC-SOC-AGM-ANNUAL") as any;
+  assert.ok(cdb.dump("continuityPeriodMarks").some((row: any) => row.expectationKey === String(storedAgm2._id) && row.periodKey === "2020"), "mark moves to the stored row");
+  const afterSeed: any = await run.runQuery("continuity:gaps", { societyId: "soc2" });
+  const agm2020 = afterSeed.rows.find((row: any) => row.expectation.key === String(storedAgm2._id)).periods.find((p: any) => p.periodKey === "2020");
+  assert.equal(agm2020.status, "never_held", "never-held mark still applies after storing the rule pack");
+
+  // Storing an expectation for the committee takes over and keeps the mark.
+  await run.runMutation("continuity:createExpectation", { societyId: "soc2", title: "Ops monthly", kind: "meeting", bodyKind: "committee", committeeId: "ops2", rule: { frequency: "monthly" }, effectiveFrom: "2022-01-01" });
+  const takenOver: any = await run.runQuery("continuity:gaps", { societyId: "soc2" });
+  assert.equal(takenOver.rows.some((row: any) => row.expectation.key === "committee:ops2"), false, "stored row replaces the implicit one");
+  const storedOps = takenOver.rows.find((row: any) => row.expectation.committeeId === "ops2");
+  assert.equal(storedOps.periods.find((p: any) => p.periodKey === "2022-03").status, "never_held", "mark made while implicit still applies");
+}
 
 console.log("Continuity checks passed.");
