@@ -3,6 +3,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
   listPortable,
+  listSummariesPortable,
   getPortable,
   getManyPortable,
   createPortable,
@@ -37,6 +38,13 @@ export const list = authorizedQuery("documents:list", query)({
   args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
   returns: v.any(),
   handler: async (ctx, args) => listPortable(await toPortableQueryCtx(ctx), args),
+});
+
+/** `list` without each document's heavy `content` — for tables and pickers. */
+export const listSummaries = authorizedQuery("documents:listSummaries", query)({
+  args: { societyId: v.id("societies"), actingUserId: v.optional(v.id("users")) },
+  returns: v.any(),
+  handler: async (ctx, args) => listSummariesPortable(await toPortableQueryCtx(ctx), args),
 });
 
 export const get = authorizedQuery("documents:get", query)({

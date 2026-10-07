@@ -99,7 +99,7 @@ export function useTaskFormData(societyId: Id<"societies"> | null | undefined): 
   const users = useQuery(api.users.list, args("users:read"));
   const filings = useQuery(api.filings.list, args("filings:read"));
   const workflows = useQuery(api.workflows.list, args("tasks:read"));
-  const documents = useQuery(api.documents.list, args("documents:read"));
+  const documents = useQuery(api.documents.listSummaries, args("documents:read"));
   const commitments = useQuery(api.commitments.list, args("commitments:read"));
   const meetings = useQuery(api.meetings.list, args("meetings:read"));
   const people = useDirectoryPeople(societyId && can("members:read") ? societyId : undefined);

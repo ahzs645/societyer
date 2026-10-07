@@ -145,7 +145,7 @@ export type CommitmentFormData = {
 export function useCommitmentFormData(societyId: Id<"societies"> | null | undefined): CommitmentFormData {
   const { can } = usePermissions();
   const args = (permission: string) => societyId && can(permission) ? { societyId } : "skip";
-  const documents = useQuery(api.documents.list, args("documents:read"));
+  const documents = useQuery(api.documents.listSummaries, args("documents:read"));
   return { documents };
 }
 

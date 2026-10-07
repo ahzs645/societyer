@@ -285,8 +285,8 @@ export function Layout() {
           });
       } else if (action === "export-workspace") {
         import("../lib/localWorkspaceExport")
-          .then(({ downloadLocalWorkspaceSnapshot }) => {
-            downloadLocalWorkspaceSnapshot(`societyer-workspace-${todayDateOnly()}.json`);
+          .then(async ({ downloadLocalWorkspaceSnapshot }) => {
+            await downloadLocalWorkspaceSnapshot(`societyer-workspace-${todayDateOnly()}.json`);
             toast.success("Workspace export started");
           })
           .catch((error) => {

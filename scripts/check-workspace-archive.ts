@@ -21,11 +21,11 @@ await local.importSnapshot(archiveDatabaseSnapshot(restored.database), archiveFi
 assert.equal(await (await local.readRestoredFile({ provider: "local-filesystem", storageKey: "source/key" }))!.text(), "Exact original file bytes");
 assert.equal(await (await local.readRestoredFile({ documentId: "d1" }))!.text(), "Exact original file bytes");
 assert.equal(await (await local.readRestoredFile({ versionId: "v1" }))!.text(), "Exact original file bytes");
-assert.deepEqual(local.exportSnapshot().changes[0].snapshot, database.changes[0].snapshot);
-await local.importSnapshot(local.exportSnapshot(), undefined, true);
+assert.deepEqual((await local.exportSnapshot()).changes[0].snapshot, database.changes[0].snapshot);
+await local.importSnapshot((await local.exportSnapshot()), undefined, true);
 assert.equal(await (await local.readRestoredFile({ documentId: "d1" }))!.text(), "Exact original file bytes");
-const before = local.exportSnapshot().tables;
-await assert.rejects(local.importSnapshot({ ...database, changes: [{ bad: true }] } as any), /change history/); assert.deepEqual(local.exportSnapshot().tables, before);
+const before = (await local.exportSnapshot()).tables;
+await assert.rejects(local.importSnapshot({ ...database, changes: [{ bad: true }] } as any), /change history/); assert.deepEqual((await local.exportSnapshot()).tables, before);
 const legacy = new JSZip(); legacy.file("legacy-backup.json", JSON.stringify(database)); legacy.file("summary.json", "{}");
 assert.deepEqual((await readWorkspaceArchiveFile(new File([await legacy.generateAsync({ type: "uint8array" })], "old.zip"))).database, database);
 assert.deepEqual((await readWorkspaceArchiveFile(new File([JSON.stringify(database)], "old.json"))).database, database);

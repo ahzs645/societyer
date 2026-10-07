@@ -14,11 +14,20 @@ import type {
   PortableCapabilities,
 } from "./capabilities";
 import type {
+  PortableDbReader,
   PortableMutationCtx,
   PortablePrincipal,
   PortableQueryCtx,
   TransactionalDb,
 } from "./ctx";
+
+/** A db that can hand out read views reporting the tables they read. */
+type ReadTrackingDb = TransactionalDb & {
+  readView?: (recorder: (table: string) => void) => PortableDbReader;
+};
+
+/** Result of `runQueryTracked`: `tables` is null when the read set is unknown or unbounded. */
+export type TrackedQueryResult<Result> = { result: Result; tables: ReadonlySet<string> | null };
 
 import { requireFunctionAction } from "../functions/actionPolicy";
 
@@ -204,7 +213,7 @@ function accessDecision(
  */
 export class PortableRuntime {
   private readonly registry = new Map<string, PortableFunctionDef>();
-  private readonly db: TransactionalDb;
+  private readonly db: ReadTrackingDb;
   private readonly capabilities: PortableCapabilities;
   private readonly principalProvider: () => PortablePrincipal | Promise<PortablePrincipal>;
   private readonly shadowAccessDecisions: boolean;
@@ -250,12 +259,12 @@ export class PortableRuntime {
     this.shadowDecisions.length = 0;
   }
 
-  private queryCtx(principal: PortablePrincipal): PortableQueryCtx {
+  private queryCtx(principal: PortablePrincipal, db: PortableDbReader = this.db): PortableQueryCtx {
     return {
-      db: this.db,
+      db,
       capabilities: this.capabilities,
       principal,
-      runQuery: (name, args) => this.runQueryNested(name, args, principal),
+      runQuery: (name, args) => this.runQueryNested(name, args, principal, db),
     };
   }
 
@@ -294,12 +303,13 @@ export class PortableRuntime {
     name: string,
     args: Record<string, any> = {},
     principal: PortablePrincipal,
+    db: PortableDbReader = this.db,
   ): Promise<Result> {
     const def = this.registry.get(name);
     if (!def) throw new Error(`Portable function not registered locally: ${name}`);
     if (def.kind !== "query") throw new Error(`${name} is a ${def.kind}, not a query`);
     this.accessHook(def, principal);
-    const ctx = this.queryCtx(principal);
+    const ctx = this.queryCtx(principal, db);
     if (def.applicationPolicy) await requireFunctionAction(ctx, def.name, def.kind, args);
     return def.handler(ctx, args) as Promise<Result>;
   }
@@ -327,6 +337,27 @@ export class PortableRuntime {
   async runQuery<Result = unknown>(name: string, args: Record<string, any> = {}): Promise<Result> {
     const principal = await this.principalProvider();
     return this.runQueryNested(name, args, principal);
+  }
+
+  /**
+   * Run a query and report which tables it (and its authorization checks and
+   * nested queries) read, so a reactive cache can skip it when an unrelated
+   * table changes. `tables` is null when the db cannot track reads or the query
+   * looked up an id that exists nowhere (it could appear in any table).
+   */
+  async runQueryTracked<Result = unknown>(name: string, args: Record<string, any> = {}): Promise<TrackedQueryResult<Result>> {
+    const principal = await this.principalProvider();
+    if (typeof this.db.readView !== "function") {
+      return { result: await this.runQueryNested<Result>(name, args, principal), tables: null };
+    }
+    const tables = new Set<string>();
+    let unbounded = false;
+    const view = this.db.readView((table) => {
+      if (table === "*") unbounded = true;
+      else tables.add(table);
+    });
+    const result = await this.runQueryNested<Result>(name, args, principal, view);
+    return { result, tables: unbounded ? null : tables };
   }
 
   async runMutation<Result = unknown>(name: string, args: Record<string, any> = {}): Promise<Result> {

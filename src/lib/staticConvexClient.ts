@@ -17,6 +17,9 @@ import type { StaticArgs } from "./staticConvexFixtures";
 
 const FUNCTION_NAME = Symbol.for("functionName");
 const warnedLegacyFallbacks = new Set<string>();
+const LEGACY_UNTRACKED_READ_ID = "__societyer_legacy_dispatch_reads_every_table__";
+/** Queries whose `collectProjected` memos are rebuilt in the background after a restore. */
+const PROJECTION_WARMUP_QUERIES = ["documents:browse", "importSessions:pendingByTarget", "minutes:listSummaries"] as const;
 
 export type LocalActorChoice = {
   _id: string;
@@ -48,6 +51,17 @@ function warnLegacyFallback(
   console.warn(`[societyer-local] "${name}" served by legacy demo fallback (not in the portable registry)`);
 }
 
+/**
+ * Persisted `collectProjected` memos are reused only by the build that wrote
+ * them. In production this module's chunk URL carries a content hash that also
+ * changes whenever any statically imported chunk (the handler registry) does.
+ * Development (unhashed URLs, live edits) keeps memos in memory only.
+ */
+function projectionMemoNamespace() {
+  const env = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env;
+  return env?.PROD ? import.meta.url : undefined;
+}
+
 /** Local ConvexReactClient-compatible protocol shim. */
 export class StaticConvexClient {
   private store: StaticDemoDexieStore;
@@ -66,7 +80,7 @@ export class StaticConvexClient {
     principalProvider?: () => PortablePrincipal | Promise<PortablePrincipal>;
     trustedWorkspacePrincipal?: { runtime: RuntimeKind; subject: string };
   }) {
-    this.store = new StaticDemoDexieStore(options?.seed ?? STATIC_DEMO_SEED, options);
+    this.store = new StaticDemoDexieStore(options?.seed ?? STATIC_DEMO_SEED, { ...options, projectionNamespace: projectionMemoNamespace() });
     this.clientUrl = options?.url ?? "static://societyer-demo";
     this.portable = new PortableRuntime({
       db: new LocalStoreDb(this.store.rowStore),
@@ -175,7 +189,11 @@ export class StaticConvexClient {
   private registerLegacyQuery(name: string) {
     if (this.portable.has(name)) throw new Error(`Function ${name} is not a query.`);
     this.portable.register(definePortableQuery({ name, applicationPolicy: true,
-      handler: async (_ctx, args) => {
+      handler: async (ctx, args) => {
+        // The legacy dispatcher reads the store directly, outside ctx.db, so the
+        // query cache cannot know its tables. Looking up an id that exists in
+        // no table marks the read set unbounded: it refreshes on every write.
+        await ctx.db.get(LEGACY_UNTRACKED_READ_ID);
         const { mutableQueryResult } = await import("./staticLegacyDispatch");
         return mutableQueryResult(name, args, this.store);
       },
@@ -332,12 +350,56 @@ export class StaticConvexClient {
     return () => { subscribed = false; unsubscribe(); };
   }
 
+  /**
+   * Synchronous snapshot for in-memory runtimes (Node scripts, tests). In the
+   * browser, heavy fields live in IndexedDB and this throws rather than return
+   * an incomplete backup: use `exportLocalWorkspaceSnapshotAsync()`.
+   */
   exportLocalWorkspaceSnapshot() {
+    return this.store.exportSnapshotSync();
+  }
+
+  /** Full workspace snapshot, heavy fields included (read back from IndexedDB). */
+  exportLocalWorkspaceSnapshotAsync() {
     return this.store.exportSnapshot();
   }
 
-  importLocalWorkspaceSnapshot(snapshot: LocalWorkspaceSnapshot, files?: LocalWorkspaceBinaryFile[]) {
-    return this.store.importSnapshot(snapshot, files);
+  async importLocalWorkspaceSnapshot(snapshot: LocalWorkspaceSnapshot, files?: LocalWorkspaceBinaryFile[]) {
+    await this.store.importSnapshot(snapshot, files);
+    this.scheduleProjectionWarmup();
+  }
+
+  /**
+   * After a restore every memoized projection is stale. Rebuild the expensive
+   * ones (parsed document provenance, import-candidate queue items) in the
+   * background, a society at a time, so the first visit to Documents or Imports
+   * reads persisted memos instead of loading and parsing every document's
+   * content on the critical path. Failures (e.g. no access yet) are harmless.
+   */
+  private scheduleProjectionWarmup() {
+    if (typeof window === "undefined") return;
+    // Observable by the perf gate (scripts/check-local-workspace-perf.mjs).
+    const status = globalThis as { __SOCIETYER_PROJECTION_WARMUP__?: string };
+    status.__SOCIETYER_PROJECTION_WARMUP__ = "scheduled";
+    const run = async () => {
+      status.__SOCIETYER_PROJECTION_WARMUP__ = "running";
+      // Restored societies also need their record-table metadata; seed it now
+      // rather than during the first page load of the next session.
+      await this.ensureRecordTableMetadata();
+      for (const society of (this.store.listRows("societies") ?? []) as any[]) {
+        for (const name of PROJECTION_WARMUP_QUERIES) {
+          try {
+            await this.portable.runQuery(name, { societyId: society._id });
+          } catch {
+            // Warm-up only; the page computes on demand if this could not.
+          }
+        }
+      }
+      await this.store.rowStore.flushProjections();
+      status.__SOCIETYER_PROJECTION_WARMUP__ = "done";
+    };
+    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(() => void run(), { timeout: 5_000 });
+    else setTimeout(() => void run(), 1_000);
   }
 
   readRestoredWorkspaceFile(args: { sha256?: string; provider?: string; storageKey?: string; documentId?: string; versionId?: string }) {
