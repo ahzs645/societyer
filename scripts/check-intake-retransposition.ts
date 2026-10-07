@@ -45,8 +45,8 @@ assert.ok(carriedForward?.text.includes("carried forward from the March meeting"
 
 // ------------------------------------------------------------ bodies
 assert.equal(bodyFromText("2nd Floor Committee Meeting Room, 100 Main Street"), undefined, "a meeting room is not a committee");
-assert.equal(bodyFromText("LCAS AQMP Committee Meeting")?.label, "AQMP Committee", "an organization acronym before a committee acronym is dropped");
-assert.equal(bodyKeyFor("LCAS AQMP Committee Meeting"), bodyKeyFor("AQMP Committee meeting"));
+assert.equal(bodyFromText("LCAS ABCD Committee Meeting")?.label, "ABCD Committee", "an organization acronym before a committee acronym is dropped");
+assert.equal(bodyKeyFor("LCAS ABCD Committee Meeting"), bodyKeyFor("ABCD Committee meeting"));
 assert.equal(bodyFromText("RWG_Agenda_Sept-21-2012.docx")?.body, "committee", "an acronym working group is a committee, not the board");
 assert.equal(bodyFromText("Monitoring Working Group notes")?.label, "Monitoring Working Group");
 assert.equal(bodyFromText("Strategic Planning Committee")?.label, "Strategic Planning Committee");
