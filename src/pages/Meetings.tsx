@@ -28,7 +28,7 @@ import { type MenuSection } from "../components/Menu";
 import { Modal, useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
 import { normalizedMeetingTitle } from "../features/meetings/lib/meetingDetailHelpers";
-import { isGeneralMeeting, isPastMeeting, meetingScheduleConflicts, newGeneralMeetingNoticeProblem, OVERLAP_WINDOW_MS, statusForNewMeeting } from "../features/meetings/lib/noticeWindow";
+import { isGeneralMeeting, isPastMeeting, meetingCreateLabels, meetingScheduleConflicts, newGeneralMeetingNoticeProblem, OVERLAP_WINDOW_MS, statusForNewMeeting } from "../features/meetings/lib/noticeWindow";
 import {
   MeetingFormFields,
   makeMeetingDraft,
@@ -610,8 +610,8 @@ export function MeetingsPage() {
         ) : null}
 
       <Drawer
-        open={open} onClose={() => { void closeCreate(); }} title="Schedule meeting"
-        footer={<><button className="btn" type="button" onClick={() => { void closeCreate(); }}>Cancel</button><button className="btn btn--accent" type="button" onClick={save} disabled={!canManage || hasUnacknowledgedConflict}>Schedule</button></>}
+        open={open} onClose={() => { void closeCreate(); }} title={meetingCreateLabels(form?.scheduledAt ?? "").title}
+        footer={<><button className="btn" type="button" onClick={() => { void closeCreate(); }}>Cancel</button><button className="btn btn--accent" type="button" onClick={save} disabled={!canManage || hasUnacknowledgedConflict}>{meetingCreateLabels(form?.scheduledAt ?? "").action}</button></>}
       >
         {form && (
           <MeetingFormFields

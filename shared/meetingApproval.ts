@@ -11,6 +11,7 @@
  * Pure module. Dates are compared as calendar days (YYYY-MM-DD).
  */
 import { meetingCalendarDate, type MeetingDateLike } from "./meetingDates";
+import { todayDateOnly } from "./dateOnly";
 
 export type ApprovalCheckInput = {
   approvedOn: string; // YYYY-MM-DD or ISO
@@ -33,7 +34,9 @@ export function minutesApprovalIssues(input: ApprovalCheckInput): string[] {
   const approvedOn = day(input.approvedOn);
   if (!approvedOn) return ["Enter the date the minutes were approved."];
   const meetingDay = meetingCalendarDate(input.meeting);
-  const today = input.today ?? new Date().toISOString().slice(0, 10);
+  // The reviewer's local calendar day: the UTC day is already tomorrow on a
+  // BC evening, which let a future approval date through.
+  const today = input.today ?? todayDateOnly();
   if (meetingDay && dayDiff(approvedOn, meetingDay) < 0) {
     issues.push(`Approval (${approvedOn}) is before the meeting itself (${meetingDay}).`);
   }

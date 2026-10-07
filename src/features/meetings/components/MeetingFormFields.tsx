@@ -20,7 +20,7 @@ import { formatDateTime, toDateTimeLocalValue } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useBylawRules } from "@/hooks/useBylawRules";
-import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow } from "../lib/noticeWindow";
+import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow, defaultNewMeetingStart } from "../lib/noticeWindow";
 import { useHiddenSuggestions, looksLikeLink } from "@/lib/hiddenSuggestions";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { formatMeetingDate } from "../../../../shared/meetingDates";
@@ -177,8 +177,7 @@ export function makeMeetingDraft(
   const type = overrides.type ?? "Board";
   const template = meetingTemplatesForType(data.meetingTemplates, type).find((row) => row.isDefault) ??
     meetingTemplatesForType(data.meetingTemplates, type)[0];
-  const scheduled = new Date();
-  scheduled.setDate(scheduled.getDate() + data.noticeMinDays + ((data.rules as any)?.noticeRequiresClearDays ? 1 : 0));
+  const scheduled = defaultNewMeetingStart(data.noticeMinDays + ((data.rules as any)?.noticeRequiresClearDays ? 1 : 0));
   return blankMeetingDraft({
     type,
     scheduledAt: toDateTimeLocalValue(scheduled),

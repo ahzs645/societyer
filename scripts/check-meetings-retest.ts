@@ -9,6 +9,9 @@ import { cleanSourceLocation } from "../shared/meetingSourceHeader";
 import { attendanceRowsFromPaste, blankAttendanceRow, mergeAttendanceRows } from "../shared/meetingAttendanceGrid";
 import { renderMinutesHtml } from "../src/features/meetings/lib/minutesRenderer";
 import { effectiveSourceFidelity } from "../src/features/meetings/lib/minutesExportPrefs";
+import { defaultNewMeetingStart, meetingCreateLabels } from "../src/features/meetings/lib/noticeWindow";
+import { minutesApprovalIssues } from "../shared/meetingApproval";
+import { upcomingMeetingsFromISO } from "../shared/functions/dashboard";
 
 // ---------- rich-editor markdown is shown without escapes ---------------------
 // What the rich editor saves after a no-change round trip of imported text.
@@ -144,3 +147,15 @@ assert.equal(effectiveSourceFidelity(true, undefined, { approvedAt: "2012-05-29"
 assert.equal(effectiveSourceFidelity(true, undefined, {}, { sourceReviewStatus: "source_reviewed" }), false, "reviewed meetings export the corrected minutes");
 assert.equal(effectiveSourceFidelity(false, true, { approvedAt: "2012-05-29" }), true, "an explicit choice wins");
 console.log("✓ export default: corrected minutes once reviewed or approved");
+
+// ---------- governance retest items O-5..O-7 ----------------------------------
+const defaultStart = defaultNewMeetingStart(14, new Date(2026, 9, 7, 4, 16));
+assert.equal(defaultStart.getHours(), 18);
+assert.equal(defaultStart.getMinutes(), 0);
+assert.equal(defaultStart.getDate(), 21);
+assert.equal(meetingCreateLabels("2020-01-01T18:00").action, "Record meeting");
+assert.equal(meetingCreateLabels("2099-01-01T18:00").action, "Schedule");
+assert.deepEqual(minutesApprovalIssues({ approvedOn: "2026-10-06", meeting: { scheduledAt: "2026-09-01T12:00:00.000Z" }, today: "2026-10-06" }), []);
+assert.equal(upcomingMeetingsFromISO("2026-10-07T03:00:00.000Z", "2026-10-06"), "2026-10-06T00:00:00.000Z", "a BC evening keeps today's date-only meetings");
+assert.equal(upcomingMeetingsFromISO("2026-10-06T22:00:00.000Z", "2026-10-07"), "2026-10-06T22:00:00.000Z", "east of UTC keeps the current instant");
+console.log("✓ new meeting default 6 PM, Record vs Schedule, local-day approval and upcoming bounds");

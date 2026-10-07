@@ -75,6 +75,26 @@ export function meetsNoticeWindow(value: string, minDays: number, maxDays: numbe
 }
 
 /** True when the meeting's calendar day is before today: the form records a meeting already held. */
+/**
+ * Default start for a new meeting: the first day that satisfies the notice
+ * period, at 6:00 PM local time (a usual board meeting hour) rather than the
+ * current minute.
+ */
+export function defaultNewMeetingStart(noticeDays: number, now: Date = new Date()): Date {
+  const start = new Date(now);
+  start.setDate(start.getDate() + Math.max(0, noticeDays));
+  start.setHours(18, 0, 0, 0);
+  return start;
+}
+
+/** Create-form wording: recording a meeting that already happened vs scheduling one. */
+export function meetingCreateLabels(scheduledAt: string, now: string | Date = new Date()) {
+  const past = isPastMeeting(scheduledAt, now);
+  return past
+    ? { title: "Record a held meeting", action: "Record meeting", busy: "Recording…" }
+    : { title: "Schedule meeting", action: "Schedule", busy: "Scheduling…" };
+}
+
 export function isPastMeeting(value: string, now: string | Date = new Date()) {
   const days = daysUntil(value, now);
   return days != null && days < 0;
