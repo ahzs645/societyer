@@ -17,6 +17,7 @@ import {
 } from "../lib/motionGovernance";
 import { usePermissions } from "../hooks/usePermissions";
 import { useBylawRules } from "../hooks/useBylawRules";
+import { hasOutcomeOverride, motionOutcomeConsistencyIssues, motionVoteIssues } from "../../shared/motionValidation";
 // Re-export the pure governance helpers so existing importers can keep pulling
 // them from MotionEditor; the implementations now live in lib/motionGovernance.
 export { isAdjournmentMotion, thresholdFor, motionMeetsThreshold };
@@ -64,6 +65,8 @@ export type Motion = {
   votesFor?: number;
   votesAgainst?: number;
   abstentions?: number;
+  /** G-04: why a recorded outcome stands despite the tally (consensus, chair ruling). */
+  outcomeOverrideNote?: string;
   resolutionType?: "Ordinary" | "Special" | "Unanimous" | string;
   /** How the motion was decided. Procedural motions (adjournment,
    *  approve-minutes) default to "consent" — carried without a recorded tally. */
@@ -280,6 +283,47 @@ function DecidedByPicker({
   );
 }
 
+/** G-04: an outcome that contradicts the recorded tally can only be recorded
+ *  as a consensus / unanimous-consent / chair's-ruling decision with a note. */
+function OutcomeOverridePanel({
+  motion,
+  outcome,
+  onApply,
+  onCancel,
+}: {
+  motion: Motion;
+  outcome: string;
+  onApply: (patch: Partial<Motion>) => void;
+  onCancel: () => void;
+}) {
+  const [decidedBy, setDecidedBy] = useState<string>(motion.decidedBy && motion.decidedBy !== "vote" ? motion.decidedBy : "consent");
+  const [note, setNote] = useState(motion.outcomeOverrideNote ?? "");
+  const issues = motionOutcomeConsistencyIssues({ ...motion, outcome });
+  return (
+    <div className="motion-override" role="alert" data-testid="motion-outcome-override">
+      {issues.map((issue) => <p key={issue} className="field__error" style={{ margin: "4px 0" }}>{issue}</p>)}
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <Field label="Decided by">
+          <Select
+            value={decidedBy}
+            onChange={(value) => setDecidedBy(value)}
+            options={(["consent", "chair_ruling"] as DecidedBy[]).map((id) => ({ value: id, label: DECIDED_BY_LABELS[id] }))}
+          />
+        </Field>
+        <Field label="Override note" required className="field--grow">
+          <input className="input" value={note} placeholder="e.g. Decided by consensus before the vote was counted" onChange={(event) => setNote(event.target.value)} />
+        </Field>
+      </div>
+      <div className="row" style={{ gap: 6, marginTop: 6 }}>
+        <button type="button" className="btn-action btn-action--primary" disabled={!note.trim()} onClick={() => onApply({ outcome, decidedBy: decidedBy as DecidedBy, outcomeOverrideNote: note.trim() })}>
+          Record {outcome} with override
+        </button>
+        <button type="button" className="btn-action" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 export type MotionEditorHandle = {
   startAdding: () => void;
   /** Commit any in-progress motion draft. Returns true if a non-empty draft
@@ -403,9 +447,11 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   const businessMotionRows = motionRows.filter(({ motion }) => !isAdjournmentMotion(motion));
   const adjournmentRows = motionRows.filter(({ motion }) => isAdjournmentMotion(motion));
 
+  const draftIssues = motionVoteIssues(draft);
   const saveDraft = async () => {
     if (authority.current.readOnly) return;
     if (!draft.text.trim()) return;
+    if (draftIssues.length) return;
     const gaps = motionCompletionGaps(draft);
     if (gaps.length) {
       const ok = await confirm({
@@ -454,8 +500,22 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
     onChange(next);
   };
 
+  // When a tally change contradicts the recorded outcome, the outcome goes
+  // back to Pending (the vote must be re-recorded) rather than silently
+  // standing against the count — the server rejects that combination (G-04).
+  const [voteNotice, setVoteNotice] = useState<{ index: number; text: string } | null>(null);
   const setVote = (idx: number, key: "votesFor" | "votesAgainst" | "abstentions", next: number) => {
-    patch(idx, { [key]: Math.max(0, next) } as Partial<Motion>);
+    const current = motions[idx];
+    if (!current) return;
+    const diff: Partial<Motion> = { [key]: Math.max(0, Math.round(next)) } as Partial<Motion>;
+    const candidate = { ...current, ...diff };
+    if (motionOutcomeConsistencyIssues(candidate).length && !hasOutcomeOverride(candidate)) {
+      diff.outcome = "Pending";
+      setVoteNotice({ index: idx, text: `Outcome reset to Pending: ${candidate.votesFor ?? 0} for and ${candidate.votesAgainst ?? 0} against no longer support “${current.outcome}”. Record the outcome again.` });
+    } else if (voteNotice?.index === idx) {
+      setVoteNotice(null);
+    }
+    patch(idx, diff);
   };
 
   // Remove the motion at index `i`. editingIndex is an index into `motions`, so
@@ -521,6 +581,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
           onSetExpanded={(next) => setEditingIndex(next ? i : null)}
           onPatch={(diff) => patch(i, diff)}
           onSetVote={(k, n) => setVote(i, k, n)}
+            voteNotice={voteNotice?.index === i ? voteNotice.text : undefined}
           onDelete={() => deleteMotionAt(i)}
           onAddToBacklog={onAddToBacklog ? () => onAddToBacklog(m, i) : undefined}
         />
@@ -545,7 +606,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
               <button className="btn-action" onClick={() => { setAdding(false); resetDraft(); }}>
                 <X size={12} /> Cancel
               </button>
-              <button className="btn-action btn-action--primary" onClick={saveDraft} disabled={!draft.text.trim() || (!!draft.adoptsMinutesId && draft.outcome === "Carried" && !can("minutes:approve"))}>
+              <button className="btn-action btn-action--primary" onClick={saveDraft} disabled={!draft.text.trim() || draftIssues.length > 0 || (!!draft.adoptsMinutesId && draft.outcome === "Carried" && !can("minutes:approve"))}>
                 <Check size={12} /> Add
               </button>
             </div>
@@ -626,6 +687,26 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
             )}
 
             <OutcomePicker stretch canCarry={!draft.adoptsMinutesId || can("minutes:approve")} value={draft.outcome} onChange={(v) => setDraft({ ...draft, outcome: v })} />
+            {draftIssues.length > 0 && (
+              <div role="alert" data-testid="motion-draft-vote-issues">
+                {draftIssues.map((issue) => <p key={issue} className="field__error" style={{ margin: "4px 0" }}>{issue}</p>)}
+                {motionOutcomeConsistencyIssues(draft).length > 0 && (
+                  <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                    <Field label="Decided by">
+                      <Select
+                        value={draft.decidedBy && draft.decidedBy !== "vote" ? draft.decidedBy : ""}
+                        onChange={(value) => setDraft({ ...draft, decidedBy: (value || undefined) as DecidedBy | undefined })}
+                        options={[{ value: "", label: "Recorded vote" }, ...(["consent", "chair_ruling"] as DecidedBy[]).map((id) => ({ value: id, label: DECIDED_BY_LABELS[id] }))]}
+                        size="sm"
+                      />
+                    </Field>
+                    <Field label="Override note" className="field--grow">
+                      <input className="input" value={draft.outcomeOverrideNote ?? ""} onChange={(event) => setDraft({ ...draft, outcomeOverrideNote: event.target.value })} />
+                    </Field>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="motion-draft__votes">
               <div className="motion-draft__vote-row">
@@ -685,6 +766,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
             onSetExpanded={(next) => setEditingIndex(next ? i : null)}
             onPatch={(diff) => patch(i, diff)}
             onSetVote={(k, n) => setVote(i, k, n)}
+            voteNotice={voteNotice?.index === i ? voteNotice.text : undefined}
             onDelete={() => deleteMotionAt(i)}
           />
         ))}
@@ -711,6 +793,7 @@ function MotionRow({
   onDelete,
   onAddToBacklog,
   anchorId,
+  voteNotice,
 }: {
   motion: Motion;
   readOnly?: boolean;
@@ -729,8 +812,11 @@ function MotionRow({
   onAddToBacklog?: () => void | Promise<void>;
   /** DOM id for scroll-to deep-linking (e.g. from the Motions master page). */
   anchorId?: string;
+  /** Shown when a tally change reset the recorded outcome (G-04). */
+  voteNotice?: string;
 }) {
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
+  const [pendingOverrideOutcome, setPendingOverrideOutcome] = useState<string | null>(null);
   const confirm = useConfirm();
 
   const tone =
@@ -788,6 +874,13 @@ function MotionRow({
   };
 
   const setOutcomeWithReview = async (outcome: Motion["outcome"]) => {
+    // G-04: an outcome that contradicts the recorded tally needs an explicit
+    // consensus / chair's-ruling override with a note.
+    if (motionOutcomeConsistencyIssues({ ...motion, outcome }).length && !hasOutcomeOverride({ ...motion, outcome })) {
+      setPendingOverrideOutcome(outcome);
+      return;
+    }
+    setPendingOverrideOutcome(null);
     const gaps = motionCompletionGaps({ ...motion, outcome });
     if (gaps.length) {
       const ok = await confirm({
@@ -998,6 +1091,18 @@ function MotionRow({
             </Field>
           )}
           <OutcomePicker stretch canCarry={!motion.adoptsMinutesId || canApproveAdoption} value={motion.outcome} onChange={(v) => { void setOutcomeWithReview(v); }} />
+          {pendingOverrideOutcome && (
+            <OutcomeOverridePanel
+              motion={motion}
+              outcome={pendingOverrideOutcome}
+              onApply={(diff) => { setPendingOverrideOutcome(null); onPatch(diff); }}
+              onCancel={() => setPendingOverrideOutcome(null)}
+            />
+          )}
+          {voteNotice && <p className="field__error" role="status" data-testid="motion-vote-notice" style={{ margin: "4px 0" }}>{voteNotice}</p>}
+          {motion.outcomeOverrideNote && !pendingOverrideOutcome && (
+            <p className="muted" style={{ margin: "4px 0", fontSize: 12 }}>Outcome override ({DECIDED_BY_LABELS[(motion.decidedBy as DecidedBy) ?? "consent"] ?? motion.decidedBy}): {motion.outcomeOverrideNote}</p>
+          )}
           <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
             <VoteStepper label="For" value={motion.votesFor ?? 0} onChange={(n) => onSetVote("votesFor", n)} tone="success" />
             <VoteStepper label="Against" value={motion.votesAgainst ?? 0} onChange={(n) => onSetVote("votesAgainst", n)} tone="danger" />
