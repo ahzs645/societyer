@@ -5,13 +5,35 @@
  * always presented as data, never as instructions. */
 import type { z } from "zod";
 import type { IntakeBlock, IntakeExtract } from "./blocks";
+import { PROVIDER_EXCLUDED_CLASSES } from "./classify";
 import { redact, DEFAULT_LLM_REDACT, type PiiKind, type ProcessingLogEntry } from "./privacy";
 import { recordSchemaFor, schemaVersionFor, type DocClass, type ExtractionEnvelope } from "./schemas";
 import { verifyRecord, type VerificationSummary } from "./verify";
 
 export type GenerateObjectFn = (args: { system: string; prompt: string; schema: z.ZodTypeAny; schemaName: string; maxOutputTokens?: number }) => Promise<{ object: unknown; usage?: { inputTokens?: number; outputTokens?: number } }>;
 
-export const INTAKE_LLM_PROMPT_VERSION = "intake-llm-prompt/1";
+export const INTAKE_LLM_PROMPT_VERSION = "intake-llm-prompt/2";
+
+/** Per-class instructions appended to the user prompt (WP-L). They mirror what the
+ * deterministic extractors capture, so both engines fill the same fields. */
+export const CLASS_GUIDANCE: Partial<Record<DocClass, string>> = {
+  agenda: "Agenda: list every item with itemNumber, title, scheduled time, presenter and requestedAction (receive/approve/adopt/discuss/decide/information/ratify/vote/none); set consent=true for consent-agenda items. Consent-agenda receipts go in consentItems with outcome 'received' — never 'adopted'. Proposed resolutions are PROPOSED, never carried. Report minutes, reports or attachments embedded in the file in embeddedDocuments (block range, docClass) and references to prior minutes in `references`.",
+  meetingPackage: "Meeting package: first identify each embedded document (agenda, minutes, reports, statements, forms) with its block range in embeddedDocuments; then fill the agenda fields from the agenda part only. Consent items are 'received', never 'adopted'. Do not report motions from embedded minutes as decisions of this meeting.",
+  agmMaterial: "AGM material: kind (notice/script/package), notice date and delivery method, meeting date/time/location, proposed resolutions (special or ordinary; ALWAYS proposed, never carried — a script is not a record of the vote), the election slate as nominated, and the financial statements listed for presentation.",
+  bylaws: "Bylaws/constitution: title, version label, effective and adopted dates as written, clause outline, and typed rules: quorum per body (general, board, committee: type fixed/percentage/majority and value), notice periods (min/max days), AGM cadence, proxies (allowed, holder must be member, limit per holder), director count and term years, electronic meetings, special-resolution threshold, signing tiers, fiscal year end. A third party's bylaw (e.g. a municipal bylaw) is `external`: give no rules.",
+  policy: "Policy/terms of reference: title, policy number, version label, effective/adopted/review dates, the body it governs, clause outline, and any typed rules it states (committee quorum, signing tiers with dollar ranges and number of signatures). Note the meeting that adopted it if stated (as a reference).",
+  directorConsent: "Director consent: for each person, the name as written, the role, the date signed and whether consent is given. NEVER output home addresses, phone numbers or email addresses. A blank form names nobody: set blankForm.",
+  proxy: "Proxy/representative form: the member organization, the representative or proxy holder, the meeting date the proxy is for, and the date signed. No contact details.",
+  roster: "Roster: one entry per person with name, organization represented, office/role, representative type, and joined/left dates if stated. NEVER output addresses, phone numbers or email addresses.",
+  financialStatement: "Financial statement: statement type, period start/end, version label (draft/final/audited/review engagement), currency, and every line with section, label, amount, column (actual/budget/prior/variance) and the cell or block it comes from; mark totals (isTotal). Do not compute values the document does not print.",
+  budget: "Budget: fiscal period, version label, and every line with section (revenue/expense), label, amount and column, citing the cell. Mark totals; do not invent subtotals.",
+  insurance: "Insurance: policy number, insurer, broker, named insured and additional insureds, term start/end, coverages with limits and deductibles, premium/fees/total, document type (policy, certificate, renewal, invoice). Never claim a policy is in force: the reviewer decides status.",
+  agreement: "Agreement/contract: agreement number, parties, funder and program if a funding agreement, purpose, term start/end, amount, payment schedule, deliverables, reporting requirements with due dates, signatories as written, and status (draft/signed).",
+  grant: "Grant/application/report: funder, program, purpose, stage (application/approved/report), amount requested/approved, term, payment schedule, reporting requirements with due dates, contacts by role (no contact details).",
+  registryFiling: "Registry filing or confirmation: filing type (annual report, change of directors, transition, notice of change), period/AGM date, filed date and time, incorporation number, confirmation number, fee paid, directors listed as written, and filing status. A filing is 'filed' only when the document confirms submission.",
+  correspondence: "Correspondence: sender and recipients by display name only (no email addresses), date, subject, decisions or commitments stated in the text, and attachments named. Mark personalDataWithheld when contact details were present.",
+  invoice: "Invoice/receipt: vendor, invoice number, invoice and due dates, bill-to, direction (payable/receivable), line items, subtotal, tax and total. No banking details.",
+};
 
 export const SYSTEM_PROMPT = [
   "You extract governance facts from one source document of a non-profit society into a JSON record that matches the provided schema.",
@@ -125,7 +147,7 @@ export async function extractWithLlm(input: LlmExtractionInput): Promise<LlmExtr
   const log: ProcessingLogEntry[] = [];
   const schema = recordSchemaFor(input.docClass);
   if (!schema) return { log: [{ atISO: now(), fileKey: input.fileId, stage: "llm_skipped", sentToProvider: false, note: `No schema for ${input.docClass}` }], skippedReason: "no_schema" };
-  if (input.restricted) return { log: [{ atISO: now(), fileKey: input.fileId, stage: "llm_skipped", sentToProvider: false, note: "Restricted class: never sent to a model provider." }], skippedReason: "restricted" };
+  if (input.restricted || PROVIDER_EXCLUDED_CLASSES.has(input.docClass)) return { log: [{ atISO: now(), fileKey: input.fileId, stage: "llm_skipped", sentToProvider: false, note: "Restricted class: never sent to a model provider." }], skippedReason: "restricted" };
   // Redaction keeps offsets: quotes are verified against exactly what the model saw.
   const redaction = redact(input.extract.text, input.redactKinds ?? DEFAULT_LLM_REDACT);
   const view = { blocks: input.extract.blocks, text: redaction.text };
@@ -143,6 +165,7 @@ export async function extractWithLlm(input: LlmExtractionInput): Promise<LlmExtr
     const prompt = [
       `File name: ${input.fileName}`,
       `Document class: ${input.docClass}. Part ${index + 1} of ${chunks.length}${chunks.length > 1 ? " (extract only what this part contains)" : ""}.`,
+      ...(CLASS_GUIDANCE[input.docClass] ? [CLASS_GUIDANCE[input.docClass]!] : []),
       "Return {record, unsupported, references} matching the schema.",
       "<document>",
       rendered,

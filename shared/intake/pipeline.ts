@@ -3,7 +3,7 @@
  * inject file reading, hashing, text extraction and (optionally) an LLM. */
 import type { IntakeExtract } from "./blocks";
 import type { IntakeFileRecord, IntakeExtractionResult, IntakeRunResult } from "./bundle";
-import { classifyPrior, EXTRACTION_CLASSES } from "./classify";
+import { classifyPrior, EXTRACTION_CLASSES, PROVIDER_EXCLUDED_CLASSES } from "./classify";
 import { agendaEvidencedMeetings, annotateFiscalYearEndChanges, classRecordGaps, deriveEmbeddedMinutes, detectOrganizationName, linkPolicyAdoptions } from "./classStages";
 import { extractForClass } from "./extractors";
 import { clusterFiles } from "./cluster";
@@ -133,7 +133,7 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
     const docClass = file.classification!.docClass;
     let envelope: IntakeExtractionResult | undefined;
     // Restricted files (consents with home addresses, invoices, mailboxes …) are never sent to a provider.
-    const restricted = file.sensitivity === "restricted" && (Boolean(file.classification?.restricted) || !MINUTES_LIKE.has(docClass));
+    const restricted = PROVIDER_EXCLUDED_CLASSES.has(docClass) || (file.sensitivity === "restricted" && (Boolean(file.classification?.restricted) || !MINUTES_LIKE.has(docClass)));
     if (options.llm && !restricted) {
       const result = await extractWithLlm({ fileId: file.fileKey, fileName: file.name, docClass, extract, restricted, generate: options.llm.generate, provider: options.llm.provider, model: options.llm.model, budget }).catch((error) => ({ log: [{ atISO: now(), fileKey: file.fileKey, stage: "llm_skipped" as const, sentToProvider: true, note: `Provider error: ${error instanceof Error ? error.message : String(error)}` }], envelope: undefined, verification: undefined }));
       log.push(...result.log);

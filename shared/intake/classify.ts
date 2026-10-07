@@ -40,11 +40,13 @@ const RULES: Rule[] = [
   { docClass: "financialStatement", re: /\bfinancial statements?\b|\bfinancials?\b|\bbalance sheet\b|\bincome statement\b|\bstatement of (?:operations|financial position)\b|\baudit(?:ed)?\b|\breview engagement\b|\bprofit (?:and|&) loss\b|\bp&l\b|\byear[ -]?end\b/i, weight: 0.82, where: "name" },
   { docClass: "budget", re: /budget(?![a-z])/i, weight: 0.8, where: "name" },
   { docClass: "insurance", re: /\binsurance\b|\bcertificate of (?:insurance|liability)\b|\bcoi\b|\bendorsement\b|\bdeclarations? page\b|\bpolicy wording\b|\bd\s?&\s?o\b|\be\s?&\s?o\b|\b(?:dno|mc)\d{4,}/i, weight: 0.82, where: "name" },
+  { docClass: "grant", re: /\b(?:funding|contribution|grant) agreement\b|\bfunding letter\b|\bletter of (?:award|funding)\b/i, weight: 0.86, where: "name" },
   { docClass: "agreement", re: /\bagreement\b|\bcontract\b|\bmou\b|\bmemorandum of understanding\b|\bletter of (?:understanding|agreement)\b|\bservice proposal\b|\bgsa\b/i, weight: 0.78, where: "name" },
   { docClass: "grant", re: /\bgrants?\b|\bfunding\b|\bproposal\b|\bapplication\b(?!.*\bform\b)|\b[A-Z]{2}\d{2}[A-Z]{3}\d{4}\b|\bfunder report\b/i, weight: 0.72, where: "name" },
   { docClass: "invoice", re: /\binvoices?\b|\breceipts?\b|\bcheque\b|\bbank statement\b|\breconciliation\b|\bpayables?\b|\bexpense claim\b/i, weight: 0.78, where: "name" },
   { docClass: "correspondence", re: /\.msg$|\.eml$|\bemail\b/i, weight: 0.6, where: "name" },
   { docClass: "plan", re: /\b(?:strategic|work|action|business|communications?|operational) ?plan\b|\bworkplan\b|\baqmp\b/i, weight: 0.7, where: "name" },
+  { docClass: "report", re: /\bbriefing note\b|\bbackgrounder\b|\bdiscussion paper\b/i, weight: 0.85, where: "name" },
   { docClass: "report", re: /\breport\b|\bupdate\b|\bbriefing note\b|\bsummary\b/i, weight: 0.55, where: "name" },
   { docClass: "formTemplate", re: /\btemplate\b|\bblank\b|\bform\b/i, weight: 0.6, where: "name" },
   { docClass: "presentation", re: /\.(?:pptx?|key|odp)$/i, weight: 0.7, where: "name" },
@@ -71,7 +73,9 @@ const RULES: Rule[] = [
   { docClass: "insurance", re: /\bpolicy (?:number|period)\b|\binsured\b.*\blimit\b|\bdeclarations page\b|\bcertificate of insurance\b/i, weight: 0.7, where: "text" },
   { docClass: "directorConsent", re: /\bconsent to act as (?:a )?director\b/i, weight: 0.9, where: "text" },
   { docClass: "proxy", re: /\bhereby appoints?\b[\s\S]{0,200}\bproxy\b|\bproxy form\b/i, weight: 0.85, where: "text" },
-  { docClass: "registryFiling", re: /\bBC SOCIETY ANNUAL REPORT\b|\bSTATEMENT OF DIRECTORS AND REGISTERED OFFICE\b|\bconfirmation of filing\b|\bform filed\s*:|\bfiled date and time\s*:|\bthis is confirmation of payment for filing\b/i, weight: 0.85, where: "text" },
+  // Registry form headers are upper case; the same words in prose ("the statement of directors …") are not a filing.
+  { docClass: "registryFiling", re: /\bBC SOCIETY ANNUAL REPORT\b|\bSTATEMENT OF DIRECTORS AND REGISTERED OFFICE\b/, weight: 0.85, where: "text" },
+  { docClass: "registryFiling", re: /\bconfirmation of filing\b|\bform filed\s*:|\bfiled date and time\s*:|\bthis is confirmation of payment for filing\b/i, weight: 0.85, where: "text" },
   { docClass: "invoice", re: /^\s*(?:[\w .,&-]{0,80}\n){0,6}\s*invoice\b|\binvoice\s*(?:#|no\.?|number)\s*:?\s*\w|\bbalance due\b|\bbill to\b/i, weight: 0.75, where: "text" },
   { docClass: "agreement", re: /\bbetween\s*:?[\s\S]{0,600}\band\s*:?[\s\S]{0,800}\b(?:agree|agreement|contract)\b|\bthe parties agree\b|\bgeneral service agreement\b/i, weight: 0.75, where: "text" },
   { docClass: "bylaws", re: /\bthe name of the society is\b|\bbylaws of the\b[\s\S]{0,120}\bsociety\b/i, weight: 0.8, where: "text" },
@@ -149,3 +153,8 @@ export function classifyPrior(file: { name: string; path?: string; headText?: st
 
 /** Classes that carry governance facts worth structured extraction in the MVP. */
 export const EXTRACTION_CLASSES: ReadonlySet<DocClass> = new Set(["meetingMinutes", "agenda", "meetingPackage", "agmMaterial", "bylaws", "policy", "directorConsent", "proxy", "roster", "financialStatement", "budget", "insurance", "agreement", "grant", "registryFiling", "correspondence", "invoice"]);
+
+/** Classes whose content is personal data by nature (home addresses on consents, contact
+ * rosters, invoices with banking details, mailboxes). They are extracted deterministically
+ * and never sent to a model provider, whatever the per-file sensitivity scan found. */
+export const PROVIDER_EXCLUDED_CLASSES: ReadonlySet<DocClass> = new Set(["directorConsent", "proxy", "roster", "invoice", "correspondence"]);
