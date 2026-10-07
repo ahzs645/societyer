@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MEETING_STATUS_LABELS, MEETING_STATUS_OPTIONS, meetingStatusTone as sharedMeetingStatusTone } from "../../shared/meetingStatus";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -123,6 +123,18 @@ export function MeetingsPage() {
     viewId: currentViewId,
   });
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
+  // Workspaces seeded before the review columns existed get them once: the
+  // seed mutation is idempotent and reconciles new fields into system views.
+  const ensureMetadata = useMutation(api.seedRecordTableMetadata.ensureForSociety);
+  const metadataHealRef = useRef<string | null>(null);
+  useEffect(() => {
+    const metadata = tableData.objectMetadata;
+    if (!society?._id || !metadata || !loaded || !can("settings:write")) return;
+    if (metadata.fields.some((field) => field.name === "sourceReviewStatus")) return;
+    if (metadataHealRef.current === String(society._id)) return;
+    metadataHealRef.current = String(society._id);
+    void ensureMetadata({ societyId: society._id }).catch(() => undefined);
+  }, [society?._id, tableData.objectMetadata, loaded, can, ensureMetadata]);
   const noticeMinDays = data.noticeMinDays;
   const noticeMaxDays = data.noticeMaxDays;
   const effectiveNoticeMinDays = data.effectiveNoticeMinDays;

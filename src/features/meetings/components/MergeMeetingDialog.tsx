@@ -58,7 +58,7 @@ export function MergeMeetingDialog({
   const [busy, setBusy] = useState(false);
   const targetId = keepThis ? String(meeting._id) : otherId;
   const duplicateId = keepThis ? otherId : String(meeting._id);
-  const preview = useQuery(api.meetings.mergePreview, otherId && canMerge ? { targetId: targetId as any, duplicateId: duplicateId as any, addMissingAttendees } : "skip") as any;
+  const preview = useQuery(api.meetings.mergePreview, otherId && canMerge && !busy ? { targetId: targetId as any, duplicateId: duplicateId as any, addMissingAttendees } : "skip") as any;
 
   const options = useMemo(() => {
     const suggested = new Set(suggestedIds);
