@@ -146,14 +146,38 @@ stopCreated();
   assert.ok(notified > 0, "subscribers are told about the failure so they re-render");
   assert.throws(() => watch.localQueryResult(), /Society membership not found/);
   stop();
-  // Retry: the boundary re-mounts the subscriber, which runs the query again.
+  // convex/react's useQueries builds a new Watch and subscription on every
+  // render. A failed query must stay failed through that churn (it used to
+  // re-run on each one and sit pending, i.e. "Loading…" forever).
+  const runsAfterFailure = runs;
+  for (let i = 0; i < 3; i += 1) {
+    const churn = errorCache.watchQuery("people:forRecord", { recordId: "x" });
+    const stopChurn = churn.onUpdate(() => undefined);
+    assert.throws(() => churn.localQueryResult(), /Society membership not found/, "render churn keeps surfacing the failure");
+    stopChurn();
+  }
+  await settle();
+  assert.equal(runs, runsAfterFailure, "re-watching a failed query does not re-run it");
+  // Retry: the error boundary asks the cache to re-run failed queries, then re-mounts.
   mode = "ok";
   const retried = errorCache.watchQuery("people:forRecord", { recordId: "x" });
-  assert.equal(retried.localQueryResult(), undefined, "a retry starts a fresh run instead of rethrowing");
   const stopRetried = retried.onUpdate(() => undefined);
+  errorCache.retryFailed();
+  assert.equal(retried.localQueryResult(), undefined, "a retry starts a fresh run instead of rethrowing");
   await settle();
   assert.deepEqual(retried.localQueryResult(), [{ ok: true }]);
   stopRetried();
+  // A data change also re-runs a failed query.
+  mode = "fail";
+  const failedThenChanged = errorCache.watchQuery("people:forRecord", { recordId: "again" });
+  const stopAgain = failedThenChanged.onUpdate(() => undefined);
+  await settle();
+  assert.throws(() => failedThenChanged.localQueryResult(), /Society membership not found/);
+  mode = "ok";
+  for (const listener of errorListeners) listener();
+  await settle();
+  assert.deepEqual(failedThenChanged.localQueryResult(), [{ ok: true }], "a store change re-runs a failed query");
+  stopAgain();
 
   LocalQueryError.NOT_FOUND_GRACE_MS = 20;
   mode = "missing";

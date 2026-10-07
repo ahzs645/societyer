@@ -35,3 +35,28 @@ test("a missing record shows its not-found state, not the error boundary (P-O2, 
   await page.waitForTimeout(2_000);
   await expect(page.getByRole("alert").filter({ hasText: "Couldn't load this page" })).toHaveCount(0);
 });
+
+test("a failed record query reaches the error boundary, and Retry recovers (P-O2)", async ({ page }) => {
+  // Detail pages read their record with useRecordQuery (convex/react
+  // useQueries), which re-creates its watch on every render. A failed local
+  // query must stay failed through that churn so the page shows the error
+  // instead of "Loading…" forever.
+  await page.goto("/demo/app/goals");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 20_000 });
+  await page.evaluate(async () => {
+    const { localDataClient } = await import("/src/lib/localDataClient.ts" as string);
+    const portable = (localDataClient as any).portable;
+    const original = portable.runQueryTracked.bind(portable);
+    (window as any).__restoreGoalQuery = () => { portable.runQueryTracked = original; };
+    portable.runQueryTracked = (name: string, args: unknown) => (name === "goals:get" ? Promise.reject(new Error("Storage is unavailable")) : original(name, args));
+    window.history.pushState({}, "", "/demo/app/goals/static_goal_agm");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  const boundary = page.getByRole("alert").filter({ hasText: "Couldn't load this page" });
+  await expect(boundary).toBeVisible({ timeout: 15_000 });
+  await expect(boundary).toContainText("Storage is unavailable");
+  await page.evaluate(() => (window as any).__restoreGoalQuery());
+  await boundary.getByRole("button", { name: "Retry" }).click();
+  await expect(boundary).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+});
