@@ -27,8 +27,8 @@ import { landedValue } from "../shared/functions/intakeReview";
 import { writeSyntheticFixtures } from "./lib/intake-synthetic-fixtures";
 
 // ------------------------------------------------------------ policy
-for (const name of ["intake:mergeCandidates", "intake:provenanceForExtraction", "intake:runSummaries", "intake:entityCandidates"]) assert.equal(actionPermission(name, "query"), "settings:read");
-for (const name of ["intake:reviewFields", "intake:undoReviews", "intake:promoteExtraction", "intake:reconcileRun", "intake:linkNameAcrossRun"]) assert.equal(actionPermission(name, "mutation"), "settings:write");
+for (const name of ["intake:mergeCandidates", "intake:provenanceForExtraction", "intake:runSummaries", "intake:entityCandidates", "intake:bulkAcceptPreview", "intake:getFileExtract", "intake:provenanceForRecords"]) assert.equal(actionPermission(name, "query"), "settings:read");
+for (const name of ["intake:reviewFields", "intake:undoReviews", "intake:promoteExtraction", "intake:reconcileRun", "intake:linkNameAcrossRun", "intake:bulkAccept"]) assert.equal(actionPermission(name, "mutation"), "settings:write");
 
 // ------------------------------------------------------------ pipeline + staging
 const society = "society_review";
@@ -248,6 +248,21 @@ const meetingsBefore = db.dump("meetings").length;
 const otherPromoted = await mutate("intake:promoteExtraction", { societyId: society, extractionId: other._id, mode: "new" });
 assert.equal(db.dump("meetings").length, meetingsBefore + 1);
 assert.equal(otherPromoted.merged, false);
+
+// Run-wide bulk accept by class / body-year / cluster, with preview and undo.
+const preview = await query("intake:bulkAcceptPreview", { societyId: society, runId: staged.runId, scope: { docClass: "meetingMinutes" } });
+assert.ok(preview.count > 0 && preview.sample.length === Math.min(5, preview.count));
+assert.ok(preview.sample.every((row: any) => row.quote), "the preview shows each sampled field's source quote");
+assert.ok(preview.scopeExtractions >= 3, "promoted extractions are out of scope");
+const byYear = await query("intake:bulkAcceptPreview", { societyId: society, runId: staged.runId, scope: { year: "2024" } });
+assert.ok(byYear.count < preview.count, "a body-year scope narrows the class scope");
+await assert.rejects(() => query("intake:bulkAcceptPreview", { societyId: society, runId: staged.runId, scope: {} }), /Choose a document/);
+const reviewsBefore = db.dump("intakeFieldReviews").length;
+const bulkRun = await mutate("intake:bulkAccept", { societyId: society, runId: staged.runId, scope: { docClass: "meetingMinutes" } });
+assert.equal(bulkRun.fields, preview.count);
+assert.equal(db.dump("intakeFieldReviews").length, reviewsBefore + preview.count);
+await mutate("intake:undoReviews", { societyId: society, reviewIds: bulkRun.reviewIds });
+assert.equal(db.dump("intakeFieldReviews").length, reviewsBefore, "the whole run-wide batch can be undone");
 
 // Server-side reconciliation (hosted runs) and run summaries.
 const reconciled = await mutate("intake:reconcileRun", { societyId: society, runId: staged.runId });

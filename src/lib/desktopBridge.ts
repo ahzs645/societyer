@@ -212,6 +212,11 @@ export type SocietyerDesktopBridge = {
   setSecret(key: DesktopSecretKey, value: string): Promise<DesktopSecretStatus>;
   removeSecret(key: DesktopSecretKey): Promise<DesktopSecretStatus>;
   printToPdf(input: DesktopPrintToPdfInput): Promise<DesktopPrintToPdfResult>;
+  /** AI intake: a native folder pick; files are then read on demand by relative path inside it. */
+  pickIntakeFolder(): Promise<{ token: string; root: string; files: Array<{ relativePath: string; size: number; modifiedTime?: string }> } | null>;
+  readIntakeFile(input: { token: string; relativePath: string }): Promise<ArrayBuffer>;
+  /** Legacy .doc/.xls → DOCX/XLSX through LibreOffice when it is installed (null otherwise). */
+  convertLegacyDocument(input: { fileName: string; bytes: ArrayBuffer; target: "docx" | "xlsx" }): Promise<ArrayBuffer | null>;
   onNativeThemeChanged(listener: (state: DesktopNativeThemeState) => void): () => void;
   onMenuAction(listener: (action: string) => void): () => void;
 };

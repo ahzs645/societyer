@@ -20,7 +20,7 @@ import { SourceViewer, type ClusterVersion } from "../features/intake/SourceView
 import { FieldList, type FieldDecisionHandler } from "../features/intake/FieldPanel";
 import { EntityPanel } from "../features/intake/EntityPanel";
 import { GapPanel } from "../features/intake/GapPanel";
-import { BulkAcceptModal, CantRepresentModal, PromoteModal, type CantRepresentDraft, type PromoteChoice } from "../features/intake/ReviewModals";
+import { BulkAcceptModal, CantRepresentModal, PromoteModal, type CantRepresentDraft, type PromoteChoice, type RunBulkScope } from "../features/intake/ReviewModals";
 import { canStoreOriginals, useStoreOriginals } from "../features/intake/useStoreOriginals";
 import "../features/intake/intake.css";
 
@@ -82,6 +82,7 @@ export function IntakeReviewPage() {
   const promoteExtraction = usePermissionedMutation(api.intake.promoteExtraction, canWrite);
   const setExtractionStatus = usePermissionedMutation(api.intake.setExtractionStatus, canWrite);
   const linkNameAcrossRun = usePermissionedMutation(api.intake.linkNameAcrossRun, canWrite);
+  const bulkAccept = usePermissionedMutation(api.intake.bulkAccept, canWrite);
   const storeOriginals = useStoreOriginals(canWrite && can("documents:write"));
 
   const extraction = detail?.extraction;
@@ -157,6 +158,17 @@ export function IntakeReviewPage() {
 
   const bulkCandidates = useMemo(() => (bulkScope && extraction ? bulkAcceptCandidates(fields, decisions, extraction.docClass, bulkScope) : []), [bulkScope, fields, decisions, extraction]);
   const allBulk = useMemo(() => (extraction ? bulkAcceptCandidates(fields, decisions, extraction.docClass) : []), [fields, decisions, extraction]);
+  // Run-wide scopes for bulk accept: the version cluster, the body and year, the class.
+  const runBulkScopes: RunBulkScope[] = useMemo(() => {
+    if (!extraction) return [];
+    const scopes: RunBulkScope[] = [];
+    if (detail?.file?.clusterKey) scopes.push({ id: "cluster", label: "Version cluster", scope: { clusterKey: detail.file.clusterKey } });
+    const year = String(extraction.record?.date?.value?.iso ?? "").slice(0, 4);
+    const bodyValue = extraction.record?.body?.value;
+    if (bodyValue && /^\d{4}$/.test(year)) scopes.push({ id: "body-year", label: `${extraction.record?.bodyLabel?.value ?? bodyValue} ${year}`, scope: { body: String(bodyValue), year } });
+    scopes.push({ id: "class", label: `All ${extraction.docClass === "meetingMinutes" ? "minutes" : extraction.docClass} in the run`, scope: { docClass: extraction.docClass } });
+    return scopes;
+  }, [extraction, detail?.file?.clusterKey]);
 
   const promote = async (choice: PromoteChoice) => {
     if (!societyId || !selectedId) return;
@@ -339,7 +351,7 @@ export function IntakeReviewPage() {
                     </div>
                   ) : (
                     <div className="row">
-                      <button type="button" className="btn btn--sm" disabled={readOnly || !allBulk.length} onClick={() => setBulkScope({})} data-testid="intake-bulk-open"><CheckCheck size={12} /> Bulk accept ({allBulk.length})</button>
+                      <button type="button" className="btn btn--sm" disabled={readOnly} onClick={() => setBulkScope({})} data-testid="intake-bulk-open"><CheckCheck size={12} /> Bulk accept ({allBulk.length})</button>
                       <button type="button" className="btn btn--sm btn--accent" disabled={readOnly || extraction.docClass !== "meetingMinutes"} onClick={() => setPromoteOpen(true)} data-testid="intake-promote-open" title={readiness.ready ? "Promote accepted fields to native records" : `Accept ${readiness.missing.join(" and ").toLowerCase()} first`}><Upload size={12} /> Promote…</button>
                       <button type="button" className="btn btn--sm btn--ghost" disabled={readOnly} onClick={() => void rejectDocument()}><CircleSlash size={12} /> Reject document</button>
                     </div>
@@ -361,10 +373,19 @@ export function IntakeReviewPage() {
           docClass={extraction.docClass}
           scopeLabel={bulkScope?.itemIndex !== undefined ? `${bulkScope.group} item ${bulkScope.itemIndex + 1}` : bulkScope?.group ? `${bulkScope.group} fields` : "this document"}
           busy={busy}
+          societyId={society._id}
+          runId={runId}
+          runScopes={bulkScope && !bulkScope.group ? runBulkScopes : []}
           onConfirm={() => {
             const items = bulkCandidates.map((field) => ({ field, decision: "accept" }));
             setBulkScope(null);
             void decide(items, `Accepted ${pluralize(items.length, "field")}`);
+          }}
+          onConfirmRun={(scope) => {
+            setBulkScope(null);
+            void bulkAccept({ societyId: society._id, runId, scope: scope.scope }).then((result: any) => {
+              toast.success(`Accepted ${pluralize(result.fields, "field")} in ${pluralize(result.extractions, "document")}`, { duration: UNDO_MS, action: { label: "Undo", onClick: () => void undo(result.reviewIds) } });
+            }).catch((error: unknown) => toast.error("Could not bulk accept", error instanceof Error ? error.message : undefined));
           }}
         />
       )}

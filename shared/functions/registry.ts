@@ -1368,6 +1368,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "intake:entityCandidates", handler: intakeReviewFns.entityCandidates }),
   definePortableQuery({ name: "intake:getFileExtract", handler: intakeReviewFns.getFileExtract }),
   definePortableQuery({ name: "intake:provenanceForRecords", handler: intakeReviewFns.provenanceForRecords }),
+  definePortableQuery({ name: "intake:bulkAcceptPreview", handler: intakeReviewFns.bulkAcceptPreview }),
+  definePortableMutation({ name: "intake:bulkAccept", handler: intakeReviewFns.bulkAccept }),
   definePortableMutation({ name: "intake:linkNameAcrossRun", handler: intakeReviewFns.linkNameAcrossRun }),
   definePortableMutation({ name: "intake:reviewFields", handler: intakeReviewFns.reviewFields }),
   definePortableMutation({ name: "intake:undoReviews", handler: intakeReviewFns.undoReviews }),

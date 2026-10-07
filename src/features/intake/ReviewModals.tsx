@@ -10,31 +10,52 @@ import { defaultInfoTypeForPath } from "../../../shared/intake/promotion";
 import { formatFieldValue, nativeTargetForPath, samplePreview, thresholdFor, type Readiness, type ReviewField } from "../../../shared/intake/review";
 import { locatorLabel } from "./FieldPanel";
 
-/** Bulk accept: verified, stated, non-conflicting fields at or above τ, with a sampled preview of five. */
-export function BulkAcceptModal({ open, onClose, onConfirm, candidates, docClass, scopeLabel, busy }: { open: boolean; onClose: () => void; onConfirm: () => void; candidates: ReviewField[]; docClass: string; scopeLabel: string; busy: boolean }) {
-  const sample = useMemo(() => samplePreview(candidates, 5), [candidates]);
+export type RunBulkScope = { id: string; label: string; scope: { extractionId?: string; clusterKey?: string; body?: string; year?: string; docClass?: string } };
+
+/** Bulk accept: verified, stated, non-conflicting fields at or above τ, with a sampled preview of five.
+ * Scopes: this document (or one group/item of it), its version cluster, its body and year, or its class across the run. */
+export function BulkAcceptModal({ open, onClose, onConfirm, onConfirmRun, candidates, docClass, scopeLabel, busy, societyId, runId, runScopes }: {
+  open: boolean; onClose: () => void; onConfirm: () => void; onConfirmRun: (scope: RunBulkScope) => void; candidates: ReviewField[]; docClass: string; scopeLabel: string; busy: boolean;
+  societyId: string; runId: string; runScopes: RunBulkScope[];
+}) {
+  const [scopeId, setScopeId] = useState("local");
+  useEffect(() => { if (open) setScopeId("local"); }, [open]);
+  const runScope = runScopes.find((scope) => scope.id === scopeId);
+  const preview = useQuery(api.intake.bulkAcceptPreview, open && runScope ? { societyId, runId, scope: runScope.scope } : "skip") as { count: number; extractions: number; scopeExtractions: number; sample: Array<{ extractionId: string; fileKey: string; path: string; label: string; kind: string; confidence: number; value?: unknown; quote?: string }> } | undefined;
+  const localSample = useMemo(() => samplePreview(candidates, 5), [candidates]);
   const thresholds = useMemo(() => {
     const map = new Map<string, number>();
     for (const field of candidates) map.set(field.label, thresholdFor(docClass, field.pattern));
     return [...map.entries()].slice(0, 8);
   }, [candidates, docClass]);
+  const count = runScope ? preview?.count ?? 0 : candidates.length;
+  const sample = runScope
+    ? (preview?.sample ?? []).map((row) => ({ key: `${row.extractionId}:${row.path}`, label: row.label, value: formatFieldValue(row.value, row.kind as any), confidence: row.confidence, where: row.fileKey.replace(/^local:/, "").split("/").pop() ?? "", quote: row.quote }))
+    : localSample.map((field) => ({ key: field.path, label: field.label, value: formatFieldValue(field.field.value, field.kind), confidence: field.field.confidence, where: locatorLabel(field.field.locators[0]), quote: field.field.locators[0]?.quote }));
   return (
-    <Modal open={open} onClose={onClose} title={`Bulk accept ${scopeLabel}`} size="md" resizable={false}
+    <Modal open={open} onClose={onClose} title={`Bulk accept ${runScope ? runScope.label : scopeLabel}`} size="md" resizable={false}
       footer={<>
         <button type="button" className="btn" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn btn--accent" onClick={onConfirm} disabled={!candidates.length || busy} data-testid="intake-bulk-confirm">Accept {pluralize(candidates.length, "field")}</button>
+        <button type="button" className="btn btn--accent" onClick={() => (runScope ? onConfirmRun(runScope) : onConfirm())} disabled={!count || busy || (Boolean(runScope) && !preview)} data-testid="intake-bulk-confirm">Accept {pluralize(count, "field")}</button>
       </>}>
-      {!candidates.length && <p className="muted">No unreviewed field qualifies: bulk accept takes only values the source states, whose quote was re-found in the source, that are not in conflict, and whose confidence meets the threshold.</p>}
-      {candidates.length > 0 && (
+      {runScopes.length > 0 && (
+        <div className="segmented" role="radiogroup" aria-label="Bulk accept scope" style={{ marginBottom: 10, flexWrap: "wrap" }}>
+          <button type="button" role="radio" aria-checked={scopeId === "local"} className={`segmented__btn${scopeId === "local" ? " is-active" : ""}`} onClick={() => setScopeId("local")}>{scopeLabel}</button>
+          {runScopes.map((scope) => <button key={scope.id} type="button" role="radio" aria-checked={scopeId === scope.id} className={`segmented__btn${scopeId === scope.id ? " is-active" : ""}`} onClick={() => setScopeId(scope.id)}>{scope.label}</button>)}
+        </div>
+      )}
+      {runScope && !preview && <p className="muted">Counting qualifying fields…</p>}
+      {(!runScope || preview) && !count && <p className="muted">No unreviewed field qualifies: bulk accept takes only values the source states, whose quote was re-found in the source, that are not in conflict, and whose confidence meets the threshold.</p>}
+      {count > 0 && (
         <>
-          <p style={{ marginTop: 0 }}>{pluralize(candidates.length, "field")} are <strong>stated</strong>, have a <strong>verified source span</strong>, are <strong>not conflicting</strong> and meet the confidence threshold. You can undo for a few seconds afterwards.</p>
-          <p className="muted" style={{ fontSize: 12 }}>Thresholds: {thresholds.map(([label, value]) => `${label} ≥ ${Math.round(value * 100)}%`).join(" · ")}</p>
+          <p style={{ marginTop: 0 }}>{pluralize(count, "field")}{runScope && preview ? ` in ${pluralize(preview.extractions, "document")}` : ""} are <strong>stated</strong>, have a <strong>verified source span</strong>, are <strong>not conflicting</strong> and meet the confidence threshold. You can undo for a few seconds afterwards.</p>
+          {!runScope && <p className="muted" style={{ fontSize: 12 }}>Thresholds: {thresholds.map(([label, value]) => `${label} ≥ ${Math.round(value * 100)}%`).join(" · ")}</p>}
           <strong style={{ fontSize: 12 }}>Sample of {sample.length}</strong>
           <ul className="intake-sample" data-testid="intake-bulk-sample">
-            {sample.map((field) => (
-              <li key={field.path}>
-                <div><span className="muted">{field.label}</span> · <strong>{formatFieldValue(field.field.value, field.kind)}</strong> <span className="intake-chip intake-chip--high">{Math.round(field.field.confidence * 100)}%</span> <span className="muted mono" style={{ fontSize: 10 }}>{locatorLabel(field.field.locators[0])}</span></div>
-                {field.field.locators[0]?.quote && <blockquote>“{field.field.locators[0].quote}”</blockquote>}
+            {sample.map((row) => (
+              <li key={row.key}>
+                <div><span className="muted">{row.label}</span> · <strong>{row.value}</strong> <span className="intake-chip intake-chip--high">{Math.round(row.confidence * 100)}%</span> <span className="muted mono" style={{ fontSize: 10 }}>{row.where}</span></div>
+                {row.quote && <blockquote>“{row.quote}”</blockquote>}
               </li>
             ))}
           </ul>

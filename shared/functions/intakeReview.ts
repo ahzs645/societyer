@@ -29,7 +29,7 @@ import {
 } from "./importSessions";
 import { bodyKeyForMeeting } from "../meetingBody";
 import { buildPromotionBundle, defaultInfoTypeForPath, gapLocatorFrom, matchKey, type MergeTarget, type PromotionFile, type PromotionMode } from "../intake/promotion";
-import { entityGroups, formatFieldValue, isPromotedDecision, latestDecisions, linkedValue, nameOccurrences, nativeTargetForPath, primaryLocator, reviewFieldsForRecord, REVIEW_DECISIONS, type ReviewRow } from "../intake/review";
+import { bulkAcceptCandidates, entityGroups, formatFieldValue, isPromotedDecision, samplePreview, latestDecisions, linkedValue, nameOccurrences, nativeTargetForPath, primaryLocator, reviewFieldsForRecord, REVIEW_DECISIONS, type ReviewRow } from "../intake/review";
 import { visibleDirectoryRows } from "./peopleDirectory";
 import type { DirectoryPerson, OfficeTerm } from "../intake/entities";
 import { reconcileExtractions } from "../intake/reconcile";
@@ -140,6 +140,68 @@ export async function undoReviews(ctx: PortableMutationCtx, { societyId, reviewI
     removed++;
   }
   return { removed };
+}
+
+// ---------------------------------------------------------------- run-wide bulk accept
+
+export type BulkScopeArgs = { extractionId?: string; clusterKey?: string; body?: string; year?: string; docClass?: string };
+
+/** Unpromoted extractions of a run within a scope: one document, a version cluster, a body-year or a class. */
+async function scopedExtractions(ctx: PortableQueryCtx, societyId: string, runId: string, scope: BulkScopeArgs) {
+  await getOwned(ctx, "intakeRuns", runId, societyId);
+  if (!scope || !Object.values(scope).some(Boolean)) throw new Error("Choose a document, cluster, body and year, or class.");
+  const rows = (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", runId)).collect()) as any[];
+  const files = scope.clusterKey ? ((await ctx.db.query("intakeFiles").withIndex("by_run", (q) => q.eq("runId", runId)).collect()) as any[]) : [];
+  const inCluster = new Set(files.filter((file) => file.clusterKey === scope.clusterKey).map((file) => String(file._id)));
+  return rows.filter((row) => {
+    if (row.status === "promoted" || row.status === "rejected") return false;
+    if (scope.extractionId && String(row._id) !== scope.extractionId) return false;
+    if (scope.clusterKey && !inCluster.has(String(row.fileId))) return false;
+    if (scope.docClass && row.docClass !== scope.docClass) return false;
+    if (scope.body && String(row.record?.body?.value ?? "") !== scope.body) return false;
+    if (scope.year && !String(row.record?.date?.value?.iso ?? "").startsWith(scope.year)) return false;
+    return true;
+  });
+}
+
+async function bulkCandidatesFor(ctx: PortableQueryCtx, extractions: any[], thresholds?: Record<string, number>) {
+  const out: Array<{ extraction: any; field: ReturnType<typeof reviewFieldsForRecord>[number] }> = [];
+  for (const extraction of extractions) {
+    const decisions = latestDecisions(await reviewsFor(ctx, extraction._id));
+    for (const field of bulkAcceptCandidates(reviewFieldsForRecord(extraction.record ?? {}), decisions, extraction.docClass, {}, thresholds)) out.push({ extraction, field });
+  }
+  return out;
+}
+
+/** Bulk-accept preview for a run scope: how many fields qualify and a sample of five with their quotes. */
+export async function bulkAcceptPreview(ctx: PortableQueryCtx, { societyId, runId, scope }: { societyId: string; runId: string; scope: BulkScopeArgs }) {
+  await canRead(ctx, societyId);
+  await requirePermissionPortable(ctx, societyId, "documents:read");
+  const extractions = await scopedExtractions(ctx, societyId, runId, scope);
+  const candidates = await bulkCandidatesFor(ctx, extractions);
+  const restricted = new Set<string>();
+  for (const extraction of extractions) {
+    const file = await ctx.db.get<any>(extraction.fileId, "intakeFiles");
+    if (file?.sensitivity === "restricted") restricted.add(String(extraction._id));
+  }
+  const sample = samplePreview(candidates, 5).map(({ extraction, field }) => ({
+    extractionId: extraction._id, fileKey: extraction.fileKey, path: field.path, label: field.label, kind: field.kind, confidence: field.field.confidence,
+    value: restricted.has(String(extraction._id)) ? undefined : field.field.value, quote: restricted.has(String(extraction._id)) ? undefined : field.field.locators?.[0]?.quote,
+  }));
+  return { count: candidates.length, extractions: new Set(candidates.map(({ extraction }) => String(extraction._id))).size, scopeExtractions: extractions.length, sample };
+}
+
+/** Accept every qualifying field in the scope (one transaction); returns review ids for the undo window. */
+export async function bulkAccept(ctx: PortableMutationCtx, { societyId, runId, scope }: { societyId: string; runId: string; scope: BulkScopeArgs }) {
+  await canWrite(ctx, societyId);
+  const extractions = await scopedExtractions(ctx, societyId, runId, scope);
+  const candidates = await bulkCandidatesFor(ctx, extractions);
+  if (candidates.length > 5000) throw new Error("Narrow the scope: more than 5,000 fields qualify.");
+  const items: ReviewItem[] = candidates.map(({ extraction, field }) => ({ extractionId: extraction._id, fieldPath: field.path, decision: "accept", note: "Bulk accepted (stated, span-verified, at or above the threshold)." }));
+  const result = items.length ? await reviewFields(ctx, { societyId, items: items.slice(0, 1000) }) : { reviewIds: [] as string[] };
+  const reviewIds = [...result.reviewIds];
+  for (let offset = 1000; offset < items.length; offset += 1000) reviewIds.push(...(await reviewFields(ctx, { societyId, items: items.slice(offset, offset + 1000) })).reviewIds);
+  return { reviewIds, fields: items.length, extractions: new Set(items.map((item) => item.extractionId)).size };
 }
 
 // ---------------------------------------------------------------- merge candidates
