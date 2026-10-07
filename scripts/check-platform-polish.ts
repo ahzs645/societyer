@@ -12,6 +12,7 @@ import { FLOATING_LAYER_SELECTOR } from "../src/lib/floatingLayer";
 import { NAV_ITEM_LABEL_KEYS, translateNavLabel } from "../src/i18n/navLabels";
 import { formatDocumentTitle } from "../src/lib/documentTitle";
 import { openableExternalUrl } from "../src/lib/externalUrl";
+import { parseTypedDate } from "../src/lib/typedDate";
 
 type Catalog = { [key: string]: string | Catalog };
 function flatten(catalog: Catalog, prefix = ""): Map<string, string> {
@@ -85,6 +86,41 @@ for (const [path, module] of gatedRoutes) {
 for (const [path, identity] of Object.entries(ROUTE_IDENTITY as Record<string, { module?: string }>)) {
   if (identity.module && !path.includes(":")) assert.equal(gatedRoutes.get(path), identity.module, `${path} is hidden with ${identity.module}; its route must be gated by it too`);
 }
+
+// O-3: functions the local mirror serves on purpose are classified in the
+// portable manifest, and the local client only warns for unclassified ones.
+const manifest = JSON.parse(readFileSync(new URL("../shared/functions/portable-manifest.json", import.meta.url), "utf8"));
+for (const name of ["society:createWorkspace", "workflows:get", "workflows:listCatalog"]) {
+  const entry = manifest.functions.find((fn: { name: string }) => fn.name === name);
+  assert.equal(entry?.classification, "static-fallback", `${name} is classified static-fallback`);
+}
+const staticClient = readFileSync(new URL("../src/lib/staticConvexClient.ts", import.meta.url), "utf8");
+assert.match(staticClient, /known\.has\(name\)\)\s*\{\s*console\.debug/, "classified static fallbacks are logged at debug level");
+
+// O-4: Vue feature flags for Milkdown's toolbar are defined at build time.
+const viteConfig = readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
+for (const flag of ["__VUE_OPTIONS_API__", "__VUE_PROD_DEVTOOLS__", "__VUE_PROD_HYDRATION_MISMATCH_DETAILS__"]) {
+  assert.match(viteConfig, new RegExp(`${flag}:`), `vite define sets ${flag}`);
+}
+
+// O-9: typed date entry in the shared date picker.
+const typedOk = (text: string, bounds?: { min?: string; max?: string }) => {
+  const result = parseTypedDate(text, bounds);
+  return result.ok ? result.value : `ERR ${result.error}`;
+};
+assert.equal(typedOk("2012-03-04"), "2012-03-04");
+assert.equal(typedOk("1998/3/4"), "1998-03-04");
+assert.equal(typedOk("19980304"), "1998-03-04");
+assert.equal(typedOk("4 March 2012"), "2012-03-04");
+assert.equal(typedOk("March 4, 2012"), "2012-03-04");
+assert.equal(typedOk("4 mars 2012"), "2012-03-04");
+assert.equal(typedOk("1er janvier 2001"), "2001-01-01");
+assert.match(typedOk("2023-02-29"), /^ERR .*not a calendar date/);
+assert.match(typedOk("03/04/2012"), /^ERR Day\/month order is ambiguous/);
+assert.match(typedOk("soon"), /^ERR /);
+assert.match(typedOk("2001-01-01", { min: "2005-01-01" }), /^ERR The date must be on or after 2005-01-01/);
+const datePicker = readFileSync(new URL("../src/components/DatePicker.tsx", import.meta.url), "utf8");
+assert.match(datePicker, /parseTypedDate\(typed, \{ min, max \}\)/, "the date picker validates typed dates against its bounds");
 
 // Integration links only become anchors when a browser can open them.
 assert.equal(openableExternalUrl("demo://paperless/1001"), null, "placeholder schemes are not links");
