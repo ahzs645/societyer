@@ -74,6 +74,28 @@ export interface LocalRowStore {
   externalFields?(table: string, id: string): readonly string[] | undefined;
   /** Load the externalized fields of these rows: id → { field: value }. */
   loadExternalFields?(table: string, ids: string[]): Promise<Map<string, Record<string, unknown>>>;
+  /**
+   * Opaque version of a stored row: changes whenever the row is written. Lets
+   * the adapter memoize `collectProjected` results; undefined disables memos.
+   */
+  rowRevision?(table: string, id: string): string | undefined;
+  /** Persisted projection memos (survive reloads): id → { rev, value }. */
+  loadProjections?(key: string, table: string, ids: string[]): Promise<Map<string, { rev: string; value: unknown }>>;
+  saveProjections?(key: string, table: string, entries: Array<{ id: string; rev: string; value: unknown }>): void;
+}
+
+/** Rows loaded and projected per step of a `collectProjected` miss. */
+const PROJECTION_CHUNK = 250;
+
+/** Short stable hash of a projection's source, so edited logic never reuses old memos. */
+function sourceHash(fn: (...args: any[]) => unknown) {
+  const text = fn.toString();
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index++) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 type Overlay = Map<TableName, Map<string, PortableDoc | null>>;
@@ -140,6 +162,10 @@ class LocalQueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
 
   private output(rows: T[]): Promise<T[]> {
     return this.db.materialize(this.table, rows, this.omitted);
+  }
+
+  async collectProjected<R>(key: string, project: (doc: T) => R): Promise<R[]> {
+    return this.db.projectRows(this.table, await this.run(), this.omitted, key, project);
   }
 
   async collect(): Promise<T[]> {
@@ -395,6 +421,98 @@ export class LocalStoreDb implements PortableDbWriter {
    * Copies of rows for the handler, with the lazy fields it did not project
    * away. Freshly loaded heavy values are not copied a second time.
    */
+  /** Memoized projections: projection key → record key → { rev, value }. Shared by read views. */
+  private projectionMemo = new Map<string, Map<string, { rev: string; value: unknown }>>();
+  /** Tail of the in-flight projection runs per key: concurrent runs reuse each other's work. */
+  private projectionQueue = new Map<string, Promise<void>>();
+
+  /** Revision of a stored row as seen by this db, or undefined when it cannot be memoized. */
+  private revisionOf(table: TableName, row: PortableDoc): string | undefined {
+    if (!this.store.rowRevision) return undefined;
+    if (this.activeOverlay?.get(table)?.has(row._id)) return undefined;
+    return this.store.rowRevision(table, row._id);
+  }
+
+  /**
+   * `collectProjected`: reuse a memoized projection while the row's revision is
+   * unchanged (in memory, then from the store's persisted memos), and load +
+   * project only the rows that changed. The heavy fields of a hit are never read.
+   */
+  async projectRows<T extends PortableDoc, R>(
+    table: TableName,
+    rows: T[],
+    omitted: readonly string[],
+    key: string,
+    project: (doc: T) => R,
+  ): Promise<R[]> {
+    const fullKey = `${key}#${sourceHash(project)}${omitted.length ? `#-${[...omitted].sort().join(",")}` : ""}`;
+    const root = this.base ?? this;
+    // Serialize runs of the same projection (two components mounting the same
+    // list at once): the second finds the first one's results in the memo.
+    const previous = root.projectionQueue.get(fullKey) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => (release = resolve));
+    const tail = previous.then(() => current);
+    root.projectionQueue.set(fullKey, tail);
+    await previous;
+    try {
+      return await this.projectRowsNow(root, fullKey, table, rows, omitted, project);
+    } finally {
+      release();
+      if (root.projectionQueue.get(fullKey) === tail) root.projectionQueue.delete(fullKey);
+    }
+  }
+
+  private async projectRowsNow<T extends PortableDoc, R>(
+    root: LocalStoreDb,
+    fullKey: string,
+    table: TableName,
+    rows: T[],
+    omitted: readonly string[],
+    project: (doc: T) => R,
+  ): Promise<R[]> {
+    let memo = root.projectionMemo.get(fullKey);
+    if (!memo) root.projectionMemo.set(fullKey, (memo = new Map()));
+    const out = new Array<R>(rows.length);
+    const revisions = rows.map((row) => this.revisionOf(table, row));
+    let misses: number[] = [];
+    rows.forEach((row, index) => {
+      const rev = revisions[index];
+      const hit = rev === undefined ? undefined : memo!.get(row._id);
+      if (hit && hit.rev === rev) out[index] = hit.value as R;
+      else misses.push(index);
+    });
+    const persistable = misses.filter((index) => revisions[index] !== undefined);
+    if (persistable.length && this.store.loadProjections) {
+      const stored = await this.store.loadProjections(fullKey, table, persistable.map((index) => rows[index]._id));
+      misses = misses.filter((index) => {
+        const entry = stored.get(rows[index]._id);
+        if (!entry || entry.rev !== revisions[index]) return true;
+        out[index] = entry.value as R;
+        memo!.set(rows[index]._id, entry);
+        return false;
+      });
+    }
+    // Load and project the misses a chunk at a time: only one chunk of heavy
+    // values is alive at once, which bounds peak memory on a first visit.
+    for (let start = 0; start < misses.length; start += PROJECTION_CHUNK) {
+      const chunk = misses.slice(start, start + PROJECTION_CHUNK);
+      const complete = await this.materialize(table, chunk.map((index) => rows[index]), omitted);
+      const toSave: Array<{ id: string; rev: string; value: unknown }> = [];
+      chunk.forEach((index, position) => {
+        const value = project(complete[position]);
+        out[index] = value;
+        const rev = revisions[index];
+        if (rev === undefined) return;
+        memo!.set(rows[index]._id, { rev, value });
+        toSave.push({ id: rows[index]._id, rev, value });
+      });
+      if (toSave.length) this.store.saveProjections?.(fullKey, table, toSave);
+    }
+    // Memoized values are shared; hand the handler its own copy.
+    return out.map((value) => jsonClone(value));
+  }
+
   async materialize<T extends PortableDoc>(table: TableName, rows: T[], omitted: readonly string[]): Promise<T[]> {
     const loaded = await this.loadMissingFields(table, rows, omitted);
     return rows.map((row) => {
@@ -571,6 +689,9 @@ export class MemoryRowStore implements LocalRowStore {
   loadExternalFields?: (table: string, ids: string[]) => Promise<Map<string, Record<string, unknown>>>;
   /** Number of rows whose heavy fields were loaded (test observability). */
   externalLoads = 0;
+  private revisions = new Map<string, number>();
+  private revisionCounter = 0;
+  rowRevision?: (table: string, id: string) => string | undefined;
 
   constructor(seed: Record<string, PortableDoc[]> = {}, options: MemoryRowStoreOptions = {}) {
     this.policy = options.heavyFields === true ? DEFAULT_HEAVY_FIELD_POLICY : options.heavyFields || null;
@@ -592,6 +713,12 @@ export class MemoryRowStore implements LocalRowStore {
           if (fields.every((field, index) => row[field] === values[index])) out.push(clone(row));
         }
         return out;
+      };
+    }
+    if (options.indexed || this.policy) {
+      this.rowRevision = (table, id) => {
+        const rev = this.revisions.get(`${table}:${id}`);
+        return rev === undefined ? undefined : String(rev);
       };
     }
     if (this.policy) {
@@ -620,6 +747,7 @@ export class MemoryRowStore implements LocalRowStore {
     }
     const { light, heavy } = this.policy ? splitHeavyFields(table, row, this.policy) : { light: row, heavy: null };
     map.set(row._id, light);
+    this.revisions.set(`${table}:${row._id}`, ++this.revisionCounter);
     if (heavy) {
       let fields = this.heavy.get(table);
       if (!fields) this.heavy.set(table, (fields = new Map()));
@@ -647,6 +775,7 @@ export class MemoryRowStore implements LocalRowStore {
       if (op.kind === "delete") {
         this.tables.get(op.table)?.delete(op.id);
         this.heavy.get(op.table)?.delete(op.id);
+        this.revisions.delete(`${op.table}:${op.id}`);
       } else {
         this.put(op.table, clone(op.row));
       }

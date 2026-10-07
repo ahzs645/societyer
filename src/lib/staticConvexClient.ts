@@ -18,6 +18,8 @@ import type { StaticArgs } from "./staticConvexFixtures";
 const FUNCTION_NAME = Symbol.for("functionName");
 const warnedLegacyFallbacks = new Set<string>();
 const LEGACY_UNTRACKED_READ_ID = "__societyer_legacy_dispatch_reads_every_table__";
+/** Queries whose `collectProjected` memos are rebuilt in the background after a restore. */
+const PROJECTION_WARMUP_QUERIES = ["documents:browse", "importSessions:pendingByTarget"] as const;
 
 export type LocalActorChoice = {
   _id: string;
@@ -49,6 +51,17 @@ function warnLegacyFallback(
   console.warn(`[societyer-local] "${name}" served by legacy demo fallback (not in the portable registry)`);
 }
 
+/**
+ * Persisted `collectProjected` memos are reused only by the build that wrote
+ * them. In production this module's chunk URL carries a content hash that also
+ * changes whenever any statically imported chunk (the handler registry) does.
+ * Development (unhashed URLs, live edits) keeps memos in memory only.
+ */
+function projectionMemoNamespace() {
+  const env = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env;
+  return env?.PROD ? import.meta.url : undefined;
+}
+
 /** Local ConvexReactClient-compatible protocol shim. */
 export class StaticConvexClient {
   private store: StaticDemoDexieStore;
@@ -67,7 +80,7 @@ export class StaticConvexClient {
     principalProvider?: () => PortablePrincipal | Promise<PortablePrincipal>;
     trustedWorkspacePrincipal?: { runtime: RuntimeKind; subject: string };
   }) {
-    this.store = new StaticDemoDexieStore(options?.seed ?? STATIC_DEMO_SEED, options);
+    this.store = new StaticDemoDexieStore(options?.seed ?? STATIC_DEMO_SEED, { ...options, projectionNamespace: projectionMemoNamespace() });
     this.clientUrl = options?.url ?? "static://societyer-demo";
     this.portable = new PortableRuntime({
       db: new LocalStoreDb(this.store.rowStore),
@@ -342,8 +355,34 @@ export class StaticConvexClient {
     return this.store.exportSnapshot();
   }
 
-  importLocalWorkspaceSnapshot(snapshot: LocalWorkspaceSnapshot, files?: LocalWorkspaceBinaryFile[]) {
-    return this.store.importSnapshot(snapshot, files);
+  async importLocalWorkspaceSnapshot(snapshot: LocalWorkspaceSnapshot, files?: LocalWorkspaceBinaryFile[]) {
+    await this.store.importSnapshot(snapshot, files);
+    this.scheduleProjectionWarmup();
+  }
+
+  /**
+   * After a restore every memoized projection is stale. Rebuild the expensive
+   * ones (parsed document provenance, import-candidate queue items) in the
+   * background, a society at a time, so the first visit to Documents or Imports
+   * reads persisted memos instead of loading and parsing every document's
+   * content on the critical path. Failures (e.g. no access yet) are harmless.
+   */
+  private scheduleProjectionWarmup() {
+    if (typeof window === "undefined") return;
+    const run = async () => {
+      for (const society of (this.store.listRows("societies") ?? []) as any[]) {
+        for (const name of PROJECTION_WARMUP_QUERIES) {
+          try {
+            await this.portable.runQuery(name, { societyId: society._id });
+          } catch {
+            // Warm-up only; the page computes on demand if this could not.
+          }
+        }
+      }
+    };
+    const idle = (window as Window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number }).requestIdleCallback;
+    if (idle) idle(() => void run(), { timeout: 5_000 });
+    else setTimeout(() => void run(), 1_000);
   }
 
   readRestoredWorkspaceFile(args: { sha256?: string; provider?: string; storageKey?: string; documentId?: string; versionId?: string }) {

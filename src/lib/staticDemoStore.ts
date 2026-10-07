@@ -13,10 +13,11 @@ export const STATIC_DEMO_SEED: StaticDemoSeed = {
 export class StaticDemoDexieStore {
   private rowsStore: LocalDexieRowStore;
 
-  constructor(seed: StaticDemoSeed, options?: { databaseName?: string }) {
+  constructor(seed: StaticDemoSeed, options?: { databaseName?: string; projectionNamespace?: string }) {
     this.rowsStore = new LocalDexieRowStore(seed, {
       databaseName: options?.databaseName ?? "societyer-static-demo",
       logLabel: "societyer-demo",
+      projectionNamespace: options?.projectionNamespace,
     });
   }
 

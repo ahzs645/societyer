@@ -22,6 +22,16 @@ export type LocalRecordEnvelope = {
    * (lazy heavy fields, see shared/portable/heavyFields.ts). Absent = none.
    */
   external?: string[];
+  /** Row revision, renewed on every write (projection memos). Absent = the data epoch. */
+  rev?: string;
+};
+
+/** A persisted `collectProjected` result for one row at one revision. */
+export type LocalProjectionEnvelope = {
+  key: string;
+  table: string;
+  rev: string;
+  value: unknown;
 };
 
 /** Side record holding a row's externalized heavy field values. */
@@ -98,6 +108,7 @@ export class LocalDexieDatabase extends Dexie {
   meta!: Table<any, string>;
   records!: Table<LocalRecordEnvelope, string>;
   recordFields!: Table<LocalRecordFieldsEnvelope, string>;
+  projections!: Table<LocalProjectionEnvelope, string>;
   changes!: Table<LocalChangeEnvelope, number>;
   attachments!: Table<any, string>;
   meetings!: Table<any, string>;
@@ -125,6 +136,7 @@ export class LocalDexieDatabase extends Dexie {
     });
     this.version(4).stores({ files: "&key, sha256" });
     this.version(5).stores({ recordFields: "&key, table" });
+    this.version(6).stores({ projections: "&key, table" });
   }
 }
 
@@ -149,6 +161,7 @@ type PreparedOp =
       /** Previously external fields the (light) legacy row did not mention: kept as they are. */
       carried: string[];
       external: string[];
+      rev: string;
     };
 
 type UndoEntry = {
@@ -177,6 +190,19 @@ export class LocalDexieRowStore implements LocalRowStore {
   private idTables = new Map<string, string>();
   /** recordKey → externalized field names. */
   private external = new Map<string, readonly string[]>();
+  /** recordKey → revision of rows written since the data epoch began. */
+  private revisions = new Map<string, string>();
+  /**
+   * Revision shared by every row not rewritten since the vault's data was
+   * (re)loaded wholesale. Persisted in meta and renewed by restore/reseed, so
+   * projection memos computed before a restore can never match restored rows.
+   */
+  private dataEpoch = newRevisionToken();
+  private revisionCounter = 0;
+  /** Unique per store instance, so revisions written in different sessions never collide. */
+  private readonly sessionToken = newRevisionToken();
+  /** Namespace for persisted projection memos (a build id); undefined = memory only. */
+  private projectionNamespace: string | undefined;
   /** Heavy values written but not yet durable (read before IndexedDB). */
   private pendingHeavy = new Map<string, Record<string, unknown>>();
   /** Heavy values when there is no IndexedDB (memory-only session never splits). */
@@ -203,7 +229,8 @@ export class LocalDexieRowStore implements LocalRowStore {
    */
   private preHydrationOps: RowStoreOp[] | null = null;
 
-  constructor(seed: LocalSeed, options?: { databaseName?: string; logLabel?: string }) {
+  constructor(seed: LocalSeed, options?: { databaseName?: string; logLabel?: string; projectionNamespace?: string }) {
+    this.projectionNamespace = options?.projectionNamespace;
     this.seed = cloneLocalSeed(seed);
     this.loadTables(cloneLocalSeed(seed));
     this.workspaceMeta = {
@@ -330,6 +357,37 @@ export class LocalDexieRowStore implements LocalRowStore {
       state.indexes.set(indexName, index);
     }
     return index.get(indexKey(values)) ?? [];
+  }
+
+  /** Opaque row version for projection memos (LocalRowStore contract). */
+  rowRevision(table: string, id: string) {
+    const key = localRecordKey(table, id);
+    if (!this.tableState(table)?.rows.has(id)) return undefined;
+    return this.revisions.get(key) ?? `e:${this.dataEpoch}`;
+  }
+
+  private nextRevision() {
+    return `${this.sessionToken}.${(++this.revisionCounter).toString(36)}`;
+  }
+
+  async loadProjections(key: string, table: string, ids: string[]) {
+    const out = new Map<string, { rev: string; value: unknown }>();
+    if (!this.db || !this.projectionNamespace || !ids.length) return out;
+    try {
+      const rows = await this.db.projections.bulkGet(ids.map((id) => projectionKey(key, table, id)));
+      rows.forEach((row, index) => {
+        if (row) out.set(ids[index], { rev: row.rev, value: row.value });
+      });
+    } catch {
+      // A memo is only an optimisation; recompute on any storage problem.
+    }
+    return out;
+  }
+
+  saveProjections(key: string, table: string, entries: Array<{ id: string; rev: string; value: unknown }>) {
+    if (!this.db || !this.projectionNamespace || !entries.length) return;
+    const rows = entries.map((entry) => ({ key: projectionKey(key, table, entry.id), table, rev: entry.rev, value: entry.value }));
+    void this.db.projections.bulkPut(rows).catch(() => undefined);
   }
 
   externalFields(table: string, id: string) {
@@ -475,6 +533,7 @@ export class LocalDexieRowStore implements LocalRowStore {
         heavy,
         carried,
         external: [...carried, ...Object.keys(heavy ?? {})],
+        rev: this.nextRevision(),
       };
     });
   }
@@ -483,11 +542,13 @@ export class LocalDexieRowStore implements LocalRowStore {
     for (const op of prepared) {
       if (op.kind === "delete") {
         this.deleteCachedRow(op.table, op.id);
+        this.revisions.delete(op.key);
         this.external.delete(op.key);
         this.pendingHeavy.delete(op.key);
         continue;
       }
       this.setCachedRow(op.table, op.light);
+      this.revisions.set(op.key, op.rev);
       if (op.external.length) this.external.set(op.key, op.external);
       else this.external.delete(op.key);
       if (op.heavy) this.pendingHeavy.set(op.key, op.heavy);
@@ -543,7 +604,7 @@ export class LocalDexieRowStore implements LocalRowStore {
               await db.recordFields.delete(op.key);
               continue;
             }
-            await db.records.put(localRecord(op.table, op.light, false, op.external));
+            await db.records.put({ ...localRecord(op.table, op.light, false, op.external), rev: op.rev });
             if (op.carried.length) {
               const existing = await db.recordFields.get(op.key);
               const fields: Record<string, unknown> = {};
@@ -635,6 +696,7 @@ export class LocalDexieRowStore implements LocalRowStore {
     let committedImportChange = importChange;
 
     const split = this.db ? splitSeed(importedCache) : { light: importedCache, records: [], fields: [], external: new Map<string, string[]>() };
+    const nextEpoch = newRevisionToken();
     if (this.db) {
       const db = this.db;
       await db.open();
@@ -645,6 +707,7 @@ export class LocalDexieRowStore implements LocalRowStore {
           await db.meta.clear();
           await db.records.clear();
           await db.recordFields.clear();
+          await db.projections.clear();
           await db.changes.clear();
           await db.attachments.clear();
           await db.meetings.clear();
@@ -660,6 +723,7 @@ export class LocalDexieRowStore implements LocalRowStore {
             { key: "schemaVersion", value: importedMeta.schemaVersion },
             { key: "workspace", value: importedMeta },
             { key: "storageLayout", value: CURRENT_LOCAL_STORAGE_LAYOUT },
+            { key: "dataEpoch", value: nextEpoch },
           ]);
           const seq = await db.changes.add(importChange);
           committedImportChange = { ...importChange, seq };
@@ -669,6 +733,8 @@ export class LocalDexieRowStore implements LocalRowStore {
 
     this.loadTables(split.light);
     this.external = new Map(split.external);
+    this.revisions = new Map();
+    this.dataEpoch = nextEpoch;
     this.pendingHeavy = new Map();
     this.attachmentsCache = importedAttachments;
     if (!preserveFiles) this.filesCache = files;
@@ -703,6 +769,8 @@ export class LocalDexieRowStore implements LocalRowStore {
     this.loadTables(cloneLocalSeed(this.seed));
     this.external = new Map();
     this.pendingHeavy = new Map();
+    this.revisions = new Map();
+    this.dataEpoch = newRevisionToken();
     if (!this.db) {
       this.notify(null);
       return;
@@ -712,6 +780,7 @@ export class LocalDexieRowStore implements LocalRowStore {
       this.db.meta.clear(),
       this.db.records.clear(),
       this.db.recordFields.clear(),
+      this.db.projections.clear(),
       this.db.changes.clear(),
       this.db.attachments.clear(),
       this.db.meetings.clear(),
@@ -763,6 +832,7 @@ export class LocalDexieRowStore implements LocalRowStore {
     const seedIndex = new Map<string, Map<string, number>>();
     for (const [table, rows] of Object.entries(next)) seedIndex.set(table, new Map(rows.map((row, index) => [row._id, index])));
     const external = new Map<string, readonly string[]>();
+    const revisions = new Map<string, string>();
     const persisted = new Map<string, Map<string, any>>();
     for (const record of localRecords) {
       if (!record?.table || !record?.value?._id) continue;
@@ -777,6 +847,7 @@ export class LocalDexieRowStore implements LocalRowStore {
       if (!table) persisted.set(record.table, (table = new Map()));
       table.set(id, record.value);
       if (record.external?.length) external.set(record.key, record.external);
+      if (record.rev) revisions.set(record.key, record.rev);
     }
     // Seed rows first (in seed order) unless overridden, then persisted rows in key order.
     const merged: LocalSeed = {};
@@ -818,6 +889,8 @@ export class LocalDexieRowStore implements LocalRowStore {
 
     this.loadTables(hydratedCache);
     this.external = external;
+    this.revisions = revisions;
+    this.dataEpoch = await this.persistedDataEpoch();
     // Replay anything written while this read was in flight, so a mutation
     // issued during startup survives hydration.
     const replay = this.preHydrationOps ?? [];
@@ -829,6 +902,24 @@ export class LocalDexieRowStore implements LocalRowStore {
     this.workspaceMeta = hydratedWorkspaceMeta;
     recordBootTiming({ totalMs: now() - started, readMs: now() - readStarted, records: localRecords.length });
     this.notify(null);
+  }
+
+  /**
+   * The vault's data epoch (see `dataEpoch`), created on first use. Projection
+   * memos from another build are dropped here, since their logic may differ.
+   */
+  private async persistedDataEpoch() {
+    const db = this.db!;
+    const [epoch, namespace] = await Promise.all([db.meta.get("dataEpoch"), db.meta.get("projectionNamespace")]);
+    const value = typeof epoch?.value === "string" && epoch.value ? epoch.value : newRevisionToken();
+    const writes: Array<{ key: string; value: unknown }> = [];
+    if (value !== epoch?.value) writes.push({ key: "dataEpoch", value });
+    if (this.projectionNamespace && namespace?.value !== this.projectionNamespace) {
+      await db.projections.clear();
+      writes.push({ key: "projectionNamespace", value: this.projectionNamespace });
+    }
+    if (writes.length) await db.meta.bulkPut(writes);
+    return value;
   }
 
   /**
@@ -882,6 +973,7 @@ export class LocalDexieRowStore implements LocalRowStore {
         { key: "schemaVersion", value: CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION },
         { key: "workspace", value: this.workspaceMeta },
         { key: "storageLayout", value: CURRENT_LOCAL_STORAGE_LAYOUT },
+        { key: "dataEpoch", value: this.dataEpoch },
       ]);
     });
   }
@@ -961,6 +1053,14 @@ export class LocalDexieRowStore implements LocalRowStore {
     }
     this.notify(new Set(tables));
   }
+}
+
+function newRevisionToken() {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function projectionKey(key: string, table: string, id: string) {
+  return `${key}|${table}:${id}`;
 }
 
 function now() {

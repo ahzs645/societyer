@@ -78,6 +78,10 @@ class ConvexPortableQuery<T extends PortableDoc> implements PortableQuery<T> {
     return this.apply(await this.inner.collect()).map((row) => this.project(row));
   }
 
+  async collectProjected<R>(_key: string, project: (doc: T) => R): Promise<R[]> {
+    return (await this.collect()).map(project);
+  }
+
   async take(n: number): Promise<T[]> {
     if (!this.predicates.length) return ((await this.inner.take(n)) as T[]).map((row) => this.project(row));
     return this.apply(await this.inner.collect()).slice(0, n).map((row) => this.project(row));

@@ -189,6 +189,10 @@ class QueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
     return this.run().map(this.out);
   }
 
+  async collectProjected<R>(_key: string, project: (doc: T) => R): Promise<R[]> {
+    return (await this.collect()).map(project);
+  }
+
   async take(n: number): Promise<T[]> {
     return this.run().slice(0, n).map(this.out);
   }

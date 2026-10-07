@@ -23,7 +23,7 @@ import {
   isInternalDocumentRecord,
   normalizeDocumentCategory,
 } from "../documentCategories";
-import { documentProvenanceCached, sourceSystemLabel } from "../documentProvenance";
+import { attachDocumentProvenance, documentProvenance, documentProvenanceCached, sourceSystemLabel } from "../documentProvenance";
 import { normalizeDocumentReviewStatus } from "../documentReviewStatus";
 import {
   buildDocumentGroups,
@@ -35,12 +35,27 @@ import {
 
 type Row = Record<string, any>;
 
-async function visibleSocietyDocuments(ctx: PortableQueryCtx, societyId: string) {
-  const [allows, docs] = await Promise.all([
+/**
+ * Visible, non-internal documents WITHOUT their `content`. Provenance (which is
+ * parsed out of `content`) is attached per row from a memoized projection, so a
+ * reactive re-run neither reloads nor re-parses unchanged documents' content.
+ */
+async function visibleSocietyDocuments(ctx: PortableQueryCtx, societyId: string, withProvenance = true) {
+  const visible = () =>
+    ctx.db
+      .query("documents")
+      .withIndex("by_society", (q) => q.eq("societyId", societyId))
+      .filter((doc: Row) => !isInternalDocumentRecord(doc));
+  const [allows, docs, provenance] = await Promise.all([
     documentAccessPredicate(ctx, societyId),
-    ctx.db.query("documents").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect(),
+    visible().omitFields("content").collect(),
+    withProvenance
+      ? visible().collectProjected("documentCatalog.provenance/v1", (doc: Row) => ({ id: String(doc._id), value: documentProvenance(doc) }))
+      : Promise.resolve([]),
   ]);
-  return docs.filter((doc: Row) => !isInternalDocumentRecord(doc) && allows(doc));
+  const byId = new Map(provenance.map((entry) => [entry.id, entry.value]));
+  for (const doc of docs) attachDocumentProvenance(doc, byId.get(String(doc._id)));
+  return docs.filter((doc: Row) => allows(doc));
 }
 
 function latestVersionsByDocument(versions: Row[], societyId: string) {
@@ -192,7 +207,7 @@ export async function browsePortable(ctx: PortableQueryCtx, { societyId }: { soc
 export async function categoryCountsPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
   const counts: Record<string, number> = {};
-  for (const doc of await visibleSocietyDocuments(ctx, societyId)) {
+  for (const doc of await visibleSocietyDocuments(ctx, societyId, false)) {
     if (doc.archivedAtISO) continue;
     const key = normalizeDocumentCategory(doc.category);
     counts[key] = (counts[key] ?? 0) + 1;

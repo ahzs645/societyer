@@ -123,6 +123,16 @@ export interface PortableQuery<T extends PortableDoc = PortableDoc> {
    */
   omitFields(...fields: string[]): PortableQuery<T>;
   collect(): Promise<T[]>;
+  /**
+   * Terminal: `collect()` mapped through `project`, a PURE function of one row
+   * (no clock, no randomness, no other rows). Engines may memoize the result per
+   * row version under `key`, so a projection over a heavy field (parsing a
+   * document's JSON content, say) is computed once per row change instead of on
+   * every reactive re-run, and the heavy field is not even loaded on a hit.
+   * Change `key` whenever the projection's logic changes. Treat results as
+   * read-only. On Convex this is exactly `(await collect()).map(project)`.
+   */
+  collectProjected<R>(key: string, project: (doc: T) => R): Promise<R[]>;
   take(n: number): Promise<T[]>;
   first(): Promise<T | null>;
   unique(): Promise<T | null>;
