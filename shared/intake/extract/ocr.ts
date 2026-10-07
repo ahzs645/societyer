@@ -230,7 +230,7 @@ export function ocrBlockStats(items: Array<{ str: string; conf?: number }>): Int
 
 export { OCR_IMAGE_EXTENSIONS } from "./extensions";
 
-const DOCUMENT_IMAGE_NAME = /\b(?:scan(?:ned)?|signed|signature|certificate|cert|letter|form|receipt|invoice|minutes|agenda|consent|proxy|bylaws?|constitution|resolution|notice|filing|registry|agreement|contract|statement|cheque|page\s*\d+|p\d+|doc(?:ument)?|fax)\b|\b(?:scan|doc|img|image)[_ -]?\d{3,}\b/i;
+const DOCUMENT_IMAGE_NAME = /\b(?:scan(?:ned)?|signed|signature|certificate|cert|letter|form|receipt|invoice|minutes|agenda|consent|proxy|bylaws?|constitution|resolution|notice|filing|registry|agreement|contract|statement|cheque|page\s*\d+|p\d+|doc(?:ument)?|fax)\b|\b(?:scan|doc)[_ -]?\d{3,}\b/i;
 const PHOTO_NAME = /\b(?:photo|pic|picture|logo|banner|poster|flyer|graphic|icon|selfie|event|workshop|group|team|screenshot|facebook|instagram|twitter|header|background|map)\b|^(?:dsc|dscn|dji|gopr|p\d{7}|pxl|mvimg)[_ -]?\d+/i;
 
 /** True for an image whose name or folder says it is a document (a scanned letter, a signed form,

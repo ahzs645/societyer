@@ -1058,6 +1058,18 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
   // Start/end times fall back to the call-to-order and adjournment times.
   if (!record.startTime && record.calledToOrderAt) record.startTime = { ...record.calledToOrderAt, status: "inferred", confidence: Math.min(0.5, record.calledToOrderAt.confidence), note: "No scheduled start time; using the call-to-order time." };
   if (!record.endTime && record.adjournedAt && record.startTime?.note) record.endTime = { ...record.adjournedAt, status: "inferred", confidence: 0.5, note: "No scheduled end time; using the adjournment time." };
+  // A "Chair: Name" line in the header block (beside Date/Time/Location) is text evidence too.
+  if (!chairFromText) {
+    for (const unit of headerUnits) {
+      const label = new RegExp(String.raw`^\s*(?:meeting\s+)?chair(?:person)?\s*(?::|\t)\s*(${NAME})`, "i").exec(unit.text);
+      const name = label ? cleanName(label[1]) : undefined;
+      if (name && (looksLikePersonName(name) || /^[A-Z]\.\s?[A-Z]/.test(name))) {
+        record.chair = personRef(name, unit, label![0].trim(), 0.9);
+        chairFromText = true;
+        break;
+      }
+    }
+  }
   // Chair evidence: the text ("Chair:", "chaired by"), the attendance marks and who called the
   // meeting to order. Agreement raises confidence; disagreement keeps the value below every
   // bulk-accept threshold with a note; a caller alone is an inferred chair.

@@ -28,9 +28,11 @@ write("2025-02-11 Executive Committee Minutes.xps", await buildXps([[
   { x: 96, y: 130, text: "Executive Committee Minutes", size: 18 },
   { x: 96, y: 170, text: "Date:" }, { x: 240, y: 170, text: "February 11, 2025" },
   { x: 96, y: 195, text: "Present:" }, { x: 240, y: 195, text: "Avery Quill, Morgan Reyes, Robin Vale" },
-  { x: 96, y: 240, text: "MOTION: To accept the January financial report." },
-  { x: 96, y: 262, text: "Moved by Morgan Reyes, seconded by Robin Vale. CARRIED." },
-  { x: 96, y: 300, text: "The meeting adjourned at 1:05 PM." },
+  { x: 96, y: 235, text: "1. Financial Report" },
+  { x: 96, y: 262, text: "MOTION: To accept the January financial report." },
+  { x: 96, y: 284, text: "Moved by Morgan Reyes, seconded by Robin Vale. CARRIED." },
+  { x: 96, y: 320, text: "2. Adjournment" },
+  { x: 96, y: 345, text: "The meeting adjourned at 1:05 PM." },
 ]]));
 
 // Legacy binaries through LibreOffice (a CSV gives a date-formatted cell and shared strings).
