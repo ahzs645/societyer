@@ -193,6 +193,20 @@ export async function bulkAcceptPreview(ctx: PortableQueryCtx, { societyId, runI
 
 export const BULK_ACCEPT_BATCH_FIELDS = 5000;
 
+/** Whole documents, in order, until adding the next would pass `limit` fields (at least one document). */
+export function takeBulkBatch(extractionIdPerField: string[], limit: number): Set<string> {
+  const perExtraction = new Map<string, number>();
+  for (const id of extractionIdPerField) perExtraction.set(id, (perExtraction.get(id) ?? 0) + 1);
+  const taken = new Set<string>();
+  let size = 0;
+  for (const [id, count] of perExtraction) {
+    if (taken.size && size + count > limit) break;
+    taken.add(id);
+    size += count;
+  }
+  return taken;
+}
+
 /** Accept every qualifying field in the scope; returns review ids for the undo window.
  * One transaction holds at most ~5,000 fields: whole documents are taken in queue order
  * until the batch is full and `remainingFields` reports what is left, so a client can
@@ -201,15 +215,7 @@ export async function bulkAccept(ctx: PortableMutationCtx, { societyId, runId, s
   await canWrite(ctx, societyId);
   const extractions = await scopedExtractions(ctx, societyId, runId, scope);
   const all = await bulkCandidatesFor(ctx, extractions);
-  const perExtraction = new Map<string, number>();
-  for (const { extraction } of all) perExtraction.set(String(extraction._id), (perExtraction.get(String(extraction._id)) ?? 0) + 1);
-  const taken = new Set<string>();
-  let size = 0;
-  for (const [id, count] of perExtraction) {
-    if (taken.size && size + count > BULK_ACCEPT_BATCH_FIELDS) break;
-    taken.add(id);
-    size += count;
-  }
+  const taken = takeBulkBatch(all.map(({ extraction }) => String(extraction._id)), BULK_ACCEPT_BATCH_FIELDS);
   const candidates = all.filter(({ extraction }) => taken.has(String(extraction._id)));
   const items: ReviewItem[] = candidates.map(({ extraction, field }) => ({ extractionId: extraction._id, fieldPath: field.path, decision: "accept", note: "Bulk accepted (stated, span-verified, at or above the threshold)." }));
   const result = items.length ? await reviewFields(ctx, { societyId, items: items.slice(0, 1000) }) : { reviewIds: [] as string[] };

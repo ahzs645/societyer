@@ -321,6 +321,22 @@ function pageHeaderGroup(extract: IntakeExtract): Line[] {
   return withDate.find((group) => /subject\s*:?[^\n]*\bagenda\b|\bagenda\b/i.test(group.map((line) => line.text).join("\n"))) ?? (withDate.length === 1 ? withDate[0] : []);
 }
 
+/** A file named with a full ISO-style date ("2023_09_13 … Agenda") whose own "Date:" line
+ * carries that date is dated by that line, even when the agenda part of a combined
+ * minutes-and-agenda file starts later and its first date is the next meeting's. */
+function confirmFileNameDate<T extends FieldValue<{ iso: string; precision: "day" | "month" | "year"; text: string }>>(date: T, lines: Line[], fileName: string): T {
+  const named = /\b((?:19|20)\d{2})[_-](\d{2})[_-](\d{2})(?!\d)/.exec(fileName);
+  if (!named) return date;
+  const iso = `${named[1]}-${named[2]}-${named[3]}`;
+  if (date.value?.iso === iso) return date;
+  for (const line of lines) {
+    if (!/^\s*(?:meeting\s+)?date\s*[:\t]/i.test(line.text)) continue;
+    const hit = findDates(line.text).find((candidate) => candidate.iso === iso && candidate.precision === "day");
+    if (hit) return { ...(at(dateValue(hit), line, hit.text, 0.9) as T), ...(date.value ? { note: `The file name and this Date: line give ${iso}; ${date.value.iso} appears earlier in the agenda part.` } : {}) };
+  }
+  return date;
+}
+
 export function extractAgenda(input: ClassExtractorInput): ExtractionEnvelope {
   const { extract, fileName } = input;
   const segments = splitPackage(extract);
@@ -342,10 +358,11 @@ export function extractAgenda(input: ClassExtractorInput): ExtractionEnvelope {
   const coverHeader = coverLines.length ? meetingHeader(coverLines, fileName) : undefined;
   // A package cover's meeting date wins over an agenda that kept last meeting's date (copy-paste).
   const fromFileName = header.date.locators[0]?.kind === "filename";
-  const date = fromFileName && coverHeader?.date.value && coverHeader.date.locators[0]?.kind !== "filename" ? coverHeader.date
+  const chosenDate = fromFileName && coverHeader?.date.value && coverHeader.date.locators[0]?.kind !== "filename" ? coverHeader.date
     : coverHeader?.date.value && header.date.value && coverHeader.date.value.iso !== header.date.value.iso
     ? { ...coverHeader.date, status: "conflicting" as const, locators: [...coverHeader.date.locators, ...header.date.locators], note: `Package cover says ${coverHeader.date.value.iso}; the agenda inside says ${header.date.value.iso}.` }
     : header.date.value ? header.date : coverHeader?.date ?? header.date;
+  const date = confirmFileNameDate(chosenDate, lines, fileName);
   const title = !titleLineValue ? fileName.replace(/\.[a-z0-9]+$/i, "").replace(/_/g, " ") : clean(titleLineValue.text.replace(/^\s*(?:item|attachment)\s*#?\s*\d+(?:\.\d+)?(?:\s*&\s*\d+)?\s*[-–:]?\s*/i, "")) || clean(titleLineValue.text);
   const bodyInfo = bodyFields([titleLineValue, ...coverLines.slice(0, 2), ...agendaLines.slice(0, 3)], fileName, { assumeBoard: true });
   const kind = kindFor(fileName, `${title} ${coverLines.slice(0, 2).map((line) => line.text).join(" ")}`, input.docClass, bodyInfo.bodyKey);

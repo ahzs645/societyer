@@ -362,8 +362,13 @@ export function bodyFromText(value: string): { body: BodyKind; label: string; ty
   if (/annual general meeting|\bAGM\b/i.test(text)) return { body: "agm", label: "Annual General Meeting", type: "annual_general" };
   if (/special general meeting|extraordinary general|\bSGM\b/i.test(text)) return { body: "sgm", label: "Special General Meeting", type: "special_general" };
   if (/\boperations\b|\bops\b/i.test(text)) return { body: "operations", label: "Operations Committee", type: "committee" };
-  const committee = /\b([A-Z][\w&]*(?:\s+[A-Z][\w&]*){0,3})\s+Committee\b/.exec(text);
-  if (committee && !/^(?:Board|Executive)$/i.test(committee[1])) return { body: "committee", label: `${committee[1]} Committee`, type: "committee" };
+  // "2nd Floor Committee Meeting Room" is a place, not a body; "ORG AQMP Committee" is the AQMP Committee.
+  const committee = /\b([A-Z][\w&]*(?:\s+[A-Z][\w&]*){0,3})\s+Committee\b(?!\s+(?:[Mm]eeting\s+|MEETING\s+)?(?:[Rr]oom|ROOM|[Rr]m)\b)/.exec(text);
+  const committeeName = committee?.[1].replace(/^[A-Z]{3,}\s+(?=[A-Z]{2,}\b)/, "");
+  if (committee && committeeName && /^[A-Z]/.test(committeeName) && !/^(?:Board|Executive|Floor|\d\w*\s+Floor)$/i.test(committeeName) && !/\bfloor$/i.test(committeeName)) return { body: "committee", label: `${committeeName} Committee`, type: "committee" };
+  // Working groups named by acronym ("MWG", "RWG_Agenda") or in full are committees, not the board.
+  const workingGroup = /\b([A-Z]{1,6}WG)(?:\b|_)/.exec(text) ?? /\b([A-Z][\w&]*(?:\s+[A-Z][\w&]*){0,3})\s+Working Group\b/.exec(text);
+  if (workingGroup) return { body: "committee", label: workingGroup[1].endsWith("WG") ? workingGroup[1] : `${workingGroup[1]} Working Group`, type: "committee" };
   if (/\bexecutive\b/i.test(text)) return { body: "executive", label: "Executive Committee", type: "committee" };
   if (/\bboard\b|\bdirectors?['’]?s?\b/i.test(text)) return { body: "board", label: "Board of Directors", type: "regular" };
   if (/\bspecial meeting\b/i.test(text)) return { body: "board", label: "Special Meeting", type: "special" };
