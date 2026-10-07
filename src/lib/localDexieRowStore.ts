@@ -5,6 +5,7 @@ import { DEFAULT_HOME_JURISDICTION_CODE } from "../../shared/jurisdictionWorkspa
 import type { LocalRowStore, RowStoreOp } from "../../shared/portable/localRowStore";
 import { createEntityIdFactory } from "../../shared/portable/ids";
 import { HEAVY_FIELD_POLICY, splitHeavyFields } from "../../shared/portable/heavyFields";
+import { DEFERRED_HYDRATION_TABLES } from "../../shared/portable/localRowStore";
 
 export type LocalSeed = Record<string, any[]>;
 export type LocalArgs = Record<string, any> | undefined;
@@ -97,7 +98,8 @@ const CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION = 3;
  *   2 — heavy fields split into `recordFields` so boot reads only light rows;
  *       legacy mirrors no longer written (still read once to upgrade v1 data).
  */
-const CURRENT_LOCAL_STORAGE_LAYOUT = 2;
+// 3: intake extracts and extraction records joined the lazy heavy fields (the same idempotent move).
+const CURRENT_LOCAL_STORAGE_LAYOUT = 3;
 const LAYOUT_MIGRATION_CHUNK = 100;
 /** At or above this many rows, persisted projection memos are read by key range. */
 const PROJECTION_RANGE_READ_MIN = 256;
@@ -199,6 +201,11 @@ export class LocalDexieRowStore implements LocalRowStore {
   private dbReady: Promise<LocalDexieDatabase | null> | null = null;
   /** Whether rows are persisted (heavy fields are split out only then). */
   private persistent = false;
+  /**
+   * Deferred tables (DEFERRED_HYDRATION_TABLES) whose stored rows have not been read yet: table → the load
+   * in flight (null = not started). Boot skips them; the first read (or write) of one loads it.
+   */
+  private deferred = new Map<string, Promise<void> | null>();
 
   constructor(seed: LocalSeed, options?: { databaseName?: string; logLabel?: string; projectionNamespace?: string }) {
     this.projectionNamespace = options?.projectionNamespace;
@@ -301,6 +308,61 @@ export class LocalDexieRowStore implements LocalRowStore {
       this.tables.set(table, { rows, array: null, indexes: new Map() });
       for (const id of rows.keys()) this.idTables.set(id, table);
     }
+  }
+
+  isDeferred(table: string) {
+    return this.deferred.has(table);
+  }
+
+  hasDeferredTables() {
+    return this.deferred.size > 0;
+  }
+
+  /** Reads deferred tables' stored rows into the cache (all of them when `tables` is omitted). */
+  async ensureTables(tables?: readonly string[]) {
+    if (!this.deferred.size) return;
+    const names = (tables ?? [...this.deferred.keys()]).filter((table) => this.deferred.has(table));
+    await Promise.all(names.map((table) => {
+      let loading = this.deferred.get(table);
+      if (!loading) {
+        loading = this.loadDeferredTable(table);
+        this.deferred.set(table, loading);
+      }
+      return loading;
+    }));
+  }
+
+  private async loadDeferredTable(table: string) {
+    const db = await this.database();
+    const started = now();
+    let count = 0;
+    if (db) {
+      // Record keys are "<table>:<id>": one key range, read with a single getAll.
+      const records = await db.records.where(":id").between(`${table}:`, `${table}:\uffff`, true, true).toArray();
+      // A table with nothing stored stays absent, exactly as boot would have left it.
+      const state = records.length ? this.tableState(table, true) : this.tableState(table);
+      for (const record of records) {
+        if (!record?.value?._id) continue;
+        const id = record.value._id;
+        // A row written in this session (it has a session revision) is newer than the stored one.
+        if (this.revisions.has(record.key) && this.revisions.get(record.key) !== record.rev) continue;
+        if (record.deletedAtISO) {
+          this.deleteCachedRow(table, id);
+          continue;
+        }
+        state!.rows.set(id, record.value);
+        this.idTables.set(id, table);
+        if (record.external?.length && !this.external.has(record.key)) this.external.set(record.key, record.external);
+        if (record.rev && !this.revisions.has(record.key)) this.revisions.set(record.key, record.rev);
+        count++;
+      }
+      if (state) {
+        state.array = null;
+        state.indexes.clear();
+      }
+    }
+    this.deferred.delete(table);
+    recordDeferredTiming(table, now() - started, count);
   }
 
   rows(table: string) {
@@ -515,9 +577,9 @@ export class LocalDexieRowStore implements LocalRowStore {
     }
   }
 
-  /** Table names currently held in the cache (LocalRowStore contract). */
+  /** Table names held in the cache or deferred (LocalRowStore contract). */
   tableNames(): string[] {
-    return [...this.tables.keys()];
+    return this.deferred.size ? [...new Set([...this.tables.keys(), ...this.deferred.keys()])] : [...this.tables.keys()];
   }
 
   private get splitsHeavyFields() {
@@ -579,6 +641,7 @@ export class LocalDexieRowStore implements LocalRowStore {
    */
   async commitBatch(ops: RowStoreOp[]): Promise<void> {
     if (!ops.length) return;
+    if (this.deferred.size && ops.some((op) => this.deferred.has(op.table))) await this.ensureTables(ops.map((op) => op.table));
 
     const undo = new Map<string, UndoEntry>();
     for (const op of ops) {
@@ -655,6 +718,7 @@ export class LocalDexieRowStore implements LocalRowStore {
    */
   async exportSnapshot(): Promise<LocalWorkspaceSnapshot> {
     await this.whenHydrated();
+    await this.ensureTables();
     await this.flushProjections();
     const tables: LocalSeed = {};
     for (const table of this.tables.keys()) {
@@ -674,12 +738,45 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   /**
+   * The snapshot as a stream for backups: the snapshot fields without `tables`, and per table an iterator of
+   * row batches whose lazy fields are loaded one batch at a time (the whole workspace is never one object).
+   * Each batch's rows are fresh objects. Rows written while the export runs may or may not be included.
+   */
+  async exportSnapshotSource(batchSize = 500): Promise<{ meta: Omit<LocalWorkspaceSnapshot, "tables">; tables: Array<{ name: string; rows: () => AsyncIterable<any[]> }> }> {
+    await this.whenHydrated();
+    await this.ensureTables();
+    await this.flushProjections();
+    const meta = {
+      kind: "societyer.localWorkspaceSnapshot" as const,
+      exportedAtISO: new Date().toISOString(),
+      workspace: { ...this.workspaceMeta, updatedAtISO: new Date().toISOString() },
+      attachments: cloneLocalRows(this.attachmentsCache),
+      changes: cloneLocalRows(this.changesCache),
+    };
+    const tables = [...this.tables.keys()].map((table) => ({
+      name: table,
+      rows: () => this.exportTableBatches(table, batchSize),
+    }));
+    return { meta, tables };
+  }
+
+  private async *exportTableBatches(table: string, batchSize: number): AsyncIterable<any[]> {
+    const rows = [...this.rows(table)];
+    for (let start = 0; start < rows.length; start += batchSize) {
+      const batch = rows.slice(start, start + batchSize);
+      const heavyIds = batch.filter((row) => this.external.has(localRecordKey(table, row._id))).map((row) => row._id);
+      const heavy = heavyIds.length ? await this.loadExternalFields(table, heavyIds) : new Map<string, Record<string, unknown>>();
+      yield batch.map((row) => ({ ...row, ...(heavy.get(row._id) ?? {}) }));
+    }
+  }
+
+  /**
    * Synchronous snapshot for runtimes whose rows are all in memory (Node
    * scripts, a session without IndexedDB). Throws when heavy fields are lazy:
    * a backup must never silently omit them — use `exportSnapshot()`.
    */
   exportSnapshotSync(): LocalWorkspaceSnapshot {
-    if (this.external.size) {
+    if (this.external.size || this.deferred.size) {
       throw new Error("Some fields of this workspace are stored outside memory; export it with exportSnapshot().");
     }
     const tables: LocalSeed = {};
@@ -780,6 +877,7 @@ export class LocalDexieRowStore implements LocalRowStore {
     }
 
     this.loadTables(split.light);
+    this.deferred = new Map();
     this.external = new Map(split.external);
     this.revisions = new Map();
     this.dataEpoch = nextEpoch;
@@ -817,6 +915,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   async reseed() {
     await this.database();
     this.loadTables(cloneLocalSeed(this.seed));
+    this.deferred = new Map();
     this.external = new Map();
     this.pendingHeavy = new Map();
     this.revisions = new Map();
@@ -871,12 +970,15 @@ export class LocalDexieRowStore implements LocalRowStore {
     });
 
     const readStarted = now();
-    // Boot reads LIGHT rows only: heavy fields stay in `recordFields`.
-    const [localRecords, attachments, changes, workspaceMeta] = await Promise.all([
-      db.records.toArray(),
+    // Boot reads LIGHT rows only: heavy fields stay in `recordFields`. Deferred tables (AI intake staging,
+    // field provenance) are read on first use, unless a schema migration needs every row now.
+    const workspaceMeta = await db.meta.get("workspace");
+    const needsMigration = normalizeWorkspaceMeta(workspaceMeta?.value, this.workspaceMeta).schemaVersion < CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION;
+    const deferTables = needsMigration ? [] : DEFERRED_HYDRATION_TABLES.filter((table) => !this.seed[table]?.length);
+    const [localRecords, attachments, changes] = await Promise.all([
+      deferTables.length ? readRecordsExcept(db, deferTables) : db.records.toArray(),
       db.attachments.toArray(),
       db.changes.toArray(),
-      db.meta.get("workspace"),
     ]);
     // One pass, straight into per-table maps: seed rows first (in seed order;
     // `this.seed` is a private copy and cached rows are never mutated), then each
@@ -931,6 +1033,7 @@ export class LocalDexieRowStore implements LocalRowStore {
     else this.loadTableMaps(tableMaps);
     this.external = external;
     this.revisions = revisions;
+    this.deferred = new Map(deferTables.map((table) => [table, null]));
     this.dataEpoch = await this.persistedDataEpoch();
     // Replay anything written while this read was in flight, so a mutation
     // issued during startup survives hydration.
@@ -964,7 +1067,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   /**
-   * Layout 1 → 2: move heavy field values out of `records` into `recordFields`,
+   * Layout 1 → 2 (→ 3): move heavy field values out of `records` into `recordFields`,
    * a bounded chunk at a time (never the whole table in memory), and stop
    * mirroring rows into the legacy v1 meetings/minutes stores. Idempotent, so an
    * interrupted upgrade simply resumes on the next start.
@@ -973,7 +1076,9 @@ export class LocalDexieRowStore implements LocalRowStore {
     const db = this.db!;
     const layout = Number((await db.meta.get("storageLayout"))?.value ?? 1);
     if (layout >= CURRENT_LOCAL_STORAGE_LAYOUT) return;
-    for (const table of Object.keys(HEAVY_FIELD_POLICY)) {
+    // Layout 2 vaults already moved the tables layout 2 knew about; only newer heavy tables need a pass.
+    const LAYOUT_2_TABLES = new Set(["documents", "minutes", "transcripts"]);
+    for (const table of Object.keys(HEAVY_FIELD_POLICY).filter((name) => layout < 2 || !LAYOUT_2_TABLES.has(name))) {
       const keys = await db.records.where("table").equals(table).primaryKeys();
       for (let start = 0; start < keys.length; start += LAYOUT_MIGRATION_CHUNK) {
         const chunk = keys.slice(start, start + LAYOUT_MIGRATION_CHUNK);
@@ -981,13 +1086,14 @@ export class LocalDexieRowStore implements LocalRowStore {
           const envelopes = await db.records.bulkGet(chunk);
           const records: LocalRecordEnvelope[] = [];
           const fields: LocalRecordFieldsEnvelope[] = [];
-          for (const envelope of envelopes) {
+          const existingFields = await db.recordFields.bulkGet(chunk as string[]);
+          for (const [position, envelope] of envelopes.entries()) {
             if (!envelope?.value?._id || envelope.deletedAtISO) continue;
             const { light, heavy } = splitHeavyFields(table, envelope.value);
             if (!heavy) continue;
             const external = [...new Set([...(envelope.external ?? []), ...Object.keys(heavy)])];
             records.push({ ...envelope, value: light, external });
-            fields.push({ key: envelope.key, table, id: envelope.id, fields: heavy });
+            fields.push({ key: envelope.key, table, id: envelope.id, fields: { ...(existingFields[position]?.fields ?? {}), ...heavy } });
           }
           if (records.length) await db.records.bulkPut(records);
           if (fields.length) await db.recordFields.bulkPut(fields);
@@ -1121,6 +1227,28 @@ function recordBootTiming(timing: { totalMs: number; readMs: number; records: nu
     readMs: Math.round(timing.readMs),
     records: timing.records,
   };
+}
+
+/**
+ * Every record except those of `tables`, as key ranges between the tables' key prefixes ("<table>:<id>"),
+ * each read with one getAll. (An index `noneOf` walks a cursor record by record, several times slower.)
+ */
+async function readRecordsExcept(db: LocalDexieDatabase, tables: readonly string[]): Promise<LocalRecordEnvelope[]> {
+  const prefixes = [...tables].map((table) => `${table}:`).sort();
+  const reads: Array<Promise<LocalRecordEnvelope[]>> = [];
+  let lower: string | null = null;
+  for (const prefix of prefixes) {
+    reads.push(lower === null ? db.records.where(":id").below(prefix).toArray() : db.records.where(":id").between(lower, prefix, false, false).toArray());
+    lower = `${prefix}\uffff`;
+  }
+  reads.push(lower === null ? db.records.toArray() : db.records.where(":id").above(lower).toArray());
+  return (await Promise.all(reads)).flat();
+}
+
+/** Opt-in diagnostics: deferred tables loaded on first use (table → { ms, rows }). */
+function recordDeferredTiming(table: string, ms: number, rows: number) {
+  const target = globalThis as { __SOCIETYER_LOCAL_DEFERRED__?: Record<string, { ms: number; rows: number }> };
+  (target.__SOCIETYER_LOCAL_DEFERRED__ ??= {})[table] = { ms: Math.round(ms), rows };
 }
 
 function isIndexableValue(value: unknown) {

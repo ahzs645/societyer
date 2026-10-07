@@ -50,7 +50,7 @@ export type { EntityIdFactory, EntityIdFactoryOptions } from "./ids";
 export { MemoryDb, evaluateQuery, matchesConstraints } from "./memoryDb";
 export type { MemoryDbOptions } from "./memoryDb";
 
-export { LocalStoreDb, MemoryRowStore } from "./localRowStore";
+export { LocalStoreDb, MemoryRowStore, DEFERRED_HYDRATION_TABLES } from "./localRowStore";
 export type { LocalRowStore, RowStoreOp, LocalStoreDbOptions } from "./localRowStore";
 
 export {

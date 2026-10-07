@@ -22,6 +22,7 @@ import { runIntake, type IntakeProgress, type IntakeStageId } from "../features/
 import { cacheRunOriginals, importPipelineOutput, pipelineOutputFiles, type ImportProgress, type PipelineOutputFiles } from "../features/intake/importPipelineOutput";
 import { clearOriginals, originalsUsage } from "../features/intake/originalsCache";
 import { defaultModelFor, keyStorageLabel, providerHost, readLlmPrefs, readLocalApiKey, storeLocalApiKey, writeLlmPrefs, type LocalLlmProvider } from "../features/intake/localLlm";
+import { CompactRunPanel } from "../features/intake/CompactRunPanel";
 import "../features/intake/intake.css";
 
 const STAGES: Array<{ id: IntakeStageId; label: string }> = [
@@ -510,6 +511,7 @@ function RunDetailDrawer({ societyId, runId, onClose }: { societyId: string; run
           <div className="intake-chips">
             {Object.entries(run.counts.byClass ?? {}).filter(([key]) => key !== "unknown").map(([key, count]) => <Badge key={key} tone="info">{key} {String(count)}</Badge>)}
           </div>
+          {runId && <CompactRunPanel societyId={societyId} runId={runId} />}
           <div className="segmented" role="tablist" aria-label="Run details">
             {(["files", "log", "gaps"] as const).map((id) => (
               <button key={id} type="button" role="tab" aria-selected={tab === id} className={`segmented__btn${tab === id ? " is-active" : ""}`} onClick={() => setTab(id)}>

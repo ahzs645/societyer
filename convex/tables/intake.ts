@@ -37,6 +37,8 @@ export const intakeTables = {
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
     completedAtISO: v.optional(v.string()),
+    /** Last "Compact this intake run" result (what was folded or removed, and when). */
+    compaction: v.optional(v.any()),
   }).index("by_society", ["societyId"]),
 
   intakeFiles: defineTable({
@@ -112,6 +114,8 @@ export const intakeTables = {
     runId: v.id("intakeRuns"),
     fileId: v.id("intakeFiles"),
     fileKey: v.string(),
+    /** Derived records (minutes embedded in a package): the package's fileKey; `fileId` is the package file. */
+    parentFileKey: v.optional(v.string()),
     docClass: v.string(),
     schemaVersion: v.string(),
     engine: v.string(), // deterministic | llm | human
@@ -135,7 +139,9 @@ export const intakeTables = {
     societyId: v.id("societies"),
     runId: v.id("intakeRuns"),
     extractionId: v.id("intakeExtractions"),
-    fieldPath: v.string(), // e.g. motions[2].movedBy
+    fieldPath: v.string(), // e.g. motions[2].movedBy, or "@batch" for a batch row
+    /** Batch rows: every field one bulk decision applies to, with index ranges (`attendance[0-41].nameAsWritten`). */
+    fieldPaths: v.optional(v.array(v.string())),
     decision: v.string(), // accept | edit | reject | cant_represent
     originalValue: v.optional(v.any()),
     editedValue: v.optional(v.any()),

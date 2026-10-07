@@ -265,3 +265,8 @@ mark.intake-hl, .intake-hl {
   .intake-pane--viewer .intake-pane__body { max-height: 70vh; min-height: 40vh; }
   .intake-pane--queue .intake-pane__body { max-height: 40vh; }
 }
+
+/* Run details: "Compact this intake run". */
+.intake-compact { border: 1px solid var(--border); border-radius: var(--r-md, 8px); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.intake-compact__title { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-md, 14px); }
+.intake-compact__list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }

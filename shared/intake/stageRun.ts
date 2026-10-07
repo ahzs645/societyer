@@ -44,10 +44,14 @@ export async function stageRunInWorkspace(mutation: MutationCaller, societyId: s
     tick(1);
   }
   for (const batch of chunks(run.clusters, 200)) await mutation("intake:saveClusters", { societyId, runId, clusters: batch });
+  // Minutes derived from a package are carried by the package's own extraction (embeddedDocuments). Those that
+  // are the only copy of a meeting (its reconciled canonical copy) are staged as their own extraction, on the
+  // package file, so they are reviewed and promoted with field provenance like any other minutes.
+  const canonical = new Set(run.reconciliation.meetings.map((meeting) => meeting.canonicalFileId));
+  const staged = new Set(Object.keys(extracts));
   for (const extraction of run.extractions) {
-    // Minutes derived from a package are carried by the package's own extraction (embeddedDocuments).
-    if (extraction.parentFileKey) continue;
-    const { verification: _verification, fileKey, parentFileKey: _parent, ...envelope } = extraction;
+    if (extraction.parentFileKey && (!canonical.has(extraction.fileKey) || !staged.has(extraction.parentFileKey))) continue;
+    const { verification: _verification, fileKey, ...envelope } = extraction;
     await mutation("intake:saveExtraction", { societyId, runId, fileKey, extraction: envelope });
     tick(1);
   }

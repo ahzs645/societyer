@@ -163,6 +163,7 @@ const seedRecordTableMetadataFns = lazyHandlers(() => import("./seedRecordTableM
 import * as filesFns from "./files";
 const intakeFns = lazyHandlers(() => import("./intake"), "intake");
 const intakeReviewFns = lazyHandlers(() => import("./intakeReview"), "intakeReview");
+const intakeCompactionFns = lazyHandlers(() => import("./intakeCompaction"), "intakeCompaction");
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "personHistory:overview", handler: personHistoryFns.overview }),
@@ -1307,6 +1308,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   // importSessions
   definePortableMutation({ name: "importSessions:applyApprovedDocuments", handler: importSessionsFns.applyApprovedDocumentsPortable }),
   definePortableMutation({ name: "importSessions:applyApprovedSectionRecords", handler: importSessionsFns.applyApprovedSectionRecordsPortable }),
+  definePortableMutation({ name: "importSessions:compactAppliedRecords", handler: importSessionsFns.compactAppliedRecordsPortable }),
+  definePortableMutation({ name: "importSessions:resolveBlockedRecords", handler: importSessionsFns.resolveBlockedRecordsPortable }),
 
 
   // firm
@@ -1444,6 +1447,8 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "intake:undoReviews", handler: intakeReviewFns.undoReviews }),
   definePortableMutation({ name: "intake:promoteExtraction", handler: intakeReviewFns.promoteExtraction }),
   definePortableMutation({ name: "intake:reconcileRun", handler: intakeReviewFns.reconcileRun }),
+  definePortableQuery({ name: "intake:compactionPlan", handler: intakeCompactionFns.compactionPlan }),
+  definePortableMutation({ name: "intake:compactRun", handler: intakeCompactionFns.compactRun }),
 
 ].map((definition) => ({ ...definition, applicationPolicy: true }));
 

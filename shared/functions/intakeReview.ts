@@ -20,6 +20,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import { resolveFieldPath } from "./intake";
+import { hydrateProvenance, provenanceRow, slimProvenance } from "../intake/provenance";
 import { insertRepresentationGapFromImport } from "./representationGaps";
 import {
   applyApprovedDocumentsPortable,
@@ -36,6 +37,7 @@ import { buildClassPromotionBundle, CLASS_PROMOTION, classProvenanceTargets, dir
 import { annotateFiscalYearEndChanges, deriveEmbeddedMinutes, linkPolicyAdoptions } from "../intake/classStages";
 import { bodyKeyFor } from "../intake/entities";
 import { normalizePersonKey } from "../intake/names";
+import { BATCH_FIELD_PATH, encodeFieldPaths, isBatchableAccept, planReviewCompaction } from "../intake/review";
 import { bulkAcceptCandidates, entityGroups, formatFieldValue, isPromotedDecision, samplePreview, latestDecisions, linkedValue, nameOccurrences, nativeTargetForPath, primaryLocator, requiredFieldsFor, reviewFieldsForRecord, REVIEW_DECISIONS, type ReviewRow } from "../intake/review";
 import { visibleDirectoryRows } from "./peopleDirectory";
 import type { DirectoryPerson, OfficeTerm } from "../intake/entities";
@@ -75,13 +77,45 @@ export async function reviewFields(ctx: PortableMutationCtx, { societyId, items 
   await canWrite(ctx, societyId);
   if (!Array.isArray(items) || !items.length) return { reviewIds: [], gapIds: [] };
   if (items.length > 1000) throw new Error("Review at most 1,000 fields per call.");
+  return writeReviews(ctx, societyId, items);
+}
+
+/** Writes review decisions (callers have checked settings:write and bounded the batch). */
+async function writeReviews(ctx: PortableMutationCtx, societyId: string, items: ReviewItem[]): Promise<{ reviewIds: string[]; gapIds: string[] }> {
+  if (!items.length) return { reviewIds: [], gapIds: [] };
   if (items.some((item) => item.decision === "cant_represent")) await requirePermissionPortable(ctx, societyId, "documents:write");
   const reviewerUserId = await principalUserId(ctx, societyId).catch(() => undefined);
   const extractions = new Map<string, any>();
   const reviewIds: string[] = [];
   const gapIds: string[] = [];
   const at = now();
+  // Plain accepts of several fields of one document with the same note (bulk accept, "accept as written
+  // everywhere") are one decision: one batch row lists the fields instead of one row per field, and does
+  // not copy values or locators the extraction already holds. Per-field decisions are unchanged.
+  const batchKey = (item: ReviewItem) => `${item.extractionId}\u0000${clean(item.note) ?? ""}`;
+  const batchable = new Map<string, ReviewItem[]>();
+  for (const item of items) if (isBatchableAccept(item)) batchable.set(batchKey(item), [...(batchable.get(batchKey(item)) ?? []), item]);
+  for (const [key, group] of batchable) if (group.length < 2) batchable.delete(key);
+  const batched = new Set<string>();
   for (const item of items) {
+    if (batchable.has(batchKey(item)) && isBatchableAccept(item)) {
+      const key = batchKey(item);
+      if (batched.has(key)) continue;
+      batched.add(key);
+      const group = batchable.get(key)!;
+      let extraction = extractions.get(item.extractionId);
+      if (!extraction) {
+        extraction = await getOwned<any>(ctx, "intakeExtractions", item.extractionId, societyId);
+        if (extraction.status === "promoted") throw new Error("Promoted extractions are final; review the native record instead.");
+        extractions.set(item.extractionId, extraction);
+      }
+      for (const member of group) resolveFieldPath(extraction.record, member.fieldPath);
+      reviewIds.push(await ctx.db.insert("intakeFieldReviews", compact({
+        societyId, runId: extraction.runId, extractionId: extraction._id, fieldPath: BATCH_FIELD_PATH, fieldPaths: encodeFieldPaths(group.map((member) => member.fieldPath)),
+        decision: "accept", note: clean(item.note), reviewerUserId, reviewedAtISO: at,
+      })));
+      continue;
+    }
     if (!REVIEW_DECISIONS.includes(item.decision as any)) throw new Error("Decision must be accept, edit, reject or cant_represent.");
     let extraction = extractions.get(item.extractionId);
     if (!extraction) {
@@ -227,9 +261,8 @@ export async function bulkAccept(ctx: PortableMutationCtx, { societyId, runId, s
   const taken = takeBulkBatch(all.map(({ extraction }) => String(extraction._id)), BULK_ACCEPT_BATCH_FIELDS);
   const candidates = all.filter(({ extraction }) => taken.has(String(extraction._id)));
   const items: ReviewItem[] = candidates.map(({ extraction, field }) => ({ extractionId: extraction._id, fieldPath: field.path, decision: "accept", note: "Bulk accepted (stated, span-verified, at or above the threshold)." }));
-  const result = items.length ? await reviewFields(ctx, { societyId, items: items.slice(0, 1000) }) : { reviewIds: [] as string[] };
-  const reviewIds = [...result.reviewIds];
-  for (let offset = 1000; offset < items.length; offset += 1000) reviewIds.push(...(await reviewFields(ctx, { societyId, items: items.slice(offset, offset + 1000) })).reviewIds);
+  // One batch review row per document (not one row per field).
+  const { reviewIds } = await writeReviews(ctx, societyId, items);
   return { reviewIds, fields: items.length, extractions: new Set(items.map((item) => item.extractionId)).size, remainingFields: all.length - candidates.length };
 }
 
@@ -274,7 +307,8 @@ export async function mergeCandidates(ctx: PortableQueryCtx, { societyId, extrac
 
 async function clusterFiles(ctx: PortableQueryCtx, extraction: any, file: any): Promise<any[]> {
   const files = [file];
-  if (!file.clusterKey) return files;
+  // Embedded minutes: the package is their only source; its cluster holds copies of the package, not of the minutes.
+  if (extraction.parentFileKey || !file.clusterKey) return files;
   const clusters = (await ctx.db.query("intakeClusters").withIndex("by_run", (q) => q.eq("runId", extraction.runId)).collect()) as any[];
   const cluster = clusters.find((candidate) => candidate.clusterKey === file.clusterKey);
   for (const member of cluster?.members ?? []) {
@@ -328,6 +362,9 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
   if (extraction.status === "promoted") throw new Error("This extraction was already promoted.");
   if (extraction.status === "rejected") throw new Error("This extraction was rejected; reopen it before promoting.");
   if (extraction.status === "covered") throw new Error("A copy of this document was already promoted; choose \"Review separately\" to promote it on its own.");
+  // Nothing reviewed yet (the first decision moves it to in_review): refuse before reading anything else,
+  // so "Promote all ready" passes over unreviewed documents of a large run quickly.
+  if (extraction.status === "pending_review") throw new Error(extraction.docClass === "meetingMinutes" ? "Accept or edit the meeting date and body before promoting." : "Accept or edit at least one field before promoting.");
   const run = await getOwned<any>(ctx, "intakeRuns", extraction.runId, societyId);
   const file = await getOwned<any>(ctx, "intakeFiles", extraction.fileId, societyId);
   if (file.sensitivity === "restricted") await requirePermissionPortable(ctx, societyId, "settings:write");
@@ -434,10 +471,8 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
   }
   const at = now();
   for (const row of provenance) {
-    await ctx.db.insert("fieldProvenance", compact({
-      societyId, targetTable: row.targetTable, targetId: row.targetId, fieldPath: row.fieldPath.slice(0, 300), sourceFieldPath: row.sourceFieldPath?.slice(0, 300), runId: extraction.runId, extractionId: extraction._id, fileKey: extraction.fileKey,
-      locator: compact({ fileId: clean(row.locator.fileId, 600), kind: row.locator.kind, blockIndex: row.locator.blockIndex, page: row.locator.page, sheet: clean(row.locator.sheet, 200), cell: clean(row.locator.cell, 40), charStart: row.locator.charStart, charEnd: row.locator.charEnd, quote: clean(row.locator.quote, 400) }),
-      value: row.value, decision: row.decision, createdAtISO: at,
+    await ctx.db.insert("fieldProvenance", provenanceRow({
+      societyId, targetTable: row.targetTable, targetId: row.targetId, fieldPath: row.fieldPath, sourceFieldPath: row.sourceFieldPath, extraction, locator: row.locator, value: row.value, decision: row.decision, at,
     }));
   }
 
@@ -480,14 +515,17 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
  * the same record) need no separate promotion: their source IDs are already on the record. They
  * become "covered" (reopen one to promote it separately). Returns how many were covered. */
 async function markClusterCopiesCovered(ctx: PortableMutationCtx, extraction: any, file: any, at: string): Promise<number> {
-  if (!file.clusterKey) return 0;
+  if (!file.clusterKey || extraction.parentFileKey) return 0;
   const files = (await ctx.db.query("intakeFiles").withIndex("by_run", (q) => q.eq("runId", extraction.runId)).collect()) as any[];
   const members = new Set(files.filter((row) => row.clusterKey === file.clusterKey && String(row._id) !== String(file._id)).map((row) => String(row._id)));
   if (!members.size) return 0;
   let covered = 0;
   const dateOf = (row: any) => String(row.record?.date?.value?.iso ?? row.record?.meetingDate?.value?.iso ?? row.record?.periodEnd?.value?.iso ?? "");
-  for (const row of (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", extraction.runId)).collect()) as any[]) {
-    if (!members.has(String(row.fileId)) || row.docClass !== extraction.docClass || !["pending_review", "in_review", "accepted"].includes(row.status)) continue;
+  // Only the cluster members' extractions are read (not every extraction of the run).
+  const candidates: any[] = [];
+  for (const fileId of members) candidates.push(...((await ctx.db.query("intakeExtractions").withIndex("by_file", (q) => q.eq("fileId", fileId)).collect()) as any[]));
+  for (const row of candidates) {
+    if (row.runId !== extraction.runId || row.parentFileKey || row.docClass !== extraction.docClass || !["pending_review", "in_review", "accepted"].includes(row.status)) continue;
     // A copy states the same date; a cluster member with another date is a different record.
     if (dateOf(row) && dateOf(extraction) && dateOf(row) !== dateOf(extraction)) continue;
     await ctx.db.patch(row._id, { status: "covered", promotion: { coveredByExtractionId: extraction._id, coveredByFileKey: extraction.fileKey, atISO: at }, updatedAtISO: at });
@@ -590,7 +628,7 @@ async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: strin
   for (const record of stagedRecords) await updateRecordPortable(ctx, { recordId: String(record._id), status: "Approved", reviewNotes });
   await applyApprovedDocumentsPortable(ctx, { sessionId });
   if (build.collections.meetingMinutes) await applyApprovedMeetingsPortable(ctx, { sessionId });
-  const sectionResult = await applyApprovedSectionRecordsPortable(ctx, { sessionId }) as any;
+  const sectionResult = await applyApprovedSectionRecordsPortable(ctx, { sessionId, allOrNothing: true }) as any;
   const session = await getImportSessionPortable(ctx, { sessionId }) as any;
   if (sectionResult?.preflightBlocked || Object.keys(sectionResult?.byKind ?? {}).some((key) => key.endsWith(":blocked"))) {
     const issues = (session?.records ?? []).map((record: any) => /Promotion blocked: ([^\n]+)/.exec(String(record.reviewNotes ?? ""))?.[1]).filter(Boolean).slice(0, 3);
@@ -660,10 +698,9 @@ async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: strin
     const review = decisions.get(row.sourceFieldPath)!;
     const field = resolveFieldPath(extraction.record, row.sourceFieldPath);
     const locator = primaryLocator(field, extraction.fileKey);
-    await ctx.db.insert("fieldProvenance", compact({
-      societyId, targetTable: row.targetTable, targetId: row.targetId, fieldPath: row.fieldPath.slice(0, 300), sourceFieldPath: row.sourceFieldPath.slice(0, 300), runId: extraction.runId, extractionId: extraction._id, fileKey: extraction.fileKey,
-      locator: compact({ fileId: clean(locator.fileId, 600), kind: locator.kind, blockIndex: locator.blockIndex, page: locator.page, sheet: clean(locator.sheet, 200), cell: clean(locator.cell, 40), charStart: locator.charStart, charEnd: locator.charEnd, quote: clean(locator.quote, 400) }),
-      value: review?.decision === "edit" ? review.editedValue : field?.value, decision: review?.decision ?? "accept", createdAtISO: at,
+    await ctx.db.insert("fieldProvenance", provenanceRow({
+      societyId, targetTable: row.targetTable, targetId: row.targetId, fieldPath: row.fieldPath, sourceFieldPath: row.sourceFieldPath, extraction, locator,
+      value: review?.decision === "edit" ? review.editedValue : field?.value, decision: review?.decision ?? "accept", at,
     }));
   }
 
@@ -717,7 +754,7 @@ export async function provenanceForExtraction(ctx: PortableQueryCtx, { societyId
   await canRead(ctx, societyId);
   await getOwned(ctx, "intakeExtractions", extractionId, societyId);
   const rows = (await ctx.db.query("fieldProvenance").withIndex("by_extraction", (q) => q.eq("extractionId", extractionId)).collect()) as any[];
-  return rows.filter((row) => row.societyId === societyId);
+  return hydrateProvenance(ctx, rows.filter((row) => row.societyId === societyId));
 }
 
 /** Native coverage per run: how many extractions/fields became native records. */
@@ -729,12 +766,13 @@ export async function runSummaries(ctx: PortableQueryCtx, { societyId }: { socie
     : null;
   const out: any[] = [];
   for (const run of runs) {
-    const extractions = (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", run._id)).collect()) as any[];
+    const extractions = (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", run._id)).omitFields("record", "unsupported", "references", "verification").collect()) as any[];
     const ids = new Set(extractions.map((row) => String(row._id)));
     const systemGaps = gapKeys ? gapKeys.filter((key) => ids.has(key.split(":")[1])).length : null;
     const promoted = extractions.filter((row) => row.status === "promoted");
     // Facts extracted (fields with a value) across the run; promotedFields ÷ extractedFields is the reviewed native coverage.
-    const extractedFields = extractions.reduce((sum, row) => sum + reviewFieldsForRecord(row.record ?? {}, row.docClass).filter((field) => field.field.value !== undefined && field.field.value !== null && field.field.status !== "not_stated").length, 0);
+    const factCounts = await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", run._id)).collectProjected("intake.extractedFacts/v1", extractedFactCount);
+    const extractedFields = factCounts.reduce((sum, row) => sum + row.facts, 0);
     let promotedFields = 0;
     for (const extraction of promoted) promotedFields += ((await ctx.db.query("fieldProvenance").withIndex("by_extraction", (q) => q.eq("extractionId", extraction._id)).collect()) as any[]).length;
     out.push({
@@ -743,6 +781,11 @@ export async function runSummaries(ctx: PortableQueryCtx, { societyId }: { socie
     });
   }
   return out.sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO)));
+}
+
+/** Extracted facts of one extraction (pure: memoized per extraction revision). */
+function extractedFactCount(row: any) {
+  return { id: String(row._id), facts: reviewFieldsForRecord(row.record ?? {}, row.docClass).filter((field) => field.field.value !== undefined && field.field.value !== null && field.field.status !== "not_stated").length };
 }
 
 /** Recompute reconciliation, record gaps and coverage from the stored files and extractions (after server-side field extraction). */
@@ -757,15 +800,16 @@ export async function reconcileRun(ctx: PortableMutationCtx, { societyId, runId 
     const current = byFile.get(row.fileKey);
     if (!current || (current.engine === "deterministic" && row.engine !== "deterministic")) byFile.set(row.fileKey, row);
   }
-  const extractions: any[] = [...byFile.values()].map((row) => ({ fileKey: row.fileKey, fileId: row.fileKey, docClass: row.docClass, schemaVersion: row.schemaVersion, engine: row.engine, model: row.model, record: row.record, unsupported: row.unsupported ?? [], references: row.references ?? [], warnings: row.warnings, verification: row.verification }));
+  const extractions: any[] = [...byFile.values()].map((row) => ({ fileKey: row.fileKey, fileId: row.fileKey, ...(row.parentFileKey ? { parentFileKey: row.parentFileKey } : {}), docClass: row.docClass, schemaVersion: row.schemaVersion, engine: row.engine, model: row.model, record: row.record, unsupported: row.unsupported ?? [], references: row.references ?? [], warnings: row.warnings, verification: row.verification }));
   // Minutes embedded in packages are derived records (never stored): derive them again from the stored
   // extracts, as the in-browser pipeline does, so hosted runs see the same meetings and record gaps.
-  for (const row of [...byFile.values()].filter((candidate) => ["agenda", "meetingPackage", "agmMaterial"].includes(candidate.docClass))) {
+  const storedDerived = new Set(rows.filter((row) => row.parentFileKey).map((row) => row.fileKey));
+  for (const row of [...byFile.values()].filter((candidate) => ["agenda", "meetingPackage", "agmMaterial"].includes(candidate.docClass) && !candidate.parentFileKey)) {
     const extract = await ctx.db.query("intakeExtracts").withIndex("by_file", (q) => q.eq("fileId", row.fileId)).first() as any;
     const file = files.find((candidate) => String(candidate._id) === String(row.fileId));
     if (!extract?.text || !file) continue;
     try {
-      extractions.push(...deriveEmbeddedMinutes(extractions.find((candidate) => candidate.fileKey === row.fileKey), { method: extract.method, methodVersion: extract.methodVersion, blocks: extract.blocks, text: extract.text, warnings: extract.warnings ?? [] } as any, file));
+      extractions.push(...deriveEmbeddedMinutes(extractions.find((candidate) => candidate.fileKey === row.fileKey), { method: extract.method, methodVersion: extract.methodVersion, blocks: extract.blocks, text: extract.text, warnings: extract.warnings ?? [] } as any, file).filter((derived) => !storedDerived.has(derived.fileKey)));
     } catch {
       // A truncated extract (very large package) cannot be split; its embedded minutes are skipped.
     }
@@ -853,7 +897,7 @@ export async function linkNameAcrossRun(ctx: PortableMutationCtx, { societyId, r
         : { extractionId: extraction._id, fieldPath: occurrence.path, decision: "accept", note: `Accepted "${name}" as written (applied to all occurrences).` });
     }
   }
-  const result = items.length ? await reviewFields(ctx, { societyId, items }) : { reviewIds: [], gapIds: [] };
+  const result = await writeReviews(ctx, societyId, items);
   return { reviewIds: result.reviewIds, occurrences: items.length, extractions: touched };
 }
 
@@ -890,13 +934,16 @@ export async function provenanceForRecords(ctx: PortableQueryCtx, { societyId, t
   for (const row of rows) {
     const key = `${row.runId}|${row.fileKey}`;
     if (names.has(key) || !row.runId || !row.fileKey) continue;
-    const file = await ctx.db.query("intakeFiles").withIndex("by_run_file_key", (q) => q.eq("runId", row.runId).eq("fileKey", row.fileKey)).first() as any;
+    // Minutes embedded in a package ("<package>#part-N") are shown as the package file.
+    const packageKey = String(row.fileKey).replace(/#part-\d+$/, "");
+    const file = await ctx.db.query("intakeFiles").withIndex("by_run_file_key", (q) => q.eq("runId", row.runId).eq("fileKey", packageKey)).first() as any;
     const run = await ctx.db.get<any>(row.runId, "intakeRuns");
-    names.set(key, { name: file?.name ?? String(row.fileKey).replace(/^local:/, ""), runName: run?.name, sensitivity: file?.sensitivity });
+    const embedded = packageKey !== String(row.fileKey);
+    names.set(key, { name: file?.name ? `${file.name}${embedded ? " (minutes embedded in this package)" : ""}` : String(row.fileKey).replace(/^local:/, ""), runName: run?.name, sensitivity: file?.sensitivity });
   }
   const seesRestricted = await allowed(ctx, societyId, "settings:write");
   const seesContent = await allowed(ctx, societyId, "documents:read");
-  return rows.map((row) => {
+  return (await hydrateProvenance(ctx, rows)).map((row) => {
     const meta = names.get(`${row.runId}|${row.fileKey}`);
     const restricted = meta?.sensitivity === "restricted";
     // Quotes from restricted files are shown only to people who could read the file itself.

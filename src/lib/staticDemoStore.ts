@@ -91,6 +91,11 @@ export class StaticDemoDexieStore {
     return this.rowsStore.exportSnapshot();
   }
 
+  /** The snapshot as table-by-table batches (streaming backups). */
+  exportSnapshotSource(batchSize?: number) {
+    return this.rowsStore.exportSnapshotSource(batchSize);
+  }
+
   /** Synchronous snapshot; only valid while every row is fully in memory. */
   exportSnapshotSync() {
     return this.rowsStore.exportSnapshotSync();

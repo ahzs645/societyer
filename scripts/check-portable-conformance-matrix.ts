@@ -45,6 +45,7 @@ Math.random = () => 0.42;
 import {
   MemoryDb,
   LocalStoreDb,
+  DEFERRED_HYDRATION_TABLES,
   MemoryRowStore,
   PortableRuntime,
   type PortableDoc,
@@ -118,10 +119,11 @@ function localState(store: MemoryRowStore): Record<string, PortableDoc[]> {
 // Third engine: the same LocalStoreDb over a store that behaves like the
 // browser vault at scale — every non-empty heavy field (documents.content,
 // minutes source records, …) lives outside the row cache and is loaded lazily,
+// deferred tables (AI intake staging, field provenance) are read on first use,
 // and lookups go through the id map and equality indexes. It must agree with
 // MemoryDb exactly; minLength 0 externalizes even the small seeded values.
 const lazyStore = (fixture: Fixture) =>
-  new MemoryRowStore(clone(fixture), { heavyFields: { ...DEFAULT_HEAVY_FIELD_POLICY, minLength: 0 }, indexed: true });
+  new MemoryRowStore(clone(fixture), { heavyFields: { ...DEFAULT_HEAVY_FIELD_POLICY, minLength: 0 }, indexed: true, deferredTables: DEFERRED_HYDRATION_TABLES });
 
 type Outcome = { threw: boolean; value?: unknown; error?: unknown };
 function errorValue(error: unknown): unknown {
