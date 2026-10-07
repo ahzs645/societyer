@@ -1,3 +1,4 @@
+import { sourceRoleLabel } from "../../shared/personHistory";
 import {SourceRoleObservations} from "../components/SourceRoleObservations";
 import {PersonRecordLinks} from "../components/PersonRecordLinks";
 import { useEffect, useMemo, useState } from "react";
@@ -191,7 +192,29 @@ export function DirectorsPage() {
         <Link to="/app/role-holders">Role holders</Link>.
       </p>
 
-      <SourceRoleObservations societyId={society._id}/>
+      <SourceRoleObservations
+        societyId={society._id}
+        registerCount={directorsLoaded ? (directors ?? []).length : undefined}
+        onAddAsDirector={canManage ? (observation: any) => {
+          // Prefill (never auto-save) a register entry from a roster
+          // observation; the user reviews it in the drawer first (P16).
+          const parts = String(observation.personName ?? "").trim().split(/\s+/);
+          const role = String(observation.roleTitle ?? "");
+          setSelected({
+            firstName: parts.slice(0, -1).join(" ") || parts[0] || "",
+            lastName: parts.length > 1 ? parts[parts.length - 1] : "",
+            email: "",
+            position: /president|chair|treasurer|secretary|vice/i.test(role) ? sourceRoleLabel(role) : "Director",
+            isBCResident: directorProfile.showBcResidentField,
+            termStart: observation.startDate ?? observation.observedDate ?? new Date().toISOString().slice(0, 10),
+            consentOnFile: false,
+            status: "Active",
+            aliases: [],
+            notes: `From source roster observation (${observation.observedDate ?? "undated"}): ${observation.sourceReference ?? ""} ${observation.sourceUrl ?? ""}. Confirm the appointment and consent before relying on this entry.`.trim(),
+          });
+          setOpen(true);
+        } : undefined}
+      />
       <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Active directors</div>

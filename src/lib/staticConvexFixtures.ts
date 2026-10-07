@@ -2667,7 +2667,7 @@ const tables: Record<string, any[]> = {
       actor: "Avery Santos",
       entityType: "document",
       action: "published",
-      summary: "Published the PIPA privacy policy to the transparency centre.",
+      summary: "Prepared the PIPA privacy policy as a transparency centre draft.",
       createdAtISO: "2026-04-13T19:45:00.000Z",
     },
   ],

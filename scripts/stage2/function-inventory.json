@@ -4523,6 +4523,22 @@
     ]
   },
   {
+    "key": "convex:constating:update",
+    "surface": "convex",
+    "name": "constating:update",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/constating.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "constatingEvents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:corporationSettings:complianceDeadlines",
     "surface": "convex",
     "name": "corporationSettings:complianceDeadlines",
@@ -5973,6 +5989,28 @@
         "array": false,
         "optional": false
       },
+      {
+        "path": "questionId",
+        "table": "electionQuestions",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:elections:removeQuestion",
+    "surface": "convex",
+    "name": "elections:removeQuestion",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/elections.ts",
+    "idArguments": [
       {
         "path": "questionId",
         "table": "electionQuestions",
@@ -23748,6 +23786,22 @@
     ]
   },
   {
+    "key": "portable:constating:update",
+    "surface": "portable",
+    "name": "constating:update",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "constatingEvents",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:corporationSettings:complianceDeadlines",
     "surface": "portable",
     "name": "corporationSettings:complianceDeadlines",
@@ -24984,6 +25038,28 @@
         "array": false,
         "optional": false
       },
+      {
+        "path": "questionId",
+        "table": "electionQuestions",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:elections:removeQuestion",
+    "surface": "portable",
+    "name": "elections:removeQuestion",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
       {
         "path": "questionId",
         "table": "electionQuestions",
