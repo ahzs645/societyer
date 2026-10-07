@@ -299,7 +299,7 @@ export function ImportSessionsPage() {
   });
   const runMeetingApply = () => runApply("Meeting drafts created", async () => {
     const result = await applyMeetings({ sessionId: session._id });
-    return `${result.meetings} meetings, ${result.motions} motions${result.existing ? `, ${result.existing} already existed` : ""}`;
+    return `${result.meetings} meetings, ${result.motions} motions${result.existing ? `, ${result.existing} already existed` : ""}${result.dependentsApplied ? `; ${result.dependentsApplied} waiting record${result.dependentsApplied === 1 ? "" : "s"} (materials, proxies) applied with their meetings` : ""}`;
   });
   const runMeetingBackfill = () => runApply("Meeting references refreshed", async () => {
     const result = await backfillMeetings({ sessionId: session._id });

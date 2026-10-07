@@ -163,7 +163,33 @@ outside the tab's heap.
 
 ## Real archive (PGAIR run8, session scratchpad only)
 
-RESULTS_PLACEHOLDER
+The WP-R run8 output (2,033 extractions, 10,196 files, 2,262 stored extracts) was staged into a fresh
+browser profile on a production build, entirely through the UI (scripts in the scratchpad `fas/tools/`):
+create the organization → **Import a run processed on another computer** → **Add original files** (9
+subfolders) → bulk accept **Every document in the run** → **Add run people to directory** →
+**Promote all ready** → **Compact this intake run** → **Download ZIP backup** → restore into a second fresh
+profile → download again and compare.
+
+| Step | Result | Time |
+| --- | --- | ---: |
+| Import the run | 2,069 extractions staged (2,033 + 36 package-embedded minutes that are a meeting's only copy) | 105 s |
+| Bulk accept, every document | 91,604 fields in 1,962 documents → **1,962 review rows** (1.3 MB; 1,465 batch rows). Before: 89,285 rows, 83 MB | 41 s |
+| Promote all ready | 1,082 documents promoted, 361 copies covered, 512 still need a required field, 0 failures; the 36 embedded minutes: 34 promoted with 1,945 provenance rows | 813 s |
+| Provenance | 48,582 rows, none copying a value or quote (28 MB). Before: 46,525 rows, 46 MB | — |
+| Compaction plan / compaction | 2,595 staged copies of applied records in 1,082 promotion sessions and 1,521 extracts removed, 72 MB freed (741 extracts of 626 open documents kept) | 7 s / 21 s |
+| Export | **Version 1 ZIP** (restorable by every build): 99,870 records, 155 MB `workspace.json`, 524 included files, 153 MB ZIP. Before compaction the same workspace was about 227 MB / 104,000 records — already within the old limits | 31 s |
+| Restore into a fresh profile | Setup → "I have a backup to restore" | **40 s** |
+| Re-export and compare | 148 tables and 99,870 rows on both sides, every table holds the same ids; included / external / unavailable files 524 / 1,515 / 4,319 on both | 29 s |
+
+Before this work the same full review was ~285 MB and ~190,000 rows and could not be exported at all.
+
+Pages on the restored profile (production build, fresh browser per route, machine load 5–6 from other
+agents): boot reads 23,228 records in 0.7 s (the 76,000 deferred intake and provenance rows are not read);
+`/app` 1.7 s, meetings 2.0 s, meeting detail 1.9 s, documents 2.5 s, imports 1.7 s, people 1.6 s, tasks
+1.9 s, members 2.1 s, AI intake 1.8 s, Coverage 2.0 s, Policies 2.2 s. The review screen of the
+2,069-document run: 3.3–4.1 s. A meeting page loads `fieldProvenance` (48,582 rows, 0.7 s) in the
+background for its View source badge, which reads values and quotes from the extraction; for embedded
+minutes it names the package. (Before the key-range boot read, the same boot took 3.0 s.)
 
 ## Assumptions and decisions
 
