@@ -8,6 +8,9 @@ import { maintenanceErrorMessage, seedDemoSociety } from "../lib/maintenanceApi"
 import { getRouteIdentity, resolveRouteIdentity, type IconTone } from "../lib/routeIdentity";
 import { isStaticDemoRuntime } from "../lib/staticRuntime";
 import { getRuntimeMode } from "../lib/runtimeMode";
+import { useTranslation } from "react-i18next";
+import { translateNavLabel } from "../i18n/navLabels";
+import { useDocumentTitle } from "../lib/documentTitle";
 
 // The society-loading placeholder shown while `useSociety()` is undefined.
 // Extracted so the ~86 page guards share one element instead of hand-rolling
@@ -122,6 +125,18 @@ export function PageHeader({
     ? getRouteIdentity(routeKey)
     : resolveRouteIdentity(location.pathname);
 
+  const { t } = useTranslation();
+  // A page titled with its sidebar label shows the same translated words as
+  // the sidebar; record names and other free text are left as written.
+  const displayTitle = typeof title === "string" ? translateNavLabel(t, title) : title;
+  useDocumentTitle(
+    typeof displayTitle === "string"
+      ? displayTitle
+      : identity
+        ? translateNavLabel(t, identity.label)
+        : null,
+  );
+
   const resolvedIcon = identity
     ? createElement(identity.icon, { size: 16 })
     : icon;
@@ -137,7 +152,7 @@ export function PageHeader({
                 {resolvedIcon}
               </TintedIconTile>
             )}
-            <span className="page__title-text">{title}</span>
+            <span className="page__title-text">{displayTitle}</span>
           </h1>
           {subtitle && <p className="page__subtitle">{subtitle}</p>}
         </div>

@@ -1,4 +1,5 @@
 import { isLocalDataRuntime } from "../lib/staticRuntime";
+import { useDocumentTitle } from "../lib/documentTitle";
 import { OrganizationOnboardingPanel } from "../components/OrganizationOnboardingPanel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -133,6 +134,7 @@ export function WorkflowDetailPage() {
   const latestRun = runs?.[0];
 
   const graph = useMemo(() => buildGraph(preview), [preview]);
+  useDocumentTitle(workflow?.name ? `${workflow.name} · Workflows` : null);
 
   if (society === undefined || workflow === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -179,7 +181,7 @@ export function WorkflowDetailPage() {
     <div className="workflow-detail">
       <div className="workflow-topbar">
         <div className="workflow-topbar__title">
-          <Link to="/app/workflows" className="workflow-topbar__back">
+          <Link to="/app/workflows" className="workflow-topbar__back" aria-label="Back to workflows" title="Back to workflows">
             <ArrowLeft size={14} />
           </Link>
           <div className="workflow-topbar__icon">
@@ -187,7 +189,7 @@ export function WorkflowDetailPage() {
           </div>
           <span>Workflows</span>
           <span className="muted">/</span>
-          <strong>{workflow.name}</strong>
+          <h1 className="workflow-topbar__heading"><strong>{workflow.name}</strong></h1>
           <Badge tone={workflow.status === "active" ? "success" : workflow.status === "paused" ? "warn" : "neutral"}>
             {workflow.status}
           </Badge>

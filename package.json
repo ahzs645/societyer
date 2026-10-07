@@ -84,6 +84,7 @@
     "test:firm-flow": "tsx scripts/check-firm-flow.ts",
     "test:global-search": "tsx scripts/check-global-search.ts",
     "test:platform-polish": "tsx scripts/check-platform-polish.ts",
+    "test:nav-counts": "tsx scripts/check-nav-counts-reactive.ts",
     "test:org-details": "tsx scripts/check-org-detail-smoke.ts",
     "test:pdf-ingestion": "tsx scripts/check-pdf-table-normalization.ts",
     "test:exports": "tsx scripts/check-export-coverage.ts",

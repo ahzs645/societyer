@@ -58,7 +58,7 @@ export function SocietyNewPage() {
   const canRestore = isLocalDataRuntime() && !isStaticDemoRuntime() && localWorkspaceRestoreSupported();
   const restoreCard = canRestore ? <RestoreBackupCard
     onRestored={(summary) => {
-      const restoredSocietyId = summary.societies[0]?._id;
+      const restoredSocietyId = summary.preferredSocietyId;
       if (restoredSocietyId) setStoredSocietyId(restoredSocietyId as any);
       toast.success("Backup restored", `${summary.rowCount} records across ${summary.tableCount} tables.`);
       navigate("/app");

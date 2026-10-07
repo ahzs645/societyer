@@ -146,6 +146,7 @@ import {
   getSidebarMenuPosition,
   renderNavItem,
   getCount,
+  NavCountPill,
 } from "./Layout.internal";
 import type {
   NavItem,
@@ -1230,11 +1231,7 @@ export function Layout() {
                         <Icon size={14} />
                       </TintedIconTile>
                       <span className="sidebar__label">{label}</span>
-                      {count != null && (
-                        <Pill size="sm" className="sidebar__count">
-                          {count}
-                        </Pill>
-                      )}
+                      {count != null && <NavCountPill to={item.to} count={count} />}
                     </div>
                     {renderFavoriteControls(ref, index)}
                   </div>
