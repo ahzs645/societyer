@@ -200,6 +200,16 @@ const xrefs = resolveCrossReferences([
 ], snapshot);
 assert.deepEqual(xrefs.map((gap) => `${gap.referencedDate}:${gap.matchedMeetingId ?? "-"}`), ["2010-09-28:-", "2019-05-14:agm19"], "2016 minutes exist; 2019 meeting has no minutes");
 
+const nearDuplicates = resolveCrossReferences([
+  { minutesId: "m21", meetingId: "agm21", heldAt: "2021-05-18", text: "Adopt the minutes of November 20 and the minutes of November 21, 2020." },
+], snapshot);
+assert.deepEqual(nearDuplicates.map((gap) => gap.referencedDate), ["2020-11-20"], "citations a day apart are one missing meeting");
+
+// No incorporation date: the first recorded year stands in for it.
+const noIncorporation = effectiveExpectations([], { ...snapshot, society: { jurisdictionCode: "CA-BC", entityType: "society" } });
+assert.equal(noIncorporation.find((row) => row.key === "BC-SOC-AGM-ANNUAL")?.effectiveFrom, "2011-01-01", "first meeting 2010 → AGMs expected from 2011");
+assert.equal(noIncorporation.find((row) => row.key === "BC-SOC-DIRECTORS-MIN")?.effectiveFrom, "2010-01-01");
+
 /* ---------------------------- inferred cadence ---------------------------- */
 
 const suggestions = inferCadenceSuggestions(snapshot, []);
@@ -208,6 +218,7 @@ assert.ok(opsSuggestion, "ops cadence suggested");
 assert.equal(opsSuggestion.rule.frequency, "monthly");
 assert.equal(opsSuggestion.sampleSize, 19);
 assert.ok(opsSuggestion.medianIntervalDays >= 28 && opsSuggestion.medianIntervalDays <= 31);
+assert.ok(opsSuggestion.confidence > 0.5 && opsSuggestion.confidence <= 1, `confidence ${opsSuggestion.confidence}`);
 assert.equal(inferCadenceSuggestions(snapshot, [ops]).some((s) => s.committeeId === "c-ops"), false, "existing expectation suppresses the suggestion");
 
 /* --------------------- portable handlers + authorization ------------------ */

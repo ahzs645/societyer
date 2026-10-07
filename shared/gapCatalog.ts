@@ -68,7 +68,7 @@ export type InfoTypeDefinition = {
 
 /** Controlled list of information types (schema §3 matrix rows, grouped). */
 export const INFO_TYPES: readonly InfoTypeDefinition[] = [
-  { key: "meeting.minutes", label: "Minutes not transposed", area: "meetings", suggestedTarget: "minutes" },
+  { key: "meeting.minutes", label: "Minutes content not transposed", area: "meetings", suggestedTarget: "minutes" },
   { key: "meeting.header", label: "Meeting header facts (time, place, chair)", area: "meetings", suggestedTarget: "meetings" },
   { key: "meeting.body", label: "Meeting body or committee", area: "meetings", suggestedTarget: "meetings.committeeId" },
   { key: "meeting.package", label: "Agenda or meeting package without minutes", area: "meetings", suggestedTarget: "meetingMaterials" },
@@ -267,7 +267,7 @@ const TITLE_RULES: { pattern: RegExp; infoType: string; reason: GapReason; table
   { pattern: /\.msg$|\.eml$|^re[:\s_-]|^fw[d]?[:\s_-]/i, infoType: "correspondence", reason: "no_schema_field" },
   { pattern: /consent\s+to\s+act|director.{0,20}consent|consent.{0,20}director/i, infoType: "director.consent", reason: "no_import_key" },
   { pattern: /prox(?:y|ies)/i, infoType: "proxy", reason: "no_import_key" },
-  { pattern: /terms?\s+of\s+reference|\bTOR\b/, infoType: "committee.mandate", reason: "no_import_key" },
+  { pattern: /terms?\s+of\s+ref|\bTOR\b/i, infoType: "committee.mandate", reason: "no_import_key" },
   { pattern: /agreement|contract\b|\bMOU\b|memorandum\s+of\s+understanding|\bRFQ\b|\bRFP\b/i, infoType: "agreement", reason: "no_schema_field", tables: ["documents", "commitments", "grantApplications", "minutes", "committees"] },
   { pattern: /\bletter\b|\bltr\b|letter\s+of\s+support/i, infoType: "letter", reason: "no_schema_field", tables: ["documents", "communicationCampaigns", "commitments"] },
   { pattern: /annual\s+report.{0,20}(?:receipt|filing|confirmation)|societ(?:y|al)\s+filing|filing\s+receipt|statement\s+of\s+directors/i, infoType: "filing.annual_report", reason: "not_transposed" },
@@ -302,7 +302,7 @@ export function classifyLegacySourceEvidence(row: LegacySourceEvidence, committe
   }
   const observedDate = row.sourceDate?.slice(0, 10) || observedDateForSource(title, row.excerpt);
   const bodyKey = chosen.infoType.startsWith("meeting.") || chosen.infoType === "committee.mandate"
-    ? bodyKeyFromText(title, committees) ?? bodyKeyFromText(String(row.excerpt ?? "").slice(0, 300), committees)
+    ? bodyKeyFromText(title, committees) ?? bodyKeyFromText(String(row.excerpt ?? "").slice(0, 120), committees)
     : undefined;
   const definition = infoTypeDefinition(chosen.infoType);
   return {

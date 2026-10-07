@@ -226,7 +226,8 @@
 }
 
 @media (max-width: 640px) {
-  .continuity-grid__label { min-width: 140px; max-width: 160px; }
+  .continuity-grid { --continuity-label: 132px; }
+  .continuity-grid__label { min-width: 0; max-width: 132px; padding: 6px; }
   .coverage-gap-row { grid-template-columns: minmax(0, 1fr); }
 }
 

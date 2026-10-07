@@ -50,7 +50,7 @@ export function ContinuityHeatmap({
   const colWidth = mode === "years" ? 38 : 46;
   return (
     <div className="continuity-scroll" role="region" aria-label="Record continuity heat-map" tabIndex={0}>
-      <div className="continuity-grid" style={{ gridTemplateColumns: `minmax(200px, 260px) repeat(${columns.length}, ${colWidth}px)` }}>
+      <div className="continuity-grid" style={{ gridTemplateColumns: `var(--continuity-label, minmax(200px, 260px)) repeat(${columns.length}, ${colWidth}px)` }}>
         <div className="continuity-grid__head continuity-grid__corner" style={{ gridColumn: 1, gridRow: 1 }}>Body and expectation</div>
         {columns.map((column, index) => (
           <div key={column} className="continuity-grid__head" style={{ gridColumn: index + 2, gridRow: 1 }}>

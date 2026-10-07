@@ -188,7 +188,9 @@ export function effectiveExpectations(
   for (const rule of pack?.rules ?? []) {
     if (byRuleKey.has(rule.ruleKey)) continue;
     if (rule.ruleKey === "BC-SOC-DIRECTORS-MIN" && snapshot.society?.isMemberFunded) continue;
-    const startYear = incorporated ? incorporated + (rule.startsYearsAfterIncorporation ?? 0) : firstYear;
+    // Without an incorporation date the first recorded year stands in for it
+    // (it usually is, or follows, the incorporation year).
+    const startYear = (incorporated || firstYear) + (rule.startsYearsAfterIncorporation ?? 0);
     implicit.push({
       key: rule.ruleKey,
       stored: false,
@@ -648,7 +650,9 @@ export function resolveCrossReferences(texts: readonly SnapshotMinutesText[], sn
       const candidates = [-2, -1, 0, 1, 2].flatMap((offset) => byDate.get(addDays(reference.referencedDate, offset)) ?? []).filter((meeting) => meeting._id !== entry.meetingId);
       const withMinutes = candidates.find((meeting) => index.minutesByMeeting.has(meeting._id) && index.classOf.get(meeting._id) !== "cancelled");
       if (withMinutes) continue;
-      if (gaps.has(reference.referencedDate)) continue;
+      // One gap per referenced meeting: an inferred year or a typo can put
+      // several citations of the same meeting a day or two apart.
+      if ([-2, -1, 0, 1, 2].some((offset) => gaps.has(addDays(reference.referencedDate, offset)))) continue;
       const matched = candidates.find((meeting) => index.classOf.get(meeting._id) !== "cancelled");
       const mark = marks.get(reference.referencedDate);
       const gap: CrossReferenceGap = {
@@ -729,7 +733,10 @@ export function inferCadenceSuggestions(
     else if (medianIntervalDays >= 75 && medianIntervalDays <= 110 && perYear >= 3 && perYear <= 5) rule = { frequency: "quarterly" };
     else rule = { frequency: "per_year_count", count: Math.min(perYear, 12), ...(usualMonths.length >= Math.min(perYear, 12) ? { months: usualMonths } : {}) };
     const spread = intervals.length ? intervals.filter((days) => Math.abs(days - medianIntervalDays) <= medianIntervalDays * 0.5).length / intervals.length : 0;
-    const confidence = Math.round(Math.min(1, (dates.length / 12) * 0.5 + spread * 0.5) * 100) / 100;
+    // Confidence blends sample size, interval regularity and how steady the
+    // yearly count is; a body that meets in bursts gets a lower score.
+    const steadyYears = sampleYears.filter((year) => Math.abs((years.get(year)?.length ?? 0) - perYear) <= Math.max(1, perYear * 0.25)).length / sampleYears.length;
+    const confidence = Math.round((0.3 * Math.min(1, dates.length / 12) + 0.3 * spread + 0.4 * steadyYears) * 100) / 100;
     const bodyKind: BodyKind = bodyKey.startsWith("committee:") ? "committee" : "board";
     const bodyLabel = bodyLabelFor(bodyKey, snapshot.committees);
     suggestions.push({

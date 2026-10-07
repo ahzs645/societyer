@@ -123,9 +123,9 @@ const db = new MemoryDb({
     ],
     committees: [{ _id: "c-ops", societyId: "soc", name: "Operations Committee", cadence: "Monthly", color: "blue", status: "Active", createdAtISO: "2020-01-01" }],
     meetings: [{ _id: "mt1", societyId: "soc", type: "Board", title: "Board", scheduledAt: "2021-03-02T19:00:00Z", status: "Held", electronic: false, attendeeIds: [] }],
-    meetingsOther: [],
+    minutes: [{ _id: "mn1", societyId: "soc", meetingId: "mt1", heldAt: "2021-03-02", sourceDocumentIds: ["doc-src"], attendees: [], absent: [], quorumMet: true, discussion: "", decisions: [], actionItems: [] }],
     sourceEvidence: [
-      legacy("Example_OpsAgenda_Oct2017.docx", "minutes", { _id: "se1", externalSystem: "google-drive", externalId: "google-drive:1", summary: "s", createdAtISO: "2026-01-01", accessLevel: "internal", excerpt: "Operations Committee Meeting\nDate: October 10, 2017" }),
+      legacy("Example_OpsAgenda_Oct2017.docx", "minutes", { _id: "se1", sourceDocumentId: "doc-src", externalSystem: "google-drive", externalId: "google-drive:1", summary: "s", createdAtISO: "2026-01-01", accessLevel: "internal", excerpt: "Operations Committee Meeting\nDate: October 10, 2017" }),
       legacy("2021 Service Agreement.pdf", "documents", { _id: "se2", externalSystem: "google-drive", externalId: "google-drive:2", summary: "s", createdAtISO: "2026-01-01", accessLevel: "internal" }),
       legacy("Confidential roster", "peopleDirectory", { _id: "se3", externalSystem: "google-drive", externalId: "google-drive:3", summary: "s", createdAtISO: "2026-01-01", accessLevel: "restricted", sensitivity: "restricted", excerpt: "Private phone numbers" }),
       { ...legacy("Linked", "minutes"), _id: "se4", targetId: "mt1", externalSystem: "x", summary: "s", createdAtISO: "2026-01-01", accessLevel: "internal" },
@@ -148,6 +148,8 @@ assert.equal(gaps.length, 3);
 const opsGap = gaps.find((gap) => gap.sourceEvidenceId === "se1");
 assert.deepEqual([opsGap.infoType, opsGap.reason, opsGap.observedDate, opsGap.bodyKey, opsGap.origin, opsGap.status], ["meeting.package", "not_transposed", "2017-10-10", "committee:c-ops", "backfill", "open"]);
 const restricted = gaps.find((gap) => gap.sourceEvidenceId === "se3");
+assert.deepEqual([opsGap.affectedTable, opsGap.affectedId], ["meetings", "mt1"], "a source that fed a meeting's minutes links the gap to that meeting");
+assert.equal(gaps.find((gap) => gap.sourceEvidenceId === "se2").affectedId, undefined);
 assert.equal(restricted.excerpt, undefined);
 assert.equal(restricted.sensitivity, "restricted");
 assert.equal(db.dump("sourceEvidence").length, 4, "evidence rows are left untouched");
@@ -163,7 +165,7 @@ await assert.rejects(() => viewer.runMutation("representationGaps:create", { soc
 await assert.rejects(() => owner.runMutation("representationGaps:create", { societyId: "soc", infoType: "motion.dissent", reason: "because" }), /Unsupported gap reason/);
 const gapId = await owner.runMutation("representationGaps:create", { societyId: "soc", infoType: "motion.dissent", reason: "no_schema_field", excerpt: "Two directors asked that their dissent be recorded.", affectedTable: "meetings", affectedId: "mt1", locator: { page: "2", section: "5. New business" } });
 const badge: any = await owner.runQuery("representationGaps:countForRecord", { societyId: "soc", affectedTable: "meetings", affectedId: "mt1" });
-assert.deepEqual(badge, { total: 1, open: 1, keptAsText: 0 });
+assert.deepEqual(badge, { total: 2, open: 2, keptAsText: 0 }, "reviewer gap plus the backfilled source gap");
 const created = db.dump("representationGaps").find((row: any) => row._id === gapId) as any;
 assert.equal(created.origin, "reviewer");
 assert.equal(created.reviewHistory[0].actorUserId, "owner");

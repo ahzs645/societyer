@@ -164,6 +164,30 @@ pre-fill and the filing bot accept it as held, and continuity treats it as
 - `test:interface-route-coverage` still fails only on the pre-existing
   `/app/people-directory/:id` and `/app/people-history` entries (owned by
   the people package); the two new routes are covered.
+- Browser, demo org (local runtime): heat-map, period drawer (marked a
+  missing AGM year "never held" with a reason; the cell turned "N"), month
+  view, record gaps, expectations (added a manual cadence; its row appeared),
+  native coverage, dashboard card, committee structure editor (added a
+  mandate version), phone width 390 px.
+- Browser, restored PGAIR backup (142 meetings): before conversion the AGM
+  row shows 2017 and 2018 as record missing (audit gap 1), 2023–2025 missing
+  (never transposed), and 2009/2011/2013/2015/2016/2019–2022 as draft only
+  (no approval recorded, audit gap 5). Annual-report rows are record missing
+  for every AGM year (audit gap 6, "evidence missing"); financial statements
+  missing or unverified (gap 7); director rows missing every year (gap 8).
+  Converting the 3,591 legacy rows took about 5 s and produced 25 info-type
+  groups (top: minutes content 792, general records 443, programs 431,
+  agendas without minutes 384, committee mandates 267, agreements 63,
+  director consents 55, proxies 35). After conversion 2010, 2012, 2014 and
+  2023–2025 AGMs become "only in source files"; 2017 and 2018 stay record
+  missing. Cross references found: minutes of 2010-09-28 (audit gap 3),
+  2018-11-20 and 2018-11-28 (the missing Nov 2018 meeting, gap 1), plus
+  2011-09-27, 2014-11-25, 2020-05-20 and 2020-06-20. Confirming the inferred
+  board cadence (5 per year) shows 2018 as "no meeting record" (gap 2).
+  153 converted gaps link to the 132 meetings their source files fed, so
+  meeting pages show "N unsupported details" (one 2021 AGM shows a 2022
+  agenda among them, exposing the audit's mis-merge). Native coverage
+  overall 13.8 %.
 
 ## Assumptions and decisions
 

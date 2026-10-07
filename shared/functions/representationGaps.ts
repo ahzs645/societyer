@@ -483,11 +483,20 @@ export async function backfillFromSourceEvidencePortable(
 ) {
   await requireSocietyMembership(ctx, args.societyId);
   const limit = Math.max(1, Math.min(args.limit ?? 400, 1000));
-  const [evidence, gaps, committees] = await Promise.all([
+  const [evidence, gaps, committees, minutes] = await Promise.all([
     ctx.db.query<LegacySourceEvidence & PortableDoc>("sourceEvidence").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect(),
     ctx.db.query<GapRow>("representationGaps").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect(),
     ctx.db.query("committees").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect(),
+    ctx.db.query("minutes").withIndex("by_society", (q) => q.eq("societyId", args.societyId)).collect(),
   ]);
+  // A source file that also fed a meeting's minutes: the untransposed detail
+  // belongs to that meeting, so its gap shows on the meeting's badge.
+  const meetingBySourceDocument = new Map<string, string>();
+  for (const row of minutes as any[]) {
+    for (const documentId of Array.isArray(row.sourceDocumentIds) ? row.sourceDocumentIds : []) {
+      if (!meetingBySourceDocument.has(String(documentId))) meetingBySourceDocument.set(String(documentId), String(row.meetingId));
+    }
+  }
   const converted = new Set(gaps.map((row) => row.sourceEvidenceId).filter(Boolean).map(String));
   const candidates = evidence.filter((row) => isLegacyUnsupportedEvidence(row) && !converted.has(String(row._id)));
   const hints: CommitteeHint[] = committees.map((row: any) => ({ _id: String(row._id), name: String(row.name ?? "") }));
@@ -499,7 +508,7 @@ export async function backfillFromSourceEvidencePortable(
       infoType: draft.infoType,
       reason: draft.reason,
       origin: "backfill",
-      title: draft.title,
+      title: row.sourceDocumentId && meetingBySourceDocument.has(String(row.sourceDocumentId)) ? `Partly transposed into a meeting: ${row.sourceTitle}`.slice(0, 240) : draft.title,
       sourceDocumentId: row.sourceDocumentId,
       sourceExternalId: row.externalId,
       sourceTitle: row.sourceTitle,
@@ -507,6 +516,9 @@ export async function backfillFromSourceEvidencePortable(
       excerpt: row.excerpt ? String(row.excerpt).slice(0, 600) : undefined,
       observedDate: draft.observedDate,
       bodyKey: draft.bodyKey,
+      ...(row.sourceDocumentId && meetingBySourceDocument.has(String(row.sourceDocumentId))
+        ? { affectedTable: "meetings", affectedId: meetingBySourceDocument.get(String(row.sourceDocumentId)) }
+        : {}),
       proposedTargetTable: draft.proposedTargetTable,
       dedupeKey: `legacy:${row._id}`,
       sensitivity: row.sensitivity,

@@ -126,93 +126,8 @@ export function SystemGapsPanel({ societyId, affectedTable, affectedId, focusGap
 
   const groups: Group[] = summary.groups;
   const visibleRows = detailRows?.slice(page * PAGE, page * PAGE + PAGE);
-
-  return (
-    <div className="col" style={{ gap: 16 }}>
-      {legacyRemaining > 0 && (
-        <Banner tone="info">
-          <div className="row" style={{ gap: 12, flexWrap: "wrap", justifyContent: "space-between", width: "100%" }}>
-            <span>{legacyRemaining} source files were mapped to a model area as untyped "model evidence" and never transposed. Convert them into typed gaps to count and triage them here.</span>
-            {canWrite && (
-              <button type="button" className="btn btn--sm btn--accent" disabled={Boolean(backfill)} onClick={convert}>
-                {backfill ? `Converting… ${backfill.done}/${backfill.total}` : `Convert ${legacyRemaining} rows`}
-              </button>
-            )}
-          </div>
-        </Banner>
-      )}
-
-      <div className="stat-grid">
-        {GAP_STATUSES.map((status) => (
-          <div key={status} className="stat">
-            <div className="stat__label">{GAP_STATUS_LABELS[status]}</div>
-            <div className="stat__value">{summary.byStatus[status] ?? 0}</div>
-          </div>
-        ))}
-      </div>
-
-      <section className="card">
-        <div className="card__head">
-          <h2 className="card__title">Backlog by information type</h2>
-          <span className="card__subtitle">{summary.total} gaps · ranked by open count</span>
-          {canWrite && (
-            <button type="button" className="btn-action" style={{ marginLeft: "auto" }} onClick={() => setCreating(true)}>
-              <Plus size={12} /> Record a gap
-            </button>
-          )}
-        </div>
-        <div className="coverage-table-scroll">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Information type</th>
-                <th>Reason</th>
-                <th>Open</th>
-                <th>Kept as text</th>
-                <th>Schema change</th>
-                <th>Resolved / won't fix</th>
-                <th>Suggested target</th>
-                <th aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {!groups.length && (
-                <tr><td colSpan={8} className="table__empty">No system gaps recorded. Gaps appear here from imports, preflight checks and reviewer entries.</td></tr>
-              )}
-              {groups.map((group) => {
-                const isSelected = selected?.infoType === group.infoType && selected?.reason === group.reason;
-                return (
-                  <tr key={`${group.infoType}|${group.reason}`} className={isSelected ? "is-selected" : undefined}>
-                    <td>
-                      <button type="button" className="btn-link" onClick={() => { setSelected({ infoType: group.infoType, reason: group.reason }); setPage(0); }}>
-                        {group.label}
-                      </button>
-                      <div className="muted" style={{ fontSize: 11 }}>{group.infoType} · {group.area}</div>
-                    </td>
-                    <td>{GAP_REASON_LABELS[group.reason as GapReason] ?? group.reason}</td>
-                    <td>{group.byStatus.open ?? 0}</td>
-                    <td>{group.byStatus.kept_as_text ?? 0}</td>
-                    <td>{group.byStatus.schema_change_requested ?? 0}</td>
-                    <td>{(group.byStatus.resolved_native ?? 0) + (group.byStatus.wont_fix ?? 0)}</td>
-                    <td><code style={{ fontSize: 11 }}>{group.suggestedTarget ?? "—"}</code></td>
-                    <td>
-                      {canWrite && (
-                        <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
-                          <button type="button" className="btn btn--sm" onClick={() => bulk(group, "kept_as_text")}>Keep as text</button>
-                          <button type="button" className="btn btn--sm" onClick={() => bulk(group, "schema_change_requested")}>Request schema change</button>
-                          <button type="button" className="btn btn--sm" onClick={() => bulk(group, "wont_fix")}>Won't fix</button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {(selected || (affectedTable && affectedId) || focusGapId) && (
+  const recordFocused = Boolean((affectedTable && affectedId) || focusGapId);
+  const detailSection = selected || recordFocused ? (
         <section className="card">
           <div className="card__head">
             <h2 className="card__title">
@@ -275,7 +190,95 @@ export function SystemGapsPanel({ societyId, affectedTable, affectedId, focusGap
             )}
           </div>
         </section>
+  ) : null;
+
+  return (
+    <div className="col" style={{ gap: 16 }}>
+      {legacyRemaining > 0 && (
+        <Banner tone="info">
+          <div className="row" style={{ gap: 12, flexWrap: "wrap", justifyContent: "space-between", width: "100%" }}>
+            <span>{legacyRemaining} source files were mapped to a model area as untyped "model evidence" and never transposed. Convert them into typed gaps to count and triage them here.</span>
+            {canWrite && (
+              <button type="button" className="btn btn--sm btn--accent" disabled={Boolean(backfill)} onClick={convert}>
+                {backfill ? `Converting… ${backfill.done}/${backfill.total}` : `Convert ${legacyRemaining} rows`}
+              </button>
+            )}
+          </div>
+        </Banner>
       )}
+
+      <div className="stat-grid">
+        {GAP_STATUSES.map((status) => (
+          <div key={status} className="stat">
+            <div className="stat__label">{GAP_STATUS_LABELS[status]}</div>
+            <div className="stat__value">{summary.byStatus[status] ?? 0}</div>
+          </div>
+        ))}
+      </div>
+
+      {recordFocused && detailSection}
+      <section className="card">
+        <div className="card__head">
+          <h2 className="card__title">Backlog by information type</h2>
+          <span className="card__subtitle">{summary.total} gaps · ranked by open count</span>
+          {canWrite && (
+            <button type="button" className="btn-action" style={{ marginLeft: "auto" }} onClick={() => setCreating(true)}>
+              <Plus size={12} /> Record a gap
+            </button>
+          )}
+        </div>
+        <div className="coverage-table-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Information type</th>
+                <th>Reason</th>
+                <th>Open</th>
+                <th>Kept as text</th>
+                <th>Schema change</th>
+                <th>Resolved / won't fix</th>
+                <th>Suggested target</th>
+                <th aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {!groups.length && (
+                <tr><td colSpan={8} className="table__empty">No system gaps recorded. Gaps appear here from imports, preflight checks and reviewer entries.</td></tr>
+              )}
+              {groups.map((group) => {
+                const isSelected = selected?.infoType === group.infoType && selected?.reason === group.reason;
+                return (
+                  <tr key={`${group.infoType}|${group.reason}`} className={isSelected ? "is-selected" : undefined}>
+                    <td>
+                      <button type="button" className="btn-link" onClick={() => { setSelected({ infoType: group.infoType, reason: group.reason }); setPage(0); }}>
+                        {group.label}
+                      </button>
+                      <div className="muted" style={{ fontSize: 11 }}>{group.infoType} · {group.area}</div>
+                    </td>
+                    <td>{GAP_REASON_LABELS[group.reason as GapReason] ?? group.reason}</td>
+                    <td>{group.byStatus.open ?? 0}</td>
+                    <td>{group.byStatus.kept_as_text ?? 0}</td>
+                    <td>{group.byStatus.schema_change_requested ?? 0}</td>
+                    <td>{(group.byStatus.resolved_native ?? 0) + (group.byStatus.wont_fix ?? 0)}</td>
+                    <td><code style={{ fontSize: 11 }}>{group.suggestedTarget ?? "—"}</code></td>
+                    <td>
+                      {canWrite && (
+                        <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+                          <button type="button" className="btn btn--sm" onClick={() => bulk(group, "kept_as_text")}>Keep as text</button>
+                          <button type="button" className="btn btn--sm" onClick={() => bulk(group, "schema_change_requested")}>Request schema change</button>
+                          <button type="button" className="btn btn--sm" onClick={() => bulk(group, "wont_fix")}>Won't fix</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {!recordFocused && detailSection}
 
       <RecordGapDrawer open={creating} onClose={() => setCreating(false)} societyId={societyId} affectedTable={affectedTable} affectedId={affectedId} />
     </div>
