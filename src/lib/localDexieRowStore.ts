@@ -337,7 +337,8 @@ export class LocalDexieRowStore implements LocalRowStore {
     const started = now();
     let count = 0;
     if (db) {
-      const records = await db.records.where("table").equals(table).toArray();
+      // Record keys are "<table>:<id>": one key range, read with a single getAll.
+      const records = await db.records.where(":id").between(`${table}:`, `${table}:\uffff`, true, true).toArray();
       // A table with nothing stored stays absent, exactly as boot would have left it.
       const state = records.length ? this.tableState(table, true) : this.tableState(table);
       for (const record of records) {
@@ -975,7 +976,7 @@ export class LocalDexieRowStore implements LocalRowStore {
     const needsMigration = normalizeWorkspaceMeta(workspaceMeta?.value, this.workspaceMeta).schemaVersion < CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION;
     const deferTables = needsMigration ? [] : DEFERRED_HYDRATION_TABLES.filter((table) => !this.seed[table]?.length);
     const [localRecords, attachments, changes] = await Promise.all([
-      deferTables.length ? db.records.where("table").noneOf([...deferTables]).toArray() : db.records.toArray(),
+      deferTables.length ? readRecordsExcept(db, deferTables) : db.records.toArray(),
       db.attachments.toArray(),
       db.changes.toArray(),
     ]);
@@ -1226,6 +1227,22 @@ function recordBootTiming(timing: { totalMs: number; readMs: number; records: nu
     readMs: Math.round(timing.readMs),
     records: timing.records,
   };
+}
+
+/**
+ * Every record except those of `tables`, as key ranges between the tables' key prefixes ("<table>:<id>"),
+ * each read with one getAll. (An index `noneOf` walks a cursor record by record, several times slower.)
+ */
+async function readRecordsExcept(db: LocalDexieDatabase, tables: readonly string[]): Promise<LocalRecordEnvelope[]> {
+  const prefixes = [...tables].map((table) => `${table}:`).sort();
+  const reads: Array<Promise<LocalRecordEnvelope[]>> = [];
+  let lower: string | null = null;
+  for (const prefix of prefixes) {
+    reads.push(lower === null ? db.records.where(":id").below(prefix).toArray() : db.records.where(":id").between(lower, prefix, false, false).toArray());
+    lower = `${prefix}\uffff`;
+  }
+  reads.push(lower === null ? db.records.toArray() : db.records.where(":id").above(lower).toArray());
+  return (await Promise.all(reads)).flat();
 }
 
 /** Opt-in diagnostics: deferred tables loaded on first use (table → { ms, rows }). */
