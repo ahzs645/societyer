@@ -13,6 +13,7 @@ import { readableProjectionPermissions } from "./projectionPermissions";
 import { requirePermissionPortable, type Permission } from "./permissions";
 import { documentAccessPredicate, filterDocumentLinkedRows } from "./documents";
 import { getOwned, requireSocietyMembership } from "./access";
+import { normalizeSigningAuthorityTiers } from "../signingAuthorityTiers";
 
 const REGISTER_TABLES = [
   "boardRoleAssignments",
@@ -523,6 +524,7 @@ export async function createManualPortable(
       institutionName: cleanText(p.institutionName),
       accountLabel: cleanText(p.accountLabel),
       authorityType: cleanText(p.authorityType) || "signing",
+      tiers: normalizeSigningAuthorityTiers(p.tiers),
       effectiveDate: cleanDate(p.effectiveDate) || todayDate(),
       endDate: cleanDate(p.endDate),
       status: cleanText(p.status) || "NeedsReview",

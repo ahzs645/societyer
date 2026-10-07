@@ -60,6 +60,23 @@ export async function committeeDetailPortable(ctx: PortableQueryCtx, { id }: { i
   return { committee, members, meetings, tasks, goals };
 }
 
+/** A3: a committee's own quorum rule. See shared/bodyQuorum.ts. */
+export type CommitteeQuorumRule = {
+  quorumType: string;
+  quorumValue?: number;
+  quorumMinimumCount?: number;
+  countBasis?: string;
+  notes?: string;
+};
+
+function assertQuorumRule(rule?: CommitteeQuorumRule) {
+  if (!rule) return;
+  if (!["fixed", "percentage", "all_members", "majority"].includes(rule.quorumType)) throw new Error("Committee quorum type must be fixed, percentage, all_members or majority.");
+  if ((rule.quorumType === "fixed" || rule.quorumType === "percentage") && !(typeof rule.quorumValue === "number" && rule.quorumValue > 0)) throw new Error("Committee quorum needs a positive value.");
+  if (rule.quorumType === "percentage" && (rule.quorumValue ?? 0) > 100) throw new Error("A percentage quorum cannot exceed 100.");
+  if (rule.quorumMinimumCount != null && rule.quorumMinimumCount < 0) throw new Error("Quorum minimum cannot be negative.");
+}
+
 export async function committeeCreatePortable(
   ctx: PortableMutationCtx,
   args: {
@@ -70,9 +87,12 @@ export async function committeeCreatePortable(
     cadence: string;
     cadenceNotes?: string;
     chairDirectorId?: string;
+    quorumRule?: CommitteeQuorumRule;
+    bodyKey?: string;
     color: string;
   },
 ) {
+  assertQuorumRule(args.quorumRule);
   await requireSocietyMembership(ctx, args.societyId);
   if (args.chairDirectorId) await getOwned(ctx, "directors", args.chairDirectorId, args.societyId);
   const id = await ctx.db.insert("committees", {
@@ -108,13 +128,18 @@ export async function committeeUpdatePortable(
       chairDirectorId?: string;
       color?: string;
       status?: string;
+      quorumRule?: CommitteeQuorumRule;
+      clearQuorumRule?: boolean;
+      bodyKey?: string;
     };
   },
 ) {
   const authorizedRow = await requireOwnedRow(ctx, "committees", id);
   const societyId = String(authorizedRow.societyId);
   if (patch.chairDirectorId) await getOwned(ctx, "directors", patch.chairDirectorId, societyId);
-  await ctx.db.patch(id, patch);
+  assertQuorumRule(patch.quorumRule);
+  const { clearQuorumRule, ...rest } = patch;
+  await ctx.db.patch(id, clearQuorumRule ? { ...rest, quorumRule: undefined } : rest);
 }
 
 export async function committeeRemovePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
@@ -137,15 +162,22 @@ export async function committeeAddMemberPortable(
     role: string;
     directorId?: string;
     memberId?: string;
+    /** A1: people-directory link for members who are not directors/members. */
+    personId?: string;
+    representedOrganization?: string;
+    joinedAt?: string;
+    leftAt?: string;
   },
 ) {
   await requireSocietyMembership(ctx, args.societyId);
   await getOwned(ctx, "committees", args.committeeId, args.societyId);
   if (args.directorId) await getOwned(ctx, "directors", args.directorId, args.societyId);
   if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
+  if (args.personId) await getOwned(ctx, "peopleDirectory", args.personId, args.societyId);
+  if (args.joinedAt && args.leftAt && args.leftAt < args.joinedAt) throw new Error("A committee member cannot leave before joining.");
   return ctx.db.insert("committeeMembers", {
     ...args,
-    joinedAt: new Date().toISOString().slice(0, 10),
+    joinedAt: args.joinedAt || new Date().toISOString().slice(0, 10),
   });
 }
 

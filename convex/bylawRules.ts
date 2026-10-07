@@ -1,6 +1,7 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { bodyQuorumRuleValidator } from "./validators/meetingModel";
 import {
   getActivePortable,
   getForDatePortable,
@@ -46,6 +47,8 @@ export const upsertActive = authorizedMutation("bylawRules:upsertActive", mutati
     quorumType: v.string(),
     quorumValue: v.number(),
     quorumMinimumCount: v.optional(v.number()),
+    // A3: per-body quorum rules (general / board / each committee).
+    bodyQuorumRules: v.optional(v.array(bodyQuorumRuleValidator)),
     memberProposalThresholdPct: v.number(),
     memberProposalMinSignatures: v.number(),
     memberProposalLeadDays: v.number(),

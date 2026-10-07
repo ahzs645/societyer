@@ -1,6 +1,7 @@
 import { authorizedMutation, authorizedQuery } from "./lib/authorizedServer";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { quorumRuleValidator } from "./validators/meetingModel";
 import {
   committeesListPortable,
   committeeGetPortable,
@@ -40,6 +41,8 @@ export const create = authorizedMutation("committees:create", mutation)({
     cadence: v.string(),
     cadenceNotes: v.optional(v.string()),
     chairDirectorId: v.optional(v.id("directors")),
+    quorumRule: v.optional(quorumRuleValidator),
+    bodyKey: v.optional(v.string()),
     color: v.string(),
   },
   returns: v.any(),
@@ -59,6 +62,9 @@ export const update = authorizedMutation("committees:update", mutation)({
       chairDirectorId: v.optional(v.id("directors")),
       color: v.optional(v.string()),
       status: v.optional(v.string()),
+      quorumRule: v.optional(quorumRuleValidator),
+      clearQuorumRule: v.optional(v.boolean()),
+      bodyKey: v.optional(v.string()),
     }),
   },
   returns: v.any(),
@@ -80,6 +86,10 @@ export const addMember = authorizedMutation("committees:addMember", mutation)({
     role: v.string(),
     directorId: v.optional(v.id("directors")),
     memberId: v.optional(v.id("members")),
+    personId: v.optional(v.id("peopleDirectory")),
+    representedOrganization: v.optional(v.string()),
+    joinedAt: v.optional(v.string()),
+    leftAt: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (ctx, args) => committeeAddMemberPortable(await toPortableMutationCtx(ctx), args),
