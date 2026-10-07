@@ -8,6 +8,7 @@ import path from "node:path";
 import { ConvexHttpClient } from "convex/browser";
 import { createFixture, fixtureIssuer } from "../experiments/offline-convex/fixture";
 
+await mkdir(path.join(process.cwd(), "tmp"), { recursive: true });
 const privateRoot = await mkdtemp(path.join(process.cwd(), "tmp/provider-gateway-"));
 const envNames = ["AUTH_MODE", "VITE_AUTH_MODE", "AUTH_DB_PATH", "BETTER_AUTH_SECRET", "CLERK_JWT_KEY", "CLERK_JWT_ISSUER_DOMAIN", "CLERK_AUTHORIZED_PARTIES", "CONNECTOR_RUNNER_BASE_URL", "CONNECTOR_RUNNER_SECRET", "SOCIETYER_WAVE_WORKSPACE_BINDINGS_JSON", "NODE_ENV"];
 const previous = new Map(envNames.map(name => [name, process.env[name]]));
