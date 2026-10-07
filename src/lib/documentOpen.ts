@@ -4,7 +4,8 @@ import { triggerBlobDownload } from "./zip";
 
 /**
  * Opening a document's file, in order of trust (finding D-02):
- *   1. a saved original restored from a backup (by version, document or SHA),
+ *   1. a saved original restored from a backup (by version, document or SHA), or an AI
+ *      intake source file still cached on this device (by SHA),
  *   2. the latest uploaded version,
  *   3. a legacy Convex storage file,
  *   4. the external link (Drive, Paperless, …) as a last resort.
@@ -29,9 +30,23 @@ export async function restoredDocumentFile(doc: Pick<OpenableDocument, "_id" | "
     }
     const byDocument = await getRestoredFile({ documentId: doc._id });
     if (byDocument) return byDocument;
-    if (doc.sha256) return await getRestoredFile({ sha256: doc.sha256 });
+    if (doc.sha256) {
+      const bySha = await getRestoredFile({ sha256: doc.sha256 });
+      if (bySha) return bySha;
+    }
   } catch {
     // No local workspace (hosted runtime): fall through to remote targets.
+  }
+  // A source file of an AI intake run, still in this device's intake cache (the browser-only
+  // runtime has no file store; promotion links the document to the file by SHA-256).
+  if (doc.sha256) {
+    try {
+      const { getCachedOriginal } = await import("../features/intake/originalsCache");
+      const cached = await getCachedOriginal(doc.sha256);
+      if (cached) return cached.blob;
+    } catch {
+      // No IndexedDB (private mode): nothing cached.
+    }
   }
   return undefined;
 }

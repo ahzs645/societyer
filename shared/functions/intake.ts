@@ -25,7 +25,7 @@ function sanitizeLocator(locator: any) {
     sheet: optionalText(locator?.sheet, 200), cell: optionalText(locator?.cell, 40), charStart: optionalNumber(locator?.charStart), charEnd: optionalNumber(locator?.charEnd), quote: optionalText(locator?.quote, 400),
   });
 }
-const EXTRACTION_STATUSES = new Set(["pending_review", "in_review", "accepted", "promoted", "rejected"]);
+const EXTRACTION_STATUSES = new Set(["pending_review", "in_review", "accepted", "promoted", "rejected", "covered"]);
 
 async function canRead(ctx: PortableQueryCtx, societyId: string) {
   await requirePermissionPortable(ctx, societyId, "settings:read");
@@ -107,10 +107,44 @@ export async function listExtractions(ctx: PortableQueryCtx, { societyId, runId 
     const risk = (motions * 3 + (record.attendance?.length ?? 0) * 0.2 + (record.actionItems?.length ?? 0)) * (1 + lowConfidence / 10) * (1 + (verification.mismatched ?? 0));
     return {
       _id: row._id, fileId: row.fileId, fileKey: row.fileKey, docClass: row.docClass, engine: row.engine, model: row.model, status: row.status,
-      date: record.date?.value?.iso, body: record.bodyLabel?.value ?? record.body?.value, motions, attendance: record.attendance?.length ?? 0,
+      date: recordDate(record), body: record.bodyLabel?.value ?? record.body?.value, motions, attendance: record.attendance?.length ?? 0,
       actionItems: record.actionItems?.length ?? 0, unsupported: row.unsupported?.length ?? 0, verification, lowConfidenceFields: lowConfidence, risk: Number(risk.toFixed(2)),
+      summary: recordSummary(row.docClass, record), ...(row.promotion ? { promotion: row.promotion } : {}),
     };
   }).sort((a: any, b: any) => b.risk - a.risk);
+}
+
+/** The date that identifies a record of any class (meeting, period end, term, filing, letter). */
+function recordDate(record: any): string | undefined {
+  for (const key of ["date", "meetingDate", "periodEnd", "termStart", "filedDate", "adoptedDate", "effectiveDate", "effective", "asOfDate"]) {
+    const iso = record?.[key]?.value?.iso;
+    if (typeof iso === "string" && iso) return iso;
+  }
+  return undefined;
+}
+
+const CLASS_NOUN: Record<string, string> = {
+  meetingMinutes: "Minutes", agenda: "Agenda", meetingPackage: "Meeting package", agmMaterial: "AGM material", bylaws: "Bylaws", policy: "Policy", directorConsent: "Consent to act",
+  proxy: "Proxy", roster: "Roster", financialStatement: "Financial statement", budget: "Budget", insurance: "Insurance", agreement: "Agreement", grant: "Grant",
+  registryFiling: "Registry filing", correspondence: "Correspondence", invoice: "Invoice",
+};
+
+/** One line describing a non-minutes record in the review queue ("Policy · Delegation of Signing Authority"). */
+function recordSummary(docClass: string, record: any): string | undefined {
+  if (docClass === "meetingMinutes") return undefined;
+  const value = (key: string) => record?.[key]?.value;
+  const text = (input: unknown) => (typeof input === "string" ? input : input && typeof input === "object" ? String((input as any).text ?? (input as any).nameAsWritten ?? "") : "").trim();
+  const count = (key: string, noun: string) => (Array.isArray(record?.[key]) && record[key].length ? `${record[key].length} ${noun}${record[key].length === 1 ? "" : "s"}` : "");
+  const detail = {
+    agenda: count("items", "item"), meetingPackage: count("items", "item"), agmMaterial: count("agendaItems", "item"),
+    bylaws: text(value("title")), policy: text(value("title")), grant: text(value("title")), agreement: text(value("title")),
+    directorConsent: text(record?.entries?.[0]?.person?.value), proxy: count("entries", "entry"), roster: count("entries", "person"),
+    financialStatement: text(value("title")) || String(value("statementType") ?? "").replace(/_/g, " "), budget: text(value("title")) || count("lines", "line"),
+    insurance: [text(value("insurer")), text(value("policyNumber"))].filter(Boolean).join(" · "), registryFiling: String(value("filingType") ?? "").replace(/_/g, " "),
+    correspondence: text(value("subject")), invoice: [text(value("vendor")), text(value("amount"))].filter(Boolean).join(" · "),
+  }[docClass as "agenda"];
+  const noun = CLASS_NOUN[docClass] ?? docClass;
+  return [noun, detail].filter(Boolean).join(" · ").slice(0, 140);
 }
 
 function countFields(record: unknown, predicate: (field: any) => boolean): number {

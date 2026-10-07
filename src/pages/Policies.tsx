@@ -1,3 +1,4 @@
+import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
@@ -172,6 +173,7 @@ export function PoliciesPage() {
                   <td data-label="Policy">
                     <strong>{row.policyName}</strong>
                     {row.policyNumber && <div className="mono muted">{row.policyNumber}</div>}
+                    <SourceProvenanceButton table="policies" id={row._id} />
                   </td>
                   <td data-label="Owner">{row.owner || "-"}</td>
                   <td data-label="Dates">
