@@ -41,7 +41,7 @@ function DinnerTableIcon({ size = 12 }: { size?: number }) {
   );
 }
 import { Badge, Field } from "./ui";
-import { MarkdownEditor } from "./MarkdownEditor";
+import { MarkdownEditor, type MarkdownEditorHandle } from "./MarkdownEditor";
 import { NameAutocomplete } from "./NameAutocomplete";
 import { Select, type SelectOption } from "./Select";
 import { Tooltip } from "./Tooltip";
@@ -954,6 +954,14 @@ function MotionRow({
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [pendingOverrideOutcome, setPendingOverrideOutcome] = useState<string | null>(null);
   const confirm = useConfirm();
+  // The rich editor reports changes after a short delay; "Done" right after
+  // typing used to close it first and drop the last edit.
+  const detailsRef = useRef<MarkdownEditorHandle | null>(null);
+  const finishEditing = () => {
+    const latest = (detailsRef.current?.getMarkdown() ?? motion.text ?? "").trimEnd();
+    if (latest !== motion.text) onPatch({ text: latest });
+    onSetExpanded?.(false);
+  };
 
   const tone =
     motion.outcome === "Carried" ? "success" :
@@ -1170,7 +1178,7 @@ function MotionRow({
       {expanded && (
         <div style={{ marginTop: 10, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
           <Field label="Details">
-            <MarkdownEditor rows={4} value={motion.text} onChange={(markdown) => onPatch({ text: markdown })} />
+            <MarkdownEditor ref={detailsRef} rows={4} value={motion.text} onChange={(markdown) => onPatch({ text: markdown })} />
           </Field>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Moved by">
@@ -1298,7 +1306,7 @@ function MotionRow({
             </div>
           </Field>
           <div className="row" style={{ gap: 6, justifyContent: "flex-end", marginTop: 10 }}>
-            <button className="btn-action btn-action--primary" onClick={() => onSetExpanded?.(false)}>
+            <button className="btn-action btn-action--primary" onClick={finishEditing}>
               <Check size={12} /> Done
             </button>
           </div>

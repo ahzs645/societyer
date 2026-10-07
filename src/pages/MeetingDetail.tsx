@@ -120,6 +120,7 @@ export function MeetingDetailPage() {
   const { loaded: permissionsLoaded, can } = usePermissions();
   const canMeetingsWrite = can("meetings:write");
   const canMinutesWrite = can("minutes:write");
+  const canMinutesRead = can("minutes:read");
   const canAgendasWrite = can("agendas:write");
   const canMotionsWrite = can("motions:write");
   const canTasksWrite = can("tasks:write");
@@ -533,6 +534,8 @@ export function MeetingDetailPage() {
   const agendaTree = agendaEntriesFromRecord((minutes as any)?.adoptedAgenda?.items ? (minutes as any).adoptedAgenda : agendaRecord) ?? [];
   const canonicalAgendaItems = agendaItemsFromRecord(agendaRecord);
   const agenda = agendaTree.map((entry) => entry.title);
+  // Until the minutes query answers, counts would read as "none recorded".
+  const minutesLoading = minutes === undefined && canMinutesRead;
   const sourceFidelityInExport = effectiveSourceFidelity(storedSourceFidelity, sourceFidelityChoice[String(meeting._id)], minutes, meeting);
   const setSourceFidelityInExport = (value: boolean) => {
     setSourceFidelityChoice((current) => ({ ...current, [String(meeting._id)]: value }));
@@ -2252,11 +2255,11 @@ export function MeetingDetailPage() {
         </div>
         <div>
           <span>Present</span>
-          <strong>{minutes ? minutesPresentCount(minutes) : meeting.attendeeIds?.length ?? 0}</strong>
+          <strong>{minutesLoading ? "…" : minutes ? minutesPresentCount(minutes) : meeting.attendeeIds?.length ?? 0}</strong>
         </div>
         <div>
           <span>Motions</span>
-          <strong>{businessMotions.length}</strong>
+          <strong>{minutesLoading ? "…" : businessMotions.length}</strong>
         </div>
       <div>
         <span>Materials</span>
@@ -2311,6 +2314,8 @@ export function MeetingDetailPage() {
                   </Badge>
                 ) : minutes ? (
                   <Badge tone="warn">Not approved</Badge>
+                ) : minutes === undefined && canMinutesRead ? (
+                  <span className="muted">Loading…</span>
                 ) : (
                   <span className="muted">No minutes yet</span>
                 )}

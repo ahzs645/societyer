@@ -101,6 +101,7 @@ export function StructuredMinutesEditor({
   isAgm,
   includeRecordArrays: _includeRecordArrays = false,
   peopleNames = [],
+  presentAttendees = [],
 }: {
   value: StructuredMinutesEdit;
   onChange: (value: StructuredMinutesEdit) => void;
@@ -108,6 +109,8 @@ export function StructuredMinutesEditor({
   includeRecordArrays?: boolean;
   /** People-directory names suggested for chair / secretary / recorder. */
   peopleNames?: string[];
+  /** Present attendees (name, role, affiliation) offered for AGM director appointments. */
+  presentAttendees?: Array<{ name: string; roleTitle?: string; affiliation?: string }>;
 }) {
   const patch = (diff: Partial<StructuredMinutesEdit>) => onChange({ ...value, ...diff });
   return (
@@ -193,7 +196,16 @@ export function StructuredMinutesEditor({
           <Field label="Director election / appointment notes">
             <MarkdownEditor rows={3} value={value.directorElectionNotes} onChange={(markdown) => patch({ directorElectionNotes: markdown })} />
           </Field>
-          <StructuredRowsField title="Director appointments" value={value.directorAppointments} onChange={(directorAppointments) => patch({ directorAppointments })} columns={DIRECTOR_APPOINTMENT_COLUMNS} />
+          <StructuredRowsField
+            title="Director appointments"
+            value={value.directorAppointments}
+            onChange={(directorAppointments) => patch({ directorAppointments })}
+            columns={DIRECTOR_APPOINTMENT_COLUMNS}
+            fill={presentAttendees.length ? {
+              label: `Add the ${presentAttendees.length} members present`,
+              rows: () => presentAttendees.map((row) => ({ name: row.name, roleTitle: row.roleTitle || undefined, affiliation: row.affiliation || undefined })),
+            } : undefined}
+          />
           <StructuredRowsField title="Special-resolution exhibits" value={value.specialResolutionExhibits} onChange={(specialResolutionExhibits) => patch({ specialResolutionExhibits })} columns={SPECIAL_RESOLUTION_EXHIBIT_COLUMNS} />
         </>
       )}

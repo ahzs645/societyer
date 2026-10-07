@@ -145,7 +145,14 @@ export function MinutesMetadataCard({ minutes, meetingType, committees = [], peo
       <div className="card__body">
         {draft && canWrite ? (
           <>
-            <StructuredMinutesEditor value={draft} onChange={setDraft} isAgm={meetingType === "AGM"} includeRecordArrays={false} peopleNames={peopleNames} />
+            <StructuredMinutesEditor
+              value={draft}
+              onChange={setDraft}
+              isAgm={meetingType === "AGM"}
+              includeRecordArrays={false}
+              peopleNames={peopleNames}
+              presentAttendees={((minutes.detailedAttendance ?? []) as any[]).filter((row) => row?.status === "present" && row?.name)}
+            />
             <div className="minutes-next-meetings">
               <EvidenceRowsEditor title="Next meetings" rows={nextRows} columns={nextColumns} onChange={setNextRows} />
             </div>

@@ -33,6 +33,7 @@ export function StructuredRowsField({
   onChange,
   columns,
   legacyParse,
+  fill,
 }: {
   title: string;
   value: string;
@@ -40,6 +41,8 @@ export function StructuredRowsField({
   columns: EvidenceColumn[];
   /** Converts legacy pipe-separated text into rows. */
   legacyParse?: (value: string) => any[] | undefined;
+  /** Optional one-click fill, e.g. AGM appointments from the attendance list. */
+  fill?: { label: string; rows: () => any[] };
 }) {
   // Rows live locally so a freshly added (still empty) row stays visible; the
   // serialized JSON is what the parent saves.
@@ -63,6 +66,23 @@ export function StructuredRowsField({
   }
   return (
     <div className="structured-rows-field">
+      {fill && (
+        <button
+          type="button"
+          className="btn-action"
+          style={{ marginBottom: 6 }}
+          onClick={() => {
+            // Add only names not already listed.
+            const taken = new Set(rows.map((row) => String(row?.name ?? "").trim().toLowerCase()).filter(Boolean));
+            const additions = fill.rows().filter((row) => row?.name && !taken.has(String(row.name).trim().toLowerCase()));
+            const next = [...rows, ...additions];
+            setRows(next);
+            onChange(serializeRows(next, columns));
+          }}
+        >
+          {fill.label}
+        </button>
+      )}
       <EvidenceRowsEditor title={title} rows={rows} columns={columns} onChange={(next) => { setRows(next); onChange(serializeRows(next, columns)); }} />
     </div>
   );
