@@ -183,7 +183,7 @@ const MOTION_TRIGGERS: RegExp[] = [
   /\bresolution\s+(?:was\s+)?(?:motioned|moved|passed|adopted|carried)\b/i,
   /\b(?:adopted|passed|approved)\s+(?:a\s+|the\s+)?(?:special|ordinary|extraordinary)\s+resolution\b/i,
   /\bBE IT RESOLVED\b|\bRESOLVED\s*(?:that|:)/,
-  /\bmade\s+(?:a\s+)?motion\b/i,
+  /\b(?:made|makes)\s+(?:a\s+)?motion\b/i,
   /\bmotioned\b/i,
   /\bmoved\s*\/\s*seconded\b/i,
   /\(\s*motion\s*\)/i,
@@ -249,7 +249,7 @@ export function parseMotion(line: string): ParsedMotion | null {
     ?? nameOk(firstName(new RegExp(ci(String.raw`^motion\s*[:\-–]\s*`) + String.raw`(${NAME})\s*(?:;|,|$)`), text))
     ?? nameOk(firstName(new RegExp(ci(String.raw`^motion\b`) + String.raw`.{3,}?:\s*(${NAME})\s*$`), text))
     ?? nameOk(firstName(new RegExp(String.raw`(?:moved|motion(?:ed)?|made|resolution was motioned|motion made)\s+by\s+(${NAME})`), text))
-    ?? nameOk(firstName(new RegExp(String.raw`(?:^|[.;:]\s+|,\s+)(${NAME})\s+(?:moved|moves|made\s+(?:a\s+)?motion)\b`), text))
+    ?? nameOk(firstName(new RegExp(String.raw`(?:^|[.;:]\s+|,\s+)(${NAME})\s+(?:moved|moves|(?:made|makes)\s+(?:a\s+)?motion)\b`), text))
     ?? nameOk(firstName(new RegExp(ci(String.raw`\bmotion\b`) + String.raw`[^()]*?\bby\s+(${NAME})\s*(?:\(|$|,|\.|;)`), text))
     ?? nameOk(firstName(new RegExp(String.raw`(${NAME}),\s*seconded by`), text));
   result.secondedBy = nameOk(slashPair ? cleanName(slashPair[2]) : undefined)
@@ -276,7 +276,7 @@ export function parseMotion(line: string): ParsedMotion | null {
   const resolution = /resolution\s+was\s+(?:motioned|moved)[^]*?,?\s+\bthat\s+(.+)$/i.exec(text) ?? new RegExp(ci(String.raw`\bmoved\s*/\s*seconded\s*:?\s*`) + String.raw`${NAME}\s*/\s*${NAME}\s*,?\s*(?:[Tt]hat\s+)?(.+)$`).exec(text);
   const special = /(?:adopted|passed|approved)\s+(?:a\s+|the\s+)?(?:special|ordinary|extraordinary)\s+resolution\s+(?:that\s+)?(.+)$/i.exec(text);
   const resolved = /\b(?:BE IT RESOLVED|RESOLVED)\s*(?:that|:)?\s*(.+)$/.exec(text);
-  const madeMotion = new RegExp(String.raw`^(?:${NAME})\s+made\s+(?:a\s+)?motion\s+(?:to\s+|that\s+)?(.+)$`).exec(text);
+  const madeMotion = new RegExp(String.raw`^(?:${NAME})\s+(?:made|makes)\s+(?:a\s+)?motion\s+(?:to\s+|that\s+)?(.+)$`).exec(text);
   const nameMoved = new RegExp(String.raw`^(?:${NAME})\s+(?:moved|moves)\s+(?:that\s+|to\s+|for\s+)?(.+)$`).exec(text);
   const moved = /^(?:it\s+was\s+)?moved\s+(?:by\s+[^,]+,\s*(?:seconded\s+by\s+[^,]+,\s*)?)?(?:that\s+|to\s+)?(.+)$/i.exec(text);
   const motion = /\bmotion\b\s*(?:#?\d+\s*)?[:\-–]?\s*(?:made\s+by\s+[^,]+,\s*(?:seconded\s+by\s+[^,]+,?\s*)?)?(?:to\s+|that\s+)?(.*)$/i.exec(text);
@@ -301,6 +301,8 @@ export function parseMotion(line: string): ParsedMotion | null {
     .replace(new RegExp(String.raw`,\s*${NAME}\s+second(?:ed|s)\b\.?`), "")
     .replace(new RegExp(ci(String.raw`,?\s*seconded\s+by\s+`) + NAME), "")
     .replace(/\(\s*(?:motion\s+)?(?:carried|passed|defeated|tabled|withdrawn|deferred|failed|lost)[^)]*\)\.?/gi, "")
+    // "… on behalf of the organization. Motion Carried Unanimously." — the outcome sentence is not wording.
+    .replace(/(?:^|[.;]|\s)\s*motion\s+(?:was\s+)?(?:carried|passed|accepted|approved|adopted|defeated|failed|lost)(?:\s+(?:unanimously|by consensus|as amended))?\s*[.!]?\s*$/i, "")
     .replace(/,?\s*\b(?:carried|passed)(?:\s+unanimously)?\s*\.?\s*$/i, "")
     .replace(/,?\s*and adopted by consensus[^,]*,?/i, " ")
     .replace(/(?<!\b(?:be|is|was|were|been|being))\s+approved\.?$/i, "")
@@ -504,7 +506,14 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
     }
   }
   if (locationParts.length) {
-    const text = locationParts.map((part) => part.text.replace(/^\(|\)$/g, "")).join(", ");
+    // The same location repeated in two header cells ("MS TEAMS" | "MS TEAMS") is stated once.
+    const seenParts = new Set<string>();
+    const text = locationParts.map((part) => part.text.replace(/^\(|\)$/g, "").trim()).filter((part) => {
+      const key = part.toLowerCase().replace(/\s+/g, " ");
+      if (seenParts.has(key)) return false;
+      seenParts.add(key);
+      return true;
+    }).join(", ");
     record.location = { value: text, status: "stated", confidence: 0.8, locators: locationParts.map((part) => unitLocator(part.unit, part.text)) };
     record.electronic = VIRTUAL.test(text) ? stated(true, [unitLocator(locationParts[0].unit, locationParts[0].text)], 0.9) : inferred(false, [unitLocator(locationParts[0].unit, locationParts[0].text)], 0.6, "Physical location stated; no electronic participation found in the header.");
   } else {
