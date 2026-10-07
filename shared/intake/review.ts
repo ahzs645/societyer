@@ -279,6 +279,10 @@ export const BULK_ACCEPT_THRESHOLDS: Record<string, Record<string, number>> = {
   default: { default: 0.85, title: 0.8, insurer: 0.8, date: 0.8, meetingDate: 0.8, periodEnd: 0.8, effective: 0.8, expiry: 0.8, effectiveDate: 0.8, adoptedDate: 0.8, filedDate: 0.8, termStart: 0.8, signedDate: 0.8 },
   meetingMinutes: {
     default: 0.85,
+    // Calibrated on the private minutes golden set: stated locations and recorders were 100%
+    // correct at the extractor's 0.8 (15 documents); chair (90%) stays at the default.
+    location: 0.8,
+    recorder: 0.8,
     date: 0.9,
     body: 0.85,
     "attendance.nameAsWritten": 0.8,

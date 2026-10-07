@@ -234,7 +234,9 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
         return;
       }
       push(bundle, "policies", {
-        policyName: (version && !title.includes(version) ? `${title} (${version})` : title).slice(0, 200),
+        // Versions of one policy carry their version label or date in the name, so each version is
+        // its own policy row (the import treats a repeated name as a duplicate of an existing policy).
+        policyName: (version && !title.includes(version) ? `${title} (${version})` : dated.length > 1 && date ? `${title} (${date})` : title).slice(0, 200),
         ...(val(record.policyNumber) ? { policyNumber: val(record.policyNumber) } : {}),
         ...(val(record.governsBody) ? { owner: val(record.governsBody) } : {}),
         ...(date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? { effectiveDate: date } : {}),
