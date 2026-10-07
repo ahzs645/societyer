@@ -264,7 +264,8 @@
     "intake:audit-meetings": "node --import tsx scripts/audit-meeting-promotion.ts",
     "intake:render-minutes": "node --import tsx scripts/render-intake-minutes.ts",
     "test:meeting-history": "node --import tsx scripts/check-meeting-history.ts && node --import tsx scripts/check-meeting-history-renderer.ts",
-    "test:meeting-history-ui": "playwright test --config playwright.meeting-history.config.ts"
+    "test:meeting-history-ui": "playwright test --config playwright.meeting-history.config.ts",
+    "test:people-identity-ui": "playwright test --config playwright.people-identity.config.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",
