@@ -7,6 +7,7 @@ import { minutesTextForDisplay } from "../shared/minutesMarkdownText";
 import { clockTextTo24h } from "../shared/meetingDateEdit";
 import { blankAttendanceRow, mergeAttendanceRows } from "../shared/meetingAttendanceGrid";
 import { renderMinutesHtml } from "../src/features/meetings/lib/minutesRenderer";
+import { effectiveSourceFidelity } from "../src/features/meetings/lib/minutesExportPrefs";
 
 // ---------- rich-editor markdown is shown without escapes ---------------------
 // What the rich editor saves after a no-change round trip of imported text.
@@ -101,3 +102,32 @@ assert.doesNotMatch(html, /\\\|/, "no escaped pipes in the export");
 assert.match(html, /<li>Carry-forward reviewed\.<\/li>\s*<li>Budget approved \| see notes<\/li>/, "executive style: one bullet per written line");
 assert.match(html, /Alex Example to Send feedback/);
 console.log("✓ exports: escapes removed, one bullet per line, actions with owners");
+
+// ---------- numbered style: roles, structured next meetings -------------------
+const numbered = renderMinutesHtml({
+  society: { name: "Retest Society" } as any,
+  meeting: { title: "Executive meeting", scheduledAt: "2012-05-15T12:00:00.000Z", scheduledAtPrecision: "date", type: "Committee", agendaItems: ["Welcome"] } as any,
+  minutes: {
+    heldAt: "2012-05-15T12:00:00.000Z", attendees: ["Alex Example", "Blair Sample"], absent: [], quorumMet: true, discussion: "", decisions: [], actionItems: [], motions: [],
+    detailedAttendance: [{ name: "Alex Example", status: "present", roleTitle: "President" }, { name: "Blair Sample", status: "present" }],
+    nextMeetings: [
+      { at: "2012-05-29", dateText: "May 29 (5:30-7:30 PM)", bodyLabel: "Board", notes: "Discuss draft work plan" },
+      { dateText: "Second Tuesday of the month", bodyLabel: "Executive Committee" },
+    ],
+    sections: [{ title: "Welcome", discussion: "Opened." }],
+  } as any,
+  styleId: "numbered-agenda",
+  options: { sourceFidelity: false },
+} as any);
+assert.match(numbered, /Alex Example \(President\), Blair Sample/, "present line carries roles from the attendance grid");
+assert.match(numbered, /Next Meetings/);
+assert.match(numbered, /\(May 29 \(5:30-7:30 PM\)\) · Board — Discuss draft work plan/);
+assert.match(numbered, /Second Tuesday of the month · Executive Committee/);
+console.log("✓ numbered style: attendee roles and every structured next meeting");
+
+// ---------- export default after review / approval ----------------------------
+assert.equal(effectiveSourceFidelity(true, undefined, { sourceReviewStatus: "imported_needs_review" }), true, "unreviewed imports export the source record");
+assert.equal(effectiveSourceFidelity(true, undefined, { approvedAt: "2012-05-29" }), false, "approved minutes export the corrected minutes");
+assert.equal(effectiveSourceFidelity(true, undefined, {}, { sourceReviewStatus: "source_reviewed" }), false, "reviewed meetings export the corrected minutes");
+assert.equal(effectiveSourceFidelity(false, true, { approvedAt: "2012-05-29" }), true, "an explicit choice wins");
+console.log("✓ export default: corrected minutes once reviewed or approved");

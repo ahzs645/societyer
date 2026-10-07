@@ -18,16 +18,15 @@ import { minutesMotionsForDisplay, motionRowToEmbedded } from "../../../../share
 import { MinutesDocumentPreview } from "../components/MinutesDocumentPreview";
 import { getQuorumSnapshot, personLinkCandidates } from "../components/MeetingDetailSupport";
 import { motionPersonDisplayName } from "../../../components/MotionEditor";
-import { agendaEntriesFromRecord, formalMinutesExportBlockers } from "../lib/meetingDetailHelpers";
+import { agendaEntriesFromRecord, formalMinutesExportBlockers, nextMeetingsForExport } from "../lib/meetingDetailHelpers";
 import { useToast } from "../../../components/Toast";
 import { readStoredAgendaNumberingMode } from "../lib/agendaNumbering";
 import { MINUTES_EXPORT_STYLES, type MinutesExportStyleId } from "../lib/minutesExportStyles";
 import {
   MINUTES_EXPORT_PREF_PREFIX,
   readStoredExportBool,
-  readStoredMinutesStyle,
-} from "../lib/minutesExportPrefs";
-import { minuteSectionIndexForAgendaEntry } from "../lib/sourceAgendaNavigation";
+  readStoredMinutesStyle, effectiveSourceFidelity, minutesCorrectedForExport } from "../lib/minutesExportPrefs";
+import { minuteSectionIndexForAgendaEntry, unchangedSourceDumpSection } from "../lib/sourceAgendaNavigation";
 
 export function MeetingMinutesPreviewPage() {
   const { id } = useParams<{ id: string }>();
@@ -52,8 +51,15 @@ export function MeetingMinutesPreviewPage() {
   const meetingConflicts = useQuery(api.conflicts.forMeeting, loaded && can("conflicts:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
   const meetingProxies = useQuery(api.proxies.forMeeting, loaded && can("proxies:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
   const meetingPackage = useQuery(api.meetingMaterials.packageForMeeting, loaded && can("meetings:read") && id ? { meetingId: id as Id<"meetings"> } : "skip");
+  const committees = useQuery(api.committees.list, society && loaded && can("committees:read") ? { societyId: society._id } : "skip") as any[] | undefined;
   const [minutesExportStyle, setMinutesExportStyle] = useState<MinutesExportStyleId>(readStoredMinutesStyle);
-  const [sourceFidelityInExport, setSourceFidelityInExport] = useState(() => readStoredExportBool("sourceFidelity", true));
+  const [storedSourceFidelity, setStoredSourceFidelity] = useState(() => readStoredExportBool("sourceFidelity", true));
+  const [sourceFidelityChoice, setSourceFidelityChoice] = useState<boolean | undefined>(undefined);
+  const sourceFidelityInExport = effectiveSourceFidelity(storedSourceFidelity, sourceFidelityChoice, minutes, meeting);
+  const setSourceFidelityInExport = (value: boolean) => {
+    setSourceFidelityChoice(value);
+    if (!minutesCorrectedForExport(minutes, meeting)) setStoredSourceFidelity(value);
+  };
   const [includeTranscriptInExport, setIncludeTranscriptInExport] = useState(() => readStoredExportBool("includeTranscript", false));
   const [includeActionItemsInExport, setIncludeActionItemsInExport] = useState(() => readStoredExportBool("includeActionItems", true));
   const [includeDiscussionSummaryInExport, setIncludeDiscussionSummaryInExport] = useState(() => readStoredExportBool("includeDiscussionSummary", false));
@@ -67,7 +73,7 @@ export function MeetingMinutesPreviewPage() {
   }, [minutesExportStyle]);
 
   useEffect(() => {
-    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}sourceFidelity`, String(sourceFidelityInExport));
+    window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}sourceFidelity`, String(storedSourceFidelity));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeTranscript`, String(includeTranscriptInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeActionItems`, String(includeActionItemsInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeDiscussionSummary`, String(includeDiscussionSummaryInExport));
@@ -75,7 +81,7 @@ export function MeetingMinutesPreviewPage() {
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includeSignatures`, String(includeSignaturesInExport));
     window.localStorage.setItem(`${MINUTES_EXPORT_PREF_PREFIX}includePlaceholders`, String(includePlaceholdersInExport));
   }, [
-    sourceFidelityInExport,
+    storedSourceFidelity,
     includeActionItemsInExport,
     includeApprovalInExport,
     includeDiscussionSummaryInExport,
@@ -96,7 +102,7 @@ export function MeetingMinutesPreviewPage() {
   }
   if (!minutes) return <div className="page">No minutes recorded for this meeting.</div>;
 
-  const agendaTree = agendaEntriesFromRecord(minutes?.adoptedAgenda ?? agendaRecord) ?? [];
+  const agendaTree = agendaEntriesFromRecord((minutes as any)?.adoptedAgenda?.items ? (minutes as any).adoptedAgenda : agendaRecord) ?? [];
   const quorumSnapshot = getQuorumSnapshot(minutes, meeting);
   const motionPeople = personLinkCandidates(members, directors);
   const selectedMinutesExportStyle =
@@ -116,6 +122,10 @@ export function MeetingMinutesPreviewPage() {
     if (section.publicVisible !== false) return;
     hiddenSections.add(index);
     if ((section.depth ?? 0) === 0) for (let child = index + 1; child < rawSections.length && rawSections[child].depth === 1; child++) hiddenSections.add(child);
+  });
+  // Like the meeting page: an untouched source-notes dump is not part of the minutes.
+  if (!(sourceFidelityInExport && !publicCopy)) rawSections.forEach((section: any, index: number) => {
+    if (unchangedSourceDumpSection(section, minutes.sourceMeetingRecord)) hiddenSections.add(index);
   });
   const visibleSections = rawSections.filter((_: any, index: number) => !hiddenSections.has(index));
   const visibleAgendaTree = agendaTree.filter(entry => {
@@ -175,12 +185,13 @@ export function MeetingMinutesPreviewPage() {
         ...m,
         movedBy: motionPersonDisplayName(m.movedBy, motionPeople, { memberId: m.movedByMemberId, directorId: m.movedByDirectorId }),
         secondedBy: motionPersonDisplayName(m.secondedBy, motionPeople, { memberId: m.secondedByMemberId, directorId: m.secondedByDirectorId }),
-        sectionIndex: publicCopy && m.sectionIndex != null ? indexRemap.get(m.sectionIndex) : m.sectionIndex,
+        sectionIndex: hiddenSections.size && m.sectionIndex != null ? indexRemap.get(m.sectionIndex) : m.sectionIndex,
       })) as any,
       decisions: minutes.decisions,
       actionItems: minutes.actionItems as any,
       approvedAt: minutes.approvedAt ?? null,
       nextMeetingAt: minutes.nextMeetingAt ?? null,
+      nextMeetings: nextMeetingsForExport((minutes as any).nextMeetings, committees ?? []),
       nextMeetingLocation: minutes.nextMeetingLocation ?? null,
       nextMeetingNotes: minutes.nextMeetingNotes ?? null,
       sessionSegments: minutes.sessionSegments ?? null,

@@ -148,7 +148,10 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   adoptionTargets,
   } = props;
   const { can } = usePermissions();
-  const canEditMinutes = can("minutes:write");
+  // Adopted minutes are frozen on the server ("Start an amendment…"); offering
+  // edit controls only produced errors. Reopen them from the approval dialog.
+  const minutesFrozen = !!(minutes?.approvedAt || minutes?.adoptedSnapshot);
+  const canEditMinutes = can("minutes:write") && !minutesFrozen;
   // These callbacks save both records; gate both before the first write.
   const canEditAgenda = canEditMinutes && can("agendas:write");
   const canEditSections = canEditAgenda;

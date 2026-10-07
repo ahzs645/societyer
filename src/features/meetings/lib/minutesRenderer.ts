@@ -182,6 +182,8 @@ export type MinutesRenderArgs = {
     actionItems: MinutesActionItem[];
     approvedAt?: string | null;
     nextMeetingAt?: string | null;
+    /** A16: structured next meetings (board, committees…), each as recorded. */
+    nextMeetings?: Array<{ at?: string | null; dateText?: string | null; precision?: string | null; bodyLabel?: string | null; location?: string | null; notes?: string | null }> | null;
     nextMeetingLocation?: string | null;
     nextMeetingNotes?: string | null;
     sessionSegments?: {
@@ -390,7 +392,7 @@ export function getMinutesStyleGaps({
       ...common,
       gap("Meeting location and time range", hasAny(meeting.location, minutes.calledToOrderAt, minutes.adjournedAt), "The export can fill the sample-style Date / Time / Location line.", "Location or call-to-order/adjournment times are not fully recorded."),
       gap("Motion first/second details", motionHasVoteLanguage, "Motion blocks can render First and Second lines.", "Motions are missing mover/first or seconder details."),
-      gap("Next meeting details", hasAny(minutes.nextMeetingAt, minutes.nextMeetingLocation, minutes.nextMeetingNotes), "Next meeting details can render at the end of the minutes.", "No next meeting details are recorded."),
+      gap("Next meeting details", hasAny(minutes.nextMeetingAt, minutes.nextMeetingLocation, minutes.nextMeetingNotes) || Boolean(minutes.nextMeetings?.length), "Next meeting details can render at the end of the minutes.", "No next meeting details are recorded."),
     ];
   }
 
@@ -643,7 +645,7 @@ function renderNumberedAgendaMinutes({
   const endTime = minutes.adjournedAt ? formatTime(minutes.adjournedAt) : "";
   const timeRange = endTime ? `${startTime} - ${endTime}` : startTime;
   const location = meeting.location || minutes.nextMeetingLocation || placeholder("location", options);
-  const presentLine = minutes.attendees.length ? minutes.attendees.join(", ") : placeholder("attendees", options);
+  const presentLine = minutes.attendees.length ? presentNamesWithRoles(minutes).join(", ") : placeholder("attendees", options);
   const absentLine = minutes.absent.length ? minutes.absent.join(", ") : "";
   const adjournmentMotion = minutes.motions.find((motion) => /adjourn/i.test(motion.text));
   const topicMotions = minutes.motions.filter((motion) => motion !== adjournmentMotion);
@@ -972,7 +974,37 @@ function renderSampleActionItems(actionItems: MinutesActionItem[], options: Requ
   `;
 }
 
+/** Present attendees as "Name (Role)" when the attendance grid records a role. */
+function presentNamesWithRoles(minutes: MinutesRenderArgs["minutes"]): string[] {
+  const roles = new Map<string, string>();
+  for (const row of minutes.detailedAttendance ?? []) {
+    if (row?.name && row.roleTitle) roles.set(String(row.name).trim().toLowerCase(), String(row.roleTitle).trim());
+  }
+  return minutes.attendees.map((name) => {
+    const role = roles.get(String(name).trim().toLowerCase());
+    return role ? `${name} (${role})` : name;
+  });
+}
+
+/** One line per structured next meeting: when (as written), body, place, notes. */
+function nextMeetingLines(minutes: MinutesRenderArgs["minutes"]): string[] {
+  return (minutes.nextMeetings ?? []).map((row) => {
+    const when = row.dateText?.trim()
+      ? (row.at ? `${displayDateOrText(row.at) ?? row.at} (${row.dateText.trim()})` : row.dateText.trim())
+      : row.at ? displayDateOrText(row.at) ?? row.at : "Date not stated";
+    return [when, row.bodyLabel, row.location].filter((part) => hasText(part)).join(" · ") + (hasText(row.notes) ? ` — ${row.notes}` : "");
+  }).filter(Boolean);
+}
+
 function renderSampleNextMeeting(minutes: MinutesRenderArgs["minutes"], options: Required<MinutesExportOptions>) {
+  const structured = nextMeetingLines(minutes);
+  if (structured.length) {
+    return `
+    <h2>Next Meeting${structured.length > 1 ? "s" : ""}</h2>
+    <ul>${structured.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>
+    ${minutes.nextMeetingNotes ? `<p>${escapeHtml(minutes.nextMeetingNotes)}</p>` : ""}
+  `;
+  }
   if (!hasAny(minutes.nextMeetingAt, minutes.nextMeetingLocation, minutes.nextMeetingNotes)) {
     return options.includePlaceholders ? `<h2>Next Meeting</h2>${placeholderParagraph("next meeting details", options)}` : "";
   }
@@ -1362,6 +1394,14 @@ function renderAgmDetails(agm: MinutesRenderArgs["minutes"]["agmDetails"], optio
 }
 
 function renderNextMeeting(minutes: MinutesRenderArgs["minutes"], options: Required<MinutesExportOptions>) {
+  const structured = nextMeetingLines(minutes);
+  if (structured.length) {
+    return `
+    <h2>Next Meeting${structured.length > 1 ? "s" : ""}</h2>
+    <ul>${structured.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>
+    ${minutes.nextMeetingNotes ? `<p>${escapeHtml(minutes.nextMeetingNotes)}</p>` : ""}
+  `;
+  }
   if (!hasAny(minutes.nextMeetingAt, minutes.nextMeetingLocation, minutes.nextMeetingNotes)) {
     return options.includePlaceholders ? renderOptionalSection("Next Meeting", placeholderParagraph("next meeting date and time", options), true, options) : "";
   }
@@ -1906,7 +1946,7 @@ function renderSourceFidelityMinutes(args:MinutesRenderArgs,record:SourceMeeting
  const supplements=changed.length?`<section class="current-minute-additions"><h2>Current minute additions and edits</h2><p class="meta">These editable records supplement the retained source wording.</p>${renderMinuteSections(changed,{...options,includeActionItems:true})}${renderUnrepresentedSectionDetails({...args.minutes,sections:changed},renderMinuteSections(changed,{...options,includeActionItems:true}),options)}</section>`:'';
  const structuredExtras=renderNewStructuredMinuteInformation(args.minutes,record,options);
  return `<article data-minutes-style="${escapeHtml(styleId)}" data-source-fidelity="true" class="source-fidelity source-fidelity-${escapeHtml(styleId)}">
-  <p class="meta">${escapeHtml(record.sourceKind==='recorded_minutes'?'Source recreation · imported minutes pending review':'Source recreation · proposed script, agenda or template wording')}${args.minutes.approvedAt?' · Adoption is recorded separately.':' · No approval is inferred.'}</p>
+  <p class="meta">${escapeHtml(record.sourceKind==='recorded_minutes'?((args.minutes as { sourceReviewStatus?: string }).sourceReviewStatus==='source_reviewed'?'Source recreation · imported minutes, reviewed against the source':'Source recreation · imported minutes pending review'):'Source recreation · proposed script, agenda or template wording')}${args.minutes.approvedAt?' · Adoption is recorded separately.':' · No approval is inferred.'}</p>
   ${sourceDocuments}${supplements}${structuredExtras}${renderMeetingHistory(args.minutes, options)}
   ${options.includeApprovalBlock?renderApprovalBlock(args.minutes,options):''}
   ${options.includeSignatures&&options.signatures.length?renderSignatureBlock(options.signatures):''}

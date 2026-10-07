@@ -282,3 +282,20 @@ export function buildEmlMessage({
   ];
   return parts.join("\r\n");
 }
+
+const NEXT_MEETING_BODY_LABELS: Record<string, string> = { board: "Board", agm: "AGM", sgm: "SGM" };
+
+/** Structured next meetings for the minutes renderer, with readable body names. */
+export function nextMeetingsForExport(rows: unknown, committees: Array<{ _id: unknown; name?: string }>, tx: (value?: string | null) => string | null | undefined = (value) => value) {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  return rows.map((row: any) => ({
+    at: row?.at ?? null,
+    dateText: row?.dateText ?? null,
+    precision: row?.precision ?? null,
+    bodyLabel: row?.committeeId
+      ? committees.find((committee) => String(committee._id) === String(row.committeeId))?.name ?? "Committee"
+      : NEXT_MEETING_BODY_LABELS[String(row?.bodyKey ?? "")] ?? null,
+    location: tx(row?.location) ?? null,
+    notes: tx(row?.notes) ?? null,
+  }));
+}

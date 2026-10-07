@@ -346,6 +346,11 @@ export function adoptedMinutesView(minutes: any) {
     : minutes;
 }
 
+async function adoptedAgendaItems(ctx: PortableMutationCtx, agendaId: any) {
+  const items = await ctx.db.query('agendaItems').withIndex('by_agenda', q => q.eq('agendaId', agendaId)).collect();
+  return items.sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
+}
+
 async function minutesSnapshot(ctx: PortableMutationCtx, record: any, motions: any[]) {
   const societyId = String(record.societyId);
   for (const permission of ['documents:read', 'conflicts:read', 'proxies:read', 'directors:read'] as const) await requirePermissionPortable(ctx, societyId, permission);
@@ -360,7 +365,9 @@ async function minutesSnapshot(ctx: PortableMutationCtx, record: any, motions: a
   const { _id, _creationTime, adoptedSnapshot, adoptionHistory, displayMotions, ...snapshot } = record;
   return JSON.parse(JSON.stringify({ ...snapshot, motionSnapshots: motions,
     adoptedExportEvidence: minutesEvidenceOptions(signatures.filter(row => row.societyId === societyId && !row.revokedAtISO), conflicts, proxies, directors, motions),
-    adoptedMeeting: meeting, adoptedAgenda: agenda,
+    // Same shape as agendas:getForMeeting ({ agenda, items }) so the adopted
+    // agenda renders; the bare agenda row left adopted minutes with no agenda.
+    adoptedMeeting: meeting, adoptedAgenda: agenda ? { agenda, items: await adoptedAgendaItems(ctx, agenda._id) } : null,
   }));
 }
 
