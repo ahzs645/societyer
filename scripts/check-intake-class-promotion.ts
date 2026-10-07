@@ -19,6 +19,7 @@ import { sha256Hex } from "../shared/intake/node/extractFile";
 import { runIntakePipeline } from "../shared/intake/pipeline";
 import { stageRunInWorkspace } from "../shared/intake/stageRun";
 import { orderedVersionFiles } from "../shared/intake/promotion";
+import { clusterFiles, nameDateKey } from "../shared/intake/cluster";
 import { CLASS_PROMOTION } from "../shared/intake/promotionClasses";
 import { promotionReadiness, latestDecisions, requiredFieldsFor, reviewFieldsForRecord, thresholdFor } from "../shared/intake/review";
 import { writeClassFixtures, writeSyntheticFixtures } from "./lib/intake-synthetic-fixtures";
@@ -35,6 +36,12 @@ assert.equal(thresholdFor("unknownClass", "anything"), 0.85);
 const ordered = orderedVersionFiles([{ fileKey: "b.pdf", recordStatus: "approved" }, { fileKey: "a.docx", recordStatus: "draft" }, { fileKey: "c.docx" }]).map((file) => file.fileKey);
 assert.deepEqual(ordered, ["a.docx", "c.docx", "b.pdf"]);
 assert.deepEqual(orderedVersionFiles([{ fileKey: "b.pdf", recordStatus: "approved" }, { fileKey: "c.docx" }, { fileKey: "a.docx", recordStatus: "draft" }]).map((file) => file.fileKey), ordered, "the same order whichever copy is promoted");
+
+// Version families keep the date a file name carries: two monthly minutes are not versions of one meeting.
+const clusterOf = (names: string[]) => clusterFiles(names.map((name) => ({ id: name, name }))).map((cluster) => cluster.members.map((member) => member.fileId).sort());
+assert.deepEqual(clusterOf(["2021_06_08_Lakeside_Operations_DRAFT Minutes.docx", "2021_07_21_Lakeside_Operations_DRAFT Minutes.docx"]), [], "different dates never form a version family");
+assert.deepEqual(clusterOf(["February 2021 Lakeside Board Meeting_DRAFT Minutes.docx", "February 2021 Lakeside Board Meeting Minutes.docx.pdf"]), [["February 2021 Lakeside Board Meeting Minutes.docx.pdf", "February 2021 Lakeside Board Meeting_DRAFT Minutes.docx"]], "a PDF export (.docx.pdf) and the draft of the same month are one family");
+assert.equal(nameDateKey("08-10-28 - Minutes.doc"), "2008-10-28");
 
 // ------------------------------------------------------------ workspace
 const society = "society_classes";

@@ -137,7 +137,7 @@ export function requiredFieldsFor(docClass: string | undefined, record: unknown)
   // An insurance policy is identified by its insurer or policy number (the import contract drops one with neither).
   if (docClass === "insurance") return [...(has("termStart") || !has("policyNumber") ? [{ path: "termStart", label: "Term start" }] : []), has("insurer") || !has("policyNumber") ? { path: "insurer", label: "Insurer" } : { path: "policyNumber", label: "Policy number" }];
   if (docClass === "registryFiling") return has("filingType") ? [{ path: "filingType", label: "Filing type" }] : [];
-  if (docClass === "invoice") return [{ path: "date", label: "Invoice date" }, { path: "amount", label: "Amount" }];
+  if (docClass === "invoice") return [{ path: "date", label: "Invoice date" }, { path: "amount", label: "Amount" }, ...(has("vendor") ? [{ path: "vendor", label: "Vendor" }] : [])];
   return [];
 }
 

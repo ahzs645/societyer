@@ -455,8 +455,11 @@ async function markClusterCopiesCovered(ctx: PortableMutationCtx, extraction: an
   const members = new Set(files.filter((row) => row.clusterKey === file.clusterKey && String(row._id) !== String(file._id)).map((row) => String(row._id)));
   if (!members.size) return 0;
   let covered = 0;
+  const dateOf = (row: any) => String(row.record?.date?.value?.iso ?? row.record?.meetingDate?.value?.iso ?? row.record?.periodEnd?.value?.iso ?? "");
   for (const row of (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", extraction.runId)).collect()) as any[]) {
     if (!members.has(String(row.fileId)) || row.docClass !== extraction.docClass || !["pending_review", "in_review", "accepted"].includes(row.status)) continue;
+    // A copy states the same date; a cluster member with another date is a different record.
+    if (dateOf(row) && dateOf(extraction) && dateOf(row) !== dateOf(extraction)) continue;
     await ctx.db.patch(row._id, { status: "covered", promotion: { coveredByExtractionId: extraction._id, coveredByFileKey: extraction.fileKey, atISO: at }, updatedAtISO: at });
     covered++;
   }
