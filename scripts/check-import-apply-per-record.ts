@@ -47,6 +47,10 @@ const sessionId = await mutate("importSessions:createFromBundle", { societyId: s
     { policyName: "Code of Conduct", status: "Draft", confidence: "High", sourceExternalIds: ["local:conduct.pdf"] },
   ],
   deadlines: [{ title: "Annual report filing", dueDate: "2025-06-30", sourceDate: "2025-01-15", sourceExternalIds: ["local:conduct.pdf"] }],
+  agreements: [
+    { title: "Synthetic monitoring services agreement", effectiveDate: "2024-01-01", sourceExternalIds: ["local:conduct.pdf"] },
+    { title: "Agreement with a partial date", effectiveDate: "2024-13", sourceExternalIds: ["local:conduct.pdf"] },
+  ],
   meetingMaterials: [
     { meetingDate: "2024-03-12", body: "board", label: "Board agenda", agendaLabel: "Agenda", sourceExternalIds: ["local:agenda-2024-03-12.pdf"] },
     { meetingDate: "2024-04-09", body: "board", label: "Agenda for an ambiguous day", agendaLabel: "Agenda", sourceExternalIds: ["local:agenda-2024-03-12.pdf"] },
@@ -66,13 +70,16 @@ const first = await mutate("importSessions:applyApprovedSectionRecords", { sessi
 assert.equal(first.preflightBlocked, undefined, "a partly blocked section still applies");
 assert.equal(first.byKind.policy, 1, "the new policy applied");
 assert.equal(first.byKind.deadline, 1, "the deadline applied");
-assert.equal(first.blocked.length, 3, JSON.stringify(first.blocked));
+assert.equal(first.byKind.agreement, 1, "the valid agreement applied (agreements register)");
+assert.equal(first.blocked.length, 4, JSON.stringify(first.blocked));
+const badAgreement = first.blocked.find((item: any) => item.recordKind === "agreement");
+assert.equal(badAgreement.reason, "invalid");
 const duplicate = first.blocked.find((item: any) => item.reason === "duplicate");
 assert.equal(duplicate.recordKind, "policy");
 assert.deepEqual(duplicate.duplicateOf, { table: "policies", id: "policy_existing", label: "Records Retention Policy" });
 const waiting = first.blocked.find((item: any) => item.reason === "waiting");
 assert.deepEqual(waiting.waitingFor, { kind: "meeting", meetingDate: "2024-03-12", body: "board" });
-const ambiguous = first.blocked.find((item: any) => item.reason === "invalid");
+const ambiguous = first.blocked.find((item: any) => item.reason === "invalid" && item.recordKind === "meetingMaterial");
 assert.equal(ambiguous.recordKind, "meetingMaterial");
 assert.equal((db.dump("policies") as any[]).length, 2, "no duplicate policy was written");
 rows = await records(sessionId);
@@ -85,7 +92,7 @@ for (const item of first.blocked) {
 // 2. Idempotent: a second apply writes nothing new and reports the same blocks.
 const second = await mutate("importSessions:applyApprovedSectionRecords", { sessionId });
 assert.equal(second.total, 0);
-assert.equal(second.blocked.length, 3);
+assert.equal(second.blocked.length, 4);
 assert.equal((db.dump("policies") as any[]).length, 2);
 assert.equal((db.dump("deadlines") as any[]).length, 1);
 
@@ -119,8 +126,8 @@ rows = await records(sessionId);
 assert.equal(rows.find((row) => row._id === ambiguous.recordId).status, "Pending");
 assert.match(rows.find((row) => row._id === ambiguous.recordId).reviewNotes, /Deferred:/);
 await mutate("importSessions:bulkSetStatus", { sessionId, status: "Approved", recordIds: [ambiguous.recordId] });
-assert.equal((await mutate("importSessions:applyApprovedSectionRecords", { sessionId })).blocked.length, 1, "a re-approved record is checked again");
-await mutate("importSessions:resolveBlockedRecords", { sessionId, recordIds: [ambiguous.recordId], action: "skip" });
+assert.equal((await mutate("importSessions:applyApprovedSectionRecords", { sessionId })).blocked.length, 2, "a re-approved record is checked again");
+await mutate("importSessions:resolveBlockedRecords", { sessionId, recordIds: [ambiguous.recordId, badAgreement.recordId], action: "skip" });
 rows = await records(sessionId);
 assert.equal(rows.find((row) => row._id === ambiguous.recordId).status, "Rejected");
 assert.match(rows.find((row) => row._id === ambiguous.recordId).reviewNotes, /Skipped on apply/);
