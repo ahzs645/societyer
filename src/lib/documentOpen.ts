@@ -41,8 +41,8 @@ export async function restoredDocumentFile(doc: Pick<OpenableDocument, "_id" | "
   // runtime has no file store; promotion links the document to the file by SHA-256).
   if (doc.sha256) {
     try {
-      const { getOriginal } = await import("../features/intake/originalsCache");
-      const cached = await getOriginal(doc.sha256);
+      const { getCachedOriginal } = await import("../features/intake/originalsCache");
+      const cached = await getCachedOriginal(doc.sha256);
       if (cached) return cached.blob;
     } catch {
       // No IndexedDB (private mode): nothing cached.
