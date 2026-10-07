@@ -21,6 +21,8 @@ import { guardFutureMinutesDate } from "../shared/intake/pipeline";
 import { agmGaps } from "../shared/intake/reconcile";
 import { findDates } from "../shared/intake/parse";
 import { classRecordGaps } from "../shared/intake/classStages";
+import { runPeopleNames } from "../src/features/intake/runPeople";
+import { directoryPersonId, loadDirectoryIndex } from "../shared/functions/importSessionHelpers/importMeetingApply";
 
 function textExtract(text: string): IntakeExtract {
   const { blocks, text: joined } = finalizeBlocks(blocksFromPlainText(text));
@@ -173,4 +175,24 @@ const citing = (text: string, date: string) => ({ fileKey: `local:${text}`, docC
 const unresolved = classRecordGaps({ extractions: [citing("Your presentation is limited to 10 minutes", "2023-06-28"), citing("Notes:", "2014-07-31"), citing("Minutes of the June 4 board meeting", "2024-06-04")], meetings: [], evidenced: [], policyLinks: [], fiscalChanges: [] }).filter((gap) => gap.kind === "unresolved_reference");
 assert.deepEqual(unresolved.map((gap) => gap.date), ["2024-06-04"], "durations and headings are not missing minutes");
 
-console.log("PASS intake re-transposition: motion grammar, bodies, agenda dates, evidenced meetings, insurance cleanup, evidence rule, policy copies, dated version families, future minutes dates, citations and bulk-accept batches");
+// ------------------------------------------------------------ run people → directory
+assert.deepEqual(runPeopleNames([{ fullName: "Avery Quill", aliases: ["Avery Quil", "Vice President"] }, { fullName: "Casey", aliases: [] }, { fullName: "City of Example", aliases: [] }, { fullName: "avery quill", aliases: [] }]), ["Avery Quil", "Avery Quill"], "one person per distinct full name as written; role words, organizations and single names are not added");
+const directoryRows = [
+  { _id: "pd_owned", societyId: "s1", fullName: "Avery Quill" },
+  { _id: "pd_local", fullName: "Casey Lark" },
+  { _id: "pd_other", societyId: "s2", fullName: "Drew Moss" },
+  { _id: "pd_tomb", societyId: "s1", fullName: "Avery Quil", mergedIntoId: "pd_owned" },
+];
+const fakeCtx = (trusted: boolean) => ({
+  principal: trusted ? { kind: "user", assurance: "trusted-workspace", runtime: "local" } : { kind: "user", assurance: "authenticated", runtime: "convex-hosted" },
+  db: { query: () => ({ collect: async () => directoryRows, withIndex: (_: string, by: any) => { let society: string | undefined; by({ eq: (_f: string, value: string) => { society = value; return {}; } }); return { collect: async () => directoryRows.filter((row) => row.societyId === society) }; } }) },
+});
+const localIndex = await loadDirectoryIndex(fakeCtx(true), "s1");
+assert.equal(directoryPersonId(localIndex, "Casey Lark"), "pd_local", "a trusted local workspace links its unowned directory people");
+assert.equal(directoryPersonId(localIndex, "Drew Moss"), undefined, "never another workspace's person");
+assert.equal(directoryPersonId(localIndex, "Avery Quil"), undefined, "merged tombstones are not link targets");
+const hostedIndex = await loadDirectoryIndex(fakeCtx(false), "s1");
+assert.equal(directoryPersonId(hostedIndex, "Casey Lark"), undefined, "hosted workspaces link only owned people");
+assert.equal(directoryPersonId(hostedIndex, "Avery Quill"), "pd_owned");
+
+console.log("PASS intake re-transposition: motion grammar, bodies, agenda dates, evidenced meetings, insurance cleanup, evidence rule, policy copies, dated version families, future minutes dates, citations, run people, local directory links and bulk-accept batches");

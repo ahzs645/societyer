@@ -20,6 +20,7 @@ import { SourceViewer, type ClusterVersion } from "../features/intake/SourceView
 import { FieldList, type FieldDecisionHandler } from "../features/intake/FieldPanel";
 import { EntityPanel } from "../features/intake/EntityPanel";
 import { GapPanel } from "../features/intake/GapPanel";
+import { AddRunPeopleButton } from "../features/intake/AddRunPeopleButton";
 import { BulkAcceptModal, CantRepresentModal, PromoteModal, type CantRepresentDraft, type PromoteChoice, type RunBulkScope } from "../features/intake/ReviewModals";
 import { canStoreOriginals, useStoreOriginals } from "../features/intake/useStoreOriginals";
 import "../features/intake/intake.css";
@@ -306,6 +307,7 @@ export function IntakeReviewPage() {
             <span><kbd className="intake-kbd">B</kbd> bulk accept · <kbd className="intake-kbd">?</kbd> this help</span>
           </div>
         )}
+        <AddRunPeopleButton societyId={society._id} people={run.reconciliation?.people} canWrite={canWrite && can("members:write")} />
         {canWrite && promotableCanonical.length > 0 && (
           <button type="button" className="btn btn--sm" onClick={() => void promoteReady()} disabled={Boolean(bulkPromote) || busy} data-testid="intake-promote-ready">
             {bulkPromote ? <><Loader2 size={12} className="spin" /> Promoting {bulkPromote.done}/{bulkPromote.total}…</> : <><Upload size={12} /> Promote ready meetings ({promotableCanonical.length})</>}

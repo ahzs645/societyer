@@ -46,7 +46,12 @@ export type DirectoryIndex = { byKey: Map<string, string[]>; loaded: boolean };
 
 /** Load the society's people directory once per apply. */
 export async function loadDirectoryIndex(ctx: any, societyId: string): Promise<DirectoryIndex> {
-  const rows = await ctx.db.query("peopleDirectory").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+  // A trusted local workspace also keeps unowned directory rows (people created in the browser
+  // workspace carry no society id); they are this workspace's people too (see visibleDirectoryRows).
+  const trustedLocal = ctx.principal?.kind === "user" && ctx.principal?.assurance === "trusted-workspace" && ctx.principal?.runtime !== "convex-hosted";
+  const rows = trustedLocal
+    ? (await ctx.db.query("peopleDirectory").collect()).filter((row: any) => (!row.societyId || String(row.societyId) === String(societyId)) && !row.mergedIntoId)
+    : (await ctx.db.query("peopleDirectory").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect()).filter((row: any) => !row.mergedIntoId);
   const byKey = new Map<string, string[]>();
   for (const row of rows) {
     const keys = unique([row.fullName, `${row.firstName ?? ""} ${row.lastName ?? ""}`, ...arrayOf(row.aliases)].map(personMatchKey));
