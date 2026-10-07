@@ -5,9 +5,11 @@ import { usePermissions } from "../hooks/usePermissions";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Drawer, Field } from "../components/ui";
+import { Drawer, Field, InspectorNote } from "../components/ui";
 import { ShieldCheck, Plus, Trash2 } from "lucide-react";
 import { DatePicker } from "../components/DatePicker";
+import { useToast } from "../components/Toast";
+import { isCorporation } from "../../shared/organizationDomain";
 
 /**
  * BC Transparency Register of Significant Individuals + a diligence-steps
@@ -22,6 +24,7 @@ export function SignificantIndividualsPage() {
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
+  const toast = useToast();
 
   const individuals = useQuery(
     api.registerHistory.significantIndividualsAsOf,
@@ -72,18 +75,35 @@ export function SignificantIndividualsPage() {
     setOpen(true);
   };
 
+  const formProblems = form
+    ? [
+        !String(form.individualName ?? "").trim() ? "the individual's name" : "",
+        !String(form.stepsNarrative ?? "").trim() ? "the steps taken" : "",
+        !form.stepDate ? "the step date" : "",
+      ].filter(Boolean)
+    : [];
   const save = async () => {
     if (!canWrite || !form) return;
-    await createStep({
-      societyId: society._id,
-      individualName: form.individualName,
-      stepsNarrative: form.stepsNarrative,
-      stepDate: form.stepDate,
-      nextReviewDate: form.nextReviewDate || undefined,
-      nowISO: new Date().toISOString(),
-    });
-    setOpen(false);
+    if (formProblems.length) {
+      toast.error("Step not recorded", `Enter ${formProblems.join(", ")}.`);
+      return;
+    }
+    try {
+      await createStep({
+        societyId: society._id,
+        individualName: form.individualName.trim(),
+        stepsNarrative: form.stepsNarrative.trim(),
+        stepDate: form.stepDate,
+        nextReviewDate: form.nextReviewDate || undefined,
+        nowISO: new Date().toISOString(),
+      });
+      setOpen(false);
+      toast.success("Diligence step recorded");
+    } catch (error) {
+      toast.error("Step not recorded", error instanceof Error ? error.message : String(error));
+    }
   };
+  const notApplicable = !isCorporation(society);
 
   const dueCount = reviewsDue?.length ?? 0;
 
@@ -100,6 +120,13 @@ export function SignificantIndividualsPage() {
           </button>
         }
       />
+
+      {notApplicable && (
+        <InspectorNote title="Not required for this organization">
+          {society.name} is not a BC company, so the BC Business Corporations Act transparency register does not apply.
+          Records kept here are optional and are not a statutory register for a society.
+        </InspectorNote>
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <Field label="As of">

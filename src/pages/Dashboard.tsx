@@ -690,7 +690,7 @@ function getOnboardingSteps({
       id: "timing",
       title: "Confirm fiscal year and AGM timing",
       description: hasAgmTiming ? "Fiscal year and the next AGM are visible." : "Set the fiscal year end and schedule the next AGM.",
-      to: "/app/meetings",
+      to: "/app/compliance-settings",
       complete: hasAgmTiming,
       icon: CalendarClock,
     },
@@ -778,9 +778,10 @@ function Stat({
 }
 
 function renderFilingRow(f: any) {
+  // Each row opens that filing (G-24: rows were not clickable).
   return (
     <tr key={f._id}>
-      <td>{kindLabel(f.kind)}</td>
+      <td><Link to={`/app/filings?filing=${encodeURIComponent(String(f._id))}`}>{kindLabel(f.kind)}</Link></td>
       <td className="table__cell--muted">{f.periodLabel ?? "—"}</td>
       <td className="table__cell--mono">{formatDate(f.dueDate)}</td>
       <td>{renderFilingStatus(f)}</td>

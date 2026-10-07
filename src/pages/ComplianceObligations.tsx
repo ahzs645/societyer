@@ -294,7 +294,7 @@ export function ComplianceObligationsPage() {
         </div>
         {obligations.length ? (
           <div className="table-wrap" style={{ marginInline: 0, maxWidth: "100%" }}>
-            <table className="table">
+            <table className="table table--stack-mobile">
               <thead>
                 <tr>
                   <th>Obligation</th>
@@ -336,17 +336,17 @@ export function ComplianceObligationsPage() {
                   ].filter(Boolean).join("\n");
                   return (
                     <tr key={obligation.occurrenceKey}>
-                      <td>
+                      <td data-label="Obligation">
                         <strong>{obligation.title}</strong>
                         <div className="muted" style={{ fontSize: 12 }} title={obligationDetails}>
                           {contextSummary}
                         </div>
                       </td>
-                      <td className="table__cell--mono">
+                      <td className="table__cell--mono" data-label="Due date">
                         {formatDate(obligation.dueDate)}
                         <div className="muted" style={{ fontSize: 12 }}>{relative(obligation.dueDate)}</div>
                       </td>
-                      <td>
+                      <td data-label="Status">
                         <Badge tone={existingFiling?.status === "Filed" ? (filingMatch?.late ? "warn" : "success") : isDismissed ? "neutral" : statusTone(obligation.status)}>
                           {existingFiling?.status === "Filed" ? (filingMatch?.late ? "Filed late" : "Filed") : isDismissed ? "Dismissed" : statusLabel(obligation.status)}
                         </Badge>
@@ -355,7 +355,7 @@ export function ComplianceObligationsPage() {
                           <div className="muted" style={{ fontSize: 12 }}>{relative(decision.updatedAtISO)}</div>
                         ) : null}
                       </td>
-                      <td>
+                      <td data-label="Source" className="obligations__source">
                         <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                           <span>{obligation.authority.displayCitation}</span>
                           <Badge tone={ruleStatusTone(obligation.ruleStatus)}>{ruleStatusLabel(obligation.ruleStatus)}</Badge>
@@ -374,7 +374,7 @@ export function ComplianceObligationsPage() {
                           </div>
                         ) : null}
                       </td>
-                      <td className="table__actions">
+                      <td className="table__actions" data-label="Action">
                         <div className="table__actions-inner">
                           {isDismissed ? (
                             <button className="btn btn--sm" disabled={!canReview} onClick={() => reopenObligation(obligation)}>

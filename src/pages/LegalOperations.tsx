@@ -1239,6 +1239,21 @@ export function FormationMaintenancePage() {
 
   const save = async () => {
     if (!draft || !canWrite) return;
+    // Blank annual and log records used to save as empty rows (G-29).
+    const filled = (value: unknown) => String(value ?? "").trim() !== "";
+    if (draft.kind === "annual" && !filled(draft.yearFilingFor) && !filled(draft.lastAgmDate) && !filled(draft.filingDate)) {
+      toast.error("Annual record not saved", "Enter the year the filing is for, the last AGM date or the filing date.");
+      return;
+    }
+    if (draft.kind === "annual" && filled(draft.yearFilingFor) && !/^[1-9]\d{3}$/.test(String(draft.yearFilingFor).trim())) {
+      toast.error("Annual record not saved", "The filing year must be a four-digit year.");
+      return;
+    }
+    if (draft.kind === "log" && !filled(draft.detailsHeading) && !filled(draft.detailsBody) && !filled(draft.errorMessage)) {
+      toast.error("Log entry not saved", "Enter a heading, details or an error message.");
+      return;
+    }
+    try {
     if (draft.kind === "formation") {
       await upsertFormation({
         id: draft._id,
@@ -1275,6 +1290,9 @@ export function FormationMaintenancePage() {
     }
     setDraft(null);
     toast.success("Formation and maintenance record saved");
+    } catch (error) {
+      toast.error("Record not saved", error instanceof Error ? error.message : String(error));
+    }
   };
 
   return (

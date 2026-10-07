@@ -39,6 +39,14 @@ export async function createPortable(
 ): Promise<string> {
   await requireSocietyMembership(ctx, args.societyId);
   if (args.roleHolderId) await getOwned(ctx, "roleHolders", args.roleHolderId, args.societyId);
+  // A diligence step needs who it concerns, what was done and when (G-29).
+  const problems = [
+    !String(args.individualName ?? "").trim() ? "the individual's name" : "",
+    !String(args.stepsNarrative ?? "").trim() ? "the steps taken" : "",
+    !/^\d{4}-\d{2}-\d{2}$/.test(String(args.stepDate ?? "")) ? "the step date" : "",
+  ].filter(Boolean);
+  if (problems.length) throw new Error(`Step not recorded: enter ${problems.join(", ")}.`);
+  if (args.nextReviewDate && args.nextReviewDate < args.stepDate) throw new Error("The next review date cannot be before the step date.");
   const { nowISO, ...rest } = args;
   return ctx.db.insert("significantIndividualSteps", {
     ...rest,

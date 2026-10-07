@@ -136,6 +136,27 @@ export function FilingsPage() {
     openMarkFiled(target);
   }, [canWrite, filings, openMarkFiled, params, setParams, society, toast]);
 
+  // ?filing=<id> (dashboard rows) opens that filing: mark-filed for an open
+  // filing, the read-only detail drawer for a filed one.
+  const filingParamHandled = useRef<string | null>(null);
+  useEffect(() => {
+    const filingId = params.get("filing");
+    if (!filingId || filings === undefined || filingParamHandled.current === filingId) return;
+    filingParamHandled.current = filingId;
+    const target = (filings ?? []).find((filing) => String(filing._id) === filingId);
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("filing");
+      return next;
+    }, { replace: true });
+    if (!target) {
+      toast.info("That filing no longer exists");
+      return;
+    }
+    if (target.status !== "Filed" && canWrite) openMarkFiled(target);
+    else setViewFiled(target);
+  }, [canWrite, filings, openMarkFiled, params, setParams, toast]);
+
   // ?intent=add (from the "Add filing" command palette action) opens the
   // new-filing form. Mirrors the mark-filed handler above.
   const addIntentHandled = useRef(false);

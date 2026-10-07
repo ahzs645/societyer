@@ -431,7 +431,7 @@ function RecordBundlesCard({ rows, partial }: { rows: any[]; partial?: boolean }
         <Badge tone={gapCount ? "warn" : partial ? "neutral" : "success"}>{gapCount ? `${gapCount} visible gaps` : partial ? "Access limited" : `${rows.length} records`}</Badge>
       </div>
       <div ref={scroll.ref} className={`table-wrap ${scroll.className}`}>
-        <table className="table">
+        <table className="table table--stack-mobile">
           <thead>
             <tr>
               <th>Record</th>
@@ -444,17 +444,17 @@ function RecordBundlesCard({ rows, partial }: { rows: any[]; partial?: boolean }
           <tbody>
             {visibleRows.map((row) => (
               <tr key={row.key}>
-                <td>
+                <td data-label="Record">
                   <div style={{marginTop: 3}}>{row.href ? <Link to={row.href}><strong>{humanize(row.title)}</strong></Link> : <strong>{humanize(row.title)}</strong>}</div>
                   <div className="row" style={{ gap: 6 , flexWrap: "wrap", marginTop: 9 }}>
                     <Badge>{labelize(row.type)}</Badge>
                     {(row.badges ?? []).slice(0, 3).map((badge: any) => <Badge key={`${row.key}:${badge.label}`} tone={badge.tone}>{badge.label}</Badge>)}
                   </div>
                 </td>
-                <td><BundleLinks links={row.links ?? []} partial={partial} /></td>
-                <td><CountBadges counts={row.counts ?? {}} partial={partial} /></td>
-                <td><GapBadges gaps={row.gaps ?? []} partial={partial} /></td>
-                <td><Badge tone={toneForStatus(row.status)}>{humanize(row.status) || "-"}</Badge></td>
+                <td data-label="Connected evidence"><BundleLinks links={row.links ?? []} partial={partial} /></td>
+                <td data-label="Counts"><CountBadges counts={row.counts ?? {}} partial={partial} /></td>
+                <td data-label="Gaps"><GapBadges gaps={row.gaps ?? []} partial={partial} /></td>
+                <td data-label="Status"><Badge tone={toneForStatus(row.status)}>{humanize(row.status) || "-"}</Badge></td>
               </tr>
             ))}
             {rows.length === 0 && (

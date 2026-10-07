@@ -150,7 +150,7 @@ export function PoliciesPage() {
           <Badge>{policies?.length ?? 0}</Badge>
         </div>
         <div className="table-wrap">
-          <table className="table">
+          <table className="table table--stack-mobile">
             <thead>
               <tr>
                 <th>Policy</th>
@@ -167,33 +167,33 @@ export function PoliciesPage() {
             <tbody>
               {(policies ?? []).map((row: any) => (
                 <tr key={row._id}>
-                  <td>
+                  <td data-label="Policy">
                     <strong>{row.policyName}</strong>
                     {row.policyNumber && <div className="mono muted">{row.policyNumber}</div>}
                   </td>
-                  <td>{row.owner || "-"}</td>
-                  <td>
+                  <td data-label="Owner">{row.owner || "-"}</td>
+                  <td data-label="Dates">
                     <div>{row.effectiveDate ? formatDate(row.effectiveDate) : "No effective date"}</div>
                     <div className={row.lifecycle?.reviewState === "overdue" ? "" : "muted"} style={row.lifecycle?.reviewState === "overdue" ? { color: "var(--danger)", fontWeight: 600 } : undefined}>
                       {row.reviewDate ? `Review ${formatDate(row.reviewDate)}${row.lifecycle?.reviewState === "overdue" ? " · Overdue" : ""}` : "No review date"}
                     </div>
                   </td>
-                  <td>
+                  <td data-label="Documents">
                     <div>{row.docxDocumentId ? docById.get(row.docxDocumentId)?.title ?? "DOCX linked" : "No DOCX"}</div>
                     <div className="muted">{row.pdfDocumentId ? docById.get(row.pdfDocumentId)?.title ?? "PDF linked" : "No PDF"}</div>
                   </td>
-                  <td><AdoptionCell row={row} maps={adoptionMaps} /></td>
-                  <td>
+                  <td data-label="Adoption"><AdoptionCell row={row} maps={adoptionMaps} /></td>
+                  <td data-label="Signers">
                     {row.signatureRequired ? (
                       <Badge tone="warn">{(row.requiredSigners ?? []).map((value: string) => optionLabel("requiredSigners", value)).join(", ") || "Needs review"}</Badge>
                     ) : (
                       <span className="muted">Not required</span>
                     )}
                   </td>
-                  <td>
+                  <td data-label="Lifecycle">
                     <LifecycleBadges lifecycle={row.lifecycle} />
                   </td>
-                  <td><Badge tone={toneForStatus(row.status)}>{optionLabel("policyStatuses", row.status) || row.status}</Badge></td>
+                  <td data-label="Status"><Badge tone={toneForStatus(row.status)}>{optionLabel("policyStatuses", row.status) || row.status}</Badge></td>
                   <td>
                     <div className="row" style={{ justifyContent: "flex-end" }}>
                       <Menu

@@ -1,7 +1,7 @@
 import {SourceRoleObservations} from "../components/SourceRoleObservations";
 import {PersonRecordLinks} from "../components/PersonRecordLinks";
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
@@ -49,6 +49,28 @@ export function DirectorsPage() {
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
   const [directorMode, setDirectorMode] = useState<"register" | "archived">("register");
+  // ?intent=consent (dashboard "Update consent") opens the first active
+  // director without consent on file instead of the generic list (G-24).
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get("intent") !== "consent" || directors === undefined) return;
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+    const missing = (directors ?? []).filter((director: any) => director.status === "Active" && !director.consentOnFile);
+    if (!missing.length) {
+      toast.info("Every active director has consent on file");
+      return;
+    }
+    setSelected(missing[0]);
+    setOpen(true);
+    toast.info(
+      `${missing.length} active director${missing.length === 1 ? "" : "s"} without consent on file`,
+      missing.map((director: any) => `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim()).join(", "),
+    );
+  }, [directors, params, setParams, toast]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,

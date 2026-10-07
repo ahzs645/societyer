@@ -7,7 +7,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
-import { formatDateTime, money } from "../lib/format";
+import { formatDate, formatDateTime, money } from "../lib/format";
 
 export function TimelinePage() {
   const society = useSociety();
@@ -19,6 +19,11 @@ export function TimelinePage() {
   const commitmentEvents = useQuery(api.commitments.eventsForSociety, society && loaded && can("commitments:read") ? { societyId: society._id } : "skip");
   const feeTimeline = useQuery(api.subscriptions.feeTimeline, society && loaded && can("settings:read") ? { societyId: society._id } : "skip");
   const fundingSources = useQuery(api.fundingSources.list, society && loaded && can("financials:read") ? { societyId: society._id } : "skip");
+  // G-26: the timeline claims "every due date" but omitted deadlines,
+  // elections and bylaw amendment milestones.
+  const deadlines = useQuery(api.deadlines.list, society && loaded && can("deadlines:read") ? { societyId: society._id } : "skip");
+  const elections = useQuery(api.elections.list, society && loaded && can("elections:read") ? { societyId: society._id } : "skip");
+  const bylawAmendments = useQuery(api.bylawAmendments.list, society && loaded && can("documents:read") ? { societyId: society._id } : "skip");
 
   const grouped = useMemo(() => {
     const events: { date: string; kind: string; title: string; sub?: string; to?: string; past: boolean; color?: string }[] = [];
@@ -39,8 +44,9 @@ export function TimelinePage() {
       events.push({
         date: f.dueDate,
         kind: "Filing",
-        title: `${kindLabel(f.kind)} — ${f.periodLabel ?? ""}`,
-        sub: f.status === "Filed" ? `Filed ${f.filedAt ?? ""}` : "Due",
+        title: [kindLabel(f.kind), f.periodLabel].filter(Boolean).join(" — "),
+        sub: f.status === "Filed" ? `Filed ${f.filedAt ? formatDate(f.filedAt) : ""}` : "Due",
+        to: `/app/filings?filing=${encodeURIComponent(String(f._id))}`,
         past: f.status === "Filed",
       });
     });
@@ -89,8 +95,63 @@ export function TimelinePage() {
         });
       });
     });
-    return events.sort((a, b) => b.date.localeCompare(a.date));
-  }, [meetings, committees, filings, commitments, commitmentEvents, feeTimeline, fundingSources]);
+    const today = new Date().toISOString().slice(0, 10);
+    (deadlines ?? []).forEach((deadline: any) => {
+      if (!deadline.dueDate) return;
+      const done = deadline.status ? deadline.status !== "open" : Boolean(deadline.done);
+      events.push({
+        date: deadline.dueDate,
+        kind: "Deadline",
+        title: deadline.title,
+        sub: `${deadline.category ?? "Deadline"}${done ? " · done" : String(deadline.dueDate).slice(0, 10) < today ? " · overdue" : ""}`,
+        to: "/app/deadlines",
+        past: done || String(deadline.dueDate).slice(0, 10) < today,
+      });
+    });
+    (elections ?? []).forEach((election: any) => {
+      if (election.opensAtISO) {
+        events.push({
+          date: election.opensAtISO,
+          kind: "Election",
+          title: `${election.title} — voting opens`,
+          sub: election.status,
+          to: `/app/elections/${election._id}`,
+          past: new Date(election.opensAtISO).getTime() < now,
+        });
+      }
+      if (election.closesAtISO) {
+        events.push({
+          date: election.closesAtISO,
+          kind: "Election",
+          title: `${election.title} — voting closes`,
+          sub: election.status,
+          to: `/app/elections/${election._id}`,
+          past: new Date(election.closesAtISO).getTime() < now,
+        });
+      }
+    });
+    (bylawAmendments ?? []).forEach((amendment: any) => {
+      if (amendment.resolutionPassedAtISO) {
+        events.push({
+          date: amendment.resolutionPassedAtISO,
+          kind: "Bylaws",
+          title: `${amendment.title} — special resolution passed`,
+          to: "/app/bylaw-diff",
+          past: true,
+        });
+      }
+      if (amendment.filedAtISO) {
+        events.push({
+          date: amendment.filedAtISO,
+          kind: "Bylaws",
+          title: `${amendment.title} — filed with the registrar`,
+          to: "/app/bylaw-diff",
+          past: true,
+        });
+      }
+    });
+    return events.filter((event) => Boolean(event.date)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  }, [meetings, committees, filings, commitments, commitmentEvents, feeTimeline, fundingSources, deadlines, elections, bylawAmendments]);
 
   // Hooks must run before any early returns so the rules-of-hooks contract holds.
   const nowMarkerRef = useRef<HTMLDivElement | null>(null);
@@ -122,7 +183,7 @@ export function TimelinePage() {
         title="Timeline"
         icon={<GitBranch size={16} />}
         iconColor="purple"
-        subtitle="Every meeting, filing, commitment, member-fee change, funding event, and due date on one spine."
+        subtitle="Meetings, filings, deadlines, elections, bylaw milestones, commitments, member-fee changes and funding events on one spine."
       />
 
       <div className="card">
@@ -132,7 +193,7 @@ export function TimelinePage() {
               <div className="timeline-vertical__item is-past" key={`past-${i}-${e.date}`}>
                 <span className="timeline-vertical__dot" style={e.color ? { borderColor: e.color } : undefined} />
                 <div className="row">
-                  <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(e.date)}</span>
+                  <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{timelineDate(e.date)}</span>
                   <Badge tone={eventTone(e.kind)}>{e.kind}</Badge>
                 </div>
                 <div className="timeline-vertical__title">
@@ -153,7 +214,7 @@ export function TimelinePage() {
               <div className="timeline-vertical__item is-future" key={`future-${i}-${e.date}`}>
                 <span className="timeline-vertical__dot" style={e.color ? { borderColor: e.color } : undefined} />
                 <div className="row">
-                  <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{formatDateTime(e.date)}</span>
+                  <span className="mono muted" style={{ fontSize: "var(--fs-sm)" }}>{timelineDate(e.date)}</span>
                   <Badge tone={eventTone(e.kind)}>{e.kind}</Badge>
                 </div>
                 <div className="timeline-vertical__title">
@@ -190,4 +251,10 @@ function kindLabel(k: string) {
     case "GSTHST": return "GST/HST";
     default: return k;
   }
+}
+
+/** Date-only values ("2026-05-12") have no time of day; showing them as
+ *  "12:00AM" invented a time (G-26). */
+function timelineDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? "")) ? formatDate(value) : formatDateTime(value);
 }

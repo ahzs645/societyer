@@ -1,3 +1,5 @@
+import { useConfirm } from "../components/Modal";
+import { isCorporation } from "../../shared/organizationDomain";
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -49,6 +51,7 @@ export function CertificateRegisterPage() {
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -70,6 +73,20 @@ export function CertificateRegisterPage() {
 
   const save = async () => {
     if (saving || !canEdit) return;
+    // Friendly, field-level checks before the server's validator (G-29 showed
+    // the raw "Invalid certificate: certificateNumber is required; ...").
+    const shares = Number(form.shares);
+    const problems = [
+      !String(form.certificateNumber ?? "").trim() ? "a certificate number" : "",
+      !String(form.holderName ?? "").trim() ? "the holder's name" : "",
+      !String(form.shareClass ?? "").trim() ? "the share class" : "",
+      !form.issuedOn ? "the issue date" : "",
+      !(Number.isInteger(shares) && shares > 0) ? "a whole, positive number of shares" : "",
+    ].filter(Boolean);
+    if (problems.length) {
+      toast.error("Certificate not recorded", `Enter ${problems.join(", ")}.`);
+      return;
+    }
     setSaving(true);
     try {
     await create({
@@ -120,6 +137,12 @@ export function CertificateRegisterPage() {
                 value={asOf}
                 onChange={(value) => setAsOf(value)}
               />
+      {!isCorporation(society) && (
+        <p className="muted" role="status">
+          Share certificates apply to companies with shares. {society.name} is a society, which has members rather than shareholders, so
+          this register is optional here and is not a statutory requirement.
+        </p>
+      )}
             </label>
             <button className="btn-action btn-action--primary" disabled={!canEdit} onClick={openNew}>
               <Plus size={12} /> Issue certificate
@@ -179,7 +202,16 @@ export function CertificateRegisterPage() {
                         className="btn btn--ghost btn--sm btn--icon"
                         aria-label={`Delete certificate ${c.certificateNumber}`}
                         disabled={!canEdit}
-                        onClick={() => remove({ id: c._id }).catch((error: any) => toast.error("Could not delete certificate", error?.message ?? String(error)))}
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: `Delete certificate ${c.certificateNumber}?`,
+                            message: `The register entry for ${c.holderName} (${c.shares.toLocaleString()} ${c.shareClass}) will be removed and outstanding share totals recalculated. To record a returned certificate, use Cancel instead.`,
+                            confirmLabel: "Delete certificate",
+                            tone: "danger",
+                          });
+                          if (!ok) return;
+                          remove({ id: c._id }).catch((error: any) => toast.error("Could not delete certificate", error?.message ?? String(error)));
+                        }}
                       >
                         <Trash2 size={12} />
                       </button>
