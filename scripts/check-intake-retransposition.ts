@@ -8,12 +8,15 @@
  * accept batches. Synthetic data only. */
 import assert from "node:assert/strict";
 import { finalizeBlocks, blocksFromPlainText, INTAKE_EXTRACT_VERSION, type IntakeExtract } from "../shared/intake/blocks";
-import { bodyFromText, parseMotion } from "../shared/intake/minutes/extractMinutes";
+import { bodyFromText, extractMeetingMinutes, parseMotion } from "../shared/intake/minutes/extractMinutes";
 import { bodyKeyFor } from "../shared/intake/entities";
 import { extractForClass } from "../shared/intake/extractors";
 import { agendaEvidencedMeetings } from "../shared/intake/classStages";
 import { classBundleRecords } from "../shared/intake/bundleClasses";
 import { extractionEvidenceVerified, markEvidenceVerified } from "../shared/intake/evidenceRule";
+import { extractPdf } from "../shared/intake/extract/pdf";
+import { buildDocx, buildPdf } from "./lib/intake-synthetic-fixtures";
+import { extractDocx } from "../shared/intake/extract/docx";
 import { takeBulkBatch } from "../shared/functions/intakeReview";
 import { verifyRecord } from "../shared/intake/verify";
 import { clusterFiles, nameDateSignature } from "../shared/intake/cluster";
@@ -195,4 +198,62 @@ const hostedIndex = await loadDirectoryIndex(fakeCtx(false), "s1");
 assert.equal(directoryPersonId(hostedIndex, "Casey Lark"), undefined, "hosted workspaces link only owned people");
 assert.equal(directoryPersonId(hostedIndex, "Avery Quill"), "pd_owned");
 
-console.log("PASS intake re-transposition: motion grammar, bodies, agenda dates, evidenced meetings, insurance cleanup, evidence rule, policy copies, dated version families, future minutes dates, citations, run people, local directory links and bulk-accept batches");
+// ------------------------------------------------------------ decisions: stated lines, never a repeated motion
+const minutesText = textExtract([
+  "Board Meeting Minutes",
+  "Date: May 13, 2025",
+  "Present: Avery Quill, Casey Lark, Drew Moss",
+  "1. Budget",
+  "MOTION: to approve the 2025 operating budget. Moved by Avery Quill, seconded by Casey Lark. Carried.",
+  "Approve the 2025 operating budget.",
+  "DECISION: The newsletter moves to a quarterly schedule. ACTION: Drew Moss to update the calendar.",
+  "Agenda approved.",
+].join("\n"));
+const decided = extractMeetingMinutes({ fileId: "local:m", fileName: "2025-05-13 Board Minutes.docx", extract: minutesText } as any).record as any;
+const decisionTexts = (decided.decisions ?? []).map((decision: any) => decision.value);
+assert.ok(decisionTexts.includes("The newsletter moves to a quarterly schedule."), "a DECISION: line is a stated decision, cut before its ACTION:");
+assert.equal(decided.decisions.find((decision: any) => decision.value === "The newsletter moves to a quarterly schedule.").status, "stated");
+assert.ok(!decisionTexts.some((text: string) => /operating budget/i.test(text)), "a decision that repeats a motion is dropped");
+assert.ok(decisionTexts.includes("Agenda approved."));
+assert.ok((decided.actionItems ?? []).some((action: any) => /update the calendar/.test(action.text.value)), "the ACTION: on the same line is still an action item");
+
+// ------------------------------------------------------------ two-column PDF minutes
+const twoColumn = await extractPdf(await buildPdf([
+  "Board Meeting Minutes",
+  "Date: May 13, 2025",
+  "Members Present:",
+  "Avery Quill\tMinistry of Environment and Climate Change Strategy and Planning Branch",
+  "Casey Lark\tRegional District",
+  "",
+  "Agenda Item\tGroup Action",
+  "1. Welcome\tMembers welcomed.",
+  "2. Budget update\tThe treasurer presented the budget",
+  "\tvariance report.",
+  "\f",
+  "\tACTION: Treasurer to circulate the report.",
+  "3. Adjournment\tAdjourned at 7 pm.",
+]));
+const tables = twoColumn.blocks.filter((block) => block.kind === "table");
+assert.ok(tables.length >= 2, "an 'Agenda Item | Group Action' header starts a table, which continues on the next page");
+const cells = tables.flatMap((block) => (block.rows ?? []).flatMap((row) => row.cells.map((cell) => cell.text)));
+assert.ok(cells.some((text) => /presented the budget\s+variance report/.test(text)), "a wrapped cell stays in its column");
+assert.ok(cells.some((text) => /ACTION: Treasurer to circulate/.test(text)), "the continued table keeps the action column");
+assert.ok(!/Branch Casey Lark/.test(twoColumn.text), "a tabbed list row reaching the margin does not swallow the next row");
+
+// ------------------------------------------------------------ Action | WHO | FOR columns
+const whoTable = await extractDocx(await buildDocx([
+  { p: "Operations Committee Minutes" },
+  { p: "Date: June 3, 2025" },
+  { table: [
+    ["Agenda Item", "Discussion", "Action", "WHO", "FOR"],
+    ["1. Newsletter", "The draft was reviewed.", "Send the newsletter to members", "Drew Moss", "June 30, 2025"],
+  ] },
+] as any));
+const whoMinutes = extractMeetingMinutes({ fileId: "local:w", fileName: "2025-06-03 Operations Minutes.docx", extract: whoTable } as any).record as any;
+assert.equal(whoMinutes.actionItems.length, 1, "the WHO column names who acts; it is not a second action");
+assert.equal(whoMinutes.actionItems[0].text.value, "Send the newsletter to members");
+assert.equal(whoMinutes.actionItems[0].assigneeAsWritten?.value, "Drew Moss", "the WHO cell is the action's assignee");
+assert.equal(whoMinutes.actionItems[0].due?.value.iso, "2025-06-30", "the FOR cell is the action's due date");
+assert.ok(!(whoMinutes.decisions ?? []).length, "no decision is invented from the action row");
+
+console.log("PASS intake re-transposition: motion grammar, bodies, agenda dates, evidenced meetings, insurance cleanup, evidence rule, policy copies, dated version families, future minutes dates, citations, run people, local directory links, decisions, two-column PDFs, Action/WHO/FOR columns and bulk-accept batches");

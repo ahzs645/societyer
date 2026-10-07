@@ -30,16 +30,24 @@ function linesFromItems(items: PdfItem[]): PdfLine[] {
     line.items.sort((a, b) => a.x - b.x);
     let text = "";
     let end = -Infinity;
+    let pendingSpace = false;
     for (const item of line.items) {
-      const charWidth = item.str.trim().length ? item.w / Math.max(1, item.str.length) : 4;
+      // pdf.js reports the gap between two columns as one wide " " item: it is a separator,
+      // not text, so it must not close the gap that makes the next cell a new column.
+      if (!item.str.trim()) {
+        pendingSpace = Boolean(text);
+        continue;
+      }
+      const charWidth = item.w / Math.max(1, item.str.length);
       const gap = item.x - end;
       if (text && gap > Math.max(18, charWidth * 4)) text = `${text.replace(/ +$/, "")}\t`;
-      else if (text && gap > charWidth * 0.25 && !/\s$/.test(text) && !/^\s/.test(item.str)) text += " ";
+      else if (text && (pendingSpace || gap > charWidth * 0.25) && !/\s$/.test(text) && !/^\s/.test(item.str)) text += " ";
+      pendingSpace = false;
       text += item.str;
       end = Math.max(end, item.x + item.w);
     }
     line.text = text.replace(/[  ]+/g, " ").replace(/ ?\t ?/g, "\t").trimEnd();
-    line.x0 = line.items[0].x;
+    line.x0 = (line.items.find((item) => item.str.trim()) ?? line.items[0]).x;
     line.x1 = end;
     line.h = Math.max(...line.items.map((item) => item.h || 10));
   }
@@ -47,7 +55,8 @@ function linesFromItems(items: PdfItem[]): PdfLine[] {
 }
 
 /** Column anchors from a header line such as "Agenda Item\tDiscussion\tAction". */
-const TABLE_HEADER = /^(?:item|agenda item|topic|#|no\.?)\t.*(?:discussion|notes|summary|details|update)/i;
+const TABLE_HEADER_LABELS = "discussion|notes|summary|details|update|action|actions|decisions?|group|outcome|who|responsib\\w*|minutes";
+const TABLE_HEADER = new RegExp(`^(?:item|agenda item|topic|#|no\\.?)\\t.*\\b(?:${TABLE_HEADER_LABELS})\\b`, "i");
 
 /** Header labels are often centred over their column while cell text is left-aligned:
  * move each column start to the most common left edge of text found under it. */
@@ -125,16 +134,18 @@ function columnOf(x: number, anchors: number[]): number {
   return column;
 }
 
-function tableFromLines(lines: PdfLine[], header: PdfLine, page: number, rightEdge: number): { block: DraftBlock; consumed: number } {
-  const anchors: number[] = [];
+type OpenTable = { header: PdfLine; anchors: number[] };
+
+function tableFromLines(lines: PdfLine[], header: PdfLine, page: number, rightEdge: number, preset?: number[]): { block: DraftBlock; consumed: number; anchors: number[] } {
+  const anchors: number[] = preset ? [...preset] : [];
   let previousEnd = -Infinity;
-  for (const item of header.items) {
+  if (!preset) for (const item of header.items) {
     if (!item.str.trim()) continue;
     if (!anchors.length || item.x - previousEnd > 20) anchors.push(item.x);
     previousEnd = item.x + item.w;
   }
   const headerCells = anchors.map((_, column) => header.items.filter((item) => columnOf(item.x, anchors) === column).map((item) => item.str).join(" ").replace(/\s+/g, " ").trim());
-  alignAnchors(anchors, lines, 30);
+  if (!preset) alignAnchors(anchors, lines, 30);
   const rows: IntakeRow[] = [{ cells: headerCells.map((text, column) => ({ text, cell: `R1C${column + 1}`, header: true })) }];
   let current: string[][] | null = null;
   const lastEnd: number[] = anchors.map(() => 0);
@@ -152,7 +163,10 @@ function tableFromLines(lines: PdfLine[], header: PdfLine, page: number, rightEd
     }
     const texts = parts.map((part) => part.join(" ").replace(/\s+/g, " ").trim());
     // A new row starts when the first column has text after a vertical gap, or holds an item number.
-    const startsRow = !current || (texts[0] && (/^\d+(?:\.\d+)*\.?\s/.test(texts[0]) || /^\d+(?:\.\d+)*\.?$/.test(texts[0]) || lastY - line.y > line.h * 1.9));
+    let startsRow = !current || (texts[0] && (/^\d+(?:\.\d+)*\.?\s/.test(texts[0]) || /^\d+(?:\.\d+)*\.?$/.test(texts[0]) || lastY - line.y > line.h * 1.9));
+    // A one-line cell drawn just above its row's item ("1:08PM" over "7. Adjourn") is a vertically
+    // centred cell of that row, not a row of its own with an empty item column.
+    if (startsRow && current && !current[0].length && current.reduce((sum, cell) => sum + cell.length, 0) === 1 && lastY - line.y <= line.h * 1.6) startsRow = false;
     if (startsRow) {
       if (current) rows.push({ cells: current.map((cell, column) => ({ text: cell.join("\n"), cell: `R${rows.length + 1}C${column + 1}` })) });
       current = anchors.map(() => []);
@@ -171,7 +185,7 @@ function tableFromLines(lines: PdfLine[], header: PdfLine, page: number, rightEd
     consumed += 1;
   }
   if (current) rows.push({ cells: (current as string[][]).map((cell, column) => ({ text: cell.join("\n"), cell: `R${rows.length + 1}C${column + 1}` })) });
-  return { block: { kind: "table", rows, page }, consumed };
+  return { block: { kind: "table", rows, page }, consumed, anchors };
 }
 
 export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: { pdfjs?: PdfJsModule; maxPages?: number } = {}): Promise<IntakeExtract> {
@@ -215,6 +229,9 @@ export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: { pdf
     });
   }
   let openRegister: OpenRegister | null = null;
+  // A two-column minutes table often runs over several pages without repeating its header:
+  // its column anchors carry to the next page so the cells are not read across both columns.
+  let openTable: OpenTable | null = null;
   for (const { pageNumber, lines } of pages) {
     if (pageNumber > 1) drafts.push({ kind: "page_break", page: pageNumber });
     if (!lines.length) {
@@ -232,7 +249,10 @@ export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: { pdf
         for (let index = 1; index < paragraph.length; index++) {
           const prior = paragraph[index - 1];
           const next = paragraph[index].text;
-          const soft = prior.x1 >= rightEdge - 45 && !/:$/.test(prior.text) && !/^\s*(?:[•●▪◦*]|ACTION\b|\d{1,2}[.)]\s)/.test(next);
+          // Two rows of a tabbed list ("Name<TAB>Organization") that start at the same left edge are
+          // two entries, even when the first row's long organization reaches the right margin.
+          const tabbedRows = prior.text.includes("\t") && next.includes("\t") && Math.abs(paragraph[index].x0 - prior.x0) < 4;
+          const soft = !tabbedRows && prior.x1 >= rightEdge - 45 && !/:$/.test(prior.text) && !/^\s*(?:[•●▪◦*]|ACTION\b|\d{1,2}[.)]\s)/.test(next);
           text += soft ? `${/[a-z]-$/.test(prior.text) && /^[a-z]/.test(next) ? "" : " "}${next}` : `\n${next}`;
         }
         drafts.push({ kind: "paragraph", text, page: pageNumber });
@@ -248,6 +268,16 @@ export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: { pdf
       registerStart = consumed;
     }
     openRegister = null;
+    if (openTable && registerStart === 0) {
+      const anchors = openTable.anchors;
+      const aligned = lines.slice(0, 6).filter((line) => line.items.some((item) => item.str.trim() && Math.abs(item.x - anchors[anchors.length - 1]) < 12) && line.x0 >= anchors[0] - 30).length;
+      if (aligned >= 1 && lines[0].x0 >= anchors[0] - 30) {
+        const { block, consumed } = tableFromLines(lines, openTable.header, pageNumber, Math.max(...lines.map((line) => line.x1)), anchors);
+        drafts.push(block);
+        registerStart = consumed;
+        openTable = consumed >= lines.length ? openTable : null;
+      } else openTable = null;
+    }
     for (let index = registerStart; index < lines.length; index++) {
       const line = lines[index];
       if (REGISTER_HEADER.test(line.text) && line.items.length >= 3) {
@@ -267,12 +297,14 @@ export async function extractPdf(bytes: Uint8Array | ArrayBuffer, options: { pdf
         if (index >= lines.length - 1) openRegister = open;
         continue;
       }
-      if (TABLE_HEADER.test(line.text.replace(/ +(?=(?:discussion|notes|summary|details|update)\b)/i, "\t")) && line.items.length >= 2) {
+      if (TABLE_HEADER.test(line.text.replace(new RegExp(` +(?=(?:${TABLE_HEADER_LABELS})\\b)`, "i"), "\t")) && line.items.length >= 2) {
         flush();
-        const { block, consumed } = tableFromLines(lines.slice(index + 1), line, pageNumber, rightEdge);
+        const { block, consumed, anchors } = tableFromLines(lines.slice(index + 1), line, pageNumber, rightEdge);
         drafts.push(block);
         index += consumed;
         previous = lines[index] ?? null;
+        // The table reached the bottom of the page: it may continue on the next one.
+        openTable = index >= lines.length - 1 && anchors.length >= 2 ? { header: line, anchors } : null;
         continue;
       }
       if (previous && previous.y - line.y > Math.max(previous.h, line.h) * 1.7) flush();

@@ -333,6 +333,7 @@ export function parseMotion(line: string): ParsedMotion | null {
 }
 
 // ---------------------------------------------------------------- actions
+const DECISION_LINE = /(?:^|\s)(?:DECISION|Decision)\s*[:\-–]\s*(.+)$/;
 const ACTION_LINE = /(?:^|\s)(?:ACTION(?:\s+ITEMS?)?|Action(?:\s+Items?)?)\s*[:\-–]\s*(.*)$/;
 const ASSIGNEE_LEAD = new RegExp(String.raw`^((?:${NAME}|[A-Z]{2,3})(?:\s*(?:/|,|&|\band\b)\s*(?:${NAME}|[A-Z]{2,3}))*)\s*(?:[-–—:]\s+|\s+(?:to|will|shall|should|is to|are to)\s+|\s+(?=[a-z]))(.+)$`);
 
@@ -716,7 +717,9 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
       const time = parseTime(text, { compact: true });
       if (time) record.calledToOrderAt = fv(time.time, unit, time.text, time.inferredMeridiem ? 0.7 : 0.9, time.inferredMeridiem ? "inferred" : "stated");
     }
-    if (/\ba[dj]{1,2}ourn|terminat(?:e|ed)\s+the\s+meeting|meeting\s+(?:ended|closed)/i.test(text)) {
+    // A bare time in the discussion cell of an "Adjourn" item is the adjournment time.
+    const adjournCell = unit.role === "discussion" && /\ba[dj]{1,2}ourn/i.test(sectionTitle ?? "") && /^\s*\d{1,2}[:.]\d{2}\s*(?:a\.?m\.?|p\.?m\.?)?\s*$/i.test(text);
+    if (adjournCell || /\ba[dj]{1,2}ourn|terminat(?:e|ed)\s+the\s+meeting|meeting\s+(?:ended|closed)/i.test(text)) {
       let time = parseTime(text, { compact: true });
       let timeUnit = unit;
       if (!time && text.split(/\s+/).length <= 4) {
@@ -924,6 +927,10 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
         });
         consumed.add(unit);
       }
+    } else if (unit.role !== "action" && DECISION_LINE.test(text)) {
+      // "DECISION: …" (often in the same cell as discussion and "ACTION:" lines) is a stated decision.
+      const decision = DECISION_LINE.exec(text)![1].split(/\s+(?=ACTION(?:\s+ITEMS?)?\s*[:\-–])/)[0].trim();
+      if (decision) decisions.push(fv(decision, unit, decision, 0.85));
     } else if (unit.role !== "action" && /\b(?:approved|adopted|agreed|decided|decision (?:was )?made|accepted)\b/i.test(text) && text.length < 240 && !/\bif\b|\bwill be\b|\bto be approved\b|\bpending\b/i.test(text)) {
       decisions.push(fv(stripBullet(text), unit, undefined, 0.6, "inferred"));
       if (/\bminutes\b/i.test(text)) {
@@ -1018,7 +1025,18 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
     const resolvedName = resolveName(record.chair.value.nameAsWritten);
     if (resolvedName && resolvedName !== record.chair.value.nameAsWritten) record.chair.value.resolvedName = resolvedName;
   }
-  if (decisions.length) record.decisions = decisions;
+  // A decision that repeats a recorded motion ("Motion to approve the budget … carried" and
+  // "Budget approved") is not a second decision: keep only decisions no motion already states.
+  const decisionKey = (value: string) => value.toLowerCase().replace(/^(?:that|to)\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
+  const motionKeys = (record.motions ?? []).map((motion) => decisionKey(String(motion.text?.value ?? ""))).filter((key) => key.length >= 8);
+  const motionUnits = new Set((record.motions ?? []).flatMap((motion) => (motion.text?.locators ?? []).map((locator) => `${locator.blockIndex}:${locator.quote ?? ""}`)));
+  const distinctDecisions = decisions.filter((decision) => {
+    const key = decisionKey(String(decision.value ?? ""));
+    if (!key) return false;
+    if (decision.locators.some((locator) => motionUnits.has(`${locator.blockIndex}:${locator.quote ?? ""}`))) return false;
+    return !motionKeys.some((motionKey) => motionKey === key || (key.length >= 12 && (motionKey.includes(key) || key.includes(motionKey))));
+  });
+  if (distinctDecisions.length) record.decisions = distinctDecisions;
   if (attachments.length) record.attachmentsReferenced = attachments;
   if (sessionSegments.length) record.sessionSegments = sessionSegments;
   if (!record.attendance.length) warnings.push("No attendance list recognised.");

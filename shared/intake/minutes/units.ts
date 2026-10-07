@@ -5,7 +5,7 @@
 import type { IntakeBlock, IntakeCell } from "../blocks";
 import type { Locator } from "../schemas/common";
 
-export type ColumnRole = "number" | "title" | "discussion" | "action" | "due" | "other";
+export type ColumnRole = "number" | "title" | "discussion" | "action" | "assignee" | "due" | "other";
 export type Unit = {
   text: string;
   blockIndex: number;
@@ -72,6 +72,8 @@ function headerRoles(block: IntakeBlock): Map<number, ColumnRole> | null {
     else if (nonEmpty.length <= 2) roles.set(col, "discussion");
     else if (/discussion|notes|summary|details|minutes|update/.test(text)) roles.set(col, "discussion");
     else if (/group action|responsibilit/.test(text) && ![...roles.values()].includes("discussion")) roles.set(col, "discussion");
+    // A separate WHO/owner column beside an Action column names who does the action; it is not an action.
+    else if (/^(?:who|by whom|assigned(?: to)?|owner|lead|responsible|person responsible)$/.test(text) && texts.some((other) => other !== text && /\baction/.test(other))) roles.set(col, "assignee");
     else if (/action|who|responsib|assigned|lead|owner/.test(text)) roles.set(col, "action");
     else if (/\bfor\b|due|date|when|deadline|timeline|by when/.test(text)) roles.set(col, "due");
     else roles.set(col, "other");
@@ -86,6 +88,8 @@ function registerRoles(block: IntakeBlock): Map<number, RegisterRole> | null {
   if (!header) return null;
   const texts = header.cells.map((cell) => cell.text.trim().toLowerCase());
   if (!texts.some((text) => /^(?:description|action(?: item)?s?|task|item description)$/.test(text)) || !texts.some((text) => /assigned|responsib|^who$|owner|lead/.test(text))) return null;
+  // "Agenda Item | Discussion | Action | WHO | FOR" is a minutes table with action columns, not an action register.
+  if (texts.some((text) => /^(?:agenda\s*item|topic)$/.test(text)) && texts.some((text) => /^(?:discussion|notes|summary|details|minutes)$/.test(text))) return null;
   const roles = new Map<number, RegisterRole>();
   header.cells.forEach((cell) => {
     const text = cell.text.trim().toLowerCase();
@@ -183,9 +187,11 @@ export function linearize(blocks: IntakeBlock[], options: { softWrap?: boolean }
           const dueCells = byRole("due");
           const dueLines = dueCells.flatMap((cell) => cellLines(cell).map((text) => ({ text: stripBullet(text), cell: cell.cell })));
           const actionLines = byRole("action").flatMap((cell) => cellLines(cell).map((text) => ({ text, cell: cell.cell })));
+          const assigneeLines = byRole("assignee").flatMap((cell) => cellLines(cell).map((text) => ({ text: stripBullet(text).trim(), cell: cell.cell }))).filter((line) => line.text);
           actionLines.forEach((line, index) => {
             const due = dueLines.length === actionLines.length ? dueLines[index] : dueLines.length === 1 ? dueLines[0] : undefined;
-            units.push({ text: line.text.trim(), blockIndex: block.index, page: block.page, cell: line.cell, role: "action", section, rowKey, ...(due ? { dueText: due.text, dueCell: due.cell } : {}) });
+            const assignee = assigneeLines.length === actionLines.length ? assigneeLines[index] : assigneeLines.length === 1 ? assigneeLines[0] : undefined;
+            units.push({ text: line.text.trim(), blockIndex: block.index, page: block.page, cell: line.cell, role: "action", section, rowKey, ...(due ? { dueText: due.text, dueCell: due.cell } : {}), ...(assignee ? { assigneeText: assignee.text, assigneeCell: assignee.cell } : {}) });
           });
           for (const cell of byRole("other")) for (const line of cellLines(cell)) units.push({ text: line.trim(), blockIndex: block.index, page: block.page, cell: cell.cell, role: "other", section, rowKey });
         });
