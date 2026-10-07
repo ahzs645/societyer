@@ -38067,6 +38067,34 @@
     ]
   },
   {
+    "key": "portable:society:createWorkspace",
+    "surface": "portable",
+    "name": "society:createWorkspace",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "corporationKeyVaultItemId",
+        "table": "secretVaultItems",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "certificateEvidenceDocumentId",
+        "table": "documents",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:society:get",
     "surface": "portable",
     "name": "society:get",
