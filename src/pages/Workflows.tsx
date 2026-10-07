@@ -7,6 +7,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
@@ -135,6 +136,8 @@ export function WorkflowsPage() {
   const run = useAction(api.workflows.run);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const confirm = useConfirm();
+  const [nameError, setNameError] = useState("");
   const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
@@ -212,10 +215,15 @@ export function WorkflowsPage() {
         daysBefore: Number(form.daysBefore) || 30,
       };
     }
+    if (!String(form.name ?? "").trim()) {
+      setNameError("Name the workflow so it can be found later.");
+      return;
+    }
+    setNameError("");
     await create({
       societyId: society._id,
       recipe: form.recipe,
-      name: form.name || "Untitled workflow",
+      name: String(form.name).trim(),
       trigger,
       provider: form.provider,
       status: "active",
@@ -381,6 +389,7 @@ export function WorkflowsPage() {
                 <button
                   className="btn btn--ghost btn--sm"
                   disabled={!canManage || isLocalDataRuntime() || busyId === r._id}
+                  title={isLocalDataRuntime() ? "Running a workflow needs a connected server. You can still prepare and review it here." : !canManage ? "Your role cannot run workflows." : undefined}
                   onClick={async (e) => {
                     e.stopPropagation();
                     if (!canManage) return;
@@ -409,13 +418,16 @@ export function WorkflowsPage() {
                 <button
                   className="btn btn--ghost btn--sm"
                   disabled={!canManage}
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
                     if (!canManage) return;
-                    setStatus({
-                      id: r._id,
-                      status: r.status === "active" ? "paused" : "active",
-                    });
+                    const next = r.status === "active" ? "paused" : "active";
+                    try {
+                      await setStatus({ id: r._id, status: next });
+                      toast.success(next === "paused" ? "Workflow paused" : "Workflow resumed", r.name);
+                    } catch (error: any) {
+                      toast.error("Could not change workflow status", error?.message);
+                    }
                   }}
                 >
                   <Pause size={12} /> {r.status === "active" ? "Pause" : "Resume"}
@@ -427,8 +439,19 @@ export function WorkflowsPage() {
                   onClick={async (e) => {
                     e.stopPropagation();
                     if (!canManage) return;
-                    await remove({ id: r._id });
-                    toast.success("Workflow removed");
+                    const approved = await confirm({
+                      title: "Remove workflow?",
+                      message: `"${r.name}" will be permanently removed. Past runs stay in the run history. To stop it from running without losing its setup, pause it instead.`,
+                      confirmLabel: "Remove workflow",
+                      tone: "danger",
+                    });
+                    if (!approved) return;
+                    try {
+                      await remove({ id: r._id });
+                      toast.success("Workflow removed");
+                    } catch (error: any) {
+                      toast.error("Could not remove workflow", error?.message);
+                    }
                   }}
                 >
                   <Trash2 size={12} />
@@ -498,7 +521,7 @@ export function WorkflowsPage() {
                 </div>
               </div>
             )}
-            <Field label="Name">
+            <Field label="Name" required error={nameError || undefined}>
               <input
                 className="input"
                 value={form.name}

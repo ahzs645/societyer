@@ -1145,6 +1145,7 @@ export function OrganizationHistoryBudgetPage() {
   const budget = budgets.find((item: any) => item._id === budgetId);
   const budgetLines = Array.isArray(budget?.lines) ? budget.lines : [];
   const budgetLineGroups = useMemo(() => groupBudgetLines(budgetLines), [budgetLines]);
+  const budgetTotalMismatches = useMemo(() => budgetHeaderMismatches(budget, budgetLineGroups), [budget, budgetLineGroups]);
   const registerTransactions = Array.isArray(budget?.registerTransactions) ? budget.registerTransactions : [];
   const sourceObservations = Array.isArray(budget?.sourceObservations) ? budget.sourceObservations : [];
   const sourceSummary = budget?.sourceSummary;
@@ -1225,6 +1226,20 @@ export function OrganizationHistoryBudgetPage() {
         <Stat label="Expenses" value={formatCents(budget.totalExpenseCents, budget.currency)} icon={<FileText size={14} />} />
         <Stat label="Register rows" value={String(registerTransactions.length)} icon={<Archive size={14} />} sub={sourceSummary?.pageCount ? `${sourceSummary.pageCount} source pages` : undefined} />
       </div>
+
+      {budgetTotalMismatches.length > 0 && (
+        <div className="callout callout--warn" role="note" style={{ marginBottom: 16 }}>
+          <div className="callout__body">
+            <strong className="callout__title">Totals do not match the line items</strong>
+            {budgetTotalMismatches.map((row) => (
+              <div key={row.label} className="callout__note">
+                {row.label}: snapshot total {formatCents(row.headerCents, budget.currency)}, line items add up to {formatCents(row.linesCents, budget.currency)} (difference {formatCents(row.headerCents - row.linesCents, budget.currency)}).
+              </div>
+            ))}
+            <div className="callout__note muted">Some lines may be missing from the extraction, or the source total may include items that are not itemized. Check the source document before relying on these figures.</div>
+          </div>
+        </div>
+      )}
 
       <div className="two-col org-history__budget-detail-grid">
         <div className="card">
@@ -1763,6 +1778,25 @@ function groupBudgetLines(lines: any[]): BudgetLineGroup[] {
       hasExplicitTotal: Boolean(explicitTotalLine),
     };
   });
+}
+
+/** Header income/expense totals that disagree with the sum of their line groups (L14). */
+function budgetHeaderMismatches(budget: any, groups: BudgetLineGroup[]) {
+  const rows: Array<{ label: string; headerCents: number; linesCents: number }> = [];
+  if (!budget) return rows;
+  const sum = (pattern: RegExp) => {
+    const matching = groups.filter((group) => pattern.test(group.section) && typeof group.totalCents === "number");
+    return matching.length ? matching.reduce((total, group) => total + Number(group.totalCents), 0) : undefined;
+  };
+  const income = sum(/income|revenue/i);
+  const expense = sum(/expense|expenditure|cost/i);
+  if (typeof budget.totalIncomeCents === "number" && typeof income === "number" && Math.abs(budget.totalIncomeCents - income) >= 100) {
+    rows.push({ label: "Income", headerCents: budget.totalIncomeCents, linesCents: income });
+  }
+  if (typeof budget.totalExpenseCents === "number" && typeof expense === "number" && Math.abs(budget.totalExpenseCents - expense) >= 100) {
+    rows.push({ label: "Expenses", headerCents: budget.totalExpenseCents, linesCents: expense });
+  }
+  return rows;
 }
 
 function isBudgetTotalLine(line: any) {

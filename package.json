@@ -239,6 +239,8 @@
     "test:minutes-metadata-editor": "tsx scripts/check-minutes-metadata-editor.ts",
     "test:accounting-statements": "tsx scripts/check-accounting-statements.ts",
     "test:accounting-program-tracking": "tsx scripts/check-accounting-program-tracking.ts",
+    "test:accounting-backfill": "tsx scripts/check-accounting-backfill.ts",
+    "test:record-validation": "tsx scripts/check-record-validation.ts",
     "test:insurance-history": "tsx scripts/check-insurance-history.ts",
     "test:import-source-provenance": "tsx scripts/check-import-source-provenance.ts",
     "test:import-session-completion": "tsx scripts/check-import-session-completion.ts",

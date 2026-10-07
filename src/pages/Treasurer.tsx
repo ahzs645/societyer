@@ -11,6 +11,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
 import { centsToDollarInput, dollarInputToCents, formatDate } from "../lib/format";
 import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -326,6 +327,7 @@ export function TreasurerPage() {
   const upsertJournalEntry = useMutation(api.accounting.upsertJournalEntry);
   const actingUserId = useCurrentUserId() ?? undefined;
   const toast = useToast();
+  const confirm = useConfirm();
   const [payingReport, setPayingReport] = useState<{ report: any; expenseAccountId: string; bankAccountId: string } | null>(null);
   const [sourceDraft, setSourceDraft] = useState<any>(null);
   const [eventDraft, setEventDraft] = useState<any>(null);
@@ -591,8 +593,19 @@ export function TreasurerPage() {
                         className="btn btn--ghost btn--sm btn--icon"
                         aria-label={`Delete expense report ${report.title}`}
                         onClick={async () => {
-                          await removeExpenseReport({ id: report._id });
-                          toast.success("Expense report removed");
+                          const approved = await confirm({
+                            title: "Delete expense report?",
+                            message: `"${report.title}" (${report.status}) will be permanently removed with its line items and receipt links. Journal entries already posted for it are not removed.`,
+                            confirmLabel: "Delete report",
+                            tone: "danger",
+                          });
+                          if (!approved) return;
+                          try {
+                            await removeExpenseReport({ id: report._id });
+                            toast.success("Expense report removed");
+                          } catch (error: any) {
+                            toast.error("Could not delete expense report", error?.message);
+                          }
                         }} disabled={!canWrite}
                       >
                         <Trash2 size={12} />
@@ -712,8 +725,20 @@ export function TreasurerPage() {
                           className="btn btn--ghost btn--sm btn--icon"
                           aria-label={`Delete funding source ${source.name}`}
                           onClick={async () => {
-                            await removeFundingSource({ id: source._id });
-                            toast.success("Funding source removed");
+                            const eventCount = (source.events ?? []).length;
+                            const approved = await confirm({
+                              title: "Delete funding source?",
+                              message: `"${source.name}" will be permanently removed${eventCount ? `, together with its ${eventCount} funding event${eventCount === 1 ? "" : "s"}` : ""}. To keep the history, set its status to Ended instead.`,
+                              confirmLabel: "Delete funding source",
+                              tone: "danger",
+                            });
+                            if (!approved) return;
+                            try {
+                              await removeFundingSource({ id: source._id });
+                              toast.success("Funding source removed");
+                            } catch (error: any) {
+                              toast.error("Could not delete funding source", error?.message);
+                            }
                           }} disabled={!canWrite}
                         >
                           <Trash2 size={12} />
@@ -778,8 +803,19 @@ export function TreasurerPage() {
                       className="btn btn--ghost btn--sm btn--icon"
                       aria-label={`Delete funding event ${event.label}`}
                       onClick={async () => {
-                        await removeFundingEvent({ id: event._id });
-                        toast.success("Funding event removed");
+                        const approved = await confirm({
+                          title: "Delete funding event?",
+                          message: `"${event.label}"${event.amountCents != null ? ` (${cents(event.amountCents)})` : ""} will be permanently removed from this funding source's history.`,
+                          confirmLabel: "Delete event",
+                          tone: "danger",
+                        });
+                        if (!approved) return;
+                        try {
+                          await removeFundingEvent({ id: event._id });
+                          toast.success("Funding event removed");
+                        } catch (error: any) {
+                          toast.error("Could not delete funding event", error?.message);
+                        }
                       }} disabled={!canWrite}
                     >
                       <Trash2 size={12} />

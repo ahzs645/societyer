@@ -630,7 +630,11 @@ export function GlobalAiAssistant({ initiallyOpen = false }: { initiallyOpen?: b
                       placeholder="Ask the assistant to inspect this page, find records, draft tasks, or use workspace tools."
                       rows={3}
                       onKeyDown={(event) => {
-                        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void submit();
+                        // Enter sends; Shift+Enter adds a line (IME composition is left alone).
+                        if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                          event.preventDefault();
+                          void submit();
+                        }
                       }}
                     />
                     <div className="global-ai-composer__bar">

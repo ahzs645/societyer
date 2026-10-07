@@ -805,7 +805,8 @@ export function Field({
     <div className={`field${className ? ` ${className}` : ""}`}>
       <label className="field__label" htmlFor={fieldId}>
         {label}
-        {required && <span className="field__required" aria-hidden="true"> *</span>}
+        {/* The asterisk is CSS-generated so the label's text stays the field name. */}
+        {required && <span className="field__required" aria-hidden="true" />}
       </label>
       {enhanceFieldChildren(children, fieldId, describedBy, Boolean(error))}
       {hint && <div className="field__hint" id={hintId}>{hint}</div>}

@@ -10,6 +10,8 @@ import { ArrowLeft, Database, ExternalLink, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useToast } from "../../../components/Toast";
+import { RecordNotFound } from "../../../components/RecordNotFound";
+import { useRecordQuery } from "../../../hooks/useRecordQuery";
 import { RecordTableMetadataEmpty } from "../../../components/RecordTableMetadataEmpty";
 import {
   TransactionDrawer,
@@ -250,7 +252,7 @@ export function WaveAccountDetailPage() {
   );
   const activeConnection = (connections ?? []).find((c) => c.status === "connected");
   const browserBackedWaveConnection = isBrowserBackedWaveConnection(activeConnection);
-  const resource = useQuery(
+  const resource = useRecordQuery<any>(
     api.waveCache.resource,
     resourceId ? { id: resourceId as any } : "skip",
   );
@@ -315,21 +317,7 @@ export function WaveAccountDetailPage() {
   if (society === undefined || resource === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
   if (!resource || resource.resourceType !== "account") {
-    return (
-      <div className="page">
-        <PageHeader
-          title="Wave account"
-          icon={<Database size={16} />}
-          iconColor="green"
-          subtitle="This Wave account could not be found."
-          actions={
-            <Link className="btn-action" to="/app/financials/wave/account">
-              <ArrowLeft size={12} /> Accounts
-            </Link>
-          }
-        />
-      </div>
-    );
+    return <RecordNotFound recordLabel="Wave account" noun="Wave account" backTo="/app/financials/wave/account" backLabel="Wave accounts" icon={<Database size={16} />} />;
   }
 
   const transactions = activity?.transactions ?? [];
@@ -476,7 +464,7 @@ export function WaveResourceDetailPage() {
   const society = useSociety();
   const { resourceType: routeResourceType, resourceId } = useParams();
   const tableResourceType = normalizeWaveResourceType(routeResourceType ?? "all");
-  const resource = useQuery(
+  const resource = useRecordQuery<any>(
     api.waveCache.resource,
     resourceId ? { id: resourceId as any } : "skip",
   );
@@ -504,21 +492,7 @@ export function WaveResourceDetailPage() {
   if (society === null) return <SeedPrompt />;
 
   if (!resource) {
-    return (
-      <div className="page">
-        <PageHeader
-          title="Wave resource"
-          icon={<Database size={16} />}
-          iconColor="green"
-          subtitle="This Wave resource could not be found."
-          actions={
-            <Link className="btn-action" to={`/app/financials/wave/${tableResourceType}`}>
-              <ArrowLeft size={12} /> {waveTypeLabel(tableResourceType)}
-            </Link>
-          }
-        />
-      </div>
-    );
+    return <RecordNotFound recordLabel="Wave record" noun="Wave record" backTo={`/app/financials/wave/${tableResourceType}`} backLabel={waveTypeLabel(tableResourceType)} icon={<Database size={16} />} />;
   }
 
   const transactions = activity?.transactions ?? [];

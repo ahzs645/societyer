@@ -9,6 +9,7 @@
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireSocietyMembership } from "./access";
 import { renewalPolicyDraft } from "../insuranceHistory";
+import { assertValid, validateInsurancePolicyInput } from "../recordValidation";
 
 export async function createRenewalPortable(ctx: PortableMutationCtx, args: {
   id: string; policyNumber: string; startDate: string; endDate: string;
@@ -60,6 +61,7 @@ export async function createPortable(ctx: PortableMutationCtx, args: Record<stri
   for (const documentId of Array.isArray(args.sourceDocumentIds) ? args.sourceDocumentIds : []) {
     await getOwned(ctx, "documents", String(documentId), String(args.societyId));
   }
+  assertValid(validateInsurancePolicyInput(args));
   const now = new Date().toISOString();
   return await ctx.db.insert("insurancePolicies", {
     ...args,
@@ -76,6 +78,14 @@ export async function updatePortable(
   if (!candidate || typeof candidate.societyId !== "string") throw new Error("insurancePolicies not found.");
   await requireSocietyMembership(ctx, candidate.societyId);
   await getOwned(ctx, "insurancePolicies", id, candidate.societyId);
+  // Validate the policy as it will be after the patch, but only the fields the
+  // patch touches, so legacy imported rows can still be partially updated.
+  assertValid(validateInsurancePolicyInput(patch, { partial: true }));
+  const nextStart = String(patch.startDate ?? candidate.startDate ?? "");
+  const nextEnd = String(patch.endDate ?? candidate.endDate ?? "");
+  if ((patch.startDate || patch.endDate) && /^\d{4}-\d{2}-\d{2}/.test(nextStart) && /^\d{4}-\d{2}-\d{2}/.test(nextEnd) && nextEnd.slice(0, 10) < nextStart.slice(0, 10)) {
+    throw new Error("The end date must be on or after the start date.");
+  }
   for (const documentId of Array.isArray(patch.sourceDocumentIds) ? patch.sourceDocumentIds : []) {
     await getOwned(ctx, "documents", String(documentId), candidate.societyId);
   }

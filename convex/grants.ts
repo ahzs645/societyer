@@ -18,6 +18,8 @@ import {
   upsertGrantPortable,
   importGcosProjectSnapshotPortable,
   removeGrantPortable,
+  deletionImpactPortable,
+  setArchivedPortable,
   upsertReportPortable,
   removeReportPortable,
   upsertTransactionPortable,
@@ -268,6 +270,23 @@ export const importGcosProjectSnapshot = authorizedMutation("grants:importGcosPr
   },
   returns: v.any(),
   handler: async (ctx, args) => importGcosProjectSnapshotPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const deletionImpact = authorizedQuery("grants:deletionImpact", query)({
+  args: { id: v.id("grants") },
+  returns: v.any(),
+  handler: async (ctx, args) => deletionImpactPortable(await toPortableQueryCtx(ctx), args),
+});
+
+export const setArchived = authorizedMutation("grants:setArchived", mutation)({
+  args: {
+    id: v.id("grants"),
+    archived: v.boolean(),
+    reason: v.optional(v.string()),
+    actingUserId: v.optional(v.id("users")),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => setArchivedPortable(await toPortableMutationCtx(ctx), args),
 });
 
 export const removeGrant = authorizedMutation("grants:removeGrant", mutation)({

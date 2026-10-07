@@ -9,10 +9,12 @@ import { useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, EmptyState, Field } from "../components/ui";
+import { Badge, Field } from "../components/ui";
 import { MarkdownEditor, type MarkdownEditorHandle } from "../components/MarkdownEditor";
 import { SignaturePanel } from "../components/SignaturePanel";
 import { useToast } from "../components/Toast";
+import { RecordNotFound } from "../components/RecordNotFound";
+import { useRecordQuery } from "../hooks/useRecordQuery";
 import { formatDateTime } from "../lib/format";
 import { openDocumentDownloadTarget } from "../lib/documentStorage";
 import { fetchDocumentDownload } from "../lib/documentDownload";
@@ -34,7 +36,7 @@ export function DocumentWorkbenchPage() {
   const { id } = useParams<{ id: string }>();
   const society = useSociety();
   const userId = useCurrentUserId() ?? undefined;
-  const document = useQuery(api.documents.get, id ? { id: id as Id<"documents"> } : "skip");
+  const document = useRecordQuery<any>(api.documents.get, id ? { id: id as Id<"documents"> } : "skip");
   const latest = useQuery(api.documentVersions.latest, id ? { documentId: id as Id<"documents"> } : "skip");
   const legacyUrl = useQuery(api.files.getUrl, document?.storageId ? { storageId: document.storageId } : "skip");
   const comments = useQuery(api.documentComments.listForDocument, id ? { documentId: id as Id<"documents"> } : "skip");
@@ -72,31 +74,23 @@ export function DocumentWorkbenchPage() {
   if (society === null) return <SeedPrompt />;
   if (document === undefined) return <PageLoading />;
   if (document === null) {
-    return (
-      <div className="page page--narrow">
-        <EmptyState
-          icon={<FileText size={18} />}
-          title="Document not found"
-          description="This document may have been deleted, or the link is out of date."
-          action={
-            <Link className="btn btn--accent" to="/app/documents">
-              Back to documents
-            </Link>
-          }
-        />
-      </div>
-    );
+    return <RecordNotFound recordLabel="Document" backTo="/app/documents" backLabel="All documents" icon={<FileText size={16} />} />;
   }
 
   const openFile = async () => {
     if (latest) {
       const target = await getDownloadTarget({ versionId: latest._id });
-      if (!target) return;
+      if (!target) {
+        toast.info("No stored file could be found for this version.", "Upload the file again from Versions to restore it.");
+        return;
+      }
       if (target.kind === "url" && target.url?.startsWith("demo://")) {
         toast.info("Demo mode — no stored file is available.");
         return;
       }
-      await openDocumentDownloadTarget(target);
+      if (!(await openDocumentDownloadTarget(target))) {
+        toast.info("No stored file could be found for this version.", "Upload the file again from Versions to restore it.");
+      }
       return;
     }
     if (legacyUrl) {

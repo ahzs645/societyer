@@ -77,6 +77,21 @@ export async function buildWorkspaceArchive(database: any, collectFiles: (add: (
   return { blob, manifest };
 }
 
+/**
+ * Cheap check that a chosen file can be a Societyer backup (a ZIP archive or
+ * a JSON object), so restore can refuse it before asking the person to
+ * confirm replacing their workspace. The full parse still happens on restore.
+ */
+export async function preflightWorkspaceBackupFile(file: File): Promise<void> {
+  if (file.size === 0) throw new Error(`"${file.name}" is empty.`);
+  if (file.size > MAX_ARCHIVE_BYTES) throw new Error("Choose a backup smaller than 1 GB.");
+  const head = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
+  if (head[0] === 0x50 && head[1] === 0x4b) return;
+  if (file.size > MAX_SETUP_BACKUP_BYTES) throw new Error("Workspace JSON backups must be smaller than 256 MB.");
+  const text = new TextDecoder().decode(head).replace(/^\uFEFF/, "").trimStart();
+  if (!text.startsWith("{")) throw new Error(`"${file.name}" is not readable JSON or a Societyer ZIP backup.`);
+}
+
 export async function readWorkspaceArchiveFile(file: File): Promise<{ database: any; manifest?: ArchiveManifest; files: Map<string, Blob> }> {
   if (file.size > MAX_ARCHIVE_BYTES) throw new Error("Choose a backup smaller than 1 GB.");
   const signature = new Uint8Array(await file.slice(0, 4).arrayBuffer());

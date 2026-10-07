@@ -1,3 +1,4 @@
+import { preflightWorkspaceBackupFile } from "../lib/workspaceArchive";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useConvex, useQuery } from "convex/react";
@@ -263,7 +264,14 @@ export function ExportsPage() {
   };
 
   const restorePreview = async () => {
-    if (!restoreFile || !await confirm({ title: "Restore this backup?", message: `Replace this device's current local workspace with "${restoreFile.name}"? Export its current records first if you need to keep them.`, confirmLabel: "Restore", tone: "danger" })) return;
+    if (!restoreFile) return;
+    try {
+      await preflightWorkspaceBackupFile(restoreFile);
+    } catch (error) {
+      toast.error("This file can't be restored", error instanceof Error ? error.message : "Choose a Societyer ZIP or JSON backup.");
+      return;
+    }
+    if (!await confirm({ title: "Restore this backup?", message: `Replace this device's current local workspace with "${restoreFile.name}"? Export its current records first if you need to keep them.`, confirmLabel: "Restore", tone: "danger" })) return;
     setRestoreBusy(true);
     try {
       const summary = await restoreLocalWorkspaceBackup(restoreFile);

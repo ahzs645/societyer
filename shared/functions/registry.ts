@@ -779,6 +779,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "accounting:journalEntries", handler: accountingFns.journalEntriesPortable }),
   definePortableQuery({ name: "accounting:journalEntry", handler: accountingFns.journalEntryPortable }),
   definePortableQuery({ name: "accounting:trialBalance", handler: accountingFns.trialBalancePortable }),
+  definePortableQuery({ name: "accounting:backfillPreview", handler: accountingFns.backfillPreviewPortable }),
   definePortableQuery({ name: "accounting:generalLedger", handler: accountingFns.generalLedgerPortable }),
   definePortableQuery({ name: "accounting:exportCsv", handler: accountingFns.exportCsvPortable }),
   definePortableQuery({ name: "accounting:boardAuditorPackage", handler: accountingFns.boardAuditorPackagePortable }),
@@ -861,6 +862,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "grants:reports", handler: grantsFns.reportsPortable }),
   definePortableQuery({ name: "grants:employeeLinks", handler: grantsFns.employeeLinksPortable }),
   definePortableQuery({ name: "grants:summary", handler: grantsFns.summaryPortable }),
+  definePortableQuery({ name: "grants:deletionImpact", handler: grantsFns.deletionImpactPortable }),
 
   // grantSources
   definePortableQuery({ name: "grantSources:library", handler: grantSourcesFns.libraryPortable }),
@@ -1120,6 +1122,7 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "grants:upsertGrant", handler: grantsFns.upsertGrantPortable }),
   definePortableMutation({ name: "grants:importGcosProjectSnapshot", handler: grantsFns.importGcosProjectSnapshotPortable }),
   definePortableMutation({ name: "grants:removeGrant", handler: grantsFns.removeGrantPortable }),
+  definePortableMutation({ name: "grants:setArchived", handler: grantsFns.setArchivedPortable }),
   definePortableMutation({ name: "grants:upsertReport", handler: grantsFns.upsertReportPortable }),
   definePortableMutation({ name: "grants:removeReport", handler: grantsFns.removeReportPortable }),
   definePortableMutation({ name: "grants:upsertTransaction", handler: grantsFns.upsertTransactionPortable }),
