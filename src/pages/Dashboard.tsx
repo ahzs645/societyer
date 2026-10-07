@@ -33,6 +33,7 @@ import { formatDistanceToNowStrict, parseISO } from "date-fns";
 import { jurisdictionDisplayCopy } from "../../shared/jurisdictionWorkspace";
 import { Tooltip } from "../components/Tooltip";
 import { ContinuityChecksCard } from "../features/gaps/ContinuityChecksCard";
+import { formatMeetingDate } from "../../shared/meetingDates";
 
 const HIDDEN_ONBOARDING_FLOW_KEY = "societyer.dashboard.hiddenOnboardingFlowSocietyIds";
 
@@ -472,7 +473,7 @@ export function Dashboard() {
                     <Badge tone={m.type === "AGM" ? "accent" : "info"}>{m.type}</Badge>
                     <strong>{m.title}</strong>
                   </div>
-                  <div className="muted">{formatDateTime(m.scheduledAt)} · {relative(m.scheduledAt)}</div>
+                  <div className="muted">{formatMeetingDate(m)} · {relative(m.scheduledAt)}</div>
                   <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{m.location}</div>
                 </Link>
               ))}

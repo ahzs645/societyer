@@ -1,4 +1,5 @@
 import { resolveSourceMeetingRecord, changedSourceMinuteSections, type SourceMeetingRecord, type SourceMeetingBlock } from "../../../../shared/sourceMeetingRecord";
+import { isDateOnlyPlaceholder } from "../../../../shared/meetingDates";
 import { checkpointResult, decisionReadiness } from "../../../../shared/evidenceReview";
 import type { QuorumCheckpoint } from "../../../../shared/evidenceReview";
 import type { ActionObservation, ImportedSourceVersion } from "../../../../shared/meetingHistory";
@@ -436,10 +437,7 @@ function renderStandardMinutes({
   minutes,
 }: MinutesRenderArgs, options: Required<MinutesExportOptions>): string {
   const eh = escapeHtml;
-  const held = new Date(minutes.heldAt).toLocaleString("en-CA", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric",
-    hour: "numeric", minute: "2-digit",
-  });
+  const held = formatLongDateTime(minutes.heldAt);
   const businessMotions = minutes.motions.filter((motion) => !isAdjournmentMotionForExport(motion));
 
   const motionRow = (m: typeof minutes.motions[number]) => {
@@ -515,7 +513,7 @@ function renderFormalAgmMinutes({
   const meetingKind = meeting.type === "AGM" ? "Annual General Meeting" : `${meeting.type} Meeting`;
   const chair = minutes.chairName ?? placeholder("Chair", options);
   const secretary = minutes.secretaryName ?? minutes.recorderName ?? placeholder("Secretary", options);
-  const callTime = displayDateOrText(minutes.calledToOrderAt) ?? formatTime(minutes.heldAt);
+  const callTime = displayDateOrText(minutes.calledToOrderAt) ?? timeOrUnrecorded(minutes.heldAt);
   const adjournedAt = displayDateOrText(minutes.adjournedAt);
   const adjournmentMotion = minutes.motions.find((motion) => /adjourn/i.test(motion.text));
   const nonAdjournmentMotions = minutes.motions.filter((motion) => motion !== adjournmentMotion);
@@ -574,7 +572,7 @@ function renderExecutiveAgendaMinutes({
   // been recorded yet.
   const sectionRecords: Array<NonNullable<MinutesRenderArgs["minutes"]["sections"]>[number] | { title: string }> =
     (minutes.sections ?? []).length ? (minutes.sections ?? []) : agenda.map((title) => ({ title }));
-  const callTime = displayDateOrText(minutes.calledToOrderAt) ?? formatTime(minutes.heldAt);
+  const callTime = displayDateOrText(minutes.calledToOrderAt) ?? timeOrUnrecorded(minutes.heldAt);
   const adjournedAt = displayDateOrText(minutes.adjournedAt);
   // Motions that no section claims still need to appear somewhere.
   const unplacedMotions = minutes.motions.filter(
@@ -637,7 +635,7 @@ function renderNumberedAgendaMinutes({
         (section, originalIndex) => ({ section: section as any, originalIndex }),
       );
   const date = formatLongDate(minutes.heldAt || meeting.scheduledAt);
-  const startTime = minutes.calledToOrderAt ? formatTime(minutes.calledToOrderAt) : formatTime(minutes.heldAt || meeting.scheduledAt);
+  const startTime = minutes.calledToOrderAt ? formatTime(minutes.calledToOrderAt) : timeOrUnrecorded(minutes.heldAt || meeting.scheduledAt);
   const endTime = minutes.adjournedAt ? formatTime(minutes.adjournedAt) : "";
   const timeRange = endTime ? `${startTime} - ${endTime}` : startTime;
   const location = meeting.location || minutes.nextMeetingLocation || placeholder("location", options);
@@ -772,7 +770,7 @@ function renderBoardPublicMinutes({
       : ((meeting.agendaItems ?? []).length
           ? (meeting.agendaItems ?? []).map((title) => ({ title }))
           : ["Call to order", "Approval of the Agenda", "Minutes", "Reports", "Other Business", "Adjournment"].map((title) => ({ title })));
-  const callTime = displayDateOrText(minutes.calledToOrderAt) ?? formatTime(minutes.heldAt);
+  const callTime = displayDateOrText(minutes.calledToOrderAt) ?? timeOrUnrecorded(minutes.heldAt);
   const callToOrderSentence = `<p>${eh(minutes.chairName ?? placeholder("presiding officer", options))} called the meeting to order at ${eh(callTime)}.</p>`;
   // Attach the call-to-order line to the section actually about it, not
   // blindly to whichever section renders first.
@@ -792,7 +790,7 @@ function renderBoardPublicMinutes({
   return `
     <h1>${eh(meeting.title)}</h1>
     <p><strong>Public Session Minutes</strong></p>
-    <p class="meta">${eh(formatLongDate(minutes.heldAt))} · ${eh(formatTime(minutes.heldAt))}${meeting.location ? ` · ${eh(meeting.location)}` : ""}</p>
+    <p class="meta">${eh(formatLongDate(minutes.heldAt))}${formatTime(minutes.heldAt) ? ` · ${eh(formatTime(minutes.heldAt))}` : ""}${meeting.location ? ` · ${eh(meeting.location)}` : ""}</p>
     <p class="meta">${eh(society.name)}${society.incorporationNumber ? ` · ${eh(society.incorporationNumber)}` : ""}</p>
     ${renderSessionSegments(minutes.sessionSegments)}
     ${callToOrderIndex === -1 ? callToOrderSentence : ""}
@@ -1008,7 +1006,7 @@ function renderActionTableCell(
   const eh = escapeHtml;
   if (index === 0) {
     return [
-      `Meeting started at ${eh(formatTime(minutes.heldAt))}`,
+      `Meeting started at ${eh(timeOrUnrecorded(minutes.heldAt))}`,
       `Quorum: ${minutesQuorumLabel(minutes)}`,
     ].join("<br/>");
   }
@@ -1747,7 +1745,14 @@ function voteSummary(motion: MinutesRenderArgs["minutes"]["motions"][number]) {
   return `For ${motion.votesFor ?? 0} · Against ${motion.votesAgainst ?? 0} · Abstain ${motion.abstentions ?? 0}`;
 }
 
+/** A stored instant that only carries a calendar day (A13): the noon-UTC
+ *  placeholder or a bare YYYY-MM-DD. Never shown with a clock time. */
+function isDateOnlyValue(value: string | null | undefined) {
+  return isDateOnlyPlaceholder(value) || /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? "").trim());
+}
+
 function formatLongDateTime(value: string) {
+  if (isDateOnlyValue(value)) return formatLongDate(value);
   return new Date(value).toLocaleString("en-CA", {
     weekday: "long",
     year: "numeric",
@@ -1759,6 +1764,12 @@ function formatLongDateTime(value: string) {
 }
 
 function formatLongDate(value: string) {
+  if (isDateOnlyValue(value)) {
+    // Format the calendar day itself; a time zone must not move it.
+    return new Date(`${String(value).slice(0, 10)}T12:00:00.000Z`).toLocaleDateString("en-CA", {
+      weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC",
+    });
+  }
   return new Date(value).toLocaleDateString("en-CA", {
     weekday: "long",
     year: "numeric",
@@ -1768,10 +1779,18 @@ function formatLongDate(value: string) {
 }
 
 function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString("en-CA", {
+  // Date-only meetings have no time; free text ("3:04 PM") is kept as written.
+  if (!value || isDateOnlyValue(value)) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).trim();
+  return date.toLocaleTimeString("en-CA", {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function timeOrUnrecorded(value: string) {
+  return formatTime(value) || "a time not recorded in the source";
 }
 
 function renderSourceDecisionEvidence(minutes: MinutesRenderArgs["minutes"], quorumOnly = false) {

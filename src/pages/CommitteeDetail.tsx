@@ -22,6 +22,7 @@ import { formatDateTime, formatDate, initials } from "../lib/format";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { CommitteeStructureCard } from "../features/committees/CommitteeStructureCard";
 import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
+import { formatMeetingDate } from "../../shared/meetingDates";
 
 export function CommitteeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -235,7 +236,7 @@ export function CommitteeDetailPage() {
                 .map((m: any) => (
                   <tr key={m._id}>
                     <td><Link to={`/app/meetings/${m._id}`}><strong>{m.title}</strong></Link></td>
-                    <td className="table__cell--mono">{formatDateTime(m.scheduledAt)}</td>
+                    <td className="table__cell--mono">{formatMeetingDate(m)}</td>
                     <td>{m.location ?? "—"} {m.electronic && <Badge tone="info">Electronic</Badge>}</td>
                     <td><Badge tone={m.status === "Held" ? "success" : "warn"}>{m.status}</Badge></td>
                     <td>{m.status === "Held" ? <Badge tone="success">Recorded</Badge> : <span className="muted">—</span>}</td>

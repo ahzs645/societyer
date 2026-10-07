@@ -23,6 +23,7 @@ import { useBylawRules } from "@/hooks/useBylawRules";
 import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow } from "../lib/noticeWindow";
 import { useHiddenSuggestions, looksLikeLink } from "@/lib/hiddenSuggestions";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { formatMeetingDate } from "../../../../shared/meetingDates";
 
 export type MeetingDraft = {
   type: string;
@@ -413,7 +414,7 @@ export function MeetingFormFields({
             <ul style={{ margin: "4px 0 0 20px" }}>
               {overlaps.map((m) => (
                 <li key={m._id} className="muted">
-                  {m.title} — {formatDateTime(m.scheduledAt)}
+                  {m.title} — {formatMeetingDate(m)}
                 </li>
               ))}
             </ul>

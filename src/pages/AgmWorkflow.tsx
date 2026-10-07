@@ -30,6 +30,7 @@ import { useModuleEnabled } from "../hooks/useModules";
 import { useConfirm } from "../components/Modal";
 import { AGM_STEP_ORDER, type AgmStep as Step } from "../features/meetings/components/MeetingDetailSupport";
 import { calendarDaysBetween, daysUntil } from "../features/meetings/lib/noticeWindow";
+import { formatMeetingDate } from "../../shared/meetingDates";
 
 const STEP_ORDER: { id: Step; label: string; sub: string; icon: any }[] = [
   { id: "notice", label: "Send notice", sub: "14–60 days before meeting (7–60 if bylaws permit)", icon: Send },
@@ -170,7 +171,7 @@ export function AgmWorkflowPage() {
         title={`AGM workflow · ${meeting.title}`}
         icon={<ClipboardCheck size={16} />}
         iconColor="orange"
-        subtitle={`${formatDateTime(meeting.scheduledAt)} · ${daysToMeeting >= 0 ? `in ${daysToMeeting} days` : `${-daysToMeeting} days ago`}`}
+        subtitle={`${formatMeetingDate(meeting)} · ${daysToMeeting >= 0 ? `in ${daysToMeeting} days` : `${-daysToMeeting} days ago`}`}
       />
 
       {isLocalDataRuntime() && <p className="muted" role="status">Sending meeting notices requires a connected server. Prepare the notice and retain evidence of any delivery made outside the app.</p>}

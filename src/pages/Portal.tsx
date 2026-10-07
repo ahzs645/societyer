@@ -7,6 +7,7 @@ import { useCurrentUser } from "../hooks/useCurrentUser";
 import { useAuth } from "../auth/AuthProvider";
 import { ArrowLeft, Calendar, Vote, UserRound, HandHeart, BadgeDollarSign } from "lucide-react";
 import { useModuleEnabled } from "../hooks/useModules";
+import { formatMeetingDate } from "../../shared/meetingDates";
 
 export function PortalPage() {
   const auth = useAuth();
@@ -127,7 +128,7 @@ export function PortalPage() {
                     <Calendar size={14} />
                   </div>
                   <div className="muted" style={{ fontSize: 13 }}>
-                    {new Date(meeting.scheduledAt).toLocaleString()} · {meeting.location ?? "Location TBD"}
+                    {formatMeetingDate(meeting)} · {meeting.location ?? "Location TBD"}
                   </div>
                 </div>
               ))}
