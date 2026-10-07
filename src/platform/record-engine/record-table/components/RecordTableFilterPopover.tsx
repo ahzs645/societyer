@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import { FIELD_TYPES, type ViewFilterOperator } from "../../types";
 import { Select } from "@/components/Select";
+import { isOutsidePointerEvent } from "@/lib/floatingLayer";
 
 const DEFAULT_OPERATORS: Record<string, ViewFilterOperator[]> = {
   [FIELD_TYPES.TEXT]: ["contains", "eq", "neq", "startsWith", "endsWith", "isEmpty", "isNotEmpty"],
@@ -69,9 +70,9 @@ export function RecordTableFilterPopover({
     if (!open) return;
 
     const onPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (popoverRef.current?.contains(target)) return;
+      // The field/operator Selects portal their menus to <body>; picking an
+      // option there is not an outside click.
+      if (!isOutsidePointerEvent(event, popoverRef)) return;
       onClose();
     };
 

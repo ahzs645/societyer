@@ -1,5 +1,6 @@
 import { useLayoutEffect, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { useDialogFocus } from "../lib/useDialogFocus";
+import { isOutsidePointerEvent } from "../lib/floatingLayer";
 
 /** Anchor mixed form controls to their trigger without clipping narrow screens. */
 export function ViewportPopover({ open, onClose, anchorRef, label, className, children }: {
@@ -31,9 +32,8 @@ export function ViewportPopover({ open, onClose, anchorRef, label, className, ch
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
     const onDown = (event: PointerEvent) => {
-      if (!(event.target instanceof Node) || ref.current?.contains(event.target) || anchorRef.current?.contains(event.target)) return;
       // Nested portalled Select/DatePicker controls own their outside handling.
-      if (event.target instanceof Element && event.target.closest(".menu,.calendar")) return;
+      if (!isOutsidePointerEvent(event, ref, anchorRef)) return;
       onClose();
     };
     document.addEventListener("pointerdown", onDown);

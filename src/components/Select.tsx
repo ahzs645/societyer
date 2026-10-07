@@ -357,6 +357,7 @@ export function Select<T extends string>({
               )}
               <div
                 ref={menuRef}
+                data-floating-layer=""
                 id={`${controlId}-menu`}
                 className={`menu${isBottomSheet ? " menu--sheet" : ""}`}
                 role="listbox"

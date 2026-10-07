@@ -26,6 +26,7 @@ import { useToast } from "../../../../components/Toast";
 import { RecordTableSortPopover } from "./RecordTableSortPopover";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
 import { usePermissions } from "../../../../hooks/usePermissions";
+import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 
 /**
  * Compact search bar + column toggle + view switcher. Sits above the table
@@ -116,25 +117,14 @@ export function RecordTableToolbar({
   useEffect(() => {
     if (!columnMenuOpen && !viewMenuOpen && !viewOptionsOpen) return;
     const onDown = (e: MouseEvent) => {
-      if (
-        columnMenuOpen &&
-        columnMenuRef.current &&
-        !columnMenuRef.current.contains(e.target as Node)
-      ) {
+      // Portaled Select menus inside these dropdowns count as inside.
+      if (columnMenuOpen && columnMenuRef.current && isOutsidePointerEvent(e, columnMenuRef)) {
         setColumnMenuOpen(false);
       }
-      if (
-        viewMenuOpen &&
-        viewMenuRef.current &&
-        !viewMenuRef.current.contains(e.target as Node)
-      ) {
+      if (viewMenuOpen && viewMenuRef.current && isOutsidePointerEvent(e, viewMenuRef)) {
         setViewMenuOpen(false);
       }
-      if (
-        viewOptionsOpen &&
-        viewOptionsRef.current &&
-        !viewOptionsRef.current.contains(e.target as Node)
-      ) {
+      if (viewOptionsOpen && viewOptionsRef.current && isOutsidePointerEvent(e, viewOptionsRef)) {
         setViewOptionsOpen(false);
       }
     };

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { isOutsidePointerEvent } from "../../../../lib/floatingLayer";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
 import { useRecordTableState, useRecordTableStoreHandle } from "../state/recordTableStore";
 import {
@@ -101,9 +102,7 @@ function RecordTableAggregateFooterCell({
         if (event.key === "Escape") setOpen(false);
         return;
       }
-      if (event.target instanceof Node && !menuRef.current?.contains(event.target)) {
-        setOpen(false);
-      }
+      if (isOutsidePointerEvent(event, menuRef)) setOpen(false);
     };
     window.addEventListener("pointerdown", close);
     window.addEventListener("keydown", close);
