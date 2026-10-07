@@ -162,6 +162,8 @@
     "test:bylaw-governance": "tsx scripts/check-bylaw-governance.ts",
     "test:compliance-agm-evidence": "tsx scripts/check-compliance-agm-evidence.ts",
     "test:governance-forms": "tsx scripts/check-governance-forms.ts",
+    "test:governance-quorum": "tsx scripts/check-governance-quorum.ts",
+    "test:governance-timezone": "tsx scripts/check-governance-timezone.ts",
     "test:grant-feed-parsers": "tsx scripts/check-grant-feed-parsers.ts",
     "test:authorization-policy": "tsx scripts/check-authorization-policy.ts",
     "test:hosted-identity": "tsx scripts/check-hosted-identity.ts",
@@ -283,7 +285,8 @@
     "test:intake-eval": "tsx scripts/check-intake-eval.ts",
     "test:meeting-history": "node --import tsx scripts/check-meeting-history.ts && node --import tsx scripts/check-meeting-history-renderer.ts",
     "test:meeting-history-ui": "playwright test --config playwright.meeting-history.config.ts",
-    "test:people-identity-ui": "playwright test --config playwright.people-identity.config.ts"
+    "test:people-identity-ui": "playwright test --config playwright.people-identity.config.ts",
+    "test:governance-retest-ui": "playwright test --config playwright.governance-retest.config.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

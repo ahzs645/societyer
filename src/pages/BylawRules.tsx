@@ -19,6 +19,8 @@ import { bylawRuleContextFor, bylawRuleEffectiveDateProblem, bylawRuleProblems }
 import { formatDate } from "../lib/format";
 import { calendarDateKey } from "../lib/calendarDates";
 import { LegalGuideTrackList } from "../components/LegalGuide";
+import { cleanQuorumRule, describeQuorumRule, quorumRuleProblems, type BodyQuorumRule } from "../../shared/bodyQuorum";
+import { QuorumRuleFields, quorumRuleDraft, quorumRuleFromDraft } from "../features/committees/QuorumRuleFields";
 import {
   getJurisdictionGuidePack,
   getLegalGuideRules,
@@ -107,7 +109,7 @@ export function BylawRulesPage() {
       resolutionTypes: customTypesForSave,
     },
     bylawRuleContextFor(society),
-  );
+  ).concat(bodyQuorumRowProblems(form.bodyQuorumRules));
 
   const save = async () => {
     if (!canWrite) return;
@@ -179,6 +181,9 @@ export function BylawRulesPage() {
       // Persist custom resolution types only (built-ins are derived). Blank or
       // out-of-range rows are rejected by validation above, never dropped.
       resolutionTypes: customTypesForSave,
+      // A3: per-body quorum rules carry over to the new version; leaving them
+      // out would silently drop rules recorded earlier (or imported).
+      bodyQuorumRules: bodyQuorumRulesForSave(form.bodyQuorumRules),
     });
     setForm(null);
     toast.success(`Bylaw rule set v${nextVersion} saved`);
@@ -434,6 +439,38 @@ export function BylawRulesPage() {
                   label="Allow hybrid meetings"
                 />
               </div>
+            </div>
+          </div>
+
+          <div className="card bylaw-rules__card" data-testid="body-quorum-rules">
+            <div className="card__head">
+              <h2 className="card__title">Quorum by body</h2>
+              <span className="card__subtitle">Board and committee meetings</span>
+            </div>
+            <div className="card__body bylaw-rules__body col" style={{ gap: 12 }}>
+              <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
+                Bylaws often set a different quorum for board meetings (for example a majority of directors) than for general meetings. A committee's own terms of reference, set on the committee page, take precedence over the committee default here.
+              </p>
+              {(["board", "committee"] as const).map((body) => {
+                const draft = bodyDraftFor(form.bodyQuorumRules, body);
+                return (
+                  <div key={body} className="col" style={{ gap: 4 }}>
+                    <strong style={{ fontSize: "var(--fs-sm)" }}>{body === "board" ? "Board meetings" : "Committee meetings (default)"}</strong>
+                    <QuorumRuleFields
+                      idPrefix={`body-quorum-${body}`}
+                      defaultBasis={body === "board" ? "directors_in_office" : "committee_members"}
+                      disabled={!canWrite}
+                      value={draft}
+                      onChange={(draft) => setForm({ ...form, bodyQuorumRules: setBodyRule(form.bodyQuorumRules, body, draft) })}
+                    />
+                  </div>
+                );
+              })}
+              {(form.bodyQuorumRules ?? []).filter((row: any) => row.committeeId || row.body === "general").map((row: any) => (
+                <div key={`${row.body}:${row.committeeId ?? ""}`} className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  {row.body === "general" ? "General meetings" : row.committeeName ?? "A committee"}: {describeQuorumRule(row, row.body)} (kept from the current version)
+                </div>
+              ))}
             </div>
           </div>
 
@@ -757,7 +794,7 @@ export function BylawRulesPage() {
                 <Plus size={12} /> Add resolution type
               </button>
             )}
-            <button className="btn-action btn-action--primary" onClick={save} disabled={!canWrite}>
+            <button className="btn-action btn-action--primary" onClick={save} disabled={!canWrite || ruleProblems.length > 0}>
               <Save size={12} /> Save new version
             </button>
           </div>
@@ -901,4 +938,38 @@ function toDateInputValue(value: unknown) {
     return value.slice(0, 10);
   }
   return date.toISOString().slice(0, 10);
+}
+
+type BodyRuleDraftRow = BodyQuorumRule & { _draft?: ReturnType<typeof quorumRuleDraft> };
+
+function bodyDraftFor(rows: BodyRuleDraftRow[] | undefined, body: "board" | "committee") {
+  const row = (rows ?? []).find((candidate) => candidate.body === body && !candidate.committeeId);
+  return row?._draft ?? quorumRuleDraft(row);
+}
+
+/** Replace (or remove) the generic rule for one body, keeping the typed draft so half-typed numbers survive. */
+function setBodyRule(rows: BodyRuleDraftRow[] | undefined, body: "board" | "committee", draft: ReturnType<typeof quorumRuleDraft>): BodyRuleDraftRow[] {
+  const others = (rows ?? []).filter((candidate) => !(candidate.body === body && !candidate.committeeId));
+  if (!draft.quorumType) return others;
+  const rule = quorumRuleFromDraft(draft)!;
+  return [...others, { ...rule, body, _draft: draft }];
+}
+
+function bodyQuorumRowProblems(rows: BodyRuleDraftRow[] | undefined): string[] {
+  return (rows ?? []).flatMap((row) => {
+    const rule = row._draft ? quorumRuleFromDraft(row._draft) : row;
+    const label = row.body === "board" ? "Board quorum" : row.body === "general" ? "General meeting quorum" : `${row.committeeName ?? "Committee"} quorum`;
+    return quorumRuleProblems(rule).map((problem) => `${label}: ${problem}`);
+  });
+}
+
+function bodyQuorumRulesForSave(rows: BodyRuleDraftRow[] | undefined): BodyQuorumRule[] | undefined {
+  if (!rows) return undefined;
+  return rows.map((row) => {
+    const rule = row._draft ? quorumRuleFromDraft(row._draft)! : row;
+    const out: BodyQuorumRule = { body: row.body, ...cleanQuorumRule(rule) };
+    if (row.committeeId) out.committeeId = row.committeeId;
+    if (row.committeeName) out.committeeName = row.committeeName;
+    return out;
+  });
 }

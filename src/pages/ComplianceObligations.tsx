@@ -1,3 +1,4 @@
+import { calendarDateKey } from "../lib/calendarDates";
 import { useMemo } from "react";
 import { BookTemplate, CheckCircle2, ClipboardList, ExternalLink, Plus, RotateCcw, X } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -57,7 +58,7 @@ export function ComplianceObligationsPage() {
   if (isLoading) return <PageLoading />;
   if (missingWorkspace || !organization || !society) return <SeedPrompt />;
 
-  const today = facts?.asOfDate ?? new Date().toISOString().slice(0, 10);
+  const today = facts?.asOfDate ?? calendarDateKey(new Date());
   const agmFacts = deriveAgmFacts(organization, meetings ?? [], today);
   const corporate = isCorporation(organization);
   const jurisdictionCode = homeJurisdictionCode(organization);
@@ -96,7 +97,11 @@ export function ComplianceObligationsPage() {
   const decisionsByRuleId = new Map((decisions ?? []).map((decision) => [decision.ruleId, decision]));
   // Dismissed obligations no longer count toward the overdue/due-today tiles.
   const isDismissedObligation = (obligation: (typeof obligations)[number]) => decisionsByRuleId.get(obligation.occurrenceKey)?.status === "dismissed";
-  const countable = (obligation: (typeof obligations)[number]) => !filingIsComplete(obligation) && !isDismissedObligation(obligation);
+  // A review-only obligation (no filing to submit) is done once someone records
+  // the review; it must stop reading "Overdue". Filing obligations stay open
+  // until the filing itself is marked filed.
+  const isReviewedWorkflow = (obligation: (typeof obligations)[number]) => !obligation.creates?.filingKind && decisionsByRuleId.get(obligation.occurrenceKey)?.status === "resolved";
+  const countable = (obligation: (typeof obligations)[number]) => !filingIsComplete(obligation) && !isDismissedObligation(obligation) && !isReviewedWorkflow(obligation);
   const overdue = obligations.filter((obligation) => obligation.status === "overdue" && countable(obligation)).length;
   const dueToday = obligations.filter((obligation) => obligation.status === "due_today" && countable(obligation)).length;
 
@@ -255,10 +260,12 @@ export function ComplianceObligationsPage() {
         <div className="card__body">
           {facts?.formationInferredFromRecords ? (
             <p className="muted" style={{ marginTop: 0 }} role="status">
-              The profile says this {jurisdictionCopy.entityLabel} is still being formed, but {agmFacts.agmDates.length} held AGM
+              {organization.formationStatus === "unverified_existing"
+                ? <>The profile records this {jurisdictionCopy.entityLabel} as an existing organization whose incorporation evidence is not verified yet. {agmFacts.agmDates.length} held AGM</>
+                : <>The profile says this {jurisdictionCopy.entityLabel} is still being formed, but {agmFacts.agmDates.length} held AGM</>}
               {agmFacts.agmDates.length === 1 ? " is" : "s are"} on record (latest {formatDate(agmFacts.annualMeetingDate ?? "")}).
               Obligations below are computed provisionally from those meeting records.{" "}
-              <Link to="/app/society">Confirm the formation status and incorporation date</Link> to remove this caveat.
+              <Link to="/app/society">{organization.formationStatus === "unverified_existing" ? "Verify the incorporation certificate and date" : "Confirm the formation status and incorporation date"}</Link> to remove this caveat.
             </p>
           ) : null}
           {agmFacts.annualMeetingDate ? (
@@ -347,8 +354,8 @@ export function ComplianceObligationsPage() {
                         <div className="muted" style={{ fontSize: 12 }}>{relative(obligation.dueDate)}</div>
                       </td>
                       <td data-label="Status">
-                        <Badge tone={existingFiling?.status === "Filed" ? (filingMatch?.late ? "warn" : "success") : isDismissed ? "neutral" : statusTone(obligation.status)}>
-                          {existingFiling?.status === "Filed" ? (filingMatch?.late ? "Filed late" : "Filed") : isDismissed ? "Dismissed" : statusLabel(obligation.status)}
+                        <Badge tone={existingFiling?.status === "Filed" ? (filingMatch?.late ? "warn" : "success") : isDismissed ? "neutral" : isReviewedWorkflow(obligation) ? "success" : statusTone(obligation.status)}>
+                          {existingFiling?.status === "Filed" ? (filingMatch?.late ? "Filed late" : "Filed") : isDismissed ? "Dismissed" : isReviewedWorkflow(obligation) ? "Reviewed" : statusLabel(obligation.status)}
                         </Badge>
                         {isDismissed || isReviewed ? <div className="muted" style={{ fontSize: 12 }}>{isDismissed ? "Workflow dismissed" : "Workflow reviewed"}</div> : null}
                         {decision?.updatedAtISO ? (

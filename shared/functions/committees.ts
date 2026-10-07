@@ -102,8 +102,11 @@ export async function committeeCreatePortable(
   if (args.chairDirectorId) await getOwned(ctx, "directors", args.chairDirectorId, args.societyId);
   if (args.kind && !(COMMITTEE_KINDS as readonly string[]).includes(args.kind)) throw new Error(`Unsupported committee kind: ${args.kind}.`);
   if (args.parentBody && !(COMMITTEE_PARENT_BODIES as readonly string[]).includes(args.parentBody)) throw new Error(`Unsupported parent body: ${args.parentBody}.`);
+  const name = String(args.name ?? "").trim();
+  if (!name) throw new Error("A committee needs a name.");
   const id = await ctx.db.insert("committees", {
     ...args,
+    name,
     status: "Active",
     createdAtISO: new Date().toISOString(),
   });
