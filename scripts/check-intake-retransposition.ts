@@ -116,7 +116,8 @@ assert.equal(markedDocs.documentMap[1].evidenceVerified, undefined);
 assert.equal(marked.policies[0].confidence, "High");
 assert.equal(marked.policies[0].evidenceVerified, true);
 assert.equal(marked.policies[1].evidenceVerified, undefined, "every source must pass");
-assert.equal(marked.meetingMinutes[0].evidenceVerified, true, "meetings staged from agendas or packages follow the same header rule");
+assert.match(String(marked.meetingMinutes[0].notes), /^Evidence-verified:/m, "meetings staged from agendas or packages follow the same rule (marked in notes, which their normalization keeps)");
+assert.equal(marked.meetingMinutes[0].confidence, "High");
 
 // ------------------------------------------------------------ policy copies staged once
 const policyText = textExtract("Signing Authority Policy\nEffective Date: March 1, 2024\n1. Purpose\nCheques require two signatures.\n2. Scope\nAll accounts.");

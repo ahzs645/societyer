@@ -1046,7 +1046,8 @@ function linkInsightsFor(record: any): LinkInsight[] {
 function isEvidenceVerifiedPending(record: any) {
   if (record.status !== "Pending") return false;
   const payload = record.payload ?? {};
-  return payload.evidenceVerified === true && String(record.confidence ?? payload.confidence ?? "").toLowerCase() === "high";
+  const marked = payload.evidenceVerified === true || /^Evidence-verified:/m.test(String(payload.notes ?? ""));
+  return marked && String(record.confidence ?? payload.confidence ?? "").toLowerCase() === "high";
 }
 
 function isImportReadyInsuranceRecord(record: any) {

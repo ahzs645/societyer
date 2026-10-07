@@ -273,7 +273,10 @@ export function promotionReadiness(fields: ReviewField[], decisions: Map<string,
  * the deterministic engine's confidence for heuristic values (0.75–0.8) and at its
  * stated-value level (0.85–0.95), so only directly quoted, verified values pass. */
 export const BULK_ACCEPT_THRESHOLDS: Record<string, Record<string, number>> = {
-  default: { default: 0.85 },
+  // Class documents (policies, statements, insurance, grants …): the class extractors quote a
+  // document's title from its heading and its dates from labelled lines at 0.8; heuristic
+  // guesses sit at 0.6–0.75 (organization names, funders, version labels) and stay below τ.
+  default: { default: 0.85, title: 0.8, insurer: 0.8, date: 0.8, meetingDate: 0.8, periodEnd: 0.8, effective: 0.8, expiry: 0.8, effectiveDate: 0.8, adoptedDate: 0.8, filedDate: 0.8, termStart: 0.8, signedDate: 0.8 },
   meetingMinutes: {
     default: 0.85,
     date: 0.9,
