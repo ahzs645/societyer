@@ -196,13 +196,16 @@ export function subExtract(extract: IntakeExtract, blockStart: number, blockEnd:
 }
 
 /** Moves every locator of a record extracted from a sub-extract back onto the parent extract. */
-export function rebaseLocators(node: unknown, blockOffset: number, charOffset: number): void {
-  if (Array.isArray(node)) return node.forEach((item) => rebaseLocators(item, blockOffset, charOffset));
-  if (!node || typeof node !== "object") return;
+export function rebaseLocators(node: unknown, blockOffset: number, charOffset: number, seen: WeakSet<object> = new WeakSet()): void {
+  if (Array.isArray(node)) return node.forEach((item) => rebaseLocators(item, blockOffset, charOffset, seen));
+  if (!node || typeof node !== "object" || seen.has(node)) return;
+  seen.add(node);
   const value = node as Record<string, any>;
   if (Array.isArray(value.locators)) {
     for (const locator of value.locators) {
-      if (!locator || typeof locator !== "object" || locator.kind === "filename" || locator.kind === "path") continue;
+      // The same locator object can be shared by two fields: shift it once.
+      if (!locator || typeof locator !== "object" || locator.kind === "filename" || locator.kind === "path" || seen.has(locator)) continue;
+      seen.add(locator);
       if (typeof locator.blockIndex === "number") locator.blockIndex += blockOffset;
       if (typeof locator.charStart === "number") locator.charStart += charOffset;
       if (typeof locator.charEnd === "number") locator.charEnd += charOffset;
@@ -212,5 +215,5 @@ export function rebaseLocators(node: unknown, blockOffset: number, charOffset: n
     value.blockStart += blockOffset;
     value.blockEnd += blockOffset;
   }
-  for (const child of Object.values(value)) rebaseLocators(child, blockOffset, charOffset);
+  for (const child of Object.values(value)) rebaseLocators(child, blockOffset, charOffset, seen);
 }

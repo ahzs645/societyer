@@ -29,13 +29,17 @@ export type ReconciledMeeting = {
 };
 export type ReconcileLink = { kind: "draft-of" | "duplicate-of" | "approved-by-motion" | "policy-adopted-by" | "action-carried-forward"; from: string; to: string; detail?: string };
 export type RecordGap = {
-  kind: "missing_minutes" | "draft_only_minutes" | "agm_missing_for_year" | "body_month_without_minutes";
+  kind: "missing_minutes" | "draft_only_minutes" | "agm_missing_for_year" | "body_month_without_minutes"
+    // WP-L: gaps found through agendas/packages, references, filings and policy versions.
+    | "meeting_without_minutes" | "unresolved_reference" | "annual_report_evidence_missing" | "policy_without_adoption" | "fiscal_year_end_change";
   bodyKey?: string;
   date?: string;
   year?: number;
   citedBy?: { fileId: string; motionIndex: number };
   severity: "statutory" | "bylaw" | "practice";
   explanation: string;
+  /** Source files that evidence the gap (agenda of a meeting without minutes, the citing document …). */
+  evidence?: Array<{ fileId: string; text?: string }>;
 };
 export type ActionChain = { bodyKey: string; items: Array<{ meetingKey: string; fileId: string; index: number; text: string; assignee?: string }>; latestStatus: "open" | "carried_forward" };
 

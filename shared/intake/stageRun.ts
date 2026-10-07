@@ -31,7 +31,9 @@ export async function stageRunInWorkspace(mutation: MutationCaller, societyId: s
   }
   for (const batch of chunks(run.clusters, 200)) await mutation("intake:saveClusters", { societyId, runId, clusters: batch });
   for (const extraction of run.extractions) {
-    const { verification: _verification, fileKey, ...envelope } = extraction;
+    // Minutes derived from a package are carried by the package's own extraction (embeddedDocuments).
+    if (extraction.parentFileKey) continue;
+    const { verification: _verification, fileKey, parentFileKey: _parent, ...envelope } = extraction;
     await mutation("intake:saveExtraction", { societyId, runId, fileKey, extraction: envelope });
   }
   for (const batch of chunks(run.processingLog, 400)) await mutation("intake:appendProcessingLog", { societyId, runId, entries: batch });

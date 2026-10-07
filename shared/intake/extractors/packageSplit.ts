@@ -22,7 +22,7 @@ export type PackageSegment = {
 
 const DOC_TITLE = /^(?:[\w&,.’'()/\-–— ]{0,70}?\s?)?(?:meeting\s+)?(?:agenda|minutes|draft minutes|meeting minutes|notes|report|briefing(?: note)?|financial (?:statements?|report|update)|balance sheet|income statement|statement of (?:operations|financial position)|budget|terms of reference|policy|proxy(?: form| representative form)?|representative form|nomination form|consent to act(?: as a director)?|notice(?: to (?:public|directors|members))?|press release|media release|summary|workplan|work plan|strategic plan)\b[\w ,.’'()/\-–:\t]{0,60}$/i;
 const ITEM_REF = /^\s*(?:item|attachment)\s*#?\s*(\d+(?:\.\d+)?(?:\s*&\s*\d+)?)\b/i;
-const NOT_TITLE = /^\s*(?:\d{1,2}[.)]|[a-h][.)]|[•●▪◦·\-–*]|review|adoption|approval|receipt|adopt|approve|welcome|call to order|next|upcoming)|^\s*agenda items?\s*:?\s*$|^\s*agenda item\b|^\s*(?:draft\s+)?minutes\s*:\s*$/i;
+const NOT_TITLE = /^\s*(?:\d{1,2}[.)]|[a-h][.)]|[•●▪◦·\-–*]|review|adoption|approval|receipt|adopt|approve|welcome|call to order|next|upcoming)|^\s*agenda items?\s*:?\s*$|^\s*agenda item\b|\bagenda item\b.*\b(?:responsib\w*|group action|discussion|notes)\b|^\s*(?:draft\s+)?minutes\s*:\s*$/i;
 const ATTENDANCE_START = /^\s*(?:(?:members|directors|board members)\s+)?(?:present|participants|in attendance)\s*:?\s*$/i;
 const FACT_LABEL = /^\s*(?:meeting\s+)?(?:date|subject|location|issued by|date issued|period|time)\s*:/i;
 
@@ -79,8 +79,9 @@ function segmentDate(blocks: IntakeBlock[]): PackageSegment["date"] {
 
 function classifySegment(title: string, head: string, isFirst: boolean): { docClass: PackageSegment["docClass"]; confidence: number } {
   if (isFirst && /\bpackage\b|information package|board book|\bbinder\b/i.test(title)) return { docClass: "cover", confidence: 0.8 };
+  if (/subject\s*:[^\n]{0,60}\bagenda\b/i.test(head.slice(0, 400)) && !/\bminutes\b/i.test(title)) return { docClass: "agenda", confidence: 0.85 };
   if (/\bminutes\b/i.test(title) || /subject\s*:?\s*(?:draft\s+)?(?:meeting\s+)?minutes/i.test(head.slice(0, 600))) return { docClass: "meetingMinutes", confidence: 0.85 };
-  if (/\bagenda\b/i.test(title) || /subject\s*:?\s*agenda\b/i.test(head.slice(0, 400))) return { docClass: "agenda", confidence: 0.85 };
+  if (/\bagenda\b/i.test(title) || /subject\s*:[^\n]{0,60}\bagenda\b/i.test(head.slice(0, 400))) return { docClass: "agenda", confidence: 0.85 };
   if (/\b(?:present|participants|regrets)\s*:/i.test(head.slice(0, 1500)) && /\b(?:called to order|adjourn|motion|discussion)/i.test(head)) return { docClass: "meetingMinutes", confidence: 0.7 };
   const prior = classifyPrior({ name: title, headText: head });
   if (prior.docClass === "unclassified" && /\breport\b|\bbriefing\b|\bupdate\b/i.test(title)) return { docClass: "report", confidence: 0.6 };
@@ -112,6 +113,7 @@ export function splitPackage(extract: IntakeExtract): PackageSegment[] {
     else if (isFactTable(block) && linesSinceStart >= 6 && !FACT_LABEL.test(firstLine(previous)) && !isFactTable(previous)) reason = "date/subject table";
     else if (block.kind !== "list_item" && /^[A-Z][\w&’' –-]{2,60}\b(?:Meeting|Committee)(?:\s*[–-]\s*\w+(?:\s+\d{4})?)?\s*$/.test(line) && !/^(?:next|upcoming|previous)\b/i.test(line) && hasFactsNear(body, position) && linesSinceStart >= 6) reason = "meeting header";
     else if (/^\s*(?:the undersigned|i,|consent to act)/i.test(line) && (pageBreakBefore || newPage)) reason = "form";
+    else if ((pageBreakBefore || newPage) && block.kind !== "list_item" && line.length <= 110 && /^\s*\d{1,2}(?:\.\d{1,2})?[.)]?\s+\S/.test(line) && /\b(?:minutes|report|statements?|budget|policy|terms of reference|notice)\b/i.test(line) && DOC_TITLE.test(line.replace(/^\s*\d{1,2}(?:\.\d{1,2})?[.)]?\s+/, "")) && linesSinceStart >= 4) reason = `numbered document at top of page`;
     else if (ATTENDANCE_START.test(line) && linesSinceStart >= 6 && (sawAgendaTable || isAgendaHead(body[starts[starts.length - 1].position]))) reason = "attendance list after the agenda";
     if (isAgendaTable(block)) sawAgendaTable = true;
     if (!reason) continue;
@@ -124,7 +126,8 @@ export function splitPackage(extract: IntakeExtract): PackageSegment[] {
     }
     // "Draft Minutes:" right after the meeting header/participants is part of the same minutes.
     if (/^draft minutes\s*:?$/i.test(line)) continue;
-    starts.push({ position, reason, ...(item ? { itemRef: item[1] } : laterItem ? { itemRef: ITEM_REF.exec(laterItem)![1], title: laterItem } : {}) });
+    const numberedRef = /^numbered document/.test(reason) ? /^\s*(\d{1,2}(?:\.\d{1,2})?)/.exec(line)?.[1] : undefined;
+    starts.push({ position, reason, ...(item ? { itemRef: item[1] } : laterItem ? { itemRef: ITEM_REF.exec(laterItem)![1], title: laterItem } : numberedRef ? { itemRef: numberedRef } : {}) });
     linesSinceStart = 0;
   }
   const segments: PackageSegment[] = [];

@@ -71,11 +71,12 @@ const RULES: Rule[] = [
   { docClass: "insurance", re: /\bpolicy (?:number|period)\b|\binsured\b.*\blimit\b|\bdeclarations page\b|\bcertificate of insurance\b/i, weight: 0.7, where: "text" },
   { docClass: "directorConsent", re: /\bconsent to act as (?:a )?director\b/i, weight: 0.9, where: "text" },
   { docClass: "proxy", re: /\bhereby appoints?\b[\s\S]{0,200}\bproxy\b|\bproxy form\b/i, weight: 0.85, where: "text" },
-  { docClass: "registryFiling", re: /\bBC SOCIETY ANNUAL REPORT\b|\bSTATEMENT OF DIRECTORS AND REGISTERED OFFICE\b|\bconfirmation of filing\b|\bform filed\s*:|\bbc registr(?:y|ies)\b[\s\S]{0,400}\b(?:annual report|filed|filing)|\bincorporation number\b.*\bS-?\d+/i, weight: 0.85, where: "text" },
+  { docClass: "registryFiling", re: /\bBC SOCIETY ANNUAL REPORT\b|\bSTATEMENT OF DIRECTORS AND REGISTERED OFFICE\b|\bconfirmation of filing\b|\bform filed\s*:|\bfiled date and time\s*:|\bthis is confirmation of payment for filing\b/i, weight: 0.85, where: "text" },
   { docClass: "invoice", re: /^\s*(?:[\w .,&-]{0,80}\n){0,6}\s*invoice\b|\binvoice\s*(?:#|no\.?|number)\s*:?\s*\w|\bbalance due\b|\bbill to\b/i, weight: 0.75, where: "text" },
   { docClass: "agreement", re: /\bbetween\s*:?[\s\S]{0,600}\band\s*:?[\s\S]{0,800}\b(?:agree|agreement|contract)\b|\bthe parties agree\b|\bgeneral service agreement\b/i, weight: 0.75, where: "text" },
   { docClass: "bylaws", re: /\bthe name of the society is\b|\bbylaws of the\b[\s\S]{0,120}\bsociety\b/i, weight: 0.8, where: "text" },
-  { docClass: "formTemplate", re: /\bfillable (?:application )?form\b|_{8,}[\s\S]{0,200}_{8,}[\s\S]{0,200}_{8,}/i, weight: 0.65, where: "text" },
+  { docClass: "formTemplate", re: /\bfillable (?:application )?form\b/i, weight: 0.85, where: "text" },
+  { docClass: "formTemplate", re: /_{8,}[\s\S]{0,200}_{8,}[\s\S]{0,200}_{8,}/i, weight: 0.5, where: "text" },
   { docClass: "report", re: /\bcity of [a-z ]+\bbylaw no\.?\s*\d|\bcouncil of the city\b/i, weight: 0.85, where: "text" },
 ];
 
@@ -96,10 +97,18 @@ export function classifyPrior(file: { name: string; path?: string; headText?: st
   const rationale: string[] = [];
   // A file NAMED as an agenda/package/script carries embedded minutes text: the name decides.
   const namedAgendaLike = /agenda\b|package|\bscript\b|\bnotice\b/i.test(name);
+  // A saved reply/forward ("Re Consent to Act….msg") is correspondence about the subject, not the
+  // record itself (registry confirmations excepted).
+  const namedReply = /^\s*(?:re|fw|fwd)\b\s*[:_ -]/i.test(name) && /\.(?:msg|eml)$/i.test(name);
+  if (namedReply) {
+    scores.set("correspondence", 0.9);
+    rationale.push("name is a saved email reply/forward");
+  }
   for (const rule of RULES) {
     const subject = rule.where === "name" ? name : rule.where === "path" ? folder : head;
     if (!subject || !rule.re.test(subject)) continue;
-    const weight = rule.where === "text" && rule.docClass === "meetingMinutes" && namedAgendaLike ? rule.weight * 0.4 : rule.weight;
+    const weight = rule.where === "text" && rule.docClass === "meetingMinutes" && namedAgendaLike ? rule.weight * 0.4
+      : namedReply && rule.docClass !== "correspondence" && rule.docClass !== "registryFiling" ? rule.weight * 0.4 : rule.weight;
     const previous = scores.get(rule.docClass) ?? 0;
     // Combine independent evidence: 1 - (1-a)(1-b).
     scores.set(rule.docClass, 1 - (1 - previous) * (1 - weight));

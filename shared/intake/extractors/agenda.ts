@@ -233,7 +233,7 @@ export function meetingHeader(lines: Line[], fileName: string, limit = 25) {
   const dateLabel = labelled(head, /(?:meeting\s+)?date(?:\s+issued)?/i);
   const dateFromLabel = dateLabel ? findDates(dateLabel.value)[0] : undefined;
   const dateHit = dateFromLabel ? { line: dateLabel!.line, date: dateFromLabel } : firstDate(head, { skip: /\b(?:next|previous|upcoming|issued)\b/i });
-  const fileDate = findDates(fileName.replace(/_/g, " "), { allowNumericShortYear: true }).find((date) => date.precision === "day");
+  const fileDate = findDates(fileName.replace(/\b((?:19|20)\d{2})_(\d{2})_(\d{2})/, "$1-$2-$3").replace(/_/g, " "), { allowNumericShortYear: true }).find((date) => date.precision === "day");
   const date: FieldValue<{ iso: string; precision: "day" | "month" | "year"; text: string }> = dateHit
     ? at(dateValue(dateHit.date), dateHit.line, dateHit.date.text, 0.9)
     : fileDate ? fromFile(dateValue(fileDate), fileName, 0.5, "Date from the file name; none in the document header.") : notStated("No meeting date found.");
@@ -260,7 +260,7 @@ export function meetingHeader(lines: Line[], fileName: string, limit = 25) {
 }
 
 /** Governing body from the first candidate line that names one, else the file name. */
-export function bodyFields(candidates: Array<Line | undefined>, fileName: string): { body: FieldValue<string>; bodyLabel?: FieldValue<string>; bodyKey?: string } {
+export function bodyFields(candidates: Array<Line | undefined>, fileName: string, options: { assumeBoard?: boolean } = {}): { body: FieldValue<string>; bodyLabel?: FieldValue<string>; bodyKey?: string } {
   for (const line of candidates) {
     if (!line) continue;
     const found = bodyFromText(line.text);
@@ -268,6 +268,9 @@ export function bodyFields(candidates: Array<Line | undefined>, fileName: string
   }
   const fromName = bodyFromText(fileName);
   if (fromName) return { body: fromFile(fromName.body as string, fileName, 0.55), bodyLabel: fromFile(fromName.label, fileName, 0.55), bodyKey: fromName.body };
+  // Same fallback as the minutes extractor: an agenda naming no body is assumed to be the board's.
+  const anchor = options.assumeBoard ? candidates.find((line): line is Line => Boolean(line && /\bagenda\b/i.test(line.text))) : undefined;
+  if (anchor) return { body: guessAt("board", anchor, undefined, 0.4, "No governing body named; assumed to be the board."), bodyKey: "board" };
   return { body: notStated<string>("No governing body named.") };
 }
 
@@ -293,7 +296,7 @@ export function extractAgenda(input: ClassExtractorInput): ExtractionEnvelope {
     ? { ...coverHeader.date, status: "conflicting" as const, locators: [...coverHeader.date.locators, ...header.date.locators], note: `Package cover says ${coverHeader.date.value.iso}; the agenda inside says ${header.date.value.iso}.` }
     : header.date.value ? header.date : coverHeader?.date ?? header.date;
   const title = !titleLineValue ? fileName.replace(/\.[a-z0-9]+$/i, "").replace(/_/g, " ") : clean(titleLineValue.text.replace(/^\s*(?:item|attachment)\s*#?\s*\d+(?:\.\d+)?(?:\s*&\s*\d+)?\s*[-–:]?\s*/i, "")) || clean(titleLineValue.text);
-  const bodyInfo = bodyFields([titleLineValue, ...coverLines.slice(0, 2), ...agendaLines.slice(0, 3)], fileName);
+  const bodyInfo = bodyFields([titleLineValue, ...coverLines.slice(0, 2), ...agendaLines.slice(0, 3)], fileName, { assumeBoard: true });
   const kind = kindFor(fileName, `${title} ${coverLines.slice(0, 2).map((line) => line.text).join(" ")}`, input.docClass, bodyInfo.bodyKey);
   // Items: tables first, then numbered/list lines.
   const drafts = [...tableItems(extract, lines, range.blockStart, range.blockEnd), ...lineItems(agendaLines)].sort((a, b) => a.line.blockIndex - b.line.blockIndex || (a.line.row ?? 0) - (b.line.row ?? 0));

@@ -185,7 +185,7 @@ export function extractPolicy(input: ClassExtractorInput): ExtractionEnvelope {
   const titleSource = genericFirst && genericFirst.text.trim().length > 3 && genericFirst.text.trim().length < 140 && !/^\s*(?:last updated|date|effective|\d{1,2}[.)]\s|[a-z]\.\s)/i.test(genericFirst.text) ? genericFirst : headingLine;
   const titleText = titleSource ? clean(titleSource.text.replace(/^\s*(?:subject|title|re)\s*:\s*/i, "")) : fileName.replace(/\.[a-z0-9]+$/i, "");
   const kind = kindFor(fileName, titleText);
-  const external = /\bbylaw no\.?\s*\d|\bcity of [a-z ]+ bylaw\b|\bcouncil of the city\b|^bl\d{3,}|\bmodel bylaw\b|\bmunicipal\b/i.test(`${fileName}\n${lines.slice(0, 15).map((line) => line.text).join("\n")}`) && !/\bsociety\b.{0,80}\bbylaws? of\b|bylaws of the [a-z ]+society/i.test(lines.slice(0, 10).map((line) => line.text).join(" "));
+  const external = /\bbylaw no\.?\s*\d|\bcity of [a-z ]+ bylaw\b|\bcouncil of the city\b|^bl\d{3,}|\bmodel bylaw\b|\bmunicipal\b[^\n]{0,40}\bbylaw\b/i.test(`${fileName}\n${lines.slice(0, 15).map((line) => line.text).join("\n")}`) && !/\bsociety\b.{0,80}\bbylaws? of\b|bylaws of the [a-z ]+society/i.test(lines.slice(0, 10).map((line) => line.text).join(" "));
   // Version label and dates.
   const versionLine = lines.slice(0, 20).find((line) => (/^\s*\(?(?:last (?:updated|revised|amended)|revised|amended|version|v\d+(?:\.\d+)?|effective|approved|adopted|accepted|draft|final)\b/i.test(line.text) || /\((?:last (?:updated|revised|amended))[^)]*\)/i.test(line.text)) && line.text.length < 200);
   const marker = versionMarker(fileName);
