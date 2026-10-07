@@ -1,5 +1,6 @@
 import { resolveSourceMeetingRecord, changedSourceMinuteSections, type SourceMeetingRecord, type SourceMeetingBlock } from "../../../../shared/sourceMeetingRecord";
 import { isDateOnlyPlaceholder } from "../../../../shared/meetingDates";
+import { minutesTextForDisplay } from "../../../../shared/minutesMarkdownText";
 import { screenAttendanceName } from "../../../../shared/attendanceNames";
 import { checkpointResult, decisionReadiness } from "../../../../shared/evidenceReview";
 import type { QuorumCheckpoint } from "../../../../shared/evidenceReview";
@@ -892,7 +893,9 @@ function renderExecutiveSection(
   const sectionActions = "actionItems" in section ? section.actionItems ?? [] : [];
   const bullets = [
     ...(presenter ? [`Presenter: ${presenter}`] : []),
-    ...(discussion ? [discussion] : []),
+    // One bullet per written line: the whole discussion as a single bullet
+    // ran every point together once HTML collapsed the newlines.
+    ...minutesTextForDisplay(discussion).split("\n").map((line) => line.replace(/^\s*(?:[-*+•●○]|\d+[.)])\s+/, "").trim()).filter(Boolean),
     ...decisions.map((decision) => `Decision: ${decision}`),
     ...matchingMotions.map(executiveMotionBullet),
     ...(options.includeActionItems
@@ -1207,7 +1210,7 @@ function renderMinuteSections(sections: MinutesRenderArgs["minutes"]["sections"]
 }
 
 function renderMinutesMarkdownHtml(value: string | undefined | null) {
-  const text = String(value ?? "").trim();
+  const text = minutesTextForDisplay(value).trim();
   if (!text) return "";
   const lines = text.replace(/\r\n/g, "\n").split("\n");
   const hasMarkdownList = lines.some((line) => /^\s*(?:[-*+]|[o○●]|\d+[.)])\s+/.test(line));
