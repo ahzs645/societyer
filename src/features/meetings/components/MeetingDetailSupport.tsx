@@ -60,7 +60,7 @@ export function AttendanceDetails({
   );
 }
 
-export function StructuredMinutesSummary({ minutes }: { minutes: any }) {
+export function StructuredMinutesSummary({ minutes, hideNextMeetingAt = false }: { minutes: any; hideNextMeetingAt?: boolean }) {
   const chips = [
     minutes.quorumStatus && `Quorum: ${minutesQuorumLabel(minutes)}`,
     minutes.chairName && `Chair: ${minutes.chairName}`,
@@ -74,7 +74,8 @@ export function StructuredMinutesSummary({ minutes }: { minutes: any }) {
     (minutes.sections ?? []).length ? `${minutes.sections.length} minute sections` : "",
     (minutes.sessionSegments ?? []).length ? `${minutes.sessionSegments.length} session segments` : "",
     (minutes.appendices ?? []).length ? `${minutes.appendices.length} appendices` : "",
-    minutes.nextMeetingAt && `Next: ${minutes.nextMeetingAt}`,
+    // The structured next-meeting rows are shown separately when present.
+    !hideNextMeetingAt && minutes.nextMeetingAt && `Next: ${minutes.nextMeetingAt}`,
     minutes.agmDetails?.financialStatementsPresented && "Financials presented",
     (minutes.agmDetails?.directorAppointments ?? []).length ? `${minutes.agmDetails.directorAppointments.length} director appointments` : "",
   ].filter(Boolean);

@@ -22,7 +22,7 @@ import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { MEETING_STATUS_LABELS, MEETING_STATUS_OPTIONS } from "../../../../shared/meetingStatus";
 import { bodyChoiceIssue, bodyPatchForValue, bodyValueForMeeting, meetingBodyOptions } from "../../../../shared/meetingBodyPicker";
 import { formatMeetingDate } from "../../../../shared/meetingDates";
-import { meetingDateDraftFrom, meetingDateDraftIssue, meetingDatePatchFromDraft, type MeetingDateDraft } from "../../../../shared/meetingDateEdit";
+import { clockTextTo24h, meetingDateDraftFrom, meetingDateDraftIssue, meetingDatePatchFromDraft, type MeetingDateDraft } from "../../../../shared/meetingDateEdit";
 import { normalizedMeetingTitle } from "../lib/meetingDetailHelpers";
 import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
 
@@ -181,6 +181,7 @@ export function EditMeetingDrawer({
   };
 
   const sourceTime = splitSourceTimeText(header?.timeText);
+  const sourceHeading = String(header?.literalTitle ?? "").replace(/\s+/g, " ").trim();
 
   return (
     <Drawer
@@ -208,8 +209,27 @@ export function EditMeetingDrawer({
                 {header.locationText && <><dt>Location</dt><dd>{header.locationText}</dd></>}
               </dl>
               <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                {sourceHeading && sourceHeading !== normalizedMeetingTitle(draft.title) && (
+                  <button type="button" className="btn-action" onClick={() => patchDraft({ title: sourceHeading })} data-testid="edit-meeting-use-source-heading">
+                    Use source heading as title
+                  </button>
+                )}
                 {header.timeText && (
-                  <button type="button" className="btn-action" onClick={() => patchDate({ localStartText: sourceTime.start, localEndText: sourceTime.end })}>
+                  <button
+                    type="button"
+                    className="btn-action"
+                    data-testid="edit-meeting-use-source-time"
+                    onClick={() => {
+                      // A stated start time also becomes the real start instant
+                      // (in the meeting's zone, or the viewer's when none is set).
+                      const start24 = clockTextTo24h(sourceTime.start);
+                      patchDate({
+                        localStartText: sourceTime.start,
+                        localEndText: sourceTime.end,
+                        ...(start24 ? { precision: "datetime" as const, time: start24 } : {}),
+                      });
+                    }}
+                  >
                     Use source time
                   </button>
                 )}

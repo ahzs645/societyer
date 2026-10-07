@@ -29,6 +29,7 @@ import {
   attendanceRowsFromSourceParticipants,
   blankAttendanceRow,
   defaultQuorumCounted,
+  mergeAttendanceRows,
   normalizePersonKey,
   type AttendanceGridRow,
   type AttendanceGridStatus,
@@ -141,16 +142,14 @@ export function MeetingAttendanceGrid({
     setRows((current) => [...current, blankAttendanceRow({ name, status: "unknown", quorumCounted: false })]);
   };
   const addRows = (incoming: AttendanceGridRow[]) => {
-    setRows((current) => {
-      const taken = new Set(current.map((row) => normalizePersonKey(row.name)));
-      const additions = incoming.filter((row) => {
-        const key = normalizePersonKey(row.name);
-        if (!key || taken.has(key)) return false;
-        taken.add(key);
-        return true;
-      });
-      return [...current, ...additions];
-    });
+    const blankRows = incoming.filter((row) => !normalizePersonKey(row.name));
+    const merged = mergeAttendanceRows(rows, incoming);
+    setRows([...merged.rows, ...blankRows]);
+    if (incoming.length && !blankRows.length && !merged.added && !merged.filled) {
+      toast.info("Nothing to add", "Everyone in that list is already in the grid with their role and affiliation.");
+    } else if (merged.filled) {
+      toast.success(`${merged.added} added · ${merged.filled} updated`, "Blank roles and affiliations were filled in; values you typed were kept.");
+    }
   };
   const applySuggestion = (row: AttendanceGridRow) => {
     const suggestion = suggestions.get(row.key);
@@ -286,7 +285,7 @@ export function MeetingAttendanceGrid({
         </button>
         {Array.isArray(participants) && participants.length > 0 && (
           <button type="button" className="btn-action" onClick={() => addRows(attendanceRowsFromSourceParticipants(participants))} title="Add the attendance list parsed from the source record">
-            <FileText size={12} /> Use names from source
+            <FileText size={12} /> Use names and roles from source
           </button>
         )}
         {expectedPeople && expectedPeople.length > 0 && (
@@ -358,7 +357,7 @@ export function MeetingAttendanceGrid({
               <span role="cell"><input className="input input--sm" value={row.affiliation ?? ""} onChange={(event) => patchRow(row.key, { affiliation: event.target.value })} aria-label={`Affiliation for ${row.name || `attendee ${index + 1}`}`} /></span>
               <span role="cell"><input className="input input--sm" value={row.representedOrganization ?? ""} onChange={(event) => patchRow(row.key, { representedOrganization: event.target.value })} aria-label={`Organization represented by ${row.name || `attendee ${index + 1}`}`} placeholder="Seat holder for…" /></span>
               <span role="cell" className="attendance-grid__quorum">
-                <Checkbox checked={row.quorumCounted !== false && (row.status === "present" || row.status === "proxy")} disabled={!(row.status === "present" || row.status === "proxy")} onChange={(checked) => patchRow(row.key, { quorumCounted: checked })} bare />
+                <Checkbox checked={row.quorumCounted !== false && (row.status === "present" || row.status === "proxy")} disabled={!(row.status === "present" || row.status === "proxy")} onChange={(checked) => patchRow(row.key, { quorumCounted: checked })} bare ariaLabel={`${row.name || `Attendee ${index + 1}`} counts toward quorum`} />
               </span>
               <span role="cell" className="attendance-grid__actions">
                 <button type="button" className="btn-action btn-action--icon" onClick={() => markNotPerson(row.key)} title="Not a person (role, organization or heading) — keep as source evidence" aria-label={`Mark ${row.name || "row"} as not a person`}>

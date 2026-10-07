@@ -117,3 +117,30 @@ export function meetingDatePatchFromDraft(draft: MeetingDateDraft, viewerTimeZon
     timeZone: draft.timeZone.trim(),
   };
 }
+
+/**
+ * "3:00 PM", "6 p.m.", "noon", "18:30" → "HH:MM" (24h), or undefined when the
+ * text is not a single clock time. Used by "Use source time" so a header that
+ * states the time also sets the meeting's real start instant.
+ */
+export function clockTextTo24h(text: unknown): string | undefined {
+  const raw = String(text ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!raw) return undefined;
+  if (/^noon$|^12 ?noon$/.test(raw)) return "12:00";
+  if (/^midnight$/.test(raw)) return "00:00";
+  const match = /^(\d{1,2})(?:[:.h](\d{2}))? ?(a\.?m\.?|p\.?m\.?)?$/.exec(raw);
+  if (!match) return undefined;
+  let hour = Number(match[1]);
+  const minute = Number(match[2] ?? "0");
+  const meridiem = match[3]?.replace(/\./g, "");
+  if (!meridiem && match[2] === undefined) return undefined; // "6" alone is not a time
+  if (minute > 59) return undefined;
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return undefined;
+    if (meridiem === "pm" && hour !== 12) hour += 12;
+    if (meridiem === "am" && hour === 12) hour = 0;
+  } else if (hour > 23) {
+    return undefined;
+  }
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}

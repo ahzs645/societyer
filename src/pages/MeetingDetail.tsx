@@ -2093,14 +2093,12 @@ export function MeetingDetailPage() {
         subtitle={
           <>
             <span className="meeting-detail-subtitle" data-testid="meeting-subtitle">
-              {meetingBodyLabel(meeting, committees as any)} · {formatMeetingDate(meeting, { dateStyle: "long" })}
+              {/* The body names the committee; link it rather than repeating the name. */}
+              {meetingCommittee
+                ? <Link to={`/app/committees/${meetingCommittee._id}`}>{meetingBodyLabel(meeting, committees as any)}</Link>
+                : meetingBodyLabel(meeting, committees as any)}
+              {" · "}{formatMeetingDate(meeting, { dateStyle: "long" })}
               {meeting.location ? ` · ${meeting.location}` : meeting.electronic ? " · Online" : ""}
-              {meetingCommittee && (
-                <>
-                  {" · "}
-                  <Link to={`/app/committees/${meetingCommittee._id}`}>{meetingCommittee.name}</Link>
-                </>
-              )}
             </span>
             {sourceHeaderText && (
               <span className="meeting-detail-subtitle__source" title="The meeting header exactly as written in the source document">

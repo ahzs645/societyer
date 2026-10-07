@@ -11,6 +11,8 @@ import { structuredEditFromMinutes, structuredMetadataChanges, type StructuredMi
 import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
 import { slugBody } from "../../../../shared/meetingBody";
 
+const NEXT_BODY_LABELS: Record<string, string> = { board: "Board", agm: "AGM", sgm: "SGM" };
+
 type NextMeetingRow = { at?: string; dateText?: string; precision?: string; body?: string; location?: string; notes?: string };
 
 /** Picker value for a stored next meeting (A16). */
@@ -67,7 +69,16 @@ export function MinutesMetadataCard({ minutes, meetingType, committees = [], peo
   const nextColumns: EvidenceColumn[] = useMemo(() => [
     { key: "at", label: "Date", type: "date" },
     { key: "dateText", label: "Date as written", },
-    { key: "precision", label: "Precision", options: ["datetime", "date", "month"] },
+    {
+      key: "precision",
+      label: "Precision",
+      emptyLabel: "Not stated",
+      choices: [
+        { value: "datetime", label: "Date and time" },
+        { value: "date", label: "Date only" },
+        { value: "month", label: "Month only" },
+      ],
+    },
     {
       key: "body",
       label: "Body",
@@ -141,14 +152,14 @@ export function MinutesMetadataCard({ minutes, meetingType, committees = [], peo
           </>
         ) : (
           <>
-            <StructuredMinutesSummary minutes={minutes} />
+            <StructuredMinutesSummary minutes={minutes} hideNextMeetingAt={nextMeetings.length > 0} />
             {nextMeetings.length > 0 && (
               <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                 {nextMeetings.map((row: any, index: number) => (
                   <Badge key={index} tone="info">
                     <CalendarClock size={11} style={{ verticalAlign: -1, marginRight: 4 }} />
                     Next: {row.at ? String(row.at).slice(0, 10) : row.dateText ?? "date not stated"}
-                    {row.committeeId ? ` · ${(committees ?? []).find((committee: any) => String(committee._id) === String(row.committeeId))?.name ?? "committee"}` : row.bodyKey ? ` · ${row.bodyKey}` : ""}
+                    {row.committeeId ? ` · ${(committees ?? []).find((committee: any) => String(committee._id) === String(row.committeeId))?.name ?? "committee"}` : row.bodyKey ? ` · ${NEXT_BODY_LABELS[row.bodyKey] ?? row.bodyKey}` : ""}
                     {row.location ? ` · ${row.location}` : ""}
                   </Badge>
                 ))}
