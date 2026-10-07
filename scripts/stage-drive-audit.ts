@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isLikelyMeetingMinutesDocument, meetingMinutesFromPaperlessDocument, splitMeetingSections } from '../convex/paperlessHelpers';
 import { sourceMeetingDateEvidence } from '../shared/driveStaging';
+import { isUsableContentHash } from '../shared/intake/junk';
 import { recordsFromBundle } from '../shared/functions/importSessionHelpers/importSessionRecordKinds';
 
 const corpus = path.resolve(process.argv[2] ?? '/workspace/work/source-audit');
@@ -17,7 +18,8 @@ if (!manifest.finished || !extraction.finished) throw new Error('Wait for comple
 const items = extraction.items as any[];
 const shaGroups = new Map<string, any[]>();
 for (const item of items) {
-  const key = item.sha256 || `id:${item.id}`;
+  // Never group by the empty-content hash (failed or zero-byte downloads): see shared/intake/junk.ts.
+  const key = isUsableContentHash(item.sha256) ? item.sha256 : `id:${item.id}`;
   shaGroups.set(key, [...(shaGroups.get(key) ?? []), item]);
 }
 const index: any[] = [];
