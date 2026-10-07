@@ -5,6 +5,7 @@ import { normalizeDocumentCategory } from "../documentCategories";
 import { detectSourceVersionStatus, normalizeSourceVersionStatus } from "../documentVersioning";
 import { existingImportTarget, rememberImportTarget } from "./importTargetIdentity";
 import { meetingCalendarDate } from "../meetingDates";
+import { mergeMeetingHistory, normalizeMeetingHistory } from "../meetingHistory";
 /**
  * PORTABLE FUNCTIONS: the import-session review domain.
  *
@@ -658,17 +659,32 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
     motionCount += group.length;
   }
 
+  const blockedMinutes: BlockedImportRecord[] = [];
   for (const record of minuteRecords) {
     const payload = normalizeMeetingMinutesPayload(record.payload);
     const placeholder = toMeetingDateTime(payload.meetingDate);
     const prepared = prepareImportedMeeting(payload, placeholder);
     const sourceExternalIds = unique([...(record.sourceExternalIds ?? []), ...(payload.sourceExternalIds ?? [])]);
-    const sourceDocumentIds = await ensureMeetingSourceDocuments(ctx, session.societyId, sourceExternalIds, sourceCatalog);
-    const sourceDocumentIdsByExternal = new Map(sourceExternalIds.map((externalId, index) => [externalId, String(sourceDocumentIds[index])]));
     const existingTarget = await findMeetingByIdentity(ctx, societyId, {
       dateKey: prepared.dateKey, bodyKey: prepared.body.bodyKey, special: prepared.body.special,
       identityKey: payload.meetingIdentityKey, sourceExternalIds, title: cleanText(payload.meetingTitle), bodyBasis: prepared.body.basis,
     });
+    // Per record: minutes whose observations contradict what the meeting already holds from the same source
+    // (e.g. reviewed and promoted from an intake run) are reported, not applied, and the rest still apply.
+    const conflict = existingTarget ? await minutesHistoryConflict(ctx, existingTarget, payload, sourceExternalIds) : undefined;
+    if (conflict && existingTarget) {
+      const meeting = await ctx.db.get<any>(existingTarget.meetingId, "meetings");
+      const detail: BlockedImportRecord = {
+        recordId: String(record._id), recordKind: "meetingMinutes", title: cleanText(record.title) || cleanText(payload.meetingTitle) || "Meeting minutes",
+        issues: [`The meeting already holds minutes from this source that differ (${conflict}). Link this record to it, or edit and retry.`],
+        reason: "duplicate", duplicateOf: { table: "meetings", id: String(existingTarget.meetingId), label: String(meeting?.title ?? "Meeting") },
+      };
+      blockedMinutes.push(detail);
+      await markRecordBlocked(ctx, record, detail);
+      continue;
+    }
+    const sourceDocumentIds = await ensureMeetingSourceDocuments(ctx, session.societyId, sourceExternalIds, sourceCatalog);
+    const sourceDocumentIdsByExternal = new Map(sourceExternalIds.map((externalId, index) => [externalId, String(sourceDocumentIds[index])]));
     if (existingTarget) {
       await mergeExistingMeetingImport(ctx, session, existingTarget, payload, sourceExternalIds, sourceDocumentIds, sessionId, { directory, bodyKey: prepared.body.bodyKey, identityKey: payload.meetingIdentityKey });
       await patchRecordImportTarget(ctx, record, "meetings", existingTarget);
@@ -791,7 +807,7 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
   await patchSessionUpdatedAt(ctx, sessionId);
   // Meeting materials and proxies that were waiting for these meetings are applied now.
   const dependents = meetings ? await applyWaitingDependentsPortable(ctx, societyId) : { applied: 0 };
-  return { meetings, minutes, motions: motionCount, existing, committeesCreated, nonPersonAttendance, ...(dependents.applied ? { dependentsApplied: dependents.applied } : {}) };
+  return { meetings, minutes, motions: motionCount, existing, committeesCreated, nonPersonAttendance, ...(dependents.applied ? { dependentsApplied: dependents.applied } : {}), ...(blockedMinutes.length ? { blocked: blockedMinutes } : {}) };
 }
 
 export async function backfillApprovedMeetingReferencesPortable(ctx: PortableMutationCtx, { sessionId }: { sessionId: string }) {
@@ -1073,6 +1089,24 @@ const BLOCK_TAG = "promotion-blocked";
 const WAIT_TAG = "promotion-waiting";
 const compactNameKey = (value: unknown) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 
+/** The contradiction merging these minutes into an existing meeting would hit, or undefined (read-only check). */
+async function minutesHistoryConflict(ctx: PortableMutationCtx, target: { meetingId: any; minutesId?: any }, payload: any, sourceExternalIds: string[]): Promise<string | undefined> {
+  const meeting = await ctx.db.get<any>(target.meetingId, "meetings");
+  const minutesRow = target.minutesId ? await ctx.db.get<any>(target.minutesId, "minutes") : meeting?.minutesId ? await ctx.db.get<any>(meeting.minutesId, "minutes") : null;
+  if (!minutesRow) return undefined;
+  const incoming = normalizeMeetingHistory(payload);
+  const version = importedSourceVersionFor(payload, sourceExternalIds, payload.meetingIdentityKey);
+  if (version && !sourceVersionsCover(incoming.importedSourceVersions, version.sourceExternalIds) && !sourceVersionsCover(normalizeMeetingHistory(minutesRow).importedSourceVersions, version.sourceExternalIds)) {
+    incoming.importedSourceVersions = [...(incoming.importedSourceVersions ?? []), version as any];
+  }
+  try {
+    mergeMeetingHistory(minutesRow, incoming);
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 /** Why a record is blocked, and for a duplicate the record it duplicates. */
 async function describeBlockedRecord(ctx: PortableMutationCtx, societyId: string, record: any, issues: string[]): Promise<BlockedImportRecord> {
   const payload = record.payload ?? {};
@@ -1133,8 +1167,12 @@ export async function resolveBlockedRecordsPortable(ctx: PortableMutationCtx, { 
   await selectedImportRecords(ctx, societyId, sessionId, records, recordIds);
   const selected = records.filter((record: any) => recordIds.includes(String(record._id)));
   if (action === "retry") {
-    const result: any = await applyApprovedSectionRecordsPortable(ctx, { sessionId, recordIds: selected.filter((record: any) => record.status === "Approved").map((record: any) => String(record._id)) });
-    return { action, updated: result.total ?? 0, stillBlocked: result.blocked?.length ?? 0, result };
+    const approved = selected.filter((record: any) => record.status === "Approved");
+    const minutesIds = approved.filter((record: any) => record.recordKind === "meetingMinutes").map((record: any) => String(record._id));
+    const sectionIds = approved.filter((record: any) => record.recordKind !== "meetingMinutes").map((record: any) => String(record._id));
+    const minutesResult: any = minutesIds.length ? await applyApprovedMeetingsPortable(ctx, { sessionId, recordIds: minutesIds }) : { minutes: 0, existing: 0 };
+    const result: any = sectionIds.length ? await applyApprovedSectionRecordsPortable(ctx, { sessionId, recordIds: sectionIds }) : { total: 0 };
+    return { action, updated: (result.total ?? 0) + (minutesResult.minutes ?? 0) + (minutesResult.existing ?? 0), stillBlocked: (result.blocked?.length ?? 0) + (minutesResult.blocked?.length ?? 0), result };
   }
   await requirePermissionPortable(ctx, societyId, "documents:write");
   const at = new Date().toISOString();
@@ -1148,9 +1186,13 @@ export async function resolveBlockedRecordsPortable(ctx: PortableMutationCtx, { 
       if (!target?.id) continue;
       const existing = await ctx.db.get<any>(target.id);
       if (!existing || String(existing.societyId) !== societyId) continue;
-      await requireSectionPromotionPermissions(ctx, societyId, [record]);
-      if (!(await existingImportTarget(ctx, societyId, record))) await rememberImportTarget(ctx, societyId, record, String(target.id));
-      await ctx.db.patch(record._id, { content: JSON.stringify({ ...current, reviewNotes: [cleanText(current.reviewNotes), `Linked to the existing ${target.label} (${target.table}) instead of creating a duplicate.`].filter(Boolean).join("\n"), importedTargets: { ...(current.importedTargets ?? {}), sections: target.id }, updatedAtISO: at }), tags });
+      // Minutes link to their meeting (meetings target); register records to the register row (sections target).
+      const minutesRecord = record.recordKind === "meetingMinutes";
+      if (minutesRecord) for (const permission of ["meetings:write", "minutes:write"] as const) await requirePermissionPortable(ctx, societyId, permission);
+      else await requireSectionPromotionPermissions(ctx, societyId, [record]);
+      if (!minutesRecord && !(await existingImportTarget(ctx, societyId, record))) await rememberImportTarget(ctx, societyId, record, String(target.id));
+      const importedTarget = minutesRecord ? { meetings: { meetingId: target.id, ...(existing.minutesId ? { minutesId: existing.minutesId } : {}) } } : { sections: target.id };
+      await ctx.db.patch(record._id, { content: JSON.stringify({ ...current, reviewNotes: [cleanText(current.reviewNotes), `Linked to the existing ${target.label} (${target.table}) instead of creating a duplicate.`].filter(Boolean).join("\n"), importedTargets: { ...(current.importedTargets ?? {}), ...importedTarget }, updatedAtISO: at }), tags });
     } else {
       const reason = blocked?.issues?.join("; ") ?? "blocked on apply";
       const status = action === "skip" ? "Rejected" : "Pending";

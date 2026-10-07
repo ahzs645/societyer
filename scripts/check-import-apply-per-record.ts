@@ -180,4 +180,28 @@ const merged = await mutate("importSessions:applyApprovedMeetings", { sessionId:
 assert.equal(merged.existing, 1, "the minutes fold into the evidenced meeting");
 assert.equal((db.dump("meetings") as any[]).find((row) => row._id === evidencedMeeting._id).status, "Held", "the meeting now has minutes");
 
-console.log("PASS import apply per record: valid records apply past blocked ones; duplicates, waiting and invalid records are reported with reasons; link/skip/defer/retry resolve them; waiting materials apply when their meeting is created; repeated applies and compaction stay idempotent");
+// 8. Minutes per record too: a minutes record whose observations contradict what its meeting already holds from
+// the same source (e.g. promoted from an intake review) is blocked as a duplicate; the other minutes still apply.
+const observation = (text: string) => ({ entryId: "local:package-2024-07.pdf#part-3#action1", actionKey: "a1", text, status: "open" });
+const reviewed = await mutate("importSessions:createFromBundle", { societyId: society, name: "Reviewed minutes", bundle: { meetingMinutes: [{ meetingTitle: "Board meeting", meetingDate: "2024-07-09", body: "board", discussion: "Reviewed.", actionObservations: [observation("Send the reviewed letter")], sourceExternalIds: ["local:package-2024-07.pdf"] }] } });
+await mutate("importSessions:bulkSetStatus", { sessionId: reviewed, status: "Approved" });
+await mutate("importSessions:applyApprovedMeetings", { sessionId: reviewed });
+const again2 = await mutate("importSessions:createFromBundle", { societyId: society, name: "Class records again", bundle: { meetingMinutes: [
+  { meetingTitle: "Board meeting", meetingDate: "2024-07-09", body: "board", discussion: "Unreviewed copy.", actionObservations: [observation("Send the letter (unreviewed wording)")], sourceExternalIds: ["local:package-2024-07.pdf"] },
+  { meetingTitle: "Board meeting", meetingDate: "2024-08-13", body: "board", discussion: "Another meeting.", sourceExternalIds: ["local:minutes-2024-08-13.pdf"] },
+] } });
+await mutate("importSessions:bulkSetStatus", { sessionId: again2, status: "Approved" });
+const minutesApply = await mutate("importSessions:applyApprovedMeetings", { sessionId: again2 });
+assert.equal(minutesApply.meetings, 1, "the other minutes apply");
+assert.equal(minutesApply.blocked?.length, 1, JSON.stringify(minutesApply));
+assert.equal(minutesApply.blocked[0].reason, "duplicate");
+assert.equal(minutesApply.blocked[0].duplicateOf.table, "meetings");
+assert.match(minutesApply.blocked[0].issues[0], /already holds minutes from this source that differ/);
+const conflicted = minutesApply.blocked[0].recordId;
+await mutate("importSessions:resolveBlockedRecords", { sessionId: again2, recordIds: [conflicted], action: "link_existing" });
+const linkedMinutes = ((await query("importSessions:get", { sessionId: again2 })) as any).records.find((row: any) => row._id === conflicted);
+assert.equal(String(linkedMinutes.importedTargets.meetings.meetingId), minutesApply.blocked[0].duplicateOf.id, "linked to the meeting that holds the reviewed minutes");
+assert.equal(linkedMinutes.blocked, undefined);
+assert.equal(((await query("importSessions:get", { sessionId: again2 })) as any).session.summary.approvedUnapplied, 0);
+
+console.log("PASS import apply per record: valid records apply past blocked ones; duplicates, waiting and invalid records are reported with reasons; link/skip/defer/retry resolve them; waiting materials apply when their meeting is created; conflicting minutes are blocked per record; repeated applies and compaction stay idempotent");

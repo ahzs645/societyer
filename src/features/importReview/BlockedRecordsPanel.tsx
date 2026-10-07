@@ -33,7 +33,7 @@ export function BlockedRecordsPanel({ sessionId, records, canWrite, onEdit }: { 
   const confirm = useConfirm();
   const [busy, setBusy] = useState<string | null>(null);
   const blocked = useMemo(
-    () => (records as BlockedRecord[]).filter((record) => record.blocked && record.status === "Approved" && !record.importedTargets?.sections),
+    () => (records as BlockedRecord[]).filter((record) => record.blocked && record.status === "Approved" && !Object.values(record.importedTargets ?? {}).some(Boolean)),
     [records],
   );
   if (!blocked.length) return null;

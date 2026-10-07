@@ -2039,12 +2039,16 @@ async function insertHistoryItem(ctx: any, societyId: string, kind: string, payl
 }
 
 async function patchRecordImportTarget(ctx: any, record: any, target: string, value: any) {
+  // An applied record is no longer blocked (see BlockedImportRecord in importSessions.ts).
+  const { blocked, ...rest } = record;
+  const tags = blocked ? ((await ctx.db.get(record._id))?.tags ?? []).filter((tag: string) => tag !== "promotion-blocked" && tag !== "promotion-waiting") : undefined;
   await ctx.db.patch(record._id, {
     content: JSON.stringify({
-      ...record,
+      ...rest,
       importedTargets: { ...(record.importedTargets ?? {}), [target]: value },
       updatedAtISO: new Date().toISOString(),
     }),
+    ...(tags ? { tags } : {}),
   });
 }
 
