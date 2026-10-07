@@ -26,6 +26,7 @@ export function RecordGapsPanel({
   onOpen: HeatmapSelect;
 }) {
   const [includeDraft, setIncludeDraft] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const { can } = usePermissions();
   const canWrite = can("deadlines:write");
   const markPeriod = usePermissionedMutation(api.continuity.markPeriod, canWrite);
@@ -35,15 +36,23 @@ export function RecordGapsPanel({
   const groups = useMemo(() => {
     const out = new Map<string, RecordGap[]>();
     for (const gap of visible) out.set(gap.severity, [...(out.get(gap.severity) ?? []), gap]);
-    return ["statutory", "bylaw", "practice"].filter((key) => out.has(key)).map((key) => ({ severity: key, gaps: out.get(key)! }));
+    return ["statutory", "bylaw", "practice"].filter((key) => out.has(key)).map((key) => ({ severity: key, gaps: out.get(key)!, clusters: clusterGaps(out.get(key)!) }));
   }, [visible]);
   const openCrossReferences = crossReferences.filter((gap) => gap.status === "record_missing");
 
-  const open = (gap: RecordGap) => {
-    const row = rows.find((candidate) => candidate.expectation.key === gap.expectationKey);
-    const period = row?.periods.find((candidate) => candidate.periodKey === gap.periodKey);
-    if (row && period) onOpen(row, [period]);
+  const open = (gap: RecordGap) => openMany([gap]);
+  const openMany = (gaps: RecordGap[]) => {
+    const row = rows.find((candidate) => candidate.expectation.key === gaps[0]?.expectationKey);
+    const keys = new Set(gaps.map((gap) => gap.periodKey));
+    const periods = row?.periods.filter((candidate) => keys.has(candidate.periodKey)) ?? [];
+    if (row && periods.length) onOpen(row, periods);
   };
+  const toggle = (key: string) => setExpanded((current) => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
 
   const markReference = async (gap: CrossReferenceGap, status: "never_held" | "not_applicable" | "cancelled") => {
     const reason = await prompt({
@@ -77,20 +86,42 @@ export function RecordGapsPanel({
             <span className="card__subtitle">{group.gaps.length} period{group.gaps.length === 1 ? "" : "s"}</span>
           </div>
           <div className="card__body">
-            {group.gaps.map((gap) => {
+            {group.clusters.map((cluster) => {
+              const gap = cluster.gaps[0];
               const meta = STATUS_META[gap.status];
+              const many = cluster.gaps.length > 1;
+              const isOpen = expanded.has(cluster.key);
               return (
-                <div key={gap.key} className="coverage-gap-row">
-                  <div>
-                    <strong>{gap.bodyLabel}: {gap.title}</strong> — {gap.label}
-                    <div className="coverage-gap-row__meta">
-                      <Badge tone={meta.tone}>{meta.glyph} {meta.label}</Badge>
-                      <Badge tone={SEVERITY_TONE[gap.severity] ?? "neutral"}>{SEVERITY_LABELS[gap.severity] ?? gap.severity}</Badge>
-                      {gap.citation && <span className="muted">{gap.citation}</span>}
+                <div key={cluster.key}>
+                  <div className="coverage-gap-row">
+                    <div>
+                      <strong>{gap.bodyLabel}: {gap.title}</strong> — {many ? `${cluster.gaps.length} periods (${cluster.gaps[cluster.gaps.length - 1].label} to ${gap.label})` : gap.label}
+                      <div className="coverage-gap-row__meta">
+                        <Badge tone={meta.tone}>{meta.glyph} {meta.label}</Badge>
+                        <Badge tone={SEVERITY_TONE[gap.severity] ?? "neutral"}>{SEVERITY_LABELS[gap.severity] ?? gap.severity}</Badge>
+                        {gap.citation && <span className="muted">{gap.citation}</span>}
+                      </div>
+                      {gap.note && <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{many ? `Latest: ${gap.note}` : gap.note}</div>}
                     </div>
-                    {gap.note && <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{gap.note}</div>}
+                    <div className="row" style={{ gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      {many && (
+                        <button type="button" className="btn btn--ghost btn--sm" aria-expanded={isOpen} onClick={() => toggle(cluster.key)}>
+                          {isOpen ? "Hide periods" : "Show periods"}
+                        </button>
+                      )}
+                      <button type="button" className="btn btn--sm" onClick={() => (many ? openMany(cluster.gaps) : open(gap))}>{many ? "Review all" : "Review"}</button>
+                    </div>
                   </div>
-                  <button type="button" className="btn btn--sm" onClick={() => open(gap)}>Review</button>
+                  {many && isOpen && (
+                    <ul className="coverage-evidence" style={{ margin: "0 0 8px 16px" }}>
+                      {cluster.gaps.map((item) => (
+                        <li key={item.key} className="row" style={{ gap: 8, justifyContent: "space-between", flexWrap: "wrap" }}>
+                          <span>{item.label}{item.note ? <span className="muted"> · {item.note}</span> : null}</span>
+                          <button type="button" className="btn btn--ghost btn--sm" onClick={() => open(item)}>Review {item.label}</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               );
             })}
@@ -132,4 +163,21 @@ export function RecordGapsPanel({
       </section>
     </div>
   );
+}
+
+type GapCluster = { key: string; gaps: RecordGap[] };
+
+/**
+ * One row per expectation and status: twenty years of "no director register
+ * entries" read as one finding with its range, not twenty rows.
+ */
+function clusterGaps(gaps: RecordGap[]): GapCluster[] {
+  const clusters = new Map<string, GapCluster>();
+  for (const gap of gaps) {
+    const key = `${gap.expectationKey}|${gap.status}`;
+    const cluster = clusters.get(key) ?? { key, gaps: [] };
+    cluster.gaps.push(gap);
+    clusters.set(key, cluster);
+  }
+  return [...clusters.values()];
 }

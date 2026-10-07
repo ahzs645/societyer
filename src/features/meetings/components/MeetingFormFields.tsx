@@ -257,6 +257,11 @@ export function MeetingFormFields({
 
   return (
     <div className="meeting-form">
+      {!editingId && (daysUntil(value.scheduledAt) ?? 0) < 0 && (
+        <div className="flag" role="status" style={{ marginBottom: 12 }}>
+          <div>This date is before today, so the meeting is recorded as already held (no notice check). Add its minutes and attendance after saving.</div>
+        </div>
+      )}
       {isGeneralMeeting(value.type) &&
       (daysUntil(value.scheduledAt) ?? 0) >= 0 &&
       !meetsNoticeWindow(value.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays, effectiveRules) ? (

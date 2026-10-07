@@ -125,7 +125,7 @@ export async function seatDetail(ctx:PortableQueryCtx,{seatId}:{seatId:string}){
 
 export async function saveOrganizationMember(ctx:PortableMutationCtx,args:{societyId:string;memberId?:string;organizationName:string;membershipClass:string;status:string;joinedAt:string;leftAt?:string;votingRights:boolean;email?:string;notes?:string;linkSeatIds?:string[]}){
  await requirePermissionPortable(ctx,args.societyId,'members:write');
- const name=args.organizationName.trim();if(!name||!args.membershipClass.trim()||!args.status.trim())throw new Error('Organization name, membership class and status are required.');
+ const name=args.organizationName.trim();if(!name||!args.membershipClass.trim()||!args.status.trim())throw new Error('Organization name, membership class and status are required.');if(!/[\p{L}\p{N}]/u.test(name))throw new Error(`Enter the organization name; "${name}" is a placeholder from the source.`);
  if(!partialDate(args.joinedAt)||!args.joinedAt||!partialDate(args.leftAt))throw new Error('Joined date is required (YYYY, YYYY-MM or YYYY-MM-DD).');
  const fields={firstName:name,lastName:'',memberKind:'organization',organizationName:name,membershipClass:args.membershipClass.trim(),status:args.status.trim(),joinedAt:args.joinedAt,leftAt:args.leftAt||undefined,votingRights:args.votingRights,email:args.email?.trim()||undefined,notes:args.notes?.trim()||undefined};
  let memberId=args.memberId;
