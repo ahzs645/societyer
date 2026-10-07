@@ -1,0 +1,72 @@
+export const IMPORT_KIND_LABELS: Record<string, string> = {
+  source: "Source",
+  fact: "Fact",
+  event: "Event",
+  boardTerm: "Role",
+  motion: "Motion",
+  meetingMinutes: "Minutes",
+  budget: "Budget",
+  documentCandidate: "Document",
+  filing: "Filing",
+  deadline: "Deadline",
+  bylawAmendment: "Bylaw amendment",
+  publication: "Publication",
+  insurancePolicy: "Insurance",
+  financialStatement: "Financial",
+  financialStatementImport: "Financial import",
+  grant: "Grant",
+  recordsLocation: "Records",
+  archiveAccession: "Archive",
+  boardRoleAssignment: "Role assignment",
+  boardRoleChange: "Role change",
+  signingAuthority: "Signing",
+  meetingAttendance: "Attendance",
+  motionEvidence: "Motion evidence",
+  budgetSnapshot: "Budget snapshot",
+  treasurerReport: "Treasurer report",
+  transactionCandidate: "Transaction",
+  organizationAddress: "Org address",
+  organizationRegistration: "Registration",
+  organizationIdentifier: "Identifier",
+  policy: "Policy",
+  workflowPackage: "Workflow package",
+  minuteBookItem: "Minute book",
+  legalTemplateDataField: "Template field",
+  legalTemplate: "Legal template",
+  legalPrecedent: "Legal precedent",
+  legalPrecedentRun: "Precedent run",
+  generatedLegalDocument: "Generated document",
+  legalSigner: "Legal signer",
+  sourceEvidence: "Evidence",
+  secretVaultItem: "Access custody",
+  pipaTraining: "PIPA",
+  employee: "Employee",
+  volunteer: "Volunteer",
+  committee: "Committee",
+  committeeMember: "Committee member",
+  member: "Member",
+  director: "Director",
+  task: "Task",
+  goal: "Goal",
+  commitment: "Commitment",
+  fundingSource: "Funding source",
+  grantReport: "Grant report",
+  meetingMaterial: "Meeting material",
+  organizationSeat: "Organization seat",
+  conflict: "Conflict",
+  proxy: "Proxy",
+  bylawRuleSet: "Bylaw rules",
+  operatingBudget: "Operating budget",
+  representationGap: "Unsupported detail",
+};
+
+export function importKindLabel(kind: string) {
+  return IMPORT_KIND_LABELS[kind] ?? kind.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
+}
+
+/** Target modules arrive as table names or free labels; show them readably. */
+export function importTargetLabel(target: string) {
+  if (!target || target === "unassigned") return "Unassigned";
+  if (/\s/.test(target)) return target.charAt(0).toUpperCase() + target.slice(1);
+  return target.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[-_]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+}

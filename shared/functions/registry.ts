@@ -92,6 +92,7 @@ import * as bylawAmendmentsFns from "./bylawAmendments";
 import * as filingsFns from "./filings";
 import * as organizationDetailsFns from "./organizationDetails";
 import * as documentsFns from "./documents";
+import * as documentCatalogFns from "./documentCatalog";
 import * as organizationHistoryFns from "./organizationHistory";
 import * as meetingsFns from "./meetings";
 import * as agendasFns from "./agendas";
@@ -133,6 +134,7 @@ import * as communicationsFns from "./communications";
 import * as documentVersionsFns from "./documentVersions";
 import * as financialHubFns from "./financialHub";
 import * as importSessionsFns from "./importSessions";
+import * as importReviewQueueFns from "./importReviewQueue";
 import * as membersFns from "./members";
 import * as paperlessFns from "./paperless";
 import * as permissionsFns from "./permissions";
@@ -690,6 +692,14 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "documents:flagForDeletion", handler: documentsFns.flagForDeletionPortable }),
   definePortableMutation({ name: "documents:archive", handler: documentsFns.archivePortable }),
   definePortableMutation({ name: "documents:remove", handler: documentsFns.removePortable }),
+  definePortableQuery({ name: "documents:browse", handler: documentCatalogFns.browsePortable }),
+  definePortableQuery({ name: "documents:versionsFor", handler: documentCatalogFns.versionsForPortable }),
+  definePortableQuery({ name: "documents:evidenceFor", handler: documentCatalogFns.evidenceForPortable }),
+  definePortableQuery({ name: "documents:categoryCounts", handler: documentCatalogFns.categoryCountsPortable }),
+  definePortableMutation({ name: "documents:markDuplicate", handler: documentCatalogFns.markDuplicatePortable }),
+  definePortableMutation({ name: "documents:clearDuplicate", handler: documentCatalogFns.clearDuplicatePortable }),
+  definePortableMutation({ name: "documents:setVersionInfo", handler: documentCatalogFns.setVersionInfoPortable }),
+  definePortableMutation({ name: "documents:mergeDuplicates", handler: documentCatalogFns.mergeDuplicatesPortable }),
 
   // organizationHistory
   definePortableQuery({ name: "organizationHistory:list", handler: organizationHistoryFns.listPortable }),
@@ -1123,6 +1133,10 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   // importSessions
   definePortableQuery({ name: "importSessions:list", handler: importSessionsFns.listPortable }),
   definePortableQuery({ name: "importSessions:get", handler: importSessionsFns.getPortable }),
+  definePortableQuery({ name: "importSessions:reviewQueue", handler: importReviewQueueFns.reviewQueuePortable }),
+  definePortableQuery({ name: "importSessions:getRecord", handler: importReviewQueueFns.getRecordPortable }),
+  definePortableQuery({ name: "importSessions:removalImpact", handler: importReviewQueueFns.removalImpactPortable }),
+  definePortableQuery({ name: "importSessions:pendingByTarget", handler: importReviewQueueFns.pendingByTargetPortable }),
   definePortableMutation({ name: "importSessions:createFromBundle", handler: importSessionsFns.createFromBundlePortable }),
   definePortableMutation({ name: "importSessions:updateRecord", handler: importSessionsFns.updateRecordPortable }),
   definePortableMutation({ name: "importSessions:bulkSetStatus", handler: importSessionsFns.bulkSetStatusPortable }),

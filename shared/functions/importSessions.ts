@@ -1,4 +1,7 @@
 import { recordPreflightGapsForBundle } from "./representationGaps";
+import { sessionReferences } from "./importReviewQueue";
+import { normalizeDocumentCategory } from "../documentCategories";
+import { detectSourceVersionStatus, normalizeSourceVersionStatus } from "../documentVersioning";
 import { existingImportTarget, rememberImportTarget } from "./importTargetIdentity";
 /**
  * PORTABLE FUNCTIONS: the import-session review domain.
@@ -390,14 +393,29 @@ export async function removeSessionPortable(ctx: PortableMutationCtx, { sessionI
   const session = await ctx.db.get(sessionId);
   if (!isImportSession(session)) return;
   const docs = await recordsForSession(ctx, sessionId);
-  await Promise.all(
-    docs
-      .filter(isImportRecord)
-      .map(hydrateRecord)
-      .filter((record: any) => record.sessionId === sessionId)
-      .map((record: any) => ctx.db.delete(record._id)),
-  );
+  const records = docs
+    .filter(isImportRecord)
+    .map(hydrateRecord)
+    .filter((record: any) => record.sessionId === sessionId);
+  // Documents and gaps created from this session keep their provenance as a
+  // note instead of a dangling session id (finding D-06).
+  const { linkedDocuments, gaps } = await sessionReferences(ctx, String(session.societyId), sessionId);
+  const sessionName = cleanText(hydrateSession(session).name) || cleanText(session.title) || "import session";
+  const removedAtISO = new Date().toISOString();
+  for (const doc of linkedDocuments) {
+    const patch: Record<string, any> = { tags: compactStrings([...(doc.tags ?? []), "import-session-removed"]) };
+    if (String(doc.importSessionId ?? "") === sessionId) patch.importSessionId = undefined;
+    const content = parseJson(doc.content);
+    if (content && typeof content === "object" && !Array.isArray(content) && String(content.importSessionId ?? "") === sessionId) {
+      const { importSessionId: _removed, ...rest } = content;
+      patch.content = JSON.stringify({ ...rest, importSessionRemoved: { id: sessionId, name: sessionName, removedAtISO } });
+    }
+    await ctx.db.patch(doc._id, patch);
+  }
+  for (const gap of gaps) await ctx.db.patch(gap._id, { importSessionId: undefined, importRecordId: undefined });
+  for (const record of records) await ctx.db.delete(record._id);
   await ctx.db.delete(sessionId);
+  return { records: records.length, linkedDocuments: linkedDocuments.length, gaps: gaps.length };
 }
 
 export async function applyApprovedToOrgHistoryPortable(ctx: PortableMutationCtx, { sessionId, recordIds }: { sessionId: string; recordIds?: string[] }) {
@@ -778,10 +796,12 @@ export async function applyApprovedDocumentsPortable(
   );
 
   let documents = 0;
+  const resolveExternalDocument = externalDocumentResolver(ctx, societyId);
   for (const record of candidates) {
     const existingTarget = await existingImportTarget(ctx, societyId, record);
     if (existingTarget) { await patchRecordImportTarget(ctx, record, "documents", existingTarget); continue; }
     const payload = record.payload ?? {};
+    const versionFields = await importedVersionFields(payload, resolveExternalDocument);
     const sourceExternalIds = unique([
       ...(record.sourceExternalIds ?? []),
       ...(payload.sourceExternalIds ?? []),
@@ -796,7 +816,8 @@ export async function applyApprovedDocumentsPortable(
     const docId = await ctx.db.insert("documents", {
       societyId,
       title: cleanText(payload.title) || record.title || externalId || "Imported document candidate",
-      category: cleanText(payload.category) || cleanText(record.targetModule) || cleanText(sections[0]) || "Imported Document",
+      category: normalizeDocumentCategory(cleanText(payload.category) || cleanText(record.targetModule) || cleanText(sections[0]) || "Other"),
+      ...versionFields,
       fileName: cleanText(payload.fileName),
       mimeType: cleanText(payload.mimeType),
       fileSizeBytes: numberOrUndefined(payload.fileSizeBytes),
@@ -939,4 +960,51 @@ export async function applyApprovedSectionRecordsPortable(
 
   await patchSessionUpdatedAt(ctx, sessionId);
   return { total, byKind };
+}
+
+/* --------------------- document versions from imports (A8) --------------------- */
+
+/**
+ * Lazily indexes the society's documents by external id (sourceExternalIds,
+ * external-id tags and the externalId kept in content), case-insensitively, so
+ * an import can name the document it supersedes or duplicates by source id.
+ */
+function externalDocumentResolver(ctx: PortableMutationCtx, societyId: string) {
+  let index: Map<string, string> | null = null;
+  return async (externalId: unknown) => {
+    const key = cleanText(externalId)?.toLowerCase();
+    if (!key) return undefined;
+    if (!index) {
+      const built = new Map<string, string>();
+      const docs = await ctx.db.query("documents").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+      for (const doc of docs as any[]) {
+        if (isImportRecord(doc) || isImportSession(doc)) continue;
+        const ids: unknown[] = [...(doc.sourceExternalIds ?? []), ...(doc.tags ?? [])];
+        if (typeof doc.content === "string" && doc.content.includes("externalId")) {
+          const content = parseJson(doc.content);
+          if (content && typeof content === "object") ids.push(content.externalId, ...(Array.isArray(content.sourceExternalIds) ? content.sourceExternalIds : []));
+        }
+        for (const id of ids) {
+          const idKey = cleanText(id)?.toLowerCase();
+          if (idKey && idKey.includes(":") && !built.has(idKey)) built.set(idKey, String(doc._id));
+        }
+      }
+      index = built;
+    }
+    return index.get(key);
+  };
+}
+
+/** Optional version fields a document candidate may carry (all additive). */
+async function importedVersionFields(payload: any, resolve: (externalId: unknown) => Promise<string | undefined>) {
+  const fields: Record<string, any> = {};
+  const groupKey = cleanText(payload.versionGroupKey);
+  if (groupKey) fields.versionGroupKey = groupKey.slice(0, 160);
+  const status = normalizeSourceVersionStatus(payload.sourceVersionStatus) ?? detectSourceVersionStatus(payload.fileName, payload.title);
+  if (status) fields.sourceVersionStatus = status;
+  const supersedes = await resolve(payload.supersedesExternalId ?? payload.supersedesSourceExternalId);
+  if (supersedes) fields.supersedesDocumentId = supersedes;
+  const duplicateOf = await resolve(payload.duplicateOfExternalId ?? payload.duplicateOfSourceExternalId);
+  if (duplicateOf) fields.duplicateOfDocumentId = duplicateOf;
+  return fields;
 }

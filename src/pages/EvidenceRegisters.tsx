@@ -14,6 +14,13 @@ import { useToast } from "../components/Toast";
 import { Archive, Banknote, ClipboardCheck, FileSearch, GitBranch, Plus } from "lucide-react";
 import { formatDate, money } from "../lib/format";
 import { todayDateOnly } from "../../shared/dateOnly";
+import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
+import {
+  EVIDENCE_REVIEW_STATUSES,
+  evidenceReviewStatusLabel,
+  evidenceReviewStatusTone,
+  normalizeEvidenceReviewStatus,
+} from "../../shared/documentReviewStatus";
 
 export function GovernanceRegistersPage() {
   const { society, data, people } = useRegisters();
@@ -244,6 +251,7 @@ export function MeetingEvidencePage() {
         subtitle="Attendance, quorum evidence, and source-backed motions extracted from minutes."
         actions={<Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>}
       />
+      <ImportCandidatesNotice noun="meeting evidence" kinds={["meetingAttendance", "motionEvidence", "motion", "meetingMinutes"]} emptyRegister={!attendance.length && !motions.length} />
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Attendance rows" value={data?.restrictedResources?.includes("meetings") ? "Restricted" : attendance.length} />
         <Stat label="Motion evidence" value={data?.restrictedResources?.includes("motions") ? "Restricted" : motions.length} />
@@ -302,9 +310,10 @@ export function FinanceImportsPage() {
         title="Finance imports"
         icon={<Banknote size={16} />}
         iconColor="green"
-        subtitle="Paperless-derived budget snapshots, financial statements, treasurer reports, and transaction candidates."
+        subtitle="Imported budget snapshots, financial statements, treasurer reports, and transaction candidates awaiting verification."
         actions={<Link className="btn-action" to="/app/imports"><FileSearch size={12} /> Review imports</Link>}
       />
+      <ImportCandidatesNotice noun="finance" targets={["financialStatementImports", "budgetSnapshots"]} kinds={["financialStatementImport", "budgetSnapshot", "treasurerReport", "transactionCandidate"]} documentCategory="FinancialStatement" emptyRegister={!budgets.length && !statements.length} />
       <div className="stat-grid" style={{ marginBottom: 16 }}>
         <Stat label="Budgets" value={data?.restrictedResources?.includes("financials") ? "Restricted" : budgets.length} />
         <Stat label="Statements" value={data?.restrictedResources?.includes("financials") ? "Restricted" : statements.length} />
@@ -389,11 +398,47 @@ export function FinanceImportsPage() {
 
 export function RecordsArchivePage() {
   const { society, data } = useRegisters();
+  const permissions = usePermissions();
+  const canEdit = permissions.loaded && permissions.can("documents:write");
+  const updateReview = usePermissionedMutation(api.evidenceRegisters.updateReview, canEdit);
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
   const accessions = data?.archiveAccessions ?? [];
   const evidence = data?.sourceEvidence ?? [];
+  const statusCounts = EVIDENCE_REVIEW_STATUSES.map((status) => [status, evidence.filter((row: any) => normalizeEvidenceReviewStatus(row.status) === status).length] as const);
+  const evidenceShown = statusFilter === "all" ? evidence : evidence.filter((row: any) => normalizeEvidenceReviewStatus(row.status) === statusFilter);
+  const setStatus = async (row: any, status: string) => {
+    try {
+      await updateReview({ table: "sourceEvidence", id: row._id, status });
+      toast.success("Evidence status updated", evidenceReviewStatusLabel(status));
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not update evidence status");
+    }
+  };
+  const bulkStatus = async (rows: any[], status: string) => {
+    const targets = rows.filter((row) => normalizeEvidenceReviewStatus(row.status) !== status);
+    if (!targets.length) return;
+    const ok = await confirm({
+      title: `Mark ${targets.length} evidence link${targets.length === 1 ? "" : "s"} ${evidenceReviewStatusLabel(status).toLowerCase()}?`,
+      message: `${targets.length} source evidence row${targets.length === 1 ? "" : "s"} on this page will change status. Linked records and documents are not changed.`,
+      confirmLabel: `Mark ${targets.length}`,
+    });
+    if (!ok) return;
+    let updated = 0;
+    for (const row of targets) {
+      try {
+        await updateReview({ table: "sourceEvidence", id: row._id, status });
+        updated += 1;
+      } catch {
+        // Keep going; the toast reports the count that changed.
+      }
+    }
+    toast.success(`${updated} evidence link${updated === 1 ? "" : "s"} updated`);
+  };
 
   return (
     <div className="page">
@@ -420,13 +465,37 @@ export function RecordsArchivePage() {
         columns={["Received", "Title", "Container", "Location", "Status"]}
         render={(row) => [row.dateReceived ? formatDate(row.dateReceived) : "-", row.title, row.containerType, row.location, <Status key="s" value={row.status} />]}
       />
+      <div className="documents-facets__row evidence-status-filter" role="group" aria-label="Evidence status">
+        <button type="button" className={`chip${statusFilter === "all" ? " is-active" : ""}`} aria-pressed={statusFilter === "all"} onClick={() => setStatusFilter("all")}>All <span className="chip__count">{evidence.length}</span></button>
+        {statusCounts.map(([status, count]) => (
+          <button key={status} type="button" className={`chip${statusFilter === status ? " is-active" : ""}`} aria-pressed={statusFilter === status} onClick={() => setStatusFilter(status)}>
+            {evidenceReviewStatusLabel(status)} <span className="chip__count">{count}</span>
+          </button>
+        ))}
+      </div>
       <RegisterTable
         title="Source evidence and provenance"
         restricted={data?.restrictedResources?.includes("documents")}
-        rows={evidence}
-        empty="Approved section imports automatically create source evidence links here."
+        rows={evidenceShown}
+        empty={statusFilter === "all" ? "Approved section imports automatically create source evidence links here." : "No evidence links have this status."}
         columns={["Source", "Kind", "Model destination", "Access", "Status"]}
-        render={(row) => [row.sourceDocumentId ? <Link to={`/app/documents/${row.sourceDocumentId}`}>{row.sourceTitle}</Link> : row.sourceTitle, row.evidenceKind, row.targetTable ?? "-", <Badge key="a" tone={row.accessLevel === "restricted" ? "danger" : "info"}>{row.accessLevel}</Badge>, <Status key="s" value={row.status} />]}
+        pageActions={(pageRows) => canEdit && pageRows.length > 0 ? (
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <button className="btn-action" onClick={() => { void bulkStatus(pageRows, "Verified"); }}>Mark {pageRows.length} shown verified</button>
+            <button className="btn-action" onClick={() => { void bulkStatus(pageRows, "Linked"); }}>Mark {pageRows.length} shown linked</button>
+          </div>
+        ) : null}
+        render={(row) => [
+          <EvidenceSourceCell key="src" row={row} />,
+          row.evidenceKind,
+          row.targetTable ?? "-",
+          <Badge key="a" tone={row.accessLevel === "restricted" ? "danger" : "info"}>{row.accessLevel}</Badge>,
+          canEdit ? (
+            <select key="s" className="input input--sm evidence-status-select" aria-label={`Status for ${row.sourceTitle}`} value={normalizeEvidenceReviewStatus(row.status)} onChange={(event) => { void setStatus(row, event.target.value); }}>
+              {EVIDENCE_REVIEW_STATUSES.map((status) => <option key={status} value={status}>{evidenceReviewStatusLabel(status)}</option>)}
+            </select>
+          ) : <Status key="s" value={row.status} />,
+        ]}
       />
     </div>
   );
@@ -448,6 +517,7 @@ function RegisterTable({
   render,
   empty,
   restricted,
+  pageActions,
 }: {
   title: string;
   rows: any[];
@@ -455,9 +525,13 @@ function RegisterTable({
   render: (row: any) => any[];
   empty: ReactNode;
   restricted?: boolean;
+  /** Actions over the rows currently shown on this page (bulk review). */
+  pageActions?: (pageRows: any[]) => ReactNode;
 }) {
   const [page,setPage]=useState(0);const [search,setSearch]=useState("");
   const filtered=rows.filter(row=>[row.sourceTitle,row.personName,row.meetingTitle,row.title,row.motionText,row.targetTable,row.summary,row.notes].join(" ").toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  const safePage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 25) - 1));
+  const pageRows = filtered.slice(safePage*25,safePage*25+25);
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card__head">
@@ -465,6 +539,7 @@ function RegisterTable({
         <span className="card__subtitle">{restricted ? "Access limited" : `${rows.length} row${rows.length === 1 ? "" : "s"}`}</span>
       </div>
       {rows.length>25&&<div className="card__body"><input className="input" aria-label={`Search ${title}`} placeholder="Search this evidence register" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/></div>}
+      {pageActions && pageRows.length > 0 && <div className="card__body" style={{ paddingTop: 0 }}>{pageActions(pageRows)}</div>}
       {rows.length === 0 ? (
         <div className="card__body muted">{restricted ? "This section requires additional access." : empty}</div>
       ) : (
@@ -473,7 +548,7 @@ function RegisterTable({
             <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
           </thead>
           <tbody>
-            {filtered.slice(page*25,page*25+25).map((row) => (
+            {pageRows.map((row) => (
               <tr key={row._id}>
                 {render(row).map((cell, index) => <td key={index}>{cell}</td>)}
               </tr>
@@ -481,7 +556,7 @@ function RegisterTable({
           </tbody>
         </table>
       )}
-      {filtered.length>25&&<div className="card__body row" style={{gap:12}}><button className="btn" disabled={!page} onClick={()=>setPage(page-1)}>Previous</button><span>Page {page+1} of {Math.ceil(filtered.length/25)} · {filtered.length} matching rows</span><button className="btn" disabled={(page+1)*25>=filtered.length} onClick={()=>setPage(page+1)}>Next</button></div>}
+      {filtered.length>25&&<div className="card__body row" style={{gap:12,flexWrap:"wrap"}}><button className="btn" disabled={!safePage} onClick={()=>setPage(safePage-1)}>Previous</button><span>Page {safePage+1} of {Math.ceil(filtered.length/25)} · {filtered.length} matching rows</span><button className="btn" disabled={(safePage+1)*25>=filtered.length} onClick={()=>setPage(safePage+1)}>Next</button></div>}
     </div>
   );
 }
@@ -496,8 +571,23 @@ function Stat({ label, value, tone }: { label: string; value: number | string; t
 }
 
 function Status({ value }: { value?: string }) {
-  const tone = value === "Verified" || value === "Linked" ? "success" : value === "Rejected" ? "danger" : "warn";
-  return <Badge tone={tone}>{value ?? "NeedsReview"}</Badge>;
+  // Register rows use their own vocabularies (Observed, Draft, Filed…); only
+  // review states are relabelled, anything else is shown as stored.
+  const reviewState = !value || /^(needs ?review|needsreview|linked|verified|rejected)$/i.test(value);
+  if (!reviewState) return <Badge tone="info">{value}</Badge>;
+  return <Badge tone={evidenceReviewStatusTone(value)}>{evidenceReviewStatusLabel(value)}</Badge>;
+}
+
+/** Source link that prefers the canonical document over a staged import candidate (D-20). */
+function EvidenceSourceCell({ row }: { row: any }) {
+  if (!row.sourceDocumentId) return <span>{row.sourceTitle}</span>;
+  if (row.sourceDocumentKind === "candidate") {
+    return row.canonicalDocumentId
+      ? <span className="col" style={{ gap: 2 }}><Link to={`/app/documents/${row.canonicalDocumentId}`}>{row.sourceTitle}</Link><span className="muted" style={{ fontSize: "var(--fs-xs)" }}>cited the staged import copy; showing the document</span></span>
+      : <span className="col" style={{ gap: 2 }}><span>{row.sourceTitle}</span><Link className="muted" style={{ fontSize: "var(--fs-xs)" }} to="/app/imports">still a staged import candidate</Link></span>;
+  }
+  if (row.sourceDocumentKind === "missing") return <span>{row.sourceTitle} <span className="muted">(document removed)</span></span>;
+  return <Link to={`/app/documents/${row.sourceDocumentId}`}>{row.sourceTitle}</Link>;
 }
 
 function PromoteAction({ row, onPromote, disabled }: { row: any; onPromote: () => void; disabled?: boolean }) {

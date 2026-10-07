@@ -1,8 +1,8 @@
 import { importSectionPermission } from "../../shared/importPromotionPermissions";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -12,29 +12,31 @@ import { DatePicker } from "../components/DatePicker";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { Segmented } from "../components/primitives";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
 import { ImportWizard } from "../components/ImportWizard";
 import { isMemberHistoryDate } from "../../shared/memberHistory";
 import { Select } from "../components/Select";
 import { inspectImportBundle, prepareImportBundle } from "../lib/importBundleIntake";
 import { isActiveImportSession } from "../../shared/importSessionState";
+import { distinguishSessionNames, type SessionLabel } from "../../shared/importSessionLabels";
+import { ImportReviewQueue, DEFAULT_QUEUE_FILTERS, type QueueFilters } from "../features/importReview/ImportReviewQueue";
+import { IMPORT_KIND_LABELS, importKindLabel } from "../features/importReview/importKindLabels";
+import { formatDate } from "../lib/format";
 import {
   Archive,
   Check,
   FileJson,
   FileText,
+  FileWarning,
   FolderOpen,
   History,
-  Link2,
   ListChecks,
-  Pencil,
   Plus,
   ShieldAlert,
   Trash2,
   Upload,
-  X,
 } from "lucide-react";
 
-type FilterStatus = "all" | "Pending" | "Approved" | "Rejected" | "risk" | "links";
 type SessionTrack = "active" | "completed";
 type LinkInsight = {
   key: string;
@@ -43,71 +45,52 @@ type LinkInsight = {
   resolved: boolean;
 };
 
-const STATUS_ITEMS: { id: FilterStatus; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "Pending", label: "Pending" },
-  { id: "Approved", label: "Approved" },
-  { id: "Rejected", label: "Rejected" },
-  { id: "risk", label: "Review flags" },
-  { id: "links", label: "Link gaps" },
-];
+const KIND_LABELS = IMPORT_KIND_LABELS;
+// "source" stays the session-source filter used by links from Integrations.
+const QUEUE_PARAM_KEYS = ["status", "kind", "target", "sessionId", "risk", "origin", "q", "sort", "page"] as const;
 
-const KIND_LABELS: Record<string, string> = {
-  source: "Source",
-  fact: "Fact",
-  event: "Event",
-  boardTerm: "Role",
-  motion: "Motion",
-  meetingMinutes: "Minutes",
-  budget: "Budget",
-  documentCandidate: "Document",
-  filing: "Filing",
-  deadline: "Deadline",
-  bylawAmendment: "Bylaw amendment",
-  publication: "Publication",
-  insurancePolicy: "Insurance",
-  financialStatement: "Financial",
-  financialStatementImport: "Financial import",
-  grant: "Grant",
-  recordsLocation: "Records",
-  archiveAccession: "Archive",
-  boardRoleAssignment: "Role assignment",
-  boardRoleChange: "Role change",
-  signingAuthority: "Signing",
-  meetingAttendance: "Attendance",
-  motionEvidence: "Motion evidence",
-  budgetSnapshot: "Budget snapshot",
-  treasurerReport: "Treasurer report",
-  transactionCandidate: "Transaction",
-  organizationAddress: "Org address",
-  organizationRegistration: "Registration",
-  organizationIdentifier: "Identifier",
-  policy: "Policy",
-  workflowPackage: "Workflow package",
-  minuteBookItem: "Minute book",
-  legalTemplateDataField: "Template field",
-  legalTemplate: "Legal template",
-  legalPrecedent: "Legal precedent",
-  legalPrecedentRun: "Precedent run",
-  generatedLegalDocument: "Generated document",
-  legalSigner: "Legal signer",
-  sourceEvidence: "Evidence",
-  secretVaultItem: "Access custody",
-  pipaTraining: "PIPA",
-  employee: "Employee",
-  volunteer: "Volunteer",
-};
+function filtersFromParams(params: URLSearchParams): QueueFilters {
+  const status = params.get("status");
+  return {
+    status: status === "Approved" || status === "Rejected" || status === "all" ? status : "Pending",
+    recordKind: params.get("kind") || undefined,
+    targetModule: params.get("target") || undefined,
+    sessionId: params.get("sessionId") || undefined,
+    risk: params.get("risk") || undefined,
+    source: params.get("origin") || undefined,
+    search: params.get("q") || undefined,
+    sort: params.get("sort") === "session" ? "session" : "priority",
+    page: Math.max(0, Number(params.get("page")) || 0),
+  };
+}
+
+function paramsFromFilters(base: URLSearchParams, filters: QueueFilters) {
+  const next = new URLSearchParams(base);
+  for (const key of QUEUE_PARAM_KEYS) next.delete(key);
+  if (filters.status !== DEFAULT_QUEUE_FILTERS.status) next.set("status", filters.status);
+  if (filters.recordKind) next.set("kind", filters.recordKind);
+  if (filters.targetModule) next.set("target", filters.targetModule);
+  if (filters.sessionId) next.set("sessionId", filters.sessionId);
+  if (filters.risk) next.set("risk", filters.risk);
+  if (filters.source) next.set("origin", filters.source);
+  if (filters.search) next.set("q", filters.search);
+  if (filters.sort === "session") next.set("sort", "session");
+  if (filters.page) next.set("page", String(filters.page));
+  return next;
+}
 
 export function ImportSessionsPage() {
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("settings:write");
   const society = useSociety();
   const toast = useToast();
-  const [searchParams] = useSearchParams();
-  const requestedSessionId = searchParams.get("sessionId");
+  const confirm = useConfirm();
+  const convex = useConvex();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
+  const setFilters = (next: QueueFilters) => setSearchParams(paramsFromFilters(searchParams, next), { replace: true });
   const sourceFilter = searchParams.get("source");
   const sessions = useQuery(api.importSessions.list, society ? { societyId: society._id } : "skip");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sessionTrack, setSessionTrack] = useState<SessionTrack>("active");
   const sourceFilteredSessions = useMemo(() => {
     const rows = sessions ?? [];
@@ -126,9 +109,15 @@ export function ImportSessionsPage() {
   const activeSessions = useMemo(() => sourceFilteredSessions.filter(isActiveImportSession), [sourceFilteredSessions]);
   const completedSessions = useMemo(() => sourceFilteredSessions.filter((session: any) => !isActiveImportSession(session)), [sourceFilteredSessions]);
   const visibleSessions = sessionTrack === "active" ? activeSessions : completedSessions;
-  const selectedVisible = selectedId ? visibleSessions.some((session: any) => session._id === selectedId) : false;
-  const activeSessionId = selectedVisible ? selectedId : visibleSessions[0]?._id ?? null;
-  const detail = useQuery(api.importSessions.get, activeSessionId ? { sessionId: activeSessionId } : "skip");
+  const sessionLabels = useMemo(() => {
+    const all = sessions ?? [];
+    const computed = distinguishSessionNames(all.map((session: any) => String(session.name ?? "")));
+    return new Map<string, SessionLabel>(all.map((session: any, index: number) => [String(session._id), computed[index]]));
+  }, [sessions]);
+  const selectedSessionId = filters.sessionId ?? null;
+  const detail = useQuery(api.importSessions.get, selectedSessionId ? { sessionId: selectedSessionId } : "skip");
+  const removalImpact = useQuery(api.importSessions.removalImpact, selectedSessionId && canWrite ? { sessionId: selectedSessionId } : "skip");
+  const gapSummary = useQuery(api.representationGaps.summary, society && loaded && can("documents:read") ? { societyId: society._id } : "skip");
 
   const createSession = useMutation(api.importSessions.createFromBundle);
   const importMember = useMutation(api.members.importMember);
@@ -152,10 +141,6 @@ export function ImportSessionsPage() {
   const [importFileName, setImportFileName] = useState("");
   const [importOwnershipReviewed, setImportOwnershipReviewed] = useState(false);
   const [importCreating, setImportCreating] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
-  const [kindFilter, setKindFilter] = useState("all");
-  const [targetFilter, setTargetFilter] = useState("all");
-  const [searchText, setSearchText] = useState("");
   const [recordForm, setRecordForm] = useState<any | null>(null);
   const [paperlessQuery, setPaperlessQuery] = useState("meeting minutes");
   const [paperlessLimit, setPaperlessLimit] = useState(100);
@@ -181,70 +166,29 @@ export function ImportSessionsPage() {
   }, [importText, society?._id]);
 
   useEffect(() => {
-    if (!requestedSessionId) return;
-    setSelectedId(requestedSessionId);
-    setSessionTrack("active");
-  }, [requestedSessionId]);
-
-  useEffect(() => {
-    if (!requestedSessionId || sessions === undefined) return;
-    const requested = sessions.find((session: any) => session._id === requestedSessionId);
-    if (requested && !isActiveImportSession(requested)) {
-      setSessionTrack("completed");
-    }
-  }, [requestedSessionId, sessions]);
+    if (!selectedSessionId || sessions === undefined) return;
+    const requested = sessions.find((session: any) => session._id === selectedSessionId);
+    if (requested) setSessionTrack(isActiveImportSession(requested) ? "active" : "completed");
+  }, [selectedSessionId, sessions]);
 
   const records = detail?.records ?? [];
   const session = detail?.session ?? null;
-  const kinds = useMemo<string[]>(() => {
-    return Array.from(new Set<string>(records.map((record: any) => String(record.recordKind)))).sort();
-  }, [records]);
-  const targets = useMemo<string[]>(() => {
-    return Array.from(new Set<string>(records.map((record: any) => String(record.targetModule)))).sort();
-  }, [records]);
-  const linkGapCount = useMemo(() => {
-    return records.filter((record: any) => hasOpenLinkInsight(record)).length;
-  }, [records]);
-  const filteredRecords = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
-    return records.filter((record: any) => {
-      const statusMatch =
-        statusFilter === "all" ||
-        (statusFilter === "risk"
-          ? (record.riskFlags ?? []).length > 0
-          : statusFilter === "links"
-            ? hasOpenLinkInsight(record)
-            : record.status === statusFilter);
-      const kindMatch = kindFilter === "all" || record.recordKind === kindFilter;
-      const targetMatch = targetFilter === "all" || record.targetModule === targetFilter;
-      const searchMatch = !query || [
-        record.title,
-        record.description,
-        record.targetModule,
-        record.recordKind,
-        record.payload?.insurer,
-        record.payload?.broker,
-        record.payload?.policyNumber,
-        record.payload?.policySeriesKey,
-        record.payload?.policyTermLabel,
-        record.payload?.versionType,
-        record.payload?.importReadiness,
-        record.payload?.visualReviewStatus,
-        ...(record.sourceExternalIds ?? []),
-        ...(record.riskFlags ?? []),
-        ...(Array.isArray(record.payload?.tags) ? record.payload.tags : []),
-      ].join(" ").toLowerCase().includes(query);
-      return statusMatch && kindMatch && targetMatch && searchMatch;
-    });
-  }, [records, statusFilter, kindFilter, targetFilter, searchText]);
+  const approvedToApply = useMemo(() => records.filter((record: any) => record.status === "Approved" && !Object.values(record.importedTargets ?? {}).some(Boolean)).length, [records]);
+  const sessionGaps = useMemo(() => (gapSummary?.byImportSession ?? []).find((row: any) => String(row.importSessionId) === String(selectedSessionId)), [gapSummary, selectedSessionId]);
 
   const [applyScope, setApplyScope] = useState("visible");
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
+  const pickSession = (sessionId: string | null) => setFilters({ ...filters, sessionId: sessionId ?? undefined, page: 0 });
+
   const createFromJson = async () => {
     if (!canWrite || importCreating) return;
+    // Explain why a bundle cannot be staged instead of silently disabling the button.
+    if (!importPreview?.data) { setImportError(importPreview?.error || "Paste or upload a JSON bundle first."); return; }
+    if (importPreview.data.mixedOrganizations) { setImportError("This bundle declares multiple organizations. Split it by organization before importing."); return; }
+    if (importPreview.data.needsReview && !importOwnershipReviewed) { setImportError("Confirm that you reviewed the source ownership before staging these records."); return; }
     setImportCreating(true);
     try {
       const parsed = prepareImportBundle(JSON.parse(importText), society, importOwnershipReviewed, importFileName || undefined);
@@ -253,7 +197,7 @@ export function ImportSessionsPage() {
         name: createName,
         bundle: parsed,
       });
-      setSelectedId(sessionId);
+      pickSession(sessionId);
       setImportText("");
       setImportFileName("");
       setImportError("");
@@ -283,107 +227,92 @@ export function ImportSessionsPage() {
     }
   };
 
-  const setRecordStatus = async (record: any, status: "Pending" | "Approved" | "Rejected") => {
+  const editRecord = async (recordId: string) => {
     try {
-      await updateRecord({ recordId: record._id, status });
-      toast.success(`Record ${status.toLowerCase()}`, record.title);
+      const record = await convex.query(api.importSessions.getRecord, { recordId });
+      if (record) setRecordForm(formFromRecord(record));
     } catch (error: any) {
-      toast.error(error?.message ?? "Could not update import record");
-    }
-  };
-
-  const bulkStatus = async (status: "Approved" | "Rejected" | "Pending") => {
-    if (!session) return;
-    try {
-      const result = await bulkSetStatus({
-        sessionId: session._id,
-        status,
-        recordIds: filteredRecords.map((record: any) => record._id),
-      });
-      toast.success(`${result.updated} records updated`, status);
-    } catch (error: any) {
-      toast.error(error?.message ?? "Could not bulk-update import records");
+      toast.error(error?.message ?? "Could not open the import record");
     }
   };
 
   const approveImportReadyInsurance = async () => {
     if (!session) return;
-    const insuranceRecords = records.filter(isImportReadyInsuranceRecord);
+    const insuranceRecords = records.filter(isImportReadyInsuranceRecord).filter((record: any) => record.status !== "Approved");
+    if (!insuranceRecords.length) return;
+    const ok = await confirm({
+      title: `Approve ${insuranceRecords.length} import-ready insurance record${insuranceRecords.length === 1 ? "" : "s"}?`,
+      message: `${insuranceRecords.length} insurance polic${insuranceRecords.length === 1 ? "y" : "ies"} in "${session.name}" will be marked approved. Nothing is published to Insurance until you apply sections.`,
+      confirmLabel: `Approve ${insuranceRecords.length}`,
+    });
+    if (!ok) return;
     try {
       const result = await bulkSetStatus({
         sessionId: session._id,
         status: "Approved",
         recordIds: insuranceRecords.map((record: any) => record._id),
       });
-      setKindFilter("insurancePolicy");
-      setStatusFilter("Approved");
       toast.success(`${result.updated} insurance records approved`, "Apply sections when ready to publish them to Insurance");
     } catch (error: any) {
       toast.error(error?.message ?? "Could not approve insurance records");
     }
   };
 
-  const applyRecords = applyScope === "all" ? records : filteredRecords;
-  const applyRecordIds = applyRecords.map((row: any) => row._id);
   const canPromote = (...permissions: string[]) => canWrite && permissions.every(permission => can(permission as any));
-  const runOrgHistoryApply = async () => {
+  const runApply = async (label: string, action: () => Promise<string>) => {
     if (!session) return;
     try {
-      const result = await applyToOrgHistory({ sessionId: session._id, recordIds: applyRecordIds });
-      toast.success("Approved records applied", `${result.sources} source records, ${result.items} history records`);
+      const summary = await action();
+      toast.success(label, summary);
     } catch (error: any) {
-      toast.error(error?.message ?? "Could not apply org history imports");
+      toast.error(error?.message ?? `Could not complete: ${label.toLowerCase()}`);
     }
   };
-
-  const runMeetingApply = async () => {
-    if (!session) return;
-    try {
-      const result = await applyMeetings({ sessionId: session._id, recordIds: applyRecordIds });
-      toast.success("Meeting drafts created", `${result.meetings} meetings, ${result.motions} motions${result.existing ? `, ${result.existing} already existed` : ""}`);
-    } catch (error: any) {
-      toast.error(error?.message ?? "Could not create meeting drafts");
-    }
-  };
-
-  const runMeetingBackfill = async () => {
-    if (!session) return;
-    try {
-      const result = await backfillMeetings({ sessionId: session._id });
-      toast.success("Meeting references refreshed", `${result.meetings} meetings, ${result.minutes} minutes, ${result.documents} source links`);
-    } catch (error: any) {
-      toast.error(error?.message ?? "Could not refresh meeting references");
-    }
-  };
-
-  const runDocumentApply = async () => {
-    if (!session) return;
-    try {
-      const result = await applyDocuments({ sessionId: session._id, recordIds: applyRecordIds });
-      toast.success("Document candidates created", `${result.documents} metadata records`);
-    } catch (error: any) {
-      toast.error(error?.message ?? "Could not create document candidates");
-    }
-  };
-
-  const runSectionApply = async () => {
-    if (!session) return;
-    try {
-      const result = await applySections({ sessionId: session._id, recordIds: applyRecordIds });
-      const byKind = Object.entries(result.byKind ?? {})
-        .map(([kind, count]) => `${count} ${kind}`)
-        .join(", ");
-      toast.success("Section records applied", byKind || `${result.total} records`);
-    } catch (error: any) {
-      toast.error(error?.message ?? "Could not apply section imports");
-    }
-  };
+  const runOrgHistoryApply = () => runApply("Approved records applied to history", async () => {
+    const result = await applyToOrgHistory({ sessionId: session._id });
+    return `${result.sources} source records, ${result.items} history records`;
+  });
+  const runMeetingApply = () => runApply("Meeting drafts created", async () => {
+    const result = await applyMeetings({ sessionId: session._id });
+    return `${result.meetings} meetings, ${result.motions} motions${result.existing ? `, ${result.existing} already existed` : ""}`;
+  });
+  const runMeetingBackfill = () => runApply("Meeting references refreshed", async () => {
+    const result = await backfillMeetings({ sessionId: session._id });
+    return `${result.meetings} meetings, ${result.minutes} minutes, ${result.documents} source links`;
+  });
+  const runDocumentApply = () => runApply("Documents created from approved candidates", async () => {
+    const result = await applyDocuments({ sessionId: session._id });
+    return result.documents
+      ? `${result.documents} document record${result.documents === 1 ? "" : "s"} created`
+      : "No approved document candidates were waiting to be created.";
+  });
+  const runSectionApply = () => runApply("Section records applied", async () => {
+    const result = await applySections({ sessionId: session._id });
+    const byKind = Object.entries(result.byKind ?? {})
+      .map(([kind, count]) => `${count} ${importKindLabel(kind)}`)
+      .join(", ");
+    return byKind || `${result.total} records`;
+  });
 
   const deleteSession = async () => {
     if (!session) return;
+    const impact = removalImpact ?? { records: records.length, pending: 0, approved: 0, applied: 0, linkedDocuments: 0, gaps: 0 };
+    const parts = [
+      `${impact.records} staged record${impact.records === 1 ? "" : "s"} (${impact.pending} pending, ${impact.approved} approved) will be deleted`,
+      impact.applied ? `${impact.applied} already applied record${impact.applied === 1 ? " stays" : "s stay"} in the app` : null,
+      impact.linkedDocuments ? `${impact.linkedDocuments} document${impact.linkedDocuments === 1 ? "" : "s"} created from this session will be tagged "import-session-removed" and keep the session name as provenance` : null,
+      impact.gaps ? `${impact.gaps} unsupported-detail record${impact.gaps === 1 ? "" : "s"} will be unlinked from it` : null,
+    ].filter(Boolean);
+    const ok = await confirm({
+      title: `Delete import session "${session.name}"?`,
+      message: `${parts.join(". ")}. This cannot be undone.`,
+      confirmLabel: `Delete session and ${impact.records} record${impact.records === 1 ? "" : "s"}`,
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       await removeSession({ sessionId: session._id });
-      setSelectedId(null);
+      pickSession(null);
       toast.success("Import session removed", session.name);
     } catch (error: any) {
       toast.error(error?.message ?? "Could not remove import session");
@@ -399,7 +328,7 @@ export function ImportSessionsPage() {
         query: paperlessQuery.trim() || undefined,
         maxDocuments: paperlessLimit,
       });
-      setSelectedId(result.sessionId);
+      pickSession(result.sessionId);
       toast.success("Paperless meeting scan staged", `${result.candidateDocuments} candidate docs, ${result.meetingMinutes} meeting records`);
     } catch (error: any) {
       toast.error(error?.message ?? "Paperless meeting scan failed");
@@ -417,7 +346,7 @@ export function ImportSessionsPage() {
         query: discoveryQuery.trim() || undefined,
         maxDocuments: discoveryLimit,
       });
-      setSelectedId(result.sessionId);
+      pickSession(result.sessionId);
       toast.success("Paperless discovery staged", `${result.candidateDocuments} candidates from ${result.scannedDocuments} documents`);
     } catch (error: any) {
       toast.error(error?.message ?? "Paperless discovery scan failed");
@@ -435,7 +364,7 @@ export function ImportSessionsPage() {
         query: transposeQuery.trim() || undefined,
         maxDocuments: transposeLimit,
       });
-      setSelectedId(result.sessionId);
+      pickSession(result.sessionId);
       toast.success("Paperless transposition staged", `${result.sources} sources from ${result.scannedDocuments} documents`);
     } catch (error: any) {
       toast.error(error?.message ?? "Paperless transposition failed");
@@ -444,13 +373,15 @@ export function ImportSessionsPage() {
     }
   };
 
+  const selectedLabel = selectedSessionId ? sessionLabels.get(selectedSessionId) : undefined;
+
   return (
     <div className="page import-sessions-page">
       <PageHeader
         title="Import sessions"
         icon={<FileJson size={16} />}
         iconColor="purple"
-        subtitle="Stage reviewed source bundles, review each item, then apply approved records into app modules."
+        subtitle="Review staged records from every import in one queue, then apply approved records into the app session by session."
         actions={
           <>
           <RepairImportedMinutesAction societyId={society._id} />
@@ -504,90 +435,29 @@ export function ImportSessionsPage() {
         }}
       />
 
-      <div className="stat-grid import-sessions-page__stats">
-        <Stat label="Active" value={String(activeSessions.length)} icon={<ListChecks size={14} />} sub="pending or not yet applied" />
-        <Stat label="Completed" value={String(completedSessions.length)} icon={<Archive size={14} />} sub="hidden from active track" />
-        <Stat label="Candidates" value={String(session?.summary?.total ?? 0)} icon={<ListChecks size={14} />} sub="records in selected session" />
-        <Stat label="Review flags" value={String(session?.summary?.riskCount ?? 0)} icon={<ShieldAlert size={14} />} sub="restricted, OCR, or cleanup risks" />
-        <Stat label="Link gaps" value={String(linkGapCount)} icon={<Link2 size={14} />} sub="records with likely missing links" />
-      </div>
-
       {sourceFilter && (
         <InspectorNote tone="info" title="Filtered import sessions">
           Showing sessions matching <span className="mono">{sourceFilter}</span>.
         </InspectorNote>
       )}
 
-      <div className="import-scan-grid">
-        <div className="card import-scan-card">
-          <div className="card__head import-scan-card__head">
-            <div>
-              <h2 className="card__title">Paperless meeting scan</h2>
-              <p className="card__subtitle">Creates a review session from live Paperless meeting-minute documents.</p>
-            </div>
-            <button className="btn-action btn-action--primary" disabled={!(canWrite && loaded && can("documents:write")) || (paperlessBusy)} onClick={runPaperlessMeetingScan}>
-              <FileText size={12} /> {paperlessBusy ? "Scanning..." : "Scan minutes"}
-            </button>
-          </div>
-          <div className="card__body import-scan-card__fields">
-            <Field label="Search query">
-              <input className="input" value={paperlessQuery} onChange={(event) => setPaperlessQuery(event.target.value)} />
-            </Field>
-            <Field label="Max documents" hint="Caps how many Paperless-ngx documents this pass will fetch and review.">
-              <input className="input" type="number" min={1} max={1179} value={paperlessLimit} onChange={(event) => setPaperlessLimit(Number(event.target.value) || 1)} />
-            </Field>
-          </div>
-        </div>
-
-        <div className="card import-scan-card">
-          <div className="card__head import-scan-card__head">
-            <div>
-              <h2 className="card__title">Paperless expanded discovery</h2>
-              <p className="card__subtitle">Creates a review session across app sections with source evidence, risk flags, and target modules.</p>
-            </div>
-            <button className="btn-action btn-action--primary" disabled={!(canWrite && loaded && can("documents:write")) || (discoveryBusy)} onClick={runPaperlessDiscoveryScan}>
-              <Archive size={12} /> {discoveryBusy ? "Scanning..." : "Scan sections"}
-            </button>
-          </div>
-          <div className="card__body import-scan-card__fields">
-            <Field label="Search query" hint="Leave blank to scan broadly across Paperless.">
-              <input className="input" value={discoveryQuery} onChange={(event) => setDiscoveryQuery(event.target.value)} placeholder="budget, annual report, policy..." />
-            </Field>
-            <Field label="Max documents" hint="Caps how many Paperless-ngx documents this pass will fetch and review.">
-              <input className="input" type="number" min={1} max={1179} value={discoveryLimit} onChange={(event) => setDiscoveryLimit(Number(event.target.value) || 1)} />
-            </Field>
-          </div>
-        </div>
-
-        <div className="card import-scan-card">
-          <div className="card__head import-scan-card__head">
-            <div>
-              <h2 className="card__title">Paperless transposition</h2>
-              <p className="card__subtitle">Reads Paperless OCR into section-native review records for filings, deadlines, publications, insurance, grants, records, HR, volunteers, and privacy training.</p>
-            </div>
-            <button className="btn-action btn-action--primary" disabled={!(canWrite && loaded && can("documents:write")) || (transposeBusy)} onClick={runPaperlessTransposeScan}>
-              <Archive size={12} /> {transposeBusy ? "Transposing..." : "Transpose records"}
-            </button>
-          </div>
-          <div className="card__body import-scan-card__fields">
-            <Field label="Search query" hint="Leave blank to transpose broadly across Paperless OCR.">
-              <input className="input" value={transposeQuery} onChange={(event) => setTransposeQuery(event.target.value)} placeholder="insurance, filings, issue, grant..." />
-            </Field>
-            <Field label="Max documents" hint="Caps how many Paperless-ngx documents this pass will fetch and review.">
-              <input className="input" type="number" min={1} max={1179} value={transposeLimit} onChange={(event) => setTransposeLimit(Number(event.target.value) || 1)} />
-            </Field>
-          </div>
-        </div>
-      </div>
+      <ImportReviewQueue
+        societyId={society._id}
+        canWrite={canWrite}
+        filters={filters}
+        onFiltersChange={setFilters}
+        onEdit={(recordId) => { void editRecord(recordId); }}
+        onSessionPicked={(sessionId) => pickSession(sessionId)}
+      />
 
       <div className="import-review-layout">
-        <div className="card">
+        <div className="card import-sessions-card">
           <div className="card__head">
             <div>
               <h2 className="card__title">Sessions</h2>
               <p className="card__subtitle">
                 {sessionTrack === "active"
-                  ? "Batches that still need review or apply steps."
+                  ? "Batches that still need review or apply steps. Pick one to filter the queue and apply it."
                   : "Finished, rejected, or empty batches kept for audit trail."}
               </p>
             </div>
@@ -595,36 +465,50 @@ export function ImportSessionsPage() {
           <div className="card__body import-session-track">
             <Segmented<SessionTrack>
               value={sessionTrack}
-              onChange={(next) => {
-                setSessionTrack(next);
-                setSelectedId(null);
-              }}
+              onChange={(next) => setSessionTrack(next)}
               items={[
                 { id: "active", label: `Active (${activeSessions.length})` },
                 { id: "completed", label: `Completed (${completedSessions.length})` },
               ]}
             />
+            <Select
+              className="import-session-picker"
+              aria-label="Import session"
+              value={selectedSessionId ?? ""}
+              searchable
+              onChange={(value) => pickSession(value || null)}
+              options={[
+                { value: "", label: "All sessions" },
+                ...visibleSessions.map((item: any) => ({ value: item._id, label: `${sessionLabels.get(String(item._id))?.full ?? item.name} · ${item.summary?.byStatus?.Pending ?? 0} pending` })),
+              ]}
+            />
           </div>
-          <div className="card__body col" style={{ gap: 8 }}>
-            {visibleSessions.map((item: any) => (
-              <button
-                key={item._id}
-                className={`import-session-row${item._id === activeSessionId ? " is-active" : ""}`}
-                onClick={() => setSelectedId(item._id)}
-              >
-                <span>
-                  <strong>{item.name}</strong>
-                  <span className="muted">{item.sourceSystem}</span>
-                </span>
-                <span className="import-session-row__counts">
-                  <Badge tone="info">{item.summary.total}</Badge>
-                  {(item.summary.byStatus?.Pending ?? 0) > 0 && <Badge tone="warn">{item.summary.byStatus.Pending} pending</Badge>}
-                  {(item.summary.approvedUnapplied ?? 0) > 0 && <Badge tone="info">{item.summary.approvedUnapplied} to apply</Badge>}
-                  {isCompletedImportSession(item) && <Badge tone="success">Complete</Badge>}
-                  {(item.summary.riskCount ?? 0) > 0 && <Badge tone="warn">{item.summary.riskCount} flags</Badge>}
-                </span>
-              </button>
-            ))}
+          <div className="card__body import-session-list" role="list">
+            {visibleSessions.map((item: any) => {
+              const label = sessionLabels.get(String(item._id));
+              const pending = item.summary?.byStatus?.Pending ?? 0;
+              return (
+                <button
+                  key={item._id}
+                  role="listitem"
+                  className={`import-session-row${item._id === selectedSessionId ? " is-active" : ""}`}
+                  aria-pressed={item._id === selectedSessionId}
+                  title={item.name}
+                  onClick={() => pickSession(item._id === selectedSessionId ? null : item._id)}
+                >
+                  <span className="import-session-row__name">
+                    <strong>{label?.primary ?? item.name}</strong>
+                    <span className="muted">{[label?.sharedPrefix, item.sourceSystem].filter(Boolean).join(" · ")}</span>
+                  </span>
+                  <span className="import-session-row__counts">
+                    {pending > 0 && <Badge tone="warn">{pending} pending</Badge>}
+                    {(item.summary?.approvedUnapplied ?? 0) > 0 && <Badge tone="info">{item.summary.approvedUnapplied} to apply</Badge>}
+                    {!isActiveImportSession(item) && <Badge tone="success">Complete</Badge>}
+                    <span className="muted">{item.summary?.total ?? 0} total</span>
+                  </span>
+                </button>
+              );
+            })}
             {sessions?.length === 0 && (
               <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
                 No import sessions yet.
@@ -642,167 +526,142 @@ export function ImportSessionsPage() {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card import-session-panel">
           <div className="card__head import-review-head">
             <div className="import-review-heading">
-              <h2 className="card__title">{session?.name ?? "No session selected"}</h2>
-              {session && <p className="card__subtitle">{session.sourceSystem}</p>}
+              <h2 className="card__title">{session?.name ?? (selectedSessionId ? "Loading session…" : "No session selected")}</h2>
+              {session && <p className="card__subtitle">{[session.sourceSystem, session.createdAtISO ? `staged ${formatDate(session.createdAtISO)}` : null, selectedLabel && selectedLabel.primary !== session.name ? `shown as “${selectedLabel.primary}”` : null].filter(Boolean).join(" · ")}</p>}
             </div>
             {session && (
               <div className="import-review-actions">
-                <Select value={applyScope} onChange={setApplyScope} options={[{ value: "visible", label: `Apply visible rows (${filteredRecords.length})` }, { value: "all", label: `Apply whole session (${records.length})` }]} />
-                <button className="btn-action" onClick={runOrgHistoryApply} disabled={!canPromote("society:write", "documents:write")}>
+                <button className="btn-action" onClick={() => { void runOrgHistoryApply(); }} disabled={!canPromote("society:write", "documents:write")}>
                   <History size={12} /> Apply history
                 </button>
-                <button className="btn-action" onClick={runMeetingApply} disabled={!canPromote("meetings:write", "minutes:write", "motions:write", "documents:write")}>
+                <button className="btn-action" onClick={() => { void runMeetingApply(); }} disabled={!canPromote("meetings:write", "minutes:write", "motions:write", "documents:write")}>
                   <FileText size={12} /> Create minutes
                 </button>
-                <button className="btn-action" onClick={runMeetingBackfill} disabled={!canWrite}>
+                <button className="btn-action" onClick={() => { void runMeetingBackfill(); }} disabled={!canWrite}>
                   <History size={12} /> Refresh links
                 </button>
-                <button className="btn-action" onClick={runDocumentApply} disabled={!canPromote("documents:write")}>
+                <button className="btn-action" onClick={() => { void runDocumentApply(); }} disabled={!canPromote("documents:write")}>
                   <FolderOpen size={12} /> Create docs
                 </button>
-                <button className="btn-action" onClick={runSectionApply} disabled={!canPromote("documents:write") || !applyRecords.filter((row: any) => row.status === "Approved").every((row: any) => can(importSectionPermission(row.recordKind) as any))}>
+                <button className="btn-action" onClick={() => { void runSectionApply(); }} disabled={!canPromote("documents:write") || !records.filter((row: any) => row.status === "Approved").every((row: any) => can(importSectionPermission(row.recordKind) as any))}>
                   <Archive size={12} /> Apply sections
                 </button>
-                <button className="btn-action" onClick={deleteSession} disabled={!canWrite}>
-                  <Trash2 size={12} /> Delete
+                <button className="btn-action btn-action--danger" onClick={() => { void deleteSession(); }} disabled={!canWrite}>
+                  <Trash2 size={12} /> Delete session…
                 </button>
               </div>
             )}
           </div>
           {session ? (
-            <>
-              <div className="card__body col" style={{ gap: 12 }}>
-                {session.qualitySummary && (
-                  <InspectorNote title="Quality gates">
-                    {session.qualitySummary.importBlockers ?? 0} import blockers, {session.qualitySummary.badDateDocuments ?? 0} bad-date documents, and {session.qualitySummary.sensitiveDocuments ?? 0} sensitive documents were reported in the source bundle.
-                  </InspectorNote>
-                )}
-                <InsuranceImportReviewPanel
-                  records={records}
-                  onShow={() => {
-                    setKindFilter("insurancePolicy");
-                    setStatusFilter("all");
-                    setSearchText("");
-                  }}
-                  onApproveReady={approveImportReadyInsurance}
-                />
-                <div className="import-review-filters">
-                  <Segmented value={statusFilter} onChange={setStatusFilter} items={STATUS_ITEMS} />
-                  <Select
-                    className="import-review-filter-select"
-                    value={kindFilter}
-                    onChange={(value) => setKindFilter(value)}
-                    options={[
-                      { value: "all", label: "All record types" },
-                      ...kinds.map((kind) => ({ value: kind, label: KIND_LABELS[kind] ?? kind })),
-                    ]}
-                  />
-                  <Select
-                    className="import-review-filter-select"
-                    value={targetFilter}
-                    onChange={(value) => setTargetFilter(value)}
-                    options={[
-                      { value: "all", label: "All targets" },
-                      ...targets.map((target) => ({ value: target, label: target })),
-                    ]}
-                  />
-                  <input
-                    className="input import-review-search"
-                    value={searchText}
-                    onChange={(event) => setSearchText(event.target.value)}
-                    placeholder="Search title, source, tag..."
-                  />
-                  <div className="import-review-bulk-actions">
-                    <button className="btn-action" onClick={() => bulkStatus("Approved")} disabled={!canWrite}>
-                      <Check size={12} /> Approve visible
-                    </button>
-                    <button className="btn-action" onClick={() => bulkStatus("Rejected")} disabled={!canWrite}>
-                      <X size={12} /> Reject visible
-                    </button>
+            <div className="card__body col" style={{ gap: 12 }}>
+              <div className="stat-grid import-sessions-page__stats">
+                <Stat label="Candidates" value={String(session.summary?.total ?? 0)} icon={<ListChecks size={14} />} sub={`${session.summary?.byStatus?.Pending ?? 0} pending`} />
+                <Stat label="Approved, not applied" value={String(approvedToApply)} icon={<Check size={14} />} sub="run an apply step above" />
+                <Stat label="Applied" value={String((session.summary?.documentsApplied ?? 0) + (session.summary?.sectionsApplied ?? 0) + (session.summary?.meetingsApplied ?? 0) + (session.summary?.orgHistoryApplied ?? 0))} icon={<Archive size={14} />} sub="documents, sections, minutes, history" />
+                <Stat label="Unsupported" value={sessionGaps ? String(sessionGaps.count) : "0"} icon={<FileWarning size={14} />} sub={sessionGaps ? `details · ${sessionGaps.open ?? 0} open` : "no details recorded"} />
+              </div>
+              {sessionGaps && Object.keys(sessionGaps.infoTypes ?? {}).length > 0 && (
+                <InspectorNote tone="warn" title="Source details Societyer could not represent">
+                  <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                    {Object.entries(sessionGaps.infoTypes as Record<string, number>).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([label, count]) => <Badge key={label}>{label} · {count}</Badge>)}
                   </div>
-                </div>
-              </div>
-
-              <div className="table-wrap">
-                <table className="table import-review-table">
-                  <thead>
-                    <tr>
-                      <th>Record</th>
-                      <th>Type</th>
-                      <th>Target</th>
-                      <th>Status</th>
-                      <th>Flags</th>
-                      <th>Link review</th>
-                      <th>Applied</th>
-                      <th aria-label="Actions" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRecords.map((record: any) => (
-                      <tr key={record._id}>
-                        <td>
-                          <strong>{record.title}</strong>
-                          {record.description && <div className="muted clamp-2">{record.description}</div>}
-                          {record.recordKind === "insurancePolicy" && <InsuranceRecordSummary record={record} />}
-                          {(record.sourceExternalIds ?? []).length > 0 && (
-                            <div className="mono muted" style={{ fontSize: 11 }}>
-                              {record.sourceExternalIds.slice(0, 3).join(", ")}
-                              {record.sourceExternalIds.length > 3 ? ` +${record.sourceExternalIds.length - 3}` : ""}
-                            </div>
-                          )}
-                        </td>
-                        <td><Badge tone="info">{KIND_LABELS[record.recordKind] ?? record.recordKind}</Badge></td>
-                        <td>{record.targetModule}</td>
-                        <td><StatusBadge status={record.status} /></td>
-                        <td>
-                          <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
-                            <ConfidenceBadge confidence={record.confidence} />
-                            {(record.riskFlags ?? []).map((flag: string) => (
-                              <Badge key={flag} tone={flag === "restricted" ? "danger" : "warn"}>{flag}</Badge>
-                            ))}
-                          </div>
-                        </td>
-                        <td><LinkReviewBadges record={record} /></td>
-                        <td>
-                          <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
-                            {record.importedTargets?.orgHistory && <Badge tone="success">History</Badge>}
-                            {record.importedTargets?.meetings && <Badge tone="success">Minutes</Badge>}
-                            {record.importedTargets?.documents && <Badge tone="success">Documents</Badge>}
-                            {record.importedTargets?.sections && <Badge tone="success">Sections</Badge>}
-                            {!record.importedTargets?.orgHistory && !record.importedTargets?.meetings && !record.importedTargets?.documents && !record.importedTargets?.sections && <span className="muted">-</span>}
-                          </div>
-                        </td>
-                        <td>
-                          <div className="table__actions-inner" style={{ opacity: 1, visibility: "visible" }}>
-                            <button className="btn btn--ghost btn--icon" title="Approve" onClick={() => setRecordStatus(record, "Approved")} disabled={!canWrite}>
-                              <Check size={14} />
-                            </button>
-                            <button className="btn btn--ghost btn--icon" title="Reject" onClick={() => setRecordStatus(record, "Rejected")} disabled={!canWrite}>
-                              <X size={14} />
-                            </button>
-                            <button className="btn btn--ghost btn--icon" title="Edit" onClick={() => setRecordForm(formFromRecord(record))} disabled={!canWrite}>
-                              <Pencil size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+                  <Link to="/app/coverage?tab=system">Review in Coverage and gaps</Link>
+                </InspectorNote>
+              )}
+              {session.qualitySummary && (
+                <InspectorNote title="Quality gates">
+                  {session.qualitySummary.importBlockers ?? 0} import blockers, {session.qualitySummary.badDateDocuments ?? 0} bad-date documents, and {session.qualitySummary.sensitiveDocuments ?? 0} sensitive documents were reported in the source bundle.
+                </InspectorNote>
+              )}
+              <InsuranceImportReviewPanel
+                records={records}
+                onShow={() => setFilters({ ...filters, recordKind: "insurancePolicy", status: "all", search: undefined, page: 0 })}
+                onApproveReady={() => { void approveImportReadyInsurance(); }}
+              />
+              <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>
+                Apply steps act on this session's approved records only; pending and rejected records are never applied.
+              </p>
+            </div>
           ) : (
             <div className="card__body">
-              <InspectorNote title="Create a staged import">
-                Paste an org-history import bundle or section-candidates bundle to start a review session.
+              <InspectorNote title="Pick a session to apply it">
+                The queue above reviews every session at once. Choose a session in the list to see its counts and unsupported details, and to create documents, minutes or section records from its approved candidates. To stage new records, use New session with a JSON bundle.
               </InspectorNote>
             </div>
           )}
         </div>
       </div>
+
+      <details className="card import-connectors">
+        <summary className="card__head">
+          <span className="card__title"><ShieldAlert size={14} /> Stage records from Paperless-ngx</span>
+          <span className="card__subtitle">Scan a connected Paperless server into a new review session.</span>
+        </summary>
+        <div className="import-scan-grid">
+          <div className="card import-scan-card">
+            <div className="card__head import-scan-card__head">
+              <div>
+                <h2 className="card__title">Paperless meeting scan</h2>
+                <p className="card__subtitle">Creates a review session from live Paperless meeting-minute documents.</p>
+              </div>
+              <button className="btn-action btn-action--primary" disabled={!(canWrite && loaded && can("documents:write")) || (paperlessBusy)} onClick={runPaperlessMeetingScan}>
+                <FileText size={12} /> {paperlessBusy ? "Scanning..." : "Scan minutes"}
+              </button>
+            </div>
+            <div className="card__body import-scan-card__fields">
+              <Field label="Search query">
+                <input className="input" value={paperlessQuery} onChange={(event) => setPaperlessQuery(event.target.value)} />
+              </Field>
+              <Field label="Max documents" hint="Caps how many Paperless-ngx documents this pass will fetch and review.">
+                <input className="input" type="number" min={1} max={1179} value={paperlessLimit} onChange={(event) => setPaperlessLimit(Number(event.target.value) || 1)} />
+              </Field>
+            </div>
+          </div>
+
+          <div className="card import-scan-card">
+            <div className="card__head import-scan-card__head">
+              <div>
+                <h2 className="card__title">Paperless expanded discovery</h2>
+                <p className="card__subtitle">Creates a review session across app sections with source evidence, risk flags, and target modules.</p>
+              </div>
+              <button className="btn-action btn-action--primary" disabled={!(canWrite && loaded && can("documents:write")) || (discoveryBusy)} onClick={runPaperlessDiscoveryScan}>
+                <Archive size={12} /> {discoveryBusy ? "Scanning..." : "Scan sections"}
+              </button>
+            </div>
+            <div className="card__body import-scan-card__fields">
+              <Field label="Search query" hint="Leave blank to scan broadly across Paperless.">
+                <input className="input" value={discoveryQuery} onChange={(event) => setDiscoveryQuery(event.target.value)} placeholder="budget, annual report, policy..." />
+              </Field>
+              <Field label="Max documents" hint="Caps how many Paperless-ngx documents this pass will fetch and review.">
+                <input className="input" type="number" min={1} max={1179} value={discoveryLimit} onChange={(event) => setDiscoveryLimit(Number(event.target.value) || 1)} />
+              </Field>
+            </div>
+          </div>
+
+          <div className="card import-scan-card">
+            <div className="card__head import-scan-card__head">
+              <div>
+                <h2 className="card__title">Paperless transposition</h2>
+                <p className="card__subtitle">Reads Paperless OCR into section-native review records for filings, deadlines, publications, insurance, grants, records, HR, volunteers, and privacy training.</p>
+              </div>
+              <button className="btn-action btn-action--primary" disabled={!(canWrite && loaded && can("documents:write")) || (transposeBusy)} onClick={runPaperlessTransposeScan}>
+                <Archive size={12} /> {transposeBusy ? "Transposing..." : "Transpose records"}
+              </button>
+            </div>
+            <div className="card__body import-scan-card__fields">
+              <Field label="Search query" hint="Leave blank to transpose broadly across Paperless OCR.">
+                <input className="input" value={transposeQuery} onChange={(event) => setTransposeQuery(event.target.value)} placeholder="insurance, filings, issue, grant..." />
+              </Field>
+              <Field label="Max documents" hint="Caps how many Paperless-ngx documents this pass will fetch and review.">
+                <input className="input" type="number" min={1} max={1179} value={transposeLimit} onChange={(event) => setTransposeLimit(Number(event.target.value) || 1)} />
+              </Field>
+            </div>
+          </div>
+        </div>
+      </details>
 
       <Drawer
         open={createOpen}
@@ -811,7 +670,7 @@ export function ImportSessionsPage() {
         footer={
           <>
             <button className="btn" onClick={() => setCreateOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={createFromJson} disabled={!canWrite || importCreating || !importPreview?.data || importPreview.data.mixedOrganizations || (importPreview.data.needsReview && !importOwnershipReviewed)}>
+            <button className="btn btn--accent" onClick={createFromJson} disabled={!canWrite || importCreating || !importText.trim()}>
               <Upload size={14} /> {importCreating ? "Creating..." : "Create session"}
             </button>
           </>
@@ -1019,22 +878,6 @@ function InsuranceRecordSummary({ record, compact = false }: { record: any; comp
   );
 }
 
-function LinkReviewBadges({ record }: { record: any }) {
-  const insights = linkInsightsFor(record);
-  if (!insights.length) return <span className="muted">-</span>;
-  const open = insights.filter((insight) => !insight.resolved);
-  const resolved = insights.length - open.length;
-  return (
-    <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
-      {open.slice(0, 2).map((insight) => (
-        <Badge key={insight.key} tone="warn">{insight.label}</Badge>
-      ))}
-      {open.length > 2 && <Badge tone="warn">+{open.length - 2}</Badge>}
-      {open.length === 0 && resolved > 0 && <Badge tone="success">Linked</Badge>}
-    </div>
-  );
-}
-
 function LinkReviewPanel({ record }: { record: any }) {
   const insights = linkInsightsFor(record);
   if (!insights.length) return null;
@@ -1059,10 +902,6 @@ function LinkReviewPanel({ record }: { record: any }) {
       </div>
     </InspectorNote>
   );
-}
-
-function hasOpenLinkInsight(record: any) {
-  return linkInsightsFor(record).some((insight) => !insight.resolved);
 }
 
 function linkInsightsFor(record: any): LinkInsight[] {
@@ -1431,18 +1270,6 @@ function numericInput(value: string) {
   return value === "" ? undefined : Number(value);
 }
 
-function StatusBadge({ status }: { status: string }) {
-  if (status === "Approved") return <Badge tone="success">Approved</Badge>;
-  if (status === "Rejected") return <Badge tone="danger">Rejected</Badge>;
-  return <Badge tone="warn">Pending</Badge>;
-}
-
-function ConfidenceBadge({ confidence }: { confidence?: string }) {
-  if (confidence === "High") return <Badge tone="success">High</Badge>;
-  if (confidence === "Medium") return <Badge tone="info">Medium</Badge>;
-  return <Badge tone="warn">Review</Badge>;
-}
-
 function firstString(...values: unknown[]) {
   for (const value of values) {
     if (typeof value === "string" && value.trim()) return value.trim();
@@ -1453,10 +1280,6 @@ function firstString(...values: unknown[]) {
 
 function uniqueStrings(values: unknown[]) {
   return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
-}
-
-function isCompletedImportSession(session: any) {
-  return !isActiveImportSession(session);
 }
 
 function Stat({ label, value, icon, sub }: { label: string; value: string; icon: ReactNode; sub: string }) {

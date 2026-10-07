@@ -47,7 +47,8 @@ export interface LocalRowStore {
 
 type Overlay = Map<TableName, Map<string, PortableDoc | null>>;
 
-const reusableEvaluator = evaluateQuery; // re-exported reference for clarity
+const reusableEvaluator = evaluateQuery;
+const ID_INDEXES = new WeakMap<object, Map<string, PortableDoc>>(); // re-exported reference for clarity
 
 class LocalQueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
   private readonly source: () => T[];
@@ -119,8 +120,58 @@ class LocalQueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
   }
 }
 
+/**
+ * Detach a row from the store with the exact semantics of
+ * `JSON.parse(JSON.stringify(value))` for JSON data (undefined object keys
+ * dropped, undefined/functions in arrays become null, non-finite numbers become
+ * null, `toJSON` honoured), without re-serialising strings. Strings are
+ * immutable, so sharing them is safe; the JSON round trip used to re-scan every
+ * string, which dominated large workspaces (a 10k-document table with long OCR
+ * text took seconds per query).
+ */
+export function jsonClone<T>(value: T): T {
+  return cloneJsonValue(value, true) as T;
+}
+
+function cloneJsonValue(value: any, topLevel = false): any {
+  if (value === null) return null;
+  switch (typeof value) {
+    case "string":
+    case "boolean":
+      return value;
+    case "number":
+      return Number.isFinite(value) ? (Object.is(value, -0) ? 0 : value) : null;
+    case "bigint":
+      throw new TypeError("Do not know how to serialize a BigInt");
+    case "undefined":
+    case "function":
+    case "symbol":
+      return topLevel ? undefined : SKIP;
+    default:
+      break;
+  }
+  if (typeof value.toJSON === "function") return cloneJsonValue(value.toJSON(), topLevel);
+  if (Array.isArray(value)) {
+    const out = new Array(value.length);
+    for (let i = 0; i < value.length; i++) {
+      const item = cloneJsonValue(value[i]);
+      out[i] = item === SKIP ? null : item;
+    }
+    return out;
+  }
+  if (value instanceof Number || value instanceof String || value instanceof Boolean) return cloneJsonValue(value.valueOf(), topLevel);
+  const out: Record<string, any> = {};
+  for (const key of Object.keys(value)) {
+    const item = cloneJsonValue(value[key]);
+    if (item !== SKIP) out[key] = item;
+  }
+  return out;
+}
+
+const SKIP = Symbol("skip");
+
 function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value));
+  return jsonClone(value);
 }
 
 export interface LocalStoreDbOptions {
@@ -161,16 +212,41 @@ export class LocalStoreDb implements PortableDbWriter {
     if (this.overlay) {
       for (const [table, over] of this.overlay) if (over.has(id)) return over.get(id) === null ? undefined : table;
     }
-    for (const table of this.store.tableNames()) {
-      if (this.store.rows(table).some((row) => row._id === id)) return table;
+    // Minted ids carry their table as a prefix ("documents_01M…"). Try that
+    // table first so a lookup does not scan every row of every table.
+    const separator = typeof id === "string" ? id.indexOf("_") : -1;
+    const tables = this.store.tableNames();
+    if (separator > 0) {
+      const guess = id.slice(0, separator);
+      if (tables.includes(guess) && this.baseIndex(guess).has(id)) return guess;
+    }
+    for (const table of tables) {
+      if (this.baseIndex(table).has(id)) return table;
     }
     return undefined;
+  }
+
+  /**
+   * Id index over a store table. Row stores replace a table's array on every
+   * write, so an index keyed by the array instance stays valid until the next
+   * write; stores that return a fresh array per call simply rebuild it.
+   */
+  private baseIndex(table: TableName): Map<string, PortableDoc> {
+    const rows = this.store.rows(table);
+    let index = ID_INDEXES.get(rows);
+    if (!index) {
+      index = new Map();
+      for (const row of rows) if (!index.has(row._id)) index.set(row._id, row);
+      ID_INDEXES.set(rows, index);
+    }
+    return index;
   }
 
   async get<T extends PortableDoc = PortableDoc>(id: string, expectedTable?: TableName): Promise<T | null> {
     const table = this.findTableOf(id);
     if (!table || (expectedTable && table !== expectedTable)) return null;
-    const row = this.currentRows(table).find((r) => r._id === id);
+    const over = this.overlay?.get(table);
+    const row = over?.has(id) ? over.get(id) : this.baseIndex(table).get(id);
     return row ? (clone(row) as T) : null;
   }
 

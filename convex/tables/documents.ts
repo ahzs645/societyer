@@ -31,6 +31,12 @@ export const documentTables = {
     sourcePayloadJson: v.optional(v.string()),
     importSessionId: v.optional(v.id("documents")),
     importRecordKind: v.optional(v.string()),
+    // Version groups and duplicates (schema A8). All optional: absent means
+    // "not set by a person"; the app still detects likely groups on read.
+    versionGroupKey: v.optional(v.string()),
+    supersedesDocumentId: v.optional(v.id("documents")),
+    duplicateOfDocumentId: v.optional(v.id("documents")),
+    sourceVersionStatus: v.optional(v.string()), // draft | final | approved | signed | revised
     tags: v.array(v.string()),
   })
     .index("by_society", ["societyId"])

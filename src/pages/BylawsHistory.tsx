@@ -7,6 +7,7 @@ import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
 import { Badge, Banner, Field } from "../components/ui";
 import { useToast } from "../components/Toast";
 import {
@@ -221,6 +222,7 @@ export function BylawsHistoryPage() {
         }
       />
 
+      <ImportCandidatesNotice noun="bylaw amendment" targets={["bylawAmendments"]} kinds={["bylawAmendment", "bylawRuleSet"]} documentCategory="Bylaws" emptyRegister={filed.length === 0} />
       <div className="stat-grid">
         <Stat label="Filed amendments" value={String(filed.length)} />
         <Stat label="In flight" value={String(inFlight.length)} sub="Drafts + active consultations" />

@@ -288,6 +288,7 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
   const groups = new Map<string, { infoType: string; label: string; area: string; suggestedTarget?: string; reason: string; total: number; byStatus: Record<string, number>; latestISO?: string; examples: { _id: string; title?: string; sourceTitle?: string }[] }>();
   const byArea = new Map<string, { area: string; total: number; open: number; keptAsText: number; resolved: number }>();
   const sessions = new Map<string, number>();
+  const sessionDetail = new Map<string, { open: number; infoTypes: Record<string, number> }>();
   for (const row of rows) {
     byStatus[row.status] = (byStatus[row.status] ?? 0) + 1;
     const definition = infoTypeDefinition(row.infoType);
@@ -304,7 +305,13 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
     if (row.status === "kept_as_text") area.keptAsText += 1;
     if (row.status === "resolved_native") area.resolved += 1;
     byArea.set(definition.area, area);
-    if (row.importSessionId) sessions.set(String(row.importSessionId), (sessions.get(String(row.importSessionId)) ?? 0) + 1);
+    if (row.importSessionId) {
+      sessions.set(String(row.importSessionId), (sessions.get(String(row.importSessionId)) ?? 0) + 1);
+      const detail = sessionDetail.get(String(row.importSessionId)) ?? { open: 0, infoTypes: {} };
+      if (row.status === "open" || row.status === "schema_change_requested") detail.open += 1;
+      detail.infoTypes[definition.label] = (detail.infoTypes[definition.label] ?? 0) + 1;
+      sessionDetail.set(String(row.importSessionId), detail);
+    }
   }
   const converted = new Set(rows.map((row) => row.sourceEvidenceId).filter(Boolean).map(String));
   const legacy = evidence.filter((row) => isLegacyUnsupportedEvidence(row));
@@ -313,7 +320,7 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
     byStatus,
     groups: [...groups.values()].sort((a, b) => (b.byStatus.open ?? 0) - (a.byStatus.open ?? 0) || b.total - a.total || a.infoType.localeCompare(b.infoType)),
     byArea: [...byArea.values()].sort((a, b) => b.total - a.total),
-    byImportSession: [...sessions.entries()].map(([importSessionId, count]) => ({ importSessionId, count })),
+    byImportSession: [...sessions.entries()].map(([importSessionId, count]) => ({ importSessionId, count, ...(sessionDetail.get(importSessionId) ?? { open: 0, infoTypes: {} }) })),
     legacyEvidence: { total: legacy.length, converted: legacy.filter((row) => converted.has(String(row._id))).length },
   };
 }
