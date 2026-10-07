@@ -160,7 +160,7 @@ export function CoverageGapsPage() {
         </>
       )}
 
-      {tab === "record" && data && <RecordGapsPanel societyId={society._id} recordGaps={data.recordGaps} crossReferences={data.crossReferences} rows={data.rows} onOpen={open} />}
+      {tab === "record" && data && <RecordGapsPanel societyId={society._id} recordGaps={data.recordGaps} crossReferences={data.crossReferences} agreementGaps={(data as any).agreementGaps} rows={data.rows} onOpen={open} />}
       {tab === "system" && <SystemGapsPanel societyId={society._id} affectedTable={params.get("affectedTable") ?? undefined} affectedId={params.get("affectedId") ?? undefined} focusGapId={params.get("gap") ?? undefined} />}
       {tab === "coverage" && <NativeCoveragePanel societyId={society._id} />}
       {tab === "expectations" && data && <ExpectationsPanel societyId={society._id} suggestions={data.suggestions} />}

@@ -44,8 +44,9 @@ import {
   rulePackForSociety,
   type CadenceRule,
 } from "../continuityRules";
+import { agreementGaps } from "../agreements";
 
-const READ_PERMISSIONS = ["meetings:read", "minutes:read", "motions:read", "committees:read", "filings:read", "financials:read", "directors:read", "documents:read"] as const;
+const READ_PERMISSIONS = ["meetings:read", "minutes:read", "motions:read", "committees:read", "filings:read", "financials:read", "directors:read", "documents:read", "agreements:read"] as const;
 
 async function readAccess(ctx: PortableQueryCtx, societyId: string) {
   await requireSocietyMembership(ctx, societyId);
@@ -225,6 +226,9 @@ export async function gapsPortable(
   const rows = evaluateContinuity(expectations, snapshot, range);
   const crossReferences = args.includeCrossReferences === false ? [] : resolveCrossReferences(minutesTexts, snapshot);
   const pack = rulePackForSociety(snapshot.society);
+  // Agreements register: expiring agreements without a renewal decision and overdue reports.
+  const agreementRead = (await readAccess(ctx, args.societyId)).has("agreements:read");
+  const agreementRows = agreementRead ? await bySociety(ctx, "agreements", args.societyId) : [];
   return {
     today: snapshot.today,
     range,
@@ -233,6 +237,7 @@ export async function gapsPortable(
     counts: countStatuses(rows),
     recordGaps: flattenRecordGaps(rows),
     crossReferences,
+    agreementGaps: agreementRead ? agreementGaps(agreementRows as any[], snapshot.today) : null,
     suggestions: inferCadenceSuggestions(snapshot, expectations),
     rulePack: pack ? { packId: pack.packId, title: pack.title, sources: pack.sources } : null,
     storedExpectations: stored.length,
@@ -308,6 +313,21 @@ export async function dashboardChecksPortable(ctx: PortableQueryCtx, { societyId
       to: "/app/directors",
       citation: "Societies Act, SBC 2015, c. 18, s. 42(4)",
     });
+  }
+  if ((await readAccess(ctx, societyId)).has("agreements:read")) {
+    const agreementRows = await bySociety(ctx, "agreements", societyId);
+    if (agreementRows.length) {
+      const found = agreementGaps(agreementRows as any[], today);
+      const renewals = found.filter((gap) => gap.kind === "agreement_renewal").length;
+      const reports = found.filter((gap) => gap.kind === "funder_report").length;
+      checks.push({
+        id: "CONTINUITY-AGREEMENT-OBLIGATIONS",
+        level: reports ? "err" : renewals ? "warn" : "ok",
+        title: "Agreement renewals and reports",
+        text: !found.length ? "No agreement is expiring without a renewal decision and no report is overdue." : [renewals ? `${renewals} agreement(s) expiring or expired without a renewal decision` : "", reports ? `${reports} report(s) overdue` : ""].filter(Boolean).join("; ") + ".",
+        to: "/app/coverage?tab=record",
+      });
+    }
   }
   return { checks, today };
 }

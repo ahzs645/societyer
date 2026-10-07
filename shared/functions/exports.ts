@@ -240,6 +240,7 @@ export const EXPORTABLE_TABLES = [
   "representationGaps",
   "governanceExpectations",
   "continuityPeriodMarks",
+  "agreements",
 ] as const;
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);

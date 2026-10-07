@@ -53,6 +53,7 @@ export const NAV_ITEM_LABEL_KEYS: Record<string, string> = {
   Treasurer: "nav.treasurer",
   Assets: "nav.assets",
   Grants: "nav.grants",
+  Agreements: "nav.agreements",
   Reconciliation: "nav.reconciliation",
   "Donation receipts": "nav.donationReceipts",
   "Membership & billing": "nav.membership",

@@ -6,6 +6,7 @@ import { normalizeSigningAuthorityTiers } from "../../signingAuthorityTiers";
 import { normalizeDocumentCategory } from "../../documentCategories";
 import { detectSourceVersionStatus, normalizeSourceVersionStatus } from "../../documentVersioning";
 import { EXTRA_SECTION_RECORD_HANDLERS, resolveMeetingReference } from "./importSectionHandlersExtra";
+import { AGREEMENT_SECTION_RECORD_HANDLERS } from "./importAgreementApply";
 import { normalizeMeetingQuorum } from "../../minutesQuorum";
 // Import-session apply layer: ctx-taking writes, meeting merge, and record insertion.
 
@@ -1707,7 +1708,7 @@ async function insertSectionRecord(ctx: any, societyId: string, record: any, sou
   const firstSourceDocumentId = sourceDocumentIds[0];
   const sourceNote = sourceNoteFor(record, sourceDocumentIds);
 
-  const handler = SECTION_RECORD_HANDLERS[record.recordKind] ?? EXTRA_SECTION_RECORD_HANDLERS[record.recordKind];
+  const handler = SECTION_RECORD_HANDLERS[record.recordKind] ?? EXTRA_SECTION_RECORD_HANDLERS[record.recordKind] ?? AGREEMENT_SECTION_RECORD_HANDLERS[record.recordKind];
   if (!handler) {
     throw new Error(`Unsupported section record kind: ${record.recordKind}`);
   }

@@ -90,6 +90,8 @@ const MembershipPage = React.lazy(() => import("./pages/Membership").then((m) =>
 const InspectionsPage = React.lazy(() => import("./pages/Inspections").then((m) => ({ default: m.InspectionsPage })));
 const AttestationsPage = React.lazy(() => import("./pages/Attestations").then((m) => ({ default: m.AttestationsPage })));
 const RetentionPage = React.lazy(() => import("./pages/Retention").then((m) => ({ default: m.RetentionPage })));
+const AgreementsPage = React.lazy(() => import("./pages/Agreements").then((m) => ({ default: m.AgreementsPage })));
+const AgreementDetailPage = React.lazy(() => import("./pages/AgreementDetail").then((m) => ({ default: m.AgreementDetailPage })));
 const InsurancePage = React.lazy(() => import("./pages/Insurance").then((m) => ({ default: m.InsurancePage })));
 const InsurancePolicyDetailPage = React.lazy(() => import("./pages/Insurance").then((m) => ({ default: m.InsurancePolicyDetailPage })));
 const SecretsPage = React.lazy(() => import("./pages/Secrets").then((m) => ({ default: m.SecretsPage })));
@@ -534,6 +536,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route
               path="insurance/:id"
               element={withModule("insurance", <InsurancePolicyDetailPage />)}
+            />
+            <Route
+              path="agreements"
+              element={withModule("agreements", <AgreementsPage />)}
+            />
+            <Route
+              path="agreements/:id"
+              element={withModule("agreements", <AgreementDetailPage />)}
             />
             <Route
               path="access-custody"

@@ -208,6 +208,8 @@
     "test:live-qualification": "npm --prefix experiments/live-qualification run test",
     "test:continuity": "tsx scripts/check-continuity.ts",
     "test:representation-gaps": "tsx scripts/check-representation-gaps.ts",
+    "test:agreements": "tsx scripts/check-agreements.ts",
+    "test:agreements-ui": "playwright test --config playwright.agreements.config.ts",
     "test:document-categories": "tsx scripts/check-document-categories.ts",
     "test:document-versions": "tsx scripts/check-document-versions.ts",
     "test:permissioned-mutation": "tsx scripts/check-permissioned-mutation.ts",

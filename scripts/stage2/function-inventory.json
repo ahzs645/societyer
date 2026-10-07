@@ -1112,6 +1112,236 @@
     ]
   },
   {
+    "key": "convex:agreements:conversionPreview",
+    "surface": "convex",
+    "name": "agreements:conversionPreview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:convertGaps",
+    "surface": "convex",
+    "name": "agreements:convertGaps",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:create",
+    "surface": "convex",
+    "name": "agreements:create",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:forRecord",
+    "surface": "convex",
+    "name": "agreements:forRecord",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:get",
+    "surface": "convex",
+    "name": "agreements:get",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:list",
+    "surface": "convex",
+    "name": "agreements:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:remove",
+    "surface": "convex",
+    "name": "agreements:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:renew",
+    "surface": "convex",
+    "name": "agreements:renew",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:setObligationStatus",
+    "surface": "convex",
+    "name": "agreements:setObligationStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:setRenewalDecision",
+    "surface": "convex",
+    "name": "agreements:setRenewalDecision",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "motionId",
+        "table": "motions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:summary",
+    "surface": "convex",
+    "name": "agreements:summary",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:syncObligations",
+    "surface": "convex",
+    "name": "agreements:syncObligations",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:terminate",
+    "surface": "convex",
+    "name": "agreements:terminate",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:agreements:update",
+    "surface": "convex",
+    "name": "agreements:update",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/agreements.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:aiAgents:_recordAgentRun",
     "surface": "convex",
     "name": "aiAgents:_recordAgentRun",
@@ -22881,6 +23111,236 @@
       {
         "path": "meetingId",
         "table": "meetings",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:conversionPreview",
+    "surface": "portable",
+    "name": "agreements:conversionPreview",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:convertGaps",
+    "surface": "portable",
+    "name": "agreements:convertGaps",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:create",
+    "surface": "portable",
+    "name": "agreements:create",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:forRecord",
+    "surface": "portable",
+    "name": "agreements:forRecord",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:get",
+    "surface": "portable",
+    "name": "agreements:get",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:list",
+    "surface": "portable",
+    "name": "agreements:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:remove",
+    "surface": "portable",
+    "name": "agreements:remove",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:renew",
+    "surface": "portable",
+    "name": "agreements:renew",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:setObligationStatus",
+    "surface": "portable",
+    "name": "agreements:setObligationStatus",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:setRenewalDecision",
+    "surface": "portable",
+    "name": "agreements:setRenewalDecision",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "motionId",
+        "table": "motions",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:summary",
+    "surface": "portable",
+    "name": "agreements:summary",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:syncObligations",
+    "surface": "portable",
+    "name": "agreements:syncObligations",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:terminate",
+    "surface": "portable",
+    "name": "agreements:terminate",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:agreements:update",
+    "surface": "portable",
+    "name": "agreements:update",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "agreements",
         "array": false,
         "optional": false
       }
