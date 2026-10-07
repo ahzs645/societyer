@@ -339,6 +339,10 @@ export const BULK_ACCEPT_THRESHOLDS: Record<string, Record<string, number>> = {
     default: 0.8, date: 0.85, meetingDate: 0.85, periodEnd: 0.85, termStart: 0.85, termEnd: 0.85, filedDate: 0.85, amount: 0.8, "entries.person": 0.85, directorsListed: 0.85,
     // Roster notes ("Left PGAIR in May 2022") are quoted but month-precise (0.7).
     "entries.termStart": 0.7, "entries.termEnd": 0.7,
+    // INT-17: decisions/commitments are sentences quoted verbatim from the message (0.6 because
+    // they are evidence, not recorded decisions). isBulkEligible still requires a stated value with
+    // a verified span, and promotion keeps them as restricted source evidence.
+    ...(docClass === "correspondence" ? { decisionsOrCommitments: 0.6 } : {}),
   }])),
 };
 

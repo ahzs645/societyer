@@ -23,7 +23,11 @@ import { clusterFiles, nameDateKey } from "../shared/intake/cluster";
 import { infoTypeDefinition } from "../shared/gapCatalog";
 import { CLASS_PROMOTION } from "../shared/intake/promotionClasses";
 import { PROVIDER_EXCLUDED_CLASSES } from "../shared/intake/classify";
-import { promotionReadiness, latestDecisions, requiredFieldsFor, reviewFieldsForRecord, thresholdFor } from "../shared/intake/review";
+import { promotionReadiness, latestDecisions, requiredFieldsFor, reviewFieldsForRecord, thresholdFor, isBulkEligible, bulkAcceptCandidates } from "../shared/intake/review";
+import { REGISTRY_FILING_KIND } from "../shared/intake/bundleClasses";
+import { BC_SOCIETY_PRE_FILL_KINDS } from "../shared/filingPreparation";
+import { extractRegistryFiling } from "../shared/intake/extractors/filing";
+import { policyEffectiveDate } from "../shared/functions/importSessionHelpers/importSessionMergeAndApply";
 import { writeClassFixtures, writeSyntheticFixtures } from "./lib/intake-synthetic-fixtures";
 
 // ------------------------------------------------------------ pure model
@@ -154,6 +158,43 @@ assert.ok(db.dump("policies").every((row: any) => ["Draft", "Superseded"].includ
 const directorNames = db.dump("directors").map((row: any) => `${row.firstName} ${row.lastName}`.toLowerCase());
 assert.equal(new Set(directorNames).size, directorNames.length, "a person listed by several documents is one director");
 assert.ok(db.dump("boardRoleAssignments").length >= directorNames.length, "every observed term is a role assignment");
+
+// X-02: "Approved by the Board: March 11, 2025" with no stated effective date → effectiveDate.
+const signingPolicy = db.dump("policies").find((row: any) => /Signing Authority/i.test(row.policyName)) as any;
+assert.ok(signingPolicy, "the signing authority policy was promoted");
+assert.equal(signingPolicy.effectiveDate, "2025-03-11", "a stated adoption date becomes the effective date");
+assert.equal(policyEffectiveDate({ effectiveDate: "2024-01-01", adoptedDate: "2023-05-05" }), "2024-01-01", "an explicit effective date wins");
+assert.equal(policyEffectiveDate({ adoptedDate: "2023-05-05" }), "2023-05-05");
+assert.equal(policyEffectiveDate({ adoptedAtMeeting: { meetingDate: "2022-06-14", body: "board" } }), "2022-06-14", "the adopting meeting's date");
+assert.equal(policyEffectiveDate({ adoptedDate: "May 2022" }), undefined, "a month is never padded to a day");
+// The labelled adoption line is bulk-acceptable (stated, verified span, at τ).
+{
+  const extraction = run.extractions.find((row) => /Signing Authority Policy/.test(row.fileKey))!;
+  const adopted = reviewFieldsForRecord(extraction.record as any, "policy").find((field) => field.path === "adoptedDate")!;
+  assert.ok(adopted && isBulkEligible(adopted, "policy"), `"Approved by the Board: <date>" is bulk-accepted (${JSON.stringify(adopted?.field)})`);
+}
+// INT-17: stated, span-verified correspondence decisions are bulk-accepted; promotion keeps them restricted.
+{
+  const extraction = run.extractions.find((row) => /Funder decision email/.test(row.fileKey))!;
+  const fields = reviewFieldsForRecord(extraction.record as any, "correspondence");
+  const decisionFields = fields.filter((field) => field.pattern === "decisionsOrCommitments");
+  assert.ok(decisionFields.length >= 1, "the funder e-mail states a decision");
+  assert.ok(decisionFields.every((field) => isBulkEligible(field, "correspondence")), "stated + verified decision fields are bulk-eligible");
+  const candidates = bulkAcceptCandidates(fields, new Map(), "correspondence").map((field) => field.pattern);
+  assert.ok(candidates.includes("decisionsOrCommitments"));
+  const inferredDecision = { ...decisionFields[0], field: { ...decisionFields[0].field, status: "inferred" as const } };
+  assert.equal(isBulkEligible(inferredDecision as any, "correspondence"), false, "an inferred decision still needs a reviewer");
+  const unverified = { ...decisionFields[0], field: { ...decisionFields[0].field, verification: "unverified" as any } };
+  assert.equal(isBulkEligible(unverified as any, "correspondence"), false, "an unverified decision still needs a reviewer");
+  assert.ok(db.dump("sourceEvidence").filter((row: any) => row.evidenceKind === "correspondence_decision").every((row: any) => row.sensitivity === "restricted"), "promoted decisions stay restricted evidence");
+}
+// X-07: a statement of directors is a change-of-directors filing, not an annual report.
+assert.equal(REGISTRY_FILING_KIND.statement_of_directors, "ChangeOfDirectors");
+assert.equal(REGISTRY_FILING_KIND.change_of_directors, "ChangeOfDirectors");
+assert.equal(REGISTRY_FILING_KIND.annual_report, "AnnualReport");
+for (const kind of new Set(Object.values(REGISTRY_FILING_KIND))) assert.ok(kind === "Other" || BC_SOCIETY_PRE_FILL_KINDS.some((option) => option.id === kind), `${kind} is a BC filing kind the app knows`);
+assert.equal((extractRegistryFiling({ fileName: "2025 Statement of Directors.txt", extract: await extractBytes("2025 Statement of Directors.txt", new TextEncoder().encode("STATEMENT OF DIRECTORS\nSociety Name: LAKESIDE CLEAN AIR SOCIETY\nDirectors\nQUILL, AVERY\n")) } as any).record as any).filingType?.value, "statement_of_directors");
+assert.equal((extractRegistryFiling({ fileName: "notice.txt", extract: await extractBytes("notice.txt", new TextEncoder().encode("NOTICE OF CHANGE OF DIRECTORS\nSociety Name: LAKESIDE CLEAN AIR SOCIETY\n")) } as any).record as any).filingType?.value, "change_of_directors");
 
 // Provenance on class records (View source).
 const policy = db.dump("policies")[0] as any;

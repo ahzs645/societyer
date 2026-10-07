@@ -925,7 +925,7 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       policyName: cleanText(payload.policyName) || cleanText(payload.name) || record.title || "Imported policy",
       policyNumber: cleanText(payload.policyNumber),
       owner: cleanText(payload.owner),
-      effectiveDate: cleanDate(payload.effectiveDate),
+      effectiveDate: policyEffectiveDate(payload),
       reviewDate: cleanDate(payload.reviewDate),
       ceasedDate: cleanDate(payload.ceasedDate),
       // Document links come from this import's own source documents, never
@@ -1640,6 +1640,22 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
     });
   },
 };
+
+/**
+ * X-02: a policy takes effect when it is adopted unless the source states a
+ * separate effective date. Without an explicit effective date, a stated
+ * adoption date (or the adopting meeting's date) becomes the effective date;
+ * only a full day counts, so "May 2022" never becomes a made-up day.
+ */
+export function policyEffectiveDate(payload: any): string | undefined {
+  const explicit = cleanDate(payload?.effectiveDate);
+  if (explicit) return explicit;
+  const fullDay = (value: unknown) => {
+    const date = cleanDate(typeof value === "object" && value ? (value as any).meetingDate ?? (value as any).date : value);
+    return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
+  };
+  return fullDay(payload?.adoptedDate) ?? fullDay(payload?.adoptedAtISO) ?? fullDay(payload?.adoptedAtMeetingDate) ?? fullDay(payload?.adoptedAtMeeting);
+}
 
 /** C9: resolve "adopted at the May 2022 Board meeting" to native links. */
 async function policyAdoptionLinks(ctx: any, societyId: string, payload: any) {
