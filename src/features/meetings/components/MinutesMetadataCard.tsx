@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { officerNamesFromAttendance } from "../lib/officerNames";
 import { CalendarClock, Pencil, Save } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -100,7 +101,9 @@ export function MinutesMetadataCard({ minutes, meetingType, committees = [], peo
     const value = structuredEditFromMinutes(minutes);
     const rows = nextMeetingRowsFrom(minutes);
     setOriginal(value);
-    setDraft(value);
+    // Empty chair / secretary / recorder start from the roles given in the
+    // attendance list; the reviewer sees them before saving.
+    setDraft({ ...value, ...officerNamesFromAttendance(minutes.detailedAttendance, value) });
     setNextRows(rows);
     setOriginalNext(JSON.stringify(rows));
   };

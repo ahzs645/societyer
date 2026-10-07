@@ -115,11 +115,11 @@ export function StructuredMinutesEditor({
   const patch = (diff: Partial<StructuredMinutesEdit>) => onChange({ ...value, ...diff });
   return (
     <div className="structured-minutes-editor">
-      <Field label="Quorum evidence" hint="Record what the source establishes; missing evidence is kept distinct from quorum not being met.">
+      <Field label="Quorum evidence" hint="Record what the minutes establish; quorum not recorded is kept distinct from quorum not being met.">
         <select className="input" value={value.quorumStatus} onChange={event => patch({ quorumStatus: event.target.value as StructuredMinutesEdit["quorumStatus"] })}>
           <option value="confirmed">Quorum confirmed</option>
           <option value="not_met">Quorum not met</option>
-          <option value="not_recorded">Not recorded in source</option>
+          <option value="not_recorded">Not recorded</option>
         </select>
       </Field>
       <div className="structured-minutes-editor__grid">

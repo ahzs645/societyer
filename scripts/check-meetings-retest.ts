@@ -17,6 +17,7 @@ import { preferredMeetingToKeep } from "../shared/meetingMerge";
 import { formalMinutesExportBlockers, suggestedMeetingTitle, titleForChangedDate } from "../src/features/meetings/lib/meetingDetailHelpers";
 import { duplicateActionRows, plainActionWording, suggestedActionOwner } from "../src/features/meetings/lib/actionItemTidy";
 import { agendaOnlyMeetingStatus } from "../shared/meetingStatus";
+import { officerNamesFromAttendance } from "../src/features/meetings/lib/officerNames";
 
 // ---------- rich-editor markdown is shown without escapes ---------------------
 // What the rich editor saves after a no-change round trip of imported text.
@@ -347,3 +348,15 @@ assert.equal(suggestedMeetingTitle({ type: "Board", scheduledAt: "" }), "", "no 
 assert.equal(titleForChangedDate("Board meeting — 2026-10-22", "2026-10-22", "2026-10-06"), "Board meeting — 2026-10-06");
 assert.equal(titleForChangedDate("Fall planning session", "2026-10-22", "2026-10-06"), "Fall planning session", "a typed title is kept");
 console.log("✓ new meetings: blank title uses the body and date; dated titles follow a date change");
+
+// ---------- minutes details: officers from attendance roles ---------------------
+assert.deepEqual(officerNamesFromAttendance([
+  { name: "Alex Example", roleTitle: "Chair", status: "present" },
+  { name: "Blair Sample", roleTitle: "Secretary", status: "present" },
+  { name: "Casey Demo", roleTitle: "Minute-taker", status: "staff" },
+  { name: "Drew Placeholder", roleTitle: "Treasurer", status: "regrets" },
+], { chairName: "", secretaryName: "Kept Name", recorderName: "" }), { chairName: "Alex Example", recorderName: "Casey Demo" });
+assert.deepEqual(officerNamesFromAttendance([
+  { name: "Alex Example", roleTitle: "Chair", status: "regrets" },
+], {}), {}, "absent people are not suggested");
+console.log("✓ minutes details: empty chair/secretary/recorder start from attendance roles");
