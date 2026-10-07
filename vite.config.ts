@@ -48,12 +48,22 @@ export default defineConfig({
       "@milkdown/kit/utils",
       "@milkdown/kit/prose/commands",
       "@milkdown/kit/prose/state",
+      // AI intake worker and review viewer: a late re-optimization reloads the
+      // page in the middle of an extraction run.
+      "pdfjs-dist",
+      "pdfjs-dist/legacy/build/pdf.mjs",
+      "pdfjs-dist/legacy/build/pdf.worker.mjs",
+      "@kenjiuno/msgreader",
+      "@ai-sdk/openai",
+      "docx-preview",
     ],
   },
   worker: { format: "es" },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // AI intake reads Outlook .msg files in the browser; iconv-lite needs Node's Buffer.
+      "iconv-lite": path.resolve(__dirname, "./src/lib/iconvLiteBrowser.ts"),
     },
   },
   server: {

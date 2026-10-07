@@ -151,6 +151,8 @@ export const intakeTables = {
     targetTable: v.string(),
     targetId: v.string(),
     fieldPath: v.string(),
+    /** The reviewed extraction field this value came from, e.g. motions[2].movedBy (review deep link). */
+    sourceFieldPath: v.optional(v.string()),
     runId: v.optional(v.id("intakeRuns")),
     extractionId: v.optional(v.id("intakeExtractions")),
     fileKey: v.optional(v.string()),

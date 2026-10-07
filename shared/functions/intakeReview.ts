@@ -29,7 +29,9 @@ import {
 } from "./importSessions";
 import { bodyKeyForMeeting } from "../meetingBody";
 import { buildPromotionBundle, defaultInfoTypeForPath, gapLocatorFrom, matchKey, type MergeTarget, type PromotionFile, type PromotionMode } from "../intake/promotion";
-import { formatFieldValue, isPromotedDecision, latestDecisions, nativeTargetForPath, primaryLocator, reviewFieldsForRecord, REVIEW_DECISIONS, type ReviewRow } from "../intake/review";
+import { entityGroups, formatFieldValue, isPromotedDecision, latestDecisions, linkedValue, nameOccurrences, nativeTargetForPath, primaryLocator, reviewFieldsForRecord, REVIEW_DECISIONS, type ReviewRow } from "../intake/review";
+import { visibleDirectoryRows } from "./peopleDirectory";
+import type { DirectoryPerson, OfficeTerm } from "../intake/entities";
 import { reconcileExtractions } from "../intake/reconcile";
 import { buildImportBundle, coverageReport, type IntakeRunResult } from "../intake/bundle";
 
@@ -218,7 +220,7 @@ async function mergeTargetFor(ctx: PortableMutationCtx, societyId: string, meeti
   return { dateKey: String(meeting.scheduledAt).slice(0, 10), meetingType: String(meeting.type ?? "Board"), ...(committee?.name ? { committeeName: committee.name } : {}) };
 }
 
-type Provenance = { targetTable: string; targetId: string; fieldPath: string; locator: any; value: unknown; decision: string };
+type Provenance = { targetTable: string; targetId: string; fieldPath: string; sourceFieldPath?: string; locator: any; value: unknown; decision: string };
 
 /** Promote a reviewed extraction into native records (see module comment). */
 export async function promoteExtraction(ctx: PortableMutationCtx, args: { societyId: string; extractionId: string; mode?: string; targetMeetingId?: string }) {
@@ -295,11 +297,11 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
     }
     const item = nativeTarget.item;
     if (nativeTarget.table === "meetings") {
-      provenance.push({ targetTable: "meetings", targetId: meetingId, fieldPath: nativeTarget.field, locator, value, decision: review.decision });
+      provenance.push({ targetTable: "meetings", targetId: meetingId, fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
     } else if (nativeTarget.table === "motions" && item) {
       const reviewedText = decisions.get(`motions[${item.index}].text`)?.decision === "edit" ? decisions.get(`motions[${item.index}].text`)!.editedValue : record.motions?.[item.index]?.text?.value;
       const motion = motions.find((row) => matchKey(row.text) === matchKey(reviewedText)) ?? motions.find((row) => matchKey(row.text).includes(matchKey(reviewedText)) && matchKey(reviewedText).length > 8);
-      if (motion) provenance.push({ targetTable: "motions", targetId: String(motion._id), fieldPath: nativeTarget.field, locator, value, decision: review.decision });
+      if (motion) provenance.push({ targetTable: "motions", targetId: String(motion._id), fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
       else notLandedPaths.push(path);
     } else if (item) {
       const [listField, leaf] = nativeTarget.field.split(".");
@@ -310,18 +312,18 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
       const rows = (minutes as any)?.[listField];
       const index = listField === "decisions" ? (rows ?? []).findIndex((row: unknown) => matchKey(row) === matchKey(keyValue)) : findIndex(rows, rowKey, keyValue);
       const observation = index < 0 && listField === "actionItems" ? findIndex((minutes as any)?.actionObservations, "text", keyValue) : -1;
-      if (index >= 0) provenance.push({ targetTable: "minutes", targetId: minutesId, fieldPath: `${listField}[${index}]${leaf ? `.${leaf}` : ""}`, locator, value, decision: review.decision });
-      else if (observation >= 0) provenance.push({ targetTable: "minutes", targetId: minutesId, fieldPath: `actionObservations[${observation}]${leaf ? `.${leaf}` : ""}`, locator, value, decision: review.decision });
-      else if (item.group === "attendance") provenance.push({ targetTable: "minutes", targetId: minutesId, fieldPath: "draftTranscript.nonPersonAttendance", locator, value, decision: review.decision });
+      if (index >= 0) provenance.push({ targetTable: "minutes", targetId: minutesId, fieldPath: `${listField}[${index}]${leaf ? `.${leaf}` : ""}`, locator, value, decision: review.decision, sourceFieldPath: path });
+      else if (observation >= 0) provenance.push({ targetTable: "minutes", targetId: minutesId, fieldPath: `actionObservations[${observation}]${leaf ? `.${leaf}` : ""}`, locator, value, decision: review.decision, sourceFieldPath: path });
+      else if (item.group === "attendance") provenance.push({ targetTable: "minutes", targetId: minutesId, fieldPath: "draftTranscript.nonPersonAttendance", locator, value, decision: review.decision, sourceFieldPath: path });
       else notLandedPaths.push(path);
     } else {
-      provenance.push({ targetTable: "minutes", targetId: minutesId, fieldPath: nativeTarget.field, locator, value, decision: review.decision });
+      provenance.push({ targetTable: "minutes", targetId: minutesId, fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
     }
   }
   const at = now();
   for (const row of provenance) {
     await ctx.db.insert("fieldProvenance", compact({
-      societyId, targetTable: row.targetTable, targetId: row.targetId, fieldPath: row.fieldPath.slice(0, 300), runId: extraction.runId, extractionId: extraction._id, fileKey: extraction.fileKey,
+      societyId, targetTable: row.targetTable, targetId: row.targetId, fieldPath: row.fieldPath.slice(0, 300), sourceFieldPath: row.sourceFieldPath?.slice(0, 300), runId: extraction.runId, extractionId: extraction._id, fileKey: extraction.fileKey,
       locator: compact({ fileId: clean(row.locator.fileId, 600), kind: row.locator.kind, blockIndex: row.locator.blockIndex, page: row.locator.page, sheet: clean(row.locator.sheet, 200), cell: clean(row.locator.cell, 40), charStart: row.locator.charStart, charEnd: row.locator.charEnd, quote: clean(row.locator.quote, 400) }),
       value: row.value, decision: row.decision, createdAtISO: at,
     }));
@@ -372,15 +374,20 @@ export async function provenanceForExtraction(ctx: PortableQueryCtx, { societyId
 export async function runSummaries(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await canRead(ctx, societyId);
   const runs = (await ctx.db.query("intakeRuns").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) as any[];
+  const gapKeys = (await allowed(ctx, societyId, "documents:read"))
+    ? ((await ctx.db.query("representationGaps").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) as any[]).map((row) => String(row.dedupeKey ?? "")).filter((key) => key.startsWith("intake:"))
+    : null;
   const out: any[] = [];
   for (const run of runs) {
     const extractions = (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", run._id)).collect()) as any[];
+    const ids = new Set(extractions.map((row) => String(row._id)));
+    const systemGaps = gapKeys ? gapKeys.filter((key) => ids.has(key.split(":")[1])).length : null;
     const promoted = extractions.filter((row) => row.status === "promoted");
     let promotedFields = 0;
     for (const extraction of promoted) promotedFields += ((await ctx.db.query("fieldProvenance").withIndex("by_extraction", (q) => q.eq("extractionId", extraction._id)).collect()) as any[]).length;
     out.push({
       runId: run._id, name: run.name, status: run.status, createdAtISO: run.createdAtISO, extractions: extractions.length, promoted: promoted.length,
-      rejected: extractions.filter((row) => row.status === "rejected").length, promotedFields, coverage: run.coverage?.headline ?? null, recordGaps: run.recordGaps?.length ?? 0,
+      rejected: extractions.filter((row) => row.status === "rejected").length, promotedFields, coverage: run.coverage?.headline ?? null, recordGaps: run.recordGaps?.length ?? 0, systemGaps,
     });
   }
   return out.sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO)));
@@ -419,4 +426,116 @@ export async function reconcileRun(ctx: PortableMutationCtx, { societyId, runId 
     updatedAtISO: now(),
   });
   return { meetings: reconciled.meetings.length, recordGaps: gaps.length, coverage: coverage.headline };
+}
+
+// ---------------------------------------------------------------- entities
+
+const nameKey = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+
+async function directoryFor(ctx: PortableQueryCtx, societyId: string): Promise<{ directory: DirectoryPerson[]; terms: OfficeTerm[]; readable: boolean }> {
+  if (!(await allowed(ctx, societyId, "members:read"))) return { directory: [], terms: [], readable: false };
+  const rows = await visibleDirectoryRows(ctx, societyId);
+  const directory = rows.map((row: any) => ({ id: String(row._id), fullName: String(row.fullName ?? [row.firstName, row.lastName].filter(Boolean).join(" ")), aliases: Array.isArray(row.aliases) ? row.aliases.map(String) : [] })).filter((person) => person.fullName.trim());
+  const terms: OfficeTerm[] = [];
+  if (await allowed(ctx, societyId, "directors:read")) {
+    const holders = (await ctx.db.query("roleHolders").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) as any[];
+    for (const holder of holders) if (holder.directoryPersonId && holder.officerTitle) terms.push({ personId: String(holder.directoryPersonId), title: String(holder.officerTitle), start: holder.startDate, end: holder.endDate });
+  }
+  return { directory, terms, readable: true };
+}
+
+/** Names and role words in one extraction, grouped, with people-directory candidates (office holders on the meeting date for role words). */
+export async function entityCandidates(ctx: PortableQueryCtx, { societyId, extractionId }: { societyId: string; extractionId: string }) {
+  await canRead(ctx, societyId);
+  const extraction = await getOwned<any>(ctx, "intakeExtractions", extractionId, societyId);
+  const { directory, terms, readable } = await directoryFor(ctx, societyId);
+  const record = extraction.record ?? {};
+  const contextNames = (record.attendance ?? []).map((entry: any) => entry?.nameAsWritten?.value).filter(Boolean);
+  const groups = entityGroups(nameOccurrences(record), directory, { date: record.date?.value?.iso, terms, contextNames });
+  return { directoryReadable: readable, directorySize: directory.length, groups };
+}
+
+/** One identity decision applied to every occurrence of a name across the run's unpromoted extractions:
+ * link it to a people-directory person (edit reviews carrying the resolved name) or accept it as written. */
+export async function linkNameAcrossRun(ctx: PortableMutationCtx, { societyId, runId, name, personId, mode }: { societyId: string; runId: string; name: string; personId?: string; mode?: string }) {
+  await canWrite(ctx, societyId);
+  await getOwned(ctx, "intakeRuns", runId, societyId);
+  const wanted = nameKey(String(name ?? ""));
+  if (!wanted) throw new Error("Choose a name.");
+  const linking = mode !== "accept";
+  let person: { id: string; fullName: string } | undefined;
+  if (linking) {
+    if (!personId) throw new Error("Choose the person to link.");
+    const { directory } = await directoryFor(ctx, societyId);
+    const match = directory.find((candidate) => candidate.id === personId);
+    if (!match) throw new Error("Directory person not found.");
+    person = { id: match.id, fullName: match.fullName };
+  }
+  const extractions = (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", runId)).collect()) as any[];
+  const items: ReviewItem[] = [];
+  let touched = 0;
+  for (const extraction of extractions) {
+    if (extraction.status === "promoted" || extraction.status === "rejected") continue;
+    const decisions = latestDecisions(await reviewsFor(ctx, extraction._id));
+    const occurrences = nameOccurrences(extraction.record ?? {}).filter((occurrence) => nameKey(occurrence.name) === wanted);
+    if (!occurrences.length) continue;
+    touched++;
+    for (const occurrence of occurrences) {
+      if (!linking && decisions.has(occurrence.path)) continue;
+      const field = resolveFieldPath(extraction.record, occurrence.path);
+      items.push(linking
+        ? { extractionId: extraction._id, fieldPath: occurrence.path, decision: "edit", editedValue: linkedValue(occurrence, field, person!), note: `Linked to ${person!.fullName} (applied to all occurrences of "${name}").` }
+        : { extractionId: extraction._id, fieldPath: occurrence.path, decision: "accept", note: `Accepted "${name}" as written (applied to all occurrences).` });
+    }
+  }
+  const result = items.length ? await reviewFields(ctx, { societyId, items }) : { reviewIds: [], gapIds: [] };
+  return { reviewIds: result.reviewIds, occurrences: items.length, extractions: touched };
+}
+
+/** One file's stored text/layout extract (version diffs, and the viewer for files without an extraction). */
+export async function getFileExtract(ctx: PortableQueryCtx, { societyId, fileId }: { societyId: string; fileId: string }) {
+  await canRead(ctx, societyId);
+  const file = await getOwned<any>(ctx, "intakeFiles", fileId, societyId);
+  await requirePermissionPortable(ctx, societyId, "documents:read");
+  if (file.sensitivity === "restricted") await requirePermissionPortable(ctx, societyId, "settings:write");
+  const extract = await ctx.db.query("intakeExtracts").withIndex("by_file", (q) => q.eq("fileId", file._id)).first();
+  return { file, extract };
+}
+
+/** Provenance for several records at once; a meeting also brings its minutes and motions. Rows carry the source file name for display. */
+export async function provenanceForRecords(ctx: PortableQueryCtx, { societyId, targets }: { societyId: string; targets: Array<{ targetTable: string; targetId: string }> }) {
+  await canRead(ctx, societyId);
+  if (!Array.isArray(targets) || targets.length > 50) throw new Error("Ask for at most 50 records.");
+  const wanted: Array<{ targetTable: string; targetId: string }> = [];
+  for (const target of targets) {
+    wanted.push(target);
+    if (target.targetTable !== "meetings") continue;
+    const meeting = await ctx.db.get<any>(target.targetId, "meetings");
+    if (!meeting || meeting.societyId !== societyId || !meeting.minutesId) continue;
+    wanted.push({ targetTable: "minutes", targetId: String(meeting.minutesId) });
+    const minutes = await ctx.db.get<any>(meeting.minutesId, "minutes");
+    for (const motionId of (minutes?.motionIds ?? []) as string[]) wanted.push({ targetTable: "motions", targetId: String(motionId) });
+  }
+  const rows: any[] = [];
+  for (const target of wanted) {
+    const found = (await ctx.db.query("fieldProvenance").withIndex("by_target", (q) => q.eq("targetTable", target.targetTable).eq("targetId", target.targetId)).collect()) as any[];
+    rows.push(...found.filter((row) => row.societyId === societyId));
+  }
+  const names = new Map<string, { name: string; runName?: string; sensitivity?: string }>();
+  for (const row of rows) {
+    const key = `${row.runId}|${row.fileKey}`;
+    if (names.has(key) || !row.runId || !row.fileKey) continue;
+    const file = await ctx.db.query("intakeFiles").withIndex("by_run_file_key", (q) => q.eq("runId", row.runId).eq("fileKey", row.fileKey)).first() as any;
+    const run = await ctx.db.get<any>(row.runId, "intakeRuns");
+    names.set(key, { name: file?.name ?? String(row.fileKey).replace(/^local:/, ""), runName: run?.name, sensitivity: file?.sensitivity });
+  }
+  const seesRestricted = await allowed(ctx, societyId, "settings:write");
+  const seesContent = await allowed(ctx, societyId, "documents:read");
+  return rows.map((row) => {
+    const meta = names.get(`${row.runId}|${row.fileKey}`);
+    const restricted = meta?.sensitivity === "restricted";
+    // Quotes from restricted files are shown only to people who could read the file itself.
+    const hide = !seesContent || (restricted && !seesRestricted);
+    return { ...row, ...(hide ? { value: undefined, locator: { ...row.locator, quote: undefined } } : {}), fileName: meta?.name, runName: meta?.runName, restricted };
+  });
 }

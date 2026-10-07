@@ -5,17 +5,12 @@ import { extractDocx } from "./docx";
 import { extractMsg } from "./msg";
 import { extractPdf, type PdfJsModule } from "./pdf";
 import { extractXlsx } from "./xlsx";
+import { EXTRACTABLE_EXTENSIONS, extensionOf, TEXT_EXTENSIONS } from "./extensions";
 
 export type LegacyConverter = (bytes: Uint8Array, fileName: string, target: "docx" | "xlsx") => Promise<Uint8Array | null>;
 export type ExtractOptions = { convertLegacy?: LegacyConverter; pdfjs?: PdfJsModule; maxAttachmentDepth?: number };
 
-export function extensionOf(name: string): string {
-  const match = /\.([a-z0-9]{1,6})$/i.exec(name.trim());
-  return match ? match[1].toLowerCase() : "";
-}
-
-export const TEXT_EXTENSIONS = new Set(["txt", "md", "csv", "tsv", "json", "html", "htm", "xml", "eml", "rtf"]);
-export const EXTRACTABLE_EXTENSIONS = new Set(["docx", "docm", "dotx", "pdf", "xlsx", "xlsm", "msg", "doc", "xls", "odt", "ods", "wpd", "pptx", "ppt", ...TEXT_EXTENSIONS]);
+export { extensionOf, TEXT_EXTENSIONS, EXTRACTABLE_EXTENSIONS };
 
 function unsupported(reason: string): IntakeExtract {
   return { method: "unsupported", methodVersion: INTAKE_EXTRACT_VERSION, blocks: [], text: "", warnings: [reason] };

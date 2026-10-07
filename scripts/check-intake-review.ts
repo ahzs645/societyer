@@ -26,8 +26,8 @@ import { buildPromotionBundle, defaultInfoTypeForPath, sourceDocumentPayload } f
 import { writeSyntheticFixtures } from "./lib/intake-synthetic-fixtures";
 
 // ------------------------------------------------------------ policy
-for (const name of ["intake:mergeCandidates", "intake:provenanceForExtraction", "intake:runSummaries"]) assert.equal(actionPermission(name, "query"), "settings:read");
-for (const name of ["intake:reviewFields", "intake:undoReviews", "intake:promoteExtraction", "intake:reconcileRun"]) assert.equal(actionPermission(name, "mutation"), "settings:write");
+for (const name of ["intake:mergeCandidates", "intake:provenanceForExtraction", "intake:runSummaries", "intake:entityCandidates"]) assert.equal(actionPermission(name, "query"), "settings:read");
+for (const name of ["intake:reviewFields", "intake:undoReviews", "intake:promoteExtraction", "intake:reconcileRun", "intake:linkNameAcrossRun"]) assert.equal(actionPermission(name, "mutation"), "settings:write");
 
 // ------------------------------------------------------------ pipeline + staging
 const society = "society_review";
@@ -42,6 +42,7 @@ const db = new MemoryDb({ seed: {
     { _id: "meeting_board_no_minutes", societyId: society, title: "Board meeting", scheduledAt: "2025-05-13T12:00:00.000Z", type: "Board", status: "HeldMinutesMissing", attendeeIds: [] },
     { _id: "meeting_exec", societyId: society, title: "Executive meeting (draft record)", scheduledAt: "2025-02-11T12:00:00.000Z", type: "Committee", status: "Held", attendeeIds: [], minutesId: "minutes_exec" },
   ],
+  peopleDirectory: [{ _id: "pd_avery", societyId: society, fullName: "Avery Quill", firstName: "Avery", lastName: "Quill", searchName: "avery quill" }],
   minutes: [{ _id: "minutes_exec", societyId: society, meetingId: "meeting_exec", heldAt: "2025-02-11T12:00:00.000Z", attendees: [], absent: [], quorumMet: false, quorumStatus: "not_recorded", discussion: "", decisions: [], actionItems: [], motionIds: [] }],
 } });
 let actor = "user_owner";
@@ -134,6 +135,19 @@ const payload = sourceDocumentPayload({ fileKey: "local:x.pdf", name: "x.pdf", s
 assert.equal(payload.extractedText, undefined, "restricted text never travels with the source document");
 assert.equal(payload.mimeType, "application/pdf");
 assert.throws(() => buildPromotionBundle({ extraction: { ...board.extraction, docClass: "policy" }, reviews: [], files: [], runName: "x" }), /not supported/);
+
+// ------------------------------------------------------------ entities across the run
+const entities = await query("intake:entityCandidates", { societyId: society, extractionId: boardRow._id });
+assert.equal(entities.directoryReadable, true);
+const averyGroup = entities.groups.find((group: any) => group.name === "Avery Quill");
+assert.equal(averyGroup.candidates[0].personId, "pd_avery");
+const linked = await mutate("intake:linkNameAcrossRun", { societyId: society, runId: staged.runId, name: "avery quill", personId: "pd_avery" });
+assert.ok(linked.occurrences >= averyGroup.occurrences.length, "one decision covers every occurrence in the run");
+const linkedReview = db.dump("intakeFieldReviews").find((row: any) => row.decision === "edit" && row.extractionId === boardRow._id) as any;
+assert.ok(linkedReview.editedValue === "Avery Quill" || linkedReview.editedValue.resolvedName === "Avery Quill");
+await assert.rejects(() => mutate("intake:linkNameAcrossRun", { societyId: society, runId: staged.runId, name: "Avery Quill", personId: "pd_missing" }), /not found/);
+await mutate("intake:undoReviews", { societyId: society, reviewIds: linked.reviewIds });
+assert.equal(db.dump("intakeFieldReviews").length, 0);
 
 // ------------------------------------------------------------ batched reviews + undo
 const accept = (paths: string[]) => paths.map((fieldPath) => ({ extractionId: boardRow._id, fieldPath, decision: "accept" }));
