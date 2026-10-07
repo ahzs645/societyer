@@ -1915,7 +1915,7 @@ async function sessionRecords(ctx: any, societyId: string, sessionId: string) {
   return docs
     .filter(isImportRecord)
     .map(hydrateRecord)
-    .filter((record) => record.sessionId === sessionId);
+    .filter((record: any) => record.sessionId === sessionId);
 }
 
 async function recordsForSession(ctx: any, sessionId: string) {
@@ -1950,7 +1950,7 @@ async function upsertHistorySources(ctx: any, societyId: string, sourceRecords: 
     let sourceId = null;
     if (source.externalId) {
       const existing = existingSources.find(
-        (candidate) =>
+        (candidate: any) =>
           candidate.externalId === source.externalId &&
           (candidate.externalSystem ?? "paperless") === (source.externalSystem ?? "paperless"),
       );
@@ -2055,7 +2055,7 @@ async function patchSessionUpdatedAt(ctx: any, sessionId: string) {
   const records = (await recordsForSession(ctx, sessionId))
     .filter(isImportRecord)
     .map(hydrateRecord)
-    .filter((record) => record.sessionId === sessionId);
+    .filter((record: any) => record.sessionId === sessionId);
   const summary = summarizeRecords(records);
   await ctx.db.patch(sessionId, {
     content: JSON.stringify({ ...payload, summary, updatedAtISO: new Date().toISOString() }),

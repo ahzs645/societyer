@@ -874,7 +874,7 @@ export async function applyApprovedSectionRecordsPortable(
   await requireDocumentAccess(ctx, sessionId, "manage");
   const records = await sessionRecords(ctx, societyId, sessionId);
   const selected = await selectedImportRecords(ctx, String(session.societyId), sessionId, records, recordIds);
-  for (const record of records.filter(row => selected.has(String(row._id)))) {
+  for (const record of records.filter((row: any) => selected.has(String(row._id)))) {
     const candidate = await ctx.db.get(record._id, "documents");
     if (String(candidate?.societyId) !== societyId) throw new Error("documents not found.");
     const document = await requireDocumentAccess(ctx, record._id, "manage");
@@ -901,7 +901,7 @@ export async function applyApprovedSectionRecordsPortable(
   // Resolve existing source references for the whole selection before writes.
   // Otherwise a later revoked/foreign source could follow an earlier insertion
   // in portable runtimes that do not roll back caught errors automatically.
-  const externalIds = unique(sectionRecords.flatMap(record => [
+  const externalIds = unique(sectionRecords.flatMap((record: any) => [
     ...(record.sourceExternalIds ?? []), ...(record.payload?.sourceExternalIds ?? []),
   ]));
   for (const externalId of externalIds) {
