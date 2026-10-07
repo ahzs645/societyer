@@ -223,7 +223,19 @@
     "logoDarkHint": "By default, the same logo is used in both themes.",
     "letterheadHint": "Header image for exported minutes, meeting packs, and the public copy.",
     "sidebarSubtitle": "Choose which sidebar sections show in your workspace.",
-    "aiSubtitle": "Show or hide the in-app AI chat features."
+    "aiSubtitle": "Show or hide the in-app AI chat features.",
+    "aiToggleHint": "When off, the sidebar bot button and the floating AI assistant are removed. Other AI-driven helpers (e.g. transcript generation) stay available.",
+    "inventorySubtitle": "Controls for asset and consumable workflows.",
+    "inventoryPromptHint": "When adding stock to a consumable item, ask how many are left first, then add the new amount to that observed count.",
+    "notificationsSubtitle": "Controls for the in-app notification center.",
+    "keepClearedFor": "Keep cleared notifications for",
+    "irreversible": "Irreversible",
+    "sharedViews": "Workspace shared views",
+    "demoData": "Demo data",
+    "modulesAccessNote": "Modules are workspace-wide feature switches. User access follows workspace roles.",
+    "modulesOwnerOnly": "Only an Owner or Admin can change these settings.",
+    "viewUsersAccess": "View users & access",
+    "moduleIncludes": "Includes: {{items}}"
   },
   "locale": {
     "en": "English",
@@ -245,5 +257,99 @@
     "tableView": "Table view",
     "kanbanView": "Kanban view",
     "calendarView": "Calendar view"
+  },
+  "modules": {
+    "communications": {
+      "label": "Communications",
+      "description": "Campaigns, member consent preferences, and AGM notice delivery."
+    },
+    "volunteers": {
+      "label": "Volunteer management",
+      "description": "Volunteer roster, screenings, and public volunteer intake."
+    },
+    "grants": {
+      "label": "Grant management",
+      "description": "Grant pipeline, applications, reports, and public funding intake."
+    },
+    "voting": {
+      "label": "Voting & resolutions",
+      "description": "Member proposals, elections, written resolutions, proxies, and ballot access."
+    },
+    "auditors": {
+      "label": "Auditors",
+      "description": "Auditor appointments and related oversight records."
+    },
+    "attestations": {
+      "label": "Director attestations",
+      "description": "Annual director attestations and missing-attestation tracking."
+    },
+    "courtOrders": {
+      "label": "Court orders",
+      "description": "Court order tracking for organizations that need it."
+    },
+    "filingPrefill": {
+      "label": "Filing pre-fill",
+      "description": "Pre-fill packets and export helpers for filing workflows."
+    },
+    "recordsInspection": {
+      "label": "Records requests",
+      "description": "Records retention and inspection request workflows."
+    },
+    "pipaTraining": {
+      "label": "PIPA training log",
+      "description": "Training records for privacy and CASL refresh workflows."
+    },
+    "insurance": {
+      "label": "Insurance register",
+      "description": "Insurance policy records and renewal tracking."
+    },
+    "secrets": {
+      "label": "Access custody",
+      "description": "Client-facing custody tracking for recovery keys, registry credentials, account owners, and review dates."
+    },
+    "transparency": {
+      "label": "Public transparency",
+      "description": "Public transparency center and published records."
+    },
+    "reconciliation": {
+      "label": "Reconciliation",
+      "description": "Bank-to-ledger reconciliation workflows."
+    },
+    "assets": {
+      "label": "Asset register",
+      "description": "Asset tags, custody, maintenance, insurance, grants, verification, and disposal tracking."
+    },
+    "donationReceipts": {
+      "label": "Donation receipts",
+      "description": "Receipt issuance, voiding, and receipt history."
+    },
+    "membershipBilling": {
+      "label": "Membership billing",
+      "description": "Plans, subscriptions, and membership billing operations."
+    },
+    "employees": {
+      "label": "Employee register",
+      "description": "Employee records for societies with payroll or staff."
+    },
+    "paperless": {
+      "label": "Paperless-ngx",
+      "description": "External document storage, OCR, and Paperless tag sync for Societyer files."
+    },
+    "browserConnectors": {
+      "label": "Browser apps",
+      "description": "User-authorized browser app profiles for imports, downloads, and site utilities."
+    },
+    "workflows": {
+      "label": "Workflows",
+      "description": "Templated automations — AGM prep, insurance renewal reminders, annual-report filing."
+    }
+  },
+  "moduleCategories": {
+    "Engagement": "Engagement",
+    "Governance": "Governance",
+    "Compliance": "Compliance",
+    "Public": "Public",
+    "Finance": "Finance",
+    "Integrations": "Integrations"
   }
 }

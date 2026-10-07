@@ -6,6 +6,8 @@ export default [
   {
     ignores: [
       "dist/**",
+      // `npm run desktop:build` emits compiled Electron + shared JS here.
+      "dist-electron/**",
       ".claude/**",
       "node_modules/**",
       "convex/_generated/**",

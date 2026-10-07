@@ -105,6 +105,47 @@ export function blankAttendanceRow(patch: Partial<AttendanceGridRow> = {}): Atte
 }
 
 /**
+ * Add incoming rows (from the source, a paste or the directors list) to the
+ * grid. A name already in the grid is not duplicated; instead its blank role,
+ * affiliation and represented organization are filled from the incoming row,
+ * so "Use names from source" also brings in "Terry Robert, President" roles
+ * for attendees that were imported as bare names. Values a reviewer already
+ * typed are never overwritten.
+ */
+export function mergeAttendanceRows(current: AttendanceGridRow[], incoming: AttendanceGridRow[]): { rows: AttendanceGridRow[]; added: number; filled: number } {
+  const byKey = new Map<string, number>();
+  const rows = current.map((row) => ({ ...row }));
+  rows.forEach((row, index) => {
+    const key = normalizePersonKey(row.name);
+    if (key && !byKey.has(key)) byKey.set(key, index);
+  });
+  let added = 0;
+  let filled = 0;
+  for (const row of incoming) {
+    const key = normalizePersonKey(row.name);
+    if (!key) continue;
+    const existingIndex = byKey.get(key);
+    if (existingIndex === undefined) {
+      byKey.set(key, rows.length);
+      rows.push(row);
+      added += 1;
+      continue;
+    }
+    const existing = rows[existingIndex];
+    let changed = false;
+    for (const field of ["roleTitle", "affiliation", "representedOrganization"] as const) {
+      const incomingValue = String(row[field] ?? "").trim();
+      if (incomingValue && !String(existing[field] ?? "").trim()) {
+        existing[field] = incomingValue;
+        changed = true;
+      }
+    }
+    if (changed) filled += 1;
+  }
+  return { rows, added, filled };
+}
+
+/**
  * Build grid rows from a minutes record plus the meeting's attendance register
  * rows. Detailed attendance wins; names only in the legacy lists are added; then
  * register rows not already represented are appended (except ones a reviewer
@@ -203,6 +244,17 @@ export function attendanceRowsFromPaste(text: string, status: AttendanceGridStat
     .map((line) => line.replace(/^[\s\-–—•*·]+/, "").trim())
     .filter(Boolean)
     .map((line) => {
+      // "Blair Sample (Chair), Ministry of Examples": role in brackets, then affiliation.
+      const both = /^([^(),]+?)\s*\(([^)]+)\)\s*,\s*(.+)$/.exec(line);
+      if (both) {
+        return blankAttendanceRow({
+          name: both[1].trim(),
+          status,
+          roleTitle: both[2].trim(),
+          affiliation: both[3].trim(),
+          quorumCounted: defaultQuorumCounted(status),
+        });
+      }
       const screened = screenAttendanceName(line);
       return blankAttendanceRow({
         name: screened.kind === "person" ? screened.name : line,

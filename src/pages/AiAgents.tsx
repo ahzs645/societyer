@@ -11,6 +11,7 @@ import { PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Field, SettingsShell } from "../components/ui";
 import { Select } from "../components/Select";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/Modal";
 import { streamChatMessage, isChatStreamUnavailable } from "../lib/aiChatStream";
 
 type AgentDefinition = {
@@ -106,6 +107,7 @@ export function AiAgentsPage() {
   const approveToolDraft = usePermissionedMutation(api.aiAgents.approveToolDraft, canWriteTasks);
   const rejectToolDraft = usePermissionedMutation(api.aiAgents.rejectToolDraft, canWriteTasks);
   const toast = useToast();
+  const confirm = useConfirm();
 
   const [selectedKey, setSelectedKey] = useState("compliance_analyst");
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
@@ -853,7 +855,23 @@ export function AiAgentsPage() {
                       <button
                         className="btn btn--ghost btn--sm"
                         disabled={!canWriteTasks}
-                        onClick={() => canWriteTasks && skill._id && removeSkill({ societyId: society._id, id: skill._id as any })}
+                        onClick={async () => {
+                          if (!canWriteTasks || !skill._id) return;
+                          const ok = await confirm({
+                            title: `Delete the skill "${skill.name}"?`,
+                            message: "Agents stop using its instructions. The skill's text is deleted and cannot be recovered; deactivate it instead to keep it.",
+                            confirmLabel: "Delete skill",
+                            tone: "danger",
+                          });
+                          if (!ok) return;
+                          try {
+                            await removeSkill({ societyId: society._id, id: skill._id as any });
+                            toast.success("Skill deleted", skill.name);
+                          } catch (error: any) {
+                            toast.error("Could not delete the skill", error?.message ?? "Please try again.");
+                          }
+                        }}
+                        aria-label={`Delete skill ${skill.name}`}
                       >
                         <Trash2 size={12} /> Delete
                       </button>

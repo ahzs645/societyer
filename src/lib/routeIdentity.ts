@@ -323,7 +323,7 @@ export const ROUTE_IDENTITY: Record<string, RouteIdentity> = {
   // ---- Workflows (kept visible to everyone — plain-language automation a treasurer can use) ----
   "/app/workflows": { icon: Workflow, group: "workflows", label: "Workflows", module: "workflows" },
   "/app/workflow-runs": { icon: History, group: "workflows", label: "Workflow runs", module: "workflows" },
-  "/app/calendar-sync": { icon: CalendarClock, group: "workflows", label: "Calendar sync" },
+  "/app/calendar-sync": { icon: CalendarClock, group: "workflows", label: "Calendar sync", module: "workflows" },
 
   // ---- Advanced setup (technical/admin-only — raw integration & automation internals) ----
   "/app/integrations": { icon: Plug, group: "advanced", label: "Integrations", module: "workflows", permission: "settings:manage" },

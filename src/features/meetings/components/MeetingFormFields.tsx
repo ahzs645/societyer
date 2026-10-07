@@ -20,10 +20,11 @@ import { formatDateTime, toDateTimeLocalValue } from "@/lib/format";
 import { usePermissions } from "@/hooks/usePermissions";
 import { usePermissionedMutation } from "@/hooks/usePermissionedMutation";
 import { useBylawRules } from "@/hooks/useBylawRules";
-import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow } from "../lib/noticeWindow";
+import { daysUntil, isGeneralMeeting, meetingScheduleConflicts, meetsNoticeWindow, defaultNewMeetingStart } from "../lib/noticeWindow";
 import { useHiddenSuggestions, looksLikeLink } from "@/lib/hiddenSuggestions";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { formatMeetingDate } from "../../../../shared/meetingDates";
+import { suggestedMeetingTitle } from "../lib/meetingDetailHelpers";
 
 export type MeetingDraft = {
   type: string;
@@ -177,8 +178,7 @@ export function makeMeetingDraft(
   const type = overrides.type ?? "Board";
   const template = meetingTemplatesForType(data.meetingTemplates, type).find((row) => row.isDefault) ??
     meetingTemplatesForType(data.meetingTemplates, type)[0];
-  const scheduled = new Date();
-  scheduled.setDate(scheduled.getDate() + data.noticeMinDays + ((data.rules as any)?.noticeRequiresClearDays ? 1 : 0));
+  const scheduled = defaultNewMeetingStart(data.noticeMinDays + ((data.rules as any)?.noticeRequiresClearDays ? 1 : 0));
   return blankMeetingDraft({
     type,
     scheduledAt: toDateTimeLocalValue(scheduled),
@@ -257,6 +257,11 @@ export function MeetingFormFields({
 
   return (
     <div className="meeting-form">
+      {!editingId && (daysUntil(value.scheduledAt) ?? 0) < 0 && (
+        <div className="flag" role="status" style={{ marginBottom: 12 }}>
+          <div>This date is before today, so the meeting is recorded as already held (no notice check). Add its minutes and attendance after saving.</div>
+        </div>
+      )}
       {isGeneralMeeting(value.type) &&
       (daysUntil(value.scheduledAt) ?? 0) >= 0 &&
       !meetsNoticeWindow(value.scheduledAt, effectiveNoticeMinDays, effectiveNoticeMaxDays, effectiveRules) ? (
@@ -300,11 +305,11 @@ export function MeetingFormFields({
           )}
         </div>
       )}
-      <Field label="Title" required>
+      <Field label="Title" hint={editingId ? undefined : "Leave blank to use the suggested title."}>
         <input
           className="input"
-          required
           value={value.title}
+          placeholder={editingId ? undefined : suggestedMeetingTitle(value, committees) || undefined}
           onChange={(e) => onChange({ title: e.target.value })}
         />
       </Field>

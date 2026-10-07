@@ -127,10 +127,10 @@ console.log(`end-to-end bundle: ${Object.entries(counts).map(([key, value]) => `
 for (const collection of ["meetingMinutes", "meetingMaterials", "policies", "bylawRuleSets", "committees", "directors", "organizationSeats", "proxies", "financialStatementImports", "budgetSnapshots", "insurancePolicies", "grants", "deadlines", "filings", "sourceEvidence", "transactionCandidates", "representationGaps"]) {
   assert.ok((counts[collection] ?? 0) > 0, `bundle has ${collection}`);
 }
-// Meetings shown only by an agenda are staged as held with minutes missing.
+// Meetings shown only by an agenda (date past) are staged as held with minutes missing.
 const june = bundle.meetingMinutes.find((row) => row.meetingDate === "2025-06-10");
 assert.ok(june, "the June 10 agenda evidences a meeting");
-assert.equal(june.meetingStatus, "Held");
+assert.equal(june.meetingStatus, "HeldMinutesMissing");
 assert.match(june.discussion, /No minutes were found/);
 assert.ok(june.consentItems?.length === 3 && june.consentItems.every((item: any) => item.outcome === "received"), "consent items are received, never adopted");
 assert.ok(june.agendaItems?.some((item: any) => item.requestedAction === "approve"), "agenda items carry the requested action");

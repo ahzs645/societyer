@@ -61,10 +61,17 @@ async function getNextBylawRuleVersion(
   return Math.max(0, ...rows.map((row) => row.version)) + 1;
 }
 
+// Versions are effective from a calendar day. "Reset to defaults" stamps the
+// click instant while "Save new version" stamps midnight of the chosen day, so
+// two versions effective the same day are ordered by version, not by time.
 function compareRuleSetsDesc(a: any, b: any) {
-  const byEffective = effectiveTimestamp(b) - effectiveTimestamp(a);
-  if (byEffective !== 0) return byEffective;
-  return b.version - a.version;
+  const byDay = effectiveDay(b).localeCompare(effectiveDay(a));
+  if (byDay !== 0) return byDay;
+  return (Number(b.version) || 0) - (Number(a.version) || 0);
+}
+
+function effectiveDay(row: any) {
+  return typeof row.effectiveFromISO === "string" ? row.effectiveFromISO.slice(0, 10) : "";
 }
 
 function effectiveTimestamp(row: any) {

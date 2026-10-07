@@ -278,6 +278,15 @@
     display: block;
     width: 100%;
   }
+  // `.table-wrap > .table` (phone horizontal scrolling for wide tables) sets
+  // display: table and width: max-content with higher specificity; stacked
+  // card tables must win, or they spill out of the now non-scrolling wrap.
+  .table-wrap > .table.table--stack-mobile {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
   .table--stack-mobile tr {
     padding: token('s-2') 0;
     border-bottom: 1px solid token('border');

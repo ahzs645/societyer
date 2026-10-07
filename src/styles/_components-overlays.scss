@@ -306,6 +306,24 @@
   width: 40px;
   height: 40px;
 }
+.calendar__typed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.calendar__typed-input {
+  flex: 1 1 140px;
+  min-width: 0;
+  height: 28px;
+  font-size: token('fs-sm');
+}
+.calendar__typed-error {
+  flex-basis: 100%;
+  color: token('danger');
+  font-size: token('fs-xs');
+}
 .calendar__head {
   @include flex-between;
   margin-bottom: 8px;

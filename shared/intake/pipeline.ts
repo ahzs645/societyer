@@ -164,6 +164,8 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
     let envelope: IntakeExtractionResult | undefined;
     // Restricted files (consents with home addresses, invoices, mailboxes …) are never sent to a provider.
     const restricted = PROVIDER_EXCLUDED_CLASSES.has(docClass) || (file.sensitivity === "restricted" && (Boolean(file.classification?.restricted) || !MINUTES_LIKE.has(docClass)));
+    // The processing log says so for every file a configured provider did not receive (privacy audit trail).
+    if (options.llm && restricted) log.push({ atISO: now(), fileKey: file.fileKey, stage: "llm_skipped", provider: options.llm.provider, model: options.llm.model, sentToProvider: false, note: `Restricted (${PROVIDER_EXCLUDED_CLASSES.has(docClass) ? `${docClass}: personal-data class` : file.classification?.restrictedReason ?? file.dispositionReason ?? "restricted personal data"}): never sent to a model provider; deterministic extractor used.` });
     if (options.llm && !restricted) {
       const result = await extractWithLlm({ fileId: file.fileKey, fileName: file.name, docClass, extract, restricted, generate: options.llm.generate, provider: options.llm.provider, model: options.llm.model, budget }).catch((error) => ({ log: [{ atISO: now(), fileKey: file.fileKey, stage: "llm_skipped" as const, sentToProvider: true, note: `Provider error: ${error instanceof Error ? error.message : String(error)}` }], envelope: undefined, verification: undefined }));
       log.push(...result.log);

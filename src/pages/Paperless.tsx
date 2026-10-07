@@ -11,6 +11,7 @@ import { Toggle } from "../components/Controls";
 import { formatDateTime } from "../lib/format";
 import { Database, ExternalLink, RefreshCw, Tags, UploadCloud } from "lucide-react";
 import { useEffect, useState } from "react";
+import { openableExternalUrl } from "../lib/externalUrl";
 
 export function PaperlessPage() {
   const society = useSociety();
@@ -236,8 +237,8 @@ export function PaperlessPage() {
                   <Badge tone={sync.status === "complete" ? "success" : sync.status === "failed" ? "danger" : "info"}>
                     {sync.status}
                   </Badge>
-                  {sync.paperlessDocumentUrl && (
-                    <a className="btn btn--ghost btn--sm" href={sync.paperlessDocumentUrl} target="_blank" rel="noreferrer">
+                  {openableExternalUrl(sync.paperlessDocumentUrl) && (
+                    <a className="btn btn--ghost btn--sm" href={openableExternalUrl(sync.paperlessDocumentUrl)!} target="_blank" rel="noreferrer">
                       <ExternalLink size={12} /> Open
                     </a>
                   )}

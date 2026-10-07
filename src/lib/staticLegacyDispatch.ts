@@ -921,11 +921,12 @@ function mutCasesSociety1(name: string, args: StaticArgs, store?: StaticDemoDexi
       });
       staticSeedNewSocietyOwner(store, {
         societyId,
+        // Blank form fields fall back like convex/society.createWorkspace (blankToUndefined).
         placeholderEmail:
-          args?.officialEmail ??
-          args?.privacyOfficerEmail ??
+          staticFilled(args?.officialEmail) ??
+          staticFilled(args?.privacyOfficerEmail) ??
           `owner@${String(args?.name ?? "workspace").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`,
-        placeholderDisplayName: args?.privacyOfficerName ?? "Owner",
+        placeholderDisplayName: staticFilled(args?.privacyOfficerName) ?? "Owner",
         createdAtISO: now,
       });
       // Mirror convex/society.createWorkspace exactly. The UI reads `name`,
@@ -1526,9 +1527,9 @@ export function mutationResult(name: string, args: StaticArgs, store?: StaticDem
       staticSeedNewSocietyOwner(store, {
         societyId: String(id),
         placeholderEmail:
-          row.officialEmail ??
+          staticFilled(row.officialEmail) ??
           `owner@${String(row.name ?? "workspace").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.local`,
-        placeholderDisplayName: row.privacyOfficerName ?? "Owner",
+        placeholderDisplayName: staticFilled(row.privacyOfficerName) ?? "Owner",
         createdAtISO: row.createdAtISO,
       });
     }
@@ -1634,6 +1635,11 @@ function staticStoredRoleHolderRevisions(store: StaticDemoDexieStore | null | un
 
 function staticLocalId(moduleName: string, exportName = "row") {
   return `static_${moduleName}_${exportName}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** A trimmed non-empty string, else undefined (mirrors convex/society blankToUndefined). */
+export function staticFilled(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function staticSeedNewSocietyOwner(

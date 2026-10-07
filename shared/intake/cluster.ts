@@ -3,6 +3,7 @@
  * duplicates use SimHash over word shingles; versions come from normalised
  * file names with draft/final/approved/copy markers stripped. */
 import { isUsableContentHash } from "./junk";
+import { findDates } from "./parse";
 
 export type ClusterRelation = "canonical" | "identical" | "format-copy" | "near-duplicate" | "draft-of" | "approved-of" | "version-of" | "package-embedded";
 export type ClusterInput = { id: string; name: string; path?: string; sha256?: string; text?: string; sizeBytes?: number; modifiedTime?: string };
@@ -20,9 +21,17 @@ export function versionMarker(name: string): "draft" | "approved" | "final" | "s
   return null;
 }
 
-/** File name with extension, version markers, separators and copy suffixes removed. */
+/** The date a file name carries ("2021_10_12_…", "February 2021 …", "08-10-28 …"), to the precision written. */
+export function nameDateKey(name: string): string {
+  const dates = findDates(name.replace(/\.[a-z0-9]{1,6}$/i, ""), { allowNumericShortYear: true, allowMonthPrecision: true });
+  return (dates.find((date) => date.precision === "day") ?? dates.find((date) => date.precision === "month") ?? dates[0])?.iso ?? "";
+}
+
+/** File name with extension(s), version markers, separators and copy suffixes removed. */
 export function normalizedStem(name: string): string {
   return name
+    // "Minutes.docx.pdf" (a PDF export of a Word file) has the same stem as "Minutes.docx".
+    .replace(/(?:\.(?:docx?|pdf|xlsx?|xls|pptx?|rtf|odt|txt|msg|eml|html?))+$/i, "")
     .replace(/\.[a-z0-9]{1,6}$/i, "")
     .replace(/^(?:item\s*\d+(?:\.\d+)*[\s_.-]+)/i, "")
     .replace(/\(\d+\)/g, " ")
@@ -156,12 +165,14 @@ export function clusterFiles(files: ClusterInput[], options: { nearDuplicateBits
       link(a.file.id, b.file.id, differentFormat && sameStem ? "format-copy" : "near-duplicate", `Text SimHash distance ${distance}/64${differentFormat ? " across formats" : ""}`, 1 - distance / 64);
     }
   }
-  // 3. Version families by normalised name.
+  // 3. Version families by normalised name. The stem drops every number, so the date the name
+  // carries is part of the key: "2021_06_08_Operations_Minutes" and "2021_07_21_Operations_Minutes"
+  // are two meetings, not two versions of one.
   const byStem = new Map<string, ClusterInput[]>();
   for (const file of files) {
     const stem = normalizedStem(file.name);
     if (stem.length < 6) continue;
-    const key = `${stem}|${nameDateSignature(file.name)}`;
+    const key = `${stem}|${nameDateKey(file.name)}`;
     byStem.set(key, [...(byStem.get(key) ?? []), file]);
   }
   for (const group of byStem.values()) {

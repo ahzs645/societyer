@@ -9,12 +9,14 @@ export default defineConfig({
     channel: "chrome",
     headless: true,
     screenshot: "only-on-failure",
+    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
   },
   webServer: {
     command: "npm run build:pages && npx vite preview --port 4175 --strictPort",
     port: 4175,
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    // build:pages typechecks Convex and the app and runs a full vite build first.
+    timeout: 600_000,
   },
   projects: [
     {

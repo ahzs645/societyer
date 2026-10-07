@@ -124,8 +124,36 @@ function humanize(key: string): string {
   return key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
 }
 
-/** Every reviewable FieldValue in an extraction record, header first, then by group and item. */
-export function reviewFieldsForRecord(record: unknown): ReviewField[] {
+const AGENDA_CLASSES = new Set(["agenda", "meetingPackage", "agmMaterial"]);
+
+/** Fields a reviewer must accept (or edit) before a record of this class can be promoted. */
+export function requiredFieldsFor(docClass: string | undefined, record: unknown): Array<{ path: string; label: string }> {
+  const object = (record && typeof record === "object" ? record : {}) as Record<string, unknown>;
+  const has = (key: string) => object[key] !== undefined && object[key] !== null;
+  if (!docClass || docClass === "meetingMinutes") return [{ path: "body", label: "Body" }, { path: "date", label: "Meeting date" }];
+  if (AGENDA_CLASSES.has(docClass)) return [...(has("body") ? [{ path: "body", label: "Body" }] : []), { path: has("meetingDate") && !has("date") ? "meetingDate" : "date", label: "Meeting date" }];
+  if (docClass === "policy" || docClass === "bylaws" || docClass === "grant") return has("title") ? [{ path: "title", label: "Title" }] : [];
+  if (docClass === "financialStatement") return [{ path: "periodEnd", label: "Period end" }];
+  // An insurance policy is identified by its insurer or policy number (the import contract drops one with neither).
+  if (docClass === "insurance") return [...(has("termStart") || !has("policyNumber") ? [{ path: "termStart", label: "Term start" }] : []), has("insurer") || !has("policyNumber") ? { path: "insurer", label: "Insurer" } : { path: "policyNumber", label: "Policy number" }];
+  if (docClass === "registryFiling") return has("filingType") ? [{ path: "filingType", label: "Filing type" }] : [];
+  if (docClass === "invoice") return [{ path: "date", label: "Invoice date" }, { path: "amount", label: "Amount" }, ...(has("vendor") ? [{ path: "vendor", label: "Vendor" }] : [])];
+  return [];
+}
+
+/** Label of the `date` field: the meeting date only for meeting records. */
+function dateLabelFor(docClass: string | undefined): string {
+  if (!docClass || docClass === "meetingMinutes" || AGENDA_CLASSES.has(docClass)) return "Meeting date";
+  if (docClass === "invoice") return "Invoice date";
+  if (docClass === "correspondence") return "Sent";
+  return "Date";
+}
+
+/** Every reviewable FieldValue in an extraction record, header first, then by group and item.
+ * `docClass` sets class-specific labels and which fields are required (minutes by default). */
+export function reviewFieldsForRecord(record: unknown, docClass?: string): ReviewField[] {
+  const required = new Map(requiredFieldsFor(docClass, record).map((field) => [field.path, field.label]));
+  const meetingRecord = !docClass || docClass === "meetingMinutes" || AGENDA_CLASSES.has(docClass);
   const out: ReviewField[] = [];
   const visit = (node: unknown, path: string, itemIndex?: number) => {
     if (Array.isArray(node)) {
@@ -136,16 +164,18 @@ export function reviewFieldsForRecord(record: unknown): ReviewField[] {
     if (isFieldValue(node)) {
       const pattern = patternOf(path);
       const top = pattern.split(".")[0];
-      const spec = SPECS[pattern] ?? SPECS[top];
+      // Minutes-specific specs (attendance, motions…) apply to meeting records; other classes use their own field names.
+      const spec = meetingRecord || !["body", "meetingType", "recordStatus"].includes(pattern) ? SPECS[pattern] ?? (meetingRecord ? SPECS[top] : undefined) : undefined;
+      const label = pattern === "date" ? dateLabelFor(docClass) : required.get(pattern) ?? spec?.label ?? humanize(pattern.split(".").pop() ?? pattern);
       out.push({
         path,
         pattern,
-        group: GROUP_FOR[top] ?? (path.includes(".") || path.includes("[") ? "other" : "meeting"),
+        group: (meetingRecord ? GROUP_FOR[top] : undefined) ?? (path.includes(".") || path.includes("[") ? "other" : "meeting"),
         ...(itemIndex !== undefined ? { itemIndex } : {}),
-        label: spec?.label ?? humanize(pattern.split(".").pop() ?? pattern),
-        kind: spec?.kind ?? (typeof (node as FieldValue<unknown>).value === "object" ? "json" : "text"),
+        label,
+        kind: spec?.kind ?? (pattern === "date" || /(?:Date|Start|End|^effective|^expiry)$/.test(pattern) && typeof (node as FieldValue<any>).value?.iso === "string" ? "date" : typeof (node as FieldValue<unknown>).value === "object" ? "json" : typeof (node as FieldValue<unknown>).value === "boolean" ? "boolean" : "text"),
         ...(spec?.options ? { options: spec.options } : {}),
-        required: Boolean(spec?.required),
+        required: required.has(path),
         legalWeight: spec?.weight ?? 1,
         field: node as FieldValue<any>,
       });
@@ -243,10 +273,12 @@ export function applyReviews(record: Record<string, any>, decisions: Map<string,
 
 export type Readiness = { ready: boolean; missing: string[]; problems: string[]; reviewed: number; promoted: number; rejected: number; unreviewed: number; total: number };
 
-/** A minutes record can be promoted once its required fields (date to the day, body) are accepted. */
-export function promotionReadiness(fields: ReviewField[], decisions: Map<string, ReviewRow>): Readiness {
+/** A record can be promoted once its required fields are accepted: for minutes and agendas the
+ * meeting date (to the day) and body; for other classes see requiredFieldsFor. */
+export function promotionReadiness(fields: ReviewField[], decisions: Map<string, ReviewRow>, docClass?: string): Readiness {
   const missing: string[] = [];
   const problems: string[] = [];
+  const meetingRecord = !docClass || docClass === "meetingMinutes" || AGENDA_CLASSES.has(docClass);
   for (const field of fields.filter((candidate) => candidate.required)) {
     const review = decisions.get(field.path);
     if (!isPromotedDecision(review?.decision)) {
@@ -254,9 +286,15 @@ export function promotionReadiness(fields: ReviewField[], decisions: Map<string,
       continue;
     }
     const value = review!.decision === "edit" ? review!.editedValue : field.field.value;
-    if (field.pattern === "date" && (!value || (value as any).precision !== "day" || !/^\d{4}-\d{2}-\d{2}$/.test(String((value as any).iso ?? "")))) problems.push("The meeting date must be an exact day (edit it to YYYY-MM-DD).");
+    const exactDay = (candidate: unknown) => Boolean(candidate) && (candidate as any).precision === "day" && /^\d{4}-\d{2}-\d{2}$/.test(String((candidate as any).iso ?? ""));
+    if (meetingRecord && (field.pattern === "date" || field.pattern === "meetingDate") && !exactDay(value)) problems.push("The meeting date must be an exact day (edit it to YYYY-MM-DD).");
+    else if (!meetingRecord && field.kind === "date" && !exactDay(value) && docClass !== "financialStatement") problems.push(`The ${field.label.toLowerCase()} must be an exact day (edit it to YYYY-MM-DD).`);
   }
-  if (!fields.some((field) => field.pattern === "date")) missing.push("Meeting date");
+  // A missing required field (no value extracted at all) must be added before promotion.
+  const present = Object.fromEntries(fields.filter((field) => !/[.[]/.test(field.path)).map((field) => [field.path, true]));
+  for (const required of requiredFieldsFor(docClass, present)) {
+    if (!fields.some((field) => field.path === required.path) && !missing.includes(required.label) && (meetingRecord ? required.path !== "body" : true)) missing.push(required.label);
+  }
   let promoted = 0, rejected = 0;
   for (const field of fields) {
     const decision = decisions.get(field.path)?.decision;
@@ -285,6 +323,8 @@ export const BULK_ACCEPT_THRESHOLDS: Record<string, Record<string, number>> = {
     recorder: 0.8,
     date: 0.9,
     body: 0.85,
+    // Header labels the extractor quotes directly (0.8): the body as written names the meeting, the location is printed.
+    bodyLabel: 0.8,
     "attendance.nameAsWritten": 0.8,
     "attendance.category": 0.8,
     "attendance.affiliation": 0.9,
@@ -299,6 +339,13 @@ export const BULK_ACCEPT_THRESHOLDS: Record<string, Record<string, number>> = {
     "sections.title": 0.8,
     "sections.number": 0.8,
   },
+  // Class extractors (WP-L) state directly quoted values at 0.8–0.9 and heuristic ones at ≤ 0.75;
+  // amounts, dates and people keep the stricter level.
+  ...Object.fromEntries(["agenda", "meetingPackage", "agmMaterial", "bylaws", "policy", "directorConsent", "proxy", "roster", "financialStatement", "budget", "insurance", "agreement", "grant", "registryFiling", "correspondence", "invoice"].map((docClass) => [docClass, {
+    default: 0.8, date: 0.85, meetingDate: 0.85, periodEnd: 0.85, termStart: 0.85, termEnd: 0.85, filedDate: 0.85, amount: 0.8, "entries.person": 0.85, directorsListed: 0.85,
+    // Roster notes ("Left PGAIR in May 2022") are quoted but month-precise (0.7).
+    "entries.termStart": 0.7, "entries.termEnd": 0.7,
+  }])),
 };
 
 export function thresholdFor(docClass: string, pattern: string, overrides?: Record<string, number>): number {
@@ -338,7 +385,7 @@ export function samplePreview<T>(items: readonly T[], size = 5): T[] {
 
 // ------------------------------------------------------------ queue
 
-export type QueueRow = { _id: string; fileId: string; fileKey: string; docClass: string; status: string; risk: number; motions: number; unsupported: number; lowConfidenceFields: number; verification?: { mismatched?: number }; date?: string; body?: string };
+export type QueueRow = { _id: string; fileId: string; fileKey: string; docClass: string; status: string; risk: number; motions: number; unsupported: number; lowConfidenceFields: number; verification?: { mismatched?: number }; date?: string; body?: string; summary?: string; promotion?: { targets?: Array<{ table: string; id: string; label: string }>; coveredByExtractionId?: string; coveredByFileKey?: string } };
 export type RiskTier = "high" | "medium" | "low";
 const LEGAL_CLASSES = new Set(["bylaws", "policy", "registryFiling", "directorConsent", "proxy", "financialStatement", "agreement"]);
 

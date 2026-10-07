@@ -11,7 +11,7 @@ import { sanitizeImportedVoteCount } from "../../motionValidation";
 import { requirePermissionPortable } from "../permissions";
 import { arrayOf, cleanText, compactRecord, unique } from "./importSessionUtils";
 
-export const IMPORT_MEETING_STATUSES = ["Held", "Scheduled", "Draft", "Cancelled", "Postponed"] as const;
+export const IMPORT_MEETING_STATUSES = ["Held", "HeldMinutesMissing", "Scheduled", "Draft", "Cancelled", "Postponed"] as const;
 
 /** C14: the native meeting status from the payload; minutes default to Held. */
 export function importedMeetingStatus(payload: any): string {

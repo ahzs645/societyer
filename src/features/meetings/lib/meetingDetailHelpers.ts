@@ -5,11 +5,39 @@ import { motionCompletionGaps } from "../../../lib/motionGovernance";
 import { recordedMinutesQuorum } from "../../../../shared/minutesQuorum";
 import { formatMeetingDate } from "../../../../shared/meetingDates";
 import { todayDateOnly } from "../../../../shared/dateOnly";
+import { bodyKeyForMeeting, cleanMeetingTitle } from "../../../../shared/meetingBody";
 
 export type MeetingAgendaItemEntry = { title: string; depth: 0 | 1; _id?: string };
 
 export function normalizedMeetingTitle(value: unknown): string {
   return String(value ?? "").trim();
+}
+
+/**
+ * The title a new meeting gets when the title box is left empty:
+ * "<Body> meeting — YYYY-MM-DD", the same shape imported titles are cleaned to.
+ */
+export function suggestedMeetingTitle(
+  draft: { type?: string; committeeId?: string; special?: boolean; scheduledAt?: string },
+  committees?: ReadonlyArray<{ _id: unknown; name?: string; bodyKey?: string }> | null,
+): string {
+  const date = String(draft.scheduledAt ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
+  const committee = draft.committeeId ? committees?.find((row) => String(row._id) === String(draft.committeeId)) : undefined;
+  const bodyKey = bodyKeyForMeeting({ type: draft.type, committeeId: draft.committeeId || null }, committee ?? null);
+  return cleanMeetingTitle({ bodyKey, committeeName: committee?.name, special: draft.special, date });
+}
+
+/**
+ * A "<Body> meeting — YYYY-MM-DD" title follows its date when the date is
+ * edited; any other title is left exactly as typed.
+ */
+export function titleForChangedDate(title: string, previousDate: string | undefined, nextDate: string | undefined): string {
+  const before = String(previousDate ?? "").slice(0, 10);
+  const after = String(nextDate ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(before) || !/^\d{4}-\d{2}-\d{2}$/.test(after) || before === after) return title;
+  const suffix = ` — ${before}`;
+  return title.endsWith(suffix) ? `${title.slice(0, -suffix.length)} — ${after}` : title;
 }
 
 export function quorumPresentCount(minutes: any): number {
@@ -106,7 +134,12 @@ export function formalMinutesExportBlockers({
   for (const row of minutes?.conditionalDecisions ?? []) if (row.outcome === 'Carried' && decisionReadiness(row, minutes.decisionRequirements ?? [], minutes.quorumCheckpoints ?? []) !== 'Effective') blockers.push(`Review conditional decision ${row.title ?? row.id} before formal export.`);
   if (meeting?.status !== "Held") blockers.push("Mark the meeting held.");
   if (!minutes) return [...blockers, "Create or record the minutes."];
-  if (minutes.quorumStatus && recordedMinutesQuorum(minutes) !== true && motions.some(motion =>
+  // Imported minutes that a reviewer has checked against the source record
+  // what the source says. A mover, seconder, tally or quorum statement the
+  // source never recorded cannot be "completed" without inventing it, so it
+  // must not block the export of the adopted record.
+  const sourceReviewedImport = minutes.sourceReviewStatus === "source_reviewed" || meeting?.sourceReviewStatus === "source_reviewed";
+  if (!sourceReviewedImport && minutes.quorumStatus && recordedMinutesQuorum(minutes) !== true && motions.some(motion =>
     String(motion.outcome).toLowerCase() === "carried" && String(motion.resolutionType).toLowerCase() !== "procedural" && !/\badjourn/i.test(String(motion.text)),
   )) blockers.push("Review carried business motions against the source quorum evidence before final export.");
   if ((minutes.attendees?.length ?? 0) === 0) blockers.push("Record at least one attendee present.");
@@ -116,7 +149,7 @@ export function formalMinutesExportBlockers({
   if (![minutes.chairName, minutes.secretaryName, minutes.recorderName].some((value) => String(value ?? "").trim())) {
     blockers.push("Record a chair, secretary, or minute-taker.");
   }
-  motions.forEach((motion, index) => {
+  if (!sourceReviewedImport) motions.forEach((motion, index) => {
     const gaps = motionCompletionGaps(motion);
     if (!gaps.length) return;
     const label = String(motion.name || motion.text || `Motion ${index + 1}`).trim();
@@ -281,4 +314,21 @@ export function buildEmlMessage({
     "",
   ];
   return parts.join("\r\n");
+}
+
+const NEXT_MEETING_BODY_LABELS: Record<string, string> = { board: "Board", agm: "AGM", sgm: "SGM" };
+
+/** Structured next meetings for the minutes renderer, with readable body names. */
+export function nextMeetingsForExport(rows: unknown, committees: Array<{ _id: unknown; name?: string }>, tx: (value?: string | null) => string | null | undefined = (value) => value) {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  return rows.map((row: any) => ({
+    at: row?.at ?? null,
+    dateText: row?.dateText ?? null,
+    precision: row?.precision ?? null,
+    bodyLabel: row?.committeeId
+      ? committees.find((committee) => String(committee._id) === String(row.committeeId))?.name ?? "Committee"
+      : NEXT_MEETING_BODY_LABELS[String(row?.bodyKey ?? "")] ?? null,
+    location: tx(row?.location) ?? null,
+    notes: tx(row?.notes) ?? null,
+  }));
 }

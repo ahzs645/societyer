@@ -1,3 +1,4 @@
+import { calendarDateKey } from "../lib/calendarDates";
 import { type ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
@@ -153,7 +154,7 @@ export function AnnualCyclePage() {
           icon={<FileCheck2 size={14} />}
           // Red only when the report itself is overdue, not because some other
           // cycle item is blocked (G-12).
-          tone={data.annualReport?.status === "Filed" ? "ok" : data.annualReportDueDate && data.annualReportDueDate < new Date().toISOString().slice(0, 10) ? "danger" : undefined}
+          tone={data.annualReport?.status === "Filed" ? "ok" : data.annualReportDueDate && data.annualReportDueDate < calendarDateKey(new Date()) ? "danger" : undefined}
         />
       </div>
 

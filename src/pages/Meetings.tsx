@@ -27,8 +27,8 @@ import type { ToneVariant } from "../components/ui";
 import { type MenuSection } from "../components/Menu";
 import { Modal, useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
-import { normalizedMeetingTitle } from "../features/meetings/lib/meetingDetailHelpers";
-import { noticeDaysUntil, isGeneralMeeting, meetingScheduleConflicts, OVERLAP_WINDOW_MS } from "../features/meetings/lib/noticeWindow";
+import { normalizedMeetingTitle, suggestedMeetingTitle } from "../features/meetings/lib/meetingDetailHelpers";
+import { isGeneralMeeting, isPastMeeting, meetingCreateLabels, meetingScheduleConflicts, newGeneralMeetingNoticeProblem, OVERLAP_WINDOW_MS, statusForNewMeeting } from "../features/meetings/lib/noticeWindow";
 import {
   MeetingFormFields,
   makeMeetingDraft,
@@ -41,7 +41,7 @@ import { MergeMeetingDialog } from "../features/meetings/components/MergeMeeting
 import { useDirtyCloseGuard } from "../features/meetings/lib/useDirtyCloseGuard";
 import { formatMeetingDate, meetingDatePrecision } from "../../shared/meetingDates";
 import { bodyPatchForValue, bodyValueForMeeting, meetingBodyLabel, meetingBodyOptions } from "../../shared/meetingBodyPicker";
-import { duplicateMeetingGroups } from "../../shared/meetingMerge";
+import { duplicateMeetingGroups, preferredMeetingToKeep } from "../../shared/meetingMerge";
 import type { Doc } from "../../convex/_generated/dataModel";
 
 
@@ -332,7 +332,7 @@ export function MeetingsPage() {
   if (society === null) return <SeedPrompt />;
   const save = async () => {
     if (!form) return;
-    const title = normalizedMeetingTitle(form.title);
+    const title = normalizedMeetingTitle(form.title) || suggestedMeetingTitle(form, data.committees);
     if (!title) {
       toast.error("Enter a meeting title.");
       return;
@@ -349,17 +349,18 @@ export function MeetingsPage() {
     // window governs when notice is sent, not how far ahead a meeting may be
     // scheduled. Scheduling beyond the max is allowed; the drawer shows an
     // advisory warning instead.
-    if (isGeneralMeeting(form.type)) {
-      const days = noticeDaysUntil(form.scheduledAt, data.effectiveRules);
-      if (days == null || days < effectiveNoticeMinDays) {
-        toast.error(`General meetings need at least ${effectiveNoticeMinDays} days of notice.`);
-        return;
-      }
+    // A meeting dated before today records one already held: no notice check, status Held.
+    const noticeProblem = isGeneralMeeting(form.type) ? newGeneralMeetingNoticeProblem(form.scheduledAt, effectiveNoticeMinDays, data.effectiveRules) : null;
+    if (noticeProblem) {
+      toast.error(noticeProblem);
+      return;
     }
+    const past = isPastMeeting(form.scheduledAt);
     const { conflictAcknowledged: _conflictAcknowledged, committeeId, ...payload } = form;
     const meetingId = await create({
       societyId: society._id,
       ...payload,
+      status: statusForNewMeeting(form.scheduledAt, payload.status),
       title,
       committeeId: (committeeId || undefined) as any,
       meetingTemplateId: form.meetingTemplateId || undefined,
@@ -367,7 +368,7 @@ export function MeetingsPage() {
     });
     setFormInitial(JSON.stringify(form));
     setOpen(false);
-    toast.success("Meeting scheduled", title);
+    toast.success(past ? "Held meeting recorded" : "Meeting scheduled", title);
     if (meetingId) navigate(`/app/meetings/${meetingId}`);
   };
 
@@ -438,10 +439,23 @@ export function MeetingsPage() {
                     <span key={row._id}>
                       {index > 0 ? " · " : ""}
                       <Link to={`/app/meetings/${row._id}`}>{row.title}</Link>
+                      {/* Copies usually share a generated title: say which file each came from. */}
+                      <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+                        {" "}({[
+                          row.sourceTitle ? String(row.sourceTitle).replace(/^\d{4}-\d{2}-\d{2}\s*/, "") : "",
+                          summaryByMeeting.get(String(row._id))?.approvedAt ? "minutes approved" : "",
+                          `${summaryByMeeting.get(String(row._id))?.sectionCount ?? 0} sections`,
+                          `${summaryByMeeting.get(String(row._id))?.motionCount ?? 0} motions`,
+                        ].filter(Boolean).join(", ")})
+                      </span>
                     </span>
                   ))}
                   {canManage && (
-                    <button type="button" className="btn-action" style={{ marginLeft: 8 }} onClick={() => setMergeFor({ meeting: group.meetings[0], suggested: group.meetings.slice(1).map((row: any) => String(row._id)) })}>
+                    <button type="button" className="btn-action" style={{ marginLeft: 8 }} onClick={() => {
+                      // Keep the approved/final copy by default, not whichever sorts first.
+                      const keep: any = preferredMeetingToKeep(group.meetings as any[], (row: any) => summaryByMeeting.get(String(row._id))) ?? group.meetings[0];
+                      setMergeFor({ meeting: keep, suggested: group.meetings.filter((row: any) => String(row._id) !== String(keep._id)).map((row: any) => String(row._id)) });
+                    }}>
                       <Merge size={12} /> Merge…
                     </button>
                   )}
@@ -609,8 +623,8 @@ export function MeetingsPage() {
         ) : null}
 
       <Drawer
-        open={open} onClose={() => { void closeCreate(); }} title="Schedule meeting"
-        footer={<><button className="btn" type="button" onClick={() => { void closeCreate(); }}>Cancel</button><button className="btn btn--accent" type="button" onClick={save} disabled={!canManage || hasUnacknowledgedConflict}>Schedule</button></>}
+        open={open} onClose={() => { void closeCreate(); }} title={meetingCreateLabels(form?.scheduledAt ?? "").title}
+        footer={<><button className="btn" type="button" onClick={() => { void closeCreate(); }}>Cancel</button><button className="btn btn--accent" type="button" onClick={save} disabled={!canManage || hasUnacknowledgedConflict}>{meetingCreateLabels(form?.scheduledAt ?? "").action}</button></>}
       >
         {form && (
           <MeetingFormFields

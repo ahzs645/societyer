@@ -117,6 +117,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     indentAgendaItem,
     outdentAgendaItem,
     moveAgendaItem,
+    moveAgendaItemToEdge,
     agendaDragSourceRef,
     agendaDragIndex,
     agendaDropIndex,
@@ -1169,6 +1170,30 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                   moveAgendaItem(i, 1);
                 }}
               />
+              {isRoot && (
+                <>
+                  <MenuRow
+                    role="menuitem"
+                    icon={<ArrowUp size={14} />}
+                    label="Move to top"
+                    disabled={!canMoveAgendaUp(i)}
+                    onClick={() => {
+                      closeAgendaItemMenu();
+                      moveAgendaItemToEdge(i, "top");
+                    }}
+                  />
+                  <MenuRow
+                    role="menuitem"
+                    icon={<ArrowDown size={14} />}
+                    label="Move to bottom"
+                    disabled={!canMoveAgendaDown(i)}
+                    onClick={() => {
+                      closeAgendaItemMenu();
+                      moveAgendaItemToEdge(i, "bottom");
+                    }}
+                  />
+                </>
+              )}
               <div className="menu__separator" />
               {isRoot ? (
                 <MenuRow

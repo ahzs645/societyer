@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { ArrowLeft, CheckCheck, CircleSlash, ExternalLink, Keyboard, Layers, Loader2, Lock, RotateCcw, Upload } from "lucide-react";
+import { ArrowLeft, CheckCheck, CircleSlash, ExternalLink, Keyboard, Layers, Lock, RotateCcw, Upload } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
@@ -23,12 +23,43 @@ import { GapPanel } from "../features/intake/GapPanel";
 import { AddRunPeopleButton } from "../features/intake/AddRunPeopleButton";
 import { BulkAcceptModal, CantRepresentModal, PromoteModal, type CantRepresentDraft, type PromoteChoice, type RunBulkScope } from "../features/intake/ReviewModals";
 import { canStoreOriginals, useStoreOriginals } from "../features/intake/useStoreOriginals";
+import { CLASS_PROMOTION } from "../../shared/intake/promotionClasses";
 import "../features/intake/intake.css";
 
 type Tab = "fields" | "people" | "gaps" | "log";
 const TIER_LABEL: Record<RiskTier, string> = { high: "High risk", medium: "Medium risk", low: "Low risk" };
-const STATUS_LABEL: Record<string, string> = { pending_review: "to review", in_review: "in review", accepted: "accepted", promoted: "promoted", rejected: "rejected" };
-const STATUS_TONE: Record<string, "success" | "warn" | "danger" | "info" | "neutral"> = { pending_review: "neutral", in_review: "info", accepted: "info", promoted: "success", rejected: "danger" };
+const STATUS_LABEL: Record<string, string> = { pending_review: "to review", in_review: "in review", accepted: "accepted", promoted: "promoted", rejected: "rejected", covered: "covered by a copy" };
+const STATUS_TONE: Record<string, "success" | "warn" | "danger" | "info" | "neutral"> = { pending_review: "neutral", in_review: "info", accepted: "info", promoted: "success", rejected: "danger", covered: "success" };
+const CLOSED = new Set(["promoted", "rejected", "covered"]);
+const CLASS_TITLE: Record<string, string> = {
+  meetingMinutes: "Meeting minutes", agenda: "Agenda", meetingPackage: "Meeting package", agmMaterial: "AGM material", bylaws: "Bylaws", policy: "Policy", directorConsent: "Consent to act as a director",
+  proxy: "Proxy", roster: "Roster", financialStatement: "Financial statement", budget: "Budget", insurance: "Insurance", agreement: "Agreement", grant: "Grant", registryFiling: "Registry filing",
+  correspondence: "Correspondence", invoice: "Invoice",
+};
+/** Where a promoted native record is shown. */
+function recordHref(table: string, id: string): string {
+  switch (table) {
+    case "meetings": return `/app/meetings/${id}`;
+    case "committees": return `/app/committees/${id}`;
+    case "insurancePolicies": return `/app/insurance/${id}`;
+    case "grants": return `/app/grants/${id}`;
+    case "policies": return "/app/policies";
+    case "bylawRuleSets": return "/app/bylaw-rules";
+    case "directors": case "organizationSeats": return "/app/directors";
+    case "proxies": return "/app/proxies";
+    case "financialStatementImports": case "budgetSnapshots": return "/app/financials";
+    case "deadlines": return "/app/deadlines";
+    case "filings": return "/app/filings";
+    case "sourceEvidence": return "/app/records-archive";
+    case "transactionCandidates": return "/app/finance-imports";
+    default: return "/app/documents";
+  }
+}
+const TABLE_NOUN: Record<string, string> = {
+  meetings: "Meeting", meetingMaterials: "Meeting material", committees: "Committee", insurancePolicies: "Insurance policy", grants: "Grant", policies: "Policy", bylawRuleSets: "Bylaw rule set",
+  directors: "Director", organizationSeats: "Seat", proxies: "Proxy", financialStatementImports: "Financial statement", budgetSnapshots: "Budget", deadlines: "Deadline", filings: "Filing",
+  sourceEvidence: "Source evidence", transactionCandidates: "Transaction candidate",
+};
 const UNDO_MS = 10_000;
 
 /**
@@ -66,7 +97,7 @@ export function IntakeReviewPage() {
     setParams(next, { replace: true });
   }, [params, setParams]);
 
-  const visibleQueue = useMemo(() => (queue ?? []).filter((row) => statusFilter === "all" || (row.status !== "promoted" && row.status !== "rejected")), [queue, statusFilter]);
+  const visibleQueue = useMemo(() => (queue ?? []).filter((row) => statusFilter === "all" || !CLOSED.has(row.status)), [queue, statusFilter]);
   const groups = useMemo(() => groupQueue(visibleQueue, clusters ?? []), [visibleQueue, clusters]);
   const flat = useMemo(() => groups.flatMap((group) => group.clusters.flatMap((cluster) => [cluster.canonical, ...cluster.versions.map((version) => version.row).filter(Boolean) as QueueRow[]])), [groups]);
   useEffect(() => {
@@ -87,12 +118,13 @@ export function IntakeReviewPage() {
   const storeOriginals = useStoreOriginals(canWrite && can("documents:write"));
 
   const extraction = detail?.extraction;
-  const fields = useMemo(() => (extraction ? reviewFieldsForRecord(extraction.record) : []), [extraction]);
+  const fields = useMemo(() => (extraction ? reviewFieldsForRecord(extraction.record, extraction.docClass) : []), [extraction]);
   const decisions = useMemo(() => latestDecisions(detail?.reviews ?? []), [detail?.reviews]);
-  const readiness = useMemo(() => promotionReadiness(fields, decisions), [fields, decisions]);
+  const readiness = useMemo(() => promotionReadiness(fields, decisions, extraction?.docClass), [fields, decisions, extraction?.docClass]);
+  const promotable = Boolean(extraction && (extraction.docClass === "meetingMinutes" || CLASS_PROMOTION[extraction.docClass]));
   const selectedPath = params.get("f") ?? undefined;
   const selectedField = fields.find((field) => field.path === selectedPath);
-  const readOnly = !canWrite || extraction?.status === "promoted" || extraction?.status === "rejected";
+  const readOnly = !canWrite || CLOSED.has(String(extraction?.status));
   const [tab, setTab] = useState<Tab>("fields");
   const [bulkScope, setBulkScope] = useState<{ group?: ReviewGroup; itemIndex?: number } | null>(null);
   const [gapField, setGapField] = useState<ReviewField | null>(null);
@@ -168,7 +200,8 @@ export function IntakeReviewPage() {
     const year = String(extraction.record?.date?.value?.iso ?? "").slice(0, 4);
     const bodyValue = extraction.record?.body?.value;
     if (bodyValue && /^\d{4}$/.test(year)) scopes.push({ id: "body-year", label: `${extraction.record?.bodyLabel?.value ?? bodyValue} ${year}`, scope: { body: String(bodyValue), year } });
-    scopes.push({ id: "class", label: `All ${extraction.docClass === "meetingMinutes" ? "minutes" : extraction.docClass} in the run`, scope: { docClass: extraction.docClass } });
+    scopes.push({ id: "class", label: `All ${extraction.docClass === "meetingMinutes" ? "minutes" : `${CLASS_PROMOTION[extraction.docClass]?.noun ?? extraction.docClass} documents`} in the run`, scope: { docClass: extraction.docClass } });
+    scopes.push({ id: "all", label: "Every document in the run", scope: { all: true } });
     return scopes;
   }, [extraction, detail?.file?.clusterKey]);
 
@@ -180,13 +213,19 @@ export function IntakeReviewPage() {
       setPromoteOpen(false);
       const stored = await storeOriginals(societyId, result.sourceDocuments ?? []);
       const fileNote = stored.skipped ? "Originals stay in this browser's intake cache." : stored.stored ? `${pluralize(stored.stored, "original file")} saved as document versions.` : stored.missing ? "The original file is not on this device; the source document keeps the extracted text." : "";
-      toast.success(result.merged ? "Merged into the existing meeting" : "Meeting created", {
-        description: `${pluralize(result.provenance, "field")} with source locators${result.gaps ? `, ${pluralize(result.gaps, "system gap")}` : ""}. ${fileNote}`,
+      const coveredNote = result.covered ? ` ${pluralize(result.covered, "other copy", "other copies")} of this document ${result.covered === 1 ? "is" : "are"} now covered.` : "";
+      const first = (result.targets ?? []).find((target: any) => target.table !== "meetingMaterials") ?? result.targets?.[0];
+      const title = extraction?.docClass === "meetingMinutes"
+        ? (result.merged ? "Merged into the existing meeting" : "Meeting created")
+        : first ? `${pluralize((result.targets ?? []).filter((target: any) => target.table !== "meetingMaterials").length || 1, "record")} created from the ${CLASS_PROMOTION[extraction?.docClass]?.noun ?? "document"}`
+        : result.gaps ? `The ${CLASS_PROMOTION[extraction?.docClass]?.noun ?? "document"} was recorded as system gaps` : `The ${CLASS_PROMOTION[extraction?.docClass]?.noun ?? "document"} was filed as a source document`;
+      toast.success(title, {
+        description: `${pluralize(result.provenance, "field")} with source locators${result.gaps ? `, ${pluralize(result.gaps, "system gap")}` : ""}.${coveredNote} ${fileNote}`,
         duration: 9000,
-        action: { label: "Open meeting", onClick: () => navigate(`/app/meetings/${result.meetingId}`) },
+        ...(first ? { action: { label: `Open ${(TABLE_NOUN[first.table] ?? "record").toLowerCase()}`, onClick: () => navigate(recordHref(first.table, first.id)) } } : {}),
       });
       const index = flat.findIndex((row) => row._id === selectedId);
-      const next = flat.slice(index + 1).find((row) => row.status !== "promoted" && row.status !== "rejected");
+      const next = flat.slice(index + 1).find((row) => !CLOSED.has(row.status) && row._id !== selectedId);
       if (next && statusFilter === "open") select(next._id);
     } catch (error) {
       toast.error("Could not promote", error instanceof Error ? error.message : undefined);
@@ -195,40 +234,41 @@ export function IntakeReviewPage() {
     }
   };
 
-  // Bulk promotion: the canonical copy of each reconciled meeting whose required fields
-  // (exact date, body) are accepted. Anything that fails a rule stays pending with its reason.
-  const [bulkPromote, setBulkPromote] = useState<{ done: number; total: number } | null>(null);
-  const promotableCanonical = useMemo(() => {
-    const canonical = new Set(((run?.reconciliation?.meetings ?? []) as Array<{ canonicalFileId: string }>).map((meeting) => meeting.canonicalFileId));
-    return (queue ?? []).filter((row) => row.docClass === "meetingMinutes" && row.status !== "promoted" && row.status !== "rejected" && canonical.has(row.fileKey));
-  }, [run?.reconciliation?.meetings, queue]);
-  const promoteReady = async () => {
-    if (!societyId || !promotableCanonical.length) return;
+  // Promote every open document whose required fields are accepted (after a run-wide bulk accept).
+  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
+  const promoteAllReady = async () => {
+    if (!societyId) return;
+    const rank = (row: QueueRow) => (row.docClass === "meetingMinutes" ? 0 : ["agenda", "meetingPackage", "agmMaterial"].includes(row.docClass) ? 1 : 2);
+    const rows = flat.filter((row) => !CLOSED.has(row.status) && (row.docClass === "meetingMinutes" || CLASS_PROMOTION[row.docClass])).map((row, index) => ({ row, index })).sort((a, b) => rank(a.row) - rank(b.row) || a.index - b.index).map(({ row }) => row);
+    if (!rows.length) return;
     const ok = await confirm({
-      title: `Promote up to ${pluralize(promotableCanonical.length, "meeting")}?`,
-      message: `The canonical copy of each meeting is promoted when its exact date and body are accepted. Only accepted fields are written; drafts, copies and documents with unaccepted required fields stay pending for review. Each promotion creates or merges one meeting with a source locator per field.`,
-      confirmLabel: "Promote ready meetings",
+      title: `Promote every ready document (${rows.length})?`,
+      message: "Each document whose required fields you accepted becomes native records, one at a time: minutes first (merging into a meeting with the same date and body), then agendas, then policies, people, filings, statements and the rest. Only accepted fields are written, each with its source locator. Documents still missing a required field are skipped and stay in the queue. Every promotion is kept as an import session.",
+      confirmLabel: "Promote ready documents",
     });
     if (!ok) return;
-    setBulkPromote({ done: 0, total: promotableCanonical.length });
-    const reasons = new Map<string, number>();
-    let promoted = 0;
-    let originals = 0;
-    for (const [index, row] of promotableCanonical.entries()) {
+    setBatch({ done: 0, total: rows.length });
+    let promoted = 0, covered = 0;
+    const skipped: string[] = [];
+    const failed: string[] = [];
+    for (const [index, row] of rows.entries()) {
       try {
-        const result: any = await promoteExtraction({ societyId, extractionId: row._id, mode: "auto" });
+        const result = await promoteExtraction({ societyId, extractionId: row._id, mode: "auto" });
         promoted++;
-        const stored = await storeOriginals(societyId, result.sourceDocuments ?? []);
-        originals += stored.stored;
+        covered += result.covered ?? 0;
+        await storeOriginals(societyId, result.sourceDocuments ?? []);
       } catch (error) {
-        const reason = (error instanceof Error ? error.message : String(error)).slice(0, 120);
-        reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+        const message = error instanceof Error ? error.message : String(error);
+        if (/copy of this document|already promoted/i.test(message)) { /* covered by a copy promoted earlier in this batch */ }
+        else if (/Accept or edit|exact day|Accept the meeting date/i.test(message)) skipped.push(row.fileKey.replace(/^local:/, "").split("/").pop() ?? row.fileKey);
+        else failed.push(`${row.fileKey.replace(/^local:/, "").split("/").pop()}: ${message}`);
       }
-      setBulkPromote({ done: index + 1, total: promotableCanonical.length });
+      setBatch({ done: index + 1, total: rows.length });
     }
-    setBulkPromote(null);
-    const pending = [...reasons.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([reason, count]) => `${count}: ${reason}`).join(" · ");
-    toast.success(`Promoted ${pluralize(promoted, "meeting")}`, { description: `${pluralize(originals, "original file")} saved as document versions.${reasons.size ? ` Still pending — ${pending}` : ""}`, duration: 15000 });
+    setBatch(null);
+    const parts = [`${pluralize(promoted, "document")} promoted`, covered ? `${pluralize(covered, "copy", "copies")} covered` : "", skipped.length ? `${skipped.length} still ${skipped.length === 1 ? "needs" : "need"} a required field` : "", failed.length ? `${failed.length} failed` : ""].filter(Boolean).join(" · ");
+    if (failed.length) toast.error(parts, failed.slice(0, 3).join("\n"));
+    else toast.success(parts, skipped.length ? { description: `Open "To review" to finish: ${skipped.slice(0, 4).join(", ")}${skipped.length > 4 ? "…" : ""}`, duration: 9000 } : undefined);
   };
 
   const rejectDocument = async () => {
@@ -276,7 +316,10 @@ export function IntakeReviewPage() {
   if (run === undefined || queue === undefined) return <PageLoading />;
 
   const promotedTotal = (queue ?? []).filter((row) => row.status === "promoted").length;
+  const coveredTotal = (queue ?? []).filter((row) => row.status === "covered").length;
+  const rejectedTotal = (queue ?? []).filter((row) => row.status === "rejected").length;
   const meetingLink = provenance?.find((row) => row.targetTable === "meetings")?.targetId;
+  const promotedTargets: Array<{ table: string; id: string; label: string }> = (extraction?.promotion?.targets ?? []).filter((target: any) => target.table !== "meetingMaterials");
   const fileLog = (log ?? []).filter((entry) => !entry.fileKey || entry.fileKey === detail?.file?.fileKey);
   const locator = selectedField?.field.locators?.[0];
   const recordDate = extraction?.record?.date?.value?.iso as string | undefined;
@@ -299,6 +342,11 @@ export function IntakeReviewPage() {
           <button type="button" className={`segmented__btn${statusFilter === "all" ? " is-active" : ""}`} aria-pressed={statusFilter === "all"} onClick={() => setStatusFilter("all")}>All</button>
         </div>
         <button type="button" className="btn btn--sm btn--ghost" onClick={() => setShowKeys((value) => !value)} aria-expanded={showKeys}><Keyboard size={12} /> Shortcuts</button>
+        {canWrite && queue.some((row) => !CLOSED.has(row.status)) && (
+          <button type="button" className="btn btn--sm btn--accent" onClick={() => void promoteAllReady()} disabled={Boolean(batch)} data-testid="intake-promote-all" title="Promote every open document whose required fields are accepted">
+            <Upload size={12} /> {batch ? `Promoting ${batch.done}/${batch.total}…` : "Promote all ready…"}
+          </button>
+        )}
         {showKeys && (
           <div className="intake-shortcuts" role="note">
             <span><kbd className="intake-kbd">J</kbd>/<kbd className="intake-kbd">K</kbd> next/previous document</span>
@@ -308,18 +356,33 @@ export function IntakeReviewPage() {
           </div>
         )}
         <AddRunPeopleButton societyId={society._id} people={run.reconciliation?.people} canWrite={canWrite && can("members:write")} />
-        {canWrite && promotableCanonical.length > 0 && (
-          <button type="button" className="btn btn--sm" onClick={() => void promoteReady()} disabled={Boolean(bulkPromote) || busy} data-testid="intake-promote-ready">
-            {bulkPromote ? <><Loader2 size={12} className="spin" /> Promoting {bulkPromote.done}/{bulkPromote.total}…</> : <><Upload size={12} /> Promote ready meetings ({promotableCanonical.length})</>}
-          </button>
-        )}
         {run.status === "running" && <Badge tone="info">Run still in progress</Badge>}
         {run.status === "failed" && <Badge tone="danger">Run failed: {run.stats?.error ?? "see run details"}</Badge>}
       </div>
 
       {!queue.length && <Banner tone="info">This run has no extracted documents to review{run.status === "running" ? " yet" : ""}. {run.counts?.byDisposition?.catalogue ? `${run.counts.byDisposition.catalogue} files were catalogued only (no minutes extractor for their class).` : ""}</Banner>}
 
-      {queue.length > 0 && (
+      {queue.length > 0 && !visibleQueue.length && (
+        <section className="card intake-done" data-testid="intake-review-done" aria-labelledby="intake-done-title">
+          <div className="card__body col" style={{ gap: 10 }}>
+            <h2 className="card__title" id="intake-done-title">Every document in this run has been reviewed</h2>
+            <p className="muted" style={{ margin: 0 }}>
+              {pluralize(promotedTotal, "document")} promoted
+              {coveredTotal ? `, ${pluralize(coveredTotal, "copy", "copies")} covered by a promoted copy` : ""}
+              {rejectedTotal ? `, ${rejectedTotal} rejected` : ""}.
+              {(run.recordGaps?.length ?? 0) > 0 ? ` The run found ${pluralize(run.recordGaps.length, "record gap")} (missing minutes, AGMs without minutes, unadopted policies) to follow up in Coverage & gaps.` : ""}
+            </p>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <Link className="btn btn--accent" to="/app/coverage?tab=record">Open Coverage &amp; gaps</Link>
+              <Link className="btn" to="/app/meetings">Meetings</Link>
+              <button type="button" className="btn" onClick={() => setStatusFilter("all")}>Show all documents</button>
+              <Link className="btn btn--ghost" to="/app/intake">Start another run</Link>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {visibleQueue.length > 0 && (
         <div className="intake-panes">
           <nav className="intake-pane intake-pane--queue" aria-label="Review queue">
             <div className="intake-pane__head"><h2>Queue</h2><span className="muted" style={{ fontSize: 11 }}>{visibleQueue.length} shown</span></div>
@@ -338,7 +401,7 @@ export function IntakeReviewPage() {
             {detail && extraction ? (
               <>
                 <div className="intake-pane__head">
-                  <h2>{extraction.docClass === "meetingMinutes" ? "Meeting minutes" : extraction.docClass}</h2>
+                  <h2>{CLASS_TITLE[extraction.docClass] ?? extraction.docClass}</h2>
                   <Badge tone={STATUS_TONE[extraction.status] ?? "neutral"}>{STATUS_LABEL[extraction.status] ?? extraction.status}</Badge>
                   <span className="muted" style={{ fontSize: 11 }}>{extraction.engine}{extraction.model ? ` · ${extraction.model}` : ""}</span>
                   {detail.file.sensitivity === "restricted" && <Badge tone="danger"><Lock size={10} /> restricted</Badge>}
@@ -386,10 +449,19 @@ export function IntakeReviewPage() {
                     <span className="muted">{readiness.promoted} accepted · {readiness.rejected} rejected/gap · {readiness.unreviewed} unreviewed</span>
                   </div>
                   {extraction.status === "promoted" ? (
-                    <div className="row">
+                    <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
                       <Badge tone="success">Promoted</Badge>
-                      {meetingLink && <Link className="btn btn--sm btn--accent" to={`/app/meetings/${meetingLink}`}><ExternalLink size={12} /> Open meeting</Link>}
+                      {promotedTargets.length > 0
+                        ? promotedTargets.slice(0, 4).map((target) => <Link key={`${target.table}:${target.id}`} className="btn btn--sm" to={recordHref(target.table, target.id)}><ExternalLink size={12} /> {TABLE_NOUN[target.table] ?? target.table}: {target.label}</Link>)
+                        : meetingLink && <Link className="btn btn--sm btn--accent" to={`/app/meetings/${meetingLink}`}><ExternalLink size={12} /> Open meeting</Link>}
+                      {promotedTargets.length > 4 && <span className="muted" style={{ fontSize: 11 }}>+{promotedTargets.length - 4} more</span>}
                       <span className="muted" style={{ fontSize: 11 }}>{pluralize(provenance?.length ?? 0, "field")} with provenance</span>
+                    </div>
+                  ) : extraction.status === "covered" ? (
+                    <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
+                      <Badge tone="success">Covered</Badge>
+                      <span className="muted" style={{ fontSize: 12 }}>A copy of this document ({String(extraction.promotion?.coveredByFileKey ?? "").replace(/^local:/, "").split("/").pop()}) was promoted; this file is cited as a source of the same record.</span>
+                      {canWrite && <button type="button" className="btn btn--sm" onClick={() => void setExtractionStatus({ societyId: society._id, extractionId: extraction._id, status: "in_review" })}><RotateCcw size={12} /> Review separately</button>}
                     </div>
                   ) : extraction.status === "rejected" ? (
                     <div className="row">
@@ -399,7 +471,7 @@ export function IntakeReviewPage() {
                   ) : (
                     <div className="row">
                       <button type="button" className="btn btn--sm" disabled={readOnly} onClick={() => setBulkScope({})} data-testid="intake-bulk-open"><CheckCheck size={12} /> Bulk accept ({allBulk.length})</button>
-                      <button type="button" className="btn btn--sm btn--accent" disabled={readOnly || extraction.docClass !== "meetingMinutes"} onClick={() => setPromoteOpen(true)} data-testid="intake-promote-open" title={readiness.ready ? "Promote accepted fields to native records" : `Accept ${readiness.missing.join(" and ").toLowerCase()} first`}><Upload size={12} /> Promote…</button>
+                      <button type="button" className="btn btn--sm btn--accent" disabled={readOnly || !promotable} onClick={() => setPromoteOpen(true)} data-testid="intake-promote-open" title={!promotable ? "There is no native record type for this class yet; mark its facts as system gaps (C)." : readiness.ready ? "Promote accepted fields to native records" : `Accept ${readiness.missing.join(" and ").toLowerCase()} first`}><Upload size={12} /> Promote…</button>
                       <button type="button" className="btn btn--sm btn--ghost" disabled={readOnly} onClick={() => void rejectDocument()}><CircleSlash size={12} /> Reject document</button>
                     </div>
                   )}
@@ -461,6 +533,7 @@ export function IntakeReviewPage() {
           onConfirm={(choice) => void promote(choice)}
           societyId={society._id}
           extractionId={extraction._id}
+          docClass={extraction.docClass}
           readiness={readiness}
           unsupported={extraction.unsupported?.length ?? 0}
           gapsRecorded={[...decisions.values()].filter((review) => review.decision === "cant_represent").length}
@@ -489,7 +562,9 @@ function QueueList({ groups, selectedId, onSelect }: { groups: ReturnType<typeof
     <button type="button" className="intake-queue__item" data-extraction={row._id} aria-current={row._id === selectedId} tabIndex={row._id === selectedId ? 0 : -1} onClick={() => onSelect(row._id)}>
       <span className="intake-queue__title">{row.fileKey.replace(/^local:/, "").split("/").pop()}</span>
       <span className="intake-queue__meta">
-        {row.date ?? "no date"}{row.body ? ` · ${row.body}` : ""} · {pluralize(row.motions, "motion")}
+        {row.docClass === "meetingMinutes"
+          ? <>{row.date ?? "no date"}{row.body ? ` · ${row.body}` : ""} · {pluralize(row.motions, "motion")}</>
+          : <>{row.summary ?? row.docClass}{row.date ? ` · ${row.date}` : ""}</>}
         <Badge tone={STATUS_TONE[row.status] ?? "neutral"}>{STATUS_LABEL[row.status] ?? row.status}</Badge>
         {(row.verification?.mismatched ?? 0) > 0 && <Badge tone="danger">{row.verification!.mismatched} unverified</Badge>}
         {extra && <span>{extra}</span>}

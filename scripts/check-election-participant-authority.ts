@@ -24,7 +24,7 @@ const owner = test.withIdentity({ subject: "operator", issuer });
 const participant = test.withIdentity({ subject: "participant", issuer });
 const foreign = test.withIdentity({ subject: "foreign", issuer });
 const electionId = await owner.mutation(api.elections.create, { societyId: fixture.societyId, title: "Eligible participant", opensAtISO: "2026-01-01T00:00:00Z", closesAtISO: "2030-01-01T00:00:00Z" });
-const questionId = await owner.mutation(api.elections.addQuestion, { electionId, title: "Choose a candidate", maxSelections: 1, options: [{ id: "candidate", label: "Candidate" }] });
+const questionId = await owner.mutation(api.elections.addQuestion, { electionId, title: "Choose a candidate", maxSelections: 1, options: [{ id: "candidate", label: "Candidate" }, { id: "against", label: "Against" }] });
 assert.deepEqual(await owner.mutation(api.elections.snapshotEligibleVoters, { electionId }), { eligibleCount: 1 });
 await assert.rejects(() => participant.mutation(api.elections.submitNomination, { electionId, nomineeName: "Forged nomination", actingUserId: fixture.ownerUserId }), /does not match the current principal/);
 assert.equal((await owner.query(api.elections.listNominations, { electionId })).length, 0);

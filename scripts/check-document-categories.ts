@@ -21,6 +21,8 @@ import {
 } from "../shared/documentCategories";
 import {
   documentReviewStatusLabel,
+  documentNeedsAttention,
+  reviewStatusAfterTransposition,
   normalizeDocumentReviewStatus,
   normalizeEvidenceReviewStatus,
   storedDocumentReviewStatus,
@@ -78,6 +80,13 @@ assert.equal(normalizeDocumentReviewStatus(undefined), "none");
 assert.equal(normalizeDocumentReviewStatus("Verified"), "approved");
 assert.equal(normalizeDocumentReviewStatus("something odd"), "needs_review", "unknown statuses ask for review");
 assert.equal(documentReviewStatusLabel("NeedsReview"), "Needs review");
+assert.equal(normalizeDocumentReviewStatus("transposed"), "transposed");
+assert.equal(documentReviewStatusLabel("transposed"), "Transposed");
+assert.equal(documentNeedsAttention("transposed"), false, "transposed documents are not in the review backlog");
+assert.equal(reviewStatusAfterTransposition("in_review"), "transposed");
+assert.equal(reviewStatusAfterTransposition("NeedsReview"), "transposed");
+assert.equal(reviewStatusAfterTransposition("needs_signature"), undefined, "a deliberate status is kept");
+assert.equal(reviewStatusAfterTransposition("approved"), undefined);
 assert.equal(storedDocumentReviewStatus("none"), undefined);
 assert.equal(normalizeEvidenceReviewStatus("needs_review"), "NeedsReview");
 assert.equal(normalizeEvidenceReviewStatus("linked"), "Linked");

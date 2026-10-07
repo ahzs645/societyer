@@ -35,6 +35,8 @@ import {
 } from "../proceduralMotions";
 import { motionRowToEmbedded } from "../minutesMotions";
 import { classifyMotionOutcome } from "../motionOutcome";
+import { agendaOnlyMeetingStatus } from "../meetingStatus";
+import { meetingCalendarDate } from "../meetingDates";
 import { assertMotionVotes } from "../motionValidation";
 import { normalizeActionItemStatusFields } from "../actionItemStatus";
 
@@ -346,6 +348,11 @@ export function adoptedMinutesView(minutes: any) {
     : minutes;
 }
 
+async function adoptedAgendaItems(ctx: PortableMutationCtx, agendaId: any) {
+  const items = await ctx.db.query('agendaItems').withIndex('by_agenda', q => q.eq('agendaId', agendaId)).collect();
+  return items.sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
+}
+
 async function minutesSnapshot(ctx: PortableMutationCtx, record: any, motions: any[]) {
   const societyId = String(record.societyId);
   for (const permission of ['documents:read', 'conflicts:read', 'proxies:read', 'directors:read'] as const) await requirePermissionPortable(ctx, societyId, permission);
@@ -360,7 +367,9 @@ async function minutesSnapshot(ctx: PortableMutationCtx, record: any, motions: a
   const { _id, _creationTime, adoptedSnapshot, adoptionHistory, displayMotions, ...snapshot } = record;
   return JSON.parse(JSON.stringify({ ...snapshot, motionSnapshots: motions,
     adoptedExportEvidence: minutesEvidenceOptions(signatures.filter(row => row.societyId === societyId && !row.revokedAtISO), conflicts, proxies, directors, motions),
-    adoptedMeeting: meeting, adoptedAgenda: agenda,
+    // Same shape as agendas:getForMeeting ({ agenda, items }) so the adopted
+    // agenda renders; the bare agenda row left adopted minutes with no agenda.
+    adoptedMeeting: meeting, adoptedAgenda: agenda ? { agenda, items: await adoptedAgendaItems(ctx, agenda._id) } : null,
   }));
 }
 
@@ -642,7 +651,10 @@ export async function transposeSourcePortable(ctx: PortableMutationCtx, {id,sour
     const meeting = await getOwned(ctx,"meetings", minutes.meetingId,societyId);
     const explanation = "Source is an agenda, script or template. Proposed business is not evidence that the meeting was held or motions passed.";
     const notes = String(meeting.sourceReviewNotes ?? "");
-    await ctx.db.patch(meeting._id,{status:"Draft",sourceReviewStatus:"imported_needs_review",sourceReviewNotes:notes.includes(explanation) ? notes : [notes,explanation].filter(Boolean).join("\n\n")});
+    // The agenda shows the meeting was called, not held: past → "Held — minutes
+    // missing", otherwise Scheduled (never a stray "Draft" or "Held").
+    const status = meeting.status === "Cancelled" ? "Cancelled" : agendaOnlyMeetingStatus(meetingCalendarDate(meeting as any));
+    await ctx.db.patch(meeting._id,{status,sourceReviewStatus:"imported_needs_review",sourceReviewNotes:notes.includes(explanation) ? notes : [notes,explanation].filter(Boolean).join("\n\n")});
     await ctx.db.patch(id,{quorumMet:false,quorumStatus:"not_recorded"});
     // Keep the native identity, provenance and prior audit history. A source
     // script is a draft wording object, not a motion actually moved in a room.

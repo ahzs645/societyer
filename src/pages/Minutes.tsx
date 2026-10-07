@@ -1,11 +1,11 @@
 import { useEffect, useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { minutesQuorumLabel, recordedMinutesQuorum } from "../../shared/minutesQuorum";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Badge, RecordChip } from "../components/ui";
+import { Badge, EmptyState, RecordChip } from "../components/ui";
 import { formatDate } from "../lib/format";
 import { FileText } from "lucide-react";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -110,6 +110,14 @@ export function MinutesPage() {
           <RecordTableFilterChips />
           <RecordTable
             loading={tableData.loading || minutes === undefined}
+            emptyState={
+              <EmptyState
+                icon={<FileText size={18} />}
+                title="No minutes yet"
+                description="Minutes are written from their meeting: open the meeting and use its Agenda & minutes tab."
+                action={<Link className="btn btn--accent" to="/app/meetings">Go to meetings</Link>}
+              />
+            }
             renderCell={({ record, field }) => {
               if (field.name === "meeting") {
                 if (record.meetingDeleted) {

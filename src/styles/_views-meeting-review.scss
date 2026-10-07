@@ -369,9 +369,23 @@
   }
 }
 
-/* Action items */
+/* Action items: the card sits in the narrow minutes column, so the text
+   keeps a readable width and the controls wrap underneath it. */
 .action-item__status {
   min-width: 120px;
+}
+.action-list--compact .action-item--rich {
+  flex-wrap: wrap;
+  > .action-item__text {
+    flex: 1 1 240px;
+  }
+}
+.action-item__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 /* Meetings list review toolbar */
@@ -433,4 +447,37 @@
   .meeting-detail-page .meeting-detail-summary strong {
     font-size: var(--fs-md);
   }
+}
+
+/* Minutes action items: add form */
+.action-item-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px 10px;
+  align-items: end;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-subtle, var(--bg-panel));
+  > label,
+  > .action-item-form__field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    > span:first-child {
+      font-size: var(--fs-xs);
+      color: var(--text-secondary);
+    }
+  }
+}
+.action-item-form__wide {
+  grid-column: 1 / -1;
+}
+.action-item-form__buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  grid-column: 1 / -1;
 }

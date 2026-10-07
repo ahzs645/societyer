@@ -34,12 +34,27 @@ export async function putOriginal(entry: Omit<CachedOriginal, "cachedAtISO">): P
   }
 }
 
-export async function getOriginal(sha256: string | undefined): Promise<CachedOriginal | undefined> {
+/** The original from this device's intake cache only. */
+export async function getCachedOriginal(sha256: string | undefined): Promise<CachedOriginal | undefined> {
   if (!sha256) return undefined;
   const hit = memory.get(sha256);
   if (hit) return hit;
   try {
     return (await open()?.originals.get(sha256)) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The original from the intake cache, else from files restored with a workspace backup
+ * (intake originals travel in ZIP backups, so the viewer works after a restore). */
+export async function getOriginal(sha256: string | undefined): Promise<CachedOriginal | undefined> {
+  const cached = await getCachedOriginal(sha256);
+  if (cached || !sha256) return cached;
+  try {
+    const { getRestoredFile } = await import("../../lib/workspaceArchiveFiles");
+    const blob = await getRestoredFile({ sha256 });
+    return blob ? { sha256, blob, name: sha256, mimeType: blob.type || undefined, size: blob.size, cachedAtISO: "" } : undefined;
   } catch {
     return undefined;
   }

@@ -60,7 +60,7 @@ export function AttendanceDetails({
   );
 }
 
-export function StructuredMinutesSummary({ minutes }: { minutes: any }) {
+export function StructuredMinutesSummary({ minutes, hideNextMeetingAt = false }: { minutes: any; hideNextMeetingAt?: boolean }) {
   const chips = [
     minutes.quorumStatus && `Quorum: ${minutesQuorumLabel(minutes)}`,
     minutes.chairName && `Chair: ${minutes.chairName}`,
@@ -74,7 +74,8 @@ export function StructuredMinutesSummary({ minutes }: { minutes: any }) {
     (minutes.sections ?? []).length ? `${minutes.sections.length} minute sections` : "",
     (minutes.sessionSegments ?? []).length ? `${minutes.sessionSegments.length} session segments` : "",
     (minutes.appendices ?? []).length ? `${minutes.appendices.length} appendices` : "",
-    minutes.nextMeetingAt && `Next: ${minutes.nextMeetingAt}`,
+    // The structured next-meeting rows are shown separately when present.
+    !hideNextMeetingAt && minutes.nextMeetingAt && `Next: ${minutes.nextMeetingAt}`,
     minutes.agmDetails?.financialStatementsPresented && "Financials presented",
     (minutes.agmDetails?.directorAppointments ?? []).length ? `${minutes.agmDetails.directorAppointments.length} director appointments` : "",
   ].filter(Boolean);
@@ -100,6 +101,7 @@ export function StructuredMinutesEditor({
   isAgm,
   includeRecordArrays: _includeRecordArrays = false,
   peopleNames = [],
+  presentAttendees = [],
 }: {
   value: StructuredMinutesEdit;
   onChange: (value: StructuredMinutesEdit) => void;
@@ -107,15 +109,17 @@ export function StructuredMinutesEditor({
   includeRecordArrays?: boolean;
   /** People-directory names suggested for chair / secretary / recorder. */
   peopleNames?: string[];
+  /** Present attendees (name, role, affiliation) offered for AGM director appointments. */
+  presentAttendees?: Array<{ name: string; roleTitle?: string; affiliation?: string }>;
 }) {
   const patch = (diff: Partial<StructuredMinutesEdit>) => onChange({ ...value, ...diff });
   return (
     <div className="structured-minutes-editor">
-      <Field label="Quorum evidence" hint="Record what the source establishes; missing evidence is kept distinct from quorum not being met.">
+      <Field label="Quorum evidence" hint="Record what the minutes establish; quorum not recorded is kept distinct from quorum not being met.">
         <select className="input" value={value.quorumStatus} onChange={event => patch({ quorumStatus: event.target.value as StructuredMinutesEdit["quorumStatus"] })}>
           <option value="confirmed">Quorum confirmed</option>
           <option value="not_met">Quorum not met</option>
-          <option value="not_recorded">Not recorded in source</option>
+          <option value="not_recorded">Not recorded</option>
         </select>
       </Field>
       <div className="structured-minutes-editor__grid">
@@ -192,7 +196,16 @@ export function StructuredMinutesEditor({
           <Field label="Director election / appointment notes">
             <MarkdownEditor rows={3} value={value.directorElectionNotes} onChange={(markdown) => patch({ directorElectionNotes: markdown })} />
           </Field>
-          <StructuredRowsField title="Director appointments" value={value.directorAppointments} onChange={(directorAppointments) => patch({ directorAppointments })} columns={DIRECTOR_APPOINTMENT_COLUMNS} />
+          <StructuredRowsField
+            title="Director appointments"
+            value={value.directorAppointments}
+            onChange={(directorAppointments) => patch({ directorAppointments })}
+            columns={DIRECTOR_APPOINTMENT_COLUMNS}
+            fill={presentAttendees.length ? {
+              label: `Add the ${presentAttendees.length} members present`,
+              rows: () => presentAttendees.map((row) => ({ name: row.name, roleTitle: row.roleTitle || undefined, affiliation: row.affiliation || undefined })),
+            } : undefined}
+          />
           <StructuredRowsField title="Special-resolution exhibits" value={value.specialResolutionExhibits} onChange={(specialResolutionExhibits) => patch({ specialResolutionExhibits })} columns={SPECIAL_RESOLUTION_EXHIBIT_COLUMNS} />
         </>
       )}

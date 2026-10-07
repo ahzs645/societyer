@@ -172,7 +172,8 @@ async function frameLatency(page) {
 export async function measureRoute({ base, profile, route, timeoutMs, resolvedPath }) {
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true,
-    executablePath: "/opt/pw-browsers/chromium",
+    // Preinstalled Chromium when provided (same variable as the Playwright configs); else Playwright's own.
+    executablePath: process.env.SOCIETYER_CHROMIUM_PATH || undefined,
     viewport: { width: 1440, height: 900 },
     args: ["--enable-precise-memory-info", "--js-flags=--expose-gc"],
   });

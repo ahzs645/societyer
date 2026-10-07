@@ -9,6 +9,7 @@ import { LineListEditor } from "../../../components/LineListEditor";
 import { ListEditor } from "../../../components/ListEditor";
 import { useConfirm } from "../../../components/Modal";
 import { Checkbox } from "../../../components/Controls";
+import { minutesTextForDisplay } from "../../../../shared/minutesMarkdownText";
 import { LegalGuideInline } from "../../../components/LegalGuide";
 import { Segmented } from "../../../components/primitives";
 import { MotionEditor, isAdjournmentMotion, motionPersonDisplayName, type Motion, type MotionEditorHandle } from "../../../components/MotionEditor";
@@ -258,7 +259,7 @@ function emptyActionDraft(): SectionActionDraft {
 
 
 function renderMinutesMarkdown(value: string) {
-  const text = String(value ?? "").trim();
+  const text = minutesTextForDisplay(value).trim();
   if (!text) return <p className="muted">Nothing recorded yet.</p>;
   const lines = text.replace(/\r\n/g, "\n").split("\n");
   const hasMarkdownList = lines.some((line) => /^\s*(?:[-*+]|[o○●]|\d+[.)])\s+/.test(line));

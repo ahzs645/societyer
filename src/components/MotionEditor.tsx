@@ -41,7 +41,7 @@ function DinnerTableIcon({ size = 12 }: { size?: number }) {
   );
 }
 import { Badge, Field } from "./ui";
-import { MarkdownEditor } from "./MarkdownEditor";
+import { MarkdownEditor, type MarkdownEditorHandle } from "./MarkdownEditor";
 import { NameAutocomplete } from "./NameAutocomplete";
 import { Select, type SelectOption } from "./Select";
 import { Tooltip } from "./Tooltip";
@@ -233,7 +233,7 @@ function ResolutionTypeSelect({
     opts.push({ value: "Procedural", label: "Procedural" });
     return opts;
   }, [rules]);
-  return <Select value={value} onChange={onChange} options={options} size={size} />;
+  return <Select value={value} onChange={onChange} options={options} size={size} aria-label="Resolution type" />;
 }
 
 /** Director/member name autocomplete. Uses the shared NameAutocomplete so the
@@ -474,7 +474,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   /** Documents that can be linked as a retained dissent report (A11). */
   documentOptions?: Array<{ value: string; label: string }>;
 }>(function MotionEditor({
-  motions,
+  motions: motionsProp,
   readOnly = false,
   onChange: onChangeProp,
   directorNames,
@@ -489,12 +489,23 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   documentOptions,
 }, ref) {
   const { can } = usePermissions();
+  // Every keystroke in a motion field saves the whole list. Until the saves
+  // settle, show the latest local edit: rendering each save's echo would put
+  // an older value back into the input and drop the characters typed since.
+  const [pendingMotions, setPendingMotions] = useState<Motion[] | null>(null);
+  useEffect(() => {
+    if (!pendingMotions) return;
+    const timer = window.setTimeout(() => setPendingMotions(null), 1500);
+    return () => window.clearTimeout(timer);
+  }, [pendingMotions]);
+  const motions = pendingMotions ?? motionsProp;
   const authority = useRef({ readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") });
   authority.current = { readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") };
   const onChange = (next: Motion[]) => {
     if (authority.current.readOnly) return false;
     const previouslyCarried = new Set(motions.filter(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried").map(motion => motion.adoptsMinutesId));
     if (!authority.current.canApprove && next.some(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried" && !previouslyCarried.has(motion.adoptsMinutesId))) return false;
+    setPendingMotions(next);
     onChangeProp(next);
     return true;
   };
@@ -954,6 +965,14 @@ function MotionRow({
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
   const [pendingOverrideOutcome, setPendingOverrideOutcome] = useState<string | null>(null);
   const confirm = useConfirm();
+  // The rich editor reports changes after a short delay; "Done" right after
+  // typing used to close it first and drop the last edit.
+  const detailsRef = useRef<MarkdownEditorHandle | null>(null);
+  const finishEditing = () => {
+    const latest = (detailsRef.current?.getMarkdown() ?? motion.text ?? "").trimEnd();
+    if (latest !== motion.text) onPatch({ text: latest });
+    onSetExpanded?.(false);
+  };
 
   const tone =
     motion.outcome === "Carried" ? "success" :
@@ -1170,7 +1189,7 @@ function MotionRow({
       {expanded && (
         <div style={{ marginTop: 10, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
           <Field label="Details">
-            <MarkdownEditor rows={4} value={motion.text} onChange={(markdown) => onPatch({ text: markdown })} />
+            <MarkdownEditor ref={detailsRef} rows={4} value={motion.text} onChange={(markdown) => onPatch({ text: markdown })} />
           </Field>
           <div className="row" style={{ gap: 12 }}>
             <Field label="Moved by">
@@ -1298,7 +1317,7 @@ function MotionRow({
             </div>
           </Field>
           <div className="row" style={{ gap: 6, justifyContent: "flex-end", marginTop: 10 }}>
-            <button className="btn-action btn-action--primary" onClick={() => onSetExpanded?.(false)}>
+            <button className="btn-action btn-action--primary" onClick={finishEditing}>
               <Check size={12} /> Done
             </button>
           </div>

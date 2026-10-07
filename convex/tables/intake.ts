@@ -72,7 +72,7 @@ export const intakeTables = {
     societyId: v.id("societies"),
     runId: v.id("intakeRuns"),
     fileId: v.id("intakeFiles"),
-    method: v.string(), // docx-ooxml | pdfjs-text | xlsx-ooxml | msg-msgreader | libreoffice-docx | plain-text | unsupported
+    method: v.string(), // docx-ooxml | pdfjs-text | xlsx-ooxml | msg-msgreader | libreoffice-docx | doc-binary | plain-text | unsupported
     methodVersion: v.string(),
     blocks: v.array(v.any()), // IntakeBlock[] with page/sheet/cell/charStart/charEnd
     text: v.optional(v.string()),
@@ -121,7 +121,9 @@ export const intakeTables = {
     references: v.array(v.any()),
     warnings: v.optional(v.array(v.string())),
     verification: v.optional(v.any()), // span re-verification summary
-    status: v.string(), // pending_review | in_review | accepted | promoted | rejected
+    status: v.string(), // pending_review | in_review | accepted | promoted | rejected | covered (a copy of a promoted record)
+    // Promotion result: import session, native records created ({ table, id, label }), or the promoted copy that covers this one.
+    promotion: v.optional(v.any()),
     createdAtISO: v.string(),
     updatedAtISO: v.string(),
   })

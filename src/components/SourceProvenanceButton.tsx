@@ -13,7 +13,11 @@ type ProvenanceRow = {
   locator: { kind: string; page?: number; blockIndex?: number; cell?: string; sheet?: string; quote?: string }; value?: unknown; decision?: string; fileName?: string; runName?: string; restricted?: boolean;
 };
 
-const TABLE_LABEL: Record<string, string> = { meetings: "Meeting", minutes: "Minutes", motions: "Motion" };
+const TABLE_LABEL: Record<string, string> = {
+  meetings: "Meeting", minutes: "Minutes", motions: "Motion", agendaItems: "Agenda item", meetingMaterials: "Meeting material", policies: "Policy", bylawRuleSets: "Bylaw rule set",
+  committees: "Committee", directors: "Director", organizationSeats: "Seat", proxies: "Proxy", financialStatementImports: "Financial statement", budgetSnapshots: "Budget",
+  insurancePolicies: "Insurance policy", grants: "Grant", deadlines: "Deadline", filings: "Filing", sourceEvidence: "Source evidence", transactionCandidates: "Transaction candidate",
+};
 
 function valueText(value: unknown): string {
   if (value === undefined || value === null) return "";

@@ -148,7 +148,10 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   adoptionTargets,
   } = props;
   const { can } = usePermissions();
-  const canEditMinutes = can("minutes:write");
+  // Adopted minutes are frozen on the server ("Start an amendment…"); offering
+  // edit controls only produced errors. Reopen them from the approval dialog.
+  const minutesFrozen = !!(minutes?.approvedAt || minutes?.adoptedSnapshot);
+  const canEditMinutes = can("minutes:write") && !minutesFrozen;
   // These callbacks save both records; gate both before the first write.
   const canEditAgenda = canEditMinutes && can("agendas:write");
   const canEditSections = canEditAgenda;
@@ -342,24 +345,21 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     next.splice(index, removeCount);
     await saveMinuteSections(next);
 
-    // Motions live on minutes.motions, not inside the section, so we have to
-    // clean them up explicitly: drop motions assigned to a removed section
-    // and shift sectionIndex down for motions on later sections.
-    const cleanedMotions = motions
-      .filter((motion) => {
-        if (motion.sectionIndex != null && removedIndexSet.has(motion.sectionIndex)) return false;
-        if (
-          motion.sectionTitle &&
-          removedTitleSet.has(String(motion.sectionTitle).trim().toLowerCase()) &&
-          (motion.sectionIndex == null || removedIndexSet.has(motion.sectionIndex))
-        ) return false;
-        return true;
-      })
-      .map((motion) =>
-        motion.sectionIndex != null && motion.sectionIndex >= index + removeCount
-          ? { ...motion, sectionIndex: motion.sectionIndex - removeCount }
-          : motion,
-      );
+    // Motions live on minutes.motions, not inside the section. A motion on a
+    // removed section stays in the minutes, unassigned (deleting a section
+    // used to delete its motions without saying so); motions on later
+    // sections shift down.
+    const cleanedMotions = motions.map((motion) => {
+      const onRemoved = (motion.sectionIndex != null && removedIndexSet.has(motion.sectionIndex))
+        || (motion.sectionIndex == null && motion.sectionTitle && removedTitleSet.has(String(motion.sectionTitle).trim().toLowerCase()));
+      if (onRemoved) {
+        const { sectionIndex: _sectionIndex, sectionTitle: _sectionTitle, ...rest } = motion;
+        return rest as Motion;
+      }
+      return motion.sectionIndex != null && motion.sectionIndex >= index + removeCount
+        ? { ...motion, sectionIndex: motion.sectionIndex - removeCount }
+        : motion;
+    });
     const motionsChanged =
       cleanedMotions.length !== motions.length ||
       cleanedMotions.some((m, i) => m !== motions[i]);
@@ -489,6 +489,23 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       if (next[target].depth !== 1) return;
       [next[index], next[target]] = [next[target], next[index]];
       pendingFocusIndex.current = target;
+    }
+    writeAgendaItems(next);
+  };
+
+  // Reordering an imported agenda one step at a time took dozens of clicks:
+  // move a top-level item (with its sub-items) straight to the top or bottom.
+  const moveAgendaItemToEdge = (index: number, edge: "top" | "bottom") => {
+    const item = agendaItems[index];
+    if (!item || item.depth !== 0) return;
+    const next = agendaItems.slice();
+    const group = next.splice(index, groupSizeAt(index, agendaItems));
+    if (edge === "top") {
+      next.splice(0, 0, ...group);
+      pendingFocusIndex.current = 0;
+    } else {
+      next.push(...group);
+      pendingFocusIndex.current = next.length - group.length;
     }
     writeAgendaItems(next);
   };
@@ -698,7 +715,14 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     if (left + menuWidth > window.innerWidth - margin) {
       left = window.innerWidth - menuWidth - margin;
     }
-    setAgendaItemMenu({ index, top: rect.bottom + gap, left });
+    // Open upwards when the menu would run past the bottom of the window
+    // (items near the end of a long agenda left it unreachable).
+    const estimatedHeight = 300;
+    let top = rect.bottom + gap;
+    if (top + estimatedHeight > window.innerHeight - margin) {
+      top = Math.max(margin, rect.top - gap - estimatedHeight);
+    }
+    setAgendaItemMenu({ index, top, left });
   };
 
   // F22: open the sections that carry substance (discussion, decisions,
@@ -970,11 +994,13 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     const childWarning = childIndexes.length
       ? ` Its ${childIndexes.length} sub-item${childIndexes.length === 1 ? "" : "s"} will be removed too${childrenWithContent.length ? ", including recorded content" : ""}.`
       : "";
+    const motionCount = [index, ...childIndexes].reduce((sum, i) => sum + (motionMatchesBySection[i]?.length ?? 0), 0);
+    const motionNote = motionCount ? ` ${motionCount} motion${motionCount === 1 ? "" : "s"} on it stay${motionCount === 1 ? "s" : ""} in the minutes, no longer assigned to an agenda item.` : "";
     const ok = await confirm({
       title: `Delete "${titleForPrompt}"?`,
       message: hasUnsavedDraftChanges
-        ? `This section has unsaved changes. Removing it will discard those edits along with any existing notes, decisions, and action items.${childWarning}`
-        : `Notes, decisions, and action items in this section will be removed.${childWarning}`,
+        ? `This section has unsaved changes. Removing it will discard those edits along with any existing notes, decisions, and action items.${childWarning}${motionNote}`
+        : `Notes, decisions, and action items in this section will be removed.${childWarning}${motionNote}`,
       confirmLabel: "Delete section",
       tone: "danger",
     });
@@ -1343,7 +1369,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                 rows={8}
                 value={sectionDraft.discussion}
                 onChange={(markdown) => setSectionDraft({ ...sectionDraft, discussion: markdown })}
-                placeholder="Expenses incurred by Ahmad: $80.00 for notary signing, $33.01 for posters. Receipts are recorded on Teams under Expenses."
+                placeholder="What was discussed or reported, e.g. The treasurer reported a surplus of $3,400 for the quarter."
               />
             </Field>
             <Field label="Decisions">
@@ -1597,6 +1623,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     indentAgendaItem,
     outdentAgendaItem,
     moveAgendaItem,
+    moveAgendaItemToEdge,
     agendaDragSourceRef,
     agendaDragIndex,
     agendaDropIndex,

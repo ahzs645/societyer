@@ -21,7 +21,7 @@ test("an unavailable rich-editor chunk leaves a real local deadline draft editab
   expect(blocked).toBeGreaterThan(0);
   await page.reload();
   await page.getByRole("button", { name: "Calendar", exact: true }).click();
-  await page.locator(".calendar-view").getByRole("button", { name: "List", exact: true }).click();
+  await page.locator(".calendar-view").getByRole("button", { name: "Agenda", exact: true }).click();
   await page.locator(".calendar-view").getByRole("button", { name: "Offline fallback evidence", exact: true }).click();
   drawer = page.getByRole("dialog", { name: "Edit deadline", exact: true });
   await expect(drawer.getByRole("textbox", { name: "Markdown text", exact: true })).toHaveValue(text);
@@ -31,7 +31,7 @@ test("an unavailable rich-editor chunk leaves a real local deadline draft editab
   await expect(drawer).toBeHidden();
   await page.reload();
   await page.getByRole("button", { name: "Calendar", exact: true }).click();
-  await page.locator(".calendar-view").getByRole("button", { name: "List", exact: true }).click();
+  await page.locator(".calendar-view").getByRole("button", { name: "Agenda", exact: true }).click();
   await page.locator(".calendar-view").getByRole("button", { name: "Offline fallback evidence", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Edit deadline", exact: true }).getByRole("textbox", { name: "Markdown text", exact: true })).toHaveValue(edited);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);

@@ -61,7 +61,7 @@ export function FilingsPage() {
   const actingUserId = useCurrentUserId() ?? undefined;
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
-  const [botFor, setBotFor] = useState<{ id: any; label: string } | null>(null);
+  const [botFor, setBotFor] = useState<{ id: any; kind: string; label: string } | null>(null);
   const [completeDraft, setCompleteDraft] = useState<any | null>(null);
   const [params, setParams] = useSearchParams();
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
@@ -347,7 +347,7 @@ export function FilingsPage() {
                   {jurisdictionFilingKinds.some((definition) => definition.kind === r.kind && definition.botSupported) && (
                     <button
                       className="btn btn--sm"
-                      onClick={() => setBotFor({ id: r._id, label: [kindLabel(r.kind), r.periodLabel || r.dueDate].filter(Boolean).join(": ") })}
+                      onClick={() => setBotFor({ id: r._id, kind: r.kind, label: [kindLabel(r.kind), r.periodLabel || r.dueDate].filter(Boolean).join(": ") })}
                       title="Prepare a BC society filing for manual submission"
                     disabled={!canWrite}
                    >
@@ -483,6 +483,7 @@ export function FilingsPage() {
         filingId={botFor?.id ?? null}
         societyId={society._id}
         filingLabel={botFor?.label ?? ""}
+        filingKind={botFor?.kind ?? ""}
       />
 
       <Modal

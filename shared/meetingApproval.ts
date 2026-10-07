@@ -11,6 +11,7 @@
  * Pure module. Dates are compared as calendar days (YYYY-MM-DD).
  */
 import { meetingCalendarDate, type MeetingDateLike } from "./meetingDates";
+import { todayDateOnly } from "./dateOnly";
 
 export type ApprovalCheckInput = {
   approvedOn: string; // YYYY-MM-DD or ISO
@@ -33,7 +34,9 @@ export function minutesApprovalIssues(input: ApprovalCheckInput): string[] {
   const approvedOn = day(input.approvedOn);
   if (!approvedOn) return ["Enter the date the minutes were approved."];
   const meetingDay = meetingCalendarDate(input.meeting);
-  const today = input.today ?? new Date().toISOString().slice(0, 10);
+  // The reviewer's local calendar day: the UTC day is already tomorrow on a
+  // BC evening, which let a future approval date through.
+  const today = input.today ?? todayDateOnly();
   if (meetingDay && dayDiff(approvedOn, meetingDay) < 0) {
     issues.push(`Approval (${approvedOn}) is before the meeting itself (${meetingDay}).`);
   }
@@ -56,10 +59,16 @@ export function minutesApprovalIssues(input: ApprovalCheckInput): string[] {
 }
 
 /** Meetings that could have approved these minutes: later ones, nearest first. */
-export function approvingMeetingCandidates<T extends MeetingDateLike & { _id?: string; status?: string }>(meeting: MeetingDateLike & { _id?: string }, meetings: readonly T[]): T[] {
+export function approvingMeetingCandidates<T extends MeetingDateLike & { _id?: string; status?: string; type?: string; committeeId?: unknown }>(meeting: MeetingDateLike & { _id?: string; type?: string; committeeId?: unknown }, meetings: readonly T[]): T[] {
   const meetingDay = meetingCalendarDate(meeting) ?? "";
+  // Minutes are adopted by the same body: AGM minutes at the next AGM, a
+  // committee's at its next meeting. Those come first, nearest first; other
+  // later meetings follow.
+  const sameBody = (row: T) => String(row.type ?? "") === String(meeting.type ?? "")
+    && String(row.committeeId ?? "") === String(meeting.committeeId ?? "");
   return meetings
     .filter((row) => String(row._id) !== String(meeting._id) && row.status !== "Cancelled")
     .filter((row) => (meetingCalendarDate(row) ?? "") > meetingDay)
-    .sort((a, b) => String(meetingCalendarDate(a)).localeCompare(String(meetingCalendarDate(b))));
+    .sort((a, b) => (sameBody(a) === sameBody(b) ? 0 : sameBody(a) ? -1 : 1)
+      || String(meetingCalendarDate(a)).localeCompare(String(meetingCalendarDate(b))));
 }

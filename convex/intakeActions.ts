@@ -68,13 +68,17 @@ export const extractRun = authorizedAction("intakeActions:extractRun", action)({
   returns: v.any(),
   handler: async (ctx, args) => {
     const files = await ctx.runQuery((api as any).intake.listFiles, { societyId: args.societyId, runId: args.runId });
-    const targets = (files as any[]).filter((file) => file.disposition === "extract" && EXTRACTION_CLASSES.has(file.docClass)).slice(0, Math.max(0, Math.min(args.limit ?? 200, 500)));
+    // Idempotent and batched: files that already have an extraction are skipped, so the client calls
+    // again until nothing remains (one action stays well inside the action time limit).
+    const done = new Set(((await ctx.runQuery((api as any).intake.listExtractions, { societyId: args.societyId, runId: args.runId })) as any[]).map((row) => row.fileKey));
+    const pending = (files as any[]).filter((file) => file.disposition === "extract" && EXTRACTION_CLASSES.has(file.docClass) && !done.has(file.fileKey));
+    const targets = pending.slice(0, Math.max(0, Math.min(args.limit ?? 40, 200)));
     const budget = new TokenBudget(Math.max(10_000, Math.min(args.budgetTokens ?? 1_000_000, 20_000_000)));
     const runtime = await resolveAiRuntimeConfig(ctx, args.societyId, undefined, args.modelId);
     await ctx.runMutation((api as any).intake.updateRun, { societyId: args.societyId, runId: args.runId, patch: { status: "running", engine: { minutes: runtime?.model ? "llm+deterministic-fallback" : "deterministic", classes: runtime?.model ? "llm+deterministic-fallback (personal-data classes deterministic only)" : "deterministic", ...(runtime?.model ? { llm: { provider: runtime.provider, model: runtime.modelId } } : {}) } } });
     const outcomes = await mapWithConcurrency(targets, Math.max(1, Math.min(args.concurrency ?? 4, 16)), (file) => extractOne(ctx, { societyId: args.societyId, runId: args.runId, fileKey: file.fileKey, docClass: file.docClass, budget, runtime }));
     const stats = outcomes.reduce<Record<string, number>>((acc, outcome) => ({ ...acc, [outcome.engine]: (acc[outcome.engine] ?? 0) + 1 }), {});
     await ctx.runMutation((api as any).intake.updateRun, { societyId: args.societyId, runId: args.runId, patch: { status: "extracted", stats: { extraction: stats, tokensUsed: budget.used } } });
-    return { files: targets.length, stats, tokensUsed: budget.used, outcomes };
+    return { files: targets.length, remaining: pending.length - targets.length, stats, tokensUsed: budget.used, outcomes };
   },
 });

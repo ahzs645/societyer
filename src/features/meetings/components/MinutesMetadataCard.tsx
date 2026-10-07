@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { officerNamesFromAttendance } from "../lib/officerNames";
 import { CalendarClock, Pencil, Save } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -10,6 +11,8 @@ import { StructuredMinutesEditor, StructuredMinutesSummary } from "./MeetingDeta
 import { structuredEditFromMinutes, structuredMetadataChanges, type StructuredMinutesEdit } from "../lib/structuredMinutes";
 import { useDirtyCloseGuard } from "../lib/useDirtyCloseGuard";
 import { slugBody } from "../../../../shared/meetingBody";
+
+const NEXT_BODY_LABELS: Record<string, string> = { board: "Board", agm: "AGM", sgm: "SGM" };
 
 type NextMeetingRow = { at?: string; dateText?: string; precision?: string; body?: string; location?: string; notes?: string };
 
@@ -67,7 +70,16 @@ export function MinutesMetadataCard({ minutes, meetingType, committees = [], peo
   const nextColumns: EvidenceColumn[] = useMemo(() => [
     { key: "at", label: "Date", type: "date" },
     { key: "dateText", label: "Date as written", },
-    { key: "precision", label: "Precision", options: ["datetime", "date", "month"] },
+    {
+      key: "precision",
+      label: "Precision",
+      emptyLabel: "Not stated",
+      choices: [
+        { value: "datetime", label: "Date and time" },
+        { value: "date", label: "Date only" },
+        { value: "month", label: "Month only" },
+      ],
+    },
     {
       key: "body",
       label: "Body",
@@ -89,7 +101,9 @@ export function MinutesMetadataCard({ minutes, meetingType, committees = [], peo
     const value = structuredEditFromMinutes(minutes);
     const rows = nextMeetingRowsFrom(minutes);
     setOriginal(value);
-    setDraft(value);
+    // Empty chair / secretary / recorder start from the roles given in the
+    // attendance list; the reviewer sees them before saving.
+    setDraft({ ...value, ...officerNamesFromAttendance(minutes.detailedAttendance, value) });
     setNextRows(rows);
     setOriginalNext(JSON.stringify(rows));
   };
@@ -134,21 +148,28 @@ export function MinutesMetadataCard({ minutes, meetingType, committees = [], peo
       <div className="card__body">
         {draft && canWrite ? (
           <>
-            <StructuredMinutesEditor value={draft} onChange={setDraft} isAgm={meetingType === "AGM"} includeRecordArrays={false} peopleNames={peopleNames} />
+            <StructuredMinutesEditor
+              value={draft}
+              onChange={setDraft}
+              isAgm={meetingType === "AGM"}
+              includeRecordArrays={false}
+              peopleNames={peopleNames}
+              presentAttendees={((minutes.detailedAttendance ?? []) as any[]).filter((row) => row?.status === "present" && row?.name)}
+            />
             <div className="minutes-next-meetings">
               <EvidenceRowsEditor title="Next meetings" rows={nextRows} columns={nextColumns} onChange={setNextRows} />
             </div>
           </>
         ) : (
           <>
-            <StructuredMinutesSummary minutes={minutes} />
+            <StructuredMinutesSummary minutes={minutes} hideNextMeetingAt={nextMeetings.length > 0} />
             {nextMeetings.length > 0 && (
               <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                 {nextMeetings.map((row: any, index: number) => (
                   <Badge key={index} tone="info">
                     <CalendarClock size={11} style={{ verticalAlign: -1, marginRight: 4 }} />
                     Next: {row.at ? String(row.at).slice(0, 10) : row.dateText ?? "date not stated"}
-                    {row.committeeId ? ` · ${(committees ?? []).find((committee: any) => String(committee._id) === String(row.committeeId))?.name ?? "committee"}` : row.bodyKey ? ` · ${row.bodyKey}` : ""}
+                    {row.committeeId ? ` · ${(committees ?? []).find((committee: any) => String(committee._id) === String(row.committeeId))?.name ?? "committee"}` : row.bodyKey ? ` · ${NEXT_BODY_LABELS[row.bodyKey] ?? row.bodyKey}` : ""}
                     {row.location ? ` · ${row.location}` : ""}
                   </Badge>
                 ))}

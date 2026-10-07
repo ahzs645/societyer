@@ -6,7 +6,7 @@
  */
 import assert from "node:assert/strict";
 import { StaticConvexClient } from "../src/lib/staticConvex";
-import { searchFold, searchMatches } from "../shared/functions/firm";
+import { humanizeRecordKind, searchFold, searchMatches } from "../shared/functions/firm";
 
 assert.equal(searchFold("Café Société"), "cafe societe");
 assert.equal(searchMatches("youth grant", ["Youth resilience grant"]), true, "every term must match, in any order");
@@ -30,7 +30,7 @@ const expectations: Array<{ query: string; kind: string; route: RegExp }> = [
   { query: "Governance committee", kind: "committee", route: /^\/app\/committees\/[^/?]+$/ },
   { query: "Prepare 2026", kind: "task", route: /^\/app\/tasks\?record=[^&]+$/ },
   { query: "director slate", kind: "filing", route: /^\/app\/filings\?record=[^&]+$/ },
-  { query: "Conflict of Interest", kind: "policy", route: /^\/app\/policies$/ },
+  { query: "Conflict of Interest", kind: "policy", route: /^\/app\/policies\?record=[^&]+$/ },
 ];
 for (const { query, kind, route } of expectations) {
   const hits = await search(query);
@@ -39,6 +39,23 @@ for (const { query, kind, route } of expectations) {
   assert.match(hit.to, route, `${kind} hit should open the record, got ${hit.to}`);
   assert.ok(hit.title.trim(), `${kind} hit needs a title`);
 }
+
+// Filing kinds read as words, not enum values.
+assert.equal(humanizeRecordKind("AnnualReport"), "Annual report");
+assert.equal(humanizeRecordKind("T3010"), "T3010");
+assert.equal(humanizeRecordKind("Annual report"), "Annual report");
+const annualFiling = (await search("annual report")).find((row) => row.kind === "filing");
+if (annualFiling) assert.doesNotMatch(annualFiling.title, /AnnualReport/, "filing hits show a readable kind");
+
+// People carry their organization so opening a hit switches to it.
+type FullHit = Hit & { societyId: string | null };
+const demoSocietyId = (await client.query("society:list", {}))[0]._id;
+(client as any).store.upsertRow("peopleDirectory", { _id: "gate_person_ada", _creationTime: Date.now(), fullName: "Ada Searchable", societyId: demoSocietyId });
+(client as any).store.upsertRow("peopleDirectory", { _id: "gate_person_legacy", _creationTime: Date.now(), fullName: "Ada Searchable Legacy" });
+const people = ((await client.query("firm:search", { query: "Ada Searchable" })) as FullHit[]).filter((row) => row.kind === "person");
+assert.ok(people.length >= 2, `directory people are searchable; got ${JSON.stringify(people)}`);
+for (const person of people) assert.ok(person.societyId, `person hit ${person.title} names its organization`);
+console.log(`person hits checked: ${people.length}`);
 
 // Motions: search by the text of any seeded motion.
 const motions = (await client.query("motions:list", { societyId: (await client.query("society:list", {}))[0]._id })) as any[];
