@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
+import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { Badge, Drawer, Field } from "../../components/ui";
@@ -42,6 +43,7 @@ const ORIGIN_LABELS: Record<string, string> = {
   manual: "Manual",
   inferred: "Confirmed from history",
   schedule_document: "Meeting schedule",
+  committee_structure: "Committee cadence",
 };
 
 const emptyForm = (): ExpectationForm => ({ title: "", kind: "meeting", bodyKind: "board", rule: { frequency: "monthly" }, effectiveFrom: "", effectiveTo: "", severity: "practice", citation: "", notes: "" });
@@ -93,7 +95,7 @@ export function ExpectationsPanel({ societyId, suggestions }: { societyId: strin
   const run = async (label: string, action: () => Promise<any>) => {
     try {
       const result = await action();
-      toast.success(label, result && typeof result === "object" ? Object.entries(result).map(([key, value]) => `${key}: ${value}`).join(", ") : undefined);
+      toast.success(label, describeRunResult(result));
     } catch (caught) {
       toast.error(`${label} failed`, caught instanceof Error ? caught.message : "Please try again.");
     }
@@ -134,6 +136,19 @@ export function ExpectationsPanel({ societyId, suggestions }: { societyId: strin
                   <td className="muted">From incorporation</td>
                   <td><span title={rule.caveat}>{rule.citation}</span><div className="muted" style={{ fontSize: 11 }}>{data.rulePack.title} · draft</div></td>
                   <td />
+                </tr>
+              ))}
+              {(data.committeeCadences ?? []).map((row: any) => (
+                <tr key={row.key}>
+                  <td>
+                    <strong>{row.title}</strong>
+                    <div className="row" style={{ gap: 4, marginTop: 2 }}><Badge tone={SEVERITY_TONE.practice}>{SEVERITY_LABELS.practice}</Badge><Badge tone="info">Applies automatically</Badge></div>
+                  </td>
+                  <td>{committeeName(row.committeeId)}</td>
+                  <td>{describeCadenceRule(row.rule)}</td>
+                  <td className="muted">{row.effectiveFrom ?? "—"}{row.effectiveTo ? ` to ${row.effectiveTo}` : ""}</td>
+                  <td>{ORIGIN_LABELS.committee_structure}<div className="muted" style={{ fontSize: 11 }}>Change it on the committee page</div></td>
+                  <td><Link className="btn btn--sm" to={`/app/committees/${row.committeeId}`}>Open committee</Link></td>
                 </tr>
               ))}
               {data.stored.map((row: any) => (
@@ -258,4 +273,15 @@ export function ExpectationsPanel({ societyId, suggestions }: { societyId: strin
       </Drawer>
     </div>
   );
+}
+
+/** "5 expectations stored, 1 updated" instead of raw result keys. */
+function describeRunResult(result: unknown): string | undefined {
+  if (!result || typeof result !== "object") return undefined;
+  const counts = result as Record<string, unknown>;
+  const parts: string[] = [];
+  const plural = (n: number) => `${n} expectation${n === 1 ? "" : "s"}`;
+  if (typeof counts.created === "number") parts.push(counts.created ? `${plural(counts.created)} added` : "Nothing new to add");
+  if (typeof counts.updated === "number" && counts.updated) parts.push(`${plural(counts.updated)} updated`);
+  return parts.length ? parts.join(", ") : undefined;
 }

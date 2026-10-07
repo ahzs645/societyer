@@ -182,6 +182,7 @@ for (const engine of ["memory", "local-store"] as const) {
   // A2/B1/B2: organization member, representative change, correction.
   const memberId = await mutate("memberGovernance:saveOrganizationMember", { societyId: A, organizationName: "Fictional Health Org", membershipClass: "Organization", status: "Active", joinedAt: "2015", votingRights: true, linkSeatIds: ["s1"] });
   await assert.rejects(() => mutate("memberGovernance:saveOrganizationMember", { societyId: A, organizationName: "fictional health org", membershipClass: "Organization", status: "Active", joinedAt: "2015", votingRights: true }), /already/);
+  await assert.rejects(() => mutate("memberGovernance:saveOrganizationMember", { societyId: A, organizationName: " ? ", membershipClass: "Organization", status: "Active", joinedAt: "2015", votingRights: true }), /placeholder/, "a roster placeholder is not an organization name");
   const orgs: any = await query("memberGovernance:organizationMembers", { societyId: A });
   const org = orgs.organizations.find((g: any) => g.member?._id === memberId);
   assert.equal(org.seats.length, 2, "unlinked seats with the same organization name group under the member");

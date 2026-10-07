@@ -7,6 +7,7 @@
  * seat is opened, and person/seat/meeting choices are pickers.
  */
 import { useMemo, useState } from "react";
+import { evidenceUrl } from "../../shared/evidenceReview";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { Building2, ChevronDown, ChevronRight, History, Plus, UserRoundPen } from "lucide-react";
@@ -246,7 +247,9 @@ function OrganizationMemberDrawer({ societyId, form, setForm, seats }: { society
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const candidates = seats.filter((s) => !s.memberId && (form.linkSeatIds.includes(s._id) || s.organizationName.toLocaleLowerCase() === form.organizationName.trim().toLocaleLowerCase()));
-  const valid = form.organizationName.trim() && form.membershipClass.trim() && form.joinedAt && isPartialDate(form.joinedAt) && isPartialDate(form.leftAt);
+  // Roster sheets hold placeholders such as "?" where the affiliation was unknown.
+  const nameProblem = form.organizationName.trim() && !/[\p{L}\p{N}]/u.test(form.organizationName) ? `“${form.organizationName.trim()}” is a placeholder from the source; enter the organization's name.` : null;
+  const valid = form.organizationName.trim() && !nameProblem && form.membershipClass.trim() && form.joinedAt && isPartialDate(form.joinedAt) && isPartialDate(form.leftAt);
   return (
     <Drawer open onClose={() => setForm(null)} title={form.memberId ? "Edit organization member" : "Add organization member"} footer={<>
       <button className="btn" onClick={() => setForm(null)}>Cancel</button>
@@ -259,13 +262,13 @@ function OrganizationMemberDrawer({ societyId, form, setForm, seats }: { society
         } catch (e: any) { toast.error("Could not save", e.message); } finally { setBusy(false); }
       }}>{busy ? "Saving…" : "Save"}</button>
     </>}>
-      <Field label="Organization"><input className="input" value={form.organizationName} onChange={(e) => setForm({ ...form, organizationName: e.target.value })} /></Field>
+      <Field label="Organization" required error={nameProblem ?? undefined}><input className="input" value={form.organizationName} onChange={(e) => setForm({ ...form, organizationName: e.target.value })} /></Field>
       <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
         <Field label="Membership class"><input className="input" value={form.membershipClass} onChange={(e) => setForm({ ...form, membershipClass: e.target.value })} /></Field>
         <Field label="Status"><Select value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={["Active", "NeedsReview", "Inactive", "Resigned", "Removed"].map((s) => ({ value: s, label: s === "NeedsReview" ? "Needs review" : s }))} /></Field>
       </div>
       <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
-        <Field label={`Joined (${PARTIAL_DATE_HINT})`}><input className="input" aria-invalid={!isPartialDate(form.joinedAt)} value={form.joinedAt} onChange={(e) => setForm({ ...form, joinedAt: e.target.value })} placeholder="2019" /></Field>
+        <Field label={`Joined (${PARTIAL_DATE_HINT})`} required><input className="input" aria-invalid={!isPartialDate(form.joinedAt)} value={form.joinedAt} onChange={(e) => setForm({ ...form, joinedAt: e.target.value })} placeholder="2019" /></Field>
         <Field label="Left (if any)"><input className="input" aria-invalid={!isPartialDate(form.leftAt)} value={form.leftAt} onChange={(e) => setForm({ ...form, leftAt: e.target.value })} /></Field>
       </div>
       <Checkbox checked={form.votingRights} onChange={(v) => setForm({ ...form, votingRights: v })} label="Has voting rights (exercised by its representative)" />
@@ -282,11 +285,20 @@ function OrganizationMemberDrawer({ societyId, form, setForm, seats }: { society
   );
 }
 
+/** The server requires both a web link to the source and a citation inside it (shared/evidenceReview.ts). */
+function sourceReady(value: { sourceUrl: string; sourceReference: string }) {
+  return evidenceUrl(value.sourceUrl.trim()) && Boolean(value.sourceReference.trim());
+}
+
+function urlError(value: string) {
+  return value.trim() && !evidenceUrl(value.trim()) ? "Enter a full web address starting with https:// (for example the file's link in your drive or document library)." : undefined;
+}
+
 function SourceFields({ value, onChange }: { value: { sourceUrl: string; sourceReference: string; reviewStatus: string }; onChange: (v: any) => void }) {
   return (
     <>
-      <Field label="Source URL"><input className="input" value={value.sourceUrl} onChange={(e) => onChange({ ...value, sourceUrl: e.target.value })} placeholder="https://…" /></Field>
-      <Field label="Citation (page, section, resolution or cell)"><input className="input" value={value.sourceReference} onChange={(e) => onChange({ ...value, sourceReference: e.target.value })} /></Field>
+      <Field label="Source URL" required hint="Link to the letter, minutes or roster that records this." error={urlError(value.sourceUrl)}><input className="input" type="url" value={value.sourceUrl} onChange={(e) => onChange({ ...value, sourceUrl: e.target.value })} placeholder="https://…" /></Field>
+      <Field label="Citation (page, section, resolution or cell)" required><input className="input" value={value.sourceReference} onChange={(e) => onChange({ ...value, sourceReference: e.target.value })} /></Field>
       <Field label="Source review"><Select value={value.reviewStatus} onChange={(v) => onChange({ ...value, reviewStatus: v })} options={[{ value: "pending", label: "Pending review" }, { value: "verified", label: "Verified against the source" }]} /></Field>
     </>
   );
@@ -302,7 +314,7 @@ function RepresentativeDrawer({ seat, people, onClose }: { seat: SeatSummary; pe
   return (
     <Drawer open onClose={onClose} title={`Change representative — ${seat.organizationName}`} footer={<>
       <button className="btn" onClick={onClose}>Cancel</button>
-      <button className="btn btn--accent" disabled={busy || !(form.personId || form.personName.trim()) || !datesOk || !source.sourceReference.trim()} onClick={async () => {
+      <button className="btn btn--accent" disabled={busy || !(form.personId || form.personName.trim()) || !datesOk || !sourceReady(source)} onClick={async () => {
         setBusy(true);
         try {
           await record({ seatId: seat._id, ...(form.personId ? { personId: form.personId } : {}), ...(form.personName.trim() ? { personName: form.personName.trim() } : {}), ...(form.roleTitle ? { roleTitle: form.roleTitle } : {}), ...(form.termStart ? { termStart: form.termStart } : {}), ...(form.termEnd ? { termEnd: form.termEnd } : {}), ...(form.endPreviousObservationId ? { endPreviousObservationId: form.endPreviousObservationId } : {}), ...(form.notes ? { notes: form.notes } : {}), source });
@@ -375,7 +387,7 @@ function SeatProxyDrawer({ societyId, people, seats, onClose }: { societyId: str
   const nameOf = (id: string, fallback: string) => people?.find((p) => p._id === id)?.fullName ?? fallback;
   const principal = form.principalId ? nameOf(form.principalId, form.principalName) : form.principalName;
   const proxy = form.proxyId ? nameOf(form.proxyId, form.proxyName) : form.proxyName;
-  const ready = form.seatId && form.meetingId && principal.trim() && proxy.trim() && form.authorityReference.trim() && form.sourceReference.trim();
+  const ready = form.seatId && form.meetingId && principal.trim() && proxy.trim() && evidenceUrl(form.authorityUrl.trim()) && form.authorityReference.trim() && evidenceUrl(form.sourceUrl.trim()) && form.sourceReference.trim();
   return (
     <Drawer open onClose={onClose} title="Record a seat proxy for a meeting" footer={<>
       <button className="btn" onClick={onClose}>Cancel</button>
@@ -396,10 +408,10 @@ function SeatProxyDrawer({ societyId, people, seats, onClose }: { societyId: str
       {!form.principalId && <input className="input" aria-label="Principal name" value={form.principalName} onChange={(e) => setForm({ ...form, principalName: e.target.value })} />}
       <Field label="Proxy holder"><PersonPicker people={people} value={form.proxyId} onChange={(v) => setForm({ ...form, proxyId: v })} clearLabel="Type the name instead" ariaLabel="Proxy holder" /></Field>
       {!form.proxyId && <input className="input" aria-label="Proxy holder name" value={form.proxyName} onChange={(e) => setForm({ ...form, proxyName: e.target.value })} />}
-      <Field label="Authority (bylaw clause) URL"><input className="input" value={form.authorityUrl} onChange={(e) => setForm({ ...form, authorityUrl: e.target.value })} /></Field>
-      <Field label="Authority clause"><input className="input" value={form.authorityReference} onChange={(e) => setForm({ ...form, authorityReference: e.target.value })} placeholder="e.g. Bylaw 5.4" /></Field>
-      <Field label="Appointment source URL"><input className="input" value={form.sourceUrl} onChange={(e) => setForm({ ...form, sourceUrl: e.target.value })} /></Field>
-      <Field label="Appointment citation"><input className="input" value={form.sourceReference} onChange={(e) => setForm({ ...form, sourceReference: e.target.value })} /></Field>
+      <Field label="Authority (bylaw clause) URL" required error={urlError(form.authorityUrl)}><input className="input" type="url" value={form.authorityUrl} onChange={(e) => setForm({ ...form, authorityUrl: e.target.value })} /></Field>
+      <Field label="Authority clause" required><input className="input" value={form.authorityReference} onChange={(e) => setForm({ ...form, authorityReference: e.target.value })} placeholder="e.g. Bylaw 5.4" /></Field>
+      <Field label="Appointment source URL" required error={urlError(form.sourceUrl)}><input className="input" type="url" value={form.sourceUrl} onChange={(e) => setForm({ ...form, sourceUrl: e.target.value })} /></Field>
+      <Field label="Appointment citation" required><input className="input" value={form.sourceReference} onChange={(e) => setForm({ ...form, sourceReference: e.target.value })} /></Field>
     </Drawer>
   );
 }

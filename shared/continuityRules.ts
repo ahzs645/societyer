@@ -45,7 +45,7 @@ export const EXPECTATION_KIND_LABELS: Record<ExpectationKind, string> = {
 
 export type BodyKind = "members" | "board" | "committee" | "organization";
 export type ExpectationSeverity = "statutory" | "bylaw" | "practice";
-export type ExpectationOrigin = "rule_pack" | "bylaw_rules" | "manual" | "inferred" | "schedule_document";
+export type ExpectationOrigin = "rule_pack" | "bylaw_rules" | "manual" | "inferred" | "schedule_document" | "committee_structure";
 
 export type CadenceFrequency =
   | "calendar_year"
