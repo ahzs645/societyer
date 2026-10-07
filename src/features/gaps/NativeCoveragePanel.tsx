@@ -1,5 +1,6 @@
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
+import { IntakeRunCoverage } from "../intake/IntakeRunCoverage";
 
 const AREA_LABELS: Record<string, string> = {
   meetings: "Meetings and minutes",
@@ -82,6 +83,7 @@ export function NativeCoveragePanel({ societyId }: { societyId: string }) {
         </table>
       </div>
       {data.areas.some((area: any) => area.partial) && <div className="muted" style={{ fontSize: 12 }}>* Some record families in this area are not visible to your role.</div>}
+      <IntakeRunCoverage societyId={societyId} />
     </div>
   );
 }

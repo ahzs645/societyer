@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { CalendarRange, FileWarning, ListChecks, PieChart, Settings2 } from "lucide-react";
+import { CalendarRange, FileWarning, ListChecks, PieChart, Settings2, Sparkles } from "lucide-react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { usePermissions } from "../hooks/usePermissions";
@@ -90,6 +90,7 @@ export function CoverageGapsPage() {
       <PageHeader
         title="Coverage & gaps"
         subtitle="What records should exist, which are missing, and which source details the app cannot hold yet."
+        actions={<Link className="btn-action" to="/app/intake"><Sparkles size={12} /> AI intake runs</Link>}
       />
       <div className="segmented coverage-tabs" role="tablist" aria-label="Coverage and gaps views">
         {TABS.map((item) => {

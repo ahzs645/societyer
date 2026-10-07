@@ -1,6 +1,7 @@
 import { MeetingEvidenceCard } from "../features/meetings/components/MeetingEvidenceCard";
 import { meetingStatusLabel } from "../../shared/meetingStatus";
 import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
+import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
 import { isLocalDataRuntime } from "../lib/staticRuntime";
 import { bylawBaselineForOrganization } from "../../shared/bylawBaselines";
@@ -2081,6 +2082,7 @@ export function MeetingDetailPage() {
               {meetingStatusLabel(meeting.status)}
             </Badge>
             <UnsupportedDetailsBadge table="meetings" id={meeting._id} />
+            <SourceProvenanceButton table="meetings" id={meeting._id} />
             {meeting.status !== "Held" && (
               <button className="btn-action" onClick={markHeld} disabled={!canMeetingsWrite}>Mark held</button>
             )}

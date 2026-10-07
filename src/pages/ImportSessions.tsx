@@ -1,7 +1,8 @@
 import { importSectionPermission } from "../../shared/importPromotionPermissions";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { Sparkles } from "lucide-react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
@@ -453,6 +454,7 @@ export function ImportSessionsPage() {
         subtitle="Stage reviewed source bundles, review each item, then apply approved records into app modules."
         actions={
           <>
+          <Link className="btn-action" to="/app/intake"><Sparkles size={12} /> Start an AI intake run</Link>
           <RepairImportedMinutesAction societyId={society._id} />
           <button className="btn-action" onClick={() => setCsvOpen(true)} disabled={!canWrite}>
             <Upload size={12} /> Import members CSV
