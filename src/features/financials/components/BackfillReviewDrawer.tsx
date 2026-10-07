@@ -120,7 +120,7 @@ export function BackfillReviewDrawer({
       ) : (
         <div className="backfill-review" data-testid="backfill-review">
           <div className="backfill-review__summary" aria-live="polite">
-            <Badge tone="success">{plural(summary.toPost, "to post")}</Badge>
+            <Badge tone="success">{summary.toPost} to post</Badge>
             {summary.toSuspense > 0 && <Badge tone="warn">{summary.toSuspense} to suspense</Badge>}
             {summary.beforeOpening > 0 && (
               <Badge tone="warn">
@@ -141,10 +141,10 @@ export function BackfillReviewDrawer({
           )}
 
           <h3 className="card__title" style={{ margin: "12px 0 6px" }}>Category mapping</h3>
-          <div className="backfill-review__table">
+          <div className="backfill-review__categories">
             <table className="table">
               <thead>
-                <tr><th>Category</th><th>Type</th><th style={{ textAlign: "right" }}>Rows</th><th style={{ textAlign: "right" }}>Total</th><th>Post to</th></tr>
+                <tr><th>Category</th><th style={{ textAlign: "right" }}>Total</th><th>Post to</th></tr>
               </thead>
               <tbody>
                 {preview.categories.map((category: any) => {
@@ -152,18 +152,21 @@ export function BackfillReviewDrawer({
                   const value = choices[key] || (category.offsetSource === "mapping" ? String(category.offsetAccountId) : SUSPENSE_CHOICE);
                   return (
                     <tr key={`${category.direction}-${category.category}`}>
-                      <td><strong>{category.category}</strong></td>
-                      <td>{category.direction === "income" ? "Money in" : "Money out"}</td>
-                      <td className="table__cell--mono" style={{ textAlign: "right" }}>{category.count}</td>
+                      <td>
+                        <strong>{category.category}</strong>
+                        <div className="muted" style={{ fontSize: 12 }}>
+                          {category.direction === "income" ? "Money in" : "Money out"} · {plural(category.count, "row")}
+                        </div>
+                      </td>
                       <td className="table__cell--mono" style={{ textAlign: "right" }}>{money(category.totalCents)}</td>
-                      <td style={{ minWidth: 220 }}>
+                      <td className="backfill-review__account">
                         <Select
                           aria-label={`Account for ${category.category}`}
                           value={value}
                           onChange={(next) => setChoices((current) => ({ ...current, [key]: next }))}
                           disabled={!canWrite}
                           options={[
-                            { value: SUSPENSE_CHOICE, label: `Suspense (review later)` },
+                            { value: SUSPENSE_CHOICE, label: "Suspense (review later)" },
                             ...offsetOptions(category.direction),
                           ]}
                         />
@@ -173,7 +176,7 @@ export function BackfillReviewDrawer({
                   );
                 })}
                 {preview.categories.length === 0 && (
-                  <tr><td colSpan={5} className="muted">No imported transactions are waiting to be posted.</td></tr>
+                  <tr><td colSpan={3} className="muted">No imported transactions are waiting to be posted.</td></tr>
                 )}
               </tbody>
             </table>

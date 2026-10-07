@@ -67,7 +67,7 @@ export function GrantRemoveDialog({
       onClose={onClose}
       title={archived ? `Restore or delete "${title}"?` : `Archive or delete "${title}"?`}
       size="md"
-      resizeKey="grant-remove"
+      resizable={false}
       footer={
         <>
           <button className="btn" onClick={onClose} disabled={busy !== null}>Cancel</button>

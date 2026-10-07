@@ -317,7 +317,7 @@ export function WaveAccountDetailPage() {
   if (society === undefined || resource === undefined) return <div className="page">Loading...</div>;
   if (society === null) return <SeedPrompt />;
   if (!resource || resource.resourceType !== "account") {
-    return <RecordNotFound recordLabel="Wave account" backTo="/app/financials/wave/account" backLabel="Wave accounts" icon={<Database size={16} />} />;
+    return <RecordNotFound recordLabel="Wave account" noun="Wave account" backTo="/app/financials/wave/account" backLabel="Wave accounts" icon={<Database size={16} />} />;
   }
 
   const transactions = activity?.transactions ?? [];
@@ -492,7 +492,7 @@ export function WaveResourceDetailPage() {
   if (society === null) return <SeedPrompt />;
 
   if (!resource) {
-    return <RecordNotFound recordLabel="Wave record" backTo={`/app/financials/wave/${tableResourceType}`} backLabel={waveTypeLabel(tableResourceType)} icon={<Database size={16} />} />;
+    return <RecordNotFound recordLabel="Wave record" noun="Wave record" backTo={`/app/financials/wave/${tableResourceType}`} backLabel={waveTypeLabel(tableResourceType)} icon={<Database size={16} />} />;
   }
 
   const transactions = activity?.transactions ?? [];

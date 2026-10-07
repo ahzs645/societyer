@@ -228,7 +228,9 @@ export function planTransactionBackfill(input: {
 
   const categories = new Map<string, BackfillCategorySummary>();
   for (const row of rows) {
-    if (row.status === "already_posted" || row.status === "zero_amount" || row.status === "no_cash_account") continue;
+    // Only rows that would post (or need a mapping to post) are mapped; rows
+    // held back before the opening balances join once they are included.
+    if (row.status !== "post" && row.status !== "needs_mapping") continue;
     const key = `${row.direction}|${normalizeCategory(row.category)}`;
     const existing = categories.get(key) ?? {
       category: row.category || "(uncategorized)",

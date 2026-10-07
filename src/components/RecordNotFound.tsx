@@ -20,6 +20,7 @@ export function RecordNotFound({
   description,
   action,
   embedded = false,
+  noun,
 }: {
   /** Human noun, e.g. "Grant", "Asset", "Workflow". */
   recordLabel: string;
@@ -32,6 +33,8 @@ export function RecordNotFound({
   action?: ReactNode;
   /** Render without the outer `.page` wrapper (inside an existing page). */
   embedded?: boolean;
+  /** In-sentence noun when lowercasing the label is wrong (e.g. "Wave account"). */
+  noun?: string;
 }) {
   const body = (
     <>
@@ -42,7 +45,7 @@ export function RecordNotFound({
       <div role="status" data-testid="record-not-found">
         <EmptyState
           icon={<SearchX size={20} />}
-          title={`This ${recordLabel.toLowerCase()} doesn't exist in this workspace`}
+          title={`This ${noun ?? recordLabel.toLowerCase()} doesn't exist in this workspace`}
           description={
             description ??
             "It may have been deleted, or the link points to a record in another workspace. Check the address or return to the list."

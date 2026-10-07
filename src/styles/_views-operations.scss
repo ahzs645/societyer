@@ -34,9 +34,16 @@
     margin-bottom: 10px;
   }
 
-  .users-table td {
+  .table.users-table {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .table.users-table tbody td {
+    height: auto;
     border: 0;
     padding: 4px 0;
+    background: transparent;
     word-break: normal;
     overflow-wrap: anywhere;
   }
@@ -51,7 +58,7 @@
     margin-bottom: 2px;
   }
 
-  .users-table td:last-child {
+  .table.users-table tbody td:last-child {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
@@ -78,4 +85,32 @@
 
 .backfill-review__row--excluded td {
   color: token('text-tertiary');
+}
+
+.backfill-review__categories table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.backfill-review__categories th:nth-child(2),
+.backfill-review__categories td:nth-child(2) {
+  width: 92px;
+}
+
+.backfill-review__categories th:nth-child(3),
+.backfill-review__categories td:nth-child(3) {
+  width: 46%;
+}
+
+.backfill-review__account {
+  min-width: 0;
+
+  > * {
+    max-width: 100%;
+  }
+
+  button {
+    max-width: 100%;
+    min-width: 0;
+  }
 }
