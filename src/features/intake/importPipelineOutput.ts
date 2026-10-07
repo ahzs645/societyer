@@ -40,11 +40,17 @@ export async function importPipelineOutput(
   const run = JSON.parse(await output.run.text()) as IntakeRunResult;
   if (!run || !Array.isArray(run.files) || !Array.isArray(run.extractions) || !run.reconciliation) throw new Error("run.json is not an intake run (files, extractions and reconciliation are required).");
   const coverage = output.coverage ? (JSON.parse(await output.coverage.text()) as CoverageReport) : undefined;
+  // Only the text the review needs is stored in the workspace: documents with an extraction
+  // (and their parent package) plus the other members of their version clusters (version diff).
+  // Other files keep their catalogue row; their text stays in the run folder.
+  const reviewed = new Set<string>();
+  for (const extraction of run.extractions) reviewed.add(extraction.parentFileKey ?? extraction.fileKey);
+  for (const cluster of run.clusters ?? []) if (cluster.members.some((member) => reviewed.has(member.fileId))) for (const member of cluster.members) reviewed.add(member.fileId);
   const extracts: Record<string, IntakeExtract> = {};
   let read = 0;
   for (const file of output.extracts) {
     const parsed = JSON.parse(await file.text()) as IntakeExtract & { fileKey?: string };
-    if (parsed?.fileKey && Array.isArray(parsed.blocks)) {
+    if (parsed?.fileKey && Array.isArray(parsed.blocks) && reviewed.has(parsed.fileKey)) {
       const { fileKey, ...extract } = parsed;
       extracts[fileKey] = extract as IntakeExtract;
     }

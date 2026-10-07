@@ -15,6 +15,7 @@
  *   row per promoted field.
  * - `reconcileRun`: reconciliation, record gaps and coverage for runs whose
  *   fields were extracted server-side (intakeActions:extractRun). */
+import { nameDateSignature } from "../intake/cluster";
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId } from "./access";
 import { requirePermissionPortable } from "./permissions";
@@ -270,9 +271,15 @@ async function clusterFiles(ctx: PortableQueryCtx, extraction: any, file: any): 
   const cluster = clusters.find((candidate) => candidate.clusterKey === file.clusterKey);
   for (const member of cluster?.members ?? []) {
     if (member.fileKey === file.fileKey || !member.fileId) continue;
+    // A package that embeds these minutes is its own document (a meeting material), not a copy of the record.
+    if (member.relation === "package-embedded") continue;
     // Only exact and format copies are the same record; drafts and other versions are sources of the same meeting too.
     const memberFile = await ctx.db.get<any>(member.fileId, "intakeFiles");
-    if (memberFile && memberFile.societyId === file.societyId) files.push(memberFile);
+    if (!memberFile || memberFile.societyId !== file.societyId) continue;
+    // Never cite another meeting's file: names dated differently are different records.
+    const own = nameDateSignature(file.name ?? ""), theirs = nameDateSignature(memberFile.name ?? "");
+    if (own && theirs && own !== theirs) continue;
+    files.push(memberFile);
   }
   return files;
 }

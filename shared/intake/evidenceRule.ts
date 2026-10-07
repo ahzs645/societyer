@@ -1,5 +1,6 @@
 /** Record-level evidence rule for class records staged through import sessions
- * (policies, rule sets, insurance, filings, statements, budgets, grants, directors …).
+ * (policies, rule sets, insurance, filings, statements, budgets, grants, directors, and
+ * meetings staged from agendas or packages …) and for their source documents.
  *
  * It applies the review screen's bulk-accept rule to the record's header facts:
  * a record is "evidence-verified" when its source extraction has no quote that
@@ -28,7 +29,7 @@ export function extractionEvidenceVerified(extraction: EvidenceExtraction): bool
   return header.every((field) => isBulkEligible(field, extraction.docClass));
 }
 
-const NON_CLASS_KEYS = new Set(["metadata", "sources", "documentMap", "meetingMinutes", "representationGaps"]);
+const NON_CLASS_KEYS = new Set(["metadata", "sources", "documentMap", "representationGaps"]);
 
 /** Marks bundle class records whose every source extraction is evidence-verified. Returns how many were marked. */
 export function markEvidenceVerified(bundle: Record<string, unknown>, extractions: Array<EvidenceExtraction & { fileKey: string; parentFileKey?: string }>): number {
@@ -39,6 +40,7 @@ export function markEvidenceVerified(bundle: Record<string, unknown>, extraction
     verdict.set(key, (verdict.get(key) ?? true) && ok);
   }
   let marked = 0;
+  const verifiedSources = new Set<string>();
   for (const [key, rows] of Object.entries(bundle)) {
     if (NON_CLASS_KEYS.has(key) || !Array.isArray(rows)) continue;
     for (const row of rows as Array<Record<string, unknown>>) {
@@ -46,8 +48,16 @@ export function markEvidenceVerified(bundle: Record<string, unknown>, extraction
       if (!sources.length || !sources.every((source) => verdict.get(source) === true)) continue;
       row.confidence = "High";
       row.evidenceVerified = true;
+      for (const source of sources) verifiedSources.add(source);
       marked++;
     }
+  }
+  // The source documents of evidence-verified records are verified with them (they become
+  // the records' linked documents when the session is applied).
+  for (const row of (Array.isArray(bundle.documentMap) ? bundle.documentMap : []) as Array<Record<string, unknown>>) {
+    if (!verifiedSources.has(String(row.externalId))) continue;
+    row.confidence = "High";
+    row.evidenceVerified = true;
   }
   return marked;
 }

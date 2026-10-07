@@ -13,6 +13,9 @@
  *     --budget-tokens 2000000 --llm-concurrency 4
  *   OPENROUTER_API_KEY=… … --llm openrouter --model openai/gpt-4.1-mini
  *
+ *   # Re-runs of a large archive: reuse text/layout extracts by content hash
+ *   npx tsx scripts/intake-run.ts <folder> --out <dir> --extract-cache <dir>
+ *
  *   # JSON Schema for offline agents
  *   npx tsx scripts/intake-run.ts --export-schemas <dir>
  *
@@ -28,6 +31,7 @@ import path from "node:path";
 import { buildImportBundle, coverageReport } from "../shared/intake/bundle";
 import { libreOfficeConverter, md5Hex, sha256Hex } from "../shared/intake/node/extractFile";
 import { extractBytes } from "../shared/intake/extract";
+import { INTAKE_EXTRACT_VERSION } from "../shared/intake/blocks";
 import type { GenerateObjectFn } from "../shared/intake/llm";
 import { runIntakePipeline, type PipelineSourceFile } from "../shared/intake/pipeline";
 import { exportIntakeJsonSchemas } from "../shared/intake/schemas";
@@ -146,7 +150,19 @@ const result = await runIntakePipeline(sourceFiles, {
   name: flag("--name") ?? path.basename(sourceRoot),
   sourceKind,
   sourceRoot,
-  extract: (file, bytes) => extractBytes(file.name, bytes, { convertLegacy: libreOfficeConverter }),
+  extract: async (file, bytes) => {
+    // --extract-cache <dir>: text/layout extracts keyed by content hash and extractor version,
+    // so re-running a large archive after an extractor fix skips PDF parsing and LibreOffice.
+    const cacheDir = flag("--extract-cache");
+    const cacheFile = cacheDir ? path.join(cacheDir, `${sha256Hex(bytes)}-${INTAKE_EXTRACT_VERSION.replace(/[^\w.-]+/g, "_")}-${path.extname(file.name).toLowerCase().replace(/[^\w.]/g, "")}.json`) : undefined;
+    if (cacheFile && fs.existsSync(cacheFile)) return JSON.parse(fs.readFileSync(cacheFile, "utf8"));
+    const extract = await extractBytes(file.name, bytes, { convertLegacy: libreOfficeConverter });
+    if (cacheFile) {
+      fs.mkdirSync(cacheDir!, { recursive: true });
+      fs.writeFileSync(cacheFile, JSON.stringify(extract));
+    }
+    return extract;
+  },
   hash: (bytes) => sha256Hex(bytes),
   llm,
   concurrency: Number(flag("--concurrency") ?? 2),

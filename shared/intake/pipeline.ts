@@ -30,6 +30,8 @@ export type PipelineOptions = {
   hash?: (bytes: Uint8Array) => string | Promise<string>;
   llm?: { generate: GenerateObjectFn; provider: string; model: string; budgetTokens: number; concurrency: number };
   concurrency?: number;
+  /** Per-file text extraction deadline (default 180 s); a file that exceeds it is catalogued. */
+  extractTimeoutMs?: number;
   onProgress?: (stage: string, done: number, total: number) => void;
   keepExtracts?: boolean;
   /** false: stop after classification (hosted runs extract fields server-side with intakeActions:extractRun). */
@@ -79,7 +81,11 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
         file.dispositionReason = verdict.reason;
         return;
       }
-      const extract = await options.extract(file, bytes);
+      // A malformed file can leave a parser promise that never settles (no pending I/O), which
+      // would end the run silently; each file gets a deadline instead and is catalogued on expiry.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`timed out after ${Math.round((options.extractTimeoutMs ?? 180000) / 1000)} s`)), options.extractTimeoutMs ?? 180000); });
+      const extract = await Promise.race([options.extract(file, bytes), deadline]).finally(() => clearTimeout(timer));
       file.extractMethod = extract.method;
       file.textLength = extract.text.length;
       if (extract.method === "unsupported" || !extract.text.trim()) {

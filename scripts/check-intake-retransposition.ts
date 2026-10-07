@@ -16,6 +16,7 @@ import { classBundleRecords } from "../shared/intake/bundleClasses";
 import { extractionEvidenceVerified, markEvidenceVerified } from "../shared/intake/evidenceRule";
 import { takeBulkBatch } from "../shared/functions/intakeReview";
 import { verifyRecord } from "../shared/intake/verify";
+import { clusterFiles, nameDateSignature } from "../shared/intake/cluster";
 
 function textExtract(text: string): IntakeExtract {
   const { blocks, text: joined } = finalizeBlocks(blocksFromPlainText(text));
@@ -106,11 +107,14 @@ assert.equal(extractionEvidenceVerified({ ...verifiedPolicy, verification: { quo
 assert.equal(extractionEvidenceVerified({ ...verifiedPolicy, record: { ...verifiedPolicy.record, effectiveDate: { ...verifiedPolicy.record.effectiveDate, status: "conflicting" } } }), false, "a conflicting value blocks the rule");
 assert.equal(extractionEvidenceVerified({ ...verifiedPolicy, record: { ...verifiedPolicy.record, title: { ...verifiedPolicy.record.title, confidence: 0.6 } } }), false, "a header value below the threshold blocks the rule");
 const marked = { policies: [{ policyName: "A", sourceExternalIds: ["local:p1"] }, { policyName: "B", sourceExternalIds: ["local:p1", "local:p2"] }], meetingMinutes: [{ sourceExternalIds: ["local:p1"] }] } as Record<string, any>;
-assert.equal(markEvidenceVerified(marked, [{ ...verifiedPolicy, fileKey: "local:p1" }, { ...verifiedPolicy, fileKey: "local:p2", verification: { quoted: 1, mismatched: 1 } }]), 1);
+const markedDocs = { ...marked, documentMap: [{ externalId: "local:p1" }, { externalId: "local:p2" }] };
+assert.equal(markEvidenceVerified(markedDocs, [{ ...verifiedPolicy, fileKey: "local:p1" }, { ...verifiedPolicy, fileKey: "local:p2", verification: { quoted: 1, mismatched: 1 } }]), 2);
+assert.equal(markedDocs.documentMap[0].evidenceVerified, true, "the source document of a verified record is verified with it");
+assert.equal(markedDocs.documentMap[1].evidenceVerified, undefined);
 assert.equal(marked.policies[0].confidence, "High");
 assert.equal(marked.policies[0].evidenceVerified, true);
 assert.equal(marked.policies[1].evidenceVerified, undefined, "every source must pass");
-assert.equal(marked.meetingMinutes[0].evidenceVerified, undefined, "minutes are promoted through intake review, not this rule");
+assert.equal(marked.meetingMinutes[0].evidenceVerified, true, "meetings staged from agendas or packages follow the same header rule");
 
 // ------------------------------------------------------------ policy copies staged once
 const policyText = textExtract("Signing Authority Policy\nEffective Date: March 1, 2024\n1. Purpose\nCheques require two signatures.\n2. Scope\nAll accounts.");
@@ -134,4 +138,16 @@ assert.deepEqual([...takeBulkBatch(ids, 5000)], ["e1"], "whole documents only, n
 assert.deepEqual([...takeBulkBatch(Array(7000).fill("big"), 5000)], ["big"], "one oversized document still forms a batch");
 assert.deepEqual([...takeBulkBatch(ids.slice(3000), 5000)], ["e2", "e3"]);
 
-console.log("PASS intake re-transposition: motion grammar, bodies, agenda dates, evidenced meetings, insurance cleanup, evidence rule, policy copies and bulk-accept batches");
+// ------------------------------------------------------------ version families keep their dates
+assert.equal(nameDateSignature("Board_Minutes_23-Feb-2016 DRAFT.docx"), nameDateSignature("Board_Minutes_23-Feb-2016 FINAL (2).pdf"));
+assert.notEqual(nameDateSignature("2019_04_09 Ops Minutes v2.docx"), nameDateSignature("2019_05_14 Ops Minutes.docx"));
+const monthly = clusterFiles([
+  { id: "a", name: "2019_04_09 Operations Minutes DRAFT.docx" },
+  { id: "b", name: "2019_04_09 Operations Minutes APPROVED.pdf" },
+  { id: "c", name: "2019_05_14 Operations Minutes.docx" },
+  { id: "d", name: "2019_06_11 Operations Minutes.docx" },
+]);
+assert.equal(monthly.length, 1, "only the two copies of one meeting form a version family");
+assert.deepEqual(monthly[0].members.map((member) => member.fileId).sort(), ["a", "b"]);
+
+console.log("PASS intake re-transposition: motion grammar, bodies, agenda dates, evidenced meetings, insurance cleanup, evidence rule, policy copies, dated version families and bulk-accept batches");
