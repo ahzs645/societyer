@@ -304,9 +304,9 @@ export function SettingsPage() {
         iconColor="gray"
         description={t("settings.subtitle")}
         tabs={[
-          { id: "workspace", label: "Workspace" },
-          { id: "modules", label: "Modules" },
-          { id: "runtime", label: "Runtime" },
+          { id: "workspace", label: t("settings.tabWorkspace", "Workspace") },
+          { id: "modules", label: t("settings.tabModules", "Modules") },
+          { id: "runtime", label: t("settings.tabRuntime", "Runtime") },
         ]}
         activeTab={activeTab}
         onTabChange={(id) => setSearchParams((current) => {
@@ -320,9 +320,9 @@ export function SettingsPage() {
       <>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
-          <h2 className="card__title">Organization logo</h2>
+          <h2 className="card__title">{t("settings.logoTitle", "Organization logo")}</h2>
           <span className="card__subtitle">
-            Shown in the sidebar and on exported documents.
+            {t("settings.logoSubtitle", "Shown in the sidebar and on exported documents.")}
           </span>
         </div>
         <div className="card__body col" style={{ gap: 16 }}>
@@ -358,7 +358,7 @@ export function SettingsPage() {
                     ? "Uploading…"
                     : society.logoUrl
                       ? "Replace logo"
-                      : "Upload logo"}
+                      : t("settings.uploadLogo", "Upload logo")}
                 </button>
                 {society.logoUrl && (
                   <button
@@ -372,7 +372,7 @@ export function SettingsPage() {
                 )}
               </div>
               <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                SVG, PNG, or JPG. Max 2 MB.
+                {t("settings.logoFormats", "SVG, PNG, or JPG. Max 2 MB.")}
               </p>
             </div>
           </div>
@@ -381,8 +381,8 @@ export function SettingsPage() {
             disabled={!canEditBranding}
             checked={showDarkLogoSection}
             onChange={setShowDarkLogoSection}
-            label="Customize logo for dark mode"
-            hint="By default, the same logo is used in both themes."
+            label={t("settings.logoDarkToggle", "Customize logo for dark mode")}
+            hint={t("settings.logoDarkHint", "By default, the same logo is used in both themes.")}
           />
 
           {showDarkLogoSection && (
@@ -454,7 +454,7 @@ export function SettingsPage() {
                           ? "Uploading…"
                           : society.logoDarkUrl
                             ? "Replace logo"
-                            : "Upload logo"}
+                            : t("settings.uploadLogo", "Upload logo")}
                       </button>
                       {society.logoDarkUrl && (
                         <button
@@ -477,8 +477,8 @@ export function SettingsPage() {
             disabled={!canEditBranding}
             checked={showLetterheadSection}
             onChange={setShowLetterheadSection}
-            label="Use a custom document letterhead"
-            hint="Header image for exported minutes, meeting packs, and the public copy."
+            label={t("settings.letterheadToggle", "Use a custom document letterhead")}
+            hint={t("settings.letterheadHint", "Header image for exported minutes, meeting packs, and the public copy.")}
           />
 
           {showLetterheadSection && (
@@ -565,8 +565,8 @@ export function SettingsPage() {
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
-          <h2 className="card__title">Sidebar</h2>
-          <span className="card__subtitle">Choose which sidebar sections show in your workspace.</span>
+          <h2 className="card__title">{t("settings.sidebarTitle", "Sidebar")}</h2>
+          <span className="card__subtitle">{t("settings.sidebarSubtitle", "Choose which sidebar sections show in your workspace.")}</span>
         </div>
         <div className="card__body col" style={{ gap: 12 }}>
           <Toggle
@@ -580,14 +580,14 @@ export function SettingsPage() {
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
-          <h2 className="card__title">AI assistant</h2>
-          <span className="card__subtitle">Show or hide the in-app AI chat features.</span>
+          <h2 className="card__title">{t("settings.aiTitle", "AI assistant")}</h2>
+          <span className="card__subtitle">{t("settings.aiSubtitle", "Show or hide the in-app AI chat features.")}</span>
         </div>
         <div className="card__body col" style={{ gap: 12 }}>
           <Toggle
             checked={!aiChatHidden}
             onChange={(checked) => setAiChatHidden(!checked)}
-            label="Enable AI chat"
+            label={t("settings.aiToggle", "Enable AI chat")}
             hint="When off, the sidebar bot button and the floating AI assistant are removed. Other AI-driven helpers (e.g. transcript generation) stay available."
           />
         </div>
@@ -651,7 +651,7 @@ export function SettingsPage() {
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
-          <h2 className="card__title">Inventory</h2>
+          <h2 className="card__title">{t("settings.inventoryTitle", "Inventory")}</h2>
           <span className="card__subtitle">Controls for asset and consumable workflows.</span>
         </div>
         <div className="card__body col" style={{ gap: 12 }}>
@@ -659,7 +659,7 @@ export function SettingsPage() {
             checked={inventoryPromptEnabled}
             onChange={toggleConsumablePrompt}
             disabled={!canEditSettings || savingInventorySettings}
-            label="Prompt for current count when adding consumables"
+            label={t("settings.inventoryPrompt", "Prompt for current count when adding consumables")}
             hint="When adding stock to a consumable item, ask how many are left first, then add the new amount to that observed count."
           />
         </div>
@@ -677,7 +677,7 @@ export function SettingsPage() {
 
         <div className="card">
           <div className="card__head">
-            <h2 className="card__title">Backend connection</h2>
+            <h2 className="card__title">{t("settings.backendTitle", "Backend connection")}</h2>
             <Badge tone={appRuntime.kind === "server" ? "info" : "neutral"}>
               {appRuntime.kind === "server" ? "Configured" : "Not used"}
             </Badge>
@@ -712,7 +712,7 @@ export function SettingsPage() {
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card__head">
-          <h2 className="card__title">Notifications</h2>
+          <h2 className="card__title">{t("settings.notificationsTitle", "Notifications")}</h2>
           <span className="card__subtitle">Controls for the in-app notification center.</span>
         </div>
         <div className="card__body col" style={{ gap: 12 }}>
@@ -744,7 +744,7 @@ export function SettingsPage() {
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card__head"><h2 className="card__title">Demo mode</h2></div>
+        <div className="card__head"><h2 className="card__title">{t("settings.demoTitle", "Demo mode")}</h2></div>
         <div className="card__body col">
           <Toggle
             checked={demo}
@@ -752,7 +752,7 @@ export function SettingsPage() {
               setDemoMode(v);
               setDemo(v);
             }}
-            label="Show demo banner and allow seeding a fake society"
+            label={t("settings.demoToggle", "Show demo banner and allow seeding a fake society")}
           />
           <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
             Append <code className="mono">?demo=1</code> to any URL to force-enable, <code className="mono">?demo=0</code> to disable.
@@ -766,7 +766,7 @@ export function SettingsPage() {
       >
         <div className="card__head">
           <AlertTriangle size={16} style={{ color: "var(--danger)", flexShrink: 0 }} />
-          <h2 className="card__title">Danger zone</h2>
+          <h2 className="card__title">{t("settings.dangerTitle", "Danger zone")}</h2>
           <Badge tone="danger">Irreversible</Badge>
         </div>
         <div className="card__body col" style={{ gap: 20 }}>

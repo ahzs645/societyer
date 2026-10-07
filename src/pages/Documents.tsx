@@ -21,7 +21,7 @@ import { Select } from "../components/Select";
 import { useConfirm } from "../components/Modal";
 import { useToast } from "../components/Toast";
 import { Plus, Trash2, Flag as FlagIcon, Upload, Download, FolderOpen, History, BookOpen, ClipboardCheck, MessageSquare } from "lucide-react";
-import { formatDate, formatDateTime } from "../lib/format";
+import { formatDate, formatDateTime, pluralize } from "../lib/format";
 import { DocumentVersionsDrawer } from "../components/DocumentVersions";
 import { PaperlessDocumentAction } from "../components/PaperlessDocumentAction";
 import { isNativeFileStorageEnabled } from "../lib/runtimeMode";
@@ -440,8 +440,8 @@ function DocumentQueueCard({
               {doc.lastOpenedAtISO ? `Opened ${formatDateTime(doc.lastOpenedAtISO)}` : `Created ${formatDate(doc.createdAtISO)}`}
             </div>
             <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-              {doc.openCommentCount > 0 && <Badge tone="warn">{doc.openCommentCount} comments</Badge>}
-              {doc.openTaskCount > 0 && <Badge tone="warn">{doc.openTaskCount} tasks</Badge>}
+              {doc.openCommentCount > 0 && <Badge tone="warn">{pluralize(doc.openCommentCount, "comment")}</Badge>}
+              {doc.openTaskCount > 0 && <Badge tone="warn">{pluralize(doc.openTaskCount, "task")}</Badge>}
               {doc.linkedToMeetingPackage && <Badge tone="info">Meeting packet</Badge>}
               {doc.signatureCount > 0 && <Badge tone="success">{doc.signatureCount} signed</Badge>}
             </div>

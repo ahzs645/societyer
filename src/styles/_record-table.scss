@@ -2469,3 +2469,43 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   }
   .record-table__bulk-bar-button { min-height: 44px; }
 }
+
+/* -------- Touch targets (coarse pointers) ---------------------------------
+ * Phones and tablets get >= 36-44px hit areas for the header sort buttons,
+ * column menus, view toggles and footer aggregates, which are 15-24px with a
+ * mouse. Visual density on desktop is unchanged. */
+@media (pointer: coarse) {
+  .record-table__header-cell {
+    height: 44px;
+  }
+  .record-table__header-cell-button {
+    min-height: 40px;
+    max-width: calc(100% - 40px);
+  }
+  .record-table__header-menu-wrap {
+    right: 2px;
+  }
+  .record-table__header-menu-trigger {
+    width: 36px;
+    height: 36px;
+  }
+  .record-table__segmented {
+    height: auto;
+    button {
+      min-width: 40px;
+      width: auto;
+      min-height: 36px;
+      height: auto;
+      padding: 0 8px;
+    }
+  }
+  .record-table__aggregate-trigger,
+  .record-table__toolbar button,
+  .record-table__view-toolbar button {
+    min-height: 36px;
+  }
+  .record-table__header-menu button,
+  .record-table__aggregate-menu button {
+    min-height: 40px;
+  }
+}

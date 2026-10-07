@@ -58,6 +58,11 @@ export function dollarInputToCents(value: string | number | undefined | null) {
   return Math.round(amount * 100);
 }
 
+/** "1 record", "3 records", "1 policy" → `pluralize(n, "policy", "policies")`. Numbers use the en-CA grouping. */
+export function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return `${new Intl.NumberFormat("en-CA").format(count)} ${Math.abs(count) === 1 ? singular : plural}`;
+}
+
 export function initials(first?: string, last?: string) {
   return `${(first || "?")[0]}${(last || "")[0] || ""}`.toUpperCase();
 }

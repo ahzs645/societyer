@@ -23,6 +23,8 @@ import {
 import { useRecordTableContextOrThrow } from "../contexts/RecordTableContext";
 import { resolveRouteIdentity } from "../../../../lib/routeIdentity";
 import { useToast } from "../../../../components/Toast";
+import { usePrompt } from "../../../../components/Modal";
+import { useTranslation } from "react-i18next";
 import { RecordTableSortPopover } from "./RecordTableSortPopover";
 import { useFilteredRecords } from "../hooks/useFilteredRecords";
 import { usePermissions } from "../../../../hooks/usePermissions";
@@ -89,6 +91,8 @@ export function RecordTableToolbar({
   const isDirty = useRecordTableIsDirty();
   const { objectMetadata } = useRecordTableContextOrThrow();
   const toast = useToast();
+  const prompt = usePrompt();
+  const { t } = useTranslation();
   const canPersistView = usePermissions().can("settings:write");
 
   // The section icon comes from the route registry so a table's icon always
@@ -133,7 +137,7 @@ export function RecordTableToolbar({
   }, [columnMenuOpen, viewMenuOpen, viewOptionsOpen]);
 
   const activeViewName =
-    (views ?? []).find((v) => v._id === currentViewId)?.name ?? "All records";
+    (views ?? []).find((v) => v._id === currentViewId)?.name ?? t("recordTable.allRecords", "All records");
   const selectableKanbanFields = columns.filter((column) => {
     const type = column.field.fieldType;
     return type === "SELECT" || type === "MULTI_SELECT" || type === "BOOLEAN" || type === "RELATION";
@@ -234,7 +238,7 @@ export function RecordTableToolbar({
               title="Save the current column layout, filters and sort into this view"
             >
               <Save size={12} />
-              <span>{isSaving ? "Saving…" : "Save changes"}</span>
+              <span>{isSaving ? t("common.saving", "Saving…") : t("common.saveChanges", "Save changes")}</span>
             </button>
             <button
               type="button"
@@ -244,7 +248,7 @@ export function RecordTableToolbar({
               title="Revert to the last saved view"
             >
               <RotateCcw size={12} />
-              <span>Discard</span>
+              <span>{t("common.discard", "Discard")}</span>
             </button>
           </>
         )}
@@ -255,7 +259,13 @@ export function RecordTableToolbar({
             className="record-table__toolbar-button"
             disabled={isSaving || !canPersistView}
             onClick={async () => {
-              const name = window.prompt("Name this view");
+              const name = await prompt({
+                title: t("recordTable.saveViewTitle", "Save as a new view"),
+                message: t("recordTable.saveViewMessage", "Saves the current columns, filters and sort as a personal view."),
+                placeholder: t("recordTable.viewName", "View name"),
+                confirmLabel: t("recordTable.saveView", "Save view"),
+                required: true,
+              });
               if (!name?.trim()) return;
               try {
                 setIsSaving(true);
@@ -272,7 +282,7 @@ export function RecordTableToolbar({
             title="Save the current table setup as a new personal view"
           >
             <Save size={12} />
-            <span>Save as</span>
+            <span>{t("common.saveAs", "Save as")}</span>
           </button>
         )}
 
@@ -284,7 +294,7 @@ export function RecordTableToolbar({
               handle.get().setType("table");
               resetScrollForViewSwitch();
             }}
-            title="Table view"
+            title={t("recordTable.tableView", "Table view")}
           >
             <Table2 size={12} />
           </button>
@@ -297,7 +307,7 @@ export function RecordTableToolbar({
               if (firstField) handle.get().setKanbanFieldMetadataId(firstField);
               resetScrollForViewSwitch();
             }}
-            title="Kanban view"
+            title={t("recordTable.kanbanView", "Kanban view")}
           >
             <Kanban size={12} />
           </button>
@@ -310,7 +320,7 @@ export function RecordTableToolbar({
               if (firstField) handle.get().setCalendarFieldMetadataId(firstField);
               resetScrollForViewSwitch();
             }}
-            title="Calendar view"
+            title={t("recordTable.calendarView", "Calendar view")}
           >
             <CalendarDays size={12} />
           </button>
@@ -325,7 +335,7 @@ export function RecordTableToolbar({
             title="View options"
           >
             <SlidersHorizontal size={12} />
-            <span>Options</span>
+            <span>{t("common.options", "Options")}</span>
           </button>
           {viewOptionsOpen && (
             <ViewportPopover open onClose={() => setViewOptionsOpen(false)} anchorRef={viewOptionsRef} label="View options" className="record-table__menu record-table__menu--right record-table__menu--wide">
@@ -389,7 +399,7 @@ export function RecordTableToolbar({
             onClick={onOpenFilter}
           >
             <Filter size={12} />
-            <span>Filter{filters.length > 0 ? ` · ${filters.length}` : ""}</span>
+            <span>{t("common.filter", "Filter")}{filters.length > 0 ? ` · ${filters.length}` : ""}</span>
           </button>
         )}
 
@@ -405,7 +415,7 @@ export function RecordTableToolbar({
           onClick={() => setSortMenuOpen((x) => !x)}
         >
           <ArrowDownUp size={12} />
-          <span>Sort{sorts.length > 0 ? ` · ${sorts.length}` : ""}</span>
+          <span>{t("common.sort", "Sort")}{sorts.length > 0 ? ` · ${sorts.length}` : ""}</span>
         </button>
         <RecordTableSortPopover open={sortMenuOpen} onClose={() => setSortMenuOpen(false)} anchorRef={sortButtonRef} />
 
@@ -416,7 +426,7 @@ export function RecordTableToolbar({
             onClick={() => setColumnMenuOpen((x) => !x)}
           >
             <SlidersHorizontal size={12} />
-            <span>Options</span>
+            <span>{t("common.options", "Options")}</span>
           </button>
           {columnMenuOpen && (
             <ViewportPopover open onClose={() => setColumnMenuOpen(false)} anchorRef={columnMenuRef} label="Table options" className="record-table__menu record-table__menu--right record-table__menu--wide">
