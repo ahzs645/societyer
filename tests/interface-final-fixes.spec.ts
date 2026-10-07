@@ -22,15 +22,12 @@ test("the policies register fits the window with its status visible (X-02)", asy
   }
 });
 
-test("a missing record shows a readable error with Retry instead of loading forever (P-O2)", async ({ page }) => {
+test("a missing record shows its not-found state, not the error boundary (P-O2, FF-2)", async ({ page }) => {
+  // The person profile has its own not-found state; its merge history waits
+  // for the profile instead of failing the page (FF-2).
   await page.goto("/demo/app/people-directory/synthetic_missing_person");
-  const alert = page.getByRole("alert").filter({ hasText: "Couldn't load this page" });
-  await expect(alert).toBeVisible({ timeout: 20_000 });
-  await expect(alert).toContainText("could not be found");
-  await alert.getByRole("button", { name: "Retry" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "Couldn't load this page" })).toBeVisible({ timeout: 20_000 });
-  // Moving to another page clears the boundary.
-  await page.getByRole("alert").getByRole("link", { name: "Back to dashboard" }).click();
+  await expect(page.getByText("Person not found in this workspace")).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(2_000);
   await expect(page.getByRole("alert").filter({ hasText: "Couldn't load this page" })).toHaveCount(0);
   // A page with its own not-found state keeps it.
   await page.goto("/demo/app/documents/synthetic_missing_document");

@@ -279,6 +279,7 @@
     "test:import-core": "node --import tsx scripts/check-import-core-fidelity.ts && tsx scripts/check-import-core-convex.ts",
     "test:meetings-review-ui": "tsx scripts/check-meetings-review-ui.ts",
     "test:meetings-retest": "tsx scripts/check-meetings-retest.ts",
+    "test:polish-retest": "tsx scripts/check-polish-retest.ts",
     "test:meetings-editing-ui": "playwright test --config playwright.meetings-editing.config.ts",
     "intake:audit-meetings": "node --import tsx scripts/audit-meeting-promotion.ts",
     "intake:render-minutes": "node --import tsx scripts/render-intake-minutes.ts",
