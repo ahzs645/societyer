@@ -28,7 +28,7 @@ import { type MenuSection } from "../components/Menu";
 import { Modal, useConfirm } from "../components/Modal";
 import { Select } from "../components/Select";
 import { normalizedMeetingTitle } from "../features/meetings/lib/meetingDetailHelpers";
-import { noticeDaysUntil, isGeneralMeeting, meetingScheduleConflicts, OVERLAP_WINDOW_MS } from "../features/meetings/lib/noticeWindow";
+import { isGeneralMeeting, isPastMeeting, meetingScheduleConflicts, newGeneralMeetingNoticeProblem, OVERLAP_WINDOW_MS, statusForNewMeeting } from "../features/meetings/lib/noticeWindow";
 import {
   MeetingFormFields,
   makeMeetingDraft,
@@ -349,17 +349,18 @@ export function MeetingsPage() {
     // window governs when notice is sent, not how far ahead a meeting may be
     // scheduled. Scheduling beyond the max is allowed; the drawer shows an
     // advisory warning instead.
-    if (isGeneralMeeting(form.type)) {
-      const days = noticeDaysUntil(form.scheduledAt, data.effectiveRules);
-      if (days == null || days < effectiveNoticeMinDays) {
-        toast.error(`General meetings need at least ${effectiveNoticeMinDays} days of notice.`);
-        return;
-      }
+    // A meeting dated before today records one already held: no notice check, status Held.
+    const noticeProblem = isGeneralMeeting(form.type) ? newGeneralMeetingNoticeProblem(form.scheduledAt, effectiveNoticeMinDays, data.effectiveRules) : null;
+    if (noticeProblem) {
+      toast.error(noticeProblem);
+      return;
     }
+    const past = isPastMeeting(form.scheduledAt);
     const { conflictAcknowledged: _conflictAcknowledged, committeeId, ...payload } = form;
     const meetingId = await create({
       societyId: society._id,
       ...payload,
+      status: statusForNewMeeting(form.scheduledAt, payload.status),
       title,
       committeeId: (committeeId || undefined) as any,
       meetingTemplateId: form.meetingTemplateId || undefined,
@@ -367,7 +368,7 @@ export function MeetingsPage() {
     });
     setFormInitial(JSON.stringify(form));
     setOpen(false);
-    toast.success("Meeting scheduled", title);
+    toast.success(past ? "Held meeting recorded" : "Meeting scheduled", title);
     if (meetingId) navigate(`/app/meetings/${meetingId}`);
   };
 

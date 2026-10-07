@@ -73,3 +73,26 @@ export function noticeWindowSatisfied(notice: string | Date, meeting: string, mi
 export function meetsNoticeWindow(value: string, minDays: number, maxDays: number, rules?: NoticeRules) {
   return noticeWindowSatisfied(new Date(), value, minDays, maxDays, rules);
 }
+
+/** True when the meeting's calendar day is before today: the form records a meeting already held. */
+export function isPastMeeting(value: string, now: string | Date = new Date()) {
+  const days = daysUntil(value, now);
+  return days != null && days < 0;
+}
+
+/**
+ * The minimum-notice check for a new general meeting. A meeting dated before
+ * today is a record of one already held (setting up an existing organization),
+ * so notice cannot be checked from today; the form's own advisory already
+ * skips past dates.
+ */
+export function newGeneralMeetingNoticeProblem(value: string, minDays: number, rules?: NoticeRules, now: string | Date = new Date()) {
+  if (isPastMeeting(value, now)) return null;
+  const days = noticeDaysUntil(value, rules, now);
+  return days == null || days < minDays ? `General meetings need at least ${minDays} days of notice.` : null;
+}
+
+/** New meetings dated before today are recorded as held, not scheduled. */
+export function statusForNewMeeting(value: string, status: string, now: string | Date = new Date()) {
+  return isPastMeeting(value, now) && (!status || status === "Scheduled") ? "Held" : status;
+}
