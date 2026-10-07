@@ -55,6 +55,25 @@ const MINUTES_REFS: Array<[string, string[]]> = [
   ["policies", ["adoptedInMinutesId"]],
 ];
 
+/**
+ * Rows of `table` whose `fields` hold `id`. The match runs in the read-only
+ * query predicate and keeps no rows, so the local runtime never deep-copies a
+ * whole table (the document library can be >100 MB) just to find a few links.
+ */
+async function rowsReferencing(ctx: PortableQueryCtx, table: string, societyId: string, fields: string[], id: string) {
+  const hits: Array<{ _id: string; fields: string[] }> = [];
+  await ctx.db
+    .query(table as any)
+    .withIndex("by_society", (q: any) => q.eq("societyId", societyId))
+    .filter((row: any) => {
+      const matched = fields.filter((field) => String(row[field] ?? "") === id);
+      if (matched.length) hits.push({ _id: String(row._id), fields: matched });
+      return false;
+    })
+    .collect();
+  return hits;
+}
+
 async function minutesFor(ctx: PortableQueryCtx, meetingId: string) {
   return (await ctx.db.query("minutes").withIndex("by_meeting", (q) => q.eq("meetingId", meetingId)).first()) as any;
 }
@@ -92,14 +111,12 @@ export type MergePreview = MergePlan & {
 async function countReferences(ctx: PortableQueryCtx, societyId: string, duplicateId: string, duplicateMinutesId?: string) {
   const counts: Record<string, number> = {};
   for (const [table, fields] of MEETING_REFS) {
-    const rows: any[] = await ctx.db.query(table as any).withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
-    const n = rows.filter((row) => fields.some((field) => String(row[field] ?? "") === duplicateId)).length;
+    const n = (await rowsReferencing(ctx, table, societyId, fields, duplicateId)).length;
     if (n) counts[table] = (counts[table] ?? 0) + n;
   }
   if (duplicateMinutesId) {
     for (const [table, fields] of MINUTES_REFS) {
-      const rows: any[] = await ctx.db.query(table as any).withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
-      const n = rows.filter((row) => fields.some((field) => String(row[field] ?? "") === duplicateMinutesId)).length;
+      const n = (await rowsReferencing(ctx, table, societyId, fields, duplicateMinutesId)).length;
       if (n) counts[table] = (counts[table] ?? 0) + n;
     }
   }
@@ -198,35 +215,22 @@ export async function mergePortable(ctx: PortableMutationCtx, args: MergeArgs) {
   // Re-point references.
   let referencesMoved = 0;
   for (const [table, fields] of MEETING_REFS) {
-    const rows: any[] = await ctx.db.query(table as any).withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
-    for (const row of rows) {
-      const patch: Record<string, unknown> = {};
-      for (const field of fields) if (String(row[field] ?? "") === duplicateId) patch[field] = target._id;
-      if (Object.keys(patch).length) {
-        await ctx.db.patch(row._id, patch);
-        referencesMoved += 1;
-      }
+    for (const hit of await rowsReferencing(ctx, table, societyId, fields, duplicateId)) {
+      await ctx.db.patch(hit._id, Object.fromEntries(hit.fields.map((field) => [field, target._id])));
+      referencesMoved += 1;
     }
   }
   if (duplicateMinutesId && keptMinutesId && keptMinutesId !== duplicateMinutesId) {
     for (const [table, fields] of MINUTES_REFS) {
-      const rows: any[] = await ctx.db.query(table as any).withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
-      for (const row of rows) {
-        const patch: Record<string, unknown> = {};
-        for (const field of fields) if (String(row[field] ?? "") === duplicateMinutesId) patch[field] = keptMinutesId;
-        if (Object.keys(patch).length) {
-          await ctx.db.patch(row._id, patch);
-          referencesMoved += 1;
-        }
+      for (const hit of await rowsReferencing(ctx, table, societyId, fields, duplicateMinutesId)) {
+        await ctx.db.patch(hit._id, Object.fromEntries(hit.fields.map((field) => [field, keptMinutesId])));
+        referencesMoved += 1;
       }
     }
     const occurrences: any[] = await ctx.db.query("personOccurrences").withIndex("by_record", (q) => q.eq("societyId", societyId).eq("recordTable", "minutes").eq("recordId", duplicateMinutesId)).collect();
     for (const row of occurrences) await ctx.db.patch(row._id, { recordId: keptMinutesId });
-    const signatures: any[] = await ctx.db.query("signatures").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
-    for (const row of signatures) {
-      if (row.entityType === "minutes" && (row.entityId === duplicateMinutesId || row.subjectId === duplicateMinutesId)) {
-        await ctx.db.patch(row._id, { entityId: keptMinutesId, ...(row.subjectId ? { subjectId: keptMinutesId } : {}) });
-      }
+    for (const hit of await rowsReferencing(ctx, "signatures", societyId, ["entityId", "subjectId"], duplicateMinutesId)) {
+      await ctx.db.patch(hit._id, Object.fromEntries(hit.fields.map((field) => [field, keptMinutesId])));
     }
   }
   for (const [table, oldId, newId] of [["meetings", duplicateId, targetId], ["minutes", duplicateMinutesId, keptMinutesId]] as const) {

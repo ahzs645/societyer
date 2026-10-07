@@ -16,6 +16,14 @@ const editors: Record<string, {title:string;columns:EvidenceColumn[]}> = {
   quorumCheckpoints: {title:'Decision-time quorum checkpoints',columns:[{key:'id',label:'Checkpoint ID'},{key:'boundary',label:'Source time or agenda boundary'},{key:'eligibleCount',label:'Present eligible count',type:'number'},{key:'eligiblePopulation',label:'Total eligible population',type:'number'},{key:'atTime',label:'Time as recorded'},{key:'scope',label:'Scope',options:['meeting','session','item']},{key:'scopeLabel',label:'Session or agenda item'},{key:'reason',label:'Reason or qualification'},{key:'evidence',label:'Source evidence'},{key:'required',label:'Historical threshold',type:'number'},{key:'assertion',label:'Source assertion',options:['confirmed','not_met','not_recorded']},...evidence]},
   futureMeetingSuggestions: {title:'Future meeting suggestions',columns:[{key:'id',label:'Suggestion ID'},{key:'title',label:'Meeting title'},{key:'committee',label:'Committee'},{key:'date',label:'Date (YYYY, YYYY-MM or YYYY-MM-DD)'},{key:'status',label:'Suggestion status',options:['tentative','tbc','confirmed']},{key:'venue',label:'Venue'},{key:'scheduledAt',label:'Reviewed time with timezone'},...evidence]},
 };
+/** Person links resolve every source occurrence against the whole people
+ *  history (and the document library for access checks), which costs seconds
+ *  on large imported workspaces. Load them on request, not with the tab (F26). */
+function LazyPersonRecordLinks({societyId,recordId}:{societyId:string;recordId:string}){
+  const [open,setOpen]=useState(false);
+  if(open)return <PersonRecordLinks societyId={societyId} recordTable="minutes" recordId={recordId}/>;
+  return <section className="card" style={{marginTop:16}}><div className="card__head"><h2 className="card__title">People linked to this record</h2><button className="btn-action" type="button" onClick={()=>setOpen(true)} data-testid="show-person-links">Show person links</button></div><p className="card__body muted">Source names matched to the people directory, with identity review. Loaded on request because it checks every source occurrence.</p></section>;
+}
 /** B3: consent items pick the minutes they receive or adopt instead of typing raw IDs. */
 function minutesChoices(minutes: any, allMinutes: any[] | undefined, meetings: any[] | undefined) {
   const byMeeting = new Map((meetings ?? []).map((meeting: any) => [String(meeting._id), meeting]));
@@ -35,7 +43,7 @@ export function MeetingEvidenceCard({minutes, allMinutes, meetings}:{minutes:any
   const choices=minutesChoices(minutes,allMinutes,meetings);
   const columnsFor=(key:string)=>editors[key].columns.map(column=>key==='consentItems'&&column.key==='targetMinutesId'?{...column,label:'Minutes received / adopted',choices}:column);
   const changeRows=(key:string,rows:any[])=>setDraft({...draft,[key]:key==='consentItems'?rows.map(row=>row.targetMinutesId&&!row.outcome?{...row,outcome:'received'}:row):rows});
-  return <><PersonRecordLinks societyId={minutes.societyId} recordTable="minutes" recordId={minutes._id}/><div className="card" style={{marginTop:16}}><div className="card__head"><h2 className="card__title">Source decisions and meeting evidence</h2>
+  return <><LazyPersonRecordLinks societyId={minutes.societyId} recordId={minutes._id}/><div className="card" style={{marginTop:16}}><div className="card__head"><h2 className="card__title">Source decisions and meeting evidence</h2>
     {canEdit&&<button className="btn-action" disabled={busy} onClick={()=>draft?setDraft(null):setDraft(Object.fromEntries(Object.keys(editors).map(key=>[key,structuredClone(minutes[key]??[])])))}>{draft?'Cancel':'Edit evidence'}</button>}
     {draft&&<button className="btn-action btn-action--primary" disabled={busy} onClick={async()=>{setBusy(true);try{await save({id:minutes._id,evidence:draft});setDraft(null);toast.success('Meeting evidence saved');}catch(error:any){toast.error(error.message);}finally{setBusy(false);}}}>Save evidence</button>}
   </div><div className="card__body col" style={{gap:12}}>

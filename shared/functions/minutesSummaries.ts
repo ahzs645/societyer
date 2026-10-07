@@ -96,9 +96,18 @@ export function summarizeMinutes(minutes: any): MinutesSummary {
 
 export async function listSummariesPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }): Promise<MinutesSummary[]> {
   await requireSocietyMembership(ctx, societyId);
-  const rows = await ctx.db
+  // Summarize inside the (pure, read-only) predicate and keep no rows: the
+  // local runtime then never deep-copies every minutes record with its source
+  // text (≈38 MB on large imports) just to count a few fields. On Convex the
+  // predicate runs after collect, so the result is identical.
+  const summaries: MinutesSummary[] = [];
+  await ctx.db
     .query("minutes")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
+    .filter((row) => {
+      summaries.push(summarizeMinutes(row));
+      return false;
+    })
     .collect();
-  return rows.map(summarizeMinutes);
+  return summaries;
 }
