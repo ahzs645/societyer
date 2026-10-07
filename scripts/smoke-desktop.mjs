@@ -9,7 +9,10 @@ const mainEntry = path.join(root, "dist-electron", "electron", "main.js");
 const workspaceDir = await mkdtemp(path.join(tmpdir(), "societyer-desktop-smoke-workspace-"));
 const userDataDir = await mkdtemp(path.join(tmpdir(), "societyer-desktop-smoke-user-data-"));
 
-const child = spawn(electronBin, [mainEntry, `--user-data-dir=${userDataDir}`], {
+// Chromium refuses to start as root without --no-sandbox (containers and CI
+// runners commonly run as root); the packaged app itself keeps the sandbox.
+const sandboxArgs = process.getuid?.() === 0 || process.env.SOCIETYER_ELECTRON_NO_SANDBOX === "1" ? ["--no-sandbox"] : [];
+const child = spawn(electronBin, [...sandboxArgs, mainEntry, `--user-data-dir=${userDataDir}`], {
   stdio: ["pipe", "pipe", "pipe"],
   env: {
     ...process.env,
