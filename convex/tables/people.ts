@@ -30,6 +30,10 @@ export const peopleTables = {
     leftAt: v.optional(v.string()),
     votingRights: v.boolean(),
     notes: v.optional(v.string()),
+    // A2: an organization can hold membership and appoint representatives
+    // (organizationSeats.memberId + representative terms). Absent = individual.
+    memberKind: v.optional(v.string()), // individual | organization
+    organizationName: v.optional(v.string()),
   })
     .index("by_society", ["societyId"])
     .index("by_society_status", ["societyId", "status"]),
@@ -163,6 +167,13 @@ export const peopleTables = {
     representedOrganization: v.optional(v.string()),
     joinedAt: v.string(),
     leftAt: v.optional(v.string()),
+    // P15: roster rows built from a source roster sheet stay pending until a
+    // person confirms them; the seat observation they came from is kept.
+    reviewStatus: v.optional(v.string()), // pending | verified
+    sourceSeatId: v.optional(v.id("organizationSeats")),
+    sourceObservationId: v.optional(v.string()),
+    observedDate: v.optional(v.string()),
+    sourceReference: v.optional(v.string()),
   })
     .index("by_committee", ["committeeId"])
     .index("by_society", ["societyId"]),

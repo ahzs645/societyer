@@ -234,6 +234,10 @@ export const EXPORTABLE_TABLES = [
   "intakeFieldReviews",
   "fieldProvenance",
   "intakeProcessingLog",
+  "personMerges",
+  "representationGaps",
+  "governanceExpectations",
+  "continuityPeriodMarks",
 ] as const;
 
 export const listExportableTables = authorizedQuery("exports:listExportableTables", query)({

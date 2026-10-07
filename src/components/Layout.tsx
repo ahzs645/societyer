@@ -1141,7 +1141,7 @@ export function Layout() {
                     }
                   >
                     <span>{t("sidebar.openTasks")}</span>
-                    <Pill size="sm">{counts?.openTasks ?? 0}</Pill>
+                    <Pill size="sm">{counts ? counts.openTasks : <span aria-label="Loading" className="muted">…</span>}</Pill>
                   </NavLink>
                   <NavLink
                     to="/app/deadlines"
@@ -1152,12 +1152,14 @@ export function Layout() {
                     <span>{t("sidebar.upcomingDeadlines")}</span>
                     {/* P20: "0" looked healthy for an unconfigured workspace;
                         say that deadlines are not computed yet instead. */}
-                    {(counts?.openDeadlines ?? 0) === 0 && society && (!society.incorporationDate || !society.fiscalYearEnd) ? (
+                    {!counts ? (
+                      <Pill size="sm"><span aria-label="Loading" className="muted">…</span></Pill>
+                    ) : counts.openDeadlines === 0 && society && (!society.incorporationDate || !society.fiscalYearEnd) ? (
                       <span title="No deadlines are tracked yet. Add the incorporation date and fiscal year end (Society profile) and record held AGMs to compute statutory deadlines.">
                         <Pill size="sm" tone="warn">Set up</Pill>
                       </span>
                     ) : (
-                      <Pill size="sm">{counts?.openDeadlines ?? 0}</Pill>
+                      <Pill size="sm">{counts.openDeadlines}</Pill>
                     )}
                   </NavLink>
                 </>

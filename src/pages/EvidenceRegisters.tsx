@@ -1,5 +1,5 @@
 import { usePermissionedMutation } from "../hooks/usePermissionedMutation";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -214,10 +214,24 @@ export function GovernanceRegistersPage() {
 
 export function MeetingEvidencePage() {
   const { society, data, people } = useRegisters();
+  const { can } = usePermissions();
+  const meetings = useQuery(api.meetings.list, society && can("meetings:read") ? { societyId: society._id } : "skip") as any[] | undefined;
+  // P18: one row per person, meeting and status (imports read the same minutes
+  // twice), labelled with the meeting's current title rather than a file name.
+  const attendance = useMemo(() => {
+    const titles = new Map((meetings ?? []).map((m: any) => [String(m._id), m.title]));
+    const groups = new Map<string, any>();
+    for (const row of (data?.meetingAttendanceRecords ?? []) as any[]) {
+      const key = [row.meetingId ?? row.meetingTitle ?? row.sourceTitle, String(row.directoryPersonId ?? row.personName ?? "").trim().toLocaleLowerCase(), String(row.attendanceStatus ?? "").toLocaleLowerCase()].join("|");
+      const existing = groups.get(key);
+      if (existing) { existing.duplicateCount += 1; continue; }
+      groups.set(key, { ...row, meetingTitle: (row.meetingId && titles.get(String(row.meetingId))) || row.meetingTitle, duplicateCount: 1 });
+    }
+    return [...groups.values()];
+  }, [data, meetings]);
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const attendance = data?.meetingAttendanceRecords ?? [];
   const motions = data?.motionEvidence ?? [];
 
   return (
@@ -250,7 +264,7 @@ export function MeetingEvidencePage() {
           </>
         }
         columns={["Meeting", "Date", "Person", "Attendance", "Confidence"]}
-        render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, row.attendanceStatus, <Confidence key="c" value={row.confidence} />]}
+        render={(row) => [<MeetingCell key="m" row={row} />, formatDate(row.meetingDate), <PersonCell key="p" row={row} name={row.personName} people={people} />, <span key="a">{!row.attendanceStatus || /^unknown$/i.test(row.attendanceStatus) ? "Not stated" : row.attendanceStatus}{row.duplicateCount > 1 ? <span className="muted" title="The same person, meeting and status appeared more than once in the imported evidence"> · recorded {row.duplicateCount}×</span> : null}</span>, <Confidence key="c" value={row.confidence} />]}
       />
       <RegisterTable
         title="Motion evidence"

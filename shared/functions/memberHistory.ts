@@ -47,7 +47,7 @@ export async function list(ctx: PortableQueryCtx, { societyId, memberId }: { soc
   }
   if(member.directoryPersonId){
     const connected=await personProfile(ctx,{societyId,personId:member.directoryPersonId});
-    for(const e of connected.events.filter((e:any)=>!e.derived))rows.push({...e,_id:`person:${e._id}`,kind:['role','affiliation','appointment','departure'].includes(e.kind)?'Role':e.kind==='note'?'Other':'Attendance',reviewStatus:e.reviewStatus==='verified'?'Verified':e.reviewStatus==='rejected'?'Rejected':'Observed',href:`/app/people-directory/${member.directoryPersonId}`,evidenceRegister:'personHistoryEvents',...(e.meetingId?{meetingHref:`/app/meetings/${e.meetingId}?tab=minutes`}:{})});
+    for(const e of (connected.events??[]).filter((e:any)=>!e.derived))rows.push({...e,_id:`person:${e._id}`,kind:['role','affiliation','appointment','departure'].includes(e.kind)?'Role':e.kind==='note'?'Other':'Attendance',reviewStatus:e.reviewStatus==='verified'?'Verified':e.reviewStatus==='rejected'?'Rejected':'Observed',href:`/app/people-directory/${member.directoryPersonId}`,evidenceRegister:'personHistoryEvents',...(e.meetingId?{meetingHref:`/app/meetings/${e.meetingId}?tab=minutes`}:{})});
   }
   return rows.sort((a, b) => String(b.effectiveDate).localeCompare(String(a.effectiveDate)) || String(b.createdAtISO).localeCompare(String(a.createdAtISO)));
 }

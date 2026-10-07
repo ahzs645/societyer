@@ -3822,6 +3822,22 @@
     ]
   },
   {
+    "key": "convex:committees:buildRostersFromSeats",
+    "surface": "convex",
+    "name": "committees:buildRostersFromSeats",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/committees.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:committees:create",
     "surface": "convex",
     "name": "committees:create",
@@ -3940,6 +3956,40 @@
       {
         "path": "patch.chairDirectorId",
         "table": "directors",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:committees:updateMember",
+    "surface": "convex",
+    "name": "committees:updateMember",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/committees.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "committeeMembers",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "patch.directorId",
+        "table": "directors",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "patch.memberId",
+        "table": "members",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "patch.personId",
+        "table": "peopleDirectory",
         "array": false,
         "optional": true
       }
@@ -5234,6 +5284,22 @@
     ]
   },
   {
+    "key": "convex:directors:promoteRosterObservation",
+    "surface": "convex",
+    "name": "directors:promoteRosterObservation",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/directors.ts",
+    "idArguments": [
+      {
+        "path": "seatId",
+        "table": "organizationSeats",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:directors:remove",
     "surface": "convex",
     "name": "directors:remove",
@@ -5244,6 +5310,22 @@
       {
         "path": "id",
         "table": "directors",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:directors:rosterSuggestions",
+    "surface": "convex",
+    "name": "directors:rosterSuggestions",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/directors.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }
@@ -12383,6 +12465,34 @@
     ]
   },
   {
+    "key": "convex:memberGovernance:addSeat",
+    "surface": "convex",
+    "name": "memberGovernance:addSeat",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/memberGovernance.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "memberId",
+        "table": "members",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "committeeId",
+        "table": "committees",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:memberGovernance:assess",
     "surface": "convex",
     "name": "memberGovernance:assess",
@@ -12481,6 +12591,110 @@
     ]
   },
   {
+    "key": "convex:memberGovernance:organizationMembers",
+    "surface": "convex",
+    "name": "memberGovernance:organizationMembers",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/memberGovernance.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:memberGovernance:recordRepresentative",
+    "surface": "convex",
+    "name": "memberGovernance:recordRepresentative",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/memberGovernance.ts",
+    "idArguments": [
+      {
+        "path": "seatId",
+        "table": "organizationSeats",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "personId",
+        "table": "peopleDirectory",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:memberGovernance:saveOrganizationMember",
+    "surface": "convex",
+    "name": "memberGovernance:saveOrganizationMember",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/memberGovernance.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "memberId",
+        "table": "members",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "linkSeatIds",
+        "table": "organizationSeats",
+        "array": true,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "convex:memberGovernance:seatDetail",
+    "surface": "convex",
+    "name": "memberGovernance:seatDetail",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/memberGovernance.ts",
+    "idArguments": [
+      {
+        "path": "seatId",
+        "table": "organizationSeats",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:memberGovernance:supersedeSeatObservation",
+    "surface": "convex",
+    "name": "memberGovernance:supersedeSeatObservation",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/memberGovernance.ts",
+    "idArguments": [
+      {
+        "path": "seatId",
+        "table": "organizationSeats",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "changes.personId",
+        "table": "peopleDirectory",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:memberGovernance:transition",
     "surface": "convex",
     "name": "memberGovernance:transition",
@@ -12499,6 +12713,34 @@
         "table": "memberAssessments",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:memberGovernance:updateSeat",
+    "surface": "convex",
+    "name": "memberGovernance:updateSeat",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/memberGovernance.ts",
+    "idArguments": [
+      {
+        "path": "seatId",
+        "table": "organizationSeats",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "memberId",
+        "table": "members",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "committeeId",
+        "table": "committees",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -15833,10 +16075,62 @@
     "idArguments": []
   },
   {
+    "key": "convex:personHistory:createPersonFromOccurrence",
+    "surface": "convex",
+    "name": "personHistory:createPersonFromOccurrence",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/personHistory.ts",
+    "idArguments": [
+      {
+        "path": "occurrenceId",
+        "table": "personOccurrences",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:personHistory:dismissDuplicate",
+    "surface": "convex",
+    "name": "personHistory:dismissDuplicate",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/personHistory.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:personHistory:duplicateSuggestions",
+    "surface": "convex",
+    "name": "personHistory:duplicateSuggestions",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/personHistory.ts",
+    "idArguments": []
+  },
+  {
     "key": "convex:personHistory:forRecord",
     "surface": "convex",
     "name": "personHistory:forRecord",
     "kind": "query",
+    "access": "authenticated",
+    "source": "convex/personHistory.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:personHistory:mergeHistory",
+    "surface": "convex",
+    "name": "personHistory:mergeHistory",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/personHistory.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:personHistory:mergePeople",
+    "surface": "convex",
+    "name": "personHistory:mergePeople",
+    "kind": "mutation",
     "access": "authenticated",
     "source": "convex/personHistory.ts",
     "idArguments": []
@@ -15864,6 +16158,15 @@
     "surface": "convex",
     "name": "personHistory:profile",
     "kind": "query",
+    "access": "authenticated",
+    "source": "convex/personHistory.ts",
+    "idArguments": []
+  },
+  {
+    "key": "convex:personHistory:repairOrphanedEvents",
+    "surface": "convex",
+    "name": "personHistory:repairOrphanedEvents",
+    "kind": "mutation",
     "access": "authenticated",
     "source": "convex/personHistory.ts",
     "idArguments": []
@@ -15910,6 +16213,22 @@
     "idArguments": []
   },
   {
+    "key": "convex:personHistory:splitOccurrence",
+    "surface": "convex",
+    "name": "personHistory:splitOccurrence",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/personHistory.ts",
+    "idArguments": [
+      {
+        "path": "occurrenceId",
+        "table": "personOccurrences",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:personHistory:stageRecord",
     "surface": "convex",
     "name": "personHistory:stageRecord",
@@ -15926,6 +16245,22 @@
     "access": "authenticated",
     "source": "convex/personHistory.ts",
     "idArguments": []
+  },
+  {
+    "key": "convex:personHistory:unmergePeople",
+    "surface": "convex",
+    "name": "personHistory:unmergePeople",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/personHistory.ts",
+    "idArguments": [
+      {
+        "path": "mergeId",
+        "table": "personMerges",
+        "array": false,
+        "optional": false
+      }
+    ]
   },
   {
     "key": "convex:pipaTraining:create",
@@ -18357,6 +18692,22 @@
     ]
   },
   {
+    "key": "convex:tasks:consolidateHistoricalActions",
+    "surface": "convex",
+    "name": "tasks:consolidateHistoricalActions",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/tasks.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "convex:tasks:create",
     "surface": "convex",
     "name": "tasks:create",
@@ -18391,6 +18742,12 @@
       {
         "path": "meetingId",
         "table": "meetings",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "agendaItemId",
+        "table": "agendaItems",
         "array": false,
         "optional": true
       },
@@ -18459,6 +18816,28 @@
     ]
   },
   {
+    "key": "convex:tasks:promoteHistoricalAction",
+    "surface": "convex",
+    "name": "tasks:promoteHistoricalAction",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "convex/tasks.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "tasks",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "responsibleUserIds",
+        "table": "users",
+        "array": true,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:tasks:remove",
     "surface": "convex",
     "name": "tasks:remove",
@@ -18509,6 +18888,12 @@
       {
         "path": "patch.meetingId",
         "table": "meetings",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "patch.agendaItemId",
+        "table": "agendaItems",
         "array": false,
         "optional": true
       },
@@ -24049,6 +24434,22 @@
     ]
   },
   {
+    "key": "portable:committees:buildRostersFromSeats",
+    "surface": "portable",
+    "name": "committees:buildRostersFromSeats",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:committees:create",
     "surface": "portable",
     "name": "committees:create",
@@ -24167,6 +24568,40 @@
       {
         "path": "patch.chairDirectorId",
         "table": "directors",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:committees:updateMember",
+    "surface": "portable",
+    "name": "committees:updateMember",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "committeeMembers",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "patch.directorId",
+        "table": "directors",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "patch.memberId",
+        "table": "members",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "patch.personId",
+        "table": "peopleDirectory",
         "array": false,
         "optional": true
       }
@@ -25293,6 +25728,22 @@
     ]
   },
   {
+    "key": "portable:directors:promoteRosterObservation",
+    "surface": "portable",
+    "name": "directors:promoteRosterObservation",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "seatId",
+        "table": "organizationSeats",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:directors:remove",
     "surface": "portable",
     "name": "directors:remove",
@@ -25303,6 +25754,22 @@
       {
         "path": "id",
         "table": "directors",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:directors:rosterSuggestions",
+    "surface": "portable",
+    "name": "directors:rosterSuggestions",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
         "array": false,
         "optional": false
       }
@@ -31825,6 +32292,34 @@
     ]
   },
   {
+    "key": "portable:memberGovernance:addSeat",
+    "surface": "portable",
+    "name": "memberGovernance:addSeat",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "memberId",
+        "table": "members",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "committeeId",
+        "table": "committees",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:memberGovernance:assess",
     "surface": "portable",
     "name": "memberGovernance:assess",
@@ -31923,6 +32418,110 @@
     ]
   },
   {
+    "key": "portable:memberGovernance:organizationMembers",
+    "surface": "portable",
+    "name": "memberGovernance:organizationMembers",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:memberGovernance:recordRepresentative",
+    "surface": "portable",
+    "name": "memberGovernance:recordRepresentative",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "seatId",
+        "table": "organizationSeats",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "personId",
+        "table": "peopleDirectory",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:memberGovernance:saveOrganizationMember",
+    "surface": "portable",
+    "name": "memberGovernance:saveOrganizationMember",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "memberId",
+        "table": "members",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "linkSeatIds",
+        "table": "organizationSeats",
+        "array": true,
+        "optional": true
+      }
+    ]
+  },
+  {
+    "key": "portable:memberGovernance:seatDetail",
+    "surface": "portable",
+    "name": "memberGovernance:seatDetail",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "seatId",
+        "table": "organizationSeats",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:memberGovernance:supersedeSeatObservation",
+    "surface": "portable",
+    "name": "memberGovernance:supersedeSeatObservation",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "seatId",
+        "table": "organizationSeats",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "changes.personId",
+        "table": "peopleDirectory",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:memberGovernance:transition",
     "surface": "portable",
     "name": "memberGovernance:transition",
@@ -31941,6 +32540,34 @@
         "table": "memberAssessments",
         "array": false,
         "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:memberGovernance:updateSeat",
+    "surface": "portable",
+    "name": "memberGovernance:updateSeat",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "seatId",
+        "table": "organizationSeats",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "memberId",
+        "table": "members",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "committeeId",
+        "table": "committees",
+        "array": false,
+        "optional": true
       }
     ]
   },
@@ -34591,10 +35218,62 @@
     "idArguments": []
   },
   {
+    "key": "portable:personHistory:createPersonFromOccurrence",
+    "surface": "portable",
+    "name": "personHistory:createPersonFromOccurrence",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "occurrenceId",
+        "table": "personOccurrences",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:personHistory:dismissDuplicate",
+    "surface": "portable",
+    "name": "personHistory:dismissDuplicate",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:personHistory:duplicateSuggestions",
+    "surface": "portable",
+    "name": "personHistory:duplicateSuggestions",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
     "key": "portable:personHistory:forRecord",
     "surface": "portable",
     "name": "personHistory:forRecord",
     "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:personHistory:mergeHistory",
+    "surface": "portable",
+    "name": "personHistory:mergeHistory",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:personHistory:mergePeople",
+    "surface": "portable",
+    "name": "personHistory:mergePeople",
+    "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
     "idArguments": []
@@ -34622,6 +35301,15 @@
     "surface": "portable",
     "name": "personHistory:profile",
     "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": []
+  },
+  {
+    "key": "portable:personHistory:repairOrphanedEvents",
+    "surface": "portable",
+    "name": "personHistory:repairOrphanedEvents",
+    "kind": "mutation",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
     "idArguments": []
@@ -34668,6 +35356,22 @@
     "idArguments": []
   },
   {
+    "key": "portable:personHistory:splitOccurrence",
+    "surface": "portable",
+    "name": "personHistory:splitOccurrence",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "occurrenceId",
+        "table": "personOccurrences",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:personHistory:stageRecord",
     "surface": "portable",
     "name": "personHistory:stageRecord",
@@ -34684,6 +35388,22 @@
     "access": "authenticated",
     "source": "shared/functions/registry.ts",
     "idArguments": []
+  },
+  {
+    "key": "portable:personHistory:unmergePeople",
+    "surface": "portable",
+    "name": "personHistory:unmergePeople",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "mergeId",
+        "table": "personMerges",
+        "array": false,
+        "optional": false
+      }
+    ]
   },
   {
     "key": "portable:pipaTraining:create",
@@ -36763,6 +37483,22 @@
     ]
   },
   {
+    "key": "portable:tasks:consolidateHistoricalActions",
+    "surface": "portable",
+    "name": "tasks:consolidateHistoricalActions",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
     "key": "portable:tasks:create",
     "surface": "portable",
     "name": "tasks:create",
@@ -36797,6 +37533,12 @@
       {
         "path": "meetingId",
         "table": "meetings",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "agendaItemId",
+        "table": "agendaItems",
         "array": false,
         "optional": true
       },
@@ -36865,6 +37607,28 @@
     ]
   },
   {
+    "key": "portable:tasks:promoteHistoricalAction",
+    "surface": "portable",
+    "name": "tasks:promoteHistoricalAction",
+    "kind": "mutation",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "id",
+        "table": "tasks",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "responsibleUserIds",
+        "table": "users",
+        "array": true,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:tasks:remove",
     "surface": "portable",
     "name": "tasks:remove",
@@ -36915,6 +37679,12 @@
       {
         "path": "patch.meetingId",
         "table": "meetings",
+        "array": false,
+        "optional": true
+      },
+      {
+        "path": "patch.agendaItemId",
+        "table": "agendaItems",
         "array": false,
         "optional": true
       },

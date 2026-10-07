@@ -3,6 +3,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { quorumRuleValidator } from "./validators/meetingModel";
 import {
+  committeeUpdateMemberPortable,
   committeesListPortable,
   committeeGetPortable,
   committeeDetailPortable,
@@ -117,4 +118,30 @@ export const updateStructure = authorizedMutation("committees:updateStructure", 
   },
   returns: v.any(),
   handler: async (ctx, args) => committeeUpdateStructurePortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const updateMember = authorizedMutation("committees:updateMember", mutation)({
+  args: {
+    id: v.id("committeeMembers"),
+    patch: v.object({
+      name: v.optional(v.string()),
+      email: v.optional(v.string()),
+      role: v.optional(v.string()),
+      directorId: v.optional(v.union(v.id("directors"), v.null())),
+      memberId: v.optional(v.union(v.id("members"), v.null())),
+      personId: v.optional(v.union(v.id("peopleDirectory"), v.null())),
+      representedOrganization: v.optional(v.string()),
+      joinedAt: v.optional(v.string()),
+      leftAt: v.optional(v.union(v.string(), v.null())),
+      reviewStatus: v.optional(v.string()),
+    }),
+  },
+  returns: v.any(),
+  handler: async (ctx, args) => committeeUpdateMemberPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const buildRostersFromSeats = authorizedMutation("committees:buildRostersFromSeats", mutation)({
+  args: { societyId: v.id("societies"), dryRun: v.optional(v.boolean()), createMissingCommittees: v.optional(v.boolean()) },
+  returns: v.any(),
+  handler: async (ctx, args) => (await import("../shared/functions/rosterPromotion")).buildRostersFromSeats(await toPortableMutationCtx(ctx), args),
 });

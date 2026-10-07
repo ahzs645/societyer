@@ -1,6 +1,5 @@
-import { sourceRoleLabel } from "../../shared/personHistory";
 import { calendarDateKey } from "../lib/calendarDates";
-import {SourceRoleObservations} from "../components/SourceRoleObservations";
+import { BoardRosterCard } from "../features/people/BoardRosterCard";
 import {PersonRecordLinks} from "../components/PersonRecordLinks";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -194,30 +193,7 @@ export function DirectorsPage() {
         <Link to="/app/role-holders">Role holders</Link>.
       </p>
 
-      <SourceRoleObservations
-        societyId={society._id}
-        registerCount={directorsLoaded ? (directors ?? []).length : undefined}
-        onAddAsDirector={canManage ? (observation: any) => {
-          // Prefill (never auto-save) a register entry from a roster
-          // observation; the user reviews it in the drawer first (P16).
-          const parts = String(observation.personName ?? "").trim().split(/\s+/);
-          const role = String(observation.roleTitle ?? "");
-          setSelected({
-            firstName: parts.slice(0, -1).join(" ") || parts[0] || "",
-            lastName: parts.length > 1 ? parts[parts.length - 1] : "",
-            email: "",
-            position: /president|chair|treasurer|secretary|vice/i.test(role) ? sourceRoleLabel(role) : "Director",
-            isBCResident: directorProfile.showBcResidentField,
-            // Only a full date is a usable term start; partial source dates ("2025-03") are left for the user to confirm.
-            termStart: [observation.startDate, observation.observedDate].find((value: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? ""))) ?? "",
-            consentOnFile: false,
-            status: "Active",
-            aliases: [],
-            notes: `From source roster observation (${observation.observedDate ?? "undated"}): ${observation.sourceReference ?? ""} ${observation.sourceUrl ?? ""}. Confirm the appointment and consent before relying on this entry.`.trim(),
-          });
-          setOpen(true);
-        } : undefined}
-      />
+      <BoardRosterCard societyId={society._id} activeDirectorCount={active.length} />
       <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Active directors</div>
@@ -417,7 +393,7 @@ export function DirectorsPage() {
                 <Select
                   value={selected.status}
                   onChange={(v) => setSelected({ ...selected, status: v })}
-                  options={["Active", "Resigned", "Removed"].map((s) => ({ value: s, label: s }))}
+                  options={["Active", "NeedsReview", "Resigned", "Removed"].map((s) => ({ value: s, label: s === "NeedsReview" ? "Needs review (from a source roster)" : s }))}
                 />
               </Field>
             </div>

@@ -257,6 +257,7 @@
     "test:pgair-review-workflows": "tsx scripts/check-pgair-review-workflows.ts",
     "test:pgair-convex-schema": "tsx scripts/check-pgair-convex-schema.ts",
     "test:person-history": "tsx scripts/check-person-history.ts",
+    "test:people-identity": "tsx scripts/check-people-identity.ts && tsx scripts/check-people-identity-convex.ts",
     "test:person-assumptions": "tsx scripts/check-person-assumptions.ts",
     "test:person-history-convex": "tsx scripts/check-person-history-convex.ts",
     "test:source-meeting-record": "tsx scripts/check-source-meeting-record.ts && tsx scripts/check-complete-source-records.ts",
@@ -272,7 +273,8 @@
     "test:intake-ai": "tsx scripts/check-intake-stages.ts && tsx scripts/check-intake-functions.ts && tsx scripts/check-intake-eval.ts",
     "test:intake-eval": "tsx scripts/check-intake-eval.ts",
     "test:meeting-history": "node --import tsx scripts/check-meeting-history.ts && node --import tsx scripts/check-meeting-history-renderer.ts",
-    "test:meeting-history-ui": "playwright test --config playwright.meeting-history.config.ts"
+    "test:meeting-history-ui": "playwright test --config playwright.meeting-history.config.ts",
+    "test:people-identity-ui": "playwright test --config playwright.people-identity.config.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.63",

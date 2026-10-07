@@ -57,6 +57,9 @@ export interface MemberCreateArgs {
   leftAt?: string;
   votingRights: boolean;
   notes?: string;
+  /** A2: "organization" for a member organization (absent = individual). */
+  memberKind?: string;
+  organizationName?: string;
 }
 
 export interface MemberPatch {
@@ -72,6 +75,8 @@ export interface MemberPatch {
   leftAt?: string;
   votingRights?: boolean;
   notes?: string;
+  memberKind?: string;
+  organizationName?: string;
 }
 
 export async function membersList(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
