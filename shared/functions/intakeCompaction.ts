@@ -55,8 +55,15 @@ async function canCompact(ctx: PortableQueryCtx, societyId: string) {
   await requirePermissionPortable(ctx, societyId, "documents:write");
 }
 
+/** The run's extractions without their field trees (loaded only for provenance that can be slimmed). */
 async function runExtractions(ctx: PortableQueryCtx, runId: string) {
-  return (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", runId)).collect()) as any[];
+  return (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", runId)).omitFields("record", "unsupported", "references", "verification").collect()) as any[];
+}
+
+/** Whether a provenance row still copies something its extraction holds (cheap pre-check). */
+const copiesExtraction = (row: any) => (row.value !== undefined && row.decision !== "edit") || Object.keys(row.locator ?? {}).some((key) => key !== "kind");
+async function withRecord(ctx: PortableQueryCtx, extraction: any) {
+  return (await ctx.db.get<any>(extraction._id, "intakeExtractions")) ?? extraction;
 }
 
 /** Files whose extract an open review still needs: the file of every open extraction (a derived extraction's
@@ -97,8 +104,10 @@ export async function compactionPlan(ctx: PortableQueryCtx, { societyId, runId }
     if (extraction.status !== "promoted") continue;
     const rows = (await ctx.db.query("fieldProvenance").withIndex("by_extraction", (q) => q.eq("extractionId", extraction._id)).collect()) as any[];
     provenanceRows += rows.length;
+    if (!rows.some(copiesExtraction)) continue;
+    const full = await withRecord(ctx, extraction);
     for (const row of rows) {
-      const slim = slimProvenance(row, extraction);
+      const slim = slimProvenance(row, full);
       if (slim !== row && size(slim) < size(row)) {
         provenanceSlimmable++;
         provenanceBytes += size(row) - size(slim);
@@ -172,8 +181,10 @@ export async function compactRun(ctx: PortableMutationCtx, { societyId, runId, c
       const extraction = extractions[index++];
       if (extraction.status !== "promoted") continue;
       const rows = (await ctx.db.query("fieldProvenance").withIndex("by_extraction", (q) => q.eq("extractionId", extraction._id)).collect()) as any[];
+      if (!rows.some(copiesExtraction)) continue;
+      const full = await withRecord(ctx, extraction);
       for (const row of rows) {
-        const slim: any = slimProvenance(row, extraction);
+        const slim: any = slimProvenance(row, full);
         if (slim === row || size(slim) >= size(row)) continue;
         const { _id, _creationTime, ...body } = slim;
         await ctx.db.replace(row._id, body);
