@@ -657,6 +657,7 @@ export class LocalDexieRowStore implements LocalRowStore {
    */
   async exportSnapshot(): Promise<LocalWorkspaceSnapshot> {
     await this.whenHydrated();
+    await this.flushProjections();
     const tables: LocalSeed = {};
     for (const table of this.tables.keys()) {
       const rows = this.rows(table);
@@ -664,6 +665,27 @@ export class LocalDexieRowStore implements LocalRowStore {
       const heavy = heavyIds.length ? await this.loadExternalFields(table, heavyIds) : new Map<string, Record<string, unknown>>();
       tables[table] = rows.map((row) => ({ ...row, ...(heavy.get(row._id) ?? {}) }));
     }
+    return {
+      kind: "societyer.localWorkspaceSnapshot" as const,
+      exportedAtISO: new Date().toISOString(),
+      workspace: { ...this.workspaceMeta, updatedAtISO: new Date().toISOString() },
+      tables,
+      attachments: cloneLocalRows(this.attachmentsCache),
+      changes: cloneLocalRows(this.changesCache),
+    };
+  }
+
+  /**
+   * Synchronous snapshot for runtimes whose rows are all in memory (Node
+   * scripts, a session without IndexedDB). Throws when heavy fields are lazy:
+   * a backup must never silently omit them — use `exportSnapshot()`.
+   */
+  exportSnapshotSync(): LocalWorkspaceSnapshot {
+    if (this.external.size) {
+      throw new Error("Some fields of this workspace are stored outside memory; export it with exportSnapshot().");
+    }
+    const tables: LocalSeed = {};
+    for (const table of this.tables.keys()) tables[table] = this.rows(table).map((row) => ({ ...row }));
     return {
       kind: "societyer.localWorkspaceSnapshot" as const,
       exportedAtISO: new Date().toISOString(),

@@ -90,6 +90,11 @@ export class StaticDemoDexieStore {
     return this.rowsStore.exportSnapshot();
   }
 
+  /** Synchronous snapshot; only valid while every row is fully in memory. */
+  exportSnapshotSync() {
+    return this.rowsStore.exportSnapshotSync();
+  }
+
   upsertAttachment(attachment: Parameters<LocalDexieRowStore["upsertAttachment"]>[0]) {
     return this.rowsStore.upsertAttachment(attachment);
   }

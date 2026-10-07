@@ -21,7 +21,7 @@ export class DexieWorkspaceClient extends StaticConvexClient {
   }
 
   exportWorkspaceBundle() {
-    return this.exportLocalWorkspaceSnapshot();
+    return this.exportLocalWorkspaceSnapshotAsync();
   }
 
   importWorkspaceBundle(snapshot: LocalWorkspaceSnapshot) {

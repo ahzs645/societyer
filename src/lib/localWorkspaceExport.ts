@@ -5,7 +5,7 @@ import { triggerBlobDownload } from "./zip";
 import { isLocalDataRuntime } from "./staticRuntime";
 
 type LocalExportCapableClient = {
-  exportLocalWorkspaceSnapshot?: () => unknown | Promise<unknown>;
+  exportLocalWorkspaceSnapshotAsync?: () => Promise<unknown>;
   importLocalWorkspaceSnapshot?: (snapshot: any, files?: ReturnType<typeof archiveFileRows>) => Promise<unknown> | unknown;
 };
 
@@ -23,12 +23,12 @@ export type WorkspaceBackupSummary = {
 /** Full snapshot of the local workspace, heavy fields included (read back from IndexedDB). */
 export async function getLocalWorkspaceSnapshot(): Promise<any> {
   const client = localDataClient as unknown as LocalExportCapableClient;
-  return (await client.exportLocalWorkspaceSnapshot?.()) ?? null;
+  return (await client.exportLocalWorkspaceSnapshotAsync?.()) ?? null;
 }
 
 export function localWorkspaceBackupSupported() {
   const client = localDataClient as unknown as LocalExportCapableClient;
-  return isLocalDataRuntime() && typeof client.exportLocalWorkspaceSnapshot === "function";
+  return isLocalDataRuntime() && typeof client.exportLocalWorkspaceSnapshotAsync === "function";
 }
 
 export function localWorkspaceRestoreSupported() {

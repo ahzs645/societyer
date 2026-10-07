@@ -350,8 +350,17 @@ export class StaticConvexClient {
     return () => { subscribed = false; unsubscribe(); };
   }
 
-  /** Full workspace snapshot (async: heavy fields are read back from IndexedDB). */
+  /**
+   * Synchronous snapshot for in-memory runtimes (Node scripts, tests). In the
+   * browser, heavy fields live in IndexedDB and this throws rather than return
+   * an incomplete backup: use `exportLocalWorkspaceSnapshotAsync()`.
+   */
   exportLocalWorkspaceSnapshot() {
+    return this.store.exportSnapshotSync();
+  }
+
+  /** Full workspace snapshot, heavy fields included (read back from IndexedDB). */
+  exportLocalWorkspaceSnapshotAsync() {
     return this.store.exportSnapshot();
   }
 
