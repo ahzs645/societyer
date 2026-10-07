@@ -4,7 +4,7 @@
  * - carry-forward of action items across consecutive meetings of a body;
  * - policy versions → the motion that adopted them;
  * - record gaps: cited minutes that are missing, draft-only meetings, AGM per calendar year. */
-import { meetingKey } from "./entities";
+import { bodyKeyFor, meetingKey } from "./entities";
 import { textSimilarity } from "./eval";
 
 export type MinutesSummary = {
@@ -177,4 +177,39 @@ export function bodyTimeline(meetings: ReconciledMeeting[]): Record<string, Reco
     out[meeting.bodyKey][meeting.date.slice(0, 7)] = meeting.status;
   }
   return out;
+}
+
+/** Stage 8 (reconciliation) over extractions and their classified files:
+ * meetings (copies grouped, drafts linked to adopted versions), action
+ * carry-forward, and record gaps (cited-but-missing minutes, draft-only
+ * minutes, years without AGM minutes). Shared by the pipeline and the
+ * portable `intake:reconcileRun` mutation (server-side extraction runs). */
+export function reconcileExtractions(
+  files: Array<{ fileKey: string; name: string; classification?: { docClass?: string; date?: { iso: string }; recordStatus?: string } }>,
+  extractions: Array<{ fileKey: string; docClass?: string; record: unknown; references: Array<{ kind: string; text: string; date?: string }> }>,
+) {
+  const summaries: MinutesSummary[] = extractions.filter((extraction) => (extraction.docClass ?? "meetingMinutes") === "meetingMinutes").map((extraction) => {
+    const record = extraction.record as any;
+    const date = record.date?.value;
+    return {
+      fileId: extraction.fileKey,
+      fileName: files.find((file) => file.fileKey === extraction.fileKey)?.name ?? extraction.fileKey,
+      bodyKey: bodyKeyFor(record.bodyLabel?.value ?? record.body?.value),
+      date: date?.precision === "day" ? date.iso : undefined,
+      recordStatus: String(record.recordStatus?.value ?? "unknown"),
+      adopts: [
+        ...(record.motions ?? []).map((motion: any, index: number) => (motion.adoptsMinutesOf ? { date: motion.adoptsMinutesOf.value?.date, motionIndex: index, text: motion.text?.value ?? "" } : null)).filter(Boolean),
+        // Approval recorded without a formal motion ("Minutes approved") is weaker evidence but still links the prior meeting.
+        ...extraction.references.filter((reference) => reference.kind === "prior_minutes" && !(record.motions ?? []).some((motion: any) => motion.text?.value === reference.text)).map((reference) => ({ date: reference.date, motionIndex: -1, text: reference.text })),
+      ],
+      actions: (record.actionItems ?? []).map((item: any, index: number) => ({ index, text: item.text?.value ?? "", assignee: item.assigneeAsWritten?.value, due: item.due?.value?.iso })),
+      policiesAdopted: (record.motions ?? []).map((motion: any, index: number) => ({ motionIndex: index, text: motion.adoptsPolicy?.value })).filter((item: any) => item.text),
+    };
+  });
+  const reconciled = reconcileMinutes(summaries);
+  const carry = carryForwardActions(summaries);
+  const years = reconciled.meetings.map((meeting) => Number(meeting.date.slice(0, 4))).filter(Number.isFinite);
+  const agmEvidence = files.filter((file) => file.classification?.docClass === "agmMaterial" && file.classification.date).map((file) => ({ year: Number(file.classification!.date!.iso.slice(0, 4)), kind: file.classification!.recordStatus ?? "unknown" }));
+  const gaps = [...reconciled.gaps, ...(years.length ? agmGaps(reconciled.meetings, Math.min(...years), Math.max(...years), agmEvidence) : [])];
+  return { reconciled, carry, gaps };
 }

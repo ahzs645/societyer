@@ -149,6 +149,7 @@ import * as seedRecordTableMetadataFns from "./seedRecordTableMetadata";
 
 import * as filesFns from "./files";
 import * as intakeFns from "./intake";
+import * as intakeReviewFns from "./intakeReview";
 
 export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableQuery({ name: "personHistory:overview", handler: personHistoryFns.overview }),
@@ -1361,6 +1362,13 @@ export const PORTABLE_FUNCTIONS: PortableFunctionDef[] = [
   definePortableMutation({ name: "intake:appendProcessingLog", handler: intakeFns.appendProcessingLog }),
   definePortableMutation({ name: "intake:reviewField", handler: intakeFns.reviewField }),
   definePortableMutation({ name: "intake:recordProvenance", handler: intakeFns.recordProvenance }),
+  definePortableQuery({ name: "intake:mergeCandidates", handler: intakeReviewFns.mergeCandidates }),
+  definePortableQuery({ name: "intake:provenanceForExtraction", handler: intakeReviewFns.provenanceForExtraction }),
+  definePortableQuery({ name: "intake:runSummaries", handler: intakeReviewFns.runSummaries }),
+  definePortableMutation({ name: "intake:reviewFields", handler: intakeReviewFns.reviewFields }),
+  definePortableMutation({ name: "intake:undoReviews", handler: intakeReviewFns.undoReviews }),
+  definePortableMutation({ name: "intake:promoteExtraction", handler: intakeReviewFns.promoteExtraction }),
+  definePortableMutation({ name: "intake:reconcileRun", handler: intakeReviewFns.reconcileRun }),
 
 ].map((definition) => ({ ...definition, applicationPolicy: true }));
 
