@@ -474,7 +474,7 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   /** Documents that can be linked as a retained dissent report (A11). */
   documentOptions?: Array<{ value: string; label: string }>;
 }>(function MotionEditor({
-  motions,
+  motions: motionsProp,
   readOnly = false,
   onChange: onChangeProp,
   directorNames,
@@ -489,12 +489,23 @@ export const MotionEditor = forwardRef<MotionEditorHandle, {
   documentOptions,
 }, ref) {
   const { can } = usePermissions();
+  // Every keystroke in a motion field saves the whole list. Until the saves
+  // settle, show the latest local edit: rendering each save's echo would put
+  // an older value back into the input and drop the characters typed since.
+  const [pendingMotions, setPendingMotions] = useState<Motion[] | null>(null);
+  useEffect(() => {
+    if (!pendingMotions) return;
+    const timer = window.setTimeout(() => setPendingMotions(null), 1500);
+    return () => window.clearTimeout(timer);
+  }, [pendingMotions]);
+  const motions = pendingMotions ?? motionsProp;
   const authority = useRef({ readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") });
   authority.current = { readOnly, canAddToBacklog: can("motions:write"), canApprove: can("minutes:approve") };
   const onChange = (next: Motion[]) => {
     if (authority.current.readOnly) return false;
     const previouslyCarried = new Set(motions.filter(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried").map(motion => motion.adoptsMinutesId));
     if (!authority.current.canApprove && next.some(motion => motion.adoptsMinutesId && String(motion.outcome).toLowerCase() === "carried" && !previouslyCarried.has(motion.adoptsMinutesId))) return false;
+    setPendingMotions(next);
     onChangeProp(next);
     return true;
   };
