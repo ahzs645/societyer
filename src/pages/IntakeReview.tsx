@@ -208,17 +208,20 @@ export function IntakeReviewPage() {
       if (target && (target.closest("input, textarea, select, [contenteditable=true], [role=dialog]") || target.isContentEditable)) return;
       const key = event.key.toLowerCase();
       const docIndex = flat.findIndex((row) => row._id === selectedId);
-      const fieldIndex = fields.findIndex((field) => field.path === selectedPath);
+      // The URL is updated synchronously on selection; read it so a fast key press never acts on the previous field.
+      const livePath = new URLSearchParams(window.location.search).get("f") ?? selectedPath;
+      const fieldIndex = fields.findIndex((field) => field.path === livePath);
+      const current = fields[fieldIndex];
       if (key === "j" || key === "k") {
         const next = flat[docIndex + (key === "j" ? 1 : -1)];
         if (next) select(next._id);
       } else if (key === "n" || key === "p") {
         const next = fields[fieldIndex + (key === "n" ? 1 : -1)] ?? fields[0];
         if (next) select(selectedId, next.path);
-      } else if (selectedField && !readOnly && key === "a") onDecide(selectedField, "accept");
-      else if (selectedField && !readOnly && key === "r") onDecide(selectedField, "reject");
-      else if (selectedField && !readOnly && key === "c") onDecide(selectedField, "cant_represent");
-      else if (selectedField && !readOnly && key === "e") document.querySelector(`[data-path="${CSS.escape(selectedField.path)}"]`)?.dispatchEvent(new Event("intake:edit"));
+      } else if (current && !readOnly && key === "a") onDecide(current, "accept");
+      else if (current && !readOnly && key === "r") onDecide(current, "reject");
+      else if (current && !readOnly && key === "c") onDecide(current, "cant_represent");
+      else if (current && !readOnly && key === "e") document.querySelector(`[data-path="${CSS.escape(current.path)}"]`)?.dispatchEvent(new Event("intake:edit"));
       else if (!readOnly && key === "b") setBulkScope({});
       else if (key === "?") setShowKeys((value) => !value);
       else return;
