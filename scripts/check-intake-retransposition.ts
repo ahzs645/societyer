@@ -17,6 +17,8 @@ import { extractionEvidenceVerified, markEvidenceVerified } from "../shared/inta
 import { takeBulkBatch } from "../shared/functions/intakeReview";
 import { verifyRecord } from "../shared/intake/verify";
 import { clusterFiles, nameDateSignature } from "../shared/intake/cluster";
+import { guardFutureMinutesDate } from "../shared/intake/pipeline";
+import { agmGaps } from "../shared/intake/reconcile";
 
 function textExtract(text: string): IntakeExtract {
   const { blocks, text: joined } = finalizeBlocks(blocksFromPlainText(text));
@@ -150,4 +152,15 @@ const monthly = clusterFiles([
 assert.equal(monthly.length, 1, "only the two copies of one meeting form a version family");
 assert.deepEqual(monthly[0].members.map((member) => member.fileId).sort(), ["a", "b"]);
 
-console.log("PASS intake re-transposition: motion grammar, bodies, agenda dates, evidenced meetings, insurance cleanup, evidence rule, policy copies, dated version families and bulk-accept batches");
+// ------------------------------------------------------------ impossible dates and AGM years
+const typo = { record: { date: { value: { iso: "2032-01-11", precision: "day", text: "January 11, 2032" }, status: "stated", confidence: 0.9, locators: [{ kind: "block", quote: "January 11, 2032" }] } } } as any;
+guardFutureMinutesDate(typo, "2023_01_11 Operations Minutes.docx", "2026-10-01");
+assert.equal(typo.record.date.value.iso, "2023-01-11", "the file-name date replaces a future minutes date");
+assert.equal(typo.record.date.status, "conflicting", "and a person must confirm it");
+const past = { record: { date: { value: { iso: "2025-05-13", precision: "day" }, status: "stated", confidence: 0.9, locators: [] } } } as any;
+guardFutureMinutesDate(past, "2025_05_13 Board Minutes.docx", "2026-10-01");
+assert.equal(past.record.date.status, "stated");
+const agm = (date: string) => ({ meetingKey: `agm@${date}`, bodyKey: "agm", date, files: [], canonicalFileId: "x", status: "recorded" as const });
+assert.deepEqual(agmGaps([agm("2022-06-01"), agm("2024-06-01")], 2022, 2025).map((gap) => (gap as any).year), [2023, 2025]);
+
+console.log("PASS intake re-transposition: motion grammar, bodies, agenda dates, evidenced meetings, insurance cleanup, evidence rule, policy copies, dated version families, future minutes dates and bulk-accept batches");

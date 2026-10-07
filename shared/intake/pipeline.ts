@@ -47,6 +47,26 @@ export type PipelineOutput = IntakeRunResult & { extracts: Record<string, Intake
 
 const MINUTES_LIKE = new Set(["meetingMinutes"]);
 
+/** Minutes record a meeting that was held, so a stated date after the run date is a typo
+ * ("January 11, 2032" in a file named 2023_01_11). The date becomes `conflicting` (never
+ * bulk-accepted or promoted without a person); a full date in the file name is offered instead. */
+export function guardFutureMinutesDate(envelope: { record: unknown; warnings?: string[] }, fileName: string, asOfISO: string): void {
+  const record = envelope.record as { date?: { value?: { iso?: string; precision?: string; text?: string }; status?: string; confidence?: number; locators?: unknown[]; note?: string } };
+  const iso = record.date?.value?.iso;
+  if (!record.date || !iso || iso.slice(0, 10) <= asOfISO.slice(0, 10)) return;
+  const named = /\b((?:19|20)\d{2})[_-](\d{2})[_-](\d{2})(?!\d)/.exec(fileName);
+  const fromName = named && `${named[1]}-${named[2]}-${named[3]}` <= asOfISO.slice(0, 10) ? `${named[1]}-${named[2]}-${named[3]}` : undefined;
+  record.date = {
+    ...record.date,
+    ...(fromName ? { value: { iso: fromName, precision: "day", text: named![0] } } : {}),
+    status: "conflicting",
+    confidence: Math.min(record.date.confidence ?? 0.5, 0.5),
+    locators: [...(record.date.locators ?? []), ...(fromName ? [{ kind: "filename", quote: fileName }] : [])],
+    note: `The minutes state ${iso}, after the run date${fromName ? `; the file name gives ${fromName}` : ""}. Confirm the meeting date.`,
+  };
+  envelope.warnings = [...(envelope.warnings ?? []), `Stated meeting date ${iso} is in the future.`];
+}
+
 export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], options: PipelineOptions): Promise<PipelineOutput> {
   const now = () => new Date().toISOString();
   const runId = options.runId ?? `intake-${now().replace(/[:.]/g, "-")}`;
@@ -158,6 +178,7 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
       }
     }
     if (envelope) {
+      if (MINUTES_LIKE.has(docClass)) guardFutureMinutesDate(envelope, file.name, asOfISO);
       extractions.push(envelope);
       // Packages, consent agendas and AGM packages carry earlier minutes: derive them as minutes records.
       if (["agenda", "meetingPackage", "agmMaterial"].includes(docClass)) extractions.push(...deriveEmbeddedMinutes(envelope, extract, file));
@@ -194,7 +215,7 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
     }
   }
   // 8. Reconcile.
-  const { reconciled, carry, gaps, evidencedMeetings, policyAdoptions } = reconcileExtractions(files, extractions, { fiscalChanges });
+  const { reconciled, carry, gaps, evidencedMeetings, policyAdoptions } = reconcileExtractions(files, extractions, { fiscalChanges, asOfISO });
   log.push({ atISO: now(), stage: "bundle", sentToProvider: false, note: `${reconciled.meetings.length} meetings reconciled; ${evidencedMeetings.length} meetings evidenced without minutes; ${gaps.length} record gaps` });
   return {
     runId,

@@ -193,7 +193,7 @@ export function bodyTimeline(meetings: ReconciledMeeting[]): Record<string, Reco
 export function reconcileExtractions(
   files: Array<{ fileKey: string; name: string; classification?: { docClass?: string; date?: { iso: string }; recordStatus?: string } }>,
   extractions: Array<{ fileKey: string; docClass?: string; record: unknown; references: Array<{ kind: string; text: string; date?: string }> }>,
-  options: { fiscalChanges?: ReturnType<typeof annotateFiscalYearEndChanges> } = {},
+  options: { fiscalChanges?: ReturnType<typeof annotateFiscalYearEndChanges>; /** Run date: AGMs are not missing for the current or a future year. */ asOfISO?: string } = {},
 ) {
   const summaries: MinutesSummary[] = extractions.filter((extraction) => (extraction.docClass ?? "meetingMinutes") === "meetingMinutes").map((extraction) => {
     const record = extraction.record as any;
@@ -228,7 +228,7 @@ export function reconcileExtractions(
   const agmHeld = evidencedMeetings.filter((meeting) => meeting.bodyKey === "agm").map((meeting) => ({ year: Number(meeting.date.slice(0, 4)), kind: "agenda (minutes missing)" }));
   const gaps = [
     ...reconciled.gaps,
-    ...(years.length ? agmGaps(reconciled.meetings, Math.min(...years), Math.max(...years), [...agmEvidence, ...agmHeld]) : []),
+    ...(years.length ? agmGaps(reconciled.meetings, Math.min(...years), Math.min(Math.max(...years), Number((options.asOfISO ?? new Date().toISOString()).slice(0, 4)) - 1), [...agmEvidence, ...agmHeld]) : []),
     ...classRecordGaps({ extractions: classExtractions, meetings: reconciled.meetings, evidenced: evidencedMeetings, policyLinks: policyAdoptions, fiscalChanges }),
   ];
   return { reconciled, carry, gaps, evidencedMeetings, policyAdoptions, fiscalChanges };
