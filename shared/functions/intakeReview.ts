@@ -517,8 +517,11 @@ async function markClusterCopiesCovered(ctx: PortableMutationCtx, extraction: an
   if (!members.size) return 0;
   let covered = 0;
   const dateOf = (row: any) => String(row.record?.date?.value?.iso ?? row.record?.meetingDate?.value?.iso ?? row.record?.periodEnd?.value?.iso ?? "");
-  for (const row of (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", extraction.runId)).collect()) as any[]) {
-    if (!members.has(String(row.fileId)) || row.docClass !== extraction.docClass || !["pending_review", "in_review", "accepted"].includes(row.status)) continue;
+  // Only the cluster members' extractions are read (not every extraction of the run).
+  const candidates: any[] = [];
+  for (const fileId of members) candidates.push(...((await ctx.db.query("intakeExtractions").withIndex("by_file", (q) => q.eq("fileId", fileId)).collect()) as any[]));
+  for (const row of candidates) {
+    if (row.runId !== extraction.runId || row.parentFileKey || row.docClass !== extraction.docClass || !["pending_review", "in_review", "accepted"].includes(row.status)) continue;
     // A copy states the same date; a cluster member with another date is a different record.
     if (dateOf(row) && dateOf(extraction) && dateOf(row) !== dateOf(extraction)) continue;
     await ctx.db.patch(row._id, { status: "covered", promotion: { coveredByExtractionId: extraction._id, coveredByFileKey: extraction.fileKey, atISO: at }, updatedAtISO: at });
@@ -621,7 +624,7 @@ async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: strin
   for (const record of stagedRecords) await updateRecordPortable(ctx, { recordId: String(record._id), status: "Approved", reviewNotes });
   await applyApprovedDocumentsPortable(ctx, { sessionId });
   if (build.collections.meetingMinutes) await applyApprovedMeetingsPortable(ctx, { sessionId });
-  const sectionResult = await applyApprovedSectionRecordsPortable(ctx, { sessionId }) as any;
+  const sectionResult = await applyApprovedSectionRecordsPortable(ctx, { sessionId, allOrNothing: true }) as any;
   const session = await getImportSessionPortable(ctx, { sessionId }) as any;
   if (sectionResult?.preflightBlocked || Object.keys(sectionResult?.byKind ?? {}).some((key) => key.endsWith(":blocked"))) {
     const issues = (session?.records ?? []).map((record: any) => /Promotion blocked: ([^\n]+)/.exec(String(record.reviewNotes ?? ""))?.[1]).filter(Boolean).slice(0, 3);
@@ -759,12 +762,13 @@ export async function runSummaries(ctx: PortableQueryCtx, { societyId }: { socie
     : null;
   const out: any[] = [];
   for (const run of runs) {
-    const extractions = (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", run._id)).collect()) as any[];
+    const extractions = (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", run._id)).omitFields("record", "unsupported", "references", "verification").collect()) as any[];
     const ids = new Set(extractions.map((row) => String(row._id)));
     const systemGaps = gapKeys ? gapKeys.filter((key) => ids.has(key.split(":")[1])).length : null;
     const promoted = extractions.filter((row) => row.status === "promoted");
     // Facts extracted (fields with a value) across the run; promotedFields ÷ extractedFields is the reviewed native coverage.
-    const extractedFields = extractions.reduce((sum, row) => sum + reviewFieldsForRecord(row.record ?? {}, row.docClass).filter((field) => field.field.value !== undefined && field.field.value !== null && field.field.status !== "not_stated").length, 0);
+    const factCounts = await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", run._id)).collectProjected("intake.extractedFacts/v1", extractedFactCount);
+    const extractedFields = factCounts.reduce((sum, row) => sum + row.facts, 0);
     let promotedFields = 0;
     for (const extraction of promoted) promotedFields += ((await ctx.db.query("fieldProvenance").withIndex("by_extraction", (q) => q.eq("extractionId", extraction._id)).collect()) as any[]).length;
     out.push({
@@ -773,6 +777,11 @@ export async function runSummaries(ctx: PortableQueryCtx, { societyId }: { socie
     });
   }
   return out.sort((a, b) => String(b.createdAtISO).localeCompare(String(a.createdAtISO)));
+}
+
+/** Extracted facts of one extraction (pure: memoized per extraction revision). */
+function extractedFactCount(row: any) {
+  return { id: String(row._id), facts: reviewFieldsForRecord(row.record ?? {}, row.docClass).filter((field) => field.field.value !== undefined && field.field.value !== null && field.field.status !== "not_stated").length };
 }
 
 /** Recompute reconciliation, record gaps and coverage from the stored files and extractions (after server-side field extraction). */

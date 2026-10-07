@@ -68,7 +68,12 @@ export async function listRuns(ctx: PortableQueryCtx, { societyId }: { societyId
 export async function getRun(ctx: PortableQueryCtx, { societyId, runId }: { societyId: string; runId: string }) {
   await canRead(ctx, societyId);
   const run = await ownedRun(ctx, societyId, runId);
-  const [files, extractions, clusters] = await Promise.all([runRows(ctx, "intakeFiles", runId), runRows(ctx, "intakeExtractions", runId), runRows(ctx, "intakeClusters", runId)]);
+  const [files, extractions, clusters] = await Promise.all([
+    runRows(ctx, "intakeFiles", runId),
+    // Counts only: the field trees stay unloaded.
+    ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", runId)).omitFields("record", "unsupported", "references", "verification").collect(),
+    runRows(ctx, "intakeClusters", runId),
+  ]);
   const count = (rows: any[], key: string) => rows.reduce<Record<string, number>>((acc, row) => ({ ...acc, [row[key] ?? "unknown"]: (acc[row[key] ?? "unknown"] ?? 0) + 1 }), {});
   return {
     ...run,
@@ -99,20 +104,24 @@ export async function listClusters(ctx: PortableQueryCtx, { societyId, runId }: 
 export async function listExtractions(ctx: PortableQueryCtx, { societyId, runId }: { societyId: string; runId: string }) {
   await canRead(ctx, societyId);
   await ownedRun(ctx, societyId, runId);
-  const rows = await runRows(ctx, "intakeExtractions", runId);
-  return rows.map((row: any) => {
-    const record = row.record ?? {};
-    const motions = record.motions?.length ?? 0;
-    const verification = row.verification ?? {};
-    const lowConfidence = countFields(record, (field) => field.confidence < 0.7);
-    const risk = (motions * 3 + (record.attendance?.length ?? 0) * 0.2 + (record.actionItems?.length ?? 0)) * (1 + lowConfidence / 10) * (1 + (verification.mismatched ?? 0));
-    return {
-      _id: row._id, fileId: row.fileId, fileKey: row.fileKey, docClass: row.docClass, engine: row.engine, model: row.model, status: row.status,
-      date: recordDate(record), body: record.bodyLabel?.value ?? record.body?.value, motions, attendance: record.attendance?.length ?? 0,
-      actionItems: record.actionItems?.length ?? 0, unsupported: row.unsupported?.length ?? 0, verification, lowConfidenceFields: lowConfidence, risk: Number(risk.toFixed(2)),
-      summary: recordSummary(row.docClass, record), ...(row.promotion ? { promotion: row.promotion } : {}),
-    };
-  }).sort((a: any, b: any) => b.risk - a.risk);
+  // Memoized per row revision locally: the queue never loads every extraction's field tree again.
+  const rows = await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", runId)).collectProjected("intake.queueItem/v1", queueItem);
+  return rows.sort((a: any, b: any) => b.risk - a.risk);
+}
+
+/** One review-queue row (pure: memoized per extraction revision). */
+function queueItem(row: any) {
+  const record = row.record ?? {};
+  const motions = record.motions?.length ?? 0;
+  const verification = row.verification ?? {};
+  const lowConfidence = countFields(record, (field) => field.confidence < 0.7);
+  const risk = (motions * 3 + (record.attendance?.length ?? 0) * 0.2 + (record.actionItems?.length ?? 0)) * (1 + lowConfidence / 10) * (1 + (verification.mismatched ?? 0));
+  return {
+    _id: row._id, fileId: row.fileId, fileKey: row.fileKey, ...(row.parentFileKey ? { parentFileKey: row.parentFileKey } : {}), docClass: row.docClass, engine: row.engine, model: row.model, status: row.status,
+    date: recordDate(record), body: record.bodyLabel?.value ?? record.body?.value, motions, attendance: record.attendance?.length ?? 0,
+    actionItems: record.actionItems?.length ?? 0, unsupported: row.unsupported?.length ?? 0, verification, lowConfidenceFields: lowConfidence, risk: Number(risk.toFixed(2)),
+    summary: recordSummary(row.docClass, record), ...(row.promotion ? { promotion: row.promotion } : {}),
+  };
 }
 
 /** The date that identifies a record of any class (meeting, period end, term, filing, letter). */

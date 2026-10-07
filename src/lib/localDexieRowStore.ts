@@ -97,7 +97,8 @@ const CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION = 3;
  *   2 — heavy fields split into `recordFields` so boot reads only light rows;
  *       legacy mirrors no longer written (still read once to upgrade v1 data).
  */
-const CURRENT_LOCAL_STORAGE_LAYOUT = 2;
+// 3: intake extracts and extraction records joined the lazy heavy fields (the same idempotent move).
+const CURRENT_LOCAL_STORAGE_LAYOUT = 3;
 const LAYOUT_MIGRATION_CHUNK = 100;
 /** At or above this many rows, persisted projection memos are read by key range. */
 const PROJECTION_RANGE_READ_MIN = 256;
@@ -674,6 +675,38 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   /**
+   * The snapshot as a stream for backups: the snapshot fields without `tables`, and per table an iterator of
+   * row batches whose lazy fields are loaded one batch at a time (the whole workspace is never one object).
+   * Each batch's rows are fresh objects. Rows written while the export runs may or may not be included.
+   */
+  async exportSnapshotSource(batchSize = 500): Promise<{ meta: Omit<LocalWorkspaceSnapshot, "tables">; tables: Array<{ name: string; rows: () => AsyncIterable<any[]> }> }> {
+    await this.whenHydrated();
+    await this.flushProjections();
+    const meta = {
+      kind: "societyer.localWorkspaceSnapshot" as const,
+      exportedAtISO: new Date().toISOString(),
+      workspace: { ...this.workspaceMeta, updatedAtISO: new Date().toISOString() },
+      attachments: cloneLocalRows(this.attachmentsCache),
+      changes: cloneLocalRows(this.changesCache),
+    };
+    const tables = [...this.tables.keys()].map((table) => ({
+      name: table,
+      rows: () => this.exportTableBatches(table, batchSize),
+    }));
+    return { meta, tables };
+  }
+
+  private async *exportTableBatches(table: string, batchSize: number): AsyncIterable<any[]> {
+    const rows = [...this.rows(table)];
+    for (let start = 0; start < rows.length; start += batchSize) {
+      const batch = rows.slice(start, start + batchSize);
+      const heavyIds = batch.filter((row) => this.external.has(localRecordKey(table, row._id))).map((row) => row._id);
+      const heavy = heavyIds.length ? await this.loadExternalFields(table, heavyIds) : new Map<string, Record<string, unknown>>();
+      yield batch.map((row) => ({ ...row, ...(heavy.get(row._id) ?? {}) }));
+    }
+  }
+
+  /**
    * Synchronous snapshot for runtimes whose rows are all in memory (Node
    * scripts, a session without IndexedDB). Throws when heavy fields are lazy:
    * a backup must never silently omit them — use `exportSnapshot()`.
@@ -964,7 +997,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   /**
-   * Layout 1 → 2: move heavy field values out of `records` into `recordFields`,
+   * Layout 1 → 2 (→ 3): move heavy field values out of `records` into `recordFields`,
    * a bounded chunk at a time (never the whole table in memory), and stop
    * mirroring rows into the legacy v1 meetings/minutes stores. Idempotent, so an
    * interrupted upgrade simply resumes on the next start.
@@ -973,7 +1006,9 @@ export class LocalDexieRowStore implements LocalRowStore {
     const db = this.db!;
     const layout = Number((await db.meta.get("storageLayout"))?.value ?? 1);
     if (layout >= CURRENT_LOCAL_STORAGE_LAYOUT) return;
-    for (const table of Object.keys(HEAVY_FIELD_POLICY)) {
+    // Layout 2 vaults already moved the tables layout 2 knew about; only newer heavy tables need a pass.
+    const LAYOUT_2_TABLES = new Set(["documents", "minutes", "transcripts"]);
+    for (const table of Object.keys(HEAVY_FIELD_POLICY).filter((name) => layout < 2 || !LAYOUT_2_TABLES.has(name))) {
       const keys = await db.records.where("table").equals(table).primaryKeys();
       for (let start = 0; start < keys.length; start += LAYOUT_MIGRATION_CHUNK) {
         const chunk = keys.slice(start, start + LAYOUT_MIGRATION_CHUNK);
@@ -981,13 +1016,14 @@ export class LocalDexieRowStore implements LocalRowStore {
           const envelopes = await db.records.bulkGet(chunk);
           const records: LocalRecordEnvelope[] = [];
           const fields: LocalRecordFieldsEnvelope[] = [];
-          for (const envelope of envelopes) {
+          const existingFields = await db.recordFields.bulkGet(chunk as string[]);
+          for (const [position, envelope] of envelopes.entries()) {
             if (!envelope?.value?._id || envelope.deletedAtISO) continue;
             const { light, heavy } = splitHeavyFields(table, envelope.value);
             if (!heavy) continue;
             const external = [...new Set([...(envelope.external ?? []), ...Object.keys(heavy)])];
             records.push({ ...envelope, value: light, external });
-            fields.push({ key: envelope.key, table, id: envelope.id, fields: heavy });
+            fields.push({ key: envelope.key, table, id: envelope.id, fields: { ...(existingFields[position]?.fields ?? {}), ...heavy } });
           }
           if (records.length) await db.records.bulkPut(records);
           if (fields.length) await db.recordFields.bulkPut(fields);

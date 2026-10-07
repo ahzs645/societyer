@@ -4,6 +4,7 @@ import { sessionReferences } from "./importReviewQueue";
 import { normalizeDocumentCategory } from "../documentCategories";
 import { detectSourceVersionStatus, normalizeSourceVersionStatus } from "../documentVersioning";
 import { existingImportTarget, rememberImportTarget } from "./importTargetIdentity";
+import { meetingCalendarDate } from "../meetingDates";
 /**
  * PORTABLE FUNCTIONS: the import-session review domain.
  *
@@ -783,7 +784,9 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
   }
 
   await patchSessionUpdatedAt(ctx, sessionId);
-  return { meetings, minutes, motions: motionCount, existing, committeesCreated, nonPersonAttendance };
+  // Meeting materials and proxies that were waiting for these meetings are applied now.
+  const dependents = meetings ? await applyWaitingDependentsPortable(ctx, societyId) : { applied: 0 };
+  return { meetings, minutes, motions: motionCount, existing, committeesCreated, nonPersonAttendance, ...(dependents.applied ? { dependentsApplied: dependents.applied } : {}) };
 }
 
 export async function backfillApprovedMeetingReferencesPortable(ctx: PortableMutationCtx, { sessionId }: { sessionId: string }) {
@@ -924,7 +927,7 @@ export async function applyApprovedDocumentsPortable(
 
 export async function applyApprovedSectionRecordsPortable(
   ctx: PortableMutationCtx,
-  { sessionId, recordIds }: { sessionId: string; recordIds?: string[] },
+  { sessionId, recordIds, allOrNothing }: { sessionId: string; recordIds?: string[]; allOrNothing?: boolean },
 ) {
   const session = await ctx.db.get(sessionId);
   if (!isImportSession(session)) return { total: 0, byKind: {} };
@@ -979,48 +982,219 @@ export async function applyApprovedSectionRecordsPortable(
     }
   }
 
-  const blocked: { record: any; issues: string[] }[] = [];
-  for (const record of sectionRecords) {
-    if (await existingImportTarget(ctx, societyId, record)) continue;
-    const issues = await importPromotionIssues(ctx, societyId, record);
-    if (issues.length) blocked.push({ record, issues });
-  }
-  if (blocked.length) {
-    for (const { record, issues } of blocked) await patchRecordPromotionBlocked(ctx, record, issues);
-    return { total: 0, byKind: { blocked: blocked.length }, preflightBlocked: true, blockedRecordIds: blocked.map(item => item.record._id) };
+  // Intake promotion applies one document's records as a unit: anything blocked stops the whole promotion.
+  if (allOrNothing) {
+    const blocked: { record: any; issues: string[] }[] = [];
+    for (const record of sectionRecords) {
+      if (await existingImportTarget(ctx, societyId, record)) continue;
+      const issues = await importPromotionIssues(ctx, societyId, record);
+      if (issues.length) blocked.push({ record, issues });
+    }
+    if (blocked.length) {
+      for (const { record, issues } of blocked) await patchRecordPromotionBlocked(ctx, record, issues);
+      return { total: 0, byKind: { blocked: blocked.length }, preflightBlocked: true, blockedRecordIds: blocked.map(item => item.record._id) };
+    }
   }
 
+  // Per record: everything valid is applied; a blocked record stays approved with its reasons (and, when it waits
+  // for a record that is not applied yet, what it waits for) and never holds back the rest. Records are taken in
+  // dependency order, and a record blocked only by something applied later in the same pass is retried.
   const byKind: Record<string, number> = {};
   let total = 0;
-  for (const record of sectionRecords) {
-    const existingTarget = await existingImportTarget(ctx, societyId, record);
-    if (existingTarget) { await patchRecordImportTarget(ctx, record, "sections", existingTarget); continue; }
-    const sourceDocumentIds = await ensureImportSourceDocuments(
-      ctx,
-      societyId,
-      unique([...(record.sourceExternalIds ?? []), ...(record.payload?.sourceExternalIds ?? [])]),
-      "Imported Source",
-      `Source placeholder created while applying ${record.recordKind} from ${hydrateSession(session).name}. Pull or review the original source document before publishing content.`,
-      sourceCatalog,
-    );
-    const promotionIssues = await importPromotionIssues(ctx, societyId, record);
-    if (promotionIssues.length > 0) {
-      await patchRecordPromotionBlocked(ctx, record, promotionIssues);
-      byKind[`${record.recordKind}:blocked`] = (byKind[`${record.recordKind}:blocked`] ?? 0) + 1;
-      continue;
+  let pending = sectionRecords;
+  let blocked: { record: any; issues: string[] }[] = [];
+  for (let pass = 0; pass < 3 && pending.length; pass++) {
+    blocked = [];
+    let appliedThisPass = 0;
+    for (const record of pending) {
+      const existingTarget = await existingImportTarget(ctx, societyId, record);
+      if (existingTarget) { await patchRecordImportTarget(ctx, record, "sections", existingTarget); continue; }
+      const promotionIssues = await importPromotionIssues(ctx, societyId, record);
+      if (promotionIssues.length > 0) { blocked.push({ record, issues: promotionIssues }); continue; }
+      const sourceDocumentIds = await ensureImportSourceDocuments(
+        ctx,
+        societyId,
+        unique([...(record.sourceExternalIds ?? []), ...(record.payload?.sourceExternalIds ?? [])]),
+        "Imported Source",
+        `Source placeholder created while applying ${record.recordKind} from ${hydrateSession(session).name}. Pull or review the original source document before publishing content.`,
+        sourceCatalog,
+      );
+      const target = await insertSectionRecord(ctx, societyId, record, sourceDocumentIds);
+      if (record.recordKind !== "sourceEvidence" && record.recordKind !== "representationGap") {
+        await insertSourceEvidenceForAppliedRecord(ctx, societyId, record, target, sourceDocumentIds);
+      }
+      await rememberImportTarget(ctx, societyId, record, String(target));
+      // Re-read: an earlier pass may have recorded this record as blocked.
+      const fresh = (await ctx.db.get<any>(record._id)) ?? record;
+      const { blocked: _cleared, ...current } = hydrateRecord(fresh);
+      await ctx.db.patch(record._id, {
+        content: JSON.stringify({ ...current, importedTargets: { ...(current.importedTargets ?? {}), sections: target }, updatedAtISO: new Date().toISOString() }),
+        tags: (fresh.tags ?? []).filter((tag: string) => tag !== "promotion-blocked" && tag !== "promotion-waiting"),
+      });
+      byKind[record.recordKind] = (byKind[record.recordKind] ?? 0) + 1;
+      total += 1;
+      appliedThisPass += 1;
     }
-    const target = await insertSectionRecord(ctx, societyId, record, sourceDocumentIds);
-    if (record.recordKind !== "sourceEvidence" && record.recordKind !== "representationGap") {
-      await insertSourceEvidenceForAppliedRecord(ctx, societyId, record, target, sourceDocumentIds);
-    }
-    await rememberImportTarget(ctx, societyId, record, String(target));
-    await patchRecordImportTarget(ctx, record, "sections", target);
-    byKind[record.recordKind] = (byKind[record.recordKind] ?? 0) + 1;
-    total += 1;
+    if (!appliedThisPass) break;
+    pending = blocked.map((item) => item.record);
+  }
+  const details: BlockedImportRecord[] = [];
+  for (const { record, issues } of blocked) {
+    const detail = await describeBlockedRecord(ctx, societyId, record, issues);
+    details.push(detail);
+    await markRecordBlocked(ctx, record, detail);
+    byKind[`${record.recordKind}:blocked`] = (byKind[`${record.recordKind}:blocked`] ?? 0) + 1;
   }
 
   await patchSessionUpdatedAt(ctx, sessionId);
-  return { total, byKind };
+  if (details.length && !total) return { total: 0, byKind: { ...byKind, blocked: details.length }, preflightBlocked: true, blockedRecordIds: details.map((item) => item.recordId), blocked: details };
+  return details.length ? { total, byKind, blockedRecordIds: details.map((item) => item.recordId), blocked: details } : { total, byKind };
+}
+
+/* --------------------- blocked records: reasons, fixes and dependents --------------------- */
+
+export type BlockedImportRecord = {
+  recordId: string;
+  recordKind: string;
+  title: string;
+  issues: string[];
+  /** duplicate: the register already holds this record; waiting: it names a record not applied yet; invalid: a fact needs fixing. */
+  reason: "duplicate" | "waiting" | "invalid";
+  duplicateOf?: { table: string; id: string; label: string };
+  waitingFor?: { kind: "meeting" | "grant"; meetingDate?: string; body?: string; grantTitle?: string };
+};
+
+const BLOCK_TAG = "promotion-blocked";
+const WAIT_TAG = "promotion-waiting";
+const compactNameKey = (value: unknown) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+/** Why a record is blocked, and for a duplicate the record it duplicates. */
+async function describeBlockedRecord(ctx: PortableMutationCtx, societyId: string, record: any, issues: string[]): Promise<BlockedImportRecord> {
+  const payload = record.payload ?? {};
+  const base = { recordId: String(record._id), recordKind: String(record.recordKind), title: cleanText(record.title) || titleForRecord(record.recordKind, payload) || record.recordKind, issues };
+  if (record.recordKind === "policy" && issues.some((issue) => /duplicate/i.test(issue))) {
+    const key = compactNameKey(payload.policyNumber || payload.policyName || payload.name);
+    const policies = (await ctx.db.query("policies").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect()) as any[];
+    const match = policies.find((row) => compactNameKey(row.policyNumber || row.policyName) === key);
+    return { ...base, reason: "duplicate", ...(match ? { duplicateOf: { table: "policies", id: String(match._id), label: String(match.policyName ?? match.policyNumber ?? "Policy") } } : {}) };
+  }
+  if (issues.some((issue) => /duplicate/i.test(issue))) return { ...base, reason: "duplicate" };
+  if ((record.recordKind === "meetingMaterial" || record.recordKind === "proxy") && issues.some((issue) => /identify exactly one existing meeting/.test(issue))) {
+    const ref = payload.meeting && typeof payload.meeting === "object" ? payload.meeting : payload;
+    const meetingDate = cleanText(ref.meetingDate ?? ref.date ?? payload.meetingDate)?.slice(0, 10);
+    const body = cleanText(ref.body ?? ref.bodyKey ?? ref.committeeName ?? payload.body ?? payload.committeeName);
+    const sameDay = meetingDate ? ((await ctx.db.query("meetings").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect()) as any[]).filter((meeting) => (meetingCalendarDate(meeting) ?? "") === meetingDate) : [];
+    // No meeting on that day yet: it is waiting for its meeting (applied automatically once the meeting is).
+    if (meetingDate && !sameDay.length && issues.length === 1) return { ...base, reason: "waiting", waitingFor: { kind: "meeting", meetingDate, ...(body ? { body } : {}) } };
+    return { ...base, reason: "invalid" };
+  }
+  if (record.recordKind === "grantReport" && issues.length === 1 && /existing grant/.test(issues[0])) {
+    return { ...base, reason: "waiting", waitingFor: { kind: "grant", grantTitle: cleanText(payload.grantTitle ?? payload.grant) } };
+  }
+  return { ...base, reason: "invalid" };
+}
+
+/** Records the block on the record (it stays approved; nothing else of the session is held back). */
+async function markRecordBlocked(ctx: PortableMutationCtx, record: any, detail: BlockedImportRecord) {
+  const doc = await ctx.db.get<any>(record._id);
+  const current = doc ? hydrateRecord(doc) : record;
+  const note = `Promotion blocked: ${detail.issues.join("; ")}`;
+  const riskFlags = unique([...(current.riskFlags ?? []), "validation", detail.reason === "duplicate" ? "duplicate" : ""]);
+  const { recordId: _id, recordKind: _kind, title: _title, ...blocked } = detail;
+  await ctx.db.patch(record._id, {
+    content: JSON.stringify({
+      ...current,
+      reviewNotes: String(current.reviewNotes ?? "").includes(note) ? current.reviewNotes : [cleanText(current.reviewNotes), note].filter(Boolean).join("\n"),
+      riskFlags,
+      blocked: { ...blocked, atISO: new Date().toISOString() },
+      updatedAtISO: new Date().toISOString(),
+    }),
+    tags: unique([...(doc?.tags ?? []).filter((tag: string) => tag !== WAIT_TAG), BLOCK_TAG, detail.reason === "waiting" ? WAIT_TAG : ""]),
+  });
+}
+
+/**
+ * One-click resolutions for blocked records: `skip` (reject it, with the reason), `defer` (back to pending),
+ * `link_existing` (a duplicate: count the record as applied to the register entry it duplicates) and `retry`
+ * (apply it again after a fix). Several records of one session at once.
+ */
+export async function resolveBlockedRecordsPortable(ctx: PortableMutationCtx, { sessionId, recordIds, action }: { sessionId: string; recordIds: string[]; action: string }) {
+  const session = await ctx.db.get<any>(sessionId);
+  if (!isImportSession(session)) throw new Error("Import session not found.");
+  const societyId = String(session.societyId);
+  if (!["skip", "defer", "link_existing", "retry"].includes(action)) throw new Error("Choose skip, defer, link to the existing record, or retry.");
+  if (!Array.isArray(recordIds) || !recordIds.length || recordIds.length > 500) throw new Error("Choose between 1 and 500 records.");
+  const records = await sessionRecords(ctx, societyId, sessionId);
+  await selectedImportRecords(ctx, societyId, sessionId, records, recordIds);
+  const selected = records.filter((record: any) => recordIds.includes(String(record._id)));
+  if (action === "retry") {
+    const result: any = await applyApprovedSectionRecordsPortable(ctx, { sessionId, recordIds: selected.filter((record: any) => record.status === "Approved").map((record: any) => String(record._id)) });
+    return { action, updated: result.total ?? 0, stillBlocked: result.blocked?.length ?? 0, result };
+  }
+  await requirePermissionPortable(ctx, societyId, "documents:write");
+  const at = new Date().toISOString();
+  let updated = 0;
+  for (const record of selected) {
+    const doc = await ctx.db.get<any>(record._id);
+    const { blocked, ...current } = hydrateRecord(doc);
+    const tags = (doc.tags ?? []).filter((tag: string) => tag !== BLOCK_TAG && tag !== WAIT_TAG);
+    if (action === "link_existing") {
+      const target = blocked?.duplicateOf;
+      if (!target?.id) continue;
+      const existing = await ctx.db.get<any>(target.id);
+      if (!existing || String(existing.societyId) !== societyId) continue;
+      await requireSectionPromotionPermissions(ctx, societyId, [record]);
+      if (!(await existingImportTarget(ctx, societyId, record))) await rememberImportTarget(ctx, societyId, record, String(target.id));
+      await ctx.db.patch(record._id, { content: JSON.stringify({ ...current, reviewNotes: [cleanText(current.reviewNotes), `Linked to the existing ${target.label} (${target.table}) instead of creating a duplicate.`].filter(Boolean).join("\n"), importedTargets: { ...(current.importedTargets ?? {}), sections: target.id }, updatedAtISO: at }), tags });
+    } else {
+      const reason = blocked?.issues?.join("; ") ?? "blocked on apply";
+      const status = action === "skip" ? "Rejected" : "Pending";
+      const note = action === "skip" ? `Skipped on apply: ${reason}` : `Deferred: ${reason}`;
+      await ctx.db.patch(record._id, { content: JSON.stringify({ ...current, status, reviewNotes: [cleanText(current.reviewNotes), note].filter(Boolean).join("\n"), updatedAtISO: at }), tags });
+    }
+    updated++;
+  }
+  await patchSessionUpdatedAt(ctx, sessionId);
+  return { action, updated };
+}
+
+/**
+ * Records waiting for a meeting (or grant) that is now on record are applied, in every session of the
+ * organization. Runs after meetings are created; bounded per call; a person without the permissions a
+ * waiting record needs leaves it waiting.
+ */
+export async function applyWaitingDependentsPortable(ctx: PortableMutationCtx, societyId: string, limit = 500) {
+  const docs = (await ctx.db.query("documents").withIndex("by_society_category", (q: any) => q.eq("societyId", societyId).eq("category", RECORD_CATEGORY)).omitFields("content").collect()) as any[];
+  const waiting = docs.filter((doc) => Array.isArray(doc.tags) && doc.tags.includes(WAIT_TAG)).slice(0, limit);
+  if (!waiting.length) return { applied: 0, sessions: 0 };
+  const bySession = new Map<string, string[]>();
+  for (const light of waiting) {
+    const doc = await ctx.db.get<any>(light._id);
+    if (!doc || !isImportRecord(doc)) continue;
+    const record = hydrateRecord(doc);
+    if (record.status !== "Approved" || record.importedTargets?.sections) continue;
+    const issues = await importPromotionIssues(ctx, societyId, record);
+    if (issues.length) continue;
+    bySession.set(String(record.sessionId), [...(bySession.get(String(record.sessionId)) ?? []), String(record._id)]);
+  }
+  let applied = 0;
+  for (const [sessionId, ids] of bySession) {
+    const session = await ctx.db.get<any>(sessionId);
+    if (!isImportSession(session)) continue;
+    const records = (await sessionRecords(ctx, societyId, sessionId)).filter((record: any) => ids.includes(String(record._id)));
+    // Check every permission first so a missing one never leaves a half-applied set.
+    try {
+      await requirePermissionPortable(ctx, societyId, "settings:write");
+      await requirePermissionPortable(ctx, societyId, "documents:read");
+      await requireSectionPromotionPermissions(ctx, societyId, records);
+      for (const record of records) await requireDocumentAccess(ctx, record._id, "manage");
+    } catch {
+      continue;
+    }
+    const result: any = await applyApprovedSectionRecordsPortable(ctx, { sessionId, recordIds: ids });
+    applied += Number(result.total ?? 0);
+  }
+  return { applied, sessions: bySession.size };
 }
 
 /* --------------------- document versions from imports (A8) --------------------- */
