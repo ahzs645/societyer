@@ -117,7 +117,7 @@ test("stock intake updates the asset and the camera fallback resolves an existin
   await page.getByRole("button", { name: "Complete run", exact: true }).click();
   await expect(page).toHaveURL(/\/assets$/);
   await visit(page, "assets/verification/missing-run");
-  await expect(page.getByText("Physical inventory run not found.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Physical inventory run not found" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Complete run", exact: true })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
@@ -181,7 +181,7 @@ test("inventory creation and staged import parsing work without applying records
   page.on("pageerror", (error) => errors.push(error.message));
   await visit(page, "inventory");
   await page.getByRole("button", { name: "New item", exact: true }).click();
-  await input(page, "Name *").fill("Operations audit supplies");
+  await input(page, "Name").fill("Operations audit supplies");
   await input(page, "SKU").fill("AUDIT-OPS-001");
   await fits(page);
   await page.getByRole("button", { name: "Create item", exact: true }).click();
@@ -272,9 +272,8 @@ test("a manual bank transaction can be reconciled with its note and a quick entr
   await fits(page);
   await page.getByRole("button", { name: "Add transaction", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.getByText("Synthetic operations bank fee", { exact: true }).first().click();
-  await page.locator(".inspector-panel").getByRole("button", { name: /^Open/ }).click();
-  await page.keyboard.press("Escape");
+  // Selecting a row opens its match panel directly (no generic side panel).
+  await page.getByRole("button", { name: "Match Synthetic operations bank fee", exact: true }).click();
   await page.getByRole("button", { name: "Mark manually reconciled…", exact: true }).click();
   await page.getByPlaceholder("Reason", { exact: true }).fill("Synthetic account fee for browser audit");
   await page.getByRole("button", { name: "OK", exact: true }).click();

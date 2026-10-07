@@ -263,6 +263,9 @@
 .field__error {
   color: token('danger');
 }
+.field__required::before {
+  content: "\00a0*";
+}
 .field__hint {
   font-size: token('fs-xs');
   color: token('text-tertiary');
