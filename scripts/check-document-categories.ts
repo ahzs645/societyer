@@ -128,8 +128,12 @@ const db = new MemoryDb({
       doc("d-fin", "FinancialStatement"),
       doc("d-audit", "Audit", { content: JSON.stringify({ scope: "Synthetic local test scope" }) }),
       doc("d-custom", "Board Packages"),
-      doc("d-candidate", "Import Candidate", { tags: ["import-session", "import-record"] }),
+      doc("d-candidate", "Import Candidate", { tags: ["import-session", "import-record"], content: JSON.stringify({ recordKind: "source", payload: { sha256: "d".repeat(64) } }) }),
+      doc("d-canonical", "Other", { content: JSON.stringify({ externalId: "google-drive:OTHER", sha256: "d".repeat(64) }) }),
       doc("d-session", "Import Session", { tags: ["import-session"] }),
+    ],
+    sourceEvidence: [
+      { _id: "se-cand", societyId: "soc", sourceDocumentId: "d-candidate", externalSystem: "google-drive", externalId: "google-drive:ORIGINAL", sourceTitle: "Terms of reference.pdf", evidenceKind: "import_support", sensitivity: "standard", accessLevel: "internal", summary: "s", status: "NeedsReview", createdAtISO: now },
     ],
   },
 });
@@ -137,9 +141,9 @@ const principal = (userId: string) => () => ({ kind: "user" as const, runtime: "
 const owner = new PortableRuntime({ db, capabilities: makeCapabilities({}), principalProvider: principal("owner") }).registerAll(PORTABLE_FUNCTIONS);
 
 const listed: any[] = await owner.runQuery("documents:list", { societyId: "soc" });
-assert.deepEqual(listed.map((row) => row._id).sort(), ["d-audit", "d-custom", "d-fin", "d-fin-lower", "d-recovered"], "no document is hidden by its category; internal rows stay out");
+assert.deepEqual(listed.map((row) => row._id).sort(), ["d-audit", "d-canonical", "d-custom", "d-fin", "d-fin-lower", "d-recovered"], "no document is hidden by its category; internal rows stay out");
 const browse: any = await owner.runQuery("documents:browse", { societyId: "soc" });
-assert.equal(browse.rows.length, 5);
+assert.equal(browse.rows.length, 6);
 for (const row of browse.rows) {
   assert.equal("content" in row, false, "browse rows never carry content");
   assert.equal("sourcePayloadJson" in row, false);
@@ -161,5 +165,12 @@ await owner.runMutation("documents:updateReviewStatus", { id: "d-recovered", rev
 assert.equal((await db.get("d-recovered"))?.reviewStatus, "needs_review", "writers store the normalized status");
 const created = await owner.runMutation("documents:create", { societyId: "soc", title: "Statement", category: "financial statement", tags: [] });
 assert.equal((await db.get(String(created)))?.category, "FinancialStatement", "new documents store the canonical category");
+
+// Evidence citing a staged import candidate points at the canonical document
+// (here an exact byte duplicate retained under another source id) (D-20).
+const registers: any = await owner.runQuery("evidenceRegisters:overview", { societyId: "soc" });
+const cited = registers.sourceEvidence.find((row: any) => row._id === "se-cand");
+assert.equal(cited.sourceDocumentKind, "candidate");
+assert.equal(cited.canonicalDocumentId, "d-canonical");
 
 console.log("Document category, review status and list projection checks passed.");

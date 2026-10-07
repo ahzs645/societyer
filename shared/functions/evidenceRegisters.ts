@@ -14,6 +14,7 @@ import { requirePermissionPortable, type Permission } from "./permissions";
 import { documentAccessPredicate, filterDocumentLinkedRows } from "./documents";
 import { getOwned, requireSocietyMembership } from "./access";
 import { normalizeSigningAuthorityTiers } from "../signingAuthorityTiers";
+import { documentProvenanceCached } from "../documentProvenance";
 
 const REGISTER_TABLES = [
   "boardRoleAssignments",
@@ -568,35 +569,34 @@ async function withCanonicalSourceDocuments(ctx: PortableQueryCtx, societyId: st
   const isCandidate = (doc: any) => doc && (doc.category === "Import Candidate" || doc.category === "Import Session");
   if (![...sources.values()].some(isCandidate)) return rows.map((row) => ({ ...row, sourceDocumentKind: row.sourceDocumentId ? (sources.has(String(row.sourceDocumentId)) ? "document" : "missing") : undefined }));
   const byExternalId = new Map<string, string>();
+  const bySha = new Map<string, string>();
   const docs = await ctx.db.query("documents").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
   for (const doc of docs as any[]) {
     if (isCandidate(doc)) continue;
-    const ids: unknown[] = [...(doc.sourceExternalIds ?? []), ...(doc.tags ?? [])];
-    if (typeof doc.content === "string" && doc.content.includes("externalId")) {
-      try {
-        const content = JSON.parse(doc.content);
-        ids.push(content?.externalId, ...(Array.isArray(content?.sourceExternalIds) ? content.sourceExternalIds : []));
-      } catch {
-        // Not JSON content.
-      }
-    }
-    for (const id of ids) {
+    const provenance = documentProvenanceCached(doc);
+    for (const id of [...(doc.sourceExternalIds ?? []), ...provenance.externalIds]) {
       const key = cleanText(id)?.toLowerCase();
       if (key && key.includes(":") && !byExternalId.has(key)) byExternalId.set(key, String(doc._id));
     }
+    if (provenance.sha256 && !bySha.has(provenance.sha256)) bySha.set(provenance.sha256, String(doc._id));
   }
   return rows.map((row) => {
     const source = row.sourceDocumentId ? sources.get(String(row.sourceDocumentId)) : undefined;
     if (!row.sourceDocumentId) return row;
     if (!source) return { ...row, sourceDocumentKind: "missing" };
     if (!isCandidate(source)) return { ...row, sourceDocumentKind: "document" };
-    let applied: string | undefined;
+    let candidate: any = {};
     try {
-      applied = JSON.parse(source.content ?? "{}")?.importedTargets?.documents;
+      candidate = JSON.parse(source.content ?? "{}") ?? {};
     } catch {
-      applied = undefined;
+      candidate = {};
     }
-    const canonical = applied ?? (row.externalId ? byExternalId.get(String(row.externalId).toLowerCase()) : undefined);
+    const sha = typeof candidate?.payload?.sha256 === "string" ? candidate.payload.sha256.toLowerCase() : undefined;
+    // Applied target first, then the same source id, then identical bytes
+    // (an exact duplicate retained under another Drive id).
+    const canonical = candidate?.importedTargets?.documents
+      ?? (row.externalId ? byExternalId.get(String(row.externalId).toLowerCase()) : undefined)
+      ?? (sha ? bySha.get(sha) : undefined);
     return { ...row, sourceDocumentKind: "candidate", canonicalDocumentId: canonical };
   });
 }
