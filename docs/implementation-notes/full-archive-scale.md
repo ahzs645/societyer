@@ -166,6 +166,22 @@ The old writer needed the whole snapshot object, one JSON string of the full siz
 JSZip's copy at once (several times the record size in the tab's heap); in a browser, Blob bytes live
 outside the tab's heap.
 
+**Perf gate** (`SOCIETYER_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:local-workspace-perf -- --base
+<preview>`, production build, machine load 4–7 from other agents' runs). The restore passes (30.1 s for the
+96,089-record v2 ZIP), and so does every route except `/app/documents`, which is over 3 s whether or not
+the intake run is in the workspace:
+
+| Build / workspace | Restore | `/app` | meetings | meeting | documents | imports | people | tasks | members | AI intake |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| This branch, with the compacted intake run | 30.1 s | 2.3 | 1.9 | 1.8 | **3.4** | 1.6 | 1.5 | 1.5 | 1.6 | 1.7 |
+| This branch, `--intake none` | 15.5 s | 2.3 | 2.0 | 1.7 | **3.7** | 1.7 | 1.6 | 1.7 | 1.8 | — |
+| Base `79b0952` (no changes from this package), `--intake none` | 17.3 s | 2.1 | 2.1 | 2.1 | **3.8** | 1.8 | 1.7 | 1.8 | 1.8 | — |
+
+The base build fails `/app/documents` the same way on the same machine, so it is the load rather than
+this work (WP-K measured 2.6 s there). In Node, `documents:browse` takes 143 ms warm
+on the base synthetic workspace and 239 ms with the intake run, which adds about 1,000 promoted source
+documents to the list. The base build also restored the version 1 ZIP this branch's writer made.
+
 ## Real archive (PGAIR run8, session scratchpad only)
 
 The WP-R run8 output (2,033 extractions, 10,196 files, 2,262 stored extracts) was staged into a fresh
@@ -235,7 +251,8 @@ Apply sections:
 - Hosted Convex export still fetches every table into the page before writing (now streamed into the ZIP);
   a per-table paged writer would bound that too.
 - Grouped provenance rows (see above) and a paged processing log.
-- The perf gate's absolute numbers depend on machine load; see the measurements above for this run.
+- `/app/documents` is over the perf gate's 3 s on a loaded machine, on the base build too (see the
+  perf-gate table). The list query is 0.1–0.2 s of it in Node.
 
 ## For other work packages
 
