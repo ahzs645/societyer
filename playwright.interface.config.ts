@@ -14,6 +14,9 @@ export default defineConfig({
     baseURL: process.env.INTERFACE_AUDIT_URL ?? "http://127.0.0.1:4177",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
+    // Machines with a preinstalled Chromium (rather than `playwright install`)
+    // point at it here; specs that set their own launchOptions keep it too.
+    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
   },
   webServer: process.env.INTERFACE_AUDIT_URL ? undefined : {
     command: "VITE_E2E_TEST_HARNESS=1 npx vite --host 127.0.0.1 --port 4177 --strictPort",

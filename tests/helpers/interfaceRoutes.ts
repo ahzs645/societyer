@@ -126,6 +126,24 @@ export const INTERFACE_ROUTES: InterfaceRoute[] = [
     "fixture": "route"
   },
   {
+    "pattern": "/app/people-history",
+    "path": "/demo/app/people-history",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/source-model-coverage",
+    "path": "/demo/app/source-model-coverage",
+    "kind": "app",
+    "fixture": "route"
+  },
+  {
+    "pattern": "/app/people-directory/:id",
+    "path": "/demo/app/people-directory/interface-audit-missing",
+    "kind": "app",
+    "fixture": "missing-record"
+  },
+  {
     "pattern": "/app/dividends",
     "path": "/demo/app/dividends",
     "kind": "app",

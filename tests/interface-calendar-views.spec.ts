@@ -37,14 +37,14 @@ test("calendar layouts save, discard and reload while dated records open their a
   await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeHidden();
   await page.reload();
   await expect(calendar.getByRole("button", { name: "Week", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await calendar.getByRole("button", { name: "List", exact: true }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await page.getByRole("button", { name: "Discard", exact: true }).click();
   await expect(calendar.getByRole("button", { name: "Week", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await calendar.getByRole("button", { name: "List", exact: true }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeHidden();
   await page.reload();
-  await expect(calendar.getByRole("button", { name: "List", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(calendar.getByRole("button", { name: "Agenda", exact: true })).toHaveAttribute("aria-pressed", "true");
   await fits(page);
   await calendar.getByRole("button", { name: "Calendar source deadline", exact: true }).click();
   await page.locator(".record-side-panel__open").click();
@@ -122,7 +122,7 @@ test("Viewer can change the presentation and inspect a deadline while save and e
   await palette.getByRole("option", { name: /^Deadlines/ }).first().click();
   await page.getByRole("button", { name: "Calendar view", exact: true }).click();
   const calendar = page.locator(".calendar-view");
-  await calendar.getByRole("button", { name: "List", exact: true }).click();
+  await calendar.getByRole("button", { name: "Agenda", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Save as", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "New deadline", exact: true })).toBeDisabled();
