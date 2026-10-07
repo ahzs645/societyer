@@ -48,6 +48,9 @@ jobs:
           npm run test:authorization-policy
           npm run test:permissioned-mutation
 
+      - name: Desktop main-process typecheck
+        run: npm run test:electron-architecture
+
       - name: Static-mirror parity gate
         run: npm run test:static-parity
 

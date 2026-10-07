@@ -94,6 +94,7 @@ export function PeriodDrawer({ selection, onClose }: { selection: PeriodSelectio
                 </span>
               </div>
               {period.note && <p style={{ margin: "6px 0 0" }}>{period.note}</p>}
+              {period.action && <p style={{ margin: "6px 0 0" }}><Link className="btn btn--sm btn--accent" to={period.action.href}>{period.action.label}</Link></p>}
               {period.dueDate && period.status === "upcoming" && <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>Due {period.dueDate}</p>}
               {period.evidence.length > 0 && (
                 <ul className="coverage-evidence">

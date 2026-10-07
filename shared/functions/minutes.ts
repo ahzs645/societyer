@@ -1274,8 +1274,8 @@ export async function assertMeetingHistoryReferences(ctx: PortableMutationCtx, s
       seen.add(identity);
       if (!ancestor.carriedFromMinutesId) break;
       ancestorMinutes = await getOwned(ctx, "minutes", ancestor.carriedFromMinutesId, societyId);
-      const parentEntryId = ancestor.carriedFromEntryId;
-      const parent = (normalizeMeetingHistory(ancestorMinutes).actionObservations ?? []).find((row) => row.entryId === parentEntryId);
+      const parentEntryId: string | undefined = ancestor.carriedFromEntryId;
+      const parent: any = (normalizeMeetingHistory(ancestorMinutes).actionObservations ?? []).find((row) => row.entryId === parentEntryId);
       if (!parent) throw new Error("Carried action ancestor entry does not exist");
       if (parent.actionKey !== action.actionKey) throw new Error("Carried action ancestor identity does not match");
       ancestor = parent;

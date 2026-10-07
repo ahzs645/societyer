@@ -56,6 +56,30 @@ export function sameQueryResult(a: unknown, b: unknown): boolean {
   return leftCount === rightCount;
 }
 
+/**
+ * A local query that failed (P-O2). useQuery rethrows it, like a failed hosted
+ * Convex query, so the nearest error boundary can show a readable message and a
+ * retry. Re-mounting the subscriber (the boundary's Retry) runs the query again.
+ */
+export class LocalQueryError extends Error {
+  /** How long a "record not found" failure must persist before it is surfaced. */
+  static NOT_FOUND_GRACE_MS = 1500;
+  readonly queryName: string;
+  readonly cause: unknown;
+  constructor(queryName: string, cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "LocalQueryError";
+    this.queryName = queryName;
+    this.cause = cause;
+  }
+}
+
+/** "Permission x:read required", "Role Owner required", "Access denied" … (not a wrong organization). */
+export function isRolePermissionDenial(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /\bpermission\b[^.]*\brequired\b|\brole\b[^.]*\brequired\b|access denied|forbidden|not permitted/i.test(message);
+}
+
 /** Tables a result depends on; null means "unknown — refresh on every change". */
 type ReadSet = ReadonlySet<string> | null;
 
@@ -106,6 +130,8 @@ export class PortableQueryCache {
   // value synchronously, and `portableListeners` re-renders subscribers on resolve.
   private portableCache = new Map<string, unknown>();
   private portableErrors = new Map<string, string>();
+  /** The failure of the last run per cache key, rethrown to useQuery callers (P-O2). */
+  private portableFailures = new Map<string, LocalQueryError>();
   private paginatedSnapshots = new Map<string, { source: unknown; value: unknown }>();
   private portableListeners = new Set<() => void>();
   private portableRunId = 0;
@@ -145,6 +171,7 @@ export class PortableQueryCache {
         if (!this.affectedBy(cacheKey, changed)) continue;
         this.portableCache.delete(cacheKey);
         this.portableErrors.delete(cacheKey);
+        this.portableFailures.delete(cacheKey);
         this.paginatedSnapshots.delete(cacheKey);
         this.portableReadSets.delete(cacheKey);
       }
@@ -213,6 +240,7 @@ export class PortableQueryCache {
     this.portableRunTokens.clear();
     this.portablePaginatedRunTokens.clear();
     this.portableErrors.clear();
+    this.portableFailures.clear();
     this.paginatedSnapshots.clear();
     for (const key of this.portableCache.keys()) this.portableCache.set(key, undefined);
     for (const [cacheKey, spec] of this.portableWatchSpecs) {
@@ -239,15 +267,44 @@ export class PortableQueryCache {
       }
       return;
     }
-    if (this.portableErrors.get(cacheKey) !== message) console.warn(`[societyer-local] portable query ${cacheKey} failed`, error);
+    const isNewFailure = this.portableErrors.get(cacheKey) !== message;
+    if (isNewFailure) console.warn(`[societyer-local] portable query ${cacheKey} failed`, error);
     this.portableErrors.set(cacheKey, message);
     this.portableReadSets.delete(cacheKey);
     const hadResult = this.portableCache.get(cacheKey) !== undefined;
     // Failed authorization never supplies fixture data or retains another
-    // actor's result. Undefined is a stable loading/unavailable value for the
-    // existing optional background queries, without a render feedback loop.
+    // actor's result. The failure is kept and rethrown by localQueryResult, as
+    // hosted Convex throws a failed query into the caller's error boundary, so a
+    // page shows "couldn't load" with a retry instead of loading forever (P-O2).
+    // Paginated queries keep the undefined loading value.
     this.portableCache.set(cacheKey, undefined);
+    if (paginated) {
+      if (hadResult) this.emit();
+      return;
+    }
+    // A role that lacks a permission gets a stable "unavailable" value, as
+    // before: optional panels query what the role may not read, and the route
+    // gate already explains denied pages. Re-rendering must not loop on it.
+    if (isRolePermissionDenial(error)) {
+      if (hadResult) this.emit();
+      return;
+    }
+    const failure = new LocalQueryError(queryName, error);
+    if (!isRecordNotFoundError(error)) {
+      this.portableFailures.set(cacheKey, failure);
+      if (hadResult || isNewFailure) this.emit();
+      return;
+    }
+    // A record that vanished (deleted, merged, or the organization switched) is
+    // usually transient: the component watching it unmounts on the next render.
+    // Surface it only when it outlives a short grace period with the same run.
     if (hadResult) this.emit();
+    setTimeout(() => {
+      if (this.portableRunTokens.get(cacheKey) !== runId || this.portablePending.has(cacheKey)) return;
+      if (!this.portableWatchSpecs.has(cacheKey) || this.portableCache.get(cacheKey) !== undefined) return;
+      this.portableFailures.set(cacheKey, failure);
+      this.emit();
+    }, LocalQueryError.NOT_FOUND_GRACE_MS);
   }
 
   private recomputePortable(cacheKey: string, name: string, args?: StaticArgs) {
@@ -259,6 +316,7 @@ export class PortableQueryCache {
         if (this.portableRunTokens.get(cacheKey) !== runId) return;
         this.portablePending.delete(cacheKey);
         this.portableErrors.delete(cacheKey);
+        this.portableFailures.delete(cacheKey);
         this.portableReadSets.set(cacheKey, tables);
         const prev = this.portableCache.get(cacheKey);
         if (!this.portableCache.has(cacheKey) || !sameQueryResult(next, prev)) {
@@ -327,10 +385,14 @@ export class PortableQueryCache {
           }
         };
       },
-      localQueryResult: () =>
-        this.portableCache.has(cacheKey)
-          ? this.portableCache.get(cacheKey)
-          : undefined,
+      localQueryResult: () => {
+        const value = this.portableCache.has(cacheKey) ? this.portableCache.get(cacheKey) : undefined;
+        if (value === undefined && !this.portablePending.has(cacheKey)) {
+          const failure = this.portableFailures.get(cacheKey);
+          if (failure) throw failure;
+        }
+        return value;
+      },
       journal: () => undefined,
     };
   }

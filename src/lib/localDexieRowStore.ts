@@ -1,4 +1,4 @@
-import Dexie, { type Table } from "dexie";
+import type { LocalDexieDatabase } from "./localDexieDatabase";
 import { stripImportedAuthBindings } from "../../shared/workspaceIdentity";
 import { quarantineImportedPathways } from "../../shared/pathways/imports";
 import { DEFAULT_HOME_JURISDICTION_CODE } from "../../shared/jurisdictionWorkspace";
@@ -99,46 +99,12 @@ const CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION = 3;
  */
 const CURRENT_LOCAL_STORAGE_LAYOUT = 2;
 const LAYOUT_MIGRATION_CHUNK = 100;
+/** At or above this many rows, persisted projection memos are read by key range. */
+const PROJECTION_RANGE_READ_MIN = 256;
 
 // Keep a useful diagnostic window without treating the journal as durable history.
 const LOCAL_CHANGE_JOURNAL_CAP = 2_000;
 const LOCAL_CHANGE_JOURNAL_PRUNE_SLACK = 100;
-
-export class LocalDexieDatabase extends Dexie {
-  meta!: Table<any, string>;
-  records!: Table<LocalRecordEnvelope, string>;
-  recordFields!: Table<LocalRecordFieldsEnvelope, string>;
-  projections!: Table<LocalProjectionEnvelope, string>;
-  changes!: Table<LocalChangeEnvelope, number>;
-  attachments!: Table<any, string>;
-  meetings!: Table<any, string>;
-  minutes!: Table<any, string>;
-  files!: Table<LocalWorkspaceBinaryFile, string>;
-
-  constructor(databaseName: string) {
-    super(databaseName);
-    this.version(1).stores({
-      meetings: "_id, societyId, scheduledAt, status",
-      minutes: "_id, meetingId, societyId, heldAt, status",
-    });
-    this.version(2).stores({
-      meetings: "_id, societyId, scheduledAt, status",
-      minutes: "_id, meetingId, societyId, heldAt, status",
-      records: "&key, table, id, societyId",
-    });
-    this.version(3).stores({
-      meta: "&key",
-      records: "&key, table, id, societyId, updatedAtISO, deletedAtISO",
-      changes: "++seq, table, id, societyId, op, createdAtISO",
-      attachments: "&key, societyId, documentId, versionId, sha256",
-      meetings: "_id, societyId, scheduledAt, status",
-      minutes: "_id, meetingId, societyId, heldAt, status",
-    });
-    this.version(4).stores({ files: "&key, sha256" });
-    this.version(5).stores({ recordFields: "&key, table" });
-    this.version(6).stores({ projections: "&key, table" });
-  }
-}
 
 /** One table of the in-memory cache: rows by id, plus derived views built on demand. */
 type TableState = {
@@ -229,6 +195,10 @@ export class LocalDexieRowStore implements LocalRowStore {
    * creates a workspace seconds after boot. They are replayed on top instead.
    */
   private preHydrationOps: RowStoreOp[] | null = null;
+  /** Resolves to the opened vault (null when IndexedDB is unavailable or failed). */
+  private dbReady: Promise<LocalDexieDatabase | null> | null = null;
+  /** Whether rows are persisted (heavy fields are split out only then). */
+  private persistent = false;
 
   constructor(seed: LocalSeed, options?: { databaseName?: string; logLabel?: string; projectionNamespace?: string }) {
     this.projectionNamespace = options?.projectionNamespace;
@@ -244,11 +214,19 @@ export class LocalDexieRowStore implements LocalRowStore {
 
     if (typeof window === "undefined" || !("indexedDB" in window)) return;
 
-    this.db = new LocalDexieDatabase(options?.databaseName ?? "societyer-local-workspace");
+    this.persistent = true;
     this.preHydrationOps = [];
-    this.hydrated = this.hydrate(seed).catch((error) => {
+    // Dexie loads with the vault (SU-11): writes issued before it arrives await `database()`.
+    const opening = import("./localDexieDatabase").then(({ LocalDexieDatabase }) => {
+      this.db = new LocalDexieDatabase(options?.databaseName ?? "societyer-local-workspace");
+      return this.db;
+    });
+    this.dbReady = opening.catch(() => null);
+    this.hydrated = opening.then(() => this.hydrate(seed)).catch((error) => {
       this.db?.close();
       this.db = null;
+      this.persistent = false;
+      this.dbReady = Promise.resolve(null);
       console.warn(
         `[${options?.logLabel ?? "societyer-local"}] Dexie hydrate failed; using in-memory data for this session. Changes will not persist.`,
         error,
@@ -384,6 +362,19 @@ export class LocalDexieRowStore implements LocalRowStore {
     const out = new Map<string, { rev: string; value: unknown }>();
     if (!this.db || !this.projectionNamespace || !ids.length) return out;
     try {
+      if (ids.length >= PROJECTION_RANGE_READ_MIN) {
+        // A list's memos (documents: ~11k rows) are read with one key-range
+        // getAll instead of one IndexedDB get per row, which dominated a cold
+        // visit to Documents (SU-12).
+        const prefix = projectionKey(key, table, "");
+        const wanted = new Set(ids);
+        const rows = await this.db.projections.where("key").startsWith(prefix).toArray();
+        for (const row of rows) {
+          const id = row.key.slice(prefix.length);
+          if (wanted.has(id)) out.set(id, { rev: row.rev, value: row.value });
+        }
+        return out;
+      }
       const rows = await this.db.projections.bulkGet(ids.map((id) => projectionKey(key, table, id)));
       rows.forEach((row, index) => {
         if (row) out.set(ids[index], { rev: row.rev, value: row.value });
@@ -530,7 +521,14 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   private get splitsHeavyFields() {
-    return this.db !== null;
+    return this.persistent;
+  }
+
+  /** The vault once it is open; null when this session is memory-only. */
+  private async database(): Promise<LocalDexieDatabase | null> {
+    if (this.db) return this.db;
+    if (!this.dbReady) return null;
+    return (await this.dbReady) ?? null;
   }
 
   private prepareOps(ops: RowStoreOp[]): PreparedOp[] {
@@ -609,8 +607,8 @@ export class LocalDexieRowStore implements LocalRowStore {
     }
 
     // Persistence policy: broken at startup => memory-only session; broken mid-session => fail the mutation.
-    if (this.db) {
-      const db = this.db;
+    const db = this.db ?? await this.database();
+    if (db) {
       try {
         await db.open();
         await db.transaction("rw", [db.records, db.recordFields, db.changes], async () => {
@@ -708,6 +706,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   exportAttachmentReferences() { return cloneLocalRows(this.attachmentsCache); }
 
   async importSnapshot(snapshot: LocalWorkspaceSnapshot | { tables?: LocalSeed; attachments?: LocalAttachmentEnvelope[]; workspace?: Partial<LocalWorkspaceMeta> }, files: LocalWorkspaceBinaryFile[] = [], preserveFiles = false) {
+    await this.database();
     const importedTables = quarantineImportedPathways(stripImportedAuthBindings(validateSnapshotTables(snapshot?.tables)));
     const importedAttachments = validateSnapshotAttachments(snapshot?.attachments);
     if (files.some(file => !file.key || !/^[a-f0-9]{64}$/.test(file.sha256) || (file.blob !== undefined && !(file.blob instanceof Blob)))) throw new Error("Invalid restored file data.");
@@ -792,7 +791,8 @@ export class LocalDexieRowStore implements LocalRowStore {
     };
     const index = this.attachmentsCache.findIndex((candidate) => candidate.key === row.key);
     this.attachmentsCache = index === -1 ? [...this.attachmentsCache, row] : this.attachmentsCache.map((candidate, i) => (i === index ? row : candidate));
-    void this.db?.attachments.put(cloneLocalRow(row));
+    const stored = cloneLocalRow(row);
+    void (this.db ? Promise.resolve(this.db) : this.database()).then((db) => db?.attachments.put(stored));
     void this.appendChange("__attachments", { _id: row.key, societyId: row.societyId }, "upsert", {
       reason: "attachment-upsert",
     });
@@ -805,6 +805,7 @@ export class LocalDexieRowStore implements LocalRowStore {
   }
 
   async reseed() {
+    await this.database();
     this.loadTables(cloneLocalSeed(this.seed));
     this.external = new Map();
     this.pendingHeavy = new Map();
@@ -1029,11 +1030,13 @@ export class LocalDexieRowStore implements LocalRowStore {
     const change = createLocalChange(table, row, op, metadata);
     this.changesCache.push(change);
     this.pruneChangesCacheIfNeeded();
-    if (!this.db) return undefined;
-    return this.db.transaction("rw", this.db.changes, async () => {
-      change.seq = await this.db!.changes.add(change);
+    const persist = (db: LocalDexieDatabase) => db.transaction("rw", db.changes, async () => {
+      change.seq = await db.changes.add(change);
       await this.prunePersistedChangesIfNeeded();
     });
+    if (this.db) return persist(this.db);
+    if (!this.dbReady) return undefined;
+    return this.database().then((db) => (db ? persist(db) : undefined));
   }
 
   private pruneChangesCacheIfNeeded() {

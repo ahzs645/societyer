@@ -18,7 +18,8 @@
  *                    "<Body> meeting — <date>" (original kept in
  *                    `meetings.sourceTitle`), optionally reclassifying a
  *                    Board-typed meeting whose source names a committee;
- *  5. datePrecision— mark noon-UTC placeholder dates as date-only;
+ *  5. datePrecision— mark noon-UTC placeholder dates as date-only, or place a
+ *                    stated unambiguous local start time in the organization's zone;
  *  6. quorum       — where quorum is not recorded but the stored source text
  *                    states it, record the stated status with a pending,
  *                    cited checkpoint;
@@ -39,7 +40,8 @@ import { isDateOnlyPlaceholder, meetingCalendarDate } from "../meetingDates";
 import { agendaOnlyMeetingStatus } from "../meetingStatus";
 import { quorumStatementFromText } from "../quorumStatement";
 import { screenAttendanceList } from "../attendanceNames";
-import { resolveImportCommittee } from "./importSessionHelpers/importMeetingApply";
+import { importedMeetingTime, resolveImportCommittee } from "./importSessionHelpers/importMeetingApply";
+import { organizationTimeZone } from "../organizationDomain";
 
 export type RepairImportedOptions = {
   motions?: boolean;
@@ -72,6 +74,7 @@ export type RepairImportedReport = {
   meetingBodiesReclassified: number;
   committeesCreated: number;
   datePrecisionMarked: number;
+  meetingTimesPlaced: number;
   quorumFromSource: number;
   attendeesScreened: number;
   minutesWithAttendanceScreened: number;
@@ -125,7 +128,7 @@ export async function repairImportedPortable(
   const report: RepairImportedReport = {
     dryRun: Boolean(dryRun), meetingsScanned: 0, minutesScanned: 0, motionsScanned: 0, motionsRederived: 0, motionsOutcomeTextKept: 0,
     motionsUnrecognized: 0, embeddedMotionsSynced: 0, legacyEmbeddedCleared: 0, sectionTitlesCleaned: 0, agendaTitlesCleaned: 0, agendaNamesCleaned: 0, agendaOnlyStatusesFixed: 0,
-    meetingTitlesCleaned: 0, meetingBodiesReclassified: 0, committeesCreated: 0, datePrecisionMarked: 0, quorumFromSource: 0,
+    meetingTitlesCleaned: 0, meetingBodiesReclassified: 0, committeesCreated: 0, datePrecisionMarked: 0, meetingTimesPlaced: 0, quorumFromSource: 0,
     attendeesScreened: 0, minutesWithAttendanceScreened: 0, skippedApprovedMinutes: 0, sameDayDuplicateGroups: 0, examples: [],
   };
   const example = (kind: string, id: unknown, before?: unknown, after?: unknown) => {
@@ -133,6 +136,7 @@ export async function repairImportedPortable(
   };
 
   const meetings = await ctx.db.query("meetings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
+  const organizationZone = organizationTimeZone(await ctx.db.get(societyId, "societies") as any);
   const minutesRows = await ctx.db.query("minutes").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
   const minutesById = new Map(minutesRows.map((row: any) => [String(row._id), row]));
   const minutesByMeeting = new Map<string, any[]>();
@@ -258,7 +262,7 @@ export async function repairImportedPortable(
         // of AGM and Board meetings need a human split, not a relabel.
       }
     }
-    const date = String(meeting.scheduledAt ?? "").slice(0, 10);
+    const date = (meetingCalendarDate(meeting) ?? "");
     const bodyKey = bodyKeyForMeeting({ ...meeting, type, committeeId }, committee);
     const groupKey = `${date}::${bodyKey}`;
     byDayBody.set(groupKey, (byDayBody.get(groupKey) ?? 0) + 1);
@@ -277,7 +281,19 @@ export async function repairImportedPortable(
         example("meetingTitle", meeting._id, meeting.title, title);
       }
     }
-    if (opts.datePrecision && !meeting.scheduledAtPrecision && isDateOnlyPlaceholder(meeting.scheduledAt)) {
+    // X-04: a date-only imported meeting whose source states an unambiguous local start time
+    // ("7:00 p.m.") gets the real instant in the organization's zone; the local text is kept.
+    const placed = opts.datePrecision && organizationZone && meeting.localStartText && !meeting.timeZone && isDateOnlyPlaceholder(meeting.scheduledAt)
+      && (meeting.scheduledAtPrecision ?? "date") === "date"
+      ? importedMeetingTime({ meetingDate: date, localStartText: meeting.localStartText, localEndText: meeting.localEndText }, meeting.scheduledAt, { defaultTimeZone: organizationZone })
+      : undefined;
+    if (placed?.scheduledAtPrecision === "datetime") {
+      patch.scheduledAt = placed.scheduledAt;
+      patch.scheduledAtPrecision = "datetime";
+      patch.timeZone = placed.timeZone;
+      report.meetingTimesPlaced += 1;
+      example("meetingTime", meeting._id, `${date} (${meeting.localStartText})`, placed.scheduledAt);
+    } else if (opts.datePrecision && !meeting.scheduledAtPrecision && isDateOnlyPlaceholder(meeting.scheduledAt)) {
       patch.scheduledAtPrecision = "date";
       report.datePrecisionMarked += 1;
     }
@@ -376,7 +392,7 @@ export async function repairImportedPortable(
   }
 
   const changed = report.motionsRederived + report.motionsOutcomeTextKept + report.embeddedMotionsSynced + report.legacyEmbeddedCleared + report.sectionTitlesCleaned
-    + report.agendaTitlesCleaned + (report.agendaNamesCleaned ?? 0) + (report.agendaOnlyStatusesFixed ?? 0) + report.meetingTitlesCleaned + report.meetingBodiesReclassified + report.datePrecisionMarked + report.quorumFromSource + report.attendeesScreened;
+    + report.agendaTitlesCleaned + (report.agendaNamesCleaned ?? 0) + (report.agendaOnlyStatusesFixed ?? 0) + report.meetingTitlesCleaned + report.meetingBodiesReclassified + report.datePrecisionMarked + report.meetingTimesPlaced + report.quorumFromSource + report.attendeesScreened;
   if (write && changed > 0) {
     await ctx.db.insert("activity", {
       societyId,

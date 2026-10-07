@@ -334,3 +334,27 @@
     white-space: normal;
   }
 }
+
+// Policies register (X-02): badge groups wrap inside a bounded cell so the
+// table fits a 1440 px window without horizontal scroll.
+.policies-table__badges {
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 240px;
+}
+
+.policies-table__counts {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (min-width: 761px) {
+  .table-wrap > .table.policies-table {
+    width: 100%;
+  }
+  .table.policies-table td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+  }
+}

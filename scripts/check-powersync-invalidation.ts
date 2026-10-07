@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { writeFileSync } from "node:fs";
 import { makeFunctionReference } from "convex/server";
 import { createFixture, fixtureIssuer } from "../experiments/offline-convex/fixture";
 import { withMeetingDownloadInvalidation } from "../convex/lib/offlineMeetingInvalidation";
 import { uuidPattern } from "../shared/offline/meetingProtocol";
+import { writeTrackedReport } from "./lib/writeTrackedReport.mjs";
 
 const f = await createFixture({
   "./documents.js": () => import("../convex/documents"),
@@ -176,6 +176,6 @@ await check("Feature-disabled deployments cannot issue download authority or acc
     await assert.rejects(() => owner.query(f.meetingDownloads, { societyId: f.ids.societyA }), /DISABLED/);
   } finally { process.env.OFFLINE_MEETING_PREPARATION_ENABLED = "1"; }
 });
-writeFileSync("artifacts/offline/production-invalidation-results.json", JSON.stringify({ completedAt: new Date().toISOString(), passed: results.length, results,
+writeTrackedReport("artifacts/offline/production-invalidation-results.json", JSON.stringify({ completedAt: new Date().toISOString(), passed: results.length, results,
   runtime: "Native Convex transaction oracle using production exports and actual scheduled mutations", limits: ["Identity transport injected by convex-test; live production broker replication tested separately", "Trusted internal identity disable/end-date writes exercise the same native writer hook without exposing an operator API", "Workspace limits remain 50 memberships and 100 selected meeting aggregates", "Direct admin-key database changes are repaired by the one-minute cron, not intercepted"] }, null, 2) + "\n");
 console.log(`${results.length} production meeting invalidation groups passed.`);

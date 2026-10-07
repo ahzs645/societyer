@@ -89,6 +89,8 @@ export type ContinuityPeriod = {
   foundCount: number;
   evidence: EvidenceRef[];
   note?: string;
+  /** The next step that resolves this period (e.g. confirm directors imported from a source roster). */
+  action?: { label: string; href: string };
   mark?: { id: string; status: string; reason?: string; evidenceDocumentIds?: string[] };
 };
 
@@ -496,11 +498,14 @@ function evaluateFinancialStatement(period: ExpectedPeriod, snapshot: Continuity
   return { status: "record_missing" as ContinuityStatus, foundCount: 0, evidence: [anchor], note: "No financial statements for the fiscal year before this AGM" };
 }
 
+/** Directors imported from source files stay "NeedsReview" until a person confirms them. */
+export const UNCONFIRMED_DIRECTOR_STATUS = "NeedsReview";
+
 function directorsInYear(snapshot: ContinuitySnapshot, year: number, currentYear: number) {
   const start = `${year}-01-01`;
   const end = `${year}-12-31`;
   return snapshot.directors.filter((director) => {
-    if (year === currentYear && director.status && director.status !== "Active") return false;
+    if (year === currentYear && director.status && director.status !== "Active" && director.status !== UNCONFIRMED_DIRECTOR_STATUS) return false;
     const termStart = dateOnly(director.termStart);
     const termEnd = dateOnly(director.termEnd);
     if (termStart && termStart > end) return false;
@@ -514,22 +519,47 @@ function directorName(director: SnapshotDirector) {
   return `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim() || "Director";
 }
 
+const CONFIRM_DIRECTORS_ACTION = { label: "Confirm directors", href: "/app/directors" };
+
+/**
+ * X-05: directors still marked NeedsReview (imported from a roster, consent or
+ * registry filing) are neither counted as confirmed nor reported as missing:
+ * when they would complete the requirement the period is `source_only` with a
+ * "Confirm directors" action, so the gap reads "unconfirmed", not "missing".
+ */
 function evaluateDirectors(expectation: EffectiveExpectation, period: ExpectedPeriod, snapshot: ContinuitySnapshot) {
   const year = Number(period.periodKey);
-  const directors = directorsInYear(snapshot, year, yearOf(snapshot.today));
-  const evidence = directors.slice(0, 20).map((director) => ({ table: "directors", id: director._id, label: directorName(director), date: dateOnly(director.termStart), status: director.consentOnFile ? "consent" : "no consent" }));
-  if (!directors.length) return { status: "record_missing" as ContinuityStatus, foundCount: 0, evidence, note: `No director register entries cover ${year}` };
+  const inYear = directorsInYear(snapshot, year, yearOf(snapshot.today));
+  const confirmed = inYear.filter((director) => director.status !== UNCONFIRMED_DIRECTOR_STATUS);
+  const unconfirmed = inYear.filter((director) => director.status === UNCONFIRMED_DIRECTOR_STATUS);
+  const evidence = [
+    ...confirmed.slice(0, 20).map((director) => ({ table: "directors", id: director._id, label: directorName(director), date: dateOnly(director.termStart), status: director.consentOnFile ? "consent" : "no consent" })),
+    ...unconfirmed.slice(0, 20).map((director) => ({ table: "directors", id: director._id, label: `${directorName(director)} (unconfirmed)`, date: dateOnly(director.termStart), status: "unconfirmed" })),
+  ];
+  const awaiting = (count: number) => `${count} director${count === 1 ? "" : "s"} from source files await${count === 1 ? "s" : ""} confirmation`;
+  if (!inYear.length) return { status: "record_missing" as ContinuityStatus, foundCount: 0, evidence, note: `No director register entries cover ${year}` };
   if (expectation.kind === "director_count") {
     const minimum = expectation.rule.minimumCount ?? 3;
-    const count = new Set(directors.map(directorName)).size;
-    return count >= minimum
-      ? { status: "satisfied" as ContinuityStatus, foundCount: count, evidence }
-      : { status: "record_missing" as ContinuityStatus, foundCount: count, evidence, note: `${count} of ${minimum} directors recorded` };
+    const count = new Set(confirmed.map(directorName)).size;
+    const withUnconfirmed = new Set(inYear.map(directorName)).size;
+    if (count >= minimum) return { status: "satisfied" as ContinuityStatus, foundCount: count, evidence };
+    if (unconfirmed.length && withUnconfirmed >= minimum) {
+      return { status: "source_only" as ContinuityStatus, foundCount: count, evidence, note: `${count} of ${minimum} directors confirmed; ${awaiting(unconfirmed.length)}`, action: CONFIRM_DIRECTORS_ACTION };
+    }
+    return {
+      status: "record_missing" as ContinuityStatus, foundCount: count, evidence,
+      note: `${count} of ${minimum} directors recorded${unconfirmed.length ? `; ${awaiting(unconfirmed.length)}` : ""}`,
+      ...(unconfirmed.length ? { action: CONFIRM_DIRECTORS_ACTION } : {}),
+    };
   }
-  const missing = directors.filter((director) => !director.consentOnFile);
-  return missing.length
-    ? { status: "record_missing" as ContinuityStatus, foundCount: directors.length - missing.length, evidence, note: `${missing.length} director(s) without consent evidence` }
-    : { status: "satisfied" as ContinuityStatus, foundCount: directors.length, evidence };
+  const missing = confirmed.filter((director) => !director.consentOnFile);
+  if (missing.length) {
+    return { status: "record_missing" as ContinuityStatus, foundCount: confirmed.length - missing.length, evidence, note: `${missing.length} director(s) without consent evidence${unconfirmed.length ? `; ${awaiting(unconfirmed.length)}` : ""}` };
+  }
+  if (unconfirmed.length) {
+    return { status: "source_only" as ContinuityStatus, foundCount: confirmed.length, evidence, note: awaiting(unconfirmed.length), action: CONFIRM_DIRECTORS_ACTION };
+  }
+  return { status: "satisfied" as ContinuityStatus, foundCount: confirmed.length, evidence };
 }
 
 function evaluateInsurance(expectation: EffectiveExpectation, period: ExpectedPeriod, snapshot: ContinuitySnapshot) {
@@ -570,7 +600,7 @@ export function evaluateContinuity(
     const bodyKey = bodyKeyFor(expectation);
     const meetings = expectation.kind === "agm" || expectation.kind === "meeting" ? meetingsForExpectation(expectation, snapshot.meetings) : [];
     const periods = expandPeriods(expectation, range.fromYear, range.toYear).map((period): ContinuityPeriod => {
-      let result: { status: ContinuityStatus; foundCount: number; evidence: EvidenceRef[]; note?: string; dueDate?: string };
+      let result: { status: ContinuityStatus; foundCount: number; evidence: EvidenceRef[]; note?: string; dueDate?: string; action?: { label: string; href: string } };
       switch (expectation.kind) {
         case "agm":
         case "meeting":
@@ -613,10 +643,12 @@ export function evaluateContinuity(
         evidence: result.evidence,
         status: result.status,
         ...(result.note ? { note: result.note } : {}),
+        ...(result.action ? { action: result.action } : {}),
       };
       if (mark) {
         out.mark = { id: mark._id, status: mark.status, reason: mark.reason, evidenceDocumentIds: mark.evidenceDocumentIds };
         if ((PERIOD_MARK_STATUSES as readonly string[]).includes(mark.status)) out.status = mark.status as ContinuityStatus;
+        delete out.action;
         out.note = mark.reason ? `Marked ${mark.status.replace(/_/g, " ")}: ${mark.reason}` : `Marked ${mark.status.replace(/_/g, " ")}`;
         for (const documentId of mark.evidenceDocumentIds ?? []) out.evidence.push({ table: "documents", id: documentId, label: "Attached evidence", status: "attached" });
         if (mark.meetingId) out.evidence.push({ table: "meetings", id: mark.meetingId, label: "Linked meeting", status: "attached" });

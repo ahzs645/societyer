@@ -23,6 +23,7 @@ type RepairReport = {
   meetingBodiesReclassified: number;
   committeesCreated: number;
   datePrecisionMarked: number;
+  meetingTimesPlaced?: number;
   quorumFromSource: number;
   attendeesScreened: number;
   minutesWithAttendanceScreened: number;
@@ -41,6 +42,7 @@ const ROWS: Array<[keyof RepairReport, string]> = [
   ["meetingBodiesReclassified", "Board-typed meetings moved to the committee their source names"],
   ["committeesCreated", "Committees created for those meetings"],
   ["datePrecisionMarked", "Meetings marked date-only (no invented 12:00 UTC time)"],
+  ["meetingTimesPlaced", "Meetings given their stated local start time in the organization's time zone"],
   ["quorumFromSource", "Quorum recorded where the source states it (pending review)"],
   ["attendeesScreened", "Role words, organizations and headings removed from attendee lists (kept as evidence)"],
 ];
