@@ -102,6 +102,18 @@ now copied (`detachString`).
   for any register page fed by imports.
 - `shared/portable/localRowStore.ts` exports `jsonClone`.
 
+## Known issues outside this package
+
+- `tests/interface-operations.spec.ts` "inventory creation and staged import
+  parsing" already failed on the integration branch (it clicks the disabled
+  "Create session" button with invalid JSON). The button now stays enabled and
+  explains invalid JSON, mixed organizations and the ownership check; the
+  spec's second step still expects a bundle without declared ownership to be
+  staged without ticking the ownership confirmation, which this package keeps
+  as a safeguard. The operations package should tick the checkbox in the spec.
+- `npm run test:interface-route-coverage` still reports the people package's
+  `/app/people-directory/:id` and `/app/people-history` (no new routes here).
+
 ## Deferred
 
 - Insurance "renewal overdue" badges on superseded historic policies (listed in
