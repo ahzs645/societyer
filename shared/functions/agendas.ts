@@ -590,13 +590,17 @@ function cleanMinutesSection(section: any) {
   return clean;
 }
 
+// Every field the minutes action-item validator carries. The agenda re-sync
+// runs after each section save; dropping a field here silently erased the
+// action's status, its people-directory owner and its task link.
+const ACTION_ITEM_KEPT_FIELDS = ["assignee", "assigneePersonId", "dueDate", "status", "sourceStatus", "taskId"] as const;
+
 function cleanActionItem(actionItem: any) {
   const clean: Record<string, unknown> = {
     text: String(actionItem?.text ?? ""),
     done: !!actionItem?.done,
   };
-  if (actionItem?.assignee !== undefined) clean.assignee = actionItem.assignee;
-  if (actionItem?.dueDate !== undefined) clean.dueDate = actionItem.dueDate;
+  for (const key of ACTION_ITEM_KEPT_FIELDS) if (actionItem?.[key] !== undefined) clean[key] = actionItem[key];
   return clean;
 }
 
@@ -622,8 +626,25 @@ function cleanMotion(motion: any) {
   if (motion?.adoptsMinutesId !== undefined) clean.adoptsMinutesId = motion.adoptsMinutesId;
   if (motion?.name !== undefined) clean.name = motion.name;
   if (motion?.decidedBy !== undefined) clean.decidedBy = motion.decidedBy;
+  // Person links, dissent, source wording and override notes (A1/A11/C1/C13/
+  // G-04). syncMotionsForMinutes replaces the motion row with what it is
+  // given, so anything left out here was erased by every section save.
+  for (const key of MOTION_KEPT_FIELDS) if (motion?.[key] !== undefined) clean[key] = motion[key];
   return clean;
 }
+
+const MOTION_KEPT_FIELDS = [
+  "tags",
+  "movedByPersonId",
+  "secondedByPersonId",
+  "abstainedBy",
+  "opposedBy",
+  "dissentDocumentId",
+  "sourceLocator",
+  "sourceOutcomeText",
+  "outcomeOverrideNote",
+  "sourceExternalIds",
+] as const;
 
 function sectionHasDetails(section: any) {
   return !!(
