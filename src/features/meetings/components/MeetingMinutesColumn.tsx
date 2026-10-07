@@ -173,7 +173,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       <span className="agenda-item-meta">
         {parts.map((part) => <span key={part}>{part}</span>)}
         {canEditAgenda && (
-          <button type="button" className="btn-action btn-action--icon" onClick={() => setAgendaDetailsItem(record)} title="Agenda item details" aria-label={`Details for ${entry.title}`}>
+          <button type="button" className="btn-action btn-action--icon agenda-item-meta__edit" onClick={() => setAgendaDetailsItem(record)} title="Agenda item details (number, requested action, time, consent, presenter)" aria-label={`Details for ${entry.title}`}>
             <Pencil size={10} />
           </button>
         )}

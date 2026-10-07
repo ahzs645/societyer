@@ -338,13 +338,35 @@
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
 }
+.meeting-minutes-agenda-list li {
+  position: relative;
+}
 .agenda-item-meta {
-  display: inline-flex;
+  display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-left: 6px;
+  padding-right: 28px;
   font-size: var(--fs-xs);
   color: var(--text-tertiary);
+  &:not(:has(> span)) {
+    padding-right: 0;
+  }
+}
+.agenda-item-meta__edit {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.meeting-minutes-agenda-list li:hover > .agenda-item-meta > .agenda-item-meta__edit,
+.agenda-item-meta__edit:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .agenda-item-meta__edit {
+    opacity: 0.6;
+  }
 }
 
 /* Action items */
