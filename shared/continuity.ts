@@ -68,6 +68,8 @@ export type EffectiveExpectation = {
   severity: ExpectationSeverity | string;
   origin: ExpectationOrigin | string;
   ruleKey?: string;
+  /** Key the expectation had while implicit (rule key or `committee:<id>`); marks made then still apply. */
+  implicitKey?: string;
   citation?: string;
   caveat?: string;
   status: string;
@@ -106,7 +108,17 @@ export type SnapshotDirector = { _id: string; firstName?: string; lastName?: str
 export type SnapshotInsurance = { _id: string; kind?: string; policySeriesKey?: string; policyNumber?: string; insurer?: string; startDate?: string; endDate?: string; status?: string };
 export type SnapshotSourceSignal = { table: string; id: string; date: string; bodyKey?: string; infoType?: string; label: string };
 export type SnapshotMark = { _id: string; expectationKey: string; periodKey: string; status: string; reason?: string; evidenceDocumentIds?: string[]; meetingId?: string };
-export type SnapshotCommittee = { _id: string; name: string; status?: string };
+export type SnapshotCommittee = {
+  _id: string;
+  name: string;
+  status?: string;
+  /** Structured cadence set on the committee (committee page, "Body, cadence and mandate"). */
+  cadenceRule?: CadenceRule;
+  /** First date the cadence applies: the earliest mandate version, else the first meeting. */
+  cadenceFrom?: string;
+  /** Last day the cadence applies: the end of the latest mandate version, when every version has ended. */
+  cadenceTo?: string;
+};
 export type SnapshotMinutesText = { minutesId: string; meetingId: string; heldAt: string; text: string };
 
 export type ContinuitySnapshot = {
@@ -176,9 +188,52 @@ export function inceptionYear(snapshot: Pick<ContinuitySnapshot, "society" | "me
  * rule applies implicitly until a stored row with the same `ruleKey` takes
  * over (an archived stored row switches the rule off).
  */
+export function committeeExpectationKey(committeeId: string) {
+  return `committee:${committeeId}`;
+}
+
+const INACTIVE_COMMITTEE_STATUSES = new Set(["inactive", "archived", "dissolved", "closed"]);
+const TRACKED_COMMITTEE_FREQUENCIES = new Set(["monthly", "quarterly", "per_year_count", "calendar_year", "annual"]);
+
+/**
+ * A committee whose structure has a recurring cadence is tracked like a stored
+ * meeting expectation until someone stores one for it (which then takes over;
+ * an archived stored row switches it off).
+ */
+export function committeeCadenceExpectations(
+  committees: readonly SnapshotCommittee[] | undefined,
+  stored: readonly Pick<EffectiveExpectation, "committeeId" | "bodyKind">[],
+): EffectiveExpectation[] {
+  const covered = new Set(stored.filter((row) => row.bodyKind === "committee" && row.committeeId).map((row) => String(row.committeeId)));
+  const out: EffectiveExpectation[] = [];
+  for (const committee of committees ?? []) {
+    const rule = committee.cadenceRule;
+    if (!rule || !TRACKED_COMMITTEE_FREQUENCIES.has(String(rule.frequency))) continue;
+    if (covered.has(committee._id) || INACTIVE_COMMITTEE_STATUSES.has(String(committee.status ?? "").toLowerCase())) continue;
+    const key = committeeExpectationKey(committee._id);
+    out.push({
+      key,
+      implicitKey: key,
+      stored: false,
+      title: `${committee.name} meetings`,
+      kind: "meeting",
+      bodyKind: "committee",
+      committeeId: committee._id,
+      rule,
+      ...(committee.cadenceFrom ? { effectiveFrom: committee.cadenceFrom } : {}),
+      ...(committee.cadenceTo ? { effectiveTo: committee.cadenceTo } : {}),
+      severity: "practice",
+      origin: "committee_structure",
+      status: "active",
+      notes: "From the committee's structured cadence.",
+    });
+  }
+  return out;
+}
+
 export function effectiveExpectations(
   stored: readonly EffectiveExpectation[],
-  snapshot: Pick<ContinuitySnapshot, "society" | "meetings" | "today">,
+  snapshot: Pick<ContinuitySnapshot, "society" | "meetings" | "today"> & { committees?: readonly SnapshotCommittee[] },
 ): EffectiveExpectation[] {
   const byRuleKey = new Map(stored.filter((row) => row.ruleKey).map((row) => [row.ruleKey as string, row]));
   const implicit: EffectiveExpectation[] = [];
@@ -208,7 +263,8 @@ export function effectiveExpectations(
       status: "active",
     });
   }
-  return [...implicit, ...stored].filter((row) => row.status === "active");
+  const fromCommittees = committeeCadenceExpectations(snapshot.committees, stored);
+  return [...implicit, ...fromCommittees, ...stored].filter((row) => row.status === "active");
 }
 
 /* --------------------------- period expansion ---------------------------- */
@@ -541,7 +597,11 @@ export function evaluateContinuity(
       if (result.status === "record_missing" && dueDate >= snapshot.today && !["director_count", "director_consent", "insurance_term"].includes(String(expectation.kind))) {
         result = { ...result, status: "upcoming", note: result.note ?? "Not yet due" };
       }
-      const mark = marks.get(`${expectation.key}|${period.periodKey}`);
+      // A mark made while a rule-pack expectation was implicit is keyed by its
+      // rule key; it must survive "Store rule pack" (the stored row's key is its id).
+      const mark = marks.get(`${expectation.key}|${period.periodKey}`)
+        ?? (expectation.ruleKey && expectation.ruleKey !== expectation.key ? marks.get(`${expectation.ruleKey}|${period.periodKey}`) : undefined)
+        ?? (expectation.implicitKey && expectation.implicitKey !== expectation.key ? marks.get(`${expectation.implicitKey}|${period.periodKey}`) : undefined);
       const out: ContinuityPeriod = {
         periodKey: period.periodKey,
         label: period.label,
@@ -572,13 +632,20 @@ export function evaluateContinuity(
 
 const MONTHS: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
 const MONTH_RE = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
+const REFERENCE_PREFIX = `minutes\\s+(?:of|from|dated|for)\\s+(?:the\\s+)?(?:(?:previous\\s+|last\\s+|regular\\s+|special\\s+)?(?:board\\s+|executive\\s+|committee\\s+|annual\\s+general\\s+|general\\s+|agm\\s+)?meeting\\s+(?:of|held\\s+on|on|dated)\\s+)?`;
+// The day must not be the start of a year: "minutes of November 2018" is a
+// month reference, not November 20 (with the year inferred).
 const REFERENCE_RE = new RegExp(
-  `minutes\\s+(?:of|from|dated|for)\\s+(?:the\\s+)?(?:(?:previous\\s+|last\\s+|regular\\s+|special\\s+)?(?:board\\s+|executive\\s+|committee\\s+|annual\\s+general\\s+|general\\s+|agm\\s+)?meeting\\s+(?:of|held\\s+on|on|dated)\\s+)?` +
-    `(?:${MONTH_RE}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+((?:19|20)\\d{2}))?|(\\d{1,2})(?:st|nd|rd|th)?\\s+${MONTH_RE}\\.?,?\\s+((?:19|20)\\d{2})|((?:19|20)\\d{2})-(\\d{2})-(\\d{2}))`,
+  REFERENCE_PREFIX +
+    `(?:${MONTH_RE}\\.?\\s+(\\d{1,2})(?!\\d)(?:st|nd|rd|th)?(?:,?\\s+((?:19|20)\\d{2}))?|(\\d{1,2})(?:st|nd|rd|th)?\\s+${MONTH_RE}\\.?,?\\s+((?:19|20)\\d{2})|((?:19|20)\\d{2})-(\\d{2})-(\\d{2}))`,
   "gi",
 );
 
-export type MinutesReference = { referencedDate: string; excerpt: string; yearInferred: boolean };
+/** "minutes of the May 2019 meeting": a month with no day. */
+const MONTH_REFERENCE_RE = new RegExp(`${REFERENCE_PREFIX}${MONTH_RE}\\.?,?\\s+((?:19|20)\\d{2})(?!\\d)`, "gi");
+
+/** `referencedDate` is `YYYY-MM-DD`, or `YYYY-MM` when `monthOnly`. */
+export type MinutesReference = { referencedDate: string; excerpt: string; yearInferred: boolean; monthOnly?: boolean };
 
 /** Find "minutes of <date>" references in minutes text. */
 export function findMinutesReferences(text: string, citingDate: string): MinutesReference[] {
@@ -617,6 +684,20 @@ export function findMinutesReferences(text: string, citingDate: string): Minutes
     const excerpt = text.slice(start, (match.index ?? 0) + match[0].length + 40).replace(/\s+/g, " ").trim();
     out.push({ referencedDate, excerpt, yearInferred });
   }
+  for (const match of text.matchAll(MONTH_REFERENCE_RE)) {
+    const month = MONTHS[match[1].slice(0, 3).toLowerCase()];
+    const year = Number(match[2]);
+    if (!month || !year) continue;
+    const referencedMonth = `${year}-${pad(month)}`;
+    if (referencedMonth >= citingDate.slice(0, 7) || seen.has(referencedMonth)) continue;
+    // A dated reference to the same month already covers it.
+    if ([...seen].some((date) => date.startsWith(`${referencedMonth}-`))) continue;
+    if (daysBetween(`${referencedMonth}-01`, citingDate) > 800) continue;
+    seen.add(referencedMonth);
+    const start = Math.max(0, (match.index ?? 0) - 80);
+    const excerpt = text.slice(start, (match.index ?? 0) + match[0].length + 40).replace(/\s+/g, " ").trim();
+    out.push({ referencedDate: referencedMonth, excerpt, yearInferred: false, monthOnly: true });
+  }
   return out;
 }
 
@@ -644,15 +725,24 @@ export function resolveCrossReferences(texts: readonly SnapshotMinutesText[], sn
     byDate.set(date, [...(byDate.get(date) ?? []), meeting]);
   }
   const gaps = new Map<string, CrossReferenceGap>();
-  for (const entry of texts) {
+  const references = texts.flatMap((entry) => {
     const citingDate = dateOnly(entry.heldAt);
-    for (const reference of findMinutesReferences(entry.text, citingDate)) {
-      const candidates = [-2, -1, 0, 1, 2].flatMap((offset) => byDate.get(addDays(reference.referencedDate, offset)) ?? []).filter((meeting) => meeting._id !== entry.meetingId);
+    return findMinutesReferences(entry.text, citingDate).map((reference) => ({ entry, citingDate, reference }));
+  });
+  // Dated references first, so a month-only citation of the same meeting adds nothing.
+  references.sort((a, b) => Number(Boolean(a.reference.monthOnly)) - Number(Boolean(b.reference.monthOnly)));
+  for (const { entry, citingDate, reference } of references) {
+    {
+      const candidates = reference.monthOnly
+        ? snapshot.meetings.filter((meeting) => dateOnly(meeting.scheduledAt).startsWith(`${reference.referencedDate}-`) && meeting._id !== entry.meetingId)
+        : [-2, -1, 0, 1, 2].flatMap((offset) => byDate.get(addDays(reference.referencedDate, offset)) ?? []).filter((meeting) => meeting._id !== entry.meetingId);
       const withMinutes = candidates.find((meeting) => index.minutesByMeeting.has(meeting._id) && index.classOf.get(meeting._id) !== "cancelled");
       if (withMinutes) continue;
       // One gap per referenced meeting: an inferred year or a typo can put
       // several citations of the same meeting a day or two apart.
-      if ([-2, -1, 0, 1, 2].some((offset) => gaps.has(addDays(reference.referencedDate, offset)))) continue;
+      if (reference.monthOnly
+        ? [...gaps.keys()].some((date) => date.startsWith(reference.referencedDate))
+        : [-2, -1, 0, 1, 2].some((offset) => gaps.has(addDays(reference.referencedDate, offset)))) continue;
       const matched = candidates.find((meeting) => index.classOf.get(meeting._id) !== "cancelled");
       const mark = marks.get(reference.referencedDate);
       const gap: CrossReferenceGap = {
@@ -663,7 +753,7 @@ export function resolveCrossReferences(texts: readonly SnapshotMinutesText[], sn
         citingDate,
         excerpt: reference.excerpt.slice(0, 300),
         status: "record_missing",
-        note: matched ? "Meeting recorded, but its minutes are missing" : `No meeting or minutes recorded for ${reference.referencedDate}${reference.yearInferred ? " (year inferred)" : ""}`,
+        note: matched ? "Meeting recorded, but its minutes are missing" : `No meeting or minutes recorded ${reference.monthOnly ? "in" : "for"} ${reference.referencedDate}${reference.yearInferred ? " (year inferred)" : ""}`,
         ...(matched ? { matchedMeetingId: matched._id } : {}),
       };
       if (mark) {

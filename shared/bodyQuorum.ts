@@ -128,3 +128,54 @@ export function bodyQuorumRuleIssues(rows: unknown): string[] {
   });
   return issues;
 }
+
+export const QUORUM_RULE_TYPE_LABELS: Record<string, string> = {
+  majority: "Majority (more than half)",
+  all_members: "All members",
+  fixed: "Fixed number present",
+  percentage: "Percentage",
+};
+
+export const QUORUM_COUNT_BASIS_LABELS: Record<string, string> = {
+  voting_members: "voting members",
+  directors_in_office: "directors in office",
+  committee_members: "committee members",
+};
+
+/** Plain-language summary of a quorum rule, e.g. "Majority of committee members (at least 3)". */
+export function describeQuorumRule(rule: QuorumRuleLike | null | undefined, body?: MeetingBodyKind): string {
+  if (!rule?.quorumType) return "Not set";
+  const basis = QUORUM_COUNT_BASIS_LABELS[rule.countBasis || (body ? defaultCountBasis(body) : "")] ?? "members";
+  const minimum = rule.quorumMinimumCount ? ` (at least ${rule.quorumMinimumCount})` : "";
+  if (rule.quorumType === "fixed") return `${rule.quorumValue ?? "?"} present`;
+  if (rule.quorumType === "majority") return `Majority of ${basis}${minimum}`;
+  if (rule.quorumType === "all_members") return `All ${basis}`;
+  if (rule.quorumType === "percentage") return `${rule.quorumValue ?? "?"}% of ${basis}${minimum}`;
+  return rule.quorumType;
+}
+
+/** Problems with one quorum rule as entered in a form (empty when valid). */
+export function quorumRuleProblems(rule: QuorumRuleLike | null | undefined): string[] {
+  if (!rule?.quorumType) return [];
+  const problems: string[] = [];
+  if (!(QUORUM_RULE_TYPES as readonly string[]).includes(rule.quorumType)) problems.push("Choose a quorum type.");
+  const value = rule.quorumValue;
+  if ((rule.quorumType === "fixed" || rule.quorumType === "percentage") && !(typeof value === "number" && Number.isFinite(value) && value > 0)) {
+    problems.push(rule.quorumType === "fixed" ? "Enter how many people must be present." : "Enter a percentage above 0.");
+  }
+  if (rule.quorumType === "fixed" && typeof value === "number" && value > 0 && !Number.isInteger(value)) problems.push("A fixed quorum must be a whole number.");
+  if (rule.quorumType === "percentage" && typeof value === "number" && value > 100) problems.push("A percentage cannot exceed 100.");
+  const minimum = rule.quorumMinimumCount;
+  if (minimum != null && (!Number.isInteger(minimum) || minimum < 0)) problems.push("The minimum must be a whole number of 0 or more.");
+  return problems;
+}
+
+/** Keep only the fields that apply to the chosen quorum type. */
+export function cleanQuorumRule(rule: QuorumRuleLike): QuorumRuleLike {
+  const out: QuorumRuleLike = { quorumType: rule.quorumType };
+  if ((rule.quorumType === "fixed" || rule.quorumType === "percentage") && typeof rule.quorumValue === "number") out.quorumValue = rule.quorumValue;
+  if ((rule.quorumType === "majority" || rule.quorumType === "percentage") && typeof rule.quorumMinimumCount === "number" && rule.quorumMinimumCount > 0) out.quorumMinimumCount = rule.quorumMinimumCount;
+  if (rule.quorumType !== "fixed" && rule.countBasis) out.countBasis = rule.countBasis;
+  if (rule.notes?.trim()) out.notes = rule.notes.trim().slice(0, 500);
+  return out;
+}

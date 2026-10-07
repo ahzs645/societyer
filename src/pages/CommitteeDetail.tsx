@@ -1,3 +1,4 @@
+import { calendarDateKey } from "../lib/calendarDates";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
@@ -218,7 +219,7 @@ export function CommitteeDetailPage() {
               <BuildRostersButton societyId={society._id} disabled={!canWrite} createMissingCommittees={false} label="Add from roster sheets…" />
               <button className="btn btn--accent btn--sm" disabled={!canWrite} onClick={() => {
                 if (!canWrite) return;
-                setMemberForm({ name: "", email: "", role: "Member", directorId: "", personId: "", representedOrganization: "", joinedAt: new Date().toISOString().slice(0, 10), leftAt: "", reviewStatus: "verified" });
+                setMemberForm({ name: "", email: "", role: "Member", directorId: "", personId: "", representedOrganization: "", joinedAt: calendarDateKey(new Date()), leftAt: "", reviewStatus: "verified" });
                 setMemberDrawer(true);
               }}>
                 <Plus size={12} /> Add member
