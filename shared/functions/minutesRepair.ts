@@ -35,7 +35,8 @@ import { requirePermissionPortable } from "./permissions";
 import { syncMotionsForMinutes, resolveMinutesMotions } from "./minutes";
 import { classifyMotionOutcome, storedRawMotionOutcome } from "../motionOutcome";
 import { bodyKeyForMeeting, cleanMeetingTitle, inferMeetingBody, isFilenameOrGenericMeetingTitle, stripTablePipes } from "../meetingBody";
-import { isDateOnlyPlaceholder } from "../meetingDates";
+import { isDateOnlyPlaceholder, meetingCalendarDate } from "../meetingDates";
+import { agendaOnlyMeetingStatus } from "../meetingStatus";
 import { quorumStatementFromText } from "../quorumStatement";
 import { screenAttendanceList } from "../attendanceNames";
 import { resolveImportCommittee } from "./importSessionHelpers/importMeetingApply";
@@ -65,6 +66,8 @@ export type RepairImportedReport = {
   agendaTitlesCleaned: number;
   /** Agendas still named after the imported file ("2016-07-31 X.doc section 7 agenda"). */
   agendaNamesCleaned?: number;
+  /** Meetings evidenced only by an agenda/script whose status was "Draft" or "Held". */
+  agendaOnlyStatusesFixed?: number;
   meetingTitlesCleaned: number;
   meetingBodiesReclassified: number;
   committeesCreated: number;
@@ -121,7 +124,7 @@ export async function repairImportedPortable(
   const now = new Date().toISOString();
   const report: RepairImportedReport = {
     dryRun: Boolean(dryRun), meetingsScanned: 0, minutesScanned: 0, motionsScanned: 0, motionsRederived: 0, motionsOutcomeTextKept: 0,
-    motionsUnrecognized: 0, embeddedMotionsSynced: 0, legacyEmbeddedCleared: 0, sectionTitlesCleaned: 0, agendaTitlesCleaned: 0, agendaNamesCleaned: 0,
+    motionsUnrecognized: 0, embeddedMotionsSynced: 0, legacyEmbeddedCleared: 0, sectionTitlesCleaned: 0, agendaTitlesCleaned: 0, agendaNamesCleaned: 0, agendaOnlyStatusesFixed: 0,
     meetingTitlesCleaned: 0, meetingBodiesReclassified: 0, committeesCreated: 0, datePrecisionMarked: 0, quorumFromSource: 0,
     attendeesScreened: 0, minutesWithAttendanceScreened: 0, skippedApprovedMinutes: 0, sameDayDuplicateGroups: 0, examples: [],
   };
@@ -132,6 +135,8 @@ export async function repairImportedPortable(
   const meetings = await ctx.db.query("meetings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
   const minutesRows = await ctx.db.query("minutes").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect();
   const minutesById = new Map(minutesRows.map((row: any) => [String(row._id), row]));
+  const minutesByMeeting = new Map<string, any[]>();
+  for (const row of minutesRows as any[]) minutesByMeeting.set(String(row.meetingId), [...(minutesByMeeting.get(String(row.meetingId)) ?? []), row]);
   report.meetingsScanned = meetings.length;
   report.minutesScanned = minutesRows.length;
 
@@ -276,6 +281,20 @@ export async function repairImportedPortable(
       patch.scheduledAtPrecision = "date";
       report.datePrecisionMarked += 1;
     }
+    // A meeting known only from its agenda/script is "Held — minutes missing"
+    // once past and Scheduled before, never "Draft" or plain "Held". A
+    // reviewed meeting keeps whatever status the reviewer chose.
+    const meetingMinutes = minutesByMeeting.get(String(meeting._id)) ?? [];
+    const agendaOnly = meetingMinutes.length > 0 && meetingMinutes.every((row: any) =>
+      !isAdopted(row)
+      && ((row.sourceTransposition?.sourceKind && row.sourceTransposition.sourceKind !== "recorded_minutes")
+        || /^No minutes were found for this meeting\./.test(String(row.discussion ?? ""))));
+    if (agendaOnly && (meeting.status === "Draft" || meeting.status === "Held") && meeting.sourceReviewStatus !== "source_reviewed") {
+      const status = agendaOnlyMeetingStatus(meetingCalendarDate(meeting));
+      patch.status = status;
+      report.agendaOnlyStatusesFixed = (report.agendaOnlyStatusesFixed ?? 0) + 1;
+      example("meetingStatus", meeting._id, meeting.status, status);
+    }
     if (Object.keys(patch).length && write) await ctx.db.patch(meeting._id, patch);
     // The meeting's agenda kept the file-name title; name it after the meeting.
     const meetingTitle = String(patch.title ?? meeting.title ?? "");
@@ -357,7 +376,7 @@ export async function repairImportedPortable(
   }
 
   const changed = report.motionsRederived + report.motionsOutcomeTextKept + report.embeddedMotionsSynced + report.legacyEmbeddedCleared + report.sectionTitlesCleaned
-    + report.agendaTitlesCleaned + (report.agendaNamesCleaned ?? 0) + report.meetingTitlesCleaned + report.meetingBodiesReclassified + report.datePrecisionMarked + report.quorumFromSource + report.attendeesScreened;
+    + report.agendaTitlesCleaned + (report.agendaNamesCleaned ?? 0) + (report.agendaOnlyStatusesFixed ?? 0) + report.meetingTitlesCleaned + report.meetingBodiesReclassified + report.datePrecisionMarked + report.quorumFromSource + report.attendeesScreened;
   if (write && changed > 0) {
     await ctx.db.insert("activity", {
       societyId,

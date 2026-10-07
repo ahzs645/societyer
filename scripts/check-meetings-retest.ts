@@ -16,6 +16,7 @@ import { alignSectionsToAgenda } from "../src/features/meetings/lib/agendaSectio
 import { preferredMeetingToKeep } from "../shared/meetingMerge";
 import { formalMinutesExportBlockers } from "../src/features/meetings/lib/meetingDetailHelpers";
 import { duplicateActionRows, plainActionWording, suggestedActionOwner } from "../src/features/meetings/lib/actionItemTidy";
+import { agendaOnlyMeetingStatus } from "../shared/meetingStatus";
 
 // ---------- rich-editor markdown is shown without escapes ---------------------
 // What the rich editor saves after a no-change round trip of imported text.
@@ -306,3 +307,35 @@ assert.equal(preferredMeetingToKeep([
   { _id: "b", title: "Board meeting" },
 ], (row) => (row._id === "b" ? { approvedAt: "2021-01-01" } : {}))?._id, "b");
 console.log("✓ merge: approved / final copy kept by default");
+
+// ---------- X-01: meetings known only from an agenda ---------------------------
+assert.equal(agendaOnlyMeetingStatus("2019-05-01", "2026-10-07"), "HeldMinutesMissing");
+assert.equal(agendaOnlyMeetingStatus("2026-10-07", "2026-10-07"), "Scheduled", "an agenda for today is not yet held");
+assert.equal(agendaOnlyMeetingStatus("2027-01-12", "2026-10-07"), "Scheduled");
+{
+  const sid = "x01_society";
+  const agendaClient = new StaticConvexClient({ seed: {
+    societies: [{ _id: sid, name: "Agenda Society", jurisdictionCode: "CA-BC", entityType: "society" }],
+    meetings: [
+      { _id: "past_draft", societyId: sid, type: "Board", title: "Board meeting", scheduledAt: "2019-05-01", scheduledAtPrecision: "date", electronic: false, status: "Draft", attendeeIds: [] },
+      { _id: "future_held", societyId: sid, type: "Board", title: "Board meeting", scheduledAt: "2099-05-01", scheduledAtPrecision: "date", electronic: false, status: "Held", attendeeIds: [] },
+      { _id: "reviewed", societyId: sid, type: "Board", title: "Board meeting", scheduledAt: "2018-05-01", scheduledAtPrecision: "date", electronic: false, status: "Held", sourceReviewStatus: "source_reviewed", attendeeIds: [] },
+      { _id: "real_minutes", societyId: sid, type: "Board", title: "Board meeting", scheduledAt: "2017-05-01", scheduledAtPrecision: "date", electronic: false, status: "Held", attendeeIds: [] },
+    ],
+    minutes: [
+      { _id: "min_past", societyId: sid, meetingId: "past_draft", heldAt: "2019-05-01", attendees: [], absent: [], quorumMet: false, discussion: "", decisions: [], actionItems: [], sourceTransposition: { version: 1, sourceKind: "agenda" } },
+      { _id: "min_future", societyId: sid, meetingId: "future_held", heldAt: "2099-05-01", attendees: [], absent: [], quorumMet: false, discussion: "No minutes were found for this meeting. It is evidenced by agenda.pdf (agenda).", decisions: [], actionItems: [] },
+      { _id: "min_reviewed", societyId: sid, meetingId: "reviewed", heldAt: "2018-05-01", attendees: [], absent: [], quorumMet: false, discussion: "", decisions: [], actionItems: [], sourceTransposition: { version: 1, sourceKind: "agenda" } },
+      { _id: "min_real", societyId: sid, meetingId: "real_minutes", heldAt: "2017-05-01", attendees: [], absent: [], quorumMet: false, discussion: "Called to order.", decisions: [], actionItems: [], sourceTransposition: { version: 1, sourceKind: "recorded_minutes" } },
+    ],
+  } });
+  await agendaClient.whenLocalWorkspaceReady();
+  const report: any = await agendaClient.mutation("minutes:repairImported", { societyId: sid });
+  const statusOf = (id: string) => (agendaClient.exportLocalWorkspaceSnapshot().tables as Record<string, any[]>).meetings.find((row) => row._id === id).status;
+  assert.equal(report.agendaOnlyStatusesFixed, 2);
+  assert.equal(statusOf("past_draft"), "HeldMinutesMissing", "a past agenda-only meeting is held, minutes missing");
+  assert.equal(statusOf("future_held"), "Scheduled", "an agenda-only meeting still ahead is scheduled");
+  assert.equal(statusOf("reviewed"), "Held", "a reviewer's status is kept");
+  assert.equal(statusOf("real_minutes"), "Held", "meetings with recorded minutes are untouched");
+}
+console.log("✓ agenda-only meetings: Held — minutes missing when past, Scheduled otherwise");

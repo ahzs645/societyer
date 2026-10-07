@@ -32,7 +32,7 @@ for(const engine of ['memory','local-store']) {
  assert.deepEqual(aligned.map((row:any)=>row._id),saved.sections.map((section:any)=>section.agendaItemId));
  assert.equal(saved.sections.find((section:any)=>section.title==='Adoption of Agenda').agendaItemId,'agenda_adoption','matched existing agenda identity survives');
  assert.equal(saved.sourceTransposition.agendaAlignment,'source_baseline_matched');assert.ok(saved.sourceTransposition.originalAgendaItems.some((row:any)=>row.title==='Sam Sample'));
- assert.ok(!await db.get('agenda_bad_roster'),'spurious roster scaffold removed from active agenda');assert.equal(saved.sourceTransposition.originalSources[0].text,original);assert.equal((await db.get('meeting_draft'))!.status,'Draft');
+ assert.ok(!await db.get('agenda_bad_roster'),'spurious roster scaffold removed from active agenda');assert.equal(saved.sourceTransposition.originalSources[0].text,original);assert.equal((await db.get('meeting_draft'))!.status,'HeldMinutesMissing');
  const motion:any=await db.get('source_motion');assert.equal(motion.status,'Draft');assert.equal(motion.outcome,undefined,'a scripted CARRIED is not a vote outcome');
  assert.equal((await runtime.runMutation('minutes:transposeSource',{id:'minute_draft'}) as any).skipped,'already_transposed');
  await assert.rejects(()=>runtime.runMutation('minutes:upsertFromDraft',{societyId,meetingId:'meeting_draft',heldAt:'2016-11-22',attendees:[],absent:[],quorumMet:false,discussion:'Replace recorded content',sections:[],motions:[],decisions:[],actionItems:[]}),/recorded content|Adopted minutes are frozen/);

@@ -22,7 +22,7 @@ const owner=t.withIdentity({subject:'source-owner',issuer});
 await owner.mutation(api.minutes.transposeSources,{societyId:ids.societyId,entries:[{id:ids.minuteId}]});
 const result=await owner.query(api.minutes.getByMeeting,{meetingId:ids.meetingId});
 assert.equal(result.sections[0].sourceKind,'script');assert.equal(result.sections[0].sourceEvidence.decisionState,'proposed');assert.match(result.sourceTransposition.originalSources[0].text,/private scripted/);
-assert.equal((await t.run(ctx=>ctx.db.get(ids.meetingId)))!.status,'Draft');
+assert.equal((await t.run(ctx=>ctx.db.get(ids.meetingId)))!.status,'HeldMinutesMissing');
 const draftMotion=await t.run(ctx=>ctx.db.get(ids.motionId));assert.equal(draftMotion!.status,'Draft');assert.equal(draftMotion!.outcome,undefined);assert.equal(draftMotion!.history!.length,2);assert.equal(draftMotion!.history![0].outcome,'Carried','prior extraction status remains in appended audit history');
 const editedSections=[...result.sections,{title:'Later recorder note',discussion:'Recorder-added XYZ',decisions:[],actionItems:[]}];
 await owner.mutation(api.minutes.update,{id:ids.minuteId,patch:{sections:editedSections}});

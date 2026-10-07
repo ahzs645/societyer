@@ -18,6 +18,7 @@ type RepairReport = {
   sectionTitlesCleaned: number;
   agendaTitlesCleaned: number;
   agendaNamesCleaned?: number;
+  agendaOnlyStatusesFixed?: number;
   meetingTitlesCleaned: number;
   meetingBodiesReclassified: number;
   committeesCreated: number;
@@ -36,6 +37,7 @@ const ROWS: Array<[keyof RepairReport, string]> = [
   ["agendaTitlesCleaned", "Agenda item titles with “| ” table artifacts cleaned"],
   ["meetingTitlesCleaned", "File-name or generic meeting titles replaced (originals kept as source titles)"],
   ["agendaNamesCleaned", "Agendas still named after the imported file renamed after their meeting"],
+  ["agendaOnlyStatusesFixed", "Meetings known only from an agenda marked “Held — minutes missing” (or Scheduled if still ahead)"],
   ["meetingBodiesReclassified", "Board-typed meetings moved to the committee their source names"],
   ["committeesCreated", "Committees created for those meetings"],
   ["datePrecisionMarked", "Meetings marked date-only (no invented 12:00 UTC time)"],

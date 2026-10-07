@@ -35,6 +35,8 @@ import {
 } from "../proceduralMotions";
 import { motionRowToEmbedded } from "../minutesMotions";
 import { classifyMotionOutcome } from "../motionOutcome";
+import { agendaOnlyMeetingStatus } from "../meetingStatus";
+import { meetingCalendarDate } from "../meetingDates";
 import { assertMotionVotes } from "../motionValidation";
 import { normalizeActionItemStatusFields } from "../actionItemStatus";
 
@@ -649,7 +651,10 @@ export async function transposeSourcePortable(ctx: PortableMutationCtx, {id,sour
     const meeting = await getOwned(ctx,"meetings", minutes.meetingId,societyId);
     const explanation = "Source is an agenda, script or template. Proposed business is not evidence that the meeting was held or motions passed.";
     const notes = String(meeting.sourceReviewNotes ?? "");
-    await ctx.db.patch(meeting._id,{status:"Draft",sourceReviewStatus:"imported_needs_review",sourceReviewNotes:notes.includes(explanation) ? notes : [notes,explanation].filter(Boolean).join("\n\n")});
+    // The agenda shows the meeting was called, not held: past → "Held — minutes
+    // missing", otherwise Scheduled (never a stray "Draft" or "Held").
+    const status = meeting.status === "Cancelled" ? "Cancelled" : agendaOnlyMeetingStatus(meetingCalendarDate(meeting as any));
+    await ctx.db.patch(meeting._id,{status,sourceReviewStatus:"imported_needs_review",sourceReviewNotes:notes.includes(explanation) ? notes : [notes,explanation].filter(Boolean).join("\n\n")});
     await ctx.db.patch(id,{quorumMet:false,quorumStatus:"not_recorded"});
     // Keep the native identity, provenance and prior audit history. A source
     // script is a draft wording object, not a motion actually moved in a room.
