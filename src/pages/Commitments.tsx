@@ -222,7 +222,8 @@ export function CommitmentsPage() {
       return;
     }
     try {
-      const dueDate = row.nextDueDate ? subtractDays(row.nextDueDate, row.noticeLeadDays ?? 14) : undefined;
+      // A negative lead time would schedule preparation after the due date.
+      const dueDate = row.nextDueDate ? subtractDays(row.nextDueDate, Math.max(0, row.noticeLeadDays ?? 14)) : undefined;
       const sourceTitle = documentsById.get(String(row.sourceDocumentId))?.title;
       await createTask({
         societyId: society._id,
@@ -426,9 +427,10 @@ export function CommitmentsPage() {
                     icon: <Trash2 size={14} />,
                     destructive: true,
                     onSelect: async () => {
+                      const openTasks = openTasksByCommitment.get(String(row._id))?.length ?? 0;
                       const ok = await confirm({
                         title: "Delete commitment?",
-                        message: `"${row.title}" and ${eventsByCommitment.get(String(row._id))?.length ?? 0} completion record(s) will be removed.`,
+                        message: `"${row.title}", ${eventsByCommitment.get(String(row._id))?.length ?? 0} completion record(s) and ${openTasks} open preparation task(s) will be removed. Completed tasks are kept.`,
                         confirmLabel: "Delete",
                         tone: "danger",
                       });

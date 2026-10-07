@@ -1,3 +1,4 @@
+import { JURISDICTION_WORKSPACE_CONFIGS } from "../../shared/jurisdictionWorkspace";
 import { interfaceRouteReadPermission } from "../../shared/interfaceRouteAccess";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -808,9 +809,14 @@ export function kindLabel(k: string) {
     case "GSTHST":
       return "GST/HST return";
     default:
-      return k;
+      return ALL_FILING_KIND_LABELS.get(k) ?? k;
   }
 }
+
+/** Every jurisdiction's filing kind code -> human label (e.g. BCSocietyAnnualReport). */
+const ALL_FILING_KIND_LABELS = new Map(
+  JURISDICTION_WORKSPACE_CONFIGS.flatMap((config) => config.module.filingKinds.map((definition) => [definition.kind, definition.label] as const)),
+);
 
 export function renderFilingStatus(f: any) {
   if (f.status === "Filed") return <Badge tone="success">Filed</Badge>;

@@ -378,6 +378,28 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         config: {
           options: [
             { value: "RegistryRecord", label: "Registry record", color: "gray" },
+            // Stored filing kind codes (shared/jurisdictionWorkspace.ts), so
+            // the table shows labels instead of raw enums (G-17).
+            { value: "AnnualReport", label: "Annual report", color: "blue" },
+            { value: "BCSocietyAnnualReport", label: "BC society annual report", color: "blue" },
+            { value: "BCCompanyAnnualReport", label: "BC company annual report", color: "blue" },
+            { value: "BCExtraProvincialAnnualReport", label: "BC extra-provincial annual report", color: "blue" },
+            { value: "ChangeOfDirectors", label: "Change of directors", color: "purple" },
+            { value: "ChangeOfAddress", label: "Change of address", color: "teal" },
+            { value: "BylawAmendment", label: "Bylaw amendment", color: "purple" },
+            { value: "ConstitutionAlteration", label: "Constitution alteration", color: "purple" },
+            { value: "FederalAnnualReturn", label: "Federal annual return", color: "blue" },
+            { value: "FederalIscUpdate", label: "Federal ISC update", color: "amber" },
+            { value: "FederalDirectorChange", label: "Federal director change", color: "purple" },
+            { value: "FederalRegisteredOfficeChange", label: "Federal registered office change", color: "teal" },
+            { value: "OntarioInitialReturn", label: "Ontario initial return", color: "blue" },
+            { value: "OntarioAnnualReturn", label: "Ontario annual return", color: "blue" },
+            { value: "OntarioNoticeOfChange", label: "Ontario notice of change", color: "teal" },
+            { value: "T2", label: "CRA T2", color: "green" },
+            { value: "T1044", label: "CRA T1044 (NPO)", color: "green" },
+            { value: "T3010", label: "CRA T3010 (charity)", color: "green" },
+            { value: "T4", label: "T4 / T4A", color: "green" },
+            { value: "GSTHST", label: "GST/HST return", color: "green" },
             { value: "Annual Report", label: "Annual Report", color: "blue" },
             { value: "Statement of Directors", label: "Statement of Directors", color: "purple" },
             { value: "Charity Return", label: "Charity Return", color: "green" },

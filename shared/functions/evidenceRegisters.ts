@@ -125,7 +125,19 @@ export async function promoteBoardRoleToDirectorPortable(
   await requireSocietyMembership(ctx, candidate.societyId);
   await requirePermissionPortable(ctx, candidate.societyId, "directors:write");
   const assignment = await getOwned(ctx, "boardRoleAssignments", args.assignmentId, candidate.societyId);
+  if (assignment.directorId) throw new Error(`${assignment.personName} was already promoted to the director register.`);
   const name = splitName(assignment.personName);
+  const sourced = assignmentHasSource(assignment);
+  // A person who is already an active director is not added twice (G-21).
+  const directors = await ctx.db
+    .query("directors")
+    .withIndex("by_society", (q) => q.eq("societyId", candidate.societyId))
+    .collect();
+  const norm = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const duplicate = directors.find((director) =>
+    director.status === "Active" && !director.resignedAt &&
+    norm(`${director.firstName} ${director.lastName}`) === norm(assignment.personName));
+  if (duplicate) throw new Error(`${assignment.personName} is already an active director on the register.`);
   const directorId = await ctx.db.insert("directors", {
     societyId: assignment.societyId,
     memberId: assignment.memberId,
@@ -141,15 +153,22 @@ export async function promoteBoardRoleToDirectorPortable(
     status: cleanText(args.status) || "Active",
     notes: appendReviewNote(
       args.notes,
-      `Promoted from board role evidence ${String(assignment._id)}. Review source evidence before treating as final registry data.`,
+      sourced
+        ? `Promoted from board role evidence ${String(assignment._id)}. Review source evidence before treating as final registry data.`
+        : `Promoted from manually entered board role ${String(assignment._id)} with NO source document. Attach the appointment evidence (minutes or resolution) before relying on this entry.`,
     ),
   });
+  // Promotion copies the role into the register; it is not verification. The
+  // assignment keeps its review status (G-21: unsourced records became Verified).
   await ctx.db.patch(args.assignmentId, {
     directorId,
-    status: assignment.status === "Observed" ? "Verified" : assignment.status,
-    notes: appendReviewNote(assignment.notes, `Promoted to director register as ${String(directorId)}.`),
+    notes: appendReviewNote(assignment.notes, `Promoted to director register as ${String(directorId)}${sourced ? "" : " without source evidence"}.`),
   });
   return directorId;
+}
+
+export function assignmentHasSource(assignment: any) {
+  return (assignment.sourceDocumentIds?.length ?? 0) > 0 || (assignment.sourceExternalIds?.length ?? 0) > 0 || Boolean(assignment.importedFrom);
 }
 
 export async function finishFinancePaperlessReviewPortable(

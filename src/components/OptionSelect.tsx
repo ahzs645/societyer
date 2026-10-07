@@ -34,10 +34,13 @@ type OptionMultiSelectProps = {
   values?: string[];
   onChange: (values: string[]) => void;
   rows?: number;
+  /** Option values to hide unless already selected (e.g. internal codes that
+   *  duplicate a human option, such as "CA-BC" beside "British Columbia"). */
+  hideValues?: string[];
 };
 
-export function OptionMultiSelect({ label, setName, values = [], onChange, rows = 5 }: OptionMultiSelectProps) {
-  const options = optionChoices(setName, values);
+export function OptionMultiSelect({ label, setName, values = [], onChange, rows = 5, hideValues = [] }: OptionMultiSelectProps) {
+  const options = optionChoices(setName, values).filter((option) => !hideValues.includes(option.value) || values.includes(option.value));
   return (
     <Field label={label}>
       <select

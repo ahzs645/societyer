@@ -46,11 +46,16 @@ export function FilingsPage() {
   const jurisdictionCopy = jurisdictionDisplayCopy(society);
   const jurisdictionModule = jurisdictionModuleContract(society);
   const jurisdictionFilingKinds = filingKindDefinitions(society);
+  // The legacy generic "AnnualReport" kind duplicates the jurisdiction's own
+  // annual report kind (e.g. BC society annual report); offer only one (G-17).
+  const hasSpecificAnnualReport = jurisdictionFilingKinds.some((definition) => /AnnualReport$/.test(definition.kind) && definition.kind !== "AnnualReport");
   const filingKindOptions = [
-    ...jurisdictionFilingKinds.map((definition) => ({
-      value: definition.kind,
-      label: definition.label,
-    })),
+    ...jurisdictionFilingKinds
+      .filter((definition) => !(hasSpecificAnnualReport && definition.kind === "AnnualReport"))
+      .map((definition) => ({
+        value: definition.kind,
+        label: definition.label,
+      })),
     ...TAX_FILING_KINDS.map((kind) => ({ value: kind, label: kindLabel(kind) })),
   ];
   const actingUserId = useCurrentUserId() ?? undefined;
@@ -64,6 +69,7 @@ export function FilingsPage() {
   const [importingRegistry, setImportingRegistry] = useState(false);
   const [saving, setSaving] = useState(false);
   const [markingFiled, setMarkingFiled] = useState(false);
+  const [viewFiled, setViewFiled] = useState<any | null>(null);
   const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip");
   const documents = useQuery(api.documents.list, society ? { societyId: society._id } : "skip");
   const filingGuidance = useQuery(
@@ -174,6 +180,14 @@ export function FilingsPage() {
   };
   const save = async () => {
     if (!canWrite || saving) return;
+    if (!String(form?.periodLabel ?? "").trim()) {
+      toast.error("Filing not saved", "Enter the period this filing covers (for example 2026 or FY2025-26).");
+      return;
+    }
+    if (!form?.dueDate) {
+      toast.error("Filing not saved", "Choose the due date.");
+      return;
+    }
     setSaving(true);
     try {
       await create({ societyId: society._id, ...form, submittedByUserId: actingUserId });
@@ -221,7 +235,14 @@ export function FilingsPage() {
     }
   };
 
-  const records = (filings ?? []) as any[];
+  // Unfiled filings past their due date read "Overdue" here, as they do on the
+  // dashboard, instead of a stale stored "Upcoming" (G-17).
+  const todayKey = calendarDateKey(new Date());
+  const records = ((filings ?? []) as any[]).map((filing) =>
+    filing.status !== "Filed" && filing.status !== "Attested" && filing.dueDate && String(filing.dueDate).slice(0, 10) < todayKey
+      ? { ...filing, status: "Overdue" }
+      : filing,
+  );
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
@@ -265,10 +286,13 @@ export function FilingsPage() {
           objectMetadata={tableData.objectMetadata}
           hydratedView={tableData.hydratedView}
           records={records}
-          onRecordClick={canWrite ? (_recordId, r) => {
-            if (r.status === "Filed") return;
+          onRecordClick={(_recordId, r) => {
+            if (r.status === "Filed" || r.status === "Attested" || !canWrite) {
+              setViewFiled(r);
+              return;
+            }
             openMarkFiled(r as Doc<"filings">);
-          } : undefined}
+          }}
           onUpdate={canWrite ? async ({ recordId, fieldName, value }) => {
             if (fieldName === "status" && value === "Filed") {
               const filing = filings?.find((candidate) => String(candidate._id) === recordId);
@@ -302,7 +326,7 @@ export function FilingsPage() {
                   {jurisdictionFilingKinds.some((definition) => definition.kind === r.kind && definition.botSupported) && (
                     <button
                       className="btn btn--sm"
-                      onClick={() => setBotFor({ id: r._id, label: `${r.kind}: ${r.periodLabel ?? r.dueDate}` })}
+                      onClick={() => setBotFor({ id: r._id, label: [kindLabel(r.kind), r.periodLabel || r.dueDate].filter(Boolean).join(": ") })}
                       title="Prepare a BC society filing for manual submission"
                     disabled={!canWrite}
                    >
@@ -323,7 +347,7 @@ export function FilingsPage() {
                     onClick={async () => {
                       const ok = await confirm({
                         title: "Delete filing?",
-                        message: `Permanently remove "${r.kind}: ${r.periodLabel ?? r.dueDate}". This can't be undone. Use it only for filings created in error — already-filed records can't be deleted.`,
+                        message: `Permanently remove "${[kindLabel(r.kind), r.periodLabel || r.dueDate].filter(Boolean).join(": ")}". This can't be undone. Use it only for filings created in error — already-filed records can't be deleted.`,
                         confirmLabel: "Delete",
                         tone: "danger",
                       });
@@ -394,11 +418,40 @@ export function FilingsPage() {
                 <input className="input" value={form.sourceRegistrationId ?? ""} onChange={(e) => setForm({ ...form, sourceRegistrationId: e.target.value })} />
               </Field>
             )}
-            <Field label="Period / label"><input className="input" value={form.periodLabel} onChange={(e) => setForm({ ...form, periodLabel: e.target.value })} /></Field>
+            <Field label="Period / label" required hint="For example 2026, FY2025-26 or 2026 AGM"><input className="input" value={form.periodLabel} onChange={(e) => setForm({ ...form, periodLabel: e.target.value })} /></Field>
             <Field label="Due date">
               <DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
             </Field>
             <Field label="Notes"><MarkdownEditor rows={4} value={form.notes ?? ""} onChange={(markdown) => setForm({ ...form, notes: markdown })} /></Field>
+          </div>
+        )}
+      </Drawer>
+
+      <Drawer
+        open={!!viewFiled}
+        onClose={() => setViewFiled(null)}
+        title={viewFiled ? [kindLabel(viewFiled.kind), viewFiled.periodLabel].filter(Boolean).join(" · ") : "Filing"}
+        footer={<button className="btn" onClick={() => setViewFiled(null)}>Close</button>}
+      >
+        {viewFiled && (
+          <div className="col" style={{ gap: 8 }}>
+            {viewFiled.status === "Filed" || viewFiled.status === "Attested" ? (
+              <InspectorNote title="Filed records are kept as evidence">
+                Filed filings cannot be deleted. To correct a detail, edit the cell in the table; the original submission evidence stays attached.
+              </InspectorNote>
+            ) : (
+              <InspectorNote tone="warn" title="Read-only">You do not have permission to mark this filing filed.</InspectorNote>
+            )}
+            <div><span className="muted">Status:</span> {viewFiled.status}</div>
+            <div><span className="muted">Due:</span> {viewFiled.dueDate ?? "—"}</div>
+            {viewFiled.filedAt && <div><span className="muted">Filed:</span> {viewFiled.filedAt}{viewFiled.dueDate && String(viewFiled.filedAt).slice(0, 10) > String(viewFiled.dueDate).slice(0, 10) ? " (after the due date)" : ""}</div>}
+            {viewFiled.submissionMethod && <div><span className="muted">Method:</span> {viewFiled.submissionMethod}</div>}
+            {viewFiled.confirmationNumber && <div><span className="muted">Confirmation:</span> {viewFiled.confirmationNumber}</div>}
+            {viewFiled.feePaidCents != null && <div><span className="muted">Fee paid:</span> ${(viewFiled.feePaidCents / 100).toFixed(2)}</div>}
+            {viewFiled.evidenceNotes && <div><span className="muted">Evidence notes:</span> {viewFiled.evidenceNotes}</div>}
+            {viewFiled.receiptDocumentId && (
+              <div><Link to={`/app/documents/${viewFiled.receiptDocumentId}`}>Open receipt document</Link></div>
+            )}
           </div>
         )}
       </Drawer>
@@ -430,6 +483,15 @@ export function FilingsPage() {
                   !!completeDraft.evidenceNotes?.trim();
                 if (!completeDraft.filedAt || !completeDraft.submissionMethod || !hasEvidence) {
                   toast.error("Add filed date, method, and at least one evidence item before marking filed");
+                  return;
+                }
+                const feeCents = dollarInputToCents(completeDraft.feePaidDollars);
+                if (feeCents != null && (!Number.isFinite(feeCents) || feeCents < 0)) {
+                  toast.error("The fee paid cannot be negative");
+                  return;
+                }
+                if (completeDraft.filedAt > calendarDateKey(new Date())) {
+                  toast.error("The filed date cannot be in the future");
                   return;
                 }
                 setMarkingFiled(true);

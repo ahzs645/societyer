@@ -24,6 +24,10 @@ export function GovernanceRegistersPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [addForm, setAddForm] = useState<any>(null);
+  const directors = useQuery(
+    api.directors.list,
+    society && permissions.can("directors:read") ? { societyId: society._id } : "skip",
+  ) as any[] | undefined;
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
@@ -45,19 +49,37 @@ export function GovernanceRegistersPage() {
 
   const promoteRole = async (row: any) => {
     if (!canPromote) return;
+    const sourced = (row.sourceDocumentIds?.length ?? 0) > 0 || (row.sourceExternalIds?.length ?? 0) > 0 || Boolean(row.importedFrom);
+    const samePosition = (directors ?? []).filter((director: any) =>
+      director.status === "Active" && !director.resignedAt &&
+      String(director.position ?? "").trim().toLowerCase() === String(row.roleTitle ?? "").trim().toLowerCase() &&
+      !/^director$/i.test(String(row.roleTitle ?? "")));
     const ok = await confirm({
       title: "Promote to director register?",
-      message: `${row.personName} will be added to the current directors register using this source-backed role assignment.`,
-      confirmLabel: "Promote",
+      message: [
+        `${row.personName} will be added to the current directors register as ${row.roleTitle || "Director"}.`,
+        sourced
+          ? "The role assignment has source evidence; review it before relying on the register."
+          : "This role assignment has NO source document. It will be promoted as unverified; attach the appointment minutes or resolution afterwards.",
+        samePosition.length
+          ? `Conflict: ${samePosition.map((director: any) => `${director.firstName} ${director.lastName}`.trim()).join(", ")} already holds ${row.roleTitle} on the register. Resign or update them if this replaces them.`
+          : "",
+      ].filter(Boolean).join(" "),
+      confirmLabel: sourced && !samePosition.length ? "Promote" : "Promote anyway",
+      tone: sourced && !samePosition.length ? undefined : "warn",
     });
     if (!ok) return;
-    await promoteBoardRole({
-      assignmentId: row._id,
-      position: row.roleTitle,
-      status: "Active",
-      notes: "Promoted from governance register review.",
-    });
-    toast.success("Director register updated", row.personName);
+    try {
+      await promoteBoardRole({
+        assignmentId: row._id,
+        position: row.roleTitle,
+        status: "Active",
+        notes: "Promoted from governance register review.",
+      });
+      toast.success("Director register updated", row.personName);
+    } catch (error) {
+      toast.error("Could not promote", error instanceof Error ? error.message : String(error));
+    }
   };
 
   return (
