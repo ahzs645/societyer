@@ -17,6 +17,7 @@ import { extractionEvidenceVerified, markEvidenceVerified } from "../shared/inta
 import { extractPdf } from "../shared/intake/extract/pdf";
 import { buildDocx, buildPdf } from "./lib/intake-synthetic-fixtures";
 import { extractDocx } from "../shared/intake/extract/docx";
+import { versionPolicyRows } from "../shared/intake/promotionClasses";
 import { takeBulkBatch } from "../shared/functions/intakeReview";
 import { verifyRecord } from "../shared/intake/verify";
 import { clusterFiles, nameDateSignature } from "../shared/intake/cluster";
@@ -243,6 +244,15 @@ assert.ok(cells.some((text) => /presented the budget\s+variance report/.test(tex
 assert.ok(cells.some((text) => /ACTION: Treasurer to circulate/.test(text)), "the continued table keeps the action column");
 assert.ok(!/Branch Casey Lark/.test(twoColumn.text), "a tabbed list row reaching the margin does not swallow the next row");
 
+// ------------------------------------------------------------ policy versions promoted one document at a time
+const register = [{ policyName: "Expense Approval Policy", effectiveDate: "2019-03-03" }, { policyName: "Travel Policy", policyNumber: "FIN-07", effectiveDate: "2020-01-01" }];
+const laterVersion = versionPolicyRows([{ policyName: "Expense Approval Policy", effectiveDate: "2023-05-01" }], register);
+assert.equal(laterVersion.rows[0]?.policyName, "Expense Approval Policy (2023-05-01)", "another version of a registered policy carries its date");
+assert.equal(versionPolicyRows([{ policyName: "Expense approval policy", effectiveDate: "2019-03-03" }], register).copyOf, "Expense Approval Policy", "the same version again is a copy");
+const numbered = versionPolicyRows([{ policyName: "Travel Policy", policyNumber: "FIN-07", effectiveDate: "2024-01-01" }], register).rows[0];
+assert.equal(numbered?.policyNumber, "FIN-07 (2024-01-01)", "a numbered policy's later version is numbered by its date");
+assert.deepEqual(versionPolicyRows([{ policyName: "Privacy Policy" }], register).rows, [{ policyName: "Privacy Policy" }], "a new policy is unchanged");
+
 // ------------------------------------------------------------ Action | WHO | FOR columns
 const whoTable = await extractDocx(await buildDocx([
   { p: "Operations Committee Minutes" },
@@ -259,4 +269,4 @@ assert.equal(whoMinutes.actionItems[0].assigneeAsWritten?.value, "Drew Moss", "t
 assert.equal(whoMinutes.actionItems[0].due?.value.iso, "2025-06-30", "the FOR cell is the action's due date");
 assert.ok(!(whoMinutes.decisions ?? []).length, "no decision is invented from the action row");
 
-console.log("PASS intake re-transposition: motion grammar, bodies, agenda dates, evidenced meetings, insurance cleanup, evidence rule, policy copies, dated version families, future minutes dates, citations, run people, local directory links, decisions, two-column PDFs, Action/WHO/FOR columns and bulk-accept batches");
+console.log("PASS intake re-transposition: motion grammar, bodies, agenda dates, evidenced meetings, insurance cleanup, evidence rule, policy copies, dated version families, future minutes dates, citations, run people, local directory links, decisions, two-column PDFs, Action/WHO/FOR columns, policy versions and bulk-accept batches");

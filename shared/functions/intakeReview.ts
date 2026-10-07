@@ -32,7 +32,7 @@ import {
 } from "./importSessions";
 import { bodyKeyForMeeting } from "../meetingBody";
 import { buildPromotionBundle, defaultInfoTypeForPath, gapLocatorFrom, matchKey, type MergeTarget, type PromotionFile, type PromotionMode } from "../intake/promotion";
-import { buildClassPromotionBundle, CLASS_PROMOTION, classProvenanceTargets, directorMatchKey, RECORD_KIND_TABLE } from "../intake/promotionClasses";
+import { buildClassPromotionBundle, CLASS_PROMOTION, classProvenanceTargets, directorMatchKey, RECORD_KIND_TABLE, versionPolicyRows } from "../intake/promotionClasses";
 import { annotateFiscalYearEndChanges, deriveEmbeddedMinutes, linkPolicyAdoptions } from "../intake/classStages";
 import { bodyKeyFor } from "../intake/entities";
 import { normalizePersonKey } from "../intake/names";
@@ -566,6 +566,13 @@ async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: strin
     extraction, reviews, files, runName: run.name,
     context: { asOfISO: at, organizationName: society?.name, existingMeeting, policyAdoption, existingDirectorKeys: new Set(directorByKey.keys()) },
   });
+  // Versions of a policy promoted one document at a time: date the later versions; a repeated version is a copy.
+  if (Array.isArray(build.bundle.policies) && (build.bundle.policies as any[]).length) {
+    const existingPolicies = (await ctx.db.query("policies").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) as any[];
+    const versioned = versionPolicyRows(build.bundle.policies as any[], existingPolicies);
+    if (versioned.copyOf) throw new Error(`A copy of this document is already promoted as the policy "${versioned.copyOf}".`);
+    build.bundle.policies = versioned.rows;
+  }
 
   // Stage and apply through the import-session handlers (same transaction).
   const sessionId = String(await createFromBundlePortable(ctx, { societyId, name: `Intake: ${file.name}`, bundle: build.bundle }));

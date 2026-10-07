@@ -302,3 +302,30 @@ export function classProvenanceTargets(docClass: string, record: Record<string, 
   }
   return { rows, notLanded };
 }
+
+/** Policy identity as the import checks it: policy number, else name (case and punctuation ignored). */
+export function policyIdentityKey(row: { policyNumber?: unknown; policyName?: unknown; name?: unknown }): string {
+  const text = String(row.policyNumber || row.policyName || row.name || "");
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** Another version of a policy that is already in the register (same number or name, another date)
+ * gets its date in the name, as versions of one family do in a bulk import. The same version again
+ * (same identity and date) is a copy: `copyOf` names the existing policy and nothing is written. */
+export function versionPolicyRows(rows: Array<Record<string, any>>, existing: Array<Record<string, any>>): { rows: Array<Record<string, any>>; copyOf?: string } {
+  const out: Array<Record<string, any>> = [];
+  for (const row of rows) {
+    const date = String(row.effectiveDate ?? row.adoptedDate ?? "");
+    const same = existing.filter((policy) => policyIdentityKey(policy) === policyIdentityKey(row));
+    if (!same.length) {
+      out.push(row);
+      continue;
+    }
+    if (same.some((policy) => String(policy.effectiveDate ?? policy.adoptedDate ?? "") === date)) return { rows: [], copyOf: String(same[0].policyName ?? same[0].policyNumber) };
+    const label = date || String(row.reviewDate ?? "") || "another version";
+    const versioned = { ...row, policyName: `${row.policyName} (${label})`.slice(0, 200), ...(row.policyNumber ? { policyNumber: `${row.policyNumber} (${label})` } : {}) };
+    if (existing.some((policy) => policyIdentityKey(policy) === policyIdentityKey(versioned))) return { rows: [], copyOf: String(versioned.policyName) };
+    out.push(versioned);
+  }
+  return { rows: out };
+}

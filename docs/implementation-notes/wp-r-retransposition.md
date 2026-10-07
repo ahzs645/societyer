@@ -122,10 +122,16 @@ fixes and aggregate behaviour only.
   re-verified, not conflicting, at or above the threshold). For class records
   it applies to the record's key facts; clause outlines, statement lines and
   lists are not individually reviewed and remain for a person.
-- Minutes go through intake promotion (field provenance per value); other
-  classes through import sessions (record-level source links). Minutes
-  embedded in packages and meetings evidenced only by an agenda go through
-  import sessions because they have no extraction row of their own.
+- The final staging promotes every class through the intake review: a
+  run-wide bulk accept ("Every document in the run", the bulk-accept rule),
+  then "Promote all ready". Every native record then has field provenance.
+  Only minutes embedded in agendas or packages go through an import session,
+  because they have no extraction row of their own. Meetings evidenced only
+  by an agenda are created when that agenda is promoted. The evidence rule
+  and "Approve evidence-verified" serve that import path and any bulk import.
+- A document with no accepted field is not promoted, even when its class has
+  no required field. Before this rule, "Promote all ready" wrote unreviewed
+  correspondence, agreements, consents, rosters and proxies.
 - A section-apply preflight that finds any blocked record returns the blocked
   ones to Pending (with the reason) and applies nothing; the apply is run
   again for the rest. Meeting materials whose meeting is still pending stay
@@ -141,10 +147,8 @@ fixes and aggregate behaviour only.
 - OCR for scanned PDFs (registry certificates, signed consents, scanned
   annual reports): catalogued, not extracted.
 - `.xps`, `.pages`, `.nib`, design and media files are catalogued only.
-- The integration branch can now promote non-minutes classes through the
-  intake review (field provenance). This re-transposition still stages them
-  through import sessions with the evidence rule. Moving the staging to
-  class promotion needs run-wide bulk accept per class.
+- Minutes embedded in agendas or packages have no extraction row, so they
+  cannot be promoted from the review screen.
 - Fields for what is still a representation gap (agreements, quorum
   head-counts, consensus rules, signing tiers, AGM notice, bylaw cadence and
   term rules, insurance continuity dates).
