@@ -1,4 +1,4 @@
-import {SourceRoleObservations} from "../components/SourceRoleObservations";
+import { BoardRosterCard } from "../features/people/BoardRosterCard";
 import {PersonRecordLinks} from "../components/PersonRecordLinks";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -146,7 +146,7 @@ export function DirectorsPage() {
         <Link to="/app/role-holders">Role holders</Link>.
       </p>
 
-      <SourceRoleObservations societyId={society._id}/>
+      <BoardRosterCard societyId={society._id} activeDirectorCount={active.length} />
       <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Active directors</div>
@@ -328,7 +328,7 @@ export function DirectorsPage() {
                 <Select
                   value={selected.status}
                   onChange={(v) => setSelected({ ...selected, status: v })}
-                  options={["Active", "Resigned", "Removed"].map((s) => ({ value: s, label: s }))}
+                  options={["Active", "NeedsReview", "Resigned", "Removed"].map((s) => ({ value: s, label: s === "NeedsReview" ? "Needs review (from a source roster)" : s }))}
                 />
               </Field>
             </div>

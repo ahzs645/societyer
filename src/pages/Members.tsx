@@ -1,4 +1,5 @@
 import { MembershipEvidenceCard } from "../components/MembershipEvidenceCard";
+import { MembersRepresentativesCard } from "../components/MembersRepresentativesCard";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -181,6 +182,7 @@ export function MembersPage() {
         }
       />
 
+      <MembersRepresentativesCard societyId={society._id} />
       <MembershipEvidenceCard societyId={society._id} />
       {showMetadataWarning ? (
         <RecordTableMetadataEmpty societyId={society?._id} objectLabel="member" />

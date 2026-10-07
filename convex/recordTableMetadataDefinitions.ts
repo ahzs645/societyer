@@ -203,6 +203,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
         config: {
           options: [
             { value: "Active", label: "Active", color: "green" },
+            { value: "NeedsReview", label: "Needs review", color: "amber" },
             { value: "Resigned", label: "Resigned", color: "amber" },
             { value: "Inactive", label: "Inactive", color: "gray" },
           ],
@@ -1991,6 +1992,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
             { value: "Monthly", label: "Monthly", color: "purple" },
             { value: "Quarterly", label: "Quarterly", color: "amber" },
             { value: "Ad-hoc", label: "Ad-hoc", color: "gray" },
+            { value: "Unknown", label: "Not set", color: "gray" },
           ],
         },
       },
@@ -2007,6 +2009,7 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
           options: [
             { value: "Active", label: "Active", color: "green" },
             { value: "Inactive", label: "Inactive", color: "gray" },
+            { value: "NeedsReview", label: "Needs review", color: "amber" },
           ],
         },
       },
@@ -3025,6 +3028,8 @@ export const RECORD_TABLE_OBJECTS: SeedObject[] = [
             { value: "InProgress", label: "In progress", color: "blue" },
             { value: "Blocked", label: "Blocked", color: "red" },
             { value: "Done", label: "Done", color: "green" },
+            { value: "Unknown", label: "Unknown (from source)", color: "amber" },
+            { value: "Cancelled", label: "Cancelled", color: "gray" },
           ],
         },
       },
