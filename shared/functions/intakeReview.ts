@@ -41,6 +41,7 @@ import type { DirectoryPerson, OfficeTerm } from "../intake/entities";
 import { reconcileExtractions } from "../intake/reconcile";
 import { reviewStatusAfterTransposition } from "../documentReviewStatus";
 import { buildImportBundle, coverageReport, type IntakeRunResult } from "../intake/bundle";
+import { meetingCalendarDate } from "../meetingDates";
 
 const now = () => new Date().toISOString();
 const clean = (value: unknown, max = 2000) => (typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined);
@@ -232,7 +233,7 @@ export async function mergeCandidates(ctx: PortableQueryCtx, { societyId, extrac
   const body = String(bodyReview?.decision === "edit" ? bodyReview.editedValue : extraction.record?.body?.value ?? "board");
   const wantedKey = body === "board" ? "board" : body === "agm" || body === "members" ? "agm" : body === "sgm" ? "sgm" : "committee";
   const meetings = (await ctx.db.query("meetings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) as any[];
-  const sameDay = meetings.filter((meeting) => String(meeting.scheduledAt ?? "").slice(0, 10) === date);
+  const sameDay = meetings.filter((meeting) => (meetingCalendarDate(meeting) ?? "") === date);
   const candidates: any[] = [];
   for (const meeting of sameDay) {
     const committee = meeting.committeeId ? await ctx.db.get<any>(meeting.committeeId, "committees") : null;
@@ -286,7 +287,7 @@ async function mergeTargetFor(ctx: PortableMutationCtx, societyId: string, meeti
     await ctx.db.patch(minutes._id, { sourceExternalIds: [...(minutes.sourceExternalIds ?? []), fileKey] });
   }
   const committee = meeting.committeeId ? await ctx.db.get<any>(meeting.committeeId, "committees") : null;
-  return { dateKey: String(meeting.scheduledAt).slice(0, 10), meetingType: String(meeting.type ?? "Board"), ...(committee?.name ? { committeeName: committee.name } : {}) };
+  return { dateKey: meetingCalendarDate(meeting) ?? String(meeting.scheduledAt).slice(0, 10), meetingType: String(meeting.type ?? "Board"), ...(committee?.name ? { committeeName: committee.name } : {}) };
 }
 
 type Provenance = { targetTable: string; targetId: string; fieldPath: string; sourceFieldPath?: string; locator: any; value: unknown; decision: string };
@@ -373,7 +374,7 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
     }
     const item = nativeTarget.item;
     if (nativeTarget.table === "meetings") {
-      if (landedValue(nativeTarget.field, (meeting as any)?.[nativeTarget.field], value, merged)) provenance.push({ targetTable: "meetings", targetId: meetingId, fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
+      if (landedValue(nativeTarget.field, nativeTarget.field === "scheduledAt" ? meetingCalendarDate(meeting as any) : (meeting as any)?.[nativeTarget.field], value, merged)) provenance.push({ targetTable: "meetings", targetId: meetingId, fieldPath: nativeTarget.field, locator, value, decision: review.decision, sourceFieldPath: path });
       else notLandedPaths.push(path);
     } else if (nativeTarget.table === "agendaItems" && item) {
       const titleReview = decisions.get(`sections[${item.index}].title`);
@@ -511,7 +512,7 @@ async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: strin
     const bodyKey = bodyKeyFor(String(reviewedValue(extraction, decisions, "bodyLabel") ?? reviewedValue(extraction, decisions, "body") ?? (docClass === "agmMaterial" ? "Annual General Meeting" : "")));
     if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       const wanted = bodyKey === "board" ? "board" : bodyKey === "agm" || bodyKey === "members" ? "agm" : bodyKey === "sgm" ? "sgm" : "committee";
-      const meetings = ((await ctx.db.query("meetings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) as any[]).filter((meeting) => String(meeting.scheduledAt ?? "").slice(0, 10) === date);
+      const meetings = ((await ctx.db.query("meetings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) as any[]).filter((meeting) => (meetingCalendarDate(meeting) ?? "") === date);
       for (const meeting of meetings) {
         const committee = meeting.committeeId ? await ctx.db.get<any>(meeting.committeeId, "committees") : null;
         const key = bodyKeyForMeeting(meeting, committee);

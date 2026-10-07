@@ -5,7 +5,7 @@ import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import { renderAsync } from "docx-preview";
 import { api } from "@/lib/convexApi";
 import { Id } from "../../convex/_generated/dataModel";
-import { useSociety } from "../hooks/useSociety";
+import { setStoredSocietyId, useSocieties, useSociety } from "../hooks/useSociety";
 import { useCurrentUser, useCurrentUserId } from "../hooks/useCurrentUser";
 import { usePermissions } from "../hooks/usePermissions";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
@@ -64,10 +64,13 @@ export function DocumentWorkbenchPage() {
   const society = useSociety();
   const userId = useCurrentUserId() ?? undefined;
   const document = useRecordQuery<any>(api.documents.get, id ? { id: id as Id<"documents"> } : "skip");
-  const latest = useQuery(api.documentVersions.latest, id ? { documentId: id as Id<"documents"> } : "skip");
+  // Panels read the document's versions, comments and signatures once it exists
+  // (a missing or foreign id shows the not-found state, not a failed panel).
+  const documentId = document?._id as Id<"documents"> | undefined;
+  const latest = useQuery(api.documentVersions.latest, documentId ? { documentId } : "skip");
   const legacyUrl = useQuery(api.files.getUrl, document?.storageId ? { storageId: document.storageId } : "skip");
-  const comments = useQuery(api.documentComments.listForDocument, id ? { documentId: id as Id<"documents"> } : "skip");
-  const signatures = useQuery(api.signatures.listForEntity, id ? { entityType: "document", subjectId: id } : "skip");
+  const comments = useQuery(api.documentComments.listForDocument, documentId ? { documentId } : "skip");
+  const signatures = useQuery(api.signatures.listForEntity, documentId ? { entityType: "document", subjectId: String(documentId) } : "skip");
   const markOpened = useMutation(api.documents.markOpened);
   const updateReviewStatus = useMutation(api.documents.updateReviewStatus);
   const createComment = useMutation(api.documentComments.create);
@@ -100,6 +103,14 @@ export function DocumentWorkbenchPage() {
     latestVersionId: latest?._id,
   } : null, [document, latest, provenance]);
 
+  const societies = useSocieties();
+  const documentSocietyId = document?.societyId ? String(document.societyId) : undefined;
+  const canSwitchToDocumentSociety = Boolean(documentSocietyId && societies?.some((candidate: any) => String(candidate._id) === documentSocietyId));
+  useEffect(() => {
+    if (!society || !documentSocietyId || documentSocietyId === String(society._id) || !canSwitchToDocumentSociety) return;
+    setStoredSocietyId(documentSocietyId as Id<"societies">);
+  }, [society?._id, documentSocietyId, canSwitchToDocumentSociety]);
+
   useEffect(() => {
     if (!document || openedRef.current) return;
     openedRef.current = true;
@@ -128,6 +139,9 @@ export function DocumentWorkbenchPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
   if (document === undefined) return <PageLoading />;
+  // P-O1: a document of another organization (a link, the palette, a search hit)
+  // opens in that organization, so every panel reads the right workspace.
+  if (document && documentSocietyId && documentSocietyId !== String(society._id) && canSwitchToDocumentSociety) return <PageLoading />;
   if (document === null) {
     return <RecordNotFound recordLabel="Document" backTo="/app/documents" backLabel="All documents" icon={<FileText size={16} />} />;
   }
@@ -385,7 +399,7 @@ export function DocumentWorkbenchPage() {
         </div>
       </div>
       {/* Who the document names: below the document, not above its title. */}
-      {document && society && <PersonRecordLinks societyId={society._id} recordTable="documents" recordId={document._id} />}
+      {document && society && <PersonRecordLinks societyId={String(document.societyId ?? society._id)} recordTable="documents" recordId={document._id} />}
     </div>
   );
 }

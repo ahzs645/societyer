@@ -58,7 +58,8 @@ test("intake run → review → accept → promote creates a meeting with proven
   await viewSource.click();
   const drawer = page.getByRole("dialog", { name: "Source of this record" });
   await expect(drawer).toContainText("2025-05-13_Board_Minutes_APPROVED.docx");
-  await expect(drawer).toContainText("scheduledAt");
+  await expect(drawer).toContainText("Meeting · Date"); // X-06: human labels, not raw paths
+  await expect(drawer).not.toContainText(/ · (kind|recordStatus|sourceExternalIds)\b/);
   await expect(drawer).toContainText("“May 13, 2025”");
   await expect(drawer).toContainText("edited by reviewer");
   await expect(drawer).toContainText("Committee Room, Northport Civic Centre");
@@ -132,7 +133,8 @@ test("intake reads .doc, promotes a policy and finishes the run with Promote all
   await row.getByTestId("view-source").click();
   const drawer = page.getByRole("dialog", { name: "Source of this record" });
   await expect(drawer).toContainText("Lakeside Expense Approval Policy FIN-07.txt");
-  await expect(drawer).toContainText("policyName");
+  await expect(drawer).toContainText("Policy name");
+  await expect(drawer).not.toContainText("policyName");
 
   // The .doc minutes became a meeting.
   await page.goto("/demo/app/meetings", { waitUntil: "domcontentloaded" });

@@ -121,6 +121,23 @@ export function deriveTerms(observations: Observation[]): Array<{ termStart?: st
 const POSITION = (role?: string) => (role && /president|chair|treasurer|secretary|vice/i.test(role) ? role : "Director");
 
 // ---------------------------------------------------------------- main
+/**
+ * Extracted registry filing type → native filing kind (the BC Societies Online
+ * forms in shared/filingPreparation.ts). A statement of directors lists the
+ * directors in office after a change and is filed with the registry as a
+ * change of directors (X-07), like a notice of change of directors; it is not
+ * an annual report, which has its own AGM-date evidence.
+ */
+export const REGISTRY_FILING_KIND: Record<string, string> = {
+  annual_report: "AnnualReport",
+  statement_of_directors: "ChangeOfDirectors",
+  change_of_directors: "ChangeOfDirectors",
+  change_of_address: "ChangeOfAddress",
+  bylaw_amendment: "BylawAmendment",
+  transition: "Other",
+  other: "Other",
+};
+
 export function classBundleRecords(run: IntakeRunResult, context: { minutesPayloads: Array<Record<string, any>> }): ClassBundle {
   const bundle: ClassBundle = { collections: {}, transposed: new Set(), gaps: [] };
   const byClass = (classes: string[]) => run.extractions.filter((extraction) => classes.includes(extraction.docClass) && !extraction.parentFileKey);
@@ -225,7 +242,9 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
         policyName: (version && !title.includes(version) ? `${title} (${version})` : title).slice(0, 200),
         ...(val(record.policyNumber) ? { policyNumber: val(record.policyNumber) } : {}),
         ...(val(record.governsBody) ? { owner: val(record.governsBody) } : {}),
-        ...(date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? { effectiveDate: date } : {}),
+        // An explicit effective date wins; otherwise the stated adoption date is when it took effect (X-02).
+        ...((dayIso(record.effectiveDate) ?? dayIso(record.adoptedDate)) ? { effectiveDate: dayIso(record.effectiveDate) ?? dayIso(record.adoptedDate) } : date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? { effectiveDate: date } : {}),
+        ...(dayIso(record.adoptedDate) ? { adoptedDate: dayIso(record.adoptedDate) } : {}),
         ...(dayIso(record.reviewDate) ? { reviewDate: dayIso(record.reviewDate) } : {}),
         ...(superseded && next.date && /^\d{4}-\d{2}-\d{2}$/.test(next.date) ? { ceasedDate: next.date } : {}),
         ...(link ? { adoptedAtMeeting: { meetingDate: link.meetingDate, body: link.bodyKey } } : {}),
@@ -504,7 +523,7 @@ export function classBundleRecords(run: IntakeRunResult, context: { minutesPaylo
   }
 
   // 7. Registry filings (one row per filing; confirmations, receipts and copies fold together).
-  const FILING_KIND: Record<string, string> = { annual_report: "AnnualReport", statement_of_directors: "AnnualReport", change_of_directors: "ChangeOfDirectors", change_of_address: "ChangeOfAddress", bylaw_amendment: "BylawAmendment", transition: "Other", other: "Other" };
+  const FILING_KIND = REGISTRY_FILING_KIND;
   const filings = new Map<string, Record<string, any>>();
   for (const extraction of byClass(["registryFiling"])) {
     const record: any = extraction.record;

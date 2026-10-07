@@ -15,6 +15,7 @@ import { requirePermissionPortable } from "../permissions";
 import { insertRepresentationGapFromImport } from "../representationGaps";
 import { transactionImportMappingCandidates } from "../../accountingMappingCandidates";
 import { reconcileDividend } from "../../dividends";
+import { meetingCalendarDate } from "../../meetingDates";
 import {
   HISTORY_ITEM_CATEGORY,
   HISTORY_ITEM_TAG,
@@ -925,7 +926,7 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
       policyName: cleanText(payload.policyName) || cleanText(payload.name) || record.title || "Imported policy",
       policyNumber: cleanText(payload.policyNumber),
       owner: cleanText(payload.owner),
-      effectiveDate: cleanDate(payload.effectiveDate),
+      effectiveDate: policyEffectiveDate(payload),
       reviewDate: cleanDate(payload.reviewDate),
       ceasedDate: cleanDate(payload.ceasedDate),
       // Document links come from this import's own source documents, never
@@ -1641,6 +1642,22 @@ const SECTION_RECORD_HANDLERS: Record<string, SectionRecordHandler> = {
   },
 };
 
+/**
+ * X-02: a policy takes effect when it is adopted unless the source states a
+ * separate effective date. Without an explicit effective date, a stated
+ * adoption date (or the adopting meeting's date) becomes the effective date;
+ * only a full day counts, so "May 2022" never becomes a made-up day.
+ */
+export function policyEffectiveDate(payload: any): string | undefined {
+  const explicit = cleanDate(payload?.effectiveDate);
+  if (explicit) return explicit;
+  const fullDay = (value: unknown) => {
+    const date = cleanDate(typeof value === "object" && value ? (value as any).meetingDate ?? (value as any).date : value);
+    return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
+  };
+  return fullDay(payload?.adoptedDate) ?? fullDay(payload?.adoptedAtISO) ?? fullDay(payload?.adoptedAtMeetingDate) ?? fullDay(payload?.adoptedAtMeeting);
+}
+
 /** C9: resolve "adopted at the May 2022 Board meeting" to native links. */
 async function policyAdoptionLinks(ctx: any, societyId: string, payload: any) {
   const meeting = await resolveMeetingReference(ctx, societyId, payload.adoptedAtMeeting ?? payload.adoptedAtMeetingDate ?? payload.adoptedAt);
@@ -1730,7 +1747,7 @@ async function findExistingMeetingImport(
     .collect();
   const existing = meetings.find(
     (meeting: any) =>
-      String(meeting.scheduledAt ?? "").slice(0, 10) === dateKey &&
+      (meetingCalendarDate(meeting) ?? "") === dateKey &&
       cleanText(meeting.title)?.toLowerCase() === normalizedTitle &&
       meeting.minutesId,
   );
@@ -1759,7 +1776,7 @@ async function resolveMeetingTargetForEvidence(ctx: any, societyId: string, payl
     .collect();
   const matches = meetings.filter(
     (meeting: any) =>
-      String(meeting.scheduledAt ?? "").slice(0, 10) === meetingDate &&
+      (meetingCalendarDate(meeting) ?? "") === meetingDate &&
       normalizeLookupText(meeting.title) === titleKey &&
       meeting.minutesId,
   );
@@ -1916,7 +1933,7 @@ async function sessionRecords(ctx: any, societyId: string, sessionId: string) {
   return docs
     .filter(isImportRecord)
     .map(hydrateRecord)
-    .filter((record) => record.sessionId === sessionId);
+    .filter((record: any) => record.sessionId === sessionId);
 }
 
 async function recordsForSession(ctx: any, sessionId: string) {
@@ -1951,7 +1968,7 @@ async function upsertHistorySources(ctx: any, societyId: string, sourceRecords: 
     let sourceId = null;
     if (source.externalId) {
       const existing = existingSources.find(
-        (candidate) =>
+        (candidate: any) =>
           candidate.externalId === source.externalId &&
           (candidate.externalSystem ?? "paperless") === (source.externalSystem ?? "paperless"),
       );
@@ -2056,7 +2073,7 @@ async function patchSessionUpdatedAt(ctx: any, sessionId: string) {
   const records = (await recordsForSession(ctx, sessionId))
     .filter(isImportRecord)
     .map(hydrateRecord)
-    .filter((record) => record.sessionId === sessionId);
+    .filter((record: any) => record.sessionId === sessionId);
   const summary = summarizeRecords(records);
   await ctx.db.patch(sessionId, {
     content: JSON.stringify({ ...payload, summary, updatedAtISO: new Date().toISOString() }),

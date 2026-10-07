@@ -5,7 +5,7 @@
 
 import { screenAttendanceList, type ScreenedAttendanceName } from "../../attendanceNames";
 import { bodyKeyForMeeting, cleanMeetingTitle, inferMeetingBody, isFilenameOrGenericMeetingTitle, meetingBodyFromImport, slugBody, sourceVersionStatusFromLabel, stripTablePipes, type MeetingBody } from "../../meetingBody";
-import { parseLocalTimeText } from "../../meetingDates";
+import { parseLocalTimeText, meetingCalendarDate } from "../../meetingDates";
 import { classifyMotionOutcome } from "../../motionOutcome";
 import { sanitizeImportedVoteCount } from "../../motionValidation";
 import { requirePermissionPortable } from "../permissions";
@@ -93,7 +93,7 @@ export async function findMeetingByIdentity(
   args: { dateKey: string; bodyKey: string; special?: boolean; identityKey?: string; sourceExternalIds?: string[]; title?: string; bodyBasis?: string },
 ): Promise<{ meetingId: any; minutesId: any } | null> {
   const meetings = await ctx.db.query("meetings").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
-  const sameDay = meetings.filter((meeting: any) => String(meeting.scheduledAt ?? "").slice(0, 10) === args.dateKey && meeting.minutesId);
+  const sameDay = meetings.filter((meeting: any) => (meetingCalendarDate(meeting) ?? "") === args.dateKey && meeting.minutesId);
   if (!sameDay.length) return null;
   // When nothing named a body, an exact title (or source title) match on the
   // same day is still the same meeting, as before body identity existed.
@@ -155,19 +155,34 @@ export function prepareImportedMeeting(payload: any, scheduledAt: string): Prepa
 }
 
 /** A13: date precision, local time text and (when a zone is given) the real instant. */
-export function importedMeetingTime(payload: any, placeholder: string): { scheduledAt: string; scheduledAtPrecision: "date" | "datetime"; localStartText?: string; localEndText?: string; timeZone?: string } {
+export function importedMeetingTime(payload: any, placeholder: string, options: { defaultTimeZone?: string } = {}): { scheduledAt: string; scheduledAtPrecision: "date" | "datetime"; localStartText?: string; localEndText?: string; timeZone?: string } {
   const localStartText = cleanText(payload?.localStartText);
   const localEndText = cleanText(payload?.localEndText);
-  const timeZone = cleanText(payload?.timeZone);
+  const statedTimeZone = cleanText(payload?.timeZone);
   const meetingDate = cleanText(payload?.meetingDate) ?? "";
   const explicitInstant = /T\d{2}:\d{2}/.test(meetingDate);
-  if (explicitInstant) return { scheduledAt: placeholder, scheduledAtPrecision: "datetime", localStartText, localEndText, timeZone };
+  if (explicitInstant) return { scheduledAt: placeholder, scheduledAtPrecision: "datetime", localStartText, localEndText, timeZone: statedTimeZone };
+  const dayPrecision = /^\d{4}-\d{2}-\d{2}$/.test(meetingDate.slice(0, 10)) && /^\d{4}-\d{2}-\d{2}T12:00:00\.000Z$/.test(placeholder);
   const hhmm = parseLocalTimeText(localStartText);
-  if (hhmm && timeZone) {
+  // X-04: without a zone in the source, the organization's own zone (America/Vancouver for a BC
+  // society) places a stated start time — only when the time is unambiguous (am/pm, 24-hour, or
+  // zero-padded) so "7:00" is never guessed as morning.
+  const timeZone = statedTimeZone ?? (dayPrecision && unambiguousLocalTime(localStartText) ? cleanText(options.defaultTimeZone) : undefined);
+  if (hhmm && timeZone && dayPrecision) {
     const instant = zonedTimeToUtc(placeholder.slice(0, 10), hhmm, timeZone);
     if (instant) return { scheduledAt: instant, scheduledAtPrecision: "datetime", localStartText, localEndText, timeZone };
   }
-  return { scheduledAt: placeholder, scheduledAtPrecision: "date", localStartText, localEndText, timeZone };
+  return { scheduledAt: placeholder, scheduledAtPrecision: "date", localStartText, localEndText, timeZone: statedTimeZone };
+}
+
+/** "7:00 p.m.", "19:00", "07:00" or "7 pm" fix the hour; a bare "7:00" or "7" does not. */
+export function unambiguousLocalTime(text: unknown): boolean {
+  const value = String(text ?? "").trim().toLowerCase();
+  const match = /^(\d{1,2})(?:[:.h](\d{2}))?\s*(a\.?\s?m\.?|p\.?\s?m\.?)?/.exec(value);
+  if (!match) return false;
+  if (match[3]) return true;
+  const hour = Number(match[1]);
+  return hour === 0 || hour >= 13 || (match[1].length === 2 && match[1].startsWith("0") && match[2] !== undefined);
 }
 
 /** Convert a local wall-clock time in an IANA zone to a UTC ISO instant. */
