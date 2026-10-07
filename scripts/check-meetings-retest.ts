@@ -387,3 +387,19 @@ assert.equal((fromScratch.match(/>\s*(?:\d+\.\s*)?Adjournment\s*</g) ?? []).leng
 assert.match(fromScratch, /The meeting was adjourned at 7:41 PM/);
 assert.match(fromScratch, /<strong>Motion:<\/strong> That the agenda for this meeting be adopted as presented\./, "the trimmed resolution reads as a sentence");
 console.log("✓ numbered export: quorum counts members only; no repeated motion wording or second Adjournment heading");
+
+// ---------- the first templated meeting has no "previous meeting date" filler ----
+{
+  const sid = "first_meeting_society";
+  const first = new StaticConvexClient({ seed: { societies: [{ _id: sid, name: "First Meeting Society", jurisdictionCode: "CA-BC", entityType: "society" }] } });
+  await first.whenLocalWorkspaceReady();
+  await first.mutation("meetingTemplates:seedDefaults", { societyId: sid });
+  const templates = await first.query("meetingTemplates:list", { societyId: sid }) as any[];
+  const board = templates.find((row) => row.isDefault) ?? templates[0];
+  await first.mutation("meetings:create", { societyId: sid, type: "Board", title: "Board meeting — 2026-10-06", scheduledAt: "2026-10-06T18:00", electronic: false, status: "Held", attendeeIds: [], meetingTemplateId: board._id });
+  const rows = (first.exportLocalWorkspaceSnapshot().tables as Record<string, any[]>);
+  const wording = JSON.stringify([rows.motions?.map((row) => row.text), rows.agendaItems?.map((row) => [row.title, row.motionTemplate, row.details])]);
+  assert.doesNotMatch(wording, /previous meeting date/, "no placeholder date when there is no earlier meeting");
+  assert.match(wording, /minutes of the previous meeting, as (?:circulated|presented)/);
+}
+console.log("✓ templates: the first meeting's adoption motion reads \"the minutes of the previous meeting\"");

@@ -349,8 +349,14 @@ async function buildTemplateContext(
   }
   return {
     context: {
-      previousMeetingTitle: (previous as any)?.title ?? "previous meeting",
+      previousMeetingTitle: (previous as any)?.title ?? "the previous meeting",
       previousMeetingDate: previous?.scheduledAt ? formatLongDate(previous.scheduledAt) : "the previous meeting date",
+      // "{{previousMeetingTitle}} of {{previousMeetingDate}}" with no earlier
+      // meeting on record reads "the previous meeting", not "previous meeting
+      // of the previous meeting date".
+      previousMeetingReference: previous
+        ? `${(previous as any).title ?? "the previous meeting"}${previous.scheduledAt ? ` of ${formatLongDate(previous.scheduledAt)}` : ""}`
+        : "the previous meeting",
       calledToOrderTime: "[time]",
       adjournedAt: "[time]",
     },
@@ -360,7 +366,9 @@ async function buildTemplateContext(
 
 function resolveTemplateText(value: string | undefined, context: Record<string, string>) {
   if (!value) return "";
-  return value.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => context[key] ?? "");
+  return value
+    .replace(/\{\{\s*previousMeetingTitle\s*\}\}\s+(?:of|on|held(?:\s+on)?)\s+\{\{\s*previousMeetingDate\s*\}\}/g, "{{previousMeetingReference}}")
+    .replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => context[key] ?? "");
 }
 
 function formatLongDate(value: string) {
