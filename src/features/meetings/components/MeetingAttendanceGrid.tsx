@@ -199,6 +199,9 @@ export function MeetingAttendanceGrid({
           {counts.quorumCounted}{activeProxyCount ? ` + ${activeProxyCount} proxies` : ""} of {quorumRequired} needed for quorum
         </Badge>
       )}
+      {minutes?.quorumStatus === "confirmed" && quorumRequired != null && counts.quorumCounted + activeProxyCount < quorumRequired && (
+        <Badge tone="warn">Quorum is recorded as met, but only {counts.quorumCounted + activeProxyCount} of {quorumRequired} are counted present — check the attendance</Badge>
+      )}
       {notPersonSuggestions.length > 0 && (
         <Badge tone="warn">{notPersonSuggestions.length} entr{notPersonSuggestions.length === 1 ? "y looks" : "ies look"} like a role, organization or heading</Badge>
       )}

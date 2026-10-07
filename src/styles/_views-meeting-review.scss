@@ -395,6 +395,17 @@
   margin-bottom: 12px;
 }
 
+/* F29: long source ids (google-drive:…) wrap inside the Sources card. */
+.source-document__meta .badge,
+.source-document__title {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.source-document__main {
+  min-width: 0;
+}
+
 @media (max-width: 760px) {
   /* F29: keep the meeting's body, date and place visible on phones. */
   .meeting-detail-page .page__subtitle {
@@ -403,5 +414,23 @@
   }
   .merge-preview__pair {
     grid-template-columns: 1fr;
+  }
+  /* F29: the four stat cards collapse into one compact row on phones. */
+  .meeting-detail-page .meeting-detail-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .meeting-detail-page .meeting-detail-summary > div {
+    padding: 6px 8px;
+  }
+  .meeting-detail-page .meeting-detail-summary span {
+    font-size: 10px;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .meeting-detail-page .meeting-detail-summary strong {
+    font-size: var(--fs-md);
   }
 }

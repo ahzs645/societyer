@@ -27,6 +27,7 @@ import {
 import { Tabs } from "../components/primitives";
 import { MotionBacklogPage } from "./MotionBacklog";
 import { MotionLibraryPage } from "./MotionLibrary";
+import { UnsupportedDetailsBadge } from "../components/UnsupportedDetailsBadge";
 
 const MOTION_STATUSES = ["Backlog", "Draft", "Agenda", "Moved", "Tabled", "Deferred", "Withdrawn", "Voted", "Archived"];
 const MOTION_OUTCOMES = [
@@ -380,6 +381,11 @@ function MotionsTableTab() {
       >
         {form && (
           <div>
+            {editing?._id && (
+              <div style={{ marginBottom: 8 }}>
+                <UnsupportedDetailsBadge table="motions" id={String(editing._id)} />
+              </div>
+            )}
             <Field label="Title (optional)">
               <input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </Field>

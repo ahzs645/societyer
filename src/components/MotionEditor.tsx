@@ -46,6 +46,7 @@ import { NameAutocomplete } from "./NameAutocomplete";
 import { Select, type SelectOption } from "./Select";
 import { Tooltip } from "./Tooltip";
 import { Modal, useConfirm } from "./Modal";
+import { UnsupportedDetailsBadge } from "./UnsupportedDetailsBadge";
 import { PersonPicker, type DirectoryPerson } from "../features/meetings/components/PersonPicker";
 import { matchDirectoryPerson } from "../../shared/meetingAttendanceGrid";
 
@@ -1092,6 +1093,7 @@ function MotionRow({
           )}
           <div className="motion__meta motion__meta--inline">
             {!expanded && <Badge tone={tone as any}>{motion.outcome}</Badge>}
+            {motion.motionId && <UnsupportedDetailsBadge table="motions" id={motion.motionId} />}
           </div>
         </div>
         <div className="motion__actions">

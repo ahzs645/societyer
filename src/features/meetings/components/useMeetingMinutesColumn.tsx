@@ -701,7 +701,16 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     setAgendaItemMenu({ index, top: rect.bottom + gap, left });
   };
 
-  const [openSectionIndexes, setOpenSectionIndexes] = useState<Set<number>>(() => new Set([0, 1]));
+  // F22: open the sections that carry substance (discussion, decisions,
+  // actions), not just the first two (usually 'Call to order' boilerplate).
+  const [openSectionIndexes, setOpenSectionIndexes] = useState<Set<number>>(() => {
+    const substantive = ((minutes?.sections ?? []) as any[])
+      .map((section, index) => ({ index, weight: String(section?.discussion ?? '').trim().length + 80 * ((section?.decisions ?? []).length + (section?.actionItems ?? []).length) }))
+      .filter((row) => row.weight > 120)
+      .slice(0, 4)
+      .map((row) => row.index);
+    return new Set(substantive.length ? substantive : [0, 1]);
+  });
   const sourceDumpSectionIndexes = useMemo(() => new Set<number>(sections.flatMap((section: any, index: number) =>
     sectionEditIndex !== index && unchangedSourceDumpSection(section, minutes?.sourceMeetingRecord) ? [index] : [])), [sections, minutes?.sourceMeetingRecord, sectionEditIndex]);
   const visibleAgendaTree = useMemo(() => agendaTree.filter(entry => {

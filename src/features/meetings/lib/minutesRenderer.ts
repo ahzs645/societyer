@@ -1,5 +1,6 @@
 import { resolveSourceMeetingRecord, changedSourceMinuteSections, type SourceMeetingRecord, type SourceMeetingBlock } from "../../../../shared/sourceMeetingRecord";
 import { isDateOnlyPlaceholder } from "../../../../shared/meetingDates";
+import { screenAttendanceName } from "../../../../shared/attendanceNames";
 import { checkpointResult, decisionReadiness } from "../../../../shared/evidenceReview";
 import type { QuorumCheckpoint } from "../../../../shared/evidenceReview";
 import type { ActionObservation, ImportedSourceVersion } from "../../../../shared/meetingHistory";
@@ -314,7 +315,9 @@ export function getMinutesStyleGaps({
       !!motion.secondedBy,
   );
   const common: MinutesDataGap[] = [
-    gap("Attendance list", minutes.attendees.length > 0, "Present attendees are structured.", "No present attendees are recorded."),
+    // F15: role words, organizations and headings ("Members", "Public Member")
+    // do not make an attendance list ready.
+    gap("Attendance list", minutes.attendees.some((name) => screenAttendanceName(name).kind === "person"), "Present attendees are structured.", minutes.attendees.length ? "Only role words, organizations or headings are listed as present — correct the attendance grid." : "No present attendees are recorded."),
     gap("Agenda items", agendaItems.length > 0, "Agenda headings can drive styled sections.", "Agenda items are not recorded on this meeting."),
     gap("Motions and outcomes", businessMotions.length > 0, "Motions can be rendered as resolutions or vote blocks.", "No structured motions are recorded."),
     gap(
