@@ -29,6 +29,28 @@ export function pipelineOutputFiles(list: FileList | File[] | null | undefined):
   return { run, coverage, extracts };
 }
 
+/** Caches original files for an already imported run (any subfolder of the source can be
+ * chosen, several times): a chosen file matches a run file when its path relative to the
+ * chosen folder is the end of the run file's path and the sizes agree. */
+export async function cacheRunOriginals(runFiles: Array<{ path: string; name: string; sha256?: string; sizeBytes?: number; mimeType?: string }>, chosen: FileList | File[] | null | undefined): Promise<{ matched: number; cached: number }> {
+  const byName = new Map<string, typeof runFiles>();
+  for (const file of runFiles) if (file.sha256) byName.set(file.name, [...(byName.get(file.name) ?? []), file]);
+  let matched = 0;
+  let cached = 0;
+  const seen = new Set<string>();
+  for (const original of Array.from(chosen ?? [])) {
+    const relative = relativePath(original).split("/").slice(1).join("/");
+    const candidate = (byName.get(original.name) ?? []).find((file) => (file.path === relative || file.path.endsWith(`/${relative}`)) && (file.sizeBytes === undefined || file.sizeBytes === original.size));
+    if (!candidate?.sha256) continue;
+    matched++;
+    if (seen.has(candidate.sha256)) continue;
+    seen.add(candidate.sha256);
+    await putOriginal({ sha256: candidate.sha256, blob: original, name: candidate.name, mimeType: candidate.mimeType || original.type || undefined, size: original.size });
+    cached++;
+  }
+  return { matched, cached };
+}
+
 export type ImportProgress = { stage: "read" | "originals" | "stage" | "done"; done: number; total: number; message?: string };
 
 export async function importPipelineOutput(

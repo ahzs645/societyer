@@ -19,7 +19,7 @@ import {
   desktopIntakeBridge, pickDesktopFolder, pickDirectory, selectionFromFileList, summarizeSelection, supportsDirectoryPicker, type IntakeSelection,
 } from "../features/intake/collectFiles";
 import { runIntake, type IntakeProgress, type IntakeStageId } from "../features/intake/runIntake";
-import { importPipelineOutput, pipelineOutputFiles, type ImportProgress, type PipelineOutputFiles } from "../features/intake/importPipelineOutput";
+import { cacheRunOriginals, importPipelineOutput, pipelineOutputFiles, type ImportProgress, type PipelineOutputFiles } from "../features/intake/importPipelineOutput";
 import { clearOriginals, originalsUsage } from "../features/intake/originalsCache";
 import { defaultModelFor, keyStorageLabel, providerHost, readLlmPrefs, readLocalApiKey, storeLocalApiKey, writeLlmPrefs, type LocalLlmProvider } from "../features/intake/localLlm";
 import "../features/intake/intake.css";
@@ -453,6 +453,23 @@ function RunDetailDrawer({ societyId, runId, onClose }: { societyId: string; run
   const [filter, setFilter] = useState("all");
   const shown = (files ?? []).filter((file) => filter === "all" || file.disposition === filter);
   const sent = (log ?? []).filter((entry) => entry.sentToProvider);
+  const toast = useToast();
+  const originalsPicker = useRef<HTMLInputElement>(null);
+  const [caching, setCaching] = useState(false);
+  const addOriginals = async (event: ChangeEvent<HTMLInputElement>) => {
+    const chosen = event.target.files;
+    if (!chosen?.length || !files) return;
+    setCaching(true);
+    try {
+      const result = await cacheRunOriginals(files, Array.from(chosen));
+      toast.success(`${pluralize(result.cached, "original file")} cached on this device`, `${result.matched} of ${chosen.length} chosen files matched this run by path and size. The review viewer and promotion use them.`);
+    } catch (error) {
+      toast.error("Could not cache the originals", error instanceof Error ? error.message : undefined);
+    } finally {
+      setCaching(false);
+      event.target.value = "";
+    }
+  };
   return (
     <Drawer open={Boolean(runId)} onClose={onClose} title={run?.name ?? "Intake run"} size="wide"
       footer={runId ? <Link className="btn btn--accent" to={`/app/intake/${runId}/review`}>Open review</Link> : undefined}>
@@ -482,7 +499,13 @@ function RunDetailDrawer({ societyId, runId, onClose }: { societyId: string; run
           </div>
           {tab === "files" && (
             <>
-              <Select aria-label="Filter by disposition" value={filter} onChange={setFilter} options={[{ value: "all", label: "All dispositions" }, ...Object.keys(run.counts.byDisposition ?? {}).map((key) => ({ value: key, label: key }))]} />
+              <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <Select aria-label="Filter by disposition" value={filter} onChange={setFilter} options={[{ value: "all", label: "All dispositions" }, ...Object.keys(run.counts.byDisposition ?? {}).map((key) => ({ value: key, label: key }))]} />
+                <button type="button" className="btn btn--sm" onClick={() => originalsPicker.current?.click()} disabled={caching || !files} title="Choose the source folder, or any subfolder of it, to keep this run's original files on this device for the viewer and promotion.">
+                  {caching ? <Loader2 size={12} className="spin" /> : <FolderOpen size={12} />} Add original files
+                </button>
+                <input ref={originalsPicker} type="file" multiple hidden aria-label="Choose original source files for this run" data-testid="intake-run-originals-input" onChange={(event) => void addOriginals(event)} {...{ webkitdirectory: "", directory: "" }} />
+              </div>
               <div className="table-wrap">
                 <table className="table intake-detail-table">
                   <thead><tr><th>File</th><th>Disposition</th><th>Class</th><th>Reason</th></tr></thead>
