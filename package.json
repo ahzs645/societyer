@@ -286,7 +286,7 @@
     "intake:audit-meetings": "node --import tsx scripts/audit-meeting-promotion.ts",
     "intake:render-minutes": "node --import tsx scripts/render-intake-minutes.ts",
     "intake:run": "tsx scripts/intake-run.ts",
-    "test:intake-ai": "tsx scripts/check-intake-stages.ts && tsx scripts/check-intake-legacy-doc.ts && tsx scripts/check-intake-ocr.ts && tsx scripts/check-intake-functions.ts && tsx scripts/check-intake-eval.ts && tsx scripts/check-intake-class-eval.ts && tsx scripts/check-intake-agreement-extraction.ts && tsx scripts/check-intake-review.ts && tsx scripts/check-intake-class-promotion.ts && tsx scripts/check-intake-desktop.ts && tsx scripts/check-intake-retransposition.ts",
+    "test:intake-ai": "tsx scripts/check-intake-stages.ts && tsx scripts/check-intake-legacy-doc.ts && tsx scripts/check-intake-ocr.ts && tsx scripts/check-intake-functions.ts && tsx scripts/check-intake-eval.ts && tsx scripts/check-intake-class-eval.ts && tsx scripts/check-intake-agreement-extraction.ts && tsx scripts/check-intake-review.ts && tsx scripts/check-intake-class-promotion.ts && tsx scripts/check-intake-desktop.ts && tsx scripts/check-intake-retransposition.ts && tsx scripts/check-source-pipe-tables.ts",
     "test:intake-retransposition": "tsx scripts/check-intake-retransposition.ts",
     "test:intake-class-promotion": "tsx scripts/check-intake-class-promotion.ts",
     "test:intake-legacy-doc": "tsx scripts/check-intake-legacy-doc.ts",

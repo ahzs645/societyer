@@ -95,6 +95,8 @@ export default defineConfig({
       "pdfjs-dist/legacy/build/pdf.mjs",
       "pdfjs-dist/legacy/build/pdf.worker.mjs",
       "@kenjiuno/msgreader",
+      // OCR in the intake worker (loaded only when a run reads a scanned page).
+      "tesseract.js",
       "@ai-sdk/openai",
       "docx-preview",
     ],
