@@ -99,6 +99,8 @@ const CURRENT_LOCAL_WORKSPACE_SCHEMA_VERSION = 3;
  */
 const CURRENT_LOCAL_STORAGE_LAYOUT = 2;
 const LAYOUT_MIGRATION_CHUNK = 100;
+/** At or above this many rows, persisted projection memos are read by key range. */
+const PROJECTION_RANGE_READ_MIN = 256;
 
 // Keep a useful diagnostic window without treating the journal as durable history.
 const LOCAL_CHANGE_JOURNAL_CAP = 2_000;
@@ -360,6 +362,19 @@ export class LocalDexieRowStore implements LocalRowStore {
     const out = new Map<string, { rev: string; value: unknown }>();
     if (!this.db || !this.projectionNamespace || !ids.length) return out;
     try {
+      if (ids.length >= PROJECTION_RANGE_READ_MIN) {
+        // A list's memos (documents: ~11k rows) are read with one key-range
+        // getAll instead of one IndexedDB get per row, which dominated a cold
+        // visit to Documents (SU-12).
+        const prefix = projectionKey(key, table, "");
+        const wanted = new Set(ids);
+        const rows = await this.db.projections.where("key").startsWith(prefix).toArray();
+        for (const row of rows) {
+          const id = row.key.slice(prefix.length);
+          if (wanted.has(id)) out.set(id, { rev: row.rev, value: row.value });
+        }
+        return out;
+      }
       const rows = await this.db.projections.bulkGet(ids.map((id) => projectionKey(key, table, id)));
       rows.forEach((row, index) => {
         if (row) out.set(ids[index], { rev: row.rev, value: row.value });

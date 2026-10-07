@@ -1,13 +1,15 @@
 import {useState} from 'react';import {useMutation,useQuery} from 'convex/react';import {api} from '@/lib/convexApi';import {usePermissions} from '@/hooks/usePermissions';import {useToast} from '@/components/Toast';import {Field} from './ui';import {EvidenceRowsEditor,type EvidenceColumn} from './EvidenceRowsEditor';
 const sources:EvidenceColumn[]=[{key:'sourceUrl',label:'Source URL'},{key:'sourceReference',label:'Page / section citation'}];
 export function MembershipEvidenceCard({societyId,memberId}:{societyId:string;memberId?:string}){
- const {can}=usePermissions(),toast=useToast();const data=useQuery(api.memberGovernance.list,{societyId,...(memberId?{memberId}:{})});
+ const {can}=usePermissions(),toast=useToast();
+ // Deferred panel (O-8): rules and assessments load only once the section is opened.
+ const [open,setOpen]=useState(false);const data=useQuery(api.memberGovernance.list,open?{societyId,...(memberId?{memberId}:{})}:'skip');
  const rule=useMutation(api.memberGovernance.createRule),assess=useMutation(api.memberGovernance.assess),transition=useMutation(api.memberGovernance.transition);
  const [requirements,setRequirements]=useState<any[]>([]),[results,setResults]=useState<any[]>([]);
  const [ruleForm,setRuleForm]=useState({ruleKey:'',effectiveDate:'',sourceUrl:'',sourceReference:'',reviewStatus:'pending'}),[assessment,setAssessment]=useState({ruleVersionId:'',asOf:''}),[change,setChange]=useState({assessmentId:'',status:'',sourceUrl:'',sourceReference:'',observedDate:''});const [busy,setBusy]=useState(false);
  async function run(action:()=>Promise<any>){setBusy(true);try{await action();toast.success('Membership evidence saved');}catch(error:any){toast.error(error.message);}finally{setBusy(false);}}
  const selectedRule=data?.rules.find((row:any)=>row._id===assessment.ruleVersionId);
- return <details className="card" style={{marginBottom:16}}><summary className="card__head">{memberId?'Eligibility, orientation and renewal assessments':'Membership rule versions'}</summary><div className="card__body col" style={{gap:12}}>
+ return <details className="card" style={{marginBottom:16}} open={open} onToggle={e=>setOpen((e.currentTarget as HTMLDetailsElement).open)}><summary className="card__head">{memberId?'Eligibility, orientation and renewal assessments':'Membership rule versions'}</summary>{open&&<div className="card__body col" style={{gap:12}}>
  <p className="muted">{memberId?'Missing eligibility or renewal evidence remains unknown. Register transitions require an explicit supported change.':'Eligibility, orientation and renewal rules as the bylaws or policies stated them on each effective date. Organization members, seats and proxies are under Members & representatives.'}</p>
  {!memberId&&<>
  <details><summary>Create an immutable rule version</summary><div className="col" style={{gap:10}}>
@@ -25,5 +27,5 @@ export function MembershipEvidenceCard({societyId,memberId}:{societyId:string;me
  <button className="btn-action" disabled={!can('members:write')||busy||!selectedRule} onClick={()=>void run(async()=>{await assess({memberId,...assessment,results});})}>Record assessment</button>
  <details><summary>Explicit membership transition</summary><p className="muted">Select satisfied evidence and record the source-supported status. Voting rights keep their existing recorded value.</p>{Object.keys(change).map(key=><Field key={key} label={key}><input className="input" value={(change as any)[key]} onChange={e=>setChange({...change,[key]:e.target.value})}/></Field>)}<button className="btn-action" disabled={!can('members:write')||busy} onClick={()=>void run(async()=>{await transition({memberId,assessmentId:change.assessmentId,status:change.status,source:{sourceUrl:change.sourceUrl,sourceReference:change.sourceReference,observedDate:change.observedDate,reviewStatus:'verified'}});})}>Apply supported membership transition</button></details>
  </>}
- </div></details>;
+ </div>}</details>;
 }
