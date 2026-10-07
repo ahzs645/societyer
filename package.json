@@ -77,6 +77,8 @@
     "test:compliance-rules": "tsx scripts/validate-compliance-rule-packs.ts && tsx scripts/check-compliance-obligations.ts && tsx scripts/check-static-corporation-obligations.ts",
     "test:create-workspace-onboarding": "tsx scripts/check-create-workspace-onboarding.ts",
     "test:workspace-archive": "tsx scripts/check-workspace-archive.ts",
+    "test:intake-archive-scale": "NODE_OPTIONS=--max-old-space-size=6144 tsx scripts/check-intake-archive-scale.ts",
+    "test:import-apply-per-record": "tsx scripts/check-import-apply-per-record.ts",
     "test:local-snapshots": "tsx scripts/check-local-snapshot-roundtrip.ts",
     "test:local-workspace-binding": "tsx scripts/check-local-workspace-binding.ts",
     "test:organization-domain": "tsx scripts/check-organization-domain.ts",

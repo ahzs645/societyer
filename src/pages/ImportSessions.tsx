@@ -22,6 +22,7 @@ import { isActiveImportSession } from "../../shared/importSessionState";
 import { distinguishSessionNames, type SessionLabel } from "../../shared/importSessionLabels";
 import { ImportReviewQueue, DEFAULT_QUEUE_FILTERS, type QueueFilters } from "../features/importReview/ImportReviewQueue";
 import { IMPORT_KIND_LABELS, importKindLabel } from "../features/importReview/importKindLabels";
+import { BlockedRecordsPanel } from "../features/importReview/BlockedRecordsPanel";
 import { formatDate } from "../lib/format";
 import {
   Archive,
@@ -130,6 +131,7 @@ export function ImportSessionsPage() {
   const backfillMeetings = useMutation(api.importSessions.backfillApprovedMeetingReferences);
   const applyDocuments = useMutation(api.importSessions.applyApprovedDocuments);
   const applySections = useMutation(api.importSessions.applyApprovedSectionRecords);
+  const compactApplied = useMutation(api.importSessions.compactAppliedRecords);
   const scanPaperlessMeetings = useAction(api.paperless.createMeetingMinutesImportSession);
   const scanPaperlessDiscovery = useAction(api.paperless.createDiscoveryImportSession);
   const scanPaperlessTransposed = useAction(api.paperless.createTransposedImportSession);
@@ -309,13 +311,47 @@ export function ImportSessionsPage() {
       ? `${result.documents} document record${result.documents === 1 ? "" : "s"} created`
       : "No approved document candidates were waiting to be created.";
   });
-  const runSectionApply = () => runApply("Section records applied", async () => {
-    const result = await applySections({ sessionId: session._id });
-    const byKind = Object.entries(result.byKind ?? {})
-      .map(([kind, count]) => `${count} ${importKindLabel(kind)}`)
-      .join(", ");
-    return byKind || `${result.total} records`;
-  });
+  const runSectionApply = async () => {
+    if (!session) return;
+    try {
+      const result = await applySections({ sessionId: session._id });
+      const applied = Object.entries(result.byKind ?? {})
+        .filter(([kind]) => !kind.endsWith(":blocked") && kind !== "blocked")
+        .map(([kind, count]) => `${count} ${importKindLabel(kind)}`)
+        .join(", ");
+      const blocked = result.blocked?.length ?? 0;
+      if (blocked) {
+        const reasons = ["duplicate", "waiting", "invalid"].map((reason) => [reason, (result.blocked as any[]).filter((item) => item.reason === reason).length] as const).filter(([, count]) => count);
+        const reasonText = reasons.map(([reason, count]) => `${count} ${reason === "duplicate" ? "already on record" : reason === "waiting" ? "waiting for their meeting" : "need a fix"}`).join(", ");
+        toast.warn(result.total ? `${result.total} section record${result.total === 1 ? "" : "s"} applied, ${blocked} blocked` : `${blocked} record${blocked === 1 ? "" : "s"} blocked`, `${applied ? `${applied}. ` : ""}Blocked: ${reasonText}. Resolve them in the session panel.`);
+      } else toast.success("Section records applied", applied || `${result.total} records`);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not complete: section records applied");
+    }
+  };
+  const runCompactApplied = async () => {
+    if (!session) return;
+    const applied = records.filter((record: any) => record.status === "Approved" && Object.values(record.importedTargets ?? {}).some(Boolean)).length;
+    if (!applied) { toast.info("Nothing to compact", "No applied records are staged in this session."); return; }
+    const ok = await confirm({
+      title: `Compact ${applied} applied record${applied === 1 ? "" : "s"}?`,
+      message: `The staged copies of ${applied} applied record${applied === 1 ? "" : "s"} in "${session.name}" (their JSON payloads, which can repeat a source file's whole text) are removed. The records they created stay, with their source links; the session keeps its counts and a list of where each record landed, and applying the same bundle again still reuses the existing records. Pending, rejected and blocked records stay.`,
+      confirmLabel: `Compact ${applied}`,
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      let removed = 0;
+      for (let step = 0; step < 200; step++) {
+        const result = await compactApplied({ sessionId: session._id });
+        removed += result.removed ?? 0;
+        if (!result.remaining) break;
+      }
+      toast.success("Applied records compacted", `${removed} staged record${removed === 1 ? "" : "s"} removed`);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Could not compact the session");
+    }
+  };
 
   const deleteSession = async () => {
     if (!session) return;
@@ -573,6 +609,9 @@ export function ImportSessionsPage() {
                 <button className="btn-action" onClick={() => { void runSectionApply(); }} disabled={!canPromote("documents:write") || !records.filter((row: any) => row.status === "Approved").every((row: any) => can(importSectionPermission(row.recordKind) as any))}>
                   <Archive size={12} /> Apply sections
                 </button>
+                <button className="btn-action" onClick={() => { void runCompactApplied(); }} disabled={!canPromote("documents:write")} title="Remove the staged copies of records that were already applied; the session keeps its counts and where each record landed.">
+                  <Archive size={12} /> Compact applied…
+                </button>
                 <button className="btn-action btn-action--danger" onClick={() => { void deleteSession(); }} disabled={!canWrite}>
                   <Trash2 size={12} /> Delete session…
                 </button>
@@ -607,6 +646,10 @@ export function ImportSessionsPage() {
                     <button type="button" className="btn btn--sm" onClick={() => { void approveEvidenceVerified(); }} disabled={!canWrite} data-testid="import-approve-verified"><Check size={12} /> Approve evidence-verified</button>
                   </div>
                 </InspectorNote>
+              )}
+              <BlockedRecordsPanel sessionId={session._id} records={records} canWrite={canWrite} onEdit={(recordId) => { void editRecord(recordId); }} />
+              {session.compactedRecords?.removed > 0 && (
+                <p className="muted" style={{ margin: 0, fontSize: "var(--fs-sm)" }}>{session.compactedRecords.removed} applied record{session.compactedRecords.removed === 1 ? " was" : "s were"} compacted on {formatDate(session.compactedRecords.atISO)}; the counts above include {session.compactedRecords.removed === 1 ? "it" : "them"}.</p>
               )}
               <InsuranceImportReviewPanel
                 records={records}
