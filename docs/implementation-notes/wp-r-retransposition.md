@@ -122,13 +122,16 @@ fixes and aggregate behaviour only.
   re-verified, not conflicting, at or above the threshold). For class records
   it applies to the record's key facts; clause outlines, statement lines and
   lists are not individually reviewed and remain for a person.
-- The final staging promotes every class through the intake review: a
-  run-wide bulk accept ("Every document in the run", the bulk-accept rule),
-  then "Promote all ready". Every native record then has field provenance.
-  Only minutes embedded in agendas or packages go through an import session,
-  because they have no extraction row of their own. Meetings evidenced only
-  by an agenda are created when that agenda is promoted. The evidence rule
-  and "Approve evidence-verified" serve that import path and any bulk import.
+- Minutes go through intake promotion (field provenance per value): a
+  run-wide minutes bulk accept, then "Promote all ready". Other classes go
+  through import sessions with the evidence rule (record-level source links).
+  Promoting every class through the review was tried too ("Every document in
+  the run", then "Promote all ready"). It accepted 89,285 fields in 1,926
+  documents and promoted 1,048 documents. But the workspace grew to about
+  285 MB of records and about 190,000 rows, past the device backup limits
+  (256 MB and 200,000 records), so it could not be exported. One review row
+  and one provenance row per field is too much at this archive's size (see
+  Deferred).
 - A document with no accepted field is not promoted, even when its class has
   no required field. Before this rule, "Promote all ready" wrote unreviewed
   correspondence, agreements, consents, rosters and proxies.
@@ -149,6 +152,12 @@ fixes and aggregate behaviour only.
 - `.xps`, `.pages`, `.nib`, design and media files are catalogued only.
 - Minutes embedded in agendas or packages have no extraction row, so they
   cannot be promoted from the review screen.
+- Field-level review at archive scale: per-field review rows (about 930
+  bytes each, with a copy of the value and its locators) and provenance rows
+  (about 1 KB each) push a fully reviewed archive past the 256 MB /
+  200,000-record backup limits. Possible fixes: compact bulk-accept reviews
+  (one row per document and rule), drop the value copies that the extraction
+  already holds, or allow backups larger than these limits.
 - Fields for what is still a representation gap (agreements, quorum
   head-counts, consensus rules, signing tiers, AGM notice, bylaw cadence and
   term rules, insurance continuity dates).
