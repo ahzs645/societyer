@@ -5,6 +5,7 @@ import {
   organizationLabel,
 } from "../../../shared/organizationDomain";
 import type { ComplianceFacts } from "./engine";
+import { todayDateOnly } from "../../../shared/dateOnly";
 
 export type RegistrationComplianceSource = {
   _id?: string;
@@ -31,7 +32,7 @@ export function complianceFactsForOrganization(
 ): ComplianceFacts[] {
   // A preparation workspace has no confirmed legal entity or registry obligations yet.
   if (organization.organizationStatus === "pre_incorporation" && organization.formationStatus !== "incorporated") return [];
-  const asOfDate = options.asOfDate ?? new Date().toISOString().slice(0, 10);
+  const asOfDate = options.asOfDate ?? todayDateOnly();
   const entityType = organizationEntityType(organization);
   const homeJurisdiction = canonicalizeJurisdictionCode(homeJurisdictionCode(organization));
   const homeFacts: ComplianceFacts = {
@@ -65,7 +66,7 @@ export function complianceFactsForOrganization(
   return [homeFacts, ...registrationFacts];
 }
 
-export function fiscalYearEndDateForCurrentCycle(fiscalYearEnd?: string | null, asOfDate = new Date().toISOString().slice(0, 10)) {
+export function fiscalYearEndDateForCurrentCycle(fiscalYearEnd?: string | null, asOfDate = todayDateOnly()) {
   if (!fiscalYearEnd) return undefined;
   if (/^\d{4}-\d{2}-\d{2}$/.test(fiscalYearEnd)) return fiscalYearEnd;
   if (!/^\d{2}-\d{2}$/.test(fiscalYearEnd)) return undefined;

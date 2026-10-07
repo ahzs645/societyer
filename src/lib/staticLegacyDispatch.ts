@@ -1,3 +1,4 @@
+import { todayDateOnly } from "../../shared/dateOnly";
 import { readOnboardingAnswersJson, validateInitialOrganizationProfile } from "../../shared/onboarding";
 import { entitySetupFields, validateEntitySetup, entityPreparationDecision, validateFormationEvidence, certificateAnniversaryDate } from "../../shared/entitySetup";
 import { validateWorkspaceLegalIdentity, validateWorkspaceLegalIdentityUpdate } from "../../shared/organizationDomain";
@@ -611,7 +612,7 @@ function queryResult(name: string, args: StaticArgs, store?: StaticDemoDexieStor
       .sort((a, b) => String(a.fullName ?? "").localeCompare(String(b.fullName ?? "")));
   }
   if (moduleName === "firm" && exportName === "overview") {
-    const today = (args?.todayISO ?? new Date().toISOString()).slice(0, 10);
+    const today = args?.todayISO ? String(args.todayISO).slice(0, 10) : todayDateOnly();
     const societies = store?.listRows("societies", {}) ?? [];
     const entities = societies.map((society: any) => {
       const deadlines = store?.listRows("deadlines", { societyId: society._id }) ?? [];

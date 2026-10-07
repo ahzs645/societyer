@@ -24,6 +24,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function ConflictsPage() {
   const society = useSociety();
@@ -71,7 +72,7 @@ export function ConflictsPage() {
     }
     setForm({
       directorId: directors?.[0]?._id,
-      declaredAt: new Date().toISOString().slice(0, 10),
+      declaredAt: todayDateOnly(),
       contractOrMatter: "",
       natureOfInterest: "",
       abstainedFromVote: true,
@@ -146,7 +147,7 @@ export function ConflictsPage() {
               return undefined;
             }}
             renderRowActions={(r) => !r.resolvedAt ? (
-              <button className="btn btn--sm" disabled={!canWrite} onClick={() => resolve({ id: r._id, resolvedAt: new Date().toISOString().slice(0, 10) })}>Resolve</button>
+              <button className="btn btn--sm" disabled={!canWrite} onClick={() => resolve({ id: r._id, resolvedAt: todayDateOnly() })}>Resolve</button>
             ) : null}
           />
         </RecordTableScope>

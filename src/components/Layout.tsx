@@ -153,6 +153,7 @@ import type {
   FavoriteRef,
   SidebarContextMenu,
 } from "./Layout.internal";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function Layout() {
   const { society, societies } = useSocietySelection();
@@ -285,7 +286,7 @@ export function Layout() {
       } else if (action === "export-workspace") {
         import("../lib/localWorkspaceExport")
           .then(({ downloadLocalWorkspaceSnapshot }) => {
-            downloadLocalWorkspaceSnapshot(`societyer-workspace-${new Date().toISOString().slice(0, 10)}.json`);
+            downloadLocalWorkspaceSnapshot(`societyer-workspace-${todayDateOnly()}.json`);
             toast.success("Workspace export started");
           })
           .catch((error) => {

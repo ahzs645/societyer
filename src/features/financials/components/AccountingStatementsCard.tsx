@@ -9,9 +9,10 @@ import { Select } from "@/components/Select";
 import { escapeCsvCell } from "@/lib/csv";
 import { buildAccountingStatements, buildProgramSummary, type StatementRow } from "../../../../shared/accountingStatements";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../../../shared/dateOnly";
 
 export function AccountingStatementsCard({ societyId }: { societyId: Id<"societies"> }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
   const [from, setFrom] = useState(`${today.slice(0, 4)}-01-01`);
   const [to, setTo] = useState(today);
   const { canExport, canWrite } = useFinancePermissions();

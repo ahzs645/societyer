@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 const PLAN_INTERVALS = [
   { value: "month", label: "Monthly" },
@@ -42,7 +43,7 @@ const FEE_STATUSES = [
 ];
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function newFeeDraft(plan?: any) {

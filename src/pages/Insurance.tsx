@@ -12,7 +12,7 @@ import { Badge, Drawer, Field } from "../components/ui";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
 import { ArrowLeft, FileSearch, Pencil, Plus, Shield, Trash2 } from "lucide-react";
-import { centsToDollarInput, dollarInputToCents, formatDate, money } from "../lib/format";
+import { centsToDollarInput, daysUntilDate, dollarInputToCents, formatDate, money, todayDateOnly } from "../lib/format";
 import { CitationBadge } from "../components/CitationTooltip";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { RecordTableMetadataEmpty } from "../components/RecordTableMetadataEmpty";
@@ -900,7 +900,7 @@ function RenewalCell({ date }: { date?: string }) {
 }
 
 function summarizePolicies(rows: any[]) {
-  const current = new Set(currentRenewalPolicies(rows, new Date().toISOString().slice(0,10)).map(row => row._id));
+  const current = new Set(currentRenewalPolicies(rows, todayDateOnly()).map(row => row._id));
   return rows.reduce(
     (summary, row) => {
       const days = daysUntil(row.renewalDate);
@@ -1308,7 +1308,7 @@ function dateInput(value?: string) {
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function oneYearFromToday() {
@@ -1316,10 +1316,8 @@ function oneYearFromToday() {
 }
 
 function daysUntil(value?: string) {
-  if (!value) return null;
-  const date = new Date(value).getTime();
-  if (!Number.isFinite(date)) return null;
-  return Math.floor((date - Date.now()) / 86_400_000);
+  // Calendar days in the local calendar; date-only renewals are not shifted by UTC.
+  return daysUntilDate(value);
 }
 
 function kindLabel(kind: string) {

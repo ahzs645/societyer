@@ -18,6 +18,7 @@ import { visibleDirectoryRows } from "./peopleDirectory";
 import type { PortableQueryCtx } from "../portable/ctx";
 import { organizationKind, organizationLabel } from "../organizationDomain";
 import { postIncorporationStepsForOrganization } from "../postIncorporationSteps";
+import { todayDateOnly } from "../dateOnly";
 
 async function permits(ctx: PortableQueryCtx, societyId: string, permission: Permission) {
   try { await requirePermissionPortable(ctx, societyId, permission); return true; }
@@ -46,7 +47,7 @@ function generatedPacketKeysFromRuns(runs: any[]): Set<string> {
 }
 
 export async function overviewPortable(ctx: PortableQueryCtx, { todayISO }: { todayISO?: string }) {
-  const today = (todayISO ?? new Date().toISOString()).slice(0, 10);
+  const today = todayISO ? todayISO.slice(0, 10) : todayDateOnly();
   const societies = await listAuthorizedSocietyRows(ctx);
 
   const entities: any[] = [];

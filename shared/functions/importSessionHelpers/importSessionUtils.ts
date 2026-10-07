@@ -1,6 +1,7 @@
 // Import-session leaf utilities: text/date cleaning, coercion, and source-system helpers.
 
 import { decodeYcnDate, isYcnNullDate } from "../../ycnDate";
+import { todayDateOnly } from "../../dateOnly";
 
 // YCN/Access float date: YYYYMMDD optionally followed by a .HHMMSS fraction.
 const YCN_FLOAT_DATE = /^\d{8}(\.\d+)?$/;
@@ -39,7 +40,7 @@ function cleanDateTime(value: unknown) {
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function fiscalYearFromDate(value: unknown) {

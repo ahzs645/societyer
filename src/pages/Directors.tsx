@@ -29,6 +29,7 @@ import {
 import type { Id } from "../../convex/_generated/dataModel";
 import { directorComplianceProfile } from "../../shared/directorCompliance";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function DirectorsPage() {
   const society = useSociety();
@@ -82,7 +83,7 @@ export function DirectorsPage() {
     setSelected({
       firstName: "", lastName: "", email: "",
       position: "Director", isBCResident: directorProfile.showBcResidentField,
-      termStart: new Date().toISOString().slice(0, 10),
+      termStart: todayDateOnly(),
       consentOnFile: false, status: "Active", aliases: [],
     });
     setOpen(true);

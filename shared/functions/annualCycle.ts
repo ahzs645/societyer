@@ -20,6 +20,7 @@ import type { PortableQueryCtx } from "../portable/ctx";
 import { requireSocietyMembership } from "./access";
 import { minutesMotionsForDisplay } from "../minutesMotions";
 import { resolveMinutesMotions } from "./minutes";
+import { localDateKey } from "../dateOnly";
 
 type ItemStatus = "complete" | "attention" | "blocked" | "upcoming";
 
@@ -484,7 +485,7 @@ function deriveStage(args: {
 
 function dateOnly(value?: string | Date | null) {
   if (!value) return "";
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (value instanceof Date) return localDateKey(value);
   return String(value).slice(0, 10);
 }
 

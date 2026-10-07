@@ -24,6 +24,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Bank reconciliation page. The record table on the left is purely
@@ -59,7 +60,7 @@ export function ReconciliationPage() {
   const [linkItemId, setLinkItemId] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [txnForm, setTxnForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
+    date: todayDateOnly(),
     description: "",
     amountDollars: "",
     direction: "out" as "in" | "out",
@@ -174,7 +175,7 @@ export function ReconciliationPage() {
     });
     toast.success("Transaction added");
     setAddOpen(false);
-    setTxnForm({ date: new Date().toISOString().slice(0, 10), description: "", amountDollars: "", direction: "out", counterparty: "", category: "" });
+    setTxnForm({ date: todayDateOnly(), description: "", amountDollars: "", direction: "out", counterparty: "", category: "" });
   };
 
   return (

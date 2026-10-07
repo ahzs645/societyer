@@ -13,6 +13,7 @@ import { readableProjectionPermissions } from "./projectionPermissions";
 import { requirePermissionPortable, type Permission } from "./permissions";
 import { documentAccessPredicate, filterDocumentLinkedRows } from "./documents";
 import { getOwned, requireSocietyMembership } from "./access";
+import { todayDateOnly } from "../dateOnly";
 
 const REGISTER_TABLES = [
   "boardRoleAssignments",
@@ -563,7 +564,7 @@ function cleanDate(value: unknown) {
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function arrayOf(value: unknown) {

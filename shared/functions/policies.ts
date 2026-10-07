@@ -13,6 +13,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { assertAllowedOption, invalidOptionListIssues } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
+import { todayDateOnly } from "../dateOnly";
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -220,7 +221,7 @@ function sortDesc(rows: any[], field: string) {
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function daysFromToday(date: string) {

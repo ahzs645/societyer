@@ -14,6 +14,7 @@ import { ListTodo, Plus, Target } from "lucide-react";
 import { formatDate } from "../lib/format";
 import { patchInList } from "../lib/optimistic";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 const STATUSES = ["NotStarted", "OnTrack", "AtRisk", "OffTrack", "Completed"];
 const CATEGORIES = ["Strategic", "Operational", "Program", "Fundraising", "Governance"];
@@ -59,7 +60,7 @@ export function GoalsPage() {
       title: "",
       category: "Strategic",
       status: "NotStarted",
-      startDate: new Date().toISOString().slice(0, 10),
+      startDate: todayDateOnly(),
       targetDate: new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10),
       progressPercent: 0,
       milestones: [],

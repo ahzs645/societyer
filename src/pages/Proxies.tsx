@@ -21,6 +21,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Proxies and ballots. Each row in the record table is a proxy joined
@@ -81,7 +82,7 @@ export function ProxiesPage() {
       meetingId: meetings?.[0]?._id,
       grantorName: "",
       proxyHolderName: "",
-      signedAtISO: new Date().toISOString().slice(0, 10),
+      signedAtISO: todayDateOnly(),
     });
     setOpen(true);
   };

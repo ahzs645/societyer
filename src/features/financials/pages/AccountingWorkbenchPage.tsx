@@ -15,10 +15,11 @@ import { Select } from "../../../components/Select";
 import { DatePicker } from "../../../components/DatePicker";
 import { PageHeader, SeedPrompt } from "../../../pages/_helpers";
 import { formatDate, money } from "../../../lib/format";
+import { todayDateOnly } from "../../../../shared/dateOnly";
 
 type DrawerKind = "period" | "opening" | "journal" | "candidate" | "reconciliation" | "counterparty" | "fundRestriction" | null;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayDateOnly();
 const currentYear = () => new Date().getFullYear().toString();
 
 function centsFromInput(value: string) {

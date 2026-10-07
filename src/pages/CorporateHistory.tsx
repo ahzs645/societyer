@@ -9,6 +9,7 @@ import { Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
 import { History, Plus, Trash2 } from "lucide-react";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Corporate history — effective-dated corporate NAME history plus the
@@ -78,7 +79,7 @@ export function CorporateHistoryPage() {
     setNameForm({
       name: "",
       shortName: "",
-      startISO: new Date().toISOString().slice(0, 10),
+      startISO: todayDateOnly(),
       regPosn: "",
     });
     setNameOpen(true);
@@ -104,7 +105,7 @@ export function CorporateHistoryPage() {
       jurisdiction: "",
       legislation: "",
       regNumber: "",
-      startISO: new Date().toISOString().slice(0, 10),
+      startISO: todayDateOnly(),
     });
     setEventOpen(true);
   };

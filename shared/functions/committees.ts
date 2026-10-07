@@ -9,6 +9,7 @@
 
 import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
+import { todayDateOnly } from "../dateOnly";
 
 export async function committeesListPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -145,7 +146,7 @@ export async function committeeAddMemberPortable(
   if (args.memberId) await getOwned(ctx, "members", args.memberId, args.societyId);
   return ctx.db.insert("committeeMembers", {
     ...args,
-    joinedAt: new Date().toISOString().slice(0, 10),
+    joinedAt: todayDateOnly(),
   });
 }
 

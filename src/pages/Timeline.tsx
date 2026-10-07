@@ -7,7 +7,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge } from "../components/ui";
-import { formatDateTime, money } from "../lib/format";
+import { formatDateTime, isPastDue, money } from "../lib/format";
 
 export function TimelinePage() {
   const society = useSociety();
@@ -52,7 +52,7 @@ export function TimelinePage() {
         title: commitment.title,
         sub: `${commitment.cadence}${commitment.counterparty ? ` · ${commitment.counterparty}` : ""}`,
         to: "/app/commitments",
-        past: new Date(commitment.nextDueDate).getTime() < now,
+        past: isPastDue(commitment.nextDueDate, now),
       });
     });
     (commitmentEvents ?? []).forEach((event: any) => {
@@ -74,7 +74,7 @@ export function TimelinePage() {
         title: `${period.label} — ${money(period.priceCents)} / ${period.interval}`,
         sub: period.effectiveTo ? `Ends ${period.effectiveTo}` : period.status,
         to: "/app/membership",
-        past: new Date(period.effectiveFrom).getTime() < now,
+        past: isPastDue(period.effectiveFrom, now),
       });
     });
     (fundingSources ?? []).forEach((source: any) => {
@@ -85,7 +85,7 @@ export function TimelinePage() {
           title: event.label,
           sub: `${source.name}${event.amountCents != null ? ` · ${money(event.amountCents)}` : ""}${event.attributionStatus ? ` · ${event.attributionStatus}` : ""}`,
           to: "/app/treasurer",
-          past: new Date(event.eventDate).getTime() < now,
+          past: isPastDue(event.eventDate, now),
         });
       });
     });

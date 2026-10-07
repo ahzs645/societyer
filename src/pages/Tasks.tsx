@@ -31,7 +31,7 @@ import {
 } from "../features/tasks/TaskFormFields";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { useSociety } from "../hooks/useSociety";
-import { formatDate } from "../lib/format";
+import { formatDate, isPastDue } from "../lib/format";
 import { useIsMobile } from "../lib/useIsMobile";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 
@@ -802,7 +802,7 @@ function TaskPhoneList({
           userNames(task.responsibleUserIds, userById) || task.assignee;
         const overdue =
           Boolean(task.dueDate) &&
-          new Date(task.dueDate ?? "").getTime() < Date.now() &&
+          isPastDue(task.dueDate) &&
           task.status !== "Done";
 
         return (

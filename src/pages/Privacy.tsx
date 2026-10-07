@@ -43,6 +43,7 @@ import {
 } from "../lib/legalCopy";
 import { exportWordDocx } from "../lib/docx";
 import { markdownToHtml } from "../lib/markdown";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 type StepTone = "success" | "warn" | "info" | "neutral";
 type DraftEditorKind = "policy" | "memberDataMemo";
@@ -947,7 +948,7 @@ function isGenericPipaPolicyTemplate(document: any) {
 }
 
 function buildClientPipaPolicyDraft(society: any) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
   const legalName = valueOrPlaceholder(society.name, "Legal organization name");
   const privacyOfficerName = valueOrPlaceholder(society.privacyOfficerName, "Privacy officer role or name");
   const privacyOfficerEmail = valueOrPlaceholder(society.privacyOfficerEmail, "privacy email");

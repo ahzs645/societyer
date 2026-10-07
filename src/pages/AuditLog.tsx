@@ -16,6 +16,7 @@ import {
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
 import { rowsToCsv } from "@/lib/csv";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Append-only activity log. Migrated to RecordTable so it shares the
@@ -65,7 +66,7 @@ export function AuditLogPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `societyer-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `societyer-audit-${todayDateOnly()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

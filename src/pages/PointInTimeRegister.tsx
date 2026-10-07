@@ -8,6 +8,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { DatePicker } from "../components/DatePicker";
 import { Badge } from "../components/ui";
 import { formatDate } from "../lib/format";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Point-in-Time Register — reconstructs who held each role on a chosen date,
@@ -70,7 +71,7 @@ export function PointInTimeRegisterPage() {
   const { can } = usePermissions();
   const canReadHistory = can("settings:read");
   const visibleRoles = ROLES.filter((role) => canReadHistory && can(role.roleType === "member" ? "members:read" : "directors:read"));
-  const [asOf, setAsOf] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [asOf, setAsOf] = useState<string>(() => todayDateOnly());
   const directors = useQuery(api.directors.list, society && can("directors:read") ? { societyId: society._id } : "skip");
 
   // Board term starts/ends as a timeline of transitions, so the snapshot above

@@ -8,6 +8,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { CalendarView } from "../components/CalendarView";
 import { calendarDate, calendarDateKey } from "../lib/calendarDates";
+import { isPastDue } from "../../shared/dateOnly";
 import { Segmented } from "../components/primitives";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -163,7 +164,6 @@ export function DeadlinesPage() {
     }
   };
 
-  const now = Date.now();
   const showMetadataWarning = !tableData.loading && !tableData.objectMetadata;
 
   return (
@@ -216,7 +216,7 @@ export function DeadlinesPage() {
             const s = statusOf(r);
             if (s === "complete") return "success";
             if (s === "closed") return "neutral";
-            const overdue = new Date(r.dueDate).getTime() < now;
+            const overdue = isPastDue(r.dueDate);
             return overdue ? "danger" : "info";
           }}
         />
@@ -288,7 +288,7 @@ export function DeadlinesPage() {
                 }
                 if (field.name === "dueDate") {
                   const s = statusOf(record);
-                  const isOverdue = s === "open" && record.dueDate && new Date(record.dueDate).getTime() < Date.now();
+                  const isOverdue = s === "open" && isPastDue(record.dueDate);
                   if (!record.dueDate) return <span className="record-cell__empty">—</span>;
                   return (
                     <span style={isOverdue ? { color: "var(--danger)", fontWeight: 600 } : undefined}>

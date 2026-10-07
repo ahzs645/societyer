@@ -13,6 +13,7 @@ import {
   type ComplianceSettings,
   type DerivedDeadline,
 } from "../../shared/corporationSettings";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * Compliance settings → deadlines. Surfaces the YCN Corporation_Settings idea:
@@ -96,7 +97,7 @@ export function ComplianceSettingsPage() {
     entityType: society.entityType,
     annualMeetingDate: society.annualMeetingDate,
   };
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
   const derived: DerivedDeadline[] = deriveComplianceDeadlines(settings, today);
 
   const onSave = async () => {

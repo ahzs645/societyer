@@ -1,4 +1,7 @@
 import { format, formatDistanceToNowStrict, parseISO, isValid } from "date-fns";
+import { isDateOnly, relativeDateOnly } from "../../shared/dateOnly";
+
+export { isPastDue, todayDateOnly, daysUntilDate, relativeDateOnly, toDateOnly } from "../../shared/dateOnly";
 
 type DateInput = string | number | Date | null | undefined;
 
@@ -21,10 +24,13 @@ export function formatDateTime(value?: DateInput) {
 }
 
 export function relative(value?: DateInput) {
+  // A date-only value is a calendar day: "today"/"in 2 days", never "19 hours ago".
+  if (isDateOnly(value)) return relativeDateOnly(value);
   const d = parseDateInput(value);
   if (!d) return "—";
   if (!isValid(d)) return "—";
   const diff = d.getTime() - Date.now();
+  if (Math.abs(diff) < 45_000) return "just now";
   const suffix = diff >= 0 ? "from now" : "ago";
   return `${formatDistanceToNowStrict(d)} ${suffix}`;
 }

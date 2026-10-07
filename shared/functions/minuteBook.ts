@@ -16,6 +16,7 @@ import { readableProjectionPermissions } from "./projectionPermissions";
 import type { Permission } from "./permissions";
 import { interfaceRouteReadPermission } from "../interfaceRouteAccess";
 import { assertAllowedOption } from "../orgHubOptions";
+import { todayDateOnly } from "../dateOnly";
 
 const BINDER_DOCUMENT_CATEGORIES = ["Constitution", "Bylaws", "Minutes", "Policy", "Filing", "FinancialStatement", "WorkflowGenerated"];
 const DOCUMENT_PREVIEW_LIMIT_PER_CATEGORY = 1;
@@ -1108,7 +1109,7 @@ function check(key: string, label: string, count: number, severity: string, deta
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function cleanText(value: unknown) {

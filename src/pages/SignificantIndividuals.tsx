@@ -8,6 +8,7 @@ import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
 import { ShieldCheck, Plus, Trash2 } from "lucide-react";
 import { DatePicker } from "../components/DatePicker";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * BC Transparency Register of Significant Individuals + a diligence-steps
@@ -19,7 +20,7 @@ export function SignificantIndividualsPage() {
   const society = useSociety();
   const { loaded, can } = usePermissions();
   const canWrite = loaded && can("deadlines:write");
-  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
+  const [asOf, setAsOf] = useState(todayDateOnly());
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(null);
 
@@ -65,7 +66,7 @@ export function SignificantIndividualsPage() {
     if (!canWrite) return;
     setForm({
       individualName: "",
-      stepDate: new Date().toISOString().slice(0, 10),
+      stepDate: todayDateOnly(),
       stepsNarrative: "",
       nextReviewDate: "",
     });

@@ -40,6 +40,7 @@ import { buildCsjOrientationEmailBody } from "../features/grants/lib/csjOrientat
 import { enrichGcosNormalizedGrant, readGcosExportFile } from "../lib/gcosExportImport";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function GrantsPage() {
   const { loaded, can } = usePermissions();
@@ -266,7 +267,7 @@ export function GrantsPage() {
                     setTxnDraft({
                       societyId: society._id,
                       grantId: grants?.[0]?._id ?? "",
-                      date: new Date().toISOString().slice(0, 10),
+                      date: todayDateOnly(),
                       direction: "outflow",
                       amountDollars: "",
                       description: "",
@@ -281,7 +282,7 @@ export function GrantsPage() {
                       societyId: society._id,
                       grantId: grants?.[0]?._id ?? "",
                       title: "",
-                      dueAtISO: new Date().toISOString().slice(0, 10),
+                      dueAtISO: todayDateOnly(),
                       status: "Upcoming",
                     }),
                 },

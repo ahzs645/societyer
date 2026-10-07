@@ -292,7 +292,7 @@ export function ComplianceObligationsPage() {
                         </Badge>
                         {isDismissed || isReviewed ? <div className="muted" style={{ fontSize: 12 }}>{isDismissed ? "Workflow dismissed" : "Workflow reviewed"}</div> : null}
                         {decision?.updatedAtISO ? (
-                          <div className="muted" style={{ fontSize: 12 }}>{relative(decision.updatedAtISO.slice(0, 10))}</div>
+                          <div className="muted" style={{ fontSize: 12 }}>{relative(decision.updatedAtISO)}</div>
                         ) : null}
                       </td>
                       <td>

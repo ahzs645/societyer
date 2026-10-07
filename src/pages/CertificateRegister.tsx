@@ -8,6 +8,7 @@ import { Drawer, Field } from "../components/ui";
 import { DatePicker } from "../components/DatePicker";
 import { ScrollText, Plus, Trash2 } from "lucide-react";
 import { useToast } from "../components/Toast";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 type Certificate = {
   _id?: string;
@@ -31,7 +32,7 @@ export function CertificateRegisterPage() {
   const society = useSociety();
   const permissions = usePermissions();
   const canEdit = permissions.loaded && permissions.can("documents:write");
-  const [asOf, setAsOf] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [asOf, setAsOf] = useState<string>(() => todayDateOnly());
   const register = useQuery(
     api.shareCertificates.register,
     society ? { societyId: society._id, asOf } : "skip",
@@ -62,7 +63,7 @@ export function CertificateRegisterPage() {
       holderName: "",
       shareClass: "",
       shares: "",
-      issuedOn: new Date().toISOString().slice(0, 10),
+      issuedOn: todayDateOnly(),
       replacesCertificateNumber: "",
     });
     setOpen(true);
@@ -95,7 +96,7 @@ export function CertificateRegisterPage() {
     if (!id || !canEdit) return;
     await update({
       id,
-      patch: { cancelledOn: new Date().toISOString().slice(0, 10) },
+      patch: { cancelledOn: todayDateOnly() },
     });
   };
 

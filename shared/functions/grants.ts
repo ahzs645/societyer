@@ -18,6 +18,7 @@ import {
   requireSocietyMembership,
 } from "./access";
 import { authorizeApplicationIntake } from "./publicIntake";
+import { daysUntilDate, isPastDue } from "../dateOnly";
 
 function isoNow() {
   return new Date().toISOString();
@@ -140,12 +141,12 @@ export async function summaryPortable(ctx: PortableQueryCtx, { societyId }: { so
     ledgerSpendCents: spentCents,
     overdueReports: reports.filter((report) => {
       if (report.status === "Submitted") return false;
-      return new Date(report.dueAtISO).getTime() < now;
+      return isPastDue(report.dueAtISO, now);
     }).length,
     dueSoonReports: reports.filter((report) => {
       if (report.status === "Submitted") return false;
-      const due = new Date(report.dueAtISO).getTime();
-      return due >= now && due <= now + 30 * 24 * 60 * 60 * 1000;
+      const days = daysUntilDate(report.dueAtISO, now);
+      return days != null && days >= 0 && days <= 30 && !isPastDue(report.dueAtISO, now);
     }).length,
   };
 }

@@ -15,6 +15,7 @@ import { triggerBlobDownload } from "../lib/zip";
 import { localWorkspaceRestoreSupported, restoreLocalWorkspaceBackup } from "../lib/localWorkspaceExport";
 import { useConfirm } from "../components/Modal";
 import { setStoredSocietyId } from "../hooks/useSociety";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 type TableSummary = {
   name: string;
@@ -548,7 +549,7 @@ function slug(value: string) {
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function formatNumber(value: number) {
