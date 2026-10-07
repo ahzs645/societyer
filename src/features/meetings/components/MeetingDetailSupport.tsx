@@ -541,8 +541,15 @@ export function isImportTranscriptMetadata(metadata: Record<string, any>) {
   );
 }
 
-export function importTranscriptNote(metadata: Record<string, any>) {
+export function importTranscriptNote(metadata: Record<string, any>, sourceExternalIds: string[] = []) {
   const note = typeof metadata.note === "string" ? metadata.note.trim() : "";
+  // F18: older imports stamped every record "Converted from Paperless ... OCR";
+  // do not claim Paperless for sources from another system.
+  const ids = sourceExternalIds.length ? sourceExternalIds : (Array.isArray(metadata.sourceExternalIds) ? metadata.sourceExternalIds.map(String) : []);
+  if (/paperless/i.test(note) && ids.length && !ids.some((id: string) => /^paperless:/i.test(id))) {
+    const systems = [...new Set(ids.map((id: string) => id.split(":")[0]).filter(Boolean))].join(", ");
+    return `Imported from source documents${systems ? ` (${systems})` : ""}; no audio transcript is attached.`;
+  }
   return note || "Imported from source documents; no audio transcript is attached.";
 }
 

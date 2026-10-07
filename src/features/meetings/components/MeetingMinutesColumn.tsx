@@ -55,6 +55,8 @@ import type {
 import { useMeetingMinutesColumn, type MeetingMinutesColumnProps } from "./useMeetingMinutesColumn";
 import { SourceMinutesContext, sourceIsProposal } from "./SourceMinutesContext";
 import { MeetingAttendanceGrid } from "./MeetingAttendanceGrid";
+import { MeetingActionItemsCard } from "./MeetingActionItemsCard";
+import { AgendaItemDetailsModal, requestedActionLabel } from "./AgendaItemDetailsModal";
 
 export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
   const {
@@ -143,8 +145,6 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     confirmAndRemoveSection,
     closeSectionContextMenu,
     agendaPreviewRemovals,
-    agendaActionItems,
-    toggleActionItemDone,
     startSectionEdit,
     saveSectionEdit,
     meetingTaskById,
@@ -153,6 +153,33 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
     openAgendaSection,
     sectionIndexForAgendaEntry,
   } = useMeetingMinutesColumn(props);
+  // A9: agenda item details editor (item number, requested action, time, consent, presenter).
+  const [agendaDetailsItem, setAgendaDetailsItem] = useState<any | null>(null);
+  const agendaRecordById = useMemo(
+    () => new Map(((props.agendaItemRecords ?? []) as any[]).map((record) => [String(record._id), record])),
+    [props.agendaItemRecords],
+  );
+  const agendaMeta = (entry: AgendaItemEntry) => {
+    const record = entry._id ? agendaRecordById.get(String(entry._id)) : undefined;
+    if (!record) return null;
+    const parts = [
+      record.itemNumber ? `#${record.itemNumber}` : "",
+      record.requestedAction ? requestedActionLabel(record.requestedAction) ?? record.requestedAction : "",
+      record.scheduledTimeText ?? "",
+      record.consent ? "Consent" : "",
+      record.presenter ? `Presenter: ${record.presenter}` : "",
+    ].filter(Boolean);
+    return (
+      <span className="agenda-item-meta">
+        {parts.map((part) => <span key={part}>{part}</span>)}
+        {canEditAgenda && (
+          <button type="button" className="btn-action btn-action--icon" onClick={() => setAgendaDetailsItem(record)} title="Agenda item details" aria-label={`Details for ${entry.title}`}>
+            <Pencil size={10} />
+          </button>
+        )}
+      </span>
+    );
+  };
   if (transcriptEdit !== null && canEditTranscript) {
     return (
       <div className="meeting-minutes-layout meeting-minutes-layout--transcript-focus">
@@ -410,7 +437,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                             className="btn-action btn-action--icon"
                             onClick={() => removeAgendaItem(index)}
                             disabled={!canRemove}
-                            title="Remove item"
+                            title={canRemove ? "Remove item" : "Its minutes section has recorded content — delete the section from the Agenda record to remove both"}
                             aria-label="Remove item"
                           >
                             <Trash2 size={12} />
@@ -477,6 +504,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                               >
                                 {formatSourceReferences(entry.title)}
                               </button>
+                              {agendaMeta(entry)}
                               {children.length > 0 && (
                                 <ol className="meeting-minutes-agenda-list__children">
                                   {children.map((child) => {
@@ -495,6 +523,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                                         </span>
                                         {" "}{formatSourceReferences(child.entry.title)}
                                       </button>
+                                      {agendaMeta(child.entry)}
                                     </li>
                                   );})}
                                 </ol>
@@ -575,34 +604,18 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
               </div>
             )}
 
-            {agendaActionItems.length > 0 && (
-              <div className="card" id="meeting-minutes-action-items">
-                <div className="card__head">
-                  <h2 className="card__title">Action items</h2>
-                  <span className="card__subtitle">{agendaActionItems.length}</span>
-                </div>
-                <div className="card__body">
-                  <div className="action-list action-list--compact">
-                    {agendaActionItems.map((a) => (
-                      <div className="action-item" key={`${a.sectionIndex}-${a.actionIndex}`}>
-                        <Checkbox
-                          checked={!!a.done}
-                          disabled={!canEditSections}
-                          onChange={() => toggleActionItemDone(a.sectionIndex, a.actionIndex)}
-                          bare
-                        />
-                        <span className={`action-item__text${a.done ? " done" : ""}`}>
-                          <span>{a.text}</span>
-                          <span className="action-item__context">{a.sectionIndex + 1}. {a.sectionTitle}</span>
-                        </span>
-                        {a.assignee && <Badge>{a.assignee}</Badge>}
-                        {a.dueDate && <span className="action-item__due">{a.dueDate}</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+            <MeetingActionItemsCard
+              sections={sections}
+              topLevelItems={(minutes.actionItems ?? []) as any[]}
+              people={props.directoryPeople}
+              meetingTasks={props.meetingTasks ?? []}
+              canEdit={canEditSections}
+              canCreateTasks={!!props.createTaskFromAction}
+              meetingTitle={props.meeting?.title}
+              saveSections={async (next) => { await props.saveMinuteSections(next); }}
+              saveTopLevel={props.saveTopLevelActionItems}
+              createTask={props.createTaskFromAction}
+            />
 
             <SignaturePanel
               societyId={minutes.societyId}
@@ -1183,6 +1196,7 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                 role="menuitem"
                 icon={<Trash2 size={14} />}
                 label="Remove item"
+                hint={!canRemove ? "Its minutes section has notes, decisions or actions — delete the section from the Agenda record to remove both." : undefined}
                 destructive
                 disabled={!canRemove}
                 onClick={() => {
@@ -1195,6 +1209,11 @@ export function MeetingMinutesColumn(props: MeetingMinutesColumnProps) {
           document.body,
         );
       })()}
+      <AgendaItemDetailsModal
+        item={agendaDetailsItem}
+        peopleNames={(props.directoryPeople ?? []).map((person) => person.fullName)}
+        onClose={() => setAgendaDetailsItem(null)}
+      />
       {canEditSections && sectionContextMenu && (() => {
         const i = sectionContextMenu.sectionIndex;
         const section = sections[i];

@@ -681,7 +681,8 @@ export async function applyApprovedMeetingsPortable(ctx: PortableMutationCtx, { 
           evidenceText: cleanText(motion.evidenceText),
           rawText: cleanText(motion.rawText),
         })),
-        note: "Converted from Paperless meeting-minute OCR; not an audio transcript.",
+        // F18: name the actual source system, not always Paperless OCR.
+        note: sourceExternalIds.some((id: string) => /^paperless:/i.test(id)) ? "Converted from Paperless meeting-minute OCR; not an audio transcript." : "Imported from source documents; not an audio transcript.",
       }),
     });
     await ctx.db.patch(meetingId, { minutesId });

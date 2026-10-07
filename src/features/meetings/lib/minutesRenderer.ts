@@ -1805,18 +1805,54 @@ function renderLiteralSourceText(text:string,links:Array<{text:string;url:string
  }
  pieces.push(escapeHtml(text.slice(cursor)));return pieces.join('').replace(/\n/g,'<br/>');
 }
+/** A block taken from the original's page header or footer (word/header1.xml …). */
+function isSourceHeaderFooterBlock(block:SourceMeetingBlock):boolean {
+ return /word\/(?:header|footer)\d*\.xml/i.test(String((block as any).sourceReference??''));
+}
+/** Source table column widths as percentages. Importers record OOXML twips
+ *  (e.g. [460, 2049, 7097, …]); rendering those as "%" overflowed the page and
+ *  collapsed continuation rows to one-character columns (F20). */
+export function sourceTableWidthPercents(widths:unknown):number[]|undefined {
+ if(!Array.isArray(widths)||!widths.length)return undefined;
+ const values=widths.map(value=>Number(value));
+ if(values.some(value=>!Number.isFinite(value)||value<0))return undefined;
+ const total=values.reduce((sum,value)=>sum+value,0);
+ if(total<=0)return undefined;
+ if(total<=100.5)return values;
+ return values.map(value=>Math.round(value/total*1000)/10);
+}
+/** Width for a source image: leading letterhead logos stay logo-sized and an
+ *  implausible page-wide width (a mis-read extent) never stretches it (F21). */
+function sourceImageWidthStyle(block:Extract<SourceMeetingBlock,{kind:'image'}>,leading:boolean):string {
+ const width=Number((block as any).width);
+ if(leading)return `width:${Number.isFinite(width)&&width>0&&width<=192?Math.max(1,width):168}px;`;
+ if(!Number.isFinite(width)||width<=0)return '';
+ return `width:${Math.min(Math.max(1,width),576)}px;`;
+}
 export function renderSourceMeetingBlocks(blocks:SourceMeetingBlock[]):string {
- return blocks.map(block=>{
+ const firstTextIndex=blocks.findIndex(block=>(block.kind==='paragraph'||block.kind==='heading')&&!isSourceHeaderFooterBlock(block)&&String((block as any).text??'').trim());
+ // Page-header text (a "DRAFT" watermark repeated in header1/2/3.xml) is shown
+ // once as a watermark marker, not as repeated body headings (F21).
+ const seenHeaderText=new Set<string>();
+ return blocks.map((block,blockIndex)=>{
   if(block.kind==='page_break')return '<div style="page-break-before:always; break-before:page;"></div>';
+  if((block.kind==='heading'||block.kind==='paragraph')&&isSourceHeaderFooterBlock(block)){
+   const text=String((block as any).text??'').trim();
+   if(!text||seenHeaderText.has(text.toLowerCase()))return '';
+   seenHeaderText.add(text.toLowerCase());
+   return `<p class="source-watermark" data-source-watermark="true" style="text-align:center;color:#b3b3b3;font-size:16pt;font-weight:bold;letter-spacing:6pt;margin:0 0 6pt;" title="Page header or watermark in the original">${escapeHtml(text)}</p>`;
+  }
   if(block.kind==='image'){
-   const url=sourceImageUrl(block.dataUrl??block.url);const description=[block.alt,block.caption].filter(Boolean).join(' · ');
-   return `<figure>${url?`<img src="${escapeHtml(url)}" alt="${escapeHtml(block.alt??'Source image')}" style="max-width:100%;height:auto;${block.width?`width:${Math.max(1,block.width)}px;`:''}" />`:''}${description?`<p class="meta">${escapeHtml(description)}</p>`:''}${!url?'<p class="meta">Source image is retained with the original document.</p>':''}</figure>`;
+   const url=sourceImageUrl(block.dataUrl??block.url);const description=[block.caption].filter(Boolean).join(' · ');
+   const leading=firstTextIndex<0||blockIndex<firstTextIndex;
+   return `<figure>${url?`<img src="${escapeHtml(url)}" alt="${escapeHtml(block.alt??'Source image')}" style="max-width:100%;height:auto;${sourceImageWidthStyle(block,leading)}" />`:''}${description?`<p class="meta">${escapeHtml(description)}</p>`:''}${!url?'<p class="meta">Source image is retained with the original document.</p>':''}</figure>`;
   }
   if(block.kind==='table'){
+   const percents=sourceTableWidthPercents(block.widths);
    return `<table data-variant="source" style="width:100%;border-collapse:collapse;table-layout:fixed;"><tbody>${block.rows.map(row=>`<tr>${row.cells.map((cell,index)=>{
     const tag=cell.header?'th':'td';const paragraphs=cell.paragraphs?.length?cell.paragraphs:[cell.text];
     const contents=cell.blocks?.length?renderSourceMeetingBlocks(cell.blocks):paragraphs.map(text=>`<p style="white-space:pre-wrap;margin:0 0 3pt;">${escapeHtml(text).replace(/\n/g,'<br/>')}</p>`).join('');
-    return `<${tag}${cell.colSpan&&cell.colSpan>1?` colspan="${cell.colSpan}"`:''}${cell.rowSpan&&cell.rowSpan>1?` rowspan="${cell.rowSpan}"`:''} style="vertical-align:top;border:1px solid #777;padding:4pt;${block.widths?.[index]?`width:${block.widths[index]}%;`:''}">${contents}</${tag}>`;
+    return `<${tag}${cell.colSpan&&cell.colSpan>1?` colspan="${cell.colSpan}"`:''}${cell.rowSpan&&cell.rowSpan>1?` rowspan="${cell.rowSpan}"`:''} style="vertical-align:top;border:1px solid #777;padding:4pt;${percents?.[index]?`width:${percents[index]}%;`:''}">${contents}</${tag}>`;
    }).join('')}</tr>`).join('')}</tbody></table>`;
   }
   if(block.kind==='heading'){const level=Math.max(1,Math.min(6,block.level??2));return `<h${level}>${renderLiteralSourceText(block.text,block.links)}</h${level}>`;}
@@ -1867,6 +1903,51 @@ function renderUnrepresentedSectionDetails(minutes:MinutesRenderArgs['minutes'],
  }).filter(Boolean);
  return content.join('');
 }
+const CHANGE_FIELD_LABELS: Record<string, string> = {
+ detailedAttendance: 'Attendance details', attendees: 'Present', absent: 'Regrets / absent', chairName: 'Chair',
+ secretaryName: 'Secretary', recorderName: 'Recorder', calledToOrderAt: 'Called to order', adjournedAt: 'Adjourned',
+ remoteParticipation: 'Remote participation', nextMeetingAt: 'Next meeting', nextMeetingLocation: 'Next meeting location',
+ nextMeetingNotes: 'Next meeting notes', sessionSegments: 'Session segments', appendices: 'Appendices', quorumStatus: 'Quorum',
+};
+/** Reader-facing label for a corrected field ("detailedAttendance" → "Attendance details"). */
+function changeFieldLabel(field: string): string {
+ return CHANGE_FIELD_LABELS[field] ?? humanizeLabel(field.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase());
+}
+/** One-line, human-readable description of a corrected field. */
+function describeFieldChange(field: string, before: any, after: any): string {
+ const blank = (value: any) => value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+ const text = (value: any) => blank(value) ? '(blank)' : typeof value === 'string' ? value : String(value);
+ const nameOf = (row: any) => typeof row === 'string' ? row : String(row?.name ?? row?.title ?? '').trim();
+ if (Array.isArray(before) || Array.isArray(after)) {
+  const beforeRows = Array.isArray(before) ? before : [];
+  const afterRows = Array.isArray(after) ? after : [];
+  const beforeNames = beforeRows.map(nameOf).filter(Boolean);
+  const afterNames = afterRows.map(nameOf).filter(Boolean);
+  const key = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
+  const beforeKeys = new Set(beforeNames.map(key));
+  const afterKeys = new Set(afterNames.map(key));
+  const added = afterNames.filter((name) => !beforeKeys.has(key(name)));
+  const removed = beforeNames.filter((name) => !afterKeys.has(key(name)));
+  const parts: string[] = [];
+  if (added.length) parts.push(`added ${added.join(', ')}`);
+  if (removed.length) parts.push(`removed ${removed.join(', ')}`);
+  if (!parts.length) {
+   const statusChanges = afterRows.filter((row: any) => {
+    const prior = beforeRows.find((candidate: any) => key(nameOf(candidate)) === key(nameOf(row)));
+    return prior && typeof prior === 'object' && typeof row === 'object' && JSON.stringify(prior) !== JSON.stringify(row);
+   }).length;
+   parts.push(statusChanges ? `${statusChanges} entr${statusChanges === 1 ? 'y' : 'ies'} updated (status, role or affiliation)` : 'reordered or reformatted');
+  }
+  return `${parts.join('; ')} (now ${afterRows.length}, was ${beforeRows.length})`;
+ }
+ if ((before && typeof before === 'object') || (after && typeof after === 'object')) {
+  const keys = [...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])];
+  const changed = keys.filter((k) => JSON.stringify(before?.[k] ?? null) !== JSON.stringify(after?.[k] ?? null) && !(blank(before?.[k]) && blank(after?.[k])));
+  return changed.length ? changed.map((k) => `${humanizeLabel(k)} ${text(before?.[k])} → ${text(after?.[k])}`).join('; ') : 'reformatted';
+ }
+ return `${text(before)} → ${text(after)}`;
+}
+
 function renderNewStructuredMinuteInformation(minutes:MinutesRenderArgs['minutes'],record:SourceMeetingRecord,options:Required<MinutesExportOptions>):string {
  const source=record.documents.map(document=>document.fullText).join('\n');
  const normalized=(value:string)=>value.replace(/\s+/g,' ').trim();
@@ -1885,8 +1966,11 @@ function renderNewStructuredMinuteInformation(minutes:MinutesRenderArgs['minutes
  const listFields=new Set(['detailedAttendance','attendees','absent','sessionSegments','appendices']);
  const comparableField=(field:string,value:any)=>listFields.has(field)&&(value==null||(Array.isArray(value)&&value.length===0))?null:value??null;
  const revisedFields=baseline?Object.keys(baseline.details).filter(field=>JSON.stringify(comparableField(field,(minutes as any)[field]))!==JSON.stringify(comparableField(field,baseline.details[field]))):[];
- const displayField=(value:any):string=>typeof value==='string'?value:value===null||value===undefined?'Cleared':Array.isArray(value)?value.map(displayField).join('; '):typeof value==='object'?Object.entries(value).map(([key,item])=>`${humanizeLabel(key)}: ${displayField(item)}`).join('; '):String(value);
- const fieldChanges=revisedFields.length?`<h2>Current record changes</h2><table>${revisedFields.map(field=>`<tr><th>${escapeHtml(humanizeLabel(field))}</th><td>${escapeHtml(displayField((minutes as any)[field]))}</td></tr>`).join('')}</table>`:'';
+ // Human-readable "changes since import" (F21): what changed, not a dump of
+ // every nested field. Internal copies only; public copies never carry it.
+ const fieldChanges=revisedFields.length&&!options.publicCopy&&!options.publicOnly
+  ?`<h2>Changes since import</h2><p class="meta">Corrections made in Societyer after the source was imported. The source wording is retained above.</p><ul>${revisedFields.map(field=>`<li><strong>${escapeHtml(changeFieldLabel(field))}:</strong> ${escapeHtml(describeFieldChange(field,baseline!.details[field],(minutes as any)[field]))}</li>`).join('')}</ul>`
+  :'';
  const extras=[fieldChanges,removals.length?`<h2>Items changed or removed from the editable record</h2><p class="meta">The original source wording remains retained above.</p>${renderList(removals)}`:'',extraDecisions.length?`<h2>Current decisions</h2>${renderDecisionsList(extraDecisions,options)}`:'',extraActions.length?`<h2>Current actions</h2>${renderActionItemsTable(extraActions,options)}`:'',extraMotions.length?`<h2>Current motions</h2>${extraMotions.map(renderSampleMotion).join('')}`:'',renderSourceDecisionEvidence(minutes)];
  return extras.filter(Boolean).join('');
 }

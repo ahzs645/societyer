@@ -27,6 +27,7 @@ export type MinutesSummary = {
   actionItemCount: number;
   openActionItemCount: number;
   quorumStatus?: string;
+  quorumMet?: boolean;
   chairName?: string;
   hasSourceRecord: boolean;
   sourceVersionCount: number;
@@ -77,6 +78,7 @@ export function summarizeMinutes(minutes: any): MinutesSummary {
     actionItemCount: actions.length,
     openActionItemCount: open,
     quorumStatus: minutes.quorumStatus,
+    quorumMet: minutes.quorumMet,
     chairName: minutes.chairName,
     hasSourceRecord: !!minutes.sourceMeetingRecord,
     sourceVersionCount: Array.isArray(minutes.importedSourceVersions) ? minutes.importedSourceVersions.length : 0,

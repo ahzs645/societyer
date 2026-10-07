@@ -105,6 +105,12 @@ export type MeetingMinutesColumnProps = {
   directoryPeople?: Array<{ _id: string; fullName: string; aliases?: string[] | null }>;
   /** Names offered by "Add current directors / committee members". */
   expectedAttendees?: string[];
+  /** Save the minutes' top-level action items (status, assignee, task link). */
+  saveTopLevelActionItems?: (items: any[]) => Promise<void>;
+  /** Create a task from an action item; returns the new task id. */
+  createTaskFromAction?: (draft: any) => Promise<string | undefined>;
+  /** Agenda item rows (with ids and A9 fields) for the details editor. */
+  agendaItemRecords?: any[];
 }; 
 
 export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
@@ -941,7 +947,16 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       void removeSection(index);
       return;
     }
-    const hasUnsavedDraftChanges = isEditingThis && !draftEmpty;
+    // Compare against what is stored: an unchanged open editor is not "unsaved".
+    const liveDiscussion = isEditingThis ? (sectionDiscussionRef.current?.getMarkdown() ?? sectionDraft?.discussion ?? "") : "";
+    const hasUnsavedDraftChanges = isEditingThis && !draftEmpty && (
+      String(sectionDraft?.title ?? "").trim() !== String(section.title ?? "").trim()
+      || String(sectionDraft?.presenter ?? "").trim() !== String(section.presenter ?? "").trim()
+      || String(liveDiscussion).trim() !== String(section.discussion ?? "").trim()
+      || JSON.stringify((sectionDraft?.decisions ?? []).map((line) => line.trim()).filter(Boolean)) !== JSON.stringify(section.decisions ?? [])
+      || JSON.stringify(sectionDraft?.linkedTaskIds ?? []) !== JSON.stringify(section.linkedTaskIds ?? [])
+      || Object.keys(sectionDraft?.taskUpdates ?? {}).length > 0
+    );
     const titleForPrompt = (isEditingThis ? sectionDraft?.title : section.title) || "Untitled section";
     const childWarning = childIndexes.length
       ? ` Its ${childIndexes.length} sub-item${childIndexes.length === 1 ? "" : "s"} will be removed too${childrenWithContent.length ? ", including recorded content" : ""}.`
@@ -1078,14 +1093,11 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
       sourceEvidence: existing.sourceEvidence,
       agendaItemId: existing.agendaItemId,
       decisions: sectionDraft.decisions.map((d) => d.trim()).filter(Boolean),
-      actionItems: sectionDraft.actionItems
-        .map((item) => ({
-          text: item.text.trim(),
-          assignee: cleanOptional(item.assignee),
-          dueDate: cleanOptional(item.dueDate),
-          done: !!item.done,
-        }))
-        .filter((item) => item.text),
+      // Action items are edited in the Action items card (status, assignee,
+      // task link); the section editor keeps them exactly as stored so A12
+      // status, person links and task ids are never stripped.
+      actionItems: Array.isArray(existing.actionItems) ? existing.actionItems : [],
+      sourceTitle: existing.sourceTitle,
       linkedTaskIds: sectionDraft.linkedTaskIds.length ? sectionDraft.linkedTaskIds : undefined,
       publicVisible: sectionDraft.publicVisible ? undefined : false,
     };

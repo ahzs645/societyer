@@ -534,7 +534,7 @@ export function MeetingDetailPage() {
   const minutesDraftMetadata = parseDocumentMetadata(minutesDraftTranscript);
   const minutesDraftIsImportMetadata = isImportTranscriptMetadata(minutesDraftMetadata);
   const transcriptOnFile = transcriptRecord?.text ?? (minutesDraftIsImportMetadata ? "" : minutesDraftTranscript);
-  const importNote = minutesDraftIsImportMetadata ? importTranscriptNote(minutesDraftMetadata) : null;
+  const importNote = minutesDraftIsImportMetadata ? importTranscriptNote(minutesDraftMetadata, sourceExternalIdsForMinutes(minutes)) : null;
   const transcriptProvider = transcriptOnFile
     ? transcriptRecord?.provider ?? (minutesDraftTranscript ? "manual" : null)
     : null;
@@ -1134,13 +1134,19 @@ export function MeetingDetailPage() {
   // format. Returns null when there's nothing to export.
   const buildExportArgs = (extension: "docx" | "pdf") => {
     if (!meeting || !minutes || !society) return null;
-    const safe = (meeting.title || "meeting").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    // F21: a readable file name — date, then the title without a leading date
+    // or a source file extension ("2013-05-14-executive-meeting-minutes.docx").
+    const safe = (meeting.title || "meeting")
+      .replace(/\.(?:docx?|pdf|rtf|odt|txt)\b/gi, "")
+      .replace(/^\s*\d{4}-\d{2}-\d{2}\s*/, "")
+      .replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()
+      .slice(0, 60).replace(/-+$/, "") || "meeting";
     const redact = publicCopyMode ? (s: string) => redactText(s, redactOpts()) : undefined;
     const bodyHtml = renderExportBody(redact, publicCopyMode);
     const slug = publicCopyMode ? "public-minutes" : "minutes";
     const titleSuffix = publicCopyMode ? "Public minutes" : "Minutes";
     return {
-      filename: `${safe}-${slug}-${formatDate(minutes.heldAt, "yyyy-MM-dd")}.${extension}`,
+      filename: `${meetingCalendarDate(meeting) ?? formatDate(minutes.heldAt, "yyyy-MM-dd")}-${safe}-${slug}.${extension}`,
       title: `${meeting.title} — ${titleSuffix}`,
       bodyHtml,
     };
@@ -1968,6 +1974,22 @@ export function MeetingDetailPage() {
     return taskId ? String(taskId) : undefined;
   };
 
+  // "Create task from action" (B6): the task keeps the meeting, committee,
+  // assignee (person link and the name as written) and a status mapped from
+  // the action's status.
+  const createTaskFromAction = async (draft: any): Promise<string | undefined> => {
+    if (!canTasksWrite || !society) return undefined;
+    const taskId = await createTask({
+      societyId: society._id,
+      ...draft,
+      meetingId: meeting._id as Id<"meetings">,
+      committeeId: meeting.committeeId ?? undefined,
+      tags: ["minutes-action"],
+    });
+    toast.success("Task created", draft.title);
+    return taskId ? String(taskId) : undefined;
+  };
+
   const saveCurrentMeetingAsTemplate = async () => {
     if (!(canMeetingsWrite)) return;
     await createTemplateFromMeeting({
@@ -2446,6 +2468,9 @@ export function MeetingDetailPage() {
             meeting={meeting}
             directoryPeople={directoryPeople}
             expectedAttendees={expectedAttendees}
+            agendaItemRecords={(agendaRecord as any)?.items ?? []}
+            saveTopLevelActionItems={async (items) => { if (minutes && canMinutesWrite) await updateMinutes({ id: minutes._id, patch: { actionItems: items } }); }}
+            createTaskFromAction={canTasksWrite ? createTaskFromAction : undefined}
             quorumSnapshot={quorumSnapshot}
             activeProxyCount={activeProxyCount}
             quorumLegalGuides={quorumLegalGuides}
