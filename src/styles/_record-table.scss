@@ -2224,11 +2224,29 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   opacity: 0;
   transition: opacity 120ms ease, transform 120ms ease;
   transform: translateX(2px);
+  /* Invisible actions must not swallow taps/clicks meant for the row. */
+  pointer-events: none;
 
   .record-table__row:hover &,
   .record-table__row:focus-within & {
     opacity: 1;
     transform: translateX(0);
+    pointer-events: auto;
+  }
+}
+
+/* Narrow windows (phones without touch emulation, split-screen desktops):
+ * a sticky actions column wider than the visible table would cover every data
+ * cell. Keep it in the scroll flow, always visible, like the touch layout. */
+@media (max-width: 760px) {
+  .record-table__row-actions-head,
+  .record-table__row-actions-cell {
+    position: static;
+  }
+  .record-table__row-actions {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
   }
 }
 
@@ -2248,6 +2266,7 @@ $chip-tones: ("blue", "green", "red", "amber", "purple", "teal", "gray", "pink",
   .record-table__row-actions {
     opacity: 1;
     transform: none;
+    pointer-events: auto;
     .btn, button, a {
       min-width: 44px;
       min-height: 44px;
