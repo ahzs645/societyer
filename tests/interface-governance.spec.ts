@@ -109,7 +109,7 @@ test("acting Member sees own access without a roster and cannot edit member or m
   await page.getByLabel("Display name", { exact: true }).fill("Interface Member");
   await page.getByLabel("Email", { exact: true }).fill("interface-member@example.test");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+  await expect(page.getByText("User added", { exact: true })).toBeVisible();
   const picker = page.getByTitle("Switch acting user", { exact: true });
   if (!(await picker.isVisible())) await page.getByRole("button", { name: "More", exact: true }).click();
   await picker.click();

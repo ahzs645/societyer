@@ -107,7 +107,9 @@ test("document metadata opens its review workbench and validates page comments",
   await dialog.getByLabel("Title", { exact: true }).fill(title);
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Document saved", { exact: true })).toBeVisible();
-  await page.locator("tr", { hasText: title }).getByRole("link", { name: "Review", exact: true }).click();
+  // Row actions live in the per-document menu (Preview stays inline).
+  await page.locator("tr", { hasText: title }).getByRole("button", { name: "Actions for this document", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Open review page", exact: true }).click();
   await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Open file", exact: true }).click();
   await expect(page.getByText("No file or URL is attached to this document.", { exact: true })).toBeVisible();
