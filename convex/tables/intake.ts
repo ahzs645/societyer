@@ -72,7 +72,7 @@ export const intakeTables = {
     societyId: v.id("societies"),
     runId: v.id("intakeRuns"),
     fileId: v.id("intakeFiles"),
-    method: v.string(), // docx-ooxml | pdfjs-text | xlsx-ooxml | msg-msgreader | libreoffice-docx | plain-text | unsupported
+    method: v.string(), // docx-ooxml | pdfjs-text | xlsx-ooxml | msg-msgreader | libreoffice-docx | doc-binary | plain-text | unsupported
     methodVersion: v.string(),
     blocks: v.array(v.any()), // IntakeBlock[] with page/sheet/cell/charStart/charEnd
     text: v.optional(v.string()),

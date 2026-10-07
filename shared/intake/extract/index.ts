@@ -1,6 +1,7 @@
 /** Stage 2 dispatcher: bytes + file name → IntakeExtract. Runtime-neutral; the
  * legacy-format converter (LibreOffice) and OCR are injected by Node/Electron hosts. */
 import { blocksFromPlainText, finalizeBlocks, INTAKE_EXTRACT_VERSION, type DraftBlock, type IntakeExtract } from "../blocks";
+import { extractDoc } from "./doc";
 import { extractDocx } from "./docx";
 import { extractMsg } from "./msg";
 import { extractPdf, type PdfJsModule } from "./pdf";
@@ -48,9 +49,21 @@ export async function extractBytes(fileName: string, bytes: Uint8Array, options:
   if (["doc", "odt", "wpd", "rtf", "ppt", "pptx"].includes(ext) || ext === "xls" || ext === "ods") {
     const target = ext === "xls" || ext === "ods" ? "xlsx" : "docx";
     if (ext === "rtf" && !options.convertLegacy) return textExtract(stripRtf(decodeText(bytes)));
-    if (!options.convertLegacy) return unsupported(`Legacy .${ext} needs LibreOffice conversion, which is not available in this runtime.`);
+    // Word 97–2003 without LibreOffice (browser): read the binary directly (text and approximate tables).
+    const direct = () => {
+      // Some ".doc" files are RTF or HTML saved under a Word name.
+      const head = new TextDecoder("latin1").decode(bytes.subarray(0, 64)).trimStart();
+      if (head.startsWith("{\\rtf")) return textExtract(stripRtf(decodeText(bytes)));
+      if (/^<(?:!doctype html|html)/i.test(head)) return textExtract(decodeText(bytes).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(?:p|div|tr|li|h\d)>/gi, "\n\n").replace(/<[^>]+>/g, ""));
+      try {
+        return extractDoc(bytes);
+      } catch (error) {
+        return unsupported(`This .doc could not be read without LibreOffice: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+    if (!options.convertLegacy) return ext === "doc" ? direct() : unsupported(`Legacy .${ext} needs LibreOffice conversion, which is not available in this runtime.`);
     const converted = await options.convertLegacy(bytes, fileName, target);
-    if (!converted) return unsupported(`LibreOffice could not convert this .${ext} file.`);
+    if (!converted) return ext === "doc" ? direct() : unsupported(`LibreOffice could not convert this .${ext} file.`);
     const extract = target === "xlsx" ? await extractXlsx(converted) : await extractDocx(converted);
     return { ...extract, method: target === "xlsx" ? "libreoffice-xlsx" : "libreoffice-docx", warnings: [...extract.warnings, `Converted from .${ext} with LibreOffice; page numbers are approximate.`] };
   }
