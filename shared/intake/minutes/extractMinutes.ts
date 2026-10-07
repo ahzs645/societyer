@@ -258,6 +258,10 @@ export function parseMotion(line: string): ParsedMotion | null {
     ?? nameOk(firstName(new RegExp(ci(String.raw`seconded\s+by\s+`) + String.raw`(${NAME})`), text))
     ?? nameOk(firstName(new RegExp(String.raw`(?:,\s*|\band\s+|^)(${NAME})\s+second(?:ed|s)?\b`), text))
     ?? nameOk(firstName(new RegExp(ci(String.raw`\bsecond(?:ed|er)?\s*[:\-–]\s*`) + String.raw`(${NAME})`), text));
+  // "seconded by Casey Lark. Carried." — the name ends at the sentence break before the outcome.
+  const trimOutcome = (name?: string) => name?.replace(/\.\s+(?:motion\s+)?(?:carried|defeated|passed|approved|all)\b.*$/i, "").trim();
+  result.movedBy = trimOutcome(result.movedBy);
+  result.secondedBy = trimOutcome(result.secondedBy);
   if (result.movedBy && result.secondedBy && result.movedBy === result.secondedBy) result.secondedBy = undefined;
   if (/\bby consensus\b|\bconsensus\b/i.test(text)) result.byConsensus = true;
   if (/\bunanimous(?:ly)?\b/i.test(text)) result.unanimous = true;
@@ -306,6 +310,8 @@ export function parseMotion(line: string): ParsedMotion | null {
     .replace(/^\s*(?:carried|passed)\s+/i, "")
     .replace(/\*\*/g, "").replace(/^[\s\-–—;,]+|[\s\-–—;,]+$/g, "")
     .replace(/\s+/g, " ").replace(/^[,;:\s]+|[,;:\s]+$/g, "").trim();
+  // A movers-only line ("Moved by A, seconded by B. Carried.") leaves only a connective behind.
+  if (/^(?:seconded|second|moved|by|and)$/i.test(body.replace(/[.\s]+$/, ""))) body = "";
   result.text = body;
   // Outcome: explicit outcome outside the motion wording wins over words inside it.
   const outside = text.replace(body, " ");
@@ -761,6 +767,8 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
     const motion = unit.role === "action" || consumed.has(unit) ? null : parseMotion(text);
     const standaloneOutcome = !motion && unit.role !== "action" && !consumed.has(unit) ? /^\s*[•●\-]?\s*(?:motion\s+)?(carried|defeated|passed)(?:\s+unanimously)?\s*\.?\s*$/i.exec(text) : null;
     if (motion) {
+      // Units that carry the mover / seconder / outcome when they are written on following lines.
+      const partUnits: { mover?: typeof unit; seconder?: typeof unit; outcome?: typeof unit } = {};
       // Mover / seconder written on the following lines ("Seconder: B. Oke").
       for (let look = index + 1; look <= Math.min(bodyUnits.length - 1, index + 3); look++) {
         const next = bodyUnits[look];
@@ -770,18 +778,31 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
         const nextMotion = parseMotion(next.text);
         if (nextMotion && !nextMotion.text) {
           // "Motion by Pat/Lee - all approved" completes the motion above it.
-          motion.movedBy ??= nextMotion.movedBy;
-          motion.secondedBy ??= nextMotion.secondedBy;
+          if (!motion.movedBy && nextMotion.movedBy) {
+            motion.movedBy = nextMotion.movedBy;
+            partUnits.mover = next;
+          }
+          if (!motion.secondedBy && nextMotion.secondedBy) {
+            motion.secondedBy = nextMotion.secondedBy;
+            partUnits.seconder = next;
+          }
           if (!motion.outcome && nextMotion.outcome) {
             motion.outcome = nextMotion.outcome;
             motion.outcomeQuote = nextMotion.outcomeQuote;
+            partUnits.outcome = next;
           }
           consumed.add(next);
           continue;
         }
         if ((!mover && !seconder) || nextMotion) break;
-        if (mover && !motion.movedBy) motion.movedBy = cleanName(mover[1]);
-        if (seconder && !motion.secondedBy) motion.secondedBy = cleanName(seconder[1]);
+        if (mover && !motion.movedBy) {
+          motion.movedBy = cleanName(mover[1]);
+          partUnits.mover = next;
+        }
+        if (seconder && !motion.secondedBy) {
+          motion.secondedBy = cleanName(seconder[1]);
+          partUnits.seconder = next;
+        }
         consumed.add(next);
       }
       // "Moved by X, seconded by Y, that" continues on the next line.
@@ -811,7 +832,7 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
       if (motionText && !seenMotionText.has(key)) {
         seenMotionText.add(key);
         let outcome = motion.outcome;
-        let outcomeUnit = unit;
+        let outcomeUnit = partUnits.outcome ?? unit;
         let outcomeQuote = motion.outcomeQuote;
         let outcomeStatus: "stated" | "inferred" = "stated";
         if (!outcome) {
@@ -832,8 +853,8 @@ export function extractMeetingMinutes(input: MinutesInput): ExtractionEnvelope {
         const motionRecord: MotionRecord = {
           text: textStatus === "inferred" ? inferred(motionText, [unitLocator(unit)], 0.5, "Only the mover and seconder are recorded; wording taken from the agenda item.") : stated(motionText, textLocators, 0.85, motionText === stripBullet(text) ? undefined : "Wording normalised from the quoted line(s) (mover, seconder and outcome removed)."),
           outcome: outcome ? fv(outcome, outcomeUnit, outcomeQuote, outcomeStatus === "stated" ? 0.9 : 0.6, outcomeStatus) : { value: "unknown", status: "not_stated", confidence: 0.5, locators: [unitLocator(unit)] },
-          ...(motion.movedBy ? { movedBy: personRef(motion.movedBy, unit, motion.movedBy, 0.85) } : {}),
-          ...(motion.secondedBy ? { secondedBy: personRef(motion.secondedBy, unit, motion.secondedBy, 0.85) } : {}),
+          ...(motion.movedBy ? { movedBy: personRef(motion.movedBy, partUnits.mover ?? unit, motion.movedBy, 0.85) } : {}),
+          ...(motion.secondedBy ? { secondedBy: personRef(motion.secondedBy, partUnits.seconder ?? unit, motion.secondedBy, 0.85) } : {}),
           ...(motion.votes ? { votes: fv(motion.votes, unit, undefined, 0.8) } : {}),
           ...(motion.byConsensus ? { byConsensus: fv(true, unit, "consensus", 0.85) } : {}),
           ...(motion.special ? { resolutionType: fv("special" as const, unit, "special resolution", 0.9) } : motion.unanimous ? { resolutionType: fv("unanimous" as const, unit, undefined, 0.7) } : {}),

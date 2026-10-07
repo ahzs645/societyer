@@ -34,7 +34,7 @@ export type IntakeBlock = {
 };
 
 export type IntakeExtractMethod =
-  | "docx-ooxml" | "pdfjs-text" | "xlsx-ooxml" | "msg-msgreader" | "libreoffice-docx" | "libreoffice-xlsx" | "plain-text" | "unsupported";
+  | "docx-ooxml" | "pdfjs-text" | "xlsx-ooxml" | "msg-msgreader" | "libreoffice-docx" | "libreoffice-xlsx" | "plain-text" | "eml-headers" | "unsupported";
 
 export type IntakeExtract = {
   method: IntakeExtractMethod;

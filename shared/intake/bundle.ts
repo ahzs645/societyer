@@ -6,10 +6,12 @@ import { recordsFromBundle } from "../functions/importSessionHelpers/importSessi
 import type { ClassificationPrior } from "./classify";
 import type { IntakeCluster } from "./cluster";
 import type { Disposition } from "./junk";
-import type { ProcessingLogEntry, Sensitivity } from "./privacy";
+import { redact, type ProcessingLogEntry, type Sensitivity } from "./privacy";
+import { PROVIDER_EXCLUDED_CLASSES } from "./classify";
 import type { ActionChain, RecordGap, ReconcileLink, ReconciledMeeting } from "./reconcile";
 import type { ExtractionEnvelope, FieldValue, Locator, UnsupportedDetail } from "./schemas/common";
 import { isFieldValue, type VerificationSummary } from "./verify";
+import { AFFECTED_TABLE, classBundleRecords } from "./bundleClasses";
 
 export type IntakeFileRecord = {
   fileKey: string;
@@ -33,7 +35,12 @@ export type IntakeFileRecord = {
   extractMethod?: string;
   textLength?: number;
 };
-export type IntakeExtractionResult = ExtractionEnvelope & { verification?: VerificationSummary; fileKey: string };
+export type IntakeExtractionResult = ExtractionEnvelope & {
+  verification?: VerificationSummary;
+  fileKey: string;
+  /** Derived records (minutes embedded in a package) point at the file they were found in. */
+  parentFileKey?: string;
+};
 export type IntakeRunResult = {
   runId: string;
   name: string;
@@ -45,7 +52,20 @@ export type IntakeRunResult = {
   files: IntakeFileRecord[];
   clusters: IntakeCluster[];
   extractions: IntakeExtractionResult[];
-  reconciliation: { meetings: ReconciledMeeting[]; links: ReconcileLink[]; gaps: RecordGap[]; actionChains: ActionChain[] };
+  reconciliation: {
+    meetings: ReconciledMeeting[];
+    links: ReconcileLink[];
+    gaps: RecordGap[];
+    actionChains: ActionChain[];
+    /** WP-L: meetings shown by an agenda/package/AGM material with no minutes ("held, minutes missing"). */
+    evidencedMeetings?: Array<{ meetingKey: string; bodyKey: string; date: string; fileId: string; kind: string }>;
+    /** WP-L: policy/bylaw versions linked to the motion that adopted them. */
+    policyAdoptions?: Array<ReconcileLink & { meetingDate: string; bodyKey: string; motionIndex: number }>;
+    /** WP-L: detected change of fiscal year end across annual statements. */
+    fiscalYearEndChanges?: Array<{ fileKey: string; from: string; to: string; firstYear: number }>;
+  };
+  /** WP-L: the organization the records belong to (most frequent society name in the corpus). */
+  organizationName?: string;
   processingLog: ProcessingLogEntry[];
   /** Stage 7: people seen across the run, with spelling variants folded together. */
   people?: Array<{ id: string; fullName: string; aliases: string[]; occurrences: number }>;
@@ -173,7 +193,7 @@ export function minutesPayloadFromExtraction(extraction: IntakeExtractionResult,
 const GAP_REASON: Record<UnsupportedDetail["category"], string> = { no_field: "no_schema_field", no_table: "no_schema_field", no_relationship: "no_import_key", no_ui_edit: "no_ui_input", lossy_normalization: "import_dropped" };
 
 /** representationGaps rows (schema.md §5a). */
-export function representationGapRow(detail: UnsupportedDetail, fileKey: string, observedDate: string | undefined, sha256?: string): Record<string, unknown> {
+export function representationGapRow(detail: UnsupportedDetail, fileKey: string, observedDate: string | undefined, sha256?: string, affectedTable = "meetings"): Record<string, unknown> {
   const locator = detail.locators[0];
   const [table, field] = detail.suggestedTarget.split(".");
   return {
@@ -190,8 +210,8 @@ export function representationGapRow(detail: UnsupportedDetail, fileKey: string,
     },
     excerpt: (locator?.quote ?? detail.description).slice(0, 400),
     ...(observedDate ? { observedDate } : {}),
-    affectedTable: "meetings",
-    ...(table ? { proposedTargetTable: table.replace(/=.*/, "") } : {}),
+    affectedTable,
+    ...(table ? { proposedTargetTable: table.replace(/=.*/, "").replace(/\s.*$/, "") } : {}),
     ...(field ? { proposedField: field } : {}),
     status: "open",
     reviewHistory: [],
@@ -199,10 +219,10 @@ export function representationGapRow(detail: UnsupportedDetail, fileKey: string,
   };
 }
 
-const CATEGORY: Partial<Record<string, string>> = { meetingMinutes: "Minutes", agenda: "Minutes", meetingPackage: "Minutes", agmMaterial: "Minutes", bylaws: "Bylaws", policy: "Policy", financialStatement: "FinancialStatement", budget: "FinancialStatement", insurance: "Policy", agreement: "Agreement", grant: "Agreement" };
-const SECTION: Partial<Record<string, string>> = { meetingMinutes: "meetings", agenda: "meetings", meetingPackage: "meetings", agmMaterial: "meetings", bylaws: "policies", policy: "policies", financialStatement: "financials", budget: "financials", insurance: "insurance", directorConsent: "directors", proxy: "directors", roster: "directors", agreement: "archiveAccessions", grant: "archiveAccessions" };
+const CATEGORY: Partial<Record<string, string>> = { meetingMinutes: "Minutes", agenda: "Minutes", meetingPackage: "Minutes", agmMaterial: "Minutes", bylaws: "Bylaws", policy: "Policy", financialStatement: "FinancialStatement", budget: "FinancialStatement", insurance: "Insurance", agreement: "Agreement", grant: "Grant", registryFiling: "Filing", invoice: "Receipt" };
+const SECTION: Partial<Record<string, string>> = { meetingMinutes: "meetings", agenda: "meetings", meetingPackage: "meetings", agmMaterial: "meetings", bylaws: "policies", policy: "policies", financialStatement: "financials", budget: "financials", insurance: "insurance", directorConsent: "directors", proxy: "directors", roster: "directors", agreement: "archiveAccessions", grant: "grants", registryFiling: "filings", invoice: "financials", correspondence: "archiveAccessions" };
 
-export type BundleBuild = { bundle: Record<string, unknown>; issues: string[]; stagedRecords: number; meetingsBundled: number; minutesSkipped: Array<{ fileKey: string; reason: string }> };
+export type BundleBuild = { bundle: Record<string, unknown>; issues: string[]; stagedRecords: number; meetingsBundled: number; minutesSkipped: Array<{ fileKey: string; reason: string }>; /** Files with at least one native (non-documentMap) record. */ transposedFiles?: string[]; /** Records per bundle collection. */ collectionCounts?: Record<string, number> };
 
 export function buildImportBundle(run: IntakeRunResult): BundleBuild {
   const byKey = new Map(run.files.map((file) => [file.fileKey, file]));
@@ -228,7 +248,9 @@ export function buildImportBundle(run: IntakeRunResult): BundleBuild {
       notes: [`Original path: ${file.path}`, file.dispositionReason ?? "", file.classification ? `Classified ${docClass} (${file.classification.confidence}) from ${file.classification.rationale.slice(0, 3).join("; ")}` : ""].filter(Boolean).join("\n"),
     };
     sources.push(source);
-    const text = run.texts?.[file.fileKey];
+    const rawText = run.texts?.[file.fileKey];
+    // Personal data (contact rosters, consents, e-mails, invoices): contact details are masked, length-preserving.
+    const text = rawText && (file.sensitivity === "personal" || PROVIDER_EXCLUDED_CLASSES.has(docClass as any)) ? redact(rawText).text : rawText;
     documentMap.push({
       externalId: file.fileKey, externalSystem: source.externalSystem, sourceExternalIds: [file.fileKey], title: file.name, fileName: file.name,
       category: source.category, ...(file.sha256 ? { sha256: file.sha256 } : {}), ...(file.sizeBytes !== undefined ? { fileSizeBytes: file.sizeBytes } : {}),
@@ -247,7 +269,8 @@ export function buildImportBundle(run: IntakeRunResult): BundleBuild {
     const extraction = extractionByFile.get(meeting.canonicalFileId);
     if (!extraction || extraction.docClass !== "meetingMinutes") continue;
     const clusterIds = run.clusters.filter((cluster) => cluster.members.some((member) => meeting.files.some((file) => file.fileId === member.fileId))).flatMap((cluster) => cluster.members.map((member) => member.fileId));
-    const ids = [...new Set([meeting.canonicalFileId, ...meeting.files.map((file) => file.fileId), ...clusterIds])];
+    const parentOf = (fileId: string) => run.extractions.find((candidate) => candidate.fileKey === fileId)?.parentFileKey ?? fileId;
+    const ids = [...new Set([meeting.canonicalFileId, ...meeting.files.map((file) => file.fileId), ...clusterIds].map(parentOf))];
     const adoptingMeeting = meeting.approvedBy ? run.reconciliation.meetings.find((candidate) => candidate.meetingKey === meeting.approvedBy!.meetingKey) : undefined;
     const payload = minutesPayloadFromExtraction(extraction, ids, {
       meeting,
@@ -256,20 +279,27 @@ export function buildImportBundle(run: IntakeRunResult): BundleBuild {
     });
     if (!payload) continue;
     meetingMinutes.push(payload);
-    for (const id of ids) bundledFiles.add(id);
+    for (const id of [...ids, meeting.canonicalFileId, ...meeting.files.map((file) => file.fileId)]) bundledFiles.add(id);
   }
+  // Every other class: agendas/packages (incl. meetings held with minutes missing), policies,
+  // rule sets, directors and seats, statements, insurance, grants, filings, evidence, transactions.
+  const classes = classBundleRecords(run, { minutesPayloads: meetingMinutes });
+  meetingMinutes.push(...(classes.collections.meetingMinutes ?? []));
   for (const extraction of run.extractions) {
-    if (extraction.docClass !== "meetingMinutes" || bundledFiles.has(extraction.fileKey)) continue;
+    if (extraction.docClass !== "meetingMinutes" || bundledFiles.has(extraction.fileKey) || extraction.parentFileKey) continue;
     const date = val<any>((extraction.record as any).date);
     minutesSkipped.push({ fileKey: extraction.fileKey, reason: !date ? "No meeting date found" : date.precision !== "day" ? `Meeting date known only to ${date.precision} precision` : "Not selected as the canonical copy of a meeting" });
   }
   // Representation gaps: unsupported details plus minutes that cannot be promoted.
   const representationGaps: Record<string, unknown>[] = [];
   for (const extraction of run.extractions) {
-    const observed = val<any>((extraction.record as any).date)?.iso;
-    const sha = byKey.get(extraction.fileKey)?.sha256;
-    for (const detail of extraction.unsupported) representationGaps.push(representationGapRow(detail, extraction.fileKey, observed, sha));
+    const record = extraction.record as any;
+    const observed = (val<any>(record.date) ?? val<any>(record.meetingDate) ?? val<any>(record.periodEnd) ?? val<any>(record.effectiveDate) ?? val<any>(record.filedDate))?.iso;
+    const sourceKey = extraction.parentFileKey ?? extraction.fileKey;
+    const sha = byKey.get(sourceKey)?.sha256;
+    for (const detail of extraction.unsupported) representationGaps.push(representationGapRow(detail, sourceKey, typeof observed === "string" && /^\d{4}(?:-\d{2}){0,2}$/.test(observed) ? observed : undefined, sha, AFFECTED_TABLE[extraction.docClass] ?? "meetings"));
   }
+  representationGaps.push(...classes.gaps);
   for (const skipped of minutesSkipped.filter((item) => !/canonical/.test(item.reason))) {
     representationGaps.push({ infoType: "meeting.date_precision", reason: "identity_unresolved", sourceExternalId: skipped.fileKey, locator: {}, excerpt: skipped.reason, affectedTable: "meetings", proposedTargetTable: "meetings", proposedField: "scheduledAt", status: "open", reviewHistory: [], notes: "Minutes cannot become a meeting until an exact date is confirmed." });
   }
@@ -286,9 +316,13 @@ export function buildImportBundle(run: IntakeRunResult): BundleBuild {
     sources,
     documentMap,
     meetingMinutes,
+    ...Object.fromEntries(Object.entries(classes.collections).filter(([key, rows]) => key !== "meetingMinutes" && rows.length)),
     representationGaps,
   };
-  return { bundle, ...validateIntakeBundle(bundle), meetingsBundled: meetingMinutes.length, minutesSkipped };
+  const transposedFiles = new Set<string>(classes.transposed);
+  for (const minutes of meetingMinutes) for (const id of (minutes as any).sourceExternalIds ?? []) transposedFiles.add(String(id));
+  const collectionCounts = Object.fromEntries(Object.entries(bundle).filter(([, value]) => Array.isArray(value)).map(([key, value]) => [key, (value as unknown[]).length]));
+  return { bundle, ...validateIntakeBundle(bundle), meetingsBundled: meetingMinutes.length, minutesSkipped, transposedFiles: [...transposedFiles], collectionCounts };
 }
 
 /** Preflight against the current import contract. `representationGaps` is being added
@@ -364,10 +398,20 @@ export function coverageReport(run: IntakeRunResult, build: BundleBuild): Covera
   const headline = empty();
   const byClass: Record<string, CoverageCell> = {}, byBody: Record<string, CoverageCell> = {}, byYear: Record<string, CoverageCell> = {};
   const dispositions: Record<string, number> = {};
-  const transposed = new Set<string>();
+  const transposed = new Set<string>(build.transposedFiles ?? []);
   for (const minutes of build.bundle.meetingMinutes as any[]) for (const id of minutes.sourceExternalIds ?? []) transposed.add(id);
   const canonical = new Set(run.reconciliation.meetings.map((meeting) => meeting.canonicalFileId));
-  const extractionByFile = new Map(run.extractions.map((extraction) => [extraction.fileKey, extraction]));
+  // Non-minutes classes have no reconciled "canonical copy": a file in a native collection is canonical.
+  for (const extraction of run.extractions) if (extraction.docClass !== "meetingMinutes" && transposed.has(extraction.fileKey)) canonical.add(extraction.fileKey);
+  // Minutes embedded in a package count toward the package file.
+  for (const meeting of run.reconciliation.meetings) {
+    const parent = run.extractions.find((extraction) => extraction.fileKey === meeting.canonicalFileId)?.parentFileKey;
+    if (parent) canonical.add(parent);
+  }
+  const extractionByFile = new Map(run.extractions.filter((extraction) => !extraction.parentFileKey).map((extraction) => [extraction.fileKey, extraction]));
+  const derivedByParent = new Map<string, IntakeExtractionResult[]>();
+  for (const extraction of run.extractions) if (extraction.parentFileKey) derivedByParent.set(extraction.parentFileKey, [...(derivedByParent.get(extraction.parentFileKey) ?? []), extraction]);
+  const reconciledCanonical = new Set(run.reconciliation.meetings.map((meeting) => meeting.canonicalFileId));
   let quoted = 0, bad = 0;
   for (const file of run.files) {
     dispositions[file.disposition] = (dispositions[file.disposition] ?? 0) + 1;
@@ -385,10 +429,22 @@ export function coverageReport(run: IntakeRunResult, build: BundleBuild): Covera
       gap = extraction.unsupported.length;
       const isBundled = transposed.has(file.fileKey) && canonical.has(file.fileKey);
       const isCopy = transposed.has(file.fileKey) && !canonical.has(file.fileKey);
+      const agreementGap = extraction.unsupported.some((detail) => detail.infoType === "agreement.contract");
       if (isBundled) {
         native = Math.max(0, total - mismatched - gap);
         unresolved = mismatched;
+      } else if (agreementGap) {
+        // No agreements table yet: the whole record is carried as a representation gap (system gap).
+        gap = Math.max(gap, total - mismatched);
+        unresolved = mismatched;
       } else if (!isCopy) unresolved = total;
+      // Minutes embedded in this package that became the record of a meeting.
+      for (const derived of derivedByParent.get(file.fileKey) ?? []) {
+        quoted += derived.verification?.quoted ?? 0;
+        bad += (derived.verification?.mismatched ?? 0) + (derived.verification?.invalid ?? 0);
+        const counts = knownFields(derived.record);
+        if (reconciledCanonical.has(derived.fileKey)) native += Math.max(0, counts.total - counts.mismatched - derived.unsupported.length);
+      }
     }
     for (const cell of cells) {
       cell.files++;
@@ -405,11 +461,11 @@ export function coverageReport(run: IntakeRunResult, build: BundleBuild): Covera
   }
   const notesOut = [
     "Facts are FieldValues with a stated/inferred value. Native = landed in a bundle collection with a verified locator; gap = an unsupported detail (representationGaps); unresolved = extracted but not promotable (no exact date, duplicate-free span mismatch).",
-    "Classes without a structured extractor in this MVP (policies, consents, finance, agreements) are catalogued in documentMap and count as files, not facts.",
+    "Every governance class has a deterministic extractor (WP-L); reports, plans, outreach, images and audio are catalogued in documentMap and count as files, not facts. Facts of a file whose extraction landed in no native collection count as unresolved.",
   ];
-  const attendanceRows = run.extractions.flatMap((extraction) => (extraction.record as any).attendance ?? []);
+  const attendanceRows = run.extractions.filter((extraction) => extraction.docClass === "meetingMinutes").flatMap((extraction) => (extraction.record as any).attendance ?? []);
   const attendancePersonLinked = attendanceRows.length ? attendanceRows.filter((row: any) => row.personKey).length / attendanceRows.length : 0;
-  const refs = run.extractions.flatMap((extraction) => {
+  const refs = run.extractions.filter((extraction) => extraction.docClass === "meetingMinutes").flatMap((extraction) => {
     const record = extraction.record as any;
     return [record.chair, record.recorder, ...(record.motions ?? []).flatMap((motion: any) => [motion.movedBy, motion.secondedBy]), ...(record.sections ?? []).map((section: any) => section.presenter)].filter((field) => field?.value);
   });

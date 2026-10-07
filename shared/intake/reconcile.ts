@@ -4,6 +4,8 @@
  * - carry-forward of action items across consecutive meetings of a body;
  * - policy versions → the motion that adopted them;
  * - record gaps: cited minutes that are missing, draft-only meetings, AGM per calendar year. */
+import type { IntakeExtractionResult, IntakeFileRecord } from "./bundle";
+import { agendaEvidencedMeetings, annotateFiscalYearEndChanges, classRecordGaps, linkPolicyAdoptions } from "./classStages";
 import { bodyKeyFor, meetingKey } from "./entities";
 import { textSimilarity } from "./eval";
 
@@ -29,13 +31,17 @@ export type ReconciledMeeting = {
 };
 export type ReconcileLink = { kind: "draft-of" | "duplicate-of" | "approved-by-motion" | "policy-adopted-by" | "action-carried-forward"; from: string; to: string; detail?: string };
 export type RecordGap = {
-  kind: "missing_minutes" | "draft_only_minutes" | "agm_missing_for_year" | "body_month_without_minutes";
+  kind: "missing_minutes" | "draft_only_minutes" | "agm_missing_for_year" | "body_month_without_minutes"
+    // WP-L: gaps found through agendas/packages, references, filings and policy versions.
+    | "meeting_without_minutes" | "unresolved_reference" | "annual_report_evidence_missing" | "policy_without_adoption" | "fiscal_year_end_change";
   bodyKey?: string;
   date?: string;
   year?: number;
   citedBy?: { fileId: string; motionIndex: number };
   severity: "statutory" | "bylaw" | "practice";
   explanation: string;
+  /** Source files that evidence the gap (agenda of a meeting without minutes, the citing document …). */
+  evidence?: Array<{ fileId: string; text?: string }>;
 };
 export type ActionChain = { bodyKey: string; items: Array<{ meetingKey: string; fileId: string; index: number; text: string; assignee?: string }>; latestStatus: "open" | "carried_forward" };
 
@@ -187,6 +193,7 @@ export function bodyTimeline(meetings: ReconciledMeeting[]): Record<string, Reco
 export function reconcileExtractions(
   files: Array<{ fileKey: string; name: string; classification?: { docClass?: string; date?: { iso: string }; recordStatus?: string } }>,
   extractions: Array<{ fileKey: string; docClass?: string; record: unknown; references: Array<{ kind: string; text: string; date?: string }> }>,
+  options: { fiscalChanges?: ReturnType<typeof annotateFiscalYearEndChanges> } = {},
 ) {
   const summaries: MinutesSummary[] = extractions.filter((extraction) => (extraction.docClass ?? "meetingMinutes") === "meetingMinutes").map((extraction) => {
     const record = extraction.record as any;
@@ -210,6 +217,19 @@ export function reconcileExtractions(
   const carry = carryForwardActions(summaries);
   const years = reconciled.meetings.map((meeting) => Number(meeting.date.slice(0, 4))).filter(Number.isFinite);
   const agmEvidence = files.filter((file) => file.classification?.docClass === "agmMaterial" && file.classification.date).map((file) => ({ year: Number(file.classification!.date!.iso.slice(0, 4)), kind: file.classification!.recordStatus ?? "unknown" }));
-  const gaps = [...reconciled.gaps, ...(years.length ? agmGaps(reconciled.meetings, Math.min(...years), Math.max(...years), agmEvidence) : [])];
-  return { reconciled, carry, gaps };
+  // Class extractors (WP-L): agendas/packages evidence meetings without minutes,
+  // policies link to adopting motions, and fiscal-year-end changes raise gaps.
+  const classExtractions = extractions as unknown as IntakeExtractionResult[];
+  const classFiles = files as unknown as IntakeFileRecord[];
+  const fiscalChanges = options.fiscalChanges ?? annotateFiscalYearEndChanges(classExtractions);
+  const evidencedMeetings = agendaEvidencedMeetings(classExtractions, classFiles, reconciled.meetings);
+  const policyAdoptions = linkPolicyAdoptions(classExtractions, reconciled.meetings);
+  // An agenda/package that evidences an AGM counts as AGM evidence for the per-year rule (held, minutes missing).
+  const agmHeld = evidencedMeetings.filter((meeting) => meeting.bodyKey === "agm").map((meeting) => ({ year: Number(meeting.date.slice(0, 4)), kind: "agenda (minutes missing)" }));
+  const gaps = [
+    ...reconciled.gaps,
+    ...(years.length ? agmGaps(reconciled.meetings, Math.min(...years), Math.max(...years), [...agmEvidence, ...agmHeld]) : []),
+    ...classRecordGaps({ extractions: classExtractions, meetings: reconciled.meetings, evidenced: evidencedMeetings, policyLinks: policyAdoptions, fiscalChanges }),
+  ];
+  return { reconciled, carry, gaps, evidencedMeetings, policyAdoptions, fiscalChanges };
 }

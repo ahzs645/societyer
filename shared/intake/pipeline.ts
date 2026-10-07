@@ -3,13 +3,14 @@
  * inject file reading, hashing, text extraction and (optionally) an LLM. */
 import type { IntakeExtract } from "./blocks";
 import type { IntakeFileRecord, IntakeExtractionResult, IntakeRunResult } from "./bundle";
-import { classifyPrior } from "./classify";
+import { classifyPrior, EXTRACTION_CLASSES, PROVIDER_EXCLUDED_CLASSES } from "./classify";
+import { agendaEvidencedMeetings, annotateFiscalYearEndChanges, classRecordGaps, deriveEmbeddedMinutes, detectOrganizationName, linkPolicyAdoptions } from "./classStages";
+import { extractForClass } from "./extractors";
 import { clusterFiles } from "./cluster";
 import { buildDirectoryFromOccurrences, resolvePerson } from "./entities";
 import { EXTRACTABLE_EXTENSIONS, extensionOf } from "./extract";
 import { junkVerdict } from "./junk";
 import { extractWithLlm, mapWithConcurrency, TokenBudget, type GenerateObjectFn } from "./llm";
-import { extractMeetingMinutes } from "./minutes/extractMinutes";
 import { detectPii, sensitivityFor, type ProcessingLogEntry } from "./privacy";
 import { reconcileExtractions } from "./reconcile";
 import { validateExtraction } from "./schemas";
@@ -33,6 +34,12 @@ export type PipelineOptions = {
   keepExtracts?: boolean;
   /** false: stop after classification (hosted runs extract fields server-side with intakeActions:extractRun). */
   fieldExtraction?: boolean;
+  /** Classes to extract (default: every governance class with an extractor). */
+  extractionClasses?: ReadonlySet<import("./schemas/common").DocClass>;
+  /** "Today" for status decisions (insurance terms, agreement expiry); default: run start date. */
+  asOfISO?: string;
+  /** The organization the records belong to; detected from the corpus when omitted. */
+  organizationName?: string;
 };
 export type PipelineOutput = IntakeRunResult & { extracts: Record<string, IntakeExtract> };
 
@@ -117,35 +124,49 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
     }
   }
   log.push({ atISO: now(), stage: "classify", sentToProvider: false, note: `${live.length} files classified (deterministic priors)` });
-  // 5–6. Field extraction (LLM when configured, deterministic otherwise) + span verification.
+  // 5–6. Field extraction for every governance class (LLM when configured, deterministic otherwise) + span verification.
   const budget = options.llm ? new TokenBudget(options.llm.budgetTokens) : undefined;
-  const targets = options.fieldExtraction === false ? [] : files.filter((file) => file.disposition === "extract" && file.classification && MINUTES_LIKE.has(file.classification.docClass) && extracts[file.fileKey]);
+  const organizationName = options.organizationName ?? detectOrganizationName(texts);
+  const asOfISO = options.asOfISO ?? startedAtISO.slice(0, 10);
+  const classes = options.extractionClasses ?? EXTRACTION_CLASSES;
+  const targets = options.fieldExtraction === false ? [] : files.filter((file) => file.disposition === "extract" && file.classification && classes.has(file.classification.docClass) && extracts[file.fileKey]);
   const extractions: IntakeExtractionResult[] = [];
   done = 0;
   await mapWithConcurrency(targets, options.llm?.concurrency ?? 4, async (file) => {
     const extract = extracts[file.fileKey];
+    const docClass = file.classification!.docClass;
     let envelope: IntakeExtractionResult | undefined;
-    if (options.llm) {
-      const result = await extractWithLlm({ fileId: file.fileKey, fileName: file.name, docClass: "meetingMinutes", extract, restricted: file.sensitivity === "restricted" && Boolean(file.classification?.restricted), generate: options.llm.generate, provider: options.llm.provider, model: options.llm.model, budget }).catch((error) => ({ log: [{ atISO: now(), fileKey: file.fileKey, stage: "llm_skipped" as const, sentToProvider: true, note: `Provider error: ${error instanceof Error ? error.message : String(error)}` }], envelope: undefined, verification: undefined }));
+    // Restricted files (consents with home addresses, invoices, mailboxes …) are never sent to a provider.
+    const restricted = PROVIDER_EXCLUDED_CLASSES.has(docClass) || (file.sensitivity === "restricted" && (Boolean(file.classification?.restricted) || !MINUTES_LIKE.has(docClass)));
+    if (options.llm && !restricted) {
+      const result = await extractWithLlm({ fileId: file.fileKey, fileName: file.name, docClass, extract, restricted, generate: options.llm.generate, provider: options.llm.provider, model: options.llm.model, budget }).catch((error) => ({ log: [{ atISO: now(), fileKey: file.fileKey, stage: "llm_skipped" as const, sentToProvider: true, note: `Provider error: ${error instanceof Error ? error.message : String(error)}` }], envelope: undefined, verification: undefined }));
       log.push(...result.log);
       if (result.envelope && validateExtraction(result.envelope).ok) envelope = { ...result.envelope, verification: result.verification, fileKey: file.fileKey };
     }
     if (!envelope) {
-      const deterministic = extractMeetingMinutes({ fileId: file.fileKey, fileName: file.name, path: file.path, extract });
-      const verification = verifyRecord(deterministic.record, extract);
-      envelope = { ...deterministic, verification, fileKey: file.fileKey };
-      log.push({ atISO: now(), fileKey: file.fileKey, stage: "extract_fields", sentToProvider: false, note: `deterministic; ${verification.verified + verification.fuzzy}/${verification.quoted} quotes verified` });
+      const deterministic = extractForClass(docClass, { fileId: file.fileKey, fileName: file.name, path: file.path, extract, asOfISO, organizationName });
+      if (deterministic) {
+        const verification = verifyRecord(deterministic.record, extract);
+        envelope = { ...deterministic, verification, fileKey: file.fileKey };
+        log.push({ atISO: now(), fileKey: file.fileKey, stage: "extract_fields", sentToProvider: false, note: `deterministic ${docClass}; ${verification.verified + verification.fuzzy}/${verification.quoted} quotes verified` });
+      }
     }
-    extractions.push(envelope);
+    if (envelope) {
+      extractions.push(envelope);
+      // Packages, consent agendas and AGM packages carry earlier minutes: derive them as minutes records.
+      if (["agenda", "meetingPackage", "agmMaterial"].includes(docClass)) extractions.push(...deriveEmbeddedMinutes(envelope, extract, file));
+    }
     options.onProgress?.("fields", ++done, targets.length);
   });
   extractions.sort((a, b) => a.fileKey.localeCompare(b.fileKey));
+  const fiscalChanges = annotateFiscalYearEndChanges(extractions);
   // 7. Entity resolution within the run: a directory bootstrapped from attendance lists,
   // then short references ("Avery", "T. Marsh", initials) resolved per document.
-  const allNames = extractions.flatMap((extraction) => ((extraction.record as any).attendance ?? []).map((entry: any) => entry.nameAsWritten?.value).filter(Boolean));
+  const minutesExtractions = extractions.filter((extraction) => extraction.docClass === "meetingMinutes");
+  const allNames = minutesExtractions.flatMap((extraction) => ((extraction.record as any).attendance ?? []).map((entry: any) => entry.nameAsWritten?.value).filter(Boolean));
   const directory = buildDirectoryFromOccurrences(allNames);
   const occurrences = new Map<string, number>();
-  for (const extraction of extractions) {
+  for (const extraction of minutesExtractions) {
     const record = extraction.record as any;
     const contextNames = (record.attendance ?? []).map((entry: any) => entry.nameAsWritten?.value).filter(Boolean);
     const link = (name: string | undefined) => {
@@ -167,8 +188,8 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
     }
   }
   // 8. Reconcile.
-  const { reconciled, carry, gaps } = reconcileExtractions(files, extractions);
-  log.push({ atISO: now(), stage: "bundle", sentToProvider: false, note: `${reconciled.meetings.length} meetings reconciled; ${gaps.length} record gaps` });
+  const { reconciled, carry, gaps, evidencedMeetings, policyAdoptions } = reconcileExtractions(files, extractions, { fiscalChanges });
+  log.push({ atISO: now(), stage: "bundle", sentToProvider: false, note: `${reconciled.meetings.length} meetings reconciled; ${evidencedMeetings.length} meetings evidenced without minutes; ${gaps.length} record gaps` });
   return {
     runId,
     name: options.name,
@@ -180,7 +201,8 @@ export async function runIntakePipeline(sourceFiles: PipelineSourceFile[], optio
     files: files.map(({ read: _read, ...file }) => file),
     clusters,
     extractions,
-    reconciliation: { meetings: reconciled.meetings, links: [...reconciled.links, ...carry.links], gaps, actionChains: carry.chains },
+    reconciliation: { meetings: reconciled.meetings, links: [...reconciled.links, ...carry.links, ...policyAdoptions.map(({ meetingDate: _date, bodyKey: _body, motionIndex: _index, ...link }) => link)], gaps, actionChains: carry.chains, evidencedMeetings, policyAdoptions, fiscalYearEndChanges: fiscalChanges },
+    ...(organizationName ? { organizationName } : {}),
     processingLog: log,
     people: directory.map((person) => ({ id: person.id, fullName: person.fullName, aliases: person.aliases ?? [], occurrences: occurrences.get(person.id) ?? 0 })),
     texts,

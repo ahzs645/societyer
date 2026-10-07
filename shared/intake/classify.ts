@@ -19,25 +19,34 @@ export type ClassificationPrior = {
 };
 
 type Rule = { docClass: DocClass; re: RegExp; weight: number; where: "name" | "path" | "text" };
+// Name rules are ordered by priority (the first matching name rule breaks ties). Names are
+// matched with underscores as spaces; CamelCase joins ("BoardPackage", "LCASBudget") are
+// matched without a leading word boundary.
 const RULES: Rule[] = [
-  { docClass: "agmMaterial", re: /\b(?:agm|annual general meeting)\b.*\b(?:script|notice|package|report)\b|\bscript\b/i, weight: 0.85, where: "name" },
-  { docClass: "meetingMinutes", re: /\bminutes?\b|\bmtg notes\b|\bmeeting notes\b|\bmeeting summary\b|\bnotes from\b|\b(?:committee|board|meeting|mtg|working group)\b.*\bnotes\b/i, weight: 0.85, where: "name" },
-  { docClass: "meetingPackage", re: /\bpackage\b|\bboard book\b|\bbinder\b|\bconsent agenda\b|\bbusiness agenda\b/i, weight: 0.8, where: "name" },
-  { docClass: "agenda", re: /\bagenda\b/i, weight: 0.8, where: "name" },
-  { docClass: "bylaws", re: /\bby-?laws?\b|\bconstitution\b/i, weight: 0.85, where: "name" },
-  { docClass: "policy", re: /\bpolic(?:y|ies)\b|\bterms of reference\b|\btor\b|\bprocedures?\b|\bcode of conduct\b|\bguidelines\b|\bcharter\b|\bsigning authority\b/i, weight: 0.75, where: "name" },
-  { docClass: "directorConsent", re: /\bconsent(?: to act)?\b|\bdirector(?:'s)? consent\b/i, weight: 0.8, where: "name" },
-  { docClass: "proxy", re: /\bprox(?:y|ies)\b/i, weight: 0.8, where: "name" },
-  { docClass: "roster", re: /\broster\b|\bcontact list\b|\bmember(?:ship)? list\b|\bdirectory\b|\bdirector(?:s)? list\b|\bstaff list\b|\bregister of (?:members|directors)\b/i, weight: 0.75, where: "name" },
-  { docClass: "financialStatement", re: /\bfinancial statements?\b|\bbalance sheet\b|\bincome statement\b|\bstatement of (?:operations|financial position)\b|\baudit(?:ed)?\b|\breview engagement\b|\bprofit (?:and|&) loss\b|\bp&l\b/i, weight: 0.8, where: "name" },
-  { docClass: "budget", re: /\bbudget\b/i, weight: 0.75, where: "name" },
-  { docClass: "insurance", re: /\binsurance\b|\bcertificate of (?:insurance|liability)\b|\bendorsement\b|\bdeclarations? page\b|\bpolicy wording\b/i, weight: 0.8, where: "name" },
-  { docClass: "registryFiling", re: /\bannual report\b.*\b(?:filed|filing|confirmation|registry|bc registr)|\bstatement of directors\b|\btransition application\b|\bnotice of (?:change|articles)\b|\bsocieties online\b|\bbc registr/i, weight: 0.85, where: "name" },
-  { docClass: "agreement", re: /\bagreement\b|\bcontract\b|\bmou\b|\bmemorandum of understanding\b|\bletter of (?:understanding|agreement)\b|\bservice proposal\b/i, weight: 0.75, where: "name" },
-  { docClass: "grant", re: /\bgrant\b|\bfunding (?:application|agreement|letter|request)\b|\bproposal\b.*\bfund/i, weight: 0.7, where: "name" },
-  { docClass: "invoice", re: /\binvoice\b|\breceipt\b|\bcheque\b|\bbank statement\b|\breconciliation\b|\bpayables?\b|\bexpense claim\b/i, weight: 0.75, where: "name" },
-  { docClass: "correspondence", re: /\bletter\b|\bltr\b|\bmemo\b|\bcorrespondence\b|\bemail\b|\.msg$|\.eml$/i, weight: 0.65, where: "name" },
-  { docClass: "plan", re: /\b(?:strategic|work|action|business|communications?|operational) ?plan\b|\bworkplan\b/i, weight: 0.7, where: "name" },
+  // Strong negatives first: blank forms and third-party bylaws are not governance records.
+  { docClass: "formTemplate", re: /\b(?:blank|template|fillable)\b|\bform[ _-]?blank\b/i, weight: 0.92, where: "name" },
+  { docClass: "report", re: /^bl\s?\d{3,}|\bbylaw[ -]no\.?\s*\d|\bmodel (?:wood|bylaw)|\bbylaw\b.*\b(?:consolidated|adopted)\b.*\(\d\)|\bocp\b/i, weight: 0.9, where: "name" },
+  { docClass: "agmMaterial", re: /\b(?:agm|annual general meeting)\b.*\b(?:script|notice|package|report|press release|media release)\b|\bscript\b|\bnotice of (?:the )?(?:annual )?general meeting\b/i, weight: 0.88, where: "name" },
+  { docClass: "meetingPackage", re: /package|\bboard book\b|\bbinder\b|\bconsent agenda\b|\bbusiness agenda\b/i, weight: 0.9, where: "name" },
+  { docClass: "agenda", re: /agenda\b/i, weight: 0.9, where: "name" },
+  { docClass: "meetingMinutes", re: /\bminutes?\b|minutes?(?=[_ .-])|\bmtg notes\b|\bmeeting notes\b|\bmeeting summary\b|\bnotes from\b|\b(?:committee|board|meeting|mtg|working group)\b.*\bnotes\b/i, weight: 0.85, where: "name" },
+  { docClass: "registryFiling", re: /\bannual report\b.*\b(?:filed|filing|confirmation|registry|bc registr|receipt)|(?<![a-z])(?:confirmation|receipt)\b.*\bannual report\b|\b(?:19|20)\d{2}\s+annual report\b|\bstatement of directors\b|\btransition application\b|\bnotice of (?:change|articles)\b|\bsocieties online\b|\bbc ?registr|\bsocietal filing\b|\bfiling receipt\b/i, weight: 0.88, where: "name" },
+  { docClass: "bylaws", re: /by-?laws?(?![a-z])|\bconstitution\b/i, weight: 0.85, where: "name" },
+  { docClass: "directorConsent", re: /\bconsent(?: to act)?\b|\bdirector(?:'s)? consent\b/i, weight: 0.85, where: "name" },
+  { docClass: "proxy", re: /\bprox(?:y|ies)\b/i, weight: 0.82, where: "name" },
+  { docClass: "roster", re: /\broster\b|\bcontact list\b|\bmember(?:ship)? list\b|\bdirectory\b|\bdirector(?:s)? (?:full )?list\b|\bfull list\b|\bstaff list\b|\bregister of (?:members|directors)\b|\brepresentative(?!s? form)\b|\bdirectors and staff\b/i, weight: 0.82, where: "name" },
+  { docClass: "correspondence", re: /\bletter\b(?! of (?:agreement|understanding|intent))(?!.*\bfunding\b)|\bltr\b|\bmemo\b|\bcorrespondence\b/i, weight: 0.8, where: "name" },
+  { docClass: "policy", re: /\bpolic(?:y|ies)\b|\bterms of reference\b|\btor\b|\bprocedures?\b|\bprotocol\b|\bcode of conduct\b|\bguidelines\b|\bcharter\b|\bsigning authority\b|\bdelegation of\b|\brules of order\b|\bterms and conditions\b/i, weight: 0.78, where: "name" },
+  { docClass: "financialStatement", re: /\bfinancial statements?\b|\bfinancials?\b|\bbalance sheet\b|\bincome statement\b|\bstatement of (?:operations|financial position)\b|\baudit(?:ed)?\b|\breview engagement\b|\bprofit (?:and|&) loss\b|\bp&l\b|\byear[ -]?end\b/i, weight: 0.82, where: "name" },
+  { docClass: "budget", re: /budget(?![a-z])/i, weight: 0.8, where: "name" },
+  { docClass: "insurance", re: /\binsurance\b|\bcertificate of (?:insurance|liability)\b|\bcoi\b|\bendorsement\b|\bdeclarations? page\b|\bpolicy wording\b|\bd\s?&\s?o\b|\be\s?&\s?o\b|\b(?:dno|mc)\d{4,}/i, weight: 0.82, where: "name" },
+  { docClass: "grant", re: /\b(?:funding|contribution|grant) agreement\b|\bfunding letter\b|\bletter of (?:award|funding)\b/i, weight: 0.86, where: "name" },
+  { docClass: "agreement", re: /\bagreement\b|\bcontract\b|\bmou\b|\bmemorandum of understanding\b|\bletter of (?:understanding|agreement)\b|\bservice proposal\b|\bgsa\b/i, weight: 0.78, where: "name" },
+  { docClass: "grant", re: /\bgrants?\b|\bfunding\b|\bproposal\b|\bapplication\b(?!.*\bform\b)|\b[A-Z]{2}\d{2}[A-Z]{3}\d{4}\b|\bfunder report\b/i, weight: 0.72, where: "name" },
+  { docClass: "invoice", re: /\binvoices?\b|\breceipts?\b|\bcheque\b|\bbank statement\b|\breconciliation\b|\bpayables?\b|\bexpense claim\b/i, weight: 0.78, where: "name" },
+  { docClass: "correspondence", re: /\.msg$|\.eml$|\bemail\b/i, weight: 0.6, where: "name" },
+  { docClass: "plan", re: /\b(?:strategic|work|action|business|communications?|operational) ?plan\b|\bworkplan\b|\baqmp\b/i, weight: 0.7, where: "name" },
+  { docClass: "report", re: /\bbriefing note\b|\bbackgrounder\b|\bdiscussion paper\b/i, weight: 0.85, where: "name" },
   { docClass: "report", re: /\breport\b|\bupdate\b|\bbriefing note\b|\bsummary\b/i, weight: 0.55, where: "name" },
   { docClass: "formTemplate", re: /\btemplate\b|\bblank\b|\bform\b/i, weight: 0.6, where: "name" },
   { docClass: "presentation", re: /\.(?:pptx?|key|odp)$/i, weight: 0.7, where: "name" },
@@ -48,19 +57,31 @@ const RULES: Rule[] = [
   // Folder names are weaker evidence.
   { docClass: "meetingMinutes", re: /\bminutes\b/i, weight: 0.45, where: "path" },
   { docClass: "financialStatement", re: /\bfinanc/i, weight: 0.35, where: "path" },
-  { docClass: "insurance", re: /\binsurance\b/i, weight: 0.4, where: "path" },
+  { docClass: "insurance", re: /\binsurance\b/i, weight: 0.45, where: "path" },
   { docClass: "agreement", re: /\bagreements?\b|\bcontracts?\b/i, weight: 0.4, where: "path" },
+  { docClass: "grant", re: /\bfunder reports?\b|\bproposals?\b|\bgrants?\b/i, weight: 0.45, where: "path" },
   { docClass: "policy", re: /\bpolic(?:y|ies)\b|\bbylaws?\b/i, weight: 0.35, where: "path" },
   { docClass: "correspondence", re: /\bcorrespondence\b/i, weight: 0.35, where: "path" },
+  { docClass: "roster", re: /\bcontact (?:lists?|information)\b|\bdirectors? and prox/i, weight: 0.45, where: "path" },
+  { docClass: "registryFiling", re: /\bannual society records\b/i, weight: 0.5, where: "path" },
+  { docClass: "invoice", re: /\binvoices?\b|\breceipts?\b|\bpayables?\b/i, weight: 0.45, where: "path" },
   // Text evidence (first ~3k characters).
   { docClass: "meetingMinutes", re: /\bminutes\b[\s\S]{0,800}\b(?:present|regrets|in attendance|called to order|quorum)\b|\b(?:moved|seconded)\b[\s\S]{0,200}\bcarried\b/i, weight: 0.8, where: "text" },
   { docClass: "meetingMinutes", re: /\bmeeting\b[\s\S]{0,400}\b(?:present|in attendance|attendees|participants)\s*:[\s\S]{0,3000}\b(?:adjourn|called to order|regrets|motion|quorum)/i, weight: 0.75, where: "text" },
-  { docClass: "agenda", re: /^\s*(?:[\w ]{0,60}\n)?\s*agenda\b/i, weight: 0.6, where: "text" },
-  { docClass: "financialStatement", re: /\btotal (?:revenue|expenses|assets|liabilities)\b|\bnet assets\b|\bexcess of revenue\b/i, weight: 0.7, where: "text" },
-  { docClass: "insurance", re: /\bpolicy (?:number|period)\b|\binsured\b.*\blimit\b/i, weight: 0.65, where: "text" },
+  { docClass: "agenda", re: /^\s*(?:[\w ]{0,60}\n)?\s*agenda\b|\bsubject\s*:\s*agenda\b/i, weight: 0.6, where: "text" },
+  { docClass: "financialStatement", re: /\btotal (?:revenue|expenses|assets|liabilities)\b|\bnet assets\b|\bexcess of revenue\b|\bstatement of financial position\b/i, weight: 0.7, where: "text" },
+  { docClass: "insurance", re: /\bpolicy (?:number|period)\b|\binsured\b.*\blimit\b|\bdeclarations page\b|\bcertificate of insurance\b/i, weight: 0.7, where: "text" },
   { docClass: "directorConsent", re: /\bconsent to act as (?:a )?director\b/i, weight: 0.9, where: "text" },
-  { docClass: "proxy", re: /\bhereby appoint\b.*\bproxy\b|\bproxy form\b/i, weight: 0.85, where: "text" },
-  { docClass: "registryFiling", re: /\bbc registr(?:y|ies)\b|\bsocieties act\b.*\b(?:annual report|filed)\b|\bincorporation number\b.*\bS-\d+/i, weight: 0.6, where: "text" },
+  { docClass: "proxy", re: /\bhereby appoints?\b[\s\S]{0,200}\bproxy\b|\bproxy form\b/i, weight: 0.85, where: "text" },
+  // Registry form headers are upper case; the same words in prose ("the statement of directors …") are not a filing.
+  { docClass: "registryFiling", re: /\bBC SOCIETY ANNUAL REPORT\b|\bSTATEMENT OF DIRECTORS AND REGISTERED OFFICE\b/, weight: 0.85, where: "text" },
+  { docClass: "registryFiling", re: /\bconfirmation of filing\b|\bform filed\s*:|\bfiled date and time\s*:|\bthis is confirmation of payment for filing\b/i, weight: 0.85, where: "text" },
+  { docClass: "invoice", re: /^\s*(?:[\w .,&-]{0,80}\n){0,6}\s*invoice\b|\binvoice\s*(?:#|no\.?|number)\s*:?\s*\w|\bbalance due\b|\bbill to\b/i, weight: 0.75, where: "text" },
+  { docClass: "agreement", re: /\bbetween\s*:?[\s\S]{0,600}\band\s*:?[\s\S]{0,800}\b(?:agree|agreement|contract)\b|\bthe parties agree\b|\bgeneral service agreement\b/i, weight: 0.75, where: "text" },
+  { docClass: "bylaws", re: /\bthe name of the society is\b|\bbylaws of the\b[\s\S]{0,120}\bsociety\b/i, weight: 0.8, where: "text" },
+  { docClass: "formTemplate", re: /\bfillable (?:application )?form\b/i, weight: 0.85, where: "text" },
+  { docClass: "formTemplate", re: /_{8,}[\s\S]{0,200}_{8,}[\s\S]{0,200}_{8,}/i, weight: 0.5, where: "text" },
+  { docClass: "report", re: /\bcity of [a-z ]+\bbylaw no\.?\s*\d|\bcouncil of the city\b/i, weight: 0.85, where: "text" },
 ];
 
 const RESTRICTED = [
@@ -78,12 +99,23 @@ export function classifyPrior(file: { name: string; path?: string; headText?: st
   const head = (file.headText ?? "").slice(0, 3000);
   const scores = new Map<DocClass, number>();
   const rationale: string[] = [];
+  // A file NAMED as an agenda/package/script carries embedded minutes text: the name decides.
+  const namedAgendaLike = /agenda\b|package|\bscript\b|\bnotice\b/i.test(name);
+  // A saved reply/forward ("Re Consent to Act….msg") is correspondence about the subject, not the
+  // record itself (registry confirmations excepted).
+  const namedReply = /^\s*(?:re|fw|fwd)\b\s*[:_ -]/i.test(name) && /\.(?:msg|eml)$/i.test(name);
+  if (namedReply) {
+    scores.set("correspondence", 0.9);
+    rationale.push("name is a saved email reply/forward");
+  }
   for (const rule of RULES) {
     const subject = rule.where === "name" ? name : rule.where === "path" ? folder : head;
     if (!subject || !rule.re.test(subject)) continue;
+    const weight = rule.where === "text" && rule.docClass === "meetingMinutes" && namedAgendaLike ? rule.weight * 0.4
+      : namedReply && rule.docClass !== "correspondence" && rule.docClass !== "registryFiling" ? rule.weight * 0.4 : rule.weight;
     const previous = scores.get(rule.docClass) ?? 0;
     // Combine independent evidence: 1 - (1-a)(1-b).
-    scores.set(rule.docClass, 1 - (1 - previous) * (1 - rule.weight));
+    scores.set(rule.docClass, 1 - (1 - previous) * (1 - weight));
     rationale.push(`${rule.where} matches ${rule.docClass}`);
   }
   // Name rules are ordered by priority: the first matching name rule breaks ties.
@@ -120,4 +152,9 @@ export function classifyPrior(file: { name: string; path?: string; headText?: st
 }
 
 /** Classes that carry governance facts worth structured extraction in the MVP. */
-export const EXTRACTION_CLASSES: ReadonlySet<DocClass> = new Set(["meetingMinutes", "agenda", "meetingPackage", "agmMaterial"]);
+export const EXTRACTION_CLASSES: ReadonlySet<DocClass> = new Set(["meetingMinutes", "agenda", "meetingPackage", "agmMaterial", "bylaws", "policy", "directorConsent", "proxy", "roster", "financialStatement", "budget", "insurance", "agreement", "grant", "registryFiling", "correspondence", "invoice"]);
+
+/** Classes whose content is personal data by nature (home addresses on consents, contact
+ * rosters, invoices with banking details, mailboxes). They are extracted deterministically
+ * and never sent to a model provider, whatever the per-file sensitivity scan found. */
+export const PROVIDER_EXCLUDED_CLASSES: ReadonlySet<DocClass> = new Set(["directorConsent", "proxy", "roster", "invoice", "correspondence"]);
