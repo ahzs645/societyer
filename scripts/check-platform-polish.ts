@@ -85,6 +85,13 @@ for (const [path, identity] of Object.entries(ROUTE_IDENTITY as Record<string, {
   if (identity.module && !path.includes(":")) assert.equal(gatedRoutes.get(path), identity.module, `${path} is hidden with ${identity.module}; its route must be gated by it too`);
 }
 
+// Destructive platform actions name what is lost before they run.
+const calendarSync = readFileSync(new URL("../src/pages/CalendarSync.tsx", import.meta.url), "utf8");
+assert.match(calendarSync, /const disableFeed = async \(\) => \{[\s\S]{0,120}await confirm\(/, "disabling the calendar feed is confirmed");
+assert.match(calendarSync, /const enableFeed = async \(\) => \{[\s\S]{0,160}feedToken && !\(await confirm\(/, "rotating the calendar feed link is confirmed");
+const aiAgents = readFileSync(new URL("../src/pages/AiAgents.tsx", import.meta.url), "utf8");
+assert.match(aiAgents, /await confirm\(\{\s*title: `Delete the skill[\s\S]{0,900}await removeSkill\(/, "deleting an AI skill is confirmed");
+
 // Stack-on-phone tables must beat the more specific scrolling-table rules.
 const tableCss = readFileSync(new URL("../src/styles/_components-tables-misc.scss", import.meta.url), "utf8");
 assert.match(tableCss, /\.table-wrap > \.table\.table--stack-mobile/, "stacked phone tables override .table-wrap > .table");
