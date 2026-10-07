@@ -360,3 +360,29 @@ assert.deepEqual(officerNamesFromAttendance([
   { name: "Alex Example", roleTitle: "Chair", status: "regrets" },
 ], {}), {}, "absent people are not suggested");
 console.log("✓ minutes details: empty chair/secretary/recorder start from attendance roles");
+
+// ---------- numbered export of a meeting recorded from scratch ------------------
+const fromScratch = renderMinutesHtml({
+  society: { name: "Retest Society" } as any,
+  meeting: { title: "Board meeting — 2026-10-06", scheduledAt: "2026-10-07T01:00:00.000Z", type: "Board" } as any,
+  minutes: {
+    heldAt: "2026-10-07T01:00:00.000Z", attendees: ["Alex Example", "Blair Sample", "Casey Demo"], absent: [], quorumMet: true, quorumRequired: 2,
+    discussion: "", decisions: [], actionItems: [], adjournedAt: "7:41 PM",
+    detailedAttendance: [{ name: "Alex Example", status: "present" }, { name: "Blair Sample", status: "present" }, { name: "Casey Demo", status: "staff" }],
+    motions: [
+      { text: "BE IT RESOLVED THAT the agenda for this meeting be adopted as presented.", outcome: "Carried", sectionIndex: 0, sectionTitle: "Adopt agenda" },
+      { text: "BE IT RESOLVED THAT the meeting be adjourned.", outcome: "Carried", resolutionType: "Procedural", sectionIndex: 1, sectionTitle: "Adjournment" },
+    ],
+    sections: [
+      { title: "Adopt agenda", motionText: "BE IT RESOLVED THAT the agenda for this meeting be adopted as presented." },
+      { title: "Adjournment", motionText: "BE IT RESOLVED THAT the meeting be adjourned." },
+    ],
+  } as any,
+  styleId: "numbered-agenda",
+  options: { sourceFidelity: false },
+} as any);
+assert.match(fromScratch, /\(2 present \/ 2 required\)/, "staff are not counted toward quorum in the export");
+assert.doesNotMatch(fromScratch, /Motion wording:/, "template motion wording already shown as a motion is not repeated after the signatures");
+assert.equal((fromScratch.match(/>\s*(?:\d+\.\s*)?Adjournment\s*</g) ?? []).length, 1, "one Adjournment heading: the agenda item carries the adjournment record");
+assert.match(fromScratch, /The meeting was adjourned at 7:41 PM/);
+console.log("✓ numbered export: quorum counts members only; no repeated motion wording or second Adjournment heading");

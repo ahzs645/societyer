@@ -86,6 +86,28 @@ type MinutesActionItem = {
   done: boolean;
 };
 
+/**
+ * People counted toward quorum: the attendance grid's present rows that count
+ * (staff, guests and regrets never do); plain attendee lists count everyone.
+ */
+function quorumPresentForExport(minutes: { attendees: string[]; detailedAttendance?: DetailedAttendance[] | null }): number {
+  const detailed = minutes.detailedAttendance ?? [];
+  if (detailed.length) return detailed.filter((row) => row?.status === "present" && row?.quorumCounted !== false).length;
+  return minutes.attendees.length;
+}
+
+/** Comparable motion wording: no "BE IT RESOLVED THAT", markup, case or spacing. */
+function motionWordingKey(text: unknown): string {
+  return String(text ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&[a-z#0-9]+;/gi, " ")
+    .replace(/^\s*(?:be it (?:therefore )?resolved,?|resolved,?|moved|motion:?)\s*(?:that\s+)?/i, "")
+    .replace(/^\s*that\s+/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9$%]+/g, " ")
+    .trim();
+}
+
 type DetailedAttendance = {
   name: string;
   status: string;
@@ -523,7 +545,7 @@ function renderStandardMinutes({
     <h2>Attendance</h2>
     ${renderAttendance(minutes)}
     <p>Quorum: ${minutesQuorumLabel(minutes)}${
-      minutes.quorumRequired != null ? ` · ${minutes.attendees.length} present / ${minutes.quorumRequired} required` : ""
+      minutes.quorumRequired != null ? ` · ${quorumPresentForExport(minutes)} present / ${minutes.quorumRequired} required` : ""
     }${minutes.quorumSourceLabel ? ` · Rule: ${eh(minutes.quorumSourceLabel)}` : ""}</p>
 
     ${renderMinuteSections(minutes.sections, options)}
@@ -709,6 +731,10 @@ function renderNumberedAgendaMinutes({
     ),
   );
 
+  const lastSection = sections[sections.length - 1]?.section;
+  const closingAdjournmentPosition = lastSection && (lastSection.depth ?? 0) === 0 && /^\s*(?:\d+[.)]\s*)?adjourn/i.test(String(lastSection.title ?? "")) ? sections.length - 1 : -1;
+  const adjournmentBody = `${adjournmentMotion ? renderSampleMotion(adjournmentMotion) : ""}
+    ${minutes.adjournedAt || options.includePlaceholders ? `<p>The meeting was adjourned at ${eh(minutes.adjournedAt ? formatTime(minutes.adjournedAt) : placeholder("adjournment time", options))}.</p>` : "<p>There being no further business, the meeting was adjourned.</p>"}`;
   return `
     <h1>${eh(minutesTitleForSampleStyle(society.name, meeting))}</h1>
     <p><strong>Date:</strong> ${eh(date)} · <strong>Time:</strong> ${eh(timeRange)} · <strong>Location:</strong> ${eh(location)}</p>
@@ -717,7 +743,7 @@ function renderNumberedAgendaMinutes({
     <p><strong>Present:</strong> ${eh(presentLine)}</p>
     ${alsoPresent.length ? `<p><strong>Also present:</strong> ${eh(alsoPresent.join(", "))}</p>` : ""}
     ${absentLine ? `<p><strong>Absent / Regrets:</strong> ${eh(absentLine)}</p>` : ""}
-    <p>Quorum: ${minutesQuorumLabel(minutes)}${minutes.quorumRequired != null ? ` (${minutes.attendees.length} present / ${minutes.quorumRequired} required)` : ""}${minutes.quorumSourceLabel ? `; ${eh(minutes.quorumSourceLabel)}` : ""}</p>
+    <p>Quorum: ${minutesQuorumLabel(minutes)}${minutes.quorumRequired != null ? ` (${quorumPresentForExport(minutes)} present / ${minutes.quorumRequired} required)` : ""}${minutes.quorumSourceLabel ? `; ${eh(minutes.quorumSourceLabel)}` : ""}</p>
     ${renderOfficialLine(minutes, options)}
     ${renderRemoteParticipation(minutes.remoteParticipation)}
 
@@ -731,7 +757,7 @@ function renderNumberedAgendaMinutes({
       // render under their parent with letter-numbered headings.
       let rootCount = 0;
       let childCount = 0;
-      return sections.map(({ section, originalIndex }) => {
+      return sections.map(({ section, originalIndex }, position) => {
         const depth: 0 | 1 = section?.depth === 1 ? 1 : 0;
         if (depth === 0 || rootCount === 0) {
           rootCount += 1;
@@ -740,15 +766,16 @@ function renderNumberedAgendaMinutes({
           childCount += 1;
         }
         const label = agendaSequenceLabel(rootCount, childCount, options.agendaNumberingMode);
-        return renderNumberedAgendaSection(label, originalIndex, section, minutes, topicMotions, options, depth);
+        const rendered = renderNumberedAgendaSection(label, originalIndex, section, minutes, topicMotions, options, depth);
+        // The agenda's own closing "Adjournment" item carries the adjournment
+        // record instead of a second, unnumbered "Adjournment" heading.
+        return position === closingAdjournmentPosition ? rendered + adjournmentBody : rendered;
       }).join("");
     })()}
     ${extraSections.length ? renderMinuteSections(extraSections, options) : ""}
     ${unplacedTopicMotions.length ? `<h2>Other Motions</h2>${unplacedTopicMotions.map(renderSampleMotion).join("")}` : ""}
 
-    <h2>Adjournment</h2>
-    ${adjournmentMotion ? renderSampleMotion(adjournmentMotion) : ""}
-    ${minutes.adjournedAt || options.includePlaceholders ? `<p>The meeting was adjourned at ${eh(minutes.adjournedAt ? formatTime(minutes.adjournedAt) : placeholder("adjournment time", options))}.</p>` : "<p>There being no further business, the meeting was adjourned.</p>"}
+    ${closingAdjournmentPosition < 0 ? `<h2>Adjournment</h2>${adjournmentBody}` : ""}
 
     ${options.includeDiscussionSummary ? renderOptionalSection("Discussion Summary", renderDiscussion(minutes.discussion, options), hasText(minutes.discussion), options) : ""}
     ${renderOptionalSection("Decisions", renderDecisionsList(minutes.decisions, options), minutes.decisions.length > 0, options)}
@@ -2015,7 +2042,10 @@ function renderSourceFidelityMinutes(args:MinutesRenderArgs,record:SourceMeeting
 function renderUnrepresentedSectionDetails(minutes:MinutesRenderArgs['minutes'],existingHtml:string,options:Required<MinutesExportOptions>):string {
  const content=(minutes.sections??[]).map(section=>{
   const parts:string[]=[];
-  if(section.motionText&&!existingHtml.includes(escapeHtml(section.motionText)))parts.push(`<p><strong>${section.sourceKind&&section.sourceKind!=='recorded_minutes'?'Proposed motion wording':'Motion wording'}:</strong> ${escapeHtml(section.motionText)}</p>`);
+  // A section's motion wording already rendered as a motion (often with its
+  // "BE IT RESOLVED THAT" trimmed) is not repeated after the signatures.
+  const wordingShown=!!section.motionText&&(existingHtml.includes(escapeHtml(section.motionText))||(motionWordingKey(section.motionText).length>0&&motionWordingKey(existingHtml).includes(motionWordingKey(section.motionText))));
+  if(section.motionText&&!wordingShown)parts.push(`<p><strong>${section.sourceKind&&section.sourceKind!=='recorded_minutes'?'Proposed motion wording':'Motion wording'}:</strong> ${escapeHtml(section.motionText)}</p>`);
   const tasks=(section.linkedTaskIds??[]).map(id=>{
    const task=minutes.linkedTasks?.find(row=>row._id===id||row.id===id);
    return `<li>${escapeHtml(task?.title??id)}${task?.description?` — ${escapeHtml(task.description)}`:''}${task?.dueDate?` · Due ${escapeHtml(task.dueDate)}`:''}${task?.status?` · ${escapeHtml(task.status)}`:''}</li>`;

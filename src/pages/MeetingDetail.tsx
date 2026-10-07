@@ -1204,6 +1204,8 @@ export function MeetingDetailPage() {
     const safe = (meeting.title || "meeting")
       .replace(/\.(?:docx?|pdf|rtf|odt|txt)\b/gi, "")
       .replace(/^\s*\d{4}-\d{2}-\d{2}\s*/, "")
+      // "Board meeting — 2026-10-06": the date already leads the file name.
+      .replace(/[\s—–-]*\d{4}-\d{2}-\d{2}\s*$/, "")
       .replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()
       .slice(0, 60).replace(/-+$/, "")
       // "…-meeting-minutes" + "-minutes" read as "minutes-minutes".

@@ -1369,7 +1369,7 @@ export function useMeetingMinutesColumn(props: MeetingMinutesColumnProps) {
                 rows={8}
                 value={sectionDraft.discussion}
                 onChange={(markdown) => setSectionDraft({ ...sectionDraft, discussion: markdown })}
-                placeholder="Expenses incurred by Ahmad: $80.00 for notary signing, $33.01 for posters. Receipts are recorded on Teams under Expenses."
+                placeholder="What was discussed or reported, e.g. The treasurer reported a surplus of $3,400 for the quarter."
               />
             </Field>
             <Field label="Decisions">
