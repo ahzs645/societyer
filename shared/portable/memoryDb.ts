@@ -19,11 +19,13 @@ import type {
   PaginationResult,
   PortableDbWriter,
   PortableDoc,
+  PortableGetOptions,
   PortableQuery,
   SearchFilterBuilder,
   TableName,
 } from "./ctx";
 import { createEntityIdFactory } from "./ids";
+import { omitRowFields } from "./heavyFields";
 
 type Constraint = { op: "eq" | "gt" | "gte" | "lt" | "lte"; field: string; value: unknown };
 
@@ -130,13 +132,17 @@ export function evaluateQuery<T extends PortableDoc>(
 ): T[] {
   let out = rows.filter((doc) => matchesConstraints(doc, constraints));
   for (const p of predicates) out = out.filter(p);
-  out = out.slice().sort((a, b) => {
+  return sortByCreation(out, direction);
+}
+
+/** The result order every engine uses: `_creationTime`, then `_id`. Returns a new array. */
+export function sortByCreation<T extends PortableDoc>(rows: T[], direction: "asc" | "desc"): T[] {
+  return rows.slice().sort((a, b) => {
     const at = Number(a._creationTime ?? 0);
     const bt = Number(b._creationTime ?? 0);
     const byTime = at - bt || String(a._id).localeCompare(String(b._id));
     return direction === "desc" ? -byTime : byTime;
   });
-  return out;
 }
 
 class QueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
@@ -145,6 +151,7 @@ class QueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
   private predicates: ((doc: T) => boolean)[] = [];
   private direction: "asc" | "desc" = "asc";
   private search: SearchSpec | null = null;
+  private omitted: string[] = [];
 
   constructor(source: () => T[]) {
     this.source = source;
@@ -170,33 +177,45 @@ class QueryBuilder<T extends PortableDoc> implements PortableQuery<T> {
     return this;
   }
 
+  omitFields(...fields: string[]): PortableQuery<T> {
+    this.omitted.push(...fields);
+    return this;
+  }
+
+  private out = (row: T): T => omitRowFields(clone(row), this.omitted);
+
   private run(): T[] {
     if (this.search) return evaluateSearch(this.source(), this.search, this.predicates);
     return evaluateQuery(this.source(), this.constraints, this.predicates, this.direction);
   }
 
   async collect(): Promise<T[]> {
-    return this.run().map(clone);
+    return this.run().map(this.out);
+  }
+
+  async collectProjected<R>(_key: string, project: (doc: T) => R): Promise<R[]> {
+    return (await this.collect()).map(project);
   }
 
   async take(n: number): Promise<T[]> {
-    return this.run().slice(0, n).map(clone);
+    return this.run().slice(0, n).map(this.out);
   }
 
   async first(): Promise<T | null> {
-    return this.run().map(clone)[0] ?? null;
+    const row = this.run()[0];
+    return row ? this.out(row) : null;
   }
 
   async unique(): Promise<T | null> {
     const rows = this.run();
     if (rows.length > 1) throw new Error("unique() found more than one matching document");
-    return rows[0] ? clone(rows[0]) : null;
+    return rows[0] ? this.out(rows[0]) : null;
   }
 
   async paginate(opts: PaginationOptions): Promise<PaginationResult<T>> {
     const rows = this.run();
     const start = opts.cursor ? Number(opts.cursor) : 0;
-    const page = rows.slice(start, start + opts.numItems).map(clone);
+    const page = rows.slice(start, start + opts.numItems).map(this.out);
     const nextStart = start + opts.numItems;
     const isDone = nextStart >= rows.length;
     return { page, isDone, continueCursor: isDone ? "" : String(nextStart) };
@@ -247,11 +266,11 @@ export class MemoryDb implements PortableDbWriter {
     this.idIndex.set(doc._id, table);
   }
 
-  async get<T extends PortableDoc = PortableDoc>(id: string, expectedTable?: TableName): Promise<T | null> {
+  async get<T extends PortableDoc = PortableDoc>(id: string, expectedTable?: TableName, options?: PortableGetOptions): Promise<T | null> {
     const table = this.idIndex.get(id);
     if (!table || (expectedTable && table !== expectedTable)) return null;
     const doc = this.tables.get(table)?.get(id);
-    return doc ? (clone(doc) as T) : null;
+    return doc ? (omitRowFields(clone(doc), options?.omitFields) as T) : null;
   }
 
   query<T extends PortableDoc = PortableDoc>(table: TableName): PortableQuery<T> {

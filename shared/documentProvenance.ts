@@ -160,7 +160,20 @@ export function detachString(value: string) {
 
 const PROVENANCE_CACHE = new Map<string, { content: unknown; url: unknown; tags: unknown; value: DocumentProvenance }>();
 
+/**
+ * Provenance computed elsewhere for this exact row object (a list query that
+ * read it through `collectProjected` and projected `content` away). Weakly
+ * held, so it lives exactly as long as the row.
+ */
+const ATTACHED_PROVENANCE = new WeakMap<object, DocumentProvenance>();
+
+export function attachDocumentProvenance(doc: object, value: DocumentProvenance | undefined) {
+  if (value) ATTACHED_PROVENANCE.set(doc, value);
+}
+
 export function documentProvenanceCached(doc: Parameters<typeof documentProvenance>[0] & { _id?: unknown }) {
+  const attached = ATTACHED_PROVENANCE.get(doc);
+  if (attached) return attached;
   const id = doc._id ? String(doc._id) : "";
   if (!id) return documentProvenance(doc);
   const cached = PROVENANCE_CACHE.get(id);

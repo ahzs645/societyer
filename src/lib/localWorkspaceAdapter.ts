@@ -1,4 +1,4 @@
-import { StaticConvexClient } from "./staticConvex";
+import { StaticConvexClient } from "./staticConvexClient";
 import { DexieWorkspaceClient } from "./dexieWorkspaceClient";
 import { getDesktopBridge } from "./desktopBridge";
 import { getRuntimeDescriptor, type RuntimeDescriptor } from "./runtimeMode";

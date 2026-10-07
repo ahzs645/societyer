@@ -13,9 +13,10 @@
  *    and record kind, for "N candidates awaiting review" links on the pages
  *    those records will land on.
  *
- * Candidate rows store their state as JSON in `content`. Parsed projections
- * are memoized per row id and content string, so the reactive re-run after an
- * approve only re-parses the rows that changed.
+ * Candidate rows store their state as JSON in `content`. Parsed projections go
+ * through `collectProjected`, which the local engine memoizes per row revision
+ * (and persists across reloads), so a re-run after an approve only re-reads and
+ * re-parses the rows that changed, and holds no candidate content in memory.
  */
 
 import type { PortableQueryCtx } from "../portable/ctx";
@@ -60,7 +61,8 @@ type QueueItem = {
   searchText: string;
 };
 
-const ITEM_CACHE = new Map<string, { content: unknown; item: QueueItem }>();
+
+const QUEUE_ITEM_PROJECTION = "importReviewQueue.item/v1";
 
 function str(value: unknown) {
   return typeof value === "string" ? value.trim() : typeof value === "number" && Number.isFinite(value) ? String(value) : "";
@@ -70,9 +72,8 @@ function uniqueStrings(values: unknown[]) {
   return [...new Set(values.map(str).filter(Boolean))];
 }
 
+/** Pure projection of one candidate row (memoized per row revision by the engine). */
 function queueItem(doc: any): QueueItem {
-  const cached = ITEM_CACHE.get(String(doc._id));
-  if (cached && cached.content === doc.content) return cached.item;
   const record = hydrateRecord(doc);
   const payload = record.payload && typeof record.payload === "object" ? record.payload : {};
   const sourceExternalIds = uniqueStrings([...(record.sourceExternalIds ?? []), ...(Array.isArray(payload.sourceExternalIds) ? payload.sourceExternalIds : []), payload.externalId]);
@@ -112,7 +113,6 @@ function queueItem(doc: any): QueueItem {
     searchText: [title, record.description, record.targetModule, record.recordKind, payload.fileName, folderPath, ...sourceExternalIds]
       .map(str).join(" ").toLowerCase(),
   };
-  ITEM_CACHE.set(String(doc._id), { content: doc.content, item });
   return item;
 }
 
@@ -127,16 +127,22 @@ function facetList(map: Map<string, number>) {
 const RISK_ORDER: Record<ReviewRiskLevel, number> = { high: 0, medium: 1, low: 2 };
 
 async function loadQueue(ctx: PortableQueryCtx, societyId: string) {
-  const [sessionDocs, recordDocs] = await Promise.all([
+  const [sessionDocs, recordItems] = await Promise.all([
     docsByCategory(ctx, societyId, SESSION_CATEGORY),
-    docsByCategory(ctx, societyId, RECORD_CATEGORY),
+    // Candidate state lives in each row's JSON `content`; the projection is
+    // memoized per row revision, so only changed candidates are re-read/parsed.
+    ctx.db
+      .query("documents")
+      .withIndex("by_society_category", (q) => q.eq("societyId", societyId).eq("category", RECORD_CATEGORY))
+      .filter((doc) => isImportRecord(doc))
+      .collectProjected(QUEUE_ITEM_PROJECTION, queueItem),
   ]);
   const sessions = new Map<string, { _id: string; name: string; sourceSystem?: string; createdAtISO?: string }>();
   for (const doc of sessionDocs.filter(isImportSession)) {
     const session = hydrateSession(doc);
     sessions.set(String(doc._id), { _id: String(doc._id), name: String(session.name ?? doc.title ?? "Import session"), sourceSystem: session.sourceSystem, createdAtISO: session.createdAtISO });
   }
-  const items = recordDocs.filter(isImportRecord).map(queueItem).filter((item: any) => sessions.has(item.sessionId));
+  const items = recordItems.filter((item: any) => sessions.has(item.sessionId));
   return { sessions, items };
 }
 

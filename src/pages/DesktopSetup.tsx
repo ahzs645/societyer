@@ -96,7 +96,7 @@ export function DesktopSetupPage() {
     setBusy("workspace");
     setWorkspaceSnapshotOffer(null);
     try {
-      const snapshot = getLocalWorkspaceSnapshot();
+      const snapshot = await getLocalWorkspaceSnapshot();
       if (!snapshot) throw new Error("Local workspace export is unavailable in this runtime.");
       await persistLocalWorkspaceSnapshot(JSON.stringify(snapshot, null, 2));
       const selected = await bridge.chooseWorkspaceDirectory();

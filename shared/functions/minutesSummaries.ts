@@ -96,18 +96,17 @@ export function summarizeMinutes(minutes: any): MinutesSummary {
 
 export async function listSummariesPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }): Promise<MinutesSummary[]> {
   await requireSocietyMembership(ctx, societyId);
-  // Summarize inside the (pure, read-only) predicate and keep no rows: the
-  // local runtime then never deep-copies every minutes record with its source
-  // text (≈38 MB on large imports) just to count a few fields. On Convex the
-  // predicate runs after collect, so the result is identical.
-  const summaries: MinutesSummary[] = [];
-  await ctx.db
+  // A memoized row projection: the local runtime derives each summary once per
+  // row change (persisted per build) and never keeps every minutes record with
+  // its source text in memory just to count a few fields; Convex derives it on
+  // read. Bump the key when summarizeMinutes changes.
+  return ctx.db
     .query("minutes")
     .withIndex("by_society", (q) => q.eq("societyId", societyId))
-    .filter((row) => {
-      summaries.push(summarizeMinutes(row));
-      return false;
-    })
-    .collect();
-  return summaries;
+    .collectProjected("minutes.summary/v1", (row: any) => withoutUndefined(summarizeMinutes(row)));
+}
+
+/** Persisted projections are JSON, so drop undefined keys to keep every runtime's result identical. */
+function withoutUndefined<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 }

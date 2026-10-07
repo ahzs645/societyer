@@ -5794,6 +5794,28 @@
     ]
   },
   {
+    "key": "convex:documents:listSummaries",
+    "surface": "convex",
+    "name": "documents:listSummaries",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/documents.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "convex:documents:markDuplicate",
     "surface": "convex",
     "name": "documents:markDuplicate",
@@ -13690,6 +13712,22 @@
     "key": "convex:minutes:list",
     "surface": "convex",
     "name": "minutes:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "convex/minutes.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "convex:minutes:listLight",
+    "surface": "convex",
+    "name": "minutes:listLight",
     "kind": "query",
     "access": "authenticated",
     "source": "convex/minutes.ts",
@@ -26718,6 +26756,28 @@
     ]
   },
   {
+    "key": "portable:documents:listSummaries",
+    "surface": "portable",
+    "name": "documents:listSummaries",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      },
+      {
+        "path": "actingUserId",
+        "table": "users",
+        "array": false,
+        "optional": true
+      }
+    ]
+  },
+  {
     "key": "portable:documents:markDuplicate",
     "surface": "portable",
     "name": "documents:markDuplicate",
@@ -33981,6 +34041,22 @@
     "key": "portable:minutes:list",
     "surface": "portable",
     "name": "minutes:list",
+    "kind": "query",
+    "access": "authenticated",
+    "source": "shared/functions/registry.ts",
+    "idArguments": [
+      {
+        "path": "societyId",
+        "table": "societies",
+        "array": false,
+        "optional": false
+      }
+    ]
+  },
+  {
+    "key": "portable:minutes:listLight",
+    "surface": "portable",
+    "name": "minutes:listLight",
     "kind": "query",
     "access": "authenticated",
     "source": "shared/functions/registry.ts",

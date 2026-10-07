@@ -14,9 +14,11 @@
 import { makeFunctionReference } from "convex/server";
 import { hostedPrincipal } from "./authIdentity";
 import { makeCapabilities, type PortableCapabilities } from "../../shared/portable/capabilities";
+import { omitRowFields } from "../../shared/portable/heavyFields";
 import type {
   IndexRangeBuilder,
   PortableDoc,
+  PortableGetOptions,
   PortableMutationCtx,
   PortableQuery,
   PortableQueryCtx,
@@ -27,6 +29,7 @@ import type {
 class ConvexPortableQuery<T extends PortableDoc> implements PortableQuery<T> {
   private inner: any;
   private predicates: ((doc: T) => boolean)[] = [];
+  private omitted: string[] = [];
 
   constructor(inner: any) {
     this.inner = inner;
@@ -55,41 +58,55 @@ class ConvexPortableQuery<T extends PortableDoc> implements PortableQuery<T> {
     return this;
   }
 
+  omitFields(...fields: string[]): PortableQuery<T> {
+    this.omitted.push(...fields);
+    return this;
+  }
+
   private apply(rows: T[]): T[] {
     let out = rows;
     for (const p of this.predicates) out = out.filter(p);
     return out;
   }
 
+  /** Projection runs last, so predicates above always saw the whole row. */
+  private project<R extends T | null>(row: R): R {
+    return row && this.omitted.length ? omitRowFields(row, this.omitted) : row;
+  }
+
   async collect(): Promise<T[]> {
-    return this.apply(await this.inner.collect());
+    return this.apply(await this.inner.collect()).map((row) => this.project(row));
+  }
+
+  async collectProjected<R>(_key: string, project: (doc: T) => R): Promise<R[]> {
+    return (await this.collect()).map(project);
   }
 
   async take(n: number): Promise<T[]> {
-    if (!this.predicates.length) return this.inner.take(n);
-    return this.apply(await this.inner.collect()).slice(0, n);
+    if (!this.predicates.length) return ((await this.inner.take(n)) as T[]).map((row) => this.project(row));
+    return this.apply(await this.inner.collect()).slice(0, n).map((row) => this.project(row));
   }
 
   async first(): Promise<T | null> {
-    if (!this.predicates.length) return (await this.inner.first()) ?? null;
-    return this.apply(await this.inner.collect())[0] ?? null;
+    if (!this.predicates.length) return this.project(((await this.inner.first()) ?? null) as T | null);
+    return this.project(this.apply(await this.inner.collect())[0] ?? null);
   }
 
   async unique(): Promise<T | null> {
-    if (!this.predicates.length) return (await this.inner.unique()) ?? null;
+    if (!this.predicates.length) return this.project(((await this.inner.unique()) ?? null) as T | null);
     const rows = this.apply(await this.inner.collect());
     if (rows.length > 1) throw new Error("unique() found more than one matching document");
-    return rows[0] ?? null;
+    return this.project(rows[0] ?? null);
   }
 
   async paginate(opts: { numItems: number; cursor: string | null }) {
     if (!this.predicates.length) {
       const res = await this.inner.paginate(opts);
-      return { page: res.page as T[], isDone: res.isDone as boolean, continueCursor: res.continueCursor as string };
+      return { page: (res.page as T[]).map((row) => this.project(row)), isDone: res.isDone as boolean, continueCursor: res.continueCursor as string };
     }
     const rows = this.apply(await this.inner.collect());
     const start = opts.cursor ? Number(opts.cursor) : 0;
-    const page = rows.slice(start, start + opts.numItems);
+    const page = rows.slice(start, start + opts.numItems).map((row) => this.project(row));
     const nextStart = start + opts.numItems;
     const isDone = nextStart >= rows.length;
     return { page, isDone, continueCursor: isDone ? "" : String(nextStart) };
@@ -103,10 +120,11 @@ class ConvexPortableDb implements TransactionalDb {
     this.db = db;
   }
 
-  async get<T extends PortableDoc = PortableDoc>(id: string, expectedTable?: string): Promise<T | null> {
+  async get<T extends PortableDoc = PortableDoc>(id: string, expectedTable?: string, options?: PortableGetOptions): Promise<T | null> {
     const normalizedId = expectedTable ? this.db.normalizeId(expectedTable, id) : id;
     if (!normalizedId) return null;
-    return (await this.db.get(normalizedId as any)) ?? null;
+    const row = (await this.db.get(normalizedId as any)) ?? null;
+    return row && options?.omitFields?.length ? omitRowFields(row, options.omitFields) : row;
   }
 
   query<T extends PortableDoc = PortableDoc>(table: string): PortableQuery<T> {

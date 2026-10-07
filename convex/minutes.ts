@@ -11,6 +11,7 @@ import {
   transposeSourcesPortable,
   completeSourceRecordsPortable,
   listPortable,
+  listLightPortable,
   getByMeetingPortable,
   createPortable,
   carryForwardActionPortable,
@@ -171,6 +172,13 @@ export const list = authorizedQuery("minutes:list", query)({
 
 // Light per-meeting summaries (counts and review state) for list pages, so
 // they do not load every minutes row with its full source record.
+/** `list` without the heavy imported-source fields — for pickers and adoption flows. */
+export const listLight = authorizedQuery("minutes:listLight", query)({
+  args: { societyId: v.id("societies") },
+  returns: v.any(),
+  handler: async (ctx, args) => listLightPortable(await toPortableQueryCtx(ctx), args),
+});
+
 export const listSummaries = authorizedQuery("minutes:listSummaries", query)({
   args: { societyId: v.id("societies") },
   returns: v.any(),

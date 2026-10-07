@@ -53,7 +53,7 @@ export function DraftMinutesPicker() {
   const { can } = usePermissions();
   const canDraft = can("minutes:write");
   const meetings = useQuery(api.meetings.list, open && canDraft && can("meetings:read") && society ? { societyId: society._id } : "skip");
-  const minutes = useQuery(api.minutes.list, open && canDraft && can("minutes:read") && society ? { societyId: society._id } : "skip");
+  const minutes = useQuery(api.minutes.listLight, open && canDraft && can("minutes:read") && society ? { societyId: society._id } : "skip");
   const navigate = useNavigate();
 
   useEffect(() => {

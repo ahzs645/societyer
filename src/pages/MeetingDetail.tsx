@@ -176,9 +176,7 @@ export function MeetingDetailPage() {
     can("committees:read") && meeting?.committeeId && permissionsLoaded && can("committees:read") ? { id: meeting.committeeId } : "skip",
   );
   const [materialDraft, setMaterialDraft] = useState<any | null>(null);
-  // The full document library is large (every imported source file); load it
-  // only while the material drawer needs its picker (ui-meetings F26).
-  const allDocuments = useQuery(api.documents.list, can("documents:read") && society && materialDraft ? { societyId: society._id } : "skip");
+  const allDocuments = useQuery(api.documents.listSummaries, can("documents:read") && society ? { societyId: society._id } : "skip");
   // Sibling meetings power the "approved at meeting" picker — minutes are
   // typically adopted at a later meeting, so we let the user point at it.
   const allMeetings = useQuery(api.meetings.list, can("meetings:read") && meetingSocietyId ? { societyId: meetingSocietyId as Id<"societies"> } : "skip");

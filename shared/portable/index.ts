@@ -17,6 +17,7 @@ export type {
   PaginationResult,
   PortableQuery,
   PortableDbReader,
+  PortableGetOptions,
   PortableDbWriter,
   TransactionalDb,
   PortableQueryCtx,
