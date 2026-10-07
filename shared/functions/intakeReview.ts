@@ -529,6 +529,9 @@ async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: strin
   for (const required of requiredFieldsFor(docClass, extraction.record)) {
     if (!isPromotedDecision(decisions.get(required.path)?.decision)) throw new Error(`Accept or edit the ${required.label.toLowerCase()} before promoting.`);
   }
+  // A class without required fields (correspondence, agreements, consents…) still needs a reviewed value:
+  // promoting a document nobody accepted anything in would write records no person looked at.
+  if (![...decisions.values()].some((review) => isPromotedDecision(review?.decision))) throw new Error("Accept or edit at least one field before promoting.");
   const files = await Promise.all((await clusterFiles(ctx, extraction, file)).map((row) => promotionFile(ctx, row)));
   const at = now();
 

@@ -118,6 +118,11 @@ async function acceptAll(row: any) {
   return promotionReadiness(reviewFieldsForRecord(after.extraction.record, row.docClass), latestDecisions(after.reviews), row.docClass);
 }
 
+// A class without required fields is not promoted while nothing in it was accepted ("Promote all ready" skips it).
+const unreviewed = queue.find((row) => ["correspondence", "agreement", "directorConsent", "roster", "proxy"].includes(row.docClass));
+assert.ok(unreviewed, "the fixture has a class without required fields");
+await assert.rejects(mutate("intake:promoteExtraction", { societyId: society, extractionId: unreviewed._id }), /Accept or edit at least one field/, "a document with no accepted field is not promoted");
+
 const results: Record<string, { tables: string[]; provenance: number }> = {};
 const failures: string[] = [];
 // Minutes first (so agendas of the same meeting become materials), then everything else.
