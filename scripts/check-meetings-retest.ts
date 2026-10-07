@@ -385,4 +385,5 @@ assert.match(fromScratch, /\(2 present \/ 2 required\)/, "staff are not counted 
 assert.doesNotMatch(fromScratch, /Motion wording:/, "template motion wording already shown as a motion is not repeated after the signatures");
 assert.equal((fromScratch.match(/>\s*(?:\d+\.\s*)?Adjournment\s*</g) ?? []).length, 1, "one Adjournment heading: the agenda item carries the adjournment record");
 assert.match(fromScratch, /The meeting was adjourned at 7:41 PM/);
+assert.match(fromScratch, /<strong>Motion:<\/strong> That the agenda for this meeting be adopted as presented\./, "the trimmed resolution reads as a sentence");
 console.log("✓ numbered export: quorum counts members only; no repeated motion wording or second Adjournment heading");

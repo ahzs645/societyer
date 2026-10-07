@@ -1022,7 +1022,7 @@ function renderSampleMotion(motion: MinutesRenderArgs["minutes"]["motions"][numb
   const eh = escapeHtml;
   const normalizedOutcome = motion.outcome ? humanizeLabel(motion.outcome) : "Recorded";
   return `
-    <p><strong>Motion:</strong> ${eh(stripMotionLeadIn(motion.text))}</p>
+    <p><strong>Motion:</strong> ${eh(sampleMotionWording(motion.text))}</p>
     ${motion.movedBy ? `<p><strong>First:</strong> ${eh(motion.movedBy)}</p>` : ""}
     ${motion.secondedBy ? `<p><strong>Second:</strong> ${eh(motion.secondedBy)}</p>` : ""}
     <p><strong>Motion ${eh(normalizedOutcome)}</strong>${voteSummary(motion) ? ` (${eh(voteSummary(motion))})` : ""}</p>
@@ -1784,6 +1784,13 @@ function placeholderSentence(label: string, options: Required<MinutesExportOptio
 
 function placeholderParagraph(label: string, options: Required<MinutesExportOptions>) {
   return options.includePlaceholders ? `<p class="muted">[${escapeHtml(label)} not recorded]</p>` : "";
+}
+
+/** "BE IT RESOLVED THAT the agenda…" reads "That the agenda…" after "Motion:". */
+function sampleMotionWording(text: string) {
+  const stripped = stripMotionLeadIn(text);
+  if (/^\s*(?:be it\s+)?resolved,?\s+that\b/i.test(text) && /^[a-z]/.test(stripped)) return `That ${stripped}`;
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
 function stripMotionLeadIn(text: string) {
