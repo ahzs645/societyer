@@ -8,6 +8,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote } from "../components/ui";
+import { directorProblems, directorTermLapsed } from "../../shared/registerValidation";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -88,8 +89,30 @@ export function DirectorsPage() {
     setOpen(true);
   };
 
+  const selectedProblems = selected ? directorProblems(selected) : [];
+  const deleteSelected = async () => {
+    if (!selected?._id || !canManage) return;
+    const name = `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim() || "this unnamed director";
+    const ok = await confirm({
+      title: `Delete ${name}?`,
+      message: `${name} will be removed from the director register and from active-director and BC-residency counts. To record that a real director left office, use Resign instead so the term history is kept.`,
+      confirmLabel: "Delete director",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await remove({ id: selected._id });
+      setOpen(false);
+      toast.success("Director deleted");
+    } catch (error: any) { toast.error(error.message); }
+  };
+
   const save = async () => {
     if (!selected || !canManage) return;
+    if (selectedProblems.length) {
+      toast.error("Director not saved", selectedProblems[0]);
+      return;
+    }
     try {
     if (selected._id) {
       const { _id, _creationTime, societyId, directoryPersonId, entityId, ...patch } = selected;
@@ -217,7 +240,10 @@ export function DirectorsPage() {
               loading={tableData.loading || directors === undefined}
               renderCell={({ field, record }) => field.name === "firstName" ? (
                 <button type="button" className="record-table__identifier-button" onClick={() => { setSelected(record); setOpen(true); }}>
-                  {record.firstName || "Open director"}
+                  {`${record.firstName ?? ""} ${record.lastName ?? ""}`.trim() || "Unnamed director"}
+                  {directorTermLapsed(record, new Date().toISOString().slice(0, 10)) ? (
+                    <span className="badge badge--warn" style={{ marginLeft: 6 }} title={`Term ended ${record.termEnd}; record a re-election or resignation.`}>Term ended</span>
+                  ) : null}
                 </button>
               ) : undefined}
             />
@@ -266,13 +292,28 @@ export function DirectorsPage() {
         title={selected?._id ? (canManage ? "Edit director" : "View director") : "Add director"}
         footer={
           <>
+            {selected?._id && canManage ? (
+              <button className="btn btn--danger" style={{ marginRight: "auto" }} onClick={deleteSelected}>
+                <Trash2 size={12} /> Delete
+              </button>
+            ) : null}
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save} disabled={!canManage}>Save</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canManage || selectedProblems.length > 0}>Save</button>
           </>
         }
       >
         {selected && (
           <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {selectedProblems.length > 0 && (
+              <InspectorNote tone="danger" title="Required before saving">
+                {selectedProblems.join(" ")}
+              </InspectorNote>
+            )}
+            {directorTermLapsed(selected, new Date().toISOString().slice(0, 10)) && (
+              <InspectorNote tone="warn" title="Term has ended">
+                This director's term ended {selected.termEnd} but the record is still Active. Record the re-election (new term end) or the date they left office.
+              </InspectorNote>
+            )}
             {selected._id&&<PersonRecordLinks societyId={society._id} recordTable="directors" recordId={selected._id} personName={`${selected.firstName} ${selected.lastName}`} observedDate={selected.termStart}/>}
             <InspectorNote tone="warn" title="Director register">
               Keep this register current. Changes to directors normally need to be reflected in your

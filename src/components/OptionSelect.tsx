@@ -1,5 +1,5 @@
 import { Field } from "./ui";
-import { OptionSetName, optionChoices } from "../lib/orgHubOptions";
+import { OptionSetName, normalizeOptionChoice, optionChoices } from "../lib/orgHubOptions";
 import { Select } from "./Select";
 
 type OptionSelectProps = {
@@ -11,11 +11,12 @@ type OptionSelectProps = {
 };
 
 export function OptionSelect({ label, setName, value, onChange, emptyLabel }: OptionSelectProps) {
-  const options = optionChoices(setName, value ? [value] : []);
+  const normalized = value ? normalizeOptionChoice(setName, value) : "";
+  const options = optionChoices(setName, normalized ? [normalized] : []);
   return (
     <Field label={label}>
       <Select
-        value={value ?? ""}
+        value={normalized}
         onChange={(next) => onChange(next || undefined)}
         options={options}
         placeholder={emptyLabel ?? "Select…"}

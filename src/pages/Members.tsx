@@ -7,7 +7,8 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
-import { Drawer, Field } from "../components/ui";
+import { Drawer, Field, InspectorNote } from "../components/ui";
+import { memberProblems } from "../../shared/registerValidation";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -144,16 +145,25 @@ export function MembersPage() {
     setDrawerOpen(true);
   };
 
+  const selectedProblems = selected ? memberProblems(selected) : [];
   const save = async () => {
     if (!selected || !canManage) return;
-    if (selected._id) {
-      const { _id, _creationTime, societyId, ...patch } = selected;
-      patch.aliases = cleanAliases(patch.aliases);
-      await update({ id: _id, patch });
-    } else {
-      await create({ societyId: society._id, ...selected, aliases: cleanAliases(selected.aliases) });
+    if (selectedProblems.length) {
+      toast.error("Member not saved", selectedProblems[0]);
+      return;
     }
-    setDrawerOpen(false);
+    try {
+      if (selected._id) {
+        const { _id, _creationTime, societyId, ...patch } = selected;
+        patch.aliases = cleanAliases(patch.aliases);
+        await update({ id: _id, patch });
+      } else {
+        await create({ societyId: society._id, ...selected, aliases: cleanAliases(selected.aliases) });
+      }
+      setDrawerOpen(false);
+    } catch (error) {
+      toast.error("Member not saved", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const records = (members ?? []) as any[];
@@ -218,7 +228,7 @@ export function MembersPage() {
           <RecordTable
             renderCell={({ field, record }) => field.name === "firstName" ? (
               <button type="button" className="record-table__identifier-button" onClick={() => { setSelected(record); setDrawerOpen(true); }}>
-                {record.firstName || "Open member"}
+                {`${record.firstName ?? ""} ${record.lastName ?? ""}`.trim() || "Unnamed member"}
               </button>
             ) : undefined}
             selectable={canManage}
@@ -320,12 +330,15 @@ export function MembersPage() {
               </Link>
             )}
             <button className="btn" onClick={() => setDrawerOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save} disabled={!canManage}>Save</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canManage || selectedProblems.length > 0}>Save</button>
           </>
         }
       >
         {selected && (
           <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {selectedProblems.length > 0 && (
+              <InspectorNote tone="danger" title="Required before saving">{selectedProblems.join(" ")}</InspectorNote>
+            )}
             <div className="row" style={{ gap: 12 }}>
               <Field label="First name"><input className="input" value={selected.firstName} onChange={(e) => setSelected({ ...selected, firstName: e.target.value })} /></Field>
               <Field label="Last name"><input className="input" value={selected.lastName} onChange={(e) => setSelected({ ...selected, lastName: e.target.value })} /></Field>

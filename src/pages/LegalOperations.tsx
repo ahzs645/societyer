@@ -206,9 +206,17 @@ export function RoleHoldersPage() {
   };
   const save = async () => {
     if (!draft || !canWrite) return;
-    await persistRoleHolder(draft);
-    setDraft(null);
-    toast.success("Role holder saved");
+    if (![draft.fullName, draft.firstName, draft.lastName].some((part) => String(part ?? "").trim())) {
+      toast.error("Role holder not saved", "Enter the role holder's name.");
+      return;
+    }
+    try {
+      await persistRoleHolder(draft);
+      setDraft(null);
+      toast.success("Role holder saved");
+    } catch (error) {
+      toast.error("Role holder not saved", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const confirmDelete = async (row: any) => {
