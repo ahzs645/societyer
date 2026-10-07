@@ -19,6 +19,7 @@ export function ImportCandidatesNotice({
   kinds = [],
   documentCategory,
   emptyRegister = true,
+  also,
 }: {
   /** Singular noun for the records ("policy", "financial statement"). */
   noun: string;
@@ -30,6 +31,8 @@ export function ImportCandidatesNotice({
   documentCategory?: string;
   /** The page's own register is empty; then a documents-only hint is shown too. */
   emptyRegister?: boolean;
+  /** Another place related records may already be (shown when the register is empty). */
+  also?: { to: string; label: string };
 }) {
   const society = useSociety();
   const { loaded, can } = usePermissions();
@@ -57,7 +60,7 @@ export function ImportCandidatesNotice({
   const approvedLink = approvedTargetCount >= approvedKindCount && approvedTarget.length === 1
     ? `/app/imports?status=Approved&target=${encodeURIComponent(approvedTarget[0][0])}`
     : approvedKind.length === 1 ? `/app/imports?status=Approved&kind=${encodeURIComponent(approvedKind[0][0])}` : "/app/imports?status=Approved";
-  if (!candidates && !(approved && emptyRegister) && (!docs || !emptyRegister)) return null;
+  if (!candidates && !(approved && emptyRegister) && (!docs || !emptyRegister) && !(also && emptyRegister)) return null;
   return (
     <div className="import-candidates-notice" role="status">
       <FileSearch size={14} aria-hidden="true" />
@@ -80,6 +83,12 @@ export function ImportCandidatesNotice({
           <>
             {candidates === 0 && approved === 0 && <>Nothing is recorded here yet, but source files exist: </>}
             <Link to={`/app/documents?category=${encodeURIComponent(documentCategory)}`}>{docs.toLocaleString()} {documentCategory === "FinancialStatement" ? "financial statement" : documentCategory.toLowerCase()} document{docs === 1 ? "" : "s"} in Documents</Link>
+          </>
+        )}
+        {also && emptyRegister && (
+          <>
+            {(candidates > 0 || approved > 0 || docs > 0) ? " · " : null}
+            <Link to={also.to}>{also.label}</Link>
           </>
         )}
       </span>

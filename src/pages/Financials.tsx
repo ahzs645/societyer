@@ -415,7 +415,7 @@ export function FinancialsPage() {
           )
         }
       />
-      <ImportCandidatesNotice noun="financial statement" targets={["financials", "financialStatements", "financialStatementImports"]} kinds={["financialStatement", "financialStatementImport", "budgetSnapshot", "treasurerReport"]} documentCategory="FinancialStatement" emptyRegister={!(items ?? []).length} />
+      <ImportCandidatesNotice noun="financial statement" targets={["financials", "financialStatements", "financialStatementImports"]} kinds={["financialStatement", "financialStatementImport", "budgetSnapshot", "treasurerReport"]} documentCategory="FinancialStatement" emptyRegister={!(items ?? []).length} also={{ to: "/app/finance-imports", label: "Imported statements and budget snapshots awaiting verification are in Finance imports" }} />
 
       <div className="tab-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
         {[

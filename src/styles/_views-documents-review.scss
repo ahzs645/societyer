@@ -561,7 +561,7 @@
 .import-session-row__counts {
   align-items: center;
 }
-.import-session-picker {
+.import-session-track .import-session-picker {
   display: none;
   margin-top: token('s-2');
 }
@@ -655,7 +655,7 @@
   .import-session-list {
     display: none;
   }
-  .import-session-picker {
+  .import-session-track .import-session-picker {
     display: flex;
     width: 100%;
   }

@@ -559,7 +559,7 @@ export function ImportSessionsPage() {
                 <Stat label="Candidates" value={String(session.summary?.total ?? 0)} icon={<ListChecks size={14} />} sub={`${session.summary?.byStatus?.Pending ?? 0} pending`} />
                 <Stat label="Approved, not applied" value={String(approvedToApply)} icon={<Check size={14} />} sub="run an apply step above" />
                 <Stat label="Applied" value={String((session.summary?.documentsApplied ?? 0) + (session.summary?.sectionsApplied ?? 0) + (session.summary?.meetingsApplied ?? 0) + (session.summary?.orgHistoryApplied ?? 0))} icon={<Archive size={14} />} sub="documents, sections, minutes, history" />
-                <Stat label="Unsupported details" value={sessionGaps ? String(sessionGaps.count) : "0"} icon={<FileWarning size={14} />} sub={sessionGaps ? `${sessionGaps.open ?? 0} open` : "none recorded"} />
+                <Stat label="Unsupported" value={sessionGaps ? String(sessionGaps.count) : "0"} icon={<FileWarning size={14} />} sub={sessionGaps ? `details · ${sessionGaps.open ?? 0} open` : "no details recorded"} />
               </div>
               {sessionGaps && Object.keys(sessionGaps.infoTypes ?? {}).length > 0 && (
                 <InspectorNote tone="warn" title="Source details Societyer could not represent">
