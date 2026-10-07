@@ -55,7 +55,7 @@ export function AgreementsPage() {
   const [serverError, setServerError] = useState("");
   const [converting, setConverting] = useState(false);
   const [quick, setQuick] = useState<QuickFilter>(() => (["active", "expiring", "review", "warnings"].includes(params.get("filter") ?? "") ? (params.get("filter") as QuickFilter) : "all"));
-  const [search, setSearch] = useState("");
+
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
   const tableData = useObjectRecordTableData({ societyId: society?._id, nameSingular: "agreement", viewId: currentViewId });
@@ -77,18 +77,13 @@ export function AgreementsPage() {
     signing: row.signing ? (row.signing.status === "warning" ? "Check signing authority" : row.signing.status === "ok" ? "Satisfied" : row.signing.status === "no_tiers" ? "No tiers on record" : "No value") : "",
   })), [agreements]);
 
-  const filtered = useMemo(() => {
-    const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return records.filter((row) => {
-      if (quick === "active" && !["active", "negotiating"].includes(row.effectiveStatus)) return false;
-      if (quick === "expiring" && !row.expiringSoon) return false;
-      if (quick === "review" && row.reviewStatus !== "NeedsReview") return false;
-      if (quick === "warnings" && !row.signingWarning) return false;
-      if (!words.length) return true;
-      const haystack = `${row.title} ${row.counterparty} ${row.agreementNumber ?? ""} ${row.kind ?? ""}`.toLowerCase();
-      return words.every((word) => haystack.includes(word));
-    });
-  }, [records, quick, search]);
+  const filtered = useMemo(() => records.filter((row) => {
+    if (quick === "active" && !["active", "negotiating"].includes(row.effectiveStatus)) return false;
+    if (quick === "expiring" && !row.expiringSoon) return false;
+    if (quick === "review" && row.reviewStatus !== "NeedsReview") return false;
+    if (quick === "warnings" && !row.signingWarning) return false;
+    return true;
+  }), [records, quick]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
@@ -190,7 +185,7 @@ export function AgreementsPage() {
             { id: "warnings", label: `Signing warnings (${warnings.length})` },
           ]}
         />
-        <input className="input" type="search" placeholder="Search agreements" aria-label="Search agreements" value={search} onChange={(event) => setSearch(event.target.value)} style={{ maxWidth: 260 }} />
+
       </div>
 
       {!tableData.loading && !tableData.objectMetadata ? (

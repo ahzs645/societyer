@@ -258,9 +258,9 @@ export function AgreementFormDrawer({
         <section className="col" style={{ gap: 8 }} aria-label="Term and renewal">
           <h3 className="agreement-form__heading">Term and renewal</h3>
           <div className="agreement-form__grid">
-            <Field label="Effective date" error={show("effectiveDate")}><DatePicker value={form.effectiveDate} onChange={(effectiveDate) => set({ effectiveDate })} aria-invalid={Boolean(show("effectiveDate"))} /></Field>
-            <Field label="End date" error={show("endDate")}><DatePicker value={form.endDate} onChange={(endDate) => set({ endDate })} aria-invalid={Boolean(show("endDate"))} /></Field>
-            <Field label="Signed on" error={show("signedDate")}><DatePicker value={form.signedDate} onChange={(signedDate) => set({ signedDate })} /></Field>
+            <Field label="Effective date" error={show("effectiveDate")}><DatePicker id="agreement-effective-date" value={form.effectiveDate} onChange={(effectiveDate) => set({ effectiveDate })} aria-invalid={Boolean(show("effectiveDate"))} /></Field>
+            <Field label="End date" error={show("endDate")}><DatePicker id="agreement-end-date" value={form.endDate} onChange={(endDate) => set({ endDate })} aria-invalid={Boolean(show("endDate"))} /></Field>
+            <Field label="Signed on" error={show("signedDate")}><DatePicker id="agreement-signed-date" value={form.signedDate} onChange={(signedDate) => set({ signedDate })} /></Field>
             <Field label="Renewal notice (days before end)" error={show("renewalNoticeDays")}><input className="input" type="number" min="0" value={form.renewalNoticeDays} onChange={(event) => set({ renewalNoticeDays: event.target.value })} /></Field>
             <Field label="Termination notice (days)" error={show("terminationNoticeDays")}><input className="input" type="number" min="0" value={form.terminationNoticeDays} onChange={(event) => set({ terminationNoticeDays: event.target.value })} /></Field>
             <Field label="Renewal term (months)" hint="When it renews automatically" error={show("renewalTermMonths")}><input className="input" type="number" min="0" value={form.renewalTermMonths} onChange={(event) => set({ renewalTermMonths: event.target.value })} disabled={!form.autoRenew} /></Field>

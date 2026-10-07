@@ -64,6 +64,7 @@ export function AgreementDetailPage() {
   const remove = usePermissionedMutation(api.agreements.remove, canWrite);
   const setDecision = usePermissionedMutation(api.agreements.setRenewalDecision, canWrite);
   const setObligation = usePermissionedMutation(api.agreements.setObligationStatus, canWrite);
+  const syncObligations = usePermissionedMutation(api.agreements.syncObligations, canWrite);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [serverError, setServerError] = useState("");
@@ -321,7 +322,10 @@ export function AgreementDetailPage() {
             ))}
             {data.deadlines && (
               <>
-                <h3 className="agreement-form__heading">Deadlines generated</h3>
+                <div className="row" style={{ gap: 8, justifyContent: "space-between", flexWrap: "wrap" }}>
+                  <h3 className="agreement-form__heading">Deadlines generated</h3>
+                  {canWrite && <button type="button" className="btn btn--ghost btn--sm" onClick={() => run("Deadlines brought up to date", () => syncObligations({ societyId: society._id }))}><RefreshCcw size={12} /> Update deadlines</button>}
+                </div>
                 {!data.deadlines.length && <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>No deadlines: add due dates, a renewal notice period or an end date.</div>}
                 <ul className="agreement-versions">
                   {data.deadlines.map((row: any) => (
@@ -436,8 +440,8 @@ export function AgreementDetailPage() {
                 : "The current agreement becomes superseded now; the replacement is a new linked version that starts as a draft."}
             </p>
             <Field label="Title"><input className="input" value={renewForm.title} onChange={(event) => setRenewForm({ ...renewForm, title: event.target.value })} /></Field>
-            <Field label="Effective date"><DatePicker value={renewForm.effectiveDate} onChange={(effectiveDate) => setRenewForm({ ...renewForm, effectiveDate })} /></Field>
-            <Field label="End date"><DatePicker value={renewForm.endDate} onChange={(endDate) => setRenewForm({ ...renewForm, endDate })} /></Field>
+            <Field label="Effective date"><DatePicker id="renewal-effective-date" value={renewForm.effectiveDate} onChange={(effectiveDate) => setRenewForm({ ...renewForm, effectiveDate })} /></Field>
+            <Field label="End date"><DatePicker id="renewal-end-date" value={renewForm.endDate} onChange={(endDate) => setRenewForm({ ...renewForm, endDate })} /></Field>
             <Field label="Value (dollars)" hint="Leave blank to keep the current value"><input className="input" inputMode="decimal" value={renewForm.valueDollars} onChange={(event) => setRenewForm({ ...renewForm, valueDollars: event.target.value })} /></Field>
             <label className="row" style={{ gap: 6 }}><input type="checkbox" checked={renewForm.carry} onChange={(event) => setRenewForm({ ...renewForm, carry: event.target.checked })} /> Carry open deliverables and reports forward</label>
             {renewForm.error && <div className="field__error" role="alert">{renewForm.error}</div>}
@@ -456,7 +460,7 @@ export function AgreementDetailPage() {
       >
         {terminateForm && (
           <div className="col" style={{ gap: 8 }}>
-            <Field label="Termination date" required><DatePicker value={terminateForm.date} onChange={(date) => setTerminateForm({ ...terminateForm, date })} /></Field>
+            <Field label="Termination date" required><DatePicker id="termination-date" value={terminateForm.date} onChange={(date) => setTerminateForm({ ...terminateForm, date })} /></Field>
             <Field label="Reason" required><textarea className="textarea" rows={3} value={terminateForm.reason} onChange={(event) => setTerminateForm({ ...terminateForm, reason: event.target.value })} placeholder="For example: ended by mutual agreement; notice given on …" /></Field>
             {terminateForm.error && <div className="field__error" role="alert">{terminateForm.error}</div>}
           </div>
