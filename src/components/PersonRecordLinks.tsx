@@ -2,6 +2,7 @@ import {sourceRoleLabel} from '../../shared/personHistory';
 import {peopleNamedInFragment,stripRoleAffixes} from '../../shared/personMatching';
 import {useMemo,useState} from 'react';import {Link} from 'react-router-dom';import {useQuery,useMutation} from 'convex/react';import {api} from '@/lib/convexApi';import {usePermissions} from '@/hooks/usePermissions';import {useToast} from './Toast';
 import {PersonPicker,useDirectoryPeople,type DirectoryPersonOption} from './PersonPicker';
+import {PageErrorBoundary} from './PageErrorBoundary';
 
 const STATUS_LABELS:Record<string,string>={verified:'Confirmed',suggested:'Suggested',unresolved:'Unresolved',assumed:'Test assumption — identity unconfirmed',rejected:'Rejected',not_person:'Organization / heading'};
 
@@ -57,7 +58,14 @@ export function PersonOccurrenceReview({row,people}:{row:any;people:DirectoryPer
   {!!row.reviewHistory?.length&&<details><summary>Identity review history ({row.reviewHistory.length})</summary>{row.reviewHistory.map((h:any,i:number)=><p key={i}>{h.reviewedAtISO} · {h.kind?`${h.kind} · `:''}{h.status} · {h.rationale} · previous {h.previous?.status??'—'}</p>)}</details>}
  </div>;
 }
-export function PersonRecordLinks({societyId,recordTable,recordId,personName,observedDate,people:providedPeople}:{societyId:string;recordTable:string;recordId:string;personName?:string;observedDate?:string;people?:DirectoryPersonOption[]}){
+type PersonRecordLinksProps={societyId:string;recordTable:string;recordId:string;personName?:string;observedDate?:string;people?:DirectoryPersonOption[]};
+/** P-O1: a failed lookup shows an error with Retry inside the card, never "Loading linked people…" forever. */
+export function PersonRecordLinks(props:PersonRecordLinksProps){
+ return <PageErrorBoundary variant="inline" subject="linked people" resetKey={`${props.societyId}|${props.recordTable}|${props.recordId}`}>
+  <PersonRecordLinksPanel {...props}/>
+ </PageErrorBoundary>;
+}
+function PersonRecordLinksPanel({societyId,recordTable,recordId,personName,observedDate,people:providedPeople}:PersonRecordLinksProps){
  const {can}=usePermissions();const toast=useToast();const read=can('members:read');
  const data=useQuery(api.personHistory.forRecord,read?{societyId,recordTable,recordId}:'skip') as any[]|undefined;
  // One light directory list (never the full occurrence overview) for the pickers.

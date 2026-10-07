@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { PortableQueryCache } from "../src/lib/portableQueryCache";
+import { LocalQueryError, PortableQueryCache } from "../src/lib/portableQueryCache";
 import type { PortableRuntime } from "../shared/portable/define";
 import type { StaticDemoDexieStore } from "../src/lib/staticDemoStore";
 
@@ -87,7 +87,8 @@ assert.equal(page.localQueryResult(), undefined);
 assert.equal(ordinary.localQueryResult(), undefined);
 await settle();
 assert.equal(page.localQueryResult(), undefined, "Denied current principal cannot retain a previous authorized page");
-assert.equal(ordinary.localQueryResult(), undefined);
+// P-O2: a failed (non-paginated) query is rethrown to useQuery, like hosted Convex, instead of loading forever.
+assert.throws(() => ordinary.localQueryResult(), (error: any) => error instanceof LocalQueryError && error.queryName === "example:list" && /Current principal denied/.test(error.message));
 assert.equal(fallbackReads, 0, "Authorization failures never substitute fixture data");
 
 unsubscribeSecond();
@@ -125,4 +126,51 @@ const stopCreated = created.onUpdate(() => undefined);
 await settle();
 assert.deepEqual(created.localQueryResult(), assets.get(tag.code), "A fresh authorized lookup resolves the actually created asset");
 stopCreated();
+
+// P-O2: errors reach the caller; a retry (re-mount) runs the query again; a vanished record
+// is surfaced only when it outlives the grace period (a deleted row's watcher usually unmounts first).
+{
+  const errorListeners = new Set<() => void>();
+  let mode: "fail" | "missing" | "ok" = "fail";
+  let runs = 0;
+  const errorCache = new PortableQueryCache({
+    async runQuery() { runs += 1; if (mode === "fail") throw new Error("Society membership not found."); if (mode === "missing") throw new Error("Record not found."); return [{ ok: true }]; },
+  } as unknown as PortableRuntime, {
+    onUpdate(callback: () => void) { errorListeners.add(callback); return () => errorListeners.delete(callback); },
+  } as unknown as StaticDemoDexieStore, () => undefined);
+  let notified = 0;
+  const watch = errorCache.watchQuery("people:forRecord", { recordId: "x" });
+  assert.equal(watch.localQueryResult(), undefined, "loading while the first run is in flight");
+  const stop = watch.onUpdate(() => notified++);
+  await settle();
+  assert.ok(notified > 0, "subscribers are told about the failure so they re-render");
+  assert.throws(() => watch.localQueryResult(), /Society membership not found/);
+  stop();
+  // Retry: the boundary re-mounts the subscriber, which runs the query again.
+  mode = "ok";
+  const retried = errorCache.watchQuery("people:forRecord", { recordId: "x" });
+  assert.equal(retried.localQueryResult(), undefined, "a retry starts a fresh run instead of rethrowing");
+  const stopRetried = retried.onUpdate(() => undefined);
+  await settle();
+  assert.deepEqual(retried.localQueryResult(), [{ ok: true }]);
+  stopRetried();
+
+  LocalQueryError.NOT_FOUND_GRACE_MS = 20;
+  mode = "missing";
+  const gone = errorCache.watchQuery("people:forRecord", { recordId: "gone" });
+  const stopGone = gone.onUpdate(() => undefined);
+  await settle();
+  assert.equal(gone.localQueryResult(), undefined, "a vanished record is not surfaced at once");
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.throws(() => gone.localQueryResult(), /Record not found/, "a persistent not-found is surfaced after the grace period");
+  stopGone();
+  const transient = errorCache.watchQuery("people:forRecord", { recordId: "transient" });
+  const stopTransient = transient.onUpdate(() => undefined);
+  await settle();
+  stopTransient();
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  const again = errorCache.watchQuery("people:forRecord", { recordId: "transient" });
+  assert.equal(again.localQueryResult(), undefined, "an unmounted watcher's not-found is never surfaced");
+  assert.ok(runs >= 4);
+}
 console.log("Portable cache checks passed: shared pagination, loaded pages, unsubscribe, principal/denied guards, and inactive miss→create→resubscribe lookup.");
