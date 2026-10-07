@@ -195,14 +195,18 @@ test("inventory creation and staged import parsing work without applying records
   await page.getByRole("button", { name: "New session", exact: true }).click();
   await input(page, "Session name").fill("Operations audit staged import");
   await input(page, "Import JSON").fill("{ invalid JSON");
-  // Invalid JSON is caught by the live preview: the parse error shows and
-  // creation stays disabled until the JSON parses.
-  await expect(page.getByRole("dialog")).toBeVisible();
+  // Invalid JSON is caught by the live preview: the parse error shows, and
+  // "Create session" explains why it cannot stage instead of creating anything.
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
   await expect(page.locator(".badge--danger").last()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create session", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Create session", exact: true }).click();
+  await expect(dialog).toBeVisible();
   await input(page, "Import JSON").fill('{"sources":[{"title":"Operations audit staged source","sourceExternalId":"operations-audit-source","category":"Finance"}]}');
   // The bundle declares no source organization, so ownership must be confirmed first.
-  await expect(page.getByRole("button", { name: "Create session", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Create session", exact: true }).click();
+  await expect(dialog.getByText("Confirm that you reviewed the source ownership before staging these records.", { exact: true })).toBeVisible();
+  await expect(dialog).toBeVisible();
   await page.getByRole("checkbox", { name: /I reviewed the source ownership and evidence gaps/ }).check();
   await page.getByRole("button", { name: "Create session", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);

@@ -105,11 +105,13 @@ test("acting Member sees own access without a roster and cannot edit member or m
   await expect(memberForm).toHaveCount(0);
   await expect(page.getByText("Audit", { exact: true }).first()).toBeVisible();
   await page.goto("/app/users");
+  // Guided setup leaves contacts blank; the seeded Owner still has a name.
+  await expect(page.getByRole("button", { name: "Role for Owner", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add user", exact: true }).click();
   await page.getByLabel("Display name", { exact: true }).fill("Interface Member");
   await page.getByLabel("Email", { exact: true }).fill("interface-member@example.test");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+  await expect(page.getByText("User added", { exact: true })).toBeVisible();
   const picker = page.getByTitle("Switch acting user", { exact: true });
   if (!(await picker.isVisible())) await page.getByRole("button", { name: "More", exact: true }).click();
   await picker.click();
@@ -139,7 +141,7 @@ test("acting Member sees own access without a roster and cannot edit member or m
   await expect(page.locator(".record-table__cell--editable")).toHaveCount(0);
   if (!(await picker.isVisible())) await page.getByRole("button", { name: "More", exact: true }).click();
   await picker.click();
-  await page.getByText("Owner", { exact: true }).click();
+  await page.getByRole("listbox", { name: "Acting user", exact: true }).getByRole("option").filter({ hasText: "Owner" }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "New meeting", exact: true })).toBeEnabled();
   expect(errors).toEqual([]);

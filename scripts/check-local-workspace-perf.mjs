@@ -56,7 +56,8 @@ const ROUTES = [
 async function restore(backupPath) {
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: true,
-    executablePath: "/opt/pw-browsers/chromium",
+    // Preinstalled Chromium when provided (same variable as the Playwright configs); else Playwright's own.
+    executablePath: process.env.SOCIETYER_CHROMIUM_PATH || undefined,
     viewport: { width: 1440, height: 900 },
   });
   try {

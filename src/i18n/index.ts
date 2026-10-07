@@ -9,14 +9,23 @@ export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
 const LOCALE_KEY = "societyer.locale";
 
+/** Storage can be missing (Node gate scripts) or throw (blocked site data); the UI must still boot. */
+function readStoredLocale(): string | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage.getItem(LOCALE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 function detectInitialLocale(): Locale {
   if (!isStaticDemoRuntime()) {
-    const stored = localStorage.getItem(LOCALE_KEY);
+    const stored = readStoredLocale();
     if (stored && (SUPPORTED_LOCALES as readonly string[]).includes(stored)) {
       return stored as Locale;
     }
   }
-  const nav = navigator.language?.slice(0, 2).toLowerCase();
+  const nav = typeof navigator === "undefined" ? undefined : navigator.language?.slice(0, 2).toLowerCase();
   return nav === "fr" ? "fr" : "en";
 }
 
@@ -44,7 +53,11 @@ i18n.on("languageChanged", syncDocumentLanguage);
 
 export function setLocale(locale: Locale) {
   if (!isStaticDemoRuntime()) {
-    localStorage.setItem(LOCALE_KEY, locale);
+    try {
+      localStorage.setItem(LOCALE_KEY, locale);
+    } catch {
+      // Blocked storage: the language still changes for this session.
+    }
   }
   i18n.changeLanguage(locale);
 }
