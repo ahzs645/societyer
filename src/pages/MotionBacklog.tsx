@@ -306,7 +306,10 @@ export function MotionBacklogPage({ embedded = false }: { embedded?: boolean } =
               </p>
               <Field label="Meeting">
                 <Select value={minutesMeetingId} onChange={(value) => setMinutesMeetingId(value)}
-                  options={[{ value: "", label: "Choose meeting..." }, ...(meetings ?? []).map((meeting: any) => ({ value: meeting._id, label: `${meeting.title} - ${formatDate(meeting.scheduledAt)}` }))]} disabled={!canWrite} />
+                  options={[{ value: "", label: "Choose meeting..." }, ...(meetings ?? [])
+                    // Only meetings that have not happened yet can take new agenda items (G-28).
+                    .filter((meeting: any) => !/^(held|completed|closed|cancelled|canceled)$/i.test(String(meeting.status ?? "")) && String(meeting.scheduledAt ?? "").slice(0, 10) >= new Date().toISOString().slice(0, 10))
+                    .map((meeting: any) => ({ value: meeting._id, label: `${meeting.title} - ${formatDate(meeting.scheduledAt)}` }))]} disabled={!canWrite} />
               </Field>
               <button className="btn btn--accent" onClick={seedAgendaMotionsToMinutes} disabled={!canWrite}>
                 <FileText size={12} /> Seed agenda motions into minutes

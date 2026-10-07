@@ -1,13 +1,15 @@
-import {SourceRoleObservations} from "../components/SourceRoleObservations";
+import { calendarDateKey } from "../lib/calendarDates";
+import { BoardRosterCard } from "../features/people/BoardRosterCard";
 import {PersonRecordLinks} from "../components/PersonRecordLinks";
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/lib/convexApi";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote } from "../components/ui";
+import { directorProblems, directorTermLapsed } from "../../shared/registerValidation";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { Select } from "../components/Select";
 import { DatePicker } from "../components/DatePicker";
@@ -29,6 +31,7 @@ import {
 import type { Id } from "../../convex/_generated/dataModel";
 import { directorComplianceProfile } from "../../shared/directorCompliance";
 import { MarkdownEditor } from "../components/MarkdownEditor";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function DirectorsPage() {
   const society = useSociety();
@@ -48,6 +51,28 @@ export function DirectorsPage() {
   const [currentViewId, setCurrentViewId] = useState<Id<"views"> | undefined>(undefined);
   const [filterOpen, setFilterOpen] = useState(false);
   const [directorMode, setDirectorMode] = useState<"register" | "archived">("register");
+  // ?intent=consent (dashboard "Update consent") opens the first active
+  // director without consent on file instead of the generic list (G-24).
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get("intent") !== "consent" || directors === undefined) return;
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("intent");
+      return next;
+    }, { replace: true });
+    const missing = (directors ?? []).filter((director: any) => director.status === "Active" && !director.consentOnFile);
+    if (!missing.length) {
+      toast.info("Every active director has consent on file");
+      return;
+    }
+    setSelected(missing[0]);
+    setOpen(true);
+    toast.info(
+      `${missing.length} active director${missing.length === 1 ? "" : "s"} without consent on file`,
+      missing.map((director: any) => `${director.firstName ?? ""} ${director.lastName ?? ""}`.trim()).join(", "),
+    );
+  }, [directors, params, setParams, toast]);
 
   const tableData = useObjectRecordTableData({
     societyId: society?._id,
@@ -82,14 +107,36 @@ export function DirectorsPage() {
     setSelected({
       firstName: "", lastName: "", email: "",
       position: "Director", isBCResident: directorProfile.showBcResidentField,
-      termStart: new Date().toISOString().slice(0, 10),
+      termStart: todayDateOnly(),
       consentOnFile: false, status: "Active", aliases: [],
     });
     setOpen(true);
   };
 
+  const selectedProblems = selected ? directorProblems(selected) : [];
+  const deleteSelected = async () => {
+    if (!selected?._id || !canManage) return;
+    const name = `${selected.firstName ?? ""} ${selected.lastName ?? ""}`.trim() || "this unnamed director";
+    const ok = await confirm({
+      title: `Delete ${name}?`,
+      message: `${name} will be removed from the director register and from active-director and BC-residency counts. To record that a real director left office, use Resign instead so the term history is kept.`,
+      confirmLabel: "Delete director",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await remove({ id: selected._id });
+      setOpen(false);
+      toast.success("Director deleted");
+    } catch (error: any) { toast.error(error.message); }
+  };
+
   const save = async () => {
     if (!selected || !canManage) return;
+    if (selectedProblems.length) {
+      toast.error("Director not saved", selectedProblems[0]);
+      return;
+    }
     try {
     if (selected._id) {
       const { _id, _creationTime, societyId, directoryPersonId, entityId, ...patch } = selected;
@@ -146,7 +193,7 @@ export function DirectorsPage() {
         <Link to="/app/role-holders">Role holders</Link>.
       </p>
 
-      <SourceRoleObservations societyId={society._id}/>
+      <BoardRosterCard societyId={society._id} activeDirectorCount={active.length} />
       <div className="stat-grid">
         <div className="stat">
           <div className="stat__label">Active directors</div>
@@ -217,7 +264,10 @@ export function DirectorsPage() {
               loading={tableData.loading || directors === undefined}
               renderCell={({ field, record }) => field.name === "firstName" ? (
                 <button type="button" className="record-table__identifier-button" onClick={() => { setSelected(record); setOpen(true); }}>
-                  {record.firstName || "Open director"}
+                  {record.firstName || record.lastName || "Unnamed director"}
+                  {directorTermLapsed(record, calendarDateKey(new Date())) ? (
+                    <span className="badge badge--warn" style={{ marginLeft: 6 }} title={`Term ended ${record.termEnd}; record a re-election or resignation.`}>Term ended</span>
+                  ) : null}
                 </button>
               ) : undefined}
             />
@@ -266,13 +316,28 @@ export function DirectorsPage() {
         title={selected?._id ? (canManage ? "Edit director" : "View director") : "Add director"}
         footer={
           <>
+            {selected?._id && canManage ? (
+              <button className="btn btn--danger" style={{ marginRight: "auto" }} onClick={deleteSelected}>
+                <Trash2 size={12} /> Delete
+              </button>
+            ) : null}
             <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn--accent" onClick={save} disabled={!canManage}>Save</button>
+            <button className="btn btn--accent" onClick={save} disabled={!canManage || selectedProblems.length > 0}>Save</button>
           </>
         }
       >
         {selected && (
           <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {selectedProblems.length > 0 && (
+              <InspectorNote tone="danger" title="Required before saving">
+                {selectedProblems.join(" ")}
+              </InspectorNote>
+            )}
+            {directorTermLapsed(selected, calendarDateKey(new Date())) && (
+              <InspectorNote tone="warn" title="Term has ended">
+                This director's term ended {selected.termEnd} but the record is still Active. Record the re-election (new term end) or the date they left office.
+              </InspectorNote>
+            )}
             {selected._id&&<PersonRecordLinks societyId={society._id} recordTable="directors" recordId={selected._id} personName={`${selected.firstName} ${selected.lastName}`} observedDate={selected.termStart}/>}
             <InspectorNote tone="warn" title="Director register">
               Keep this register current. Changes to directors normally need to be reflected in your
@@ -328,7 +393,7 @@ export function DirectorsPage() {
                 <Select
                   value={selected.status}
                   onChange={(v) => setSelected({ ...selected, status: v })}
-                  options={["Active", "Resigned", "Removed"].map((s) => ({ value: s, label: s }))}
+                  options={["Active", "NeedsReview", "Resigned", "Removed"].map((s) => ({ value: s, label: s === "NeedsReview" ? "Needs review (from a source roster)" : s }))}
                 />
               </Field>
             </div>

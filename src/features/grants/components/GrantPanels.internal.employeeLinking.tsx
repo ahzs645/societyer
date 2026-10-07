@@ -41,6 +41,7 @@ import {
 import {
   DossierSection,
 } from "./GrantPanels.internal.dossierPanels";
+import { todayDateOnly } from "../../../../shared/dateOnly";
 
 export function GrantFundedEmployeesPanel({
   grant,
@@ -420,8 +421,8 @@ export function defaultGrantEmployeeDraft(grant: any) {
     sinSecretVaultItemId: "",
     role: assignment.role ?? "",
     employmentType: assignment.employmentType ?? "FullTime",
-    startDate: grant.startDate ?? new Date().toISOString().slice(0, 10),
-    endDate: calculatedGrantEndDate(grant.startDate ?? new Date().toISOString().slice(0, 10), assignment.weeks) ?? grant.endDate ?? "",
+    startDate: grant.startDate ?? todayDateOnly(),
+    endDate: calculatedGrantEndDate(grant.startDate ?? todayDateOnly(), assignment.weeks) ?? grant.endDate ?? "",
     hoursPerWeek: assignment.hoursPerWeek ?? "35",
     hourlyWageDollars: assignment.hourlyWageDollars ?? "",
   };

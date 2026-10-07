@@ -21,6 +21,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * PIPA + CASL training records. The record table shows the date
@@ -60,7 +61,7 @@ export function PipaTrainingPage() {
       participantName: "",
       role: "Staff",
       topic: "PIPA",
-      completedAtISO: new Date().toISOString().slice(0, 10),
+      completedAtISO: todayDateOnly(),
       nextDueAtISO: new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10),
     });
     setOpen(true);

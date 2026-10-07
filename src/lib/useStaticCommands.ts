@@ -42,7 +42,7 @@ export function useStaticCommands(): StaticCommand[] {
         icon: Calendar,
         // The GlobalMeetingCreate popup (mounted in Layout) listens for this
         // event and pops the meeting-creation form from anywhere.
-        run: () => window.dispatchEvent(new Event("quickaction:create-meeting")),
+        run: () => { window.dispatchEvent(new Event("quickaction:create-meeting")); },
       },
       {
         id: "action-mark-filing-filed",
@@ -69,7 +69,7 @@ export function useStaticCommands(): StaticCommand[] {
         icon: PenLine,
         // Open the picker so the user explicitly chooses which meeting to
         // draft for. The picker (mounted in Layout) listens for this event.
-        run: () => window.dispatchEvent(new Event("quickaction:draft-minutes")),
+        run: () => { window.dispatchEvent(new Event("quickaction:draft-minutes")); },
       },
       {
         id: "action-add-motion",
@@ -84,7 +84,7 @@ export function useStaticCommands(): StaticCommand[] {
         icon: ListTodo,
         // The GlobalTaskCreate drawer (mounted in Layout) listens for this
         // event and pops the task-creation form in the inspector slot.
-        run: () => window.dispatchEvent(new Event("quickaction:add-task")),
+        run: () => { window.dispatchEvent(new Event("quickaction:add-task")); },
       },
       {
         id: "action-add-commitment",
@@ -92,15 +92,17 @@ export function useStaticCommands(): StaticCommand[] {
         icon: ClipboardList,
         // The GlobalCommitmentCreate popup (mounted in Layout) listens for this
         // event and pops the commitment-creation form from anywhere.
-        run: () => window.dispatchEvent(new Event("quickaction:add-commitment")),
+        run: () => { window.dispatchEvent(new Event("quickaction:add-commitment")); },
       },
       {
         id: "action-add-asset",
         label: "Add asset",
         icon: Package,
+        // Hidden with the Asset register, like its navigation and routes.
+        module: "assets",
         // The GlobalAssetCreate modal (mounted in Layout) listens for this
         // event and pops the asset-creation form.
-        run: () => window.dispatchEvent(new Event("quickaction:add-asset")),
+        run: () => { window.dispatchEvent(new Event("quickaction:add-asset")); },
       },
       {
         id: "action-invite-teammate",

@@ -16,6 +16,7 @@ import { centsToDollarInput, dollarInputToCents, formatDate } from "../lib/forma
 import { StudentLevyIntakeDrawer } from "../components/StudentLevyIntakeDrawer";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { DatePicker } from "../components/DatePicker";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 function cents(value: number): string {
   const abs = Math.abs(value);
@@ -139,7 +140,7 @@ function newQuickEntryDraft() {
 }
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function newSourceDraft() {

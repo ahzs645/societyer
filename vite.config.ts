@@ -36,7 +36,20 @@ export default defineConfig({
   plugins: [react()],
   // PowerSync uses its own worker and WASM loader. Pre-bundling that loader
   // rewrites its worker URL and can leave SQLite initialization waiting forever.
-  optimizeDeps: { exclude: ["@powersync/web"] },
+  optimizeDeps: {
+    exclude: ["@powersync/web"],
+    // The rich editor is lazy-loaded. Pre-bundle every Milkdown entry it uses
+    // in the first optimizer pass: a late re-optimization can load the shared
+    // @milkdown/ctx chunk twice (old and new `?v=` URLs), and two ctx copies
+    // fail with `MilkdownError: Context "nodes" not found`.
+    include: [
+      "@milkdown/crepe",
+      "@milkdown/kit/core",
+      "@milkdown/kit/utils",
+      "@milkdown/kit/prose/commands",
+      "@milkdown/kit/prose/state",
+    ],
+  },
   worker: { format: "es" },
   resolve: {
     alias: {

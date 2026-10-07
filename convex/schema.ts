@@ -36,12 +36,14 @@ import { pathwayTables } from "./tables/pathways";
 
 import { offlineMeetingTables } from "./tables/offlineMeetings";
 import { gapTables } from "./tables/gaps";
+import { intakeTables } from "./tables/intake";
 
 export default defineSchema({
   ...reviewEvidenceTables,
   ...personHistoryTables,
   ...offlineMeetingTables,
   ...pathwayTables,
+  ...intakeTables,
   societies: defineTable({
     accessRecoveryRequired: v.optional(v.boolean()),
     onboardingAnswersJson: v.optional(v.string()),

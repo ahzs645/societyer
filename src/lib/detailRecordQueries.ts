@@ -16,6 +16,7 @@ export const DETAIL_RECORD_QUERIES: ReadonlySet<string> = new Set([
   "documents:get",
   "workflows:get",
   "waveCache:resource",
+  "personHistory:profile",
 ]);
 
 export function isRecordNotFoundError(error: unknown): boolean {

@@ -16,7 +16,7 @@
  */
 
 import { filterRoleHolderRegisters, roleHolderHistoryAccess } from "./roleHolderReadAccess";
-import { assertAllowedOption } from "../orgHubOptions";
+import { assertAllowedOption, normalizeOptionValue } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
 import { normalizeGender } from "../nlg";
 import { planRoleHolderRevision } from "../roleHolderHistory";
@@ -163,6 +163,15 @@ export async function upsertRoleHolderPortable(
     await getOwned(ctx, "documents", documentId, args.societyId);
   }
   args.actorUserId = await principalUserId(ctx, args.societyId);
+  // Legacy/imported labels ("President", "Vice President") are normalized to
+  // option codes before validation instead of failing every save (G-10).
+  args.officerTitle = normalizeOptionValue("officerTitles", args.officerTitle);
+  args.directorTerm = normalizeOptionValue("directorTerms", args.directorTerm);
+  args.status = normalizeOptionValue("roleHolderStatuses", args.status);
+  args.roleType = normalizeOptionValue("representativeTypes", args.roleType) ?? args.roleType;
+  if (!cleanText(args.fullName) && !cleanText(args.firstName) && !cleanText(args.lastName)) {
+    throw new Error("Enter the role holder's name.");
+  }
   assertAllowedOption("representativeTypes", args.roleType, "Role-holder type", false);
   assertAllowedOption("roleHolderStatuses", args.status, "Role-holder status");
   assertAllowedOption("officerTitles", args.officerTitle, "Officer title");

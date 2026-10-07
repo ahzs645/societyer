@@ -31,6 +31,8 @@ import { useConfirm } from "../components/Modal";
 import { AGM_STEP_ORDER, type AgmStep as Step } from "../features/meetings/components/MeetingDetailSupport";
 import { calendarDaysBetween, daysUntil } from "../features/meetings/lib/noticeWindow";
 import { formatMeetingDate } from "../../shared/meetingDates";
+import { annualReportForAgm, dateOnly as agmDateOnly } from "../../shared/agmEvidence";
+import { Undo2 } from "lucide-react";
 
 const STEP_ORDER: { id: Step; label: string; sub: string; icon: any }[] = [
   { id: "notice", label: "Send notice", sub: "14–60 days before meeting (7–60 if bylaws permit)", icon: Send },
@@ -68,16 +70,25 @@ export function AgmWorkflowPage() {
   const markStep = useMutation(api.agm.markStep);
   const sendMeetingNotice = useAction(api.communications.sendMeetingNotice);
   const actingUserId = useCurrentUserId() ?? undefined;
-  const { rules } = useBylawRules();
+  const { rules: activeRules } = useBylawRules();
+  // Evaluate the meeting against the bylaw rules in force ON the meeting date,
+  // not today's active version: a later rule change never re-grades an AGM
+  // that was already held (BC Societies Act s.17 — bylaw changes are prospective).
+  const rulesAtMeeting = useQuery(
+    api.bylawRules.getForDate,
+    society && meeting?.scheduledAt ? { societyId: society._id, dateISO: meeting.scheduledAt } : "skip",
+  );
+  const rules = rulesAtMeeting ?? activeRules;
+  const filings = useQuery(api.filings.list, society ? { societyId: society._id } : "skip") as any[] | undefined;
+  const members = useQuery(api.members.list, society ? { societyId: society._id } : "skip") as any[] | undefined;
   const communicationsEnabled = useModuleEnabled("communications");
   const confirm = useConfirm();
 
   const [noticeChannel, setNoticeChannel] = useState<"email" | "mail" | "in-person">("email");
 
   const currentIdx = useMemo(() => {
-    if (!run) return 0;
-    const idx = AGM_STEP_ORDER.indexOf(run.step as Step);
-    return idx < 0 ? 0 : idx;
+    if (!run) return -1;
+    return AGM_STEP_ORDER.indexOf(run.step as Step);
   }, [run]);
 
   if (society === undefined) return <PageLoading />;
@@ -161,6 +172,25 @@ export function AgmWorkflowPage() {
   const noticeMinDays = rules?.generalNoticeMinDays ?? 14;
   const noticeMaxDays = rules?.generalNoticeMaxDays ?? 60;
   const noticeWithinWindow = noticeWindowSatisfied(meeting.noticeSentAt ?? new Date(), meeting.scheduledAt, noticeMinDays, noticeMaxDays, rules);
+  const meetingDate = agmDateOnly(meeting.scheduledAt);
+  const annualReport = meetingDate ? annualReportForAgm(filings ?? [], meetingDate, { dueDays: rules?.annualReportDueDaysAfterMeeting ?? 30 }) : null;
+  const votingMemberCount = (members ?? []).filter((member: any) => member.status === "Active" && member.votingRights).length;
+  const deliveredCount = (deliveries ?? []).filter((delivery: any) => delivery.status !== "bounced" && delivery.status !== "failed").length;
+  const recordedRecipientCount = Number(run?.noticeRecipientCount ?? 0);
+  const noticeCoverage = Math.max(deliveredCount, recordedRecipientCount);
+  const undoLastStep = async () => {
+    if (!run || currentIdx < 0) return;
+    const step = STEP_ORDER[currentIdx];
+    const ok = await confirm({
+      title: `Undo "${step?.label ?? run.step}"?`,
+      message: "The workflow step is reopened. Records already saved elsewhere (notice deliveries, minutes, filings) are not changed.",
+      confirmLabel: "Undo step",
+      tone: "warn",
+    });
+    if (!ok) return;
+    await markStep({ id: run._id, step: currentIdx > 0 ? AGM_STEP_ORDER[currentIdx - 1] : "pending" });
+    toast.info("Step reopened", step?.label);
+  };
 
   return (
     <div className="page">
@@ -187,6 +217,34 @@ export function AgmWorkflowPage() {
             }
             tone={noticeWithinWindow ? "success" : "warn"}
           />
+          <Item label="Notice coverage"
+            value={[
+              `${deliveredCount} delivery record${deliveredCount === 1 ? "" : "s"} logged`,
+              votingMemberCount ? `${votingMemberCount} voting member${votingMemberCount === 1 ? "" : "s"}` : "no voting member register",
+              recordedRecipientCount ? `workflow records ${recordedRecipientCount} recipient${recordedRecipientCount === 1 ? "" : "s"}` : "",
+            ].filter(Boolean).join(" · ")}
+            tone={votingMemberCount > 0 && noticeCoverage >= votingMemberCount ? (deliveredCount >= votingMemberCount ? "success" : "info") : "warn"}
+          />
+          <Item label="Annual report"
+            value={
+              annualReport?.filed
+                ? annualReport.late
+                  ? `Filed ${formatDate(String(annualReport.filing.filedAt))} · ${annualReport.daysLate} days late (due ${formatDate(annualReport.dueDate)})`
+                  : `Filed ${formatDate(String(annualReport.filing.filedAt))}`
+                : annualReport
+                  ? `Tracked · due ${formatDate(annualReport.dueDate)}`
+                  : meetingDate
+                    ? `Not filed · due ${formatDate(agmDueDate(meetingDate, rules?.annualReportDueDaysAfterMeeting ?? 30))}`
+                    : "Not filed"
+            }
+            tone={annualReport?.filed ? (annualReport.late ? "warn" : "success") : "warn"}
+          />
+          {rulesAtMeeting && !rulesAtMeeting.isFallback && rulesAtMeeting.version != null && (
+            <Item label="Bylaw rules applied"
+              value={`v${rulesAtMeeting.version} (in force on ${formatDate(meeting.scheduledAt)})`}
+              tone="info"
+            />
+          )}
           <Item label="Meeting electronic"
             value={meeting.electronic ? "Yes — notice must explain how to participate" : "No"}
             tone={meeting.electronic ? "info" : "neutral"}
@@ -208,7 +266,8 @@ export function AgmWorkflowPage() {
               (s.id === "held" && meeting.status === "Held") ||
               (s.id === "financialsPresented" && minutes?.agmDetails?.financialStatementsPresented === true) ||
               (s.id === "electionsHeld" && meetingElections.some((e: any) => ["Closed", "Tallied"].includes(e.status))) ||
-              (s.id === "minutesApproved" && Boolean(minutes?.approvedAt));
+              (s.id === "minutesApproved" && Boolean(minutes?.approvedAt)) ||
+              (s.id === "annualReportFiled" && Boolean(annualReport?.filed));
             const done = doneFromRun || doneFromRecord;
             const active = !done && ((!run && i === 0) || (run != null && i === currentIdx + 1));
             const Icon = s.icon;
@@ -232,6 +291,11 @@ export function AgmWorkflowPage() {
                   <div className="muted" style={{ fontSize: "var(--fs-sm)", marginTop: 2 }}>{s.sub}</div>
                   <div className="row agm-workflow__step-actions" style={{ gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                     {done && <Badge tone="success">Completed</Badge>}
+                    {done && doneFromRun && i === currentIdx && !doneFromRecord && (
+                      <button className="btn-action" onClick={undoLastStep}>
+                        <Undo2 size={12} /> Undo
+                      </button>
+                    )}
                     {!done && s.id === "notice" && (
                       <>
                         {communicationsEnabled ? (
@@ -382,4 +446,10 @@ function Item({ label, value, tone }: { label: string; value: string; tone: "suc
       <Badge tone={tone as any}>{value}</Badge>
     </div>
   );
+}
+
+function agmDueDate(meetingDate: string, days: number): string {
+  const parsed = new Date(`${meetingDate}T00:00:00.000Z`);
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
 }

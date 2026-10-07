@@ -98,7 +98,7 @@ export function MotionsPage() {
         title="Motions"
         icon={<Gavel size={16} />}
         iconColor="orange"
-        subtitle="Every decision your society has moved — a referenceable record across all meetings."
+        subtitle="Motions recorded as first-class records, with their meetings and outcomes. Motions that exist only inside minutes text appear once they are extracted or reviewed."
       />
       <Tabs<MotionsTab>
         value={tab}
@@ -181,6 +181,11 @@ function MotionsTableTab() {
     setTagDraft({ ...tagDraft, [String(row._id)]: "" });
     try {
       await setTags({ motionId: row._id, tags: next });
+      // The default view hides routine motions; say so instead of letting
+      // the row silently disappear (G-28).
+      if (ROUTINE_MOTION_TAGS.includes(value)) {
+        toast.info("Labelled as routine", "Routine motions are hidden in the default Motions view. Switch to the All motions view to see it.");
+      }
     } catch (err: any) {
       toast.error(err?.message ?? "Could not update labels");
     }

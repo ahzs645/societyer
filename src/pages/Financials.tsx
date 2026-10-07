@@ -4,6 +4,7 @@ import { api } from "@/lib/convexApi";
 import { useSociety } from "../hooks/useSociety";
 import { useCurrentUserId } from "../hooks/useCurrentUser";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
+import { ImportCandidatesNotice } from "../components/ImportCandidatesNotice";
 import { Badge, Drawer, Field, Flag } from "../components/ui";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
 import { MarkdownEditor } from "../components/MarkdownEditor";
@@ -414,6 +415,7 @@ export function FinancialsPage() {
           )
         }
       />
+      <ImportCandidatesNotice noun="financial statement" targets={["financials", "financialStatements", "financialStatementImports"]} kinds={["financialStatement", "financialStatementImport", "budgetSnapshot", "treasurerReport"]} documentCategory="FinancialStatement" emptyRegister={!(items ?? []).length} also={{ to: "/app/finance-imports", label: "Imported statements and budget snapshots awaiting verification are in Finance imports" }} />
 
       <div className="tab-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
         {[

@@ -17,6 +17,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { requiredQuorumForMeeting } from "../bodyQuorumPortable";
 import { getOwned, requireOwnedRow, principalUserId, requireSocietyMembership } from "./access";
 import { resolveMinutesMotions, syncMotionsForMinutes } from "./minutes";
+import { todayDateOnly } from "../dateOnly";
 
 /* ----------------------- Inlined bylaw / quorum helpers ----------------------- */
 
@@ -597,7 +598,7 @@ export async function createPortable(
       .query("directors")
       .withIndex("by_society", (q) => q.eq("societyId", args.societyId))
       .collect();
-    const todayISO = new Date().toISOString().slice(0, 10);
+    const todayISO = todayDateOnly();
     attendees = allDirectors
       .filter((d) => {
         const status = String(d.status ?? "").toLowerCase();

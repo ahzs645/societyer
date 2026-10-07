@@ -14,6 +14,8 @@ import { requirePermissionPortable, type Permission } from "./permissions";
 import { documentAccessPredicate, filterDocumentLinkedRows } from "./documents";
 import { getOwned, requireSocietyMembership } from "./access";
 import { normalizeSigningAuthorityTiers } from "../signingAuthorityTiers";
+import { todayDateOnly } from "../dateOnly";
+import { documentProvenanceCached } from "../documentProvenance";
 
 const REGISTER_TABLES = [
   "boardRoleAssignments",
@@ -67,6 +69,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
   for (const table of REGISTER_TABLES) {
     result[table] = await filterRegisterSourceRows(ctx, societyId, result[table], table);
   }
+  result.sourceEvidence = await withCanonicalSourceDocuments(ctx, societyId, result.sourceEvidence);
   // Detail lines inherit the source ACL of their imported parent register.
   const budgetIds = new Set(result.budgetSnapshots.map(row => String(row._id)));
   const statementIds = new Set(result.financialStatementImports.map(row => String(row._id)));
@@ -126,7 +129,19 @@ export async function promoteBoardRoleToDirectorPortable(
   await requireSocietyMembership(ctx, candidate.societyId);
   await requirePermissionPortable(ctx, candidate.societyId, "directors:write");
   const assignment = await getOwned(ctx, "boardRoleAssignments", args.assignmentId, candidate.societyId);
+  if (assignment.directorId) throw new Error(`${assignment.personName} was already promoted to the director register.`);
   const name = splitName(assignment.personName);
+  const sourced = assignmentHasSource(assignment);
+  // A person who is already an active director is not added twice (G-21).
+  const directors = await ctx.db
+    .query("directors")
+    .withIndex("by_society", (q) => q.eq("societyId", candidate.societyId))
+    .collect();
+  const norm = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const duplicate = directors.find((director) =>
+    director.status === "Active" && !director.resignedAt &&
+    norm(`${director.firstName} ${director.lastName}`) === norm(assignment.personName));
+  if (duplicate) throw new Error(`${assignment.personName} is already an active director on the register.`);
   const directorId = await ctx.db.insert("directors", {
     societyId: assignment.societyId,
     memberId: assignment.memberId,
@@ -142,15 +157,22 @@ export async function promoteBoardRoleToDirectorPortable(
     status: cleanText(args.status) || "Active",
     notes: appendReviewNote(
       args.notes,
-      `Promoted from board role evidence ${String(assignment._id)}. Review source evidence before treating as final registry data.`,
+      sourced
+        ? `Promoted from board role evidence ${String(assignment._id)}. Review source evidence before treating as final registry data.`
+        : `Promoted from manually entered board role ${String(assignment._id)} with NO source document. Attach the appointment evidence (minutes or resolution) before relying on this entry.`,
     ),
   });
+  // Promotion copies the role into the register; it is not verification. The
+  // assignment keeps its review status (G-21: unsourced records became Verified).
   await ctx.db.patch(args.assignmentId, {
     directorId,
-    status: assignment.status === "Observed" ? "Verified" : assignment.status,
-    notes: appendReviewNote(assignment.notes, `Promoted to director register as ${String(directorId)}.`),
+    notes: appendReviewNote(assignment.notes, `Promoted to director register as ${String(directorId)}${sourced ? "" : " without source evidence"}.`),
   });
   return directorId;
+}
+
+export function assignmentHasSource(assignment: any) {
+  return (assignment.sourceDocumentIds?.length ?? 0) > 0 || (assignment.sourceExternalIds?.length ?? 0) > 0 || Boolean(assignment.importedFrom);
 }
 
 export async function finishFinancePaperlessReviewPortable(
@@ -549,6 +571,56 @@ async function filterRegisterSourceRows(ctx: PortableQueryCtx, societyId: string
   return rows.filter(row => (table !== "sourceEvidence" && !linkedIds.has(String(row._id))) || allowed.has(String(row._id)));
 }
 
+/**
+ * Evidence rows sometimes cite the staged import candidate instead of the
+ * document created from it (finding D-20). Point those rows at the canonical
+ * document: the candidate's applied target, else the document with the same
+ * source id. Rows keep their stored sourceDocumentId; the UI links the
+ * canonical one.
+ */
+async function withCanonicalSourceDocuments(ctx: PortableQueryCtx, societyId: string, rows: any[]) {
+  if (!rows.length) return rows;
+  const sourceIds = [...new Set(rows.map((row) => row.sourceDocumentId).filter(Boolean).map(String))];
+  const sources = new Map<string, any>();
+  for (const id of sourceIds) {
+    const doc = await ctx.db.get(id, "documents");
+    if (doc && String(doc.societyId) === societyId) sources.set(id, doc);
+  }
+  const isCandidate = (doc: any) => doc && (doc.category === "Import Candidate" || doc.category === "Import Session");
+  if (![...sources.values()].some(isCandidate)) return rows.map((row) => ({ ...row, sourceDocumentKind: row.sourceDocumentId ? (sources.has(String(row.sourceDocumentId)) ? "document" : "missing") : undefined }));
+  const byExternalId = new Map<string, string>();
+  const bySha = new Map<string, string>();
+  const docs = await ctx.db.query("documents").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect();
+  for (const doc of docs as any[]) {
+    if (isCandidate(doc)) continue;
+    const provenance = documentProvenanceCached(doc);
+    for (const id of [...(doc.sourceExternalIds ?? []), ...provenance.externalIds]) {
+      const key = cleanText(id)?.toLowerCase();
+      if (key && key.includes(":") && !byExternalId.has(key)) byExternalId.set(key, String(doc._id));
+    }
+    if (provenance.sha256 && !bySha.has(provenance.sha256)) bySha.set(provenance.sha256, String(doc._id));
+  }
+  return rows.map((row) => {
+    const source = row.sourceDocumentId ? sources.get(String(row.sourceDocumentId)) : undefined;
+    if (!row.sourceDocumentId) return row;
+    if (!source) return { ...row, sourceDocumentKind: "missing" };
+    if (!isCandidate(source)) return { ...row, sourceDocumentKind: "document" };
+    let candidate: any = {};
+    try {
+      candidate = JSON.parse(source.content ?? "{}") ?? {};
+    } catch {
+      candidate = {};
+    }
+    const sha = typeof candidate?.payload?.sha256 === "string" ? candidate.payload.sha256.toLowerCase() : undefined;
+    // Applied target first, then the same source id, then identical bytes
+    // (an exact duplicate retained under another Drive id).
+    const canonical = candidate?.importedTargets?.documents
+      ?? (row.externalId ? byExternalId.get(String(row.externalId).toLowerCase()) : undefined)
+      ?? (sha ? bySha.get(sha) : undefined);
+    return { ...row, sourceDocumentKind: "candidate", canonicalDocumentId: canonical };
+  });
+}
+
 function sortDesc(rows: any[], field: string) {
   return rows.slice().sort((a, b) => String(b?.[field] ?? "").localeCompare(String(a?.[field] ?? "")));
 }
@@ -565,7 +637,7 @@ function cleanDate(value: unknown) {
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function arrayOf(value: unknown) {

@@ -228,6 +228,18 @@ export const EXPORTABLE_TABLES = [
   "personHistoryEvents",
   "personOccurrences",
   "seatProxyAuthorizations",
+  "intakeRuns",
+  "intakeFiles",
+  "intakeExtracts",
+  "intakeClusters",
+  "intakeExtractions",
+  "intakeFieldReviews",
+  "fieldProvenance",
+  "intakeProcessingLog",
+  "personMerges",
+  "representationGaps",
+  "governanceExpectations",
+  "continuityPeriodMarks",
 ] as const;
 
 const EXPORTABLE_SET = new Set<string>(EXPORTABLE_TABLES);

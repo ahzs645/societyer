@@ -16,6 +16,7 @@ import { readableProjectionPermissions } from "./projectionPermissions";
 import type { Permission } from "./permissions";
 import { interfaceRouteReadPermission } from "../interfaceRouteAccess";
 import { assertAllowedOption } from "../orgHubOptions";
+import { todayDateOnly } from "../dateOnly";
 
 const BINDER_DOCUMENT_CATEGORIES = ["Constitution", "Bylaws", "Minutes", "Policy", "Filing", "FinancialStatement", "WorkflowGenerated"];
 const DOCUMENT_PREVIEW_LIMIT_PER_CATEGORY = 1;
@@ -117,6 +118,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
   await requireSocietyMembership(ctx, societyId);
   const readable = await readableProjectionPermissions(ctx, societyId, Object.values(MINUTE_BOOK_READ_PERMISSIONS));
   const read = (table: string, limit: number) => readable.has(MINUTE_BOOK_READ_PERMISSIONS[table]) ? collectBySociety(ctx, table, societyId, limit) : Promise.resolve([]);
+  const societyRow = await ctx.db.get(societyId, "societies");
   const restrictedResources = [...new Set(Object.values(MINUTE_BOOK_READ_PERMISSIONS).filter(permission => !readable.has(permission)).map(permission => permission.split(":")[0]))].sort();
   const [
     items,
@@ -270,6 +272,7 @@ export async function overviewPortable(ctx: PortableQueryCtx, { societyId }: { s
       badges: bundle.badges.map((badge: any) => (restrictedResources.length || documentCoverageLimited) && /gap/i.test(badge.label) ? { ...badge, label: "Supporting access limited", tone: "neutral" } : badge),
     })),
     checks: minuteBookChecks({
+      society: societyRow,
       items: visibleItems,
       documents,
       binderDocuments,
@@ -335,7 +338,7 @@ export async function upsertPortable(
   const now = new Date().toISOString();
   const payload = {
     societyId: args.societyId,
-    title: cleanText(args.title) || "Untitled record",
+    title: requiredTitle(args.title),
     recordType: cleanText(args.recordType) || "other",
     effectiveDate: cleanText(args.effectiveDate),
     status: cleanText(args.status) || "NeedsReview",
@@ -523,7 +526,7 @@ function buildRecordBundles(data: Record<string, any[]>) {
       ]),
       links: compact([
         bundleLink("Meeting", meeting.title, `/app/meetings/${meetingId}`),
-        hasLinkedMinutes ? bundleLink("Minutes", linkedMinutes?.heldAt ? `Minutes ${linkedMinutes.heldAt}` : "Linked minutes", "/app/minutes") : undefined,
+        hasLinkedMinutes ? bundleLink("Minutes", linkedMinutes?.heldAt ? `Minutes ${humanDate(linkedMinutes.heldAt)}` : "Linked minutes", "/app/minutes") : undefined,
         materials.length ? bundleLink("Materials", `${materials.length} meeting materials`, "/app/documents", materials.length) : undefined,
         campaigns.length || deliveries.length || notices.length ? bundleLink("Notices", `${campaigns.length + deliveries.length + notices.length} notices/communications`, "/app/communications") : undefined,
         relatedFinancials.length ? bundleLink("Financials", `${relatedFinancials.length} financial records`, "/app/financials", relatedFinancials.length) : undefined,
@@ -618,13 +621,15 @@ function buildRecordBundles(data: Record<string, any[]>) {
       href: "/app/policies",
       badges: compact([
         badge("Policy", "neutral"),
-        adoptionMeeting || adoptionMinutes || adoptionMotion ? badge("adoption linked", "success") : badge("adoption gap", policy.status === "Active" ? "warn" : "neutral"),
+        // Only an Active policy needs adoption evidence; the badge and the
+        // gap list must agree (G-15 showed "adoption gap" beside "No gaps").
+        adoptionMeeting || adoptionMinutes || adoptionMotion ? badge("adoption linked", "success") : policy.status === "Active" ? badge("adoption gap", "warn") : undefined,
       ]),
       links: compact([
         bundleLink("Policy", policy.policyName, "/app/policies"),
         policyDocumentIds.length ? bundleLink("Documents", `${policyDocumentIds.length} policy documents`, "/app/documents", policyDocumentIds.length) : undefined,
         adoptionMeeting ? bundleLink("Adoption meeting", adoptionMeeting.title, `/app/meetings/${String(adoptionMeeting._id)}`) : undefined,
-        adoptionMinutes ? bundleLink("Adoption minutes", adoptionMinutes.heldAt ?? "Minutes", "/app/minutes") : undefined,
+        adoptionMinutes ? bundleLink("Adoption minutes", adoptionMinutes.heldAt ? `Minutes ${humanDate(adoptionMinutes.heldAt)}` : "Minutes", "/app/minutes") : undefined,
         adoptionMotion ? bundleLink("Resolution evidence", shortText(adoptionMotion.motionText, 72), "/app/meeting-evidence") : undefined,
         policyTasks.length ? bundleLink("Tasks", `${policyTasks.length} policy tasks`, "/app/tasks", policyTasks.length) : undefined,
         sourceRows.length ? bundleLink("Evidence", `${sourceRows.length} source evidence`, "/app/meeting-evidence", sourceRows.length) : undefined,
@@ -1032,6 +1037,7 @@ function pick(row: any, keys: string[]) {
 }
 
 function minuteBookChecks({
+  society,
   items,
   documents,
   binderDocuments,
@@ -1044,9 +1050,19 @@ function minuteBookChecks({
   motionEvidence,
   archiveAccessions,
   writtenResolutions,
-}: Record<string, any[]>) {
+}: { society?: any; [key: string]: any }) {
+  // Core records can be evidenced several ways, not only by a binder document
+  // category (G-15): the society profile links the constitution and bylaws,
+  // and minutes records (or meetings with linked minutes) evidence minutes.
   const categorySet = new Set(binderDocuments.map((doc) => doc.category));
-  const missingBasics = ["Constitution", "Bylaws", "Minutes"].filter((category) => !categorySet.has(category));
+  const constitutionOnFile = categorySet.has("Constitution") || Boolean(society?.constitutionDocId);
+  const bylawsOnFile = categorySet.has("Bylaws") || Boolean(society?.bylawsDocId);
+  const minutesOnFile = categorySet.has("Minutes") || minutes.length > 0 || meetings.some((meeting) => meeting.minutesId);
+  const missingBasics = [
+    constitutionOnFile ? undefined : "Constitution",
+    bylawsOnFile ? undefined : "Bylaws",
+    minutesOnFile ? undefined : "Minutes",
+  ].filter((value): value is string => Boolean(value));
   const signatureEntityKeys = new Set(
     signatures.map((signature) => `${signature.entityType}:${signature.subjectId ?? signature.entityId}`),
   );
@@ -1103,12 +1119,27 @@ function minuteBookChecks({
   ];
 }
 
+function requiredTitle(value: unknown): string {
+  const title = cleanText(value);
+  if (!title) throw new Error("Give the minute-book record a title.");
+  return title;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "2026-04-23T19:00:00.000Z" -> "Apr 23, 2026" (date-only, no clock time). */
+function humanDate(value: unknown): string {
+  const raw = String(value ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return String(value ?? "");
+  const [year, month, day] = raw.split("-").map(Number);
+  return `${MONTHS[month - 1]} ${day}, ${year}`;
+}
+
 function check(key: string, label: string, count: number, severity: string, detail: string) {
   return { key, label, count, severity, detail, ok: count === 0 };
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function cleanText(value: unknown) {

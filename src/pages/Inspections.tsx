@@ -23,6 +23,7 @@ import {
   useObjectRecordTableData,
 } from "@/platform/record-engine";
 import type { Id } from "../../convex/_generated/dataModel";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 export function InspectionsPage() {
   const society = useSociety();
@@ -60,7 +61,7 @@ export function InspectionsPage() {
       inspectorName: "",
       isMember: false,
       recordsRequested: "",
-      inspectedAtISO: new Date().toISOString().slice(0, 10),
+      inspectedAtISO: todayDateOnly(),
       deliveryMethod: "in-person",
       feeDollars: "",
       copyPages: 0,

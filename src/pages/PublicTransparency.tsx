@@ -1,3 +1,4 @@
+import { publicationCategoryLabel } from "../lib/publicationCategories";
 import { Link, useParams } from "react-router-dom";
 import { PageLoading } from "./_helpers";
 import { useQuery } from "convex/react";
@@ -133,7 +134,7 @@ export function PublicTransparencyPage() {
                   }}
                 >
                   <div className="row" style={{ gap: 8, marginBottom: 8 }}>
-                    <Badge>{publication.category}</Badge>
+                    <Badge>{publicationCategoryLabel(publication.category)}</Badge>
                     <span className="muted mono" style={{ fontSize: 12 }}>
                       {publication.publishedAtISO ? formatDate(publication.publishedAtISO) : "Draft"}
                     </span>

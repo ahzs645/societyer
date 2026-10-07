@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/lib/convexApi";
@@ -7,9 +7,16 @@ import { useToast } from "../components/Toast";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Drawer, Field } from "../components/ui";
-import { Contact, Plus } from "lucide-react";
+import { Contact, GitMerge, Plus, Undo2, UserPlus } from "lucide-react";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
+import { Modal, useConfirm, usePrompt } from "../components/Modal";
+import { PersonPicker } from "../components/PersonPicker";
+import { PersonMergeDialog, type MergeCandidate } from "../features/people/PersonMergeDialog";
+import { personMatchesSearch } from "../../shared/personMatching";
+
+const ROLE_LABELS: Record<string, string> = { director: "Director", officer: "Officer", member: "Member", controller: "Significant individual" };
+const PAGE_SIZE = 50;
 
 /**
  * Permission-scoped people directory with linked person history profiles.
@@ -47,23 +54,39 @@ export function PeopleDirectoryPage() {
     | Array<Array<{ id: string; fullName: string; dob?: string }>>
     | undefined;
 
+  const suggestions = useQuery(api.personHistory.duplicateSuggestions, society && can("members:read") ? { societyId: society._id } : "skip") as
+    | Array<{ ids: [string, string]; names: [string, string]; score: number; reasons: string[]; sharedMeetings: number; occurrences: [number, number]; observed: [string, string] }>
+    | undefined;
+  const mergeHistory = useQuery(api.personHistory.mergeHistory, society && can("members:read") ? { societyId: society._id } : "skip") as any[] | undefined;
   const upsert = useMutation(api.peopleDirectory.upsert);
-  const addToSociety = useMutation(api.peopleDirectory.addToSociety);
-  const [addedId, setAddedId] = useState<string | null>(null);
+  const dismiss = useMutation(api.personHistory.dismissDuplicate);
+  const unmerge = useMutation(api.personHistory.unmergePeople);
+  const confirm = useConfirm();
+  const prompt = usePrompt();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [mergePair, setMergePair] = useState<{ people: [MergeCandidate, MergeCandidate]; reasons?: string[] } | null>(null);
+  const [mergeFrom, setMergeFrom] = useState<{ id: string; fullName: string } | null>(null);
+  const [addTo, setAddTo] = useState<{ id: string; fullName: string } | null>(null);
+  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
+  const [listQuery, setListQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const filteredPeople = useMemo(() => (people ?? []).filter((p: any) => personMatchesSearch(p, listQuery)), [people, listQuery]);
 
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const addPersonToSociety = async (personId: string, roleType: string) => {
-    await addToSociety({
-      directoryPersonId: personId,
-      societyId: society._id,
-      roleType,
-      nowISO: new Date().toISOString(),
-    });
-    setAddedId(personId);
-    setTimeout(() => setAddedId(null), 2000);
+  const dismissSuggestion = async (ids: [string, string], names: [string, string]) => {
+    const rationale = await prompt({ title: "Different people?", message: `Record why ${names[0]} and ${names[1]} are different people. The suggestion will not be shown again.`, placeholder: "e.g. different organizations in the same year", confirmLabel: "Not the same person", required: true });
+    if (!rationale) return;
+    try { await dismiss({ societyId: society._id, personIds: ids as any, rationale }); toast.success("Suggestion dismissed"); }
+    catch (error) { toast.error("Could not dismiss", error instanceof Error ? error.message : undefined); }
+  };
+
+  const undoMerge = async (row: any) => {
+    const ok = await confirm({ title: `Undo merge of ${row.mergedName}?`, message: `${row.mergedName} becomes a separate profile again. The ${row.movedReferences} links moved into ${row.survivorName} by this merge go back, except any that were changed since.`, confirmLabel: "Undo merge", tone: "warn" });
+    if (!ok) return;
+    try { const result: any = await unmerge({ societyId: society._id, mergeId: row._id }); toast.success("Merge undone", `${result.restored} links restored${result.skipped ? `, ${result.skipped} left in place` : ""}`); }
+    catch (error) { toast.error("Could not undo the merge", error instanceof Error ? error.message : undefined); }
   };
 
   const openNew = () => {
@@ -180,9 +203,42 @@ export function PeopleDirectoryPage() {
         )}
       </div>
 
+      {suggestions && suggestions.length > 0 && (
+        <div className="card people-duplicates">
+          <h2 className="page__title-text">Possible duplicates ({suggestions.length})</h2>
+          <p style={{ opacity: 0.7 }}>
+            Profiles with spelling variants, nicknames, a first name only, or one name inside another. Check the sources before merging; profiles listed at the same meeting are probably different people.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            {(showAllSuggestions ? suggestions : suggestions.slice(0, 12)).map((s) => (
+              <div key={s.ids.join(":")} className="row people-duplicates__row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid var(--border)", paddingBottom: 6 }}>
+                <span style={{ minWidth: 0, flex: "1 1 260px", overflowWrap: "anywhere" }}>
+                  <Link to={`/app/people-directory/${s.ids[0]}`}>{s.names[0]}</Link> <span className="muted">({s.occurrences[0]})</span>
+                  {" ↔ "}
+                  <Link to={`/app/people-directory/${s.ids[1]}`}>{s.names[1]}</Link> <span className="muted">({s.occurrences[1]})</span>
+                  <br />
+                  <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>{s.reasons.join(" · ")}</span>
+                </span>
+                <span className="row" style={{ gap: 6 }}>
+                  <button type="button" className="btn btn--sm" disabled={!canManage} onClick={() => setMergePair({ people: [{ id: s.ids[0], fullName: s.names[0], occurrences: s.occurrences[0], observed: s.observed[0] }, { id: s.ids[1], fullName: s.names[1], occurrences: s.occurrences[1], observed: s.observed[1] }], reasons: s.reasons })}>
+                    <GitMerge size={12} /> Merge…
+                  </button>
+                  <button type="button" className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => void dismissSuggestion(s.ids, s.names)}>Not the same</button>
+                </span>
+              </div>
+            ))}
+          </div>
+          {suggestions.length > 12 && (
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setShowAllSuggestions(!showAllSuggestions)}>
+              {showAllSuggestions ? "Show fewer" : `Show all ${suggestions.length}`}
+            </button>
+          )}
+        </div>
+      )}
+
       {duplicateGroups && duplicateGroups.length > 0 && (
         <div className="card">
-          <h2 className="page__title-text">Possible duplicates</h2>
+          <h2 className="page__title-text">Same name and date of birth</h2>
           <p style={{ opacity: 0.7 }}>
             These people share a normalized name and date of birth.
           </p>
@@ -206,14 +262,18 @@ export function PeopleDirectoryPage() {
       )}
 
       <div className="card">
-        <h2 className="page__title-text">All people</h2>
+        <h2 className="page__title-text">All people{people ? ` (${people.length})` : ""}</h2>
+        {people && people.length > 10 && (
+          <input className="input" aria-label="Filter the list" placeholder="Filter by any part of a name" value={listQuery} onChange={(e) => { setListQuery(e.target.value); setPage(0); }} style={{ margin: "8px 0" }} />
+        )}
         {people === undefined ? (
           <p>Loading…</p>
         ) : people.length === 0 ? (
           <p>No people in the directory yet. <Link to="/app/people-history">Review source identities</Link></p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
-            {people.map((p) => (
+            {filteredPeople.length === 0 && <p className="muted">No one matches “{listQuery}”.</p>}
+            {filteredPeople.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE).map((p: any) => (
               <div
                 key={p._id}
                 className="row"
@@ -223,34 +283,54 @@ export function PeopleDirectoryPage() {
                 <span style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   {p.dob && <span style={{ opacity: 0.6 }}>{p.dob}</span>}
                   {p.isIndividual === false && <span style={{ opacity: 0.6 }}>Organization</span>}
-                  {addedId === p._id ? (
-                    <span style={{ color: "var(--accent, green)" }}>Added ✓</span>
-                  ) : (
-                    <Select
-                      value=""
-                      onChange={(value) => {
-                        if (value) {
-                          addPersonToSociety(p._id, value);
-                        }
-                      }}
-                      options={[
-                        { value: "", label: "Add to society…" },
-                        { value: "director", label: "as Director" },
-                        { value: "officer", label: "as Officer" },
-                        { value: "member", label: "as Member" },
-                        { value: "controller", label: "as Significant individual" },
-                      ]}
-                      disabled={!canManage}
-                      aria-label="Add to current society as…"
-                      style={{ width: 150 }}
-                    />
-                  )}
+                  {!!p.aliases?.length && <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>also {p.aliases.slice(0, 2).join(", ")}</span>}
+                  <button type="button" className="btn btn--ghost btn--sm" disabled={!canManage || p.editable === false} onClick={() => setMergeFrom({ id: p._id, fullName: p.fullName })} aria-label={`Merge ${p.fullName} with another profile`}>
+                    <GitMerge size={12} /> Merge
+                  </button>
+                  <button type="button" className="btn btn--sm" disabled={!canManage} onClick={() => setAddTo({ id: p._id, fullName: p.fullName })} aria-label={`Add ${p.fullName} to this society`}>
+                    <UserPlus size={12} /> Add to society…
+                  </button>
                 </span>
               </div>
             ))}
+            {filteredPeople.length > PAGE_SIZE && (
+              <div className="row" style={{ gap: 12, alignItems: "center", marginTop: 8 }}>
+                <button type="button" className="btn btn--sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button>
+                <span className="muted">Page {page + 1} of {Math.ceil(filteredPeople.length / PAGE_SIZE)}</span>
+                <button type="button" className="btn btn--sm" disabled={(page + 1) * PAGE_SIZE >= filteredPeople.length} onClick={() => setPage(page + 1)}>Next</button>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {!!mergeHistory?.length && (
+        <div className="card">
+          <h2 className="page__title-text">Merge history</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+            {mergeHistory.map((row) => (
+              <div key={row._id} className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ flex: "1 1 260px" }}>
+                  {row.createdAtISO.slice(0, 10)} · <strong>{row.mergedName}</strong> into <Link to={`/app/people-directory/${row.survivorId}`}>{row.survivorName}</Link> · {row.movedReferences} links moved · {row.rationale}
+                  {row.status === "undone" && <span className="muted"> · undone {String(row.undoneAtISO ?? "").slice(0, 10)}</span>}
+                </span>
+                {row.status === "applied" && <button type="button" className="btn btn--ghost btn--sm" disabled={!canManage} onClick={() => void undoMerge(row)}><Undo2 size={12} /> Undo</button>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {mergePair && <PersonMergeDialog societyId={society._id} people={mergePair.people} reasons={mergePair.reasons} onClose={() => setMergePair(null)} />}
+      {mergeFrom && (
+        <ChooseMergeTarget
+          person={mergeFrom}
+          people={(people ?? []) as any}
+          onClose={() => setMergeFrom(null)}
+          onChoose={(other) => { setMergeFrom(null); setMergePair({ people: [{ id: mergeFrom.id, fullName: mergeFrom.fullName }, other] }); }}
+        />
+      )}
+      {addTo && <AddToSocietyDialog societyId={society._id} person={addTo} onClose={() => setAddTo(null)} />}
 
       <Drawer
         open={open}
@@ -339,6 +419,65 @@ export function PeopleDirectoryPage() {
         )}
       </Drawer>
     </div>
+  );
+}
+
+function ChooseMergeTarget({ person, people, onClose, onChoose }: { person: { id: string; fullName: string }; people: Array<{ _id: string; fullName: string; aliases?: string[] }>; onClose: () => void; onChoose: (other: MergeCandidate) => void }) {
+  const [otherId, setOtherId] = useState("");
+  const other = people.find((p) => p._id === otherId);
+  return (
+    <Modal open onClose={onClose} title={`Merge ${person.fullName} with…`} size="sm" footer={<>
+      <button className="btn" onClick={onClose}>Cancel</button>
+      <button className="btn btn--accent" disabled={!other} onClick={() => other && onChoose({ id: other._id, fullName: other.fullName })}>Continue</button>
+    </>}>
+      <p style={{ marginTop: 0 }}>Choose the other profile for the same person. You pick which one to keep on the next step.</p>
+      <PersonPicker people={people.filter((p) => p._id !== person.id)} value={otherId} onChange={setOtherId} sourceName={person.fullName} ariaLabel="Profile to merge with" />
+    </Modal>
+  );
+}
+
+/** P14: adding a person to the society is a register change: confirm it, with a start date and source. */
+function AddToSocietyDialog({ societyId, person, onClose }: { societyId: string; person: { id: string; fullName: string }; onClose: () => void }) {
+  const addToSociety = useMutation(api.peopleDirectory.addToSociety);
+  const toast = useToast();
+  const [roleType, setRoleType] = useState("director");
+  const [startDate, setStartDate] = useState("");
+  const [position, setPosition] = useState("Director");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceReference, setSourceReference] = useState("");
+  const [busy, setBusy] = useState(false);
+  const validDate = !startDate || /^\d{4}(-\d{2}(-\d{2})?)?$/.test(startDate);
+  const needsDate = roleType === "director";
+  return (
+    <Modal open onClose={onClose} title={`Add ${person.fullName} to this society`} size="md" footer={<>
+      <button className="btn" onClick={onClose} disabled={busy}>Cancel</button>
+      <button className="btn btn--accent" disabled={busy || !validDate || (needsDate && !startDate) || !sourceReference.trim()} onClick={async () => {
+        setBusy(true);
+        try {
+          await addToSociety({ directoryPersonId: person.id as any, societyId: societyId as any, roleType, ...(startDate ? { startDate } : {}), ...(roleType === "director" && position.trim() ? { position: position.trim() } : {}), ...(sourceUrl.trim() ? { sourceUrl: sourceUrl.trim() } : {}), sourceReference: sourceReference.trim(), nowISO: new Date().toISOString() });
+          toast.success(`${person.fullName} added as ${ROLE_LABELS[roleType]}`, roleType === "director" ? "Listed on the Directors register. Record consent and residency there." : undefined);
+          onClose();
+        } catch (error) {
+          toast.error("Could not add", error instanceof Error ? error.message : undefined);
+        } finally { setBusy(false); }
+      }}>{busy ? "Adding…" : `Add as ${ROLE_LABELS[roleType]}`}</button>
+    </>}>
+      <Field label="Role">
+        <Select value={roleType} onChange={setRoleType} options={Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))} />
+      </Field>
+      {roleType === "director" && (
+        <p className="muted" style={{ marginTop: 0 }}>
+          This creates an <strong>Active</strong> entry on the Directors register (and a role-holder record). Consent and BC residency start as not recorded.
+          For a person only seen on an old roster, use the Directors page to add them as “needs review” instead.
+        </p>
+      )}
+      <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
+        <Field label={`Start date${needsDate ? "" : " (optional)"} — YYYY, YYYY-MM or YYYY-MM-DD`}><input className="input" aria-invalid={!validDate} value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="2025-06-12" /></Field>
+        {roleType === "director" && <Field label="Position"><input className="input" value={position} onChange={(e) => setPosition(e.target.value)} /></Field>}
+      </div>
+      <Field label="Source URL (optional)"><input className="input" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://…" /></Field>
+      <Field label="Source (resolution, minutes or filing that establishes the role)"><input className="input" value={sourceReference} onChange={(e) => setSourceReference(e.target.value)} placeholder="e.g. AGM 2025 minutes, election results" /></Field>
+    </Modal>
   );
 }
 

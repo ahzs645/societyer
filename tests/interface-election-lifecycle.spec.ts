@@ -31,8 +31,12 @@ test("election creation hands off to a complete editable draft and freezes its b
   await expect(page.getByRole("heading", { name: "Integrated governance election", exact: true })).toBeVisible();
   await expect(page.getByRole("radio", { name: "Candidate A", exact: true })).toBeVisible();
   await expect(page.getByRole("radio", { name: "Online", exact: true })).toBeVisible();
+  // Close and Publish now confirm first (G-16); an early close says so.
   await page.getByRole("button", { name: "Close election", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /^Close (early|voting)$/ }).click();
   await page.getByRole("button", { name: "Publish results", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText(/no ballots|tallied/);
+  await page.getByRole("dialog").getByRole("button", { name: "Publish results", exact: true }).click();
   await expect(page.getByRole("button", { name: "Close election", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Publish results", exact: true })).toHaveCount(0);
   expect(errors).toEqual([]);

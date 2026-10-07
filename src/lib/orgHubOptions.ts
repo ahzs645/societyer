@@ -207,6 +207,7 @@ export const ORG_HUB_OPTION_SETS = {
     { value: "managing_director", label: "Managing Director" },
     { value: "other", label: "Other (untitled)" },
     { value: "president", label: "President" },
+    { value: "privacy_officer", label: "Privacy Officer" },
     { value: "secretary", label: "Secretary" },
     { value: "secretary_treasurer", label: "Secretary-Treasurer" },
     { value: "treasurer", label: "Treasurer" },
@@ -505,9 +506,25 @@ export function optionChoices(setName: OptionSetName, currentValues: string[] = 
   const options: OptionChoice[] = [...OPTION_SETS[setName]];
   const known = new Set(options.map((option) => option.value));
   for (const value of currentValues.filter(Boolean)) {
-    if (!known.has(value)) options.push({ value, label: labelizeOptionValue(value) });
+    // A legacy label ("President") that maps onto a known code is the same
+    // choice, not an extra one; listing both showed "President" twice.
+    if (known.has(value) || known.has(normalizeOptionChoice(setName, value))) continue;
+    options.push({ value, label: labelizeOptionValue(value) });
+    known.add(value);
   }
   return options;
+}
+
+/** Client mirror of shared normalizeOptionValue: map a label to its code. */
+export function normalizeOptionChoice(setName: OptionSetName, value?: string | null): string {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const options = OPTION_SETS[setName] as readonly OptionChoice[];
+  if (options.some((option) => option.value === text)) return text;
+  const lower = text.toLowerCase();
+  const slug = lower.replace(/&/g, "and").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const byLabel = options.find((option) => option.label.toLowerCase() === lower || option.value === slug || option.label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") === slug);
+  return byLabel?.value ?? text;
 }
 
 export function optionLabel(setName: OptionSetName, value?: string | null) {

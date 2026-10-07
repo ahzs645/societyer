@@ -13,6 +13,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, requireOwnedRow, requireSocietyMembership } from "./access";
 import { assertAllowedOption, invalidOptionListIssues } from "../orgHubOptions";
 import { cleanText, cleanList } from "./text";
+import { todayDateOnly } from "../dateOnly";
 
 export async function listPortable(ctx: PortableQueryCtx, { societyId }: { societyId: string }) {
   await requireSocietyMembership(ctx, societyId);
@@ -77,7 +78,7 @@ export async function upsertPortable(ctx: PortableMutationCtx, { id, ...args }: 
   }
   const payload = {
     societyId: args.societyId,
-    policyName: cleanText(args.policyName) || "Untitled policy",
+    policyName: requirePolicyName(args.policyName),
     policyNumber: cleanText(args.policyNumber),
     owner: cleanText(args.owner),
     effectiveDate: cleanText(args.effectiveDate),
@@ -107,8 +108,34 @@ export async function upsertPortable(ctx: PortableMutationCtx, { id, ...args }: 
   });
 }
 
+function requirePolicyName(value: unknown): string {
+  const name = cleanText(value);
+  if (!name) throw new Error("Enter the policy name.");
+  return name;
+}
+
+/** Records that exist only because of a policy: its open review/signature
+ *  tasks and unpublished transparency drafts (G-19). */
+export async function policyDependents(ctx: PortableQueryCtx | PortableMutationCtx, policy: any) {
+  const policyId = String(policy._id);
+  const documentIds = new Set([policy.pdfDocumentId, policy.docxDocumentId].filter(Boolean).map(String));
+  const [tasks, publications] = await Promise.all([
+    ctx.db.query("tasks").withIndex("by_society", (q) => q.eq("societyId", policy.societyId)).collect(),
+    ctx.db.query("publications").withIndex("by_society", (q) => q.eq("societyId", policy.societyId)).collect(),
+  ]);
+  const openTasks = tasks.filter((task) =>
+    task.status !== "Done" && [`policy:${policyId}`, `policy-signatures:${policyId}`].includes(String(task.eventId ?? "")));
+  const draftPublications = publications.filter((row) =>
+    row.category === "Policy" &&
+    row.status !== "Published" &&
+    ((row.documentId && documentIds.has(String(row.documentId))) || String(row.title ?? "").toLowerCase() === String(policy.policyName ?? "").toLowerCase()));
+  return { openTasks, draftPublications };
+}
+
 export async function removePortable(ctx: PortableMutationCtx, { id }: { id: string }) {
-  await requireOwnedRow(ctx, "policies", id);
+  const policy = await requireOwnedRow(ctx, "policies", id);
+  const { openTasks, draftPublications } = await policyDependents(ctx, policy);
+  for (const row of [...openTasks, ...draftPublications]) await ctx.db.delete(row._id);
   await ctx.db.delete(id);
 }
 
@@ -191,6 +218,13 @@ function policyLifecycle(policy: any, related: Record<string, any[]>) {
     `${workflow.name ?? ""} ${workflow.recipe ?? ""}`.toLowerCase().includes(name) ||
     `${workflow.name ?? ""} ${workflow.recipe ?? ""}`.toLowerCase().includes("policy"),
   ).length;
+  const openTaskCount = related.tasks.filter((task) =>
+    task.status !== "Done" && [`policy:${String(policy._id)}`, `policy-signatures:${String(policy._id)}`].includes(String(task.eventId ?? "")),
+  ).length;
+  const draftPublicationCount = related.publications.filter((row) =>
+    row.category === "Policy" && row.status !== "Published" &&
+    ((row.documentId && docIds.has(String(row.documentId))) || String(row.title ?? "").toLowerCase() === name),
+  ).length;
   const taskCount = related.tasks.filter((task) =>
     String(task.eventId ?? "").includes(String(policy._id)) ||
     (task.documentId && docIds.has(String(task.documentId))) ||
@@ -204,6 +238,8 @@ function policyLifecycle(policy: any, related: Record<string, any[]>) {
     trainingCount,
     workflowCount,
     taskCount,
+    openTaskCount,
+    draftPublicationCount,
     signatureState: policy.signatureRequired
       ? (policy.requiredSigners?.length ? "required" : "missing_signers")
       : "not_required",
@@ -220,7 +256,7 @@ function sortDesc(rows: any[], field: string) {
 }
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function daysFromToday(date: string) {

@@ -9,6 +9,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useSociety } from "../../hooks/useSociety";
+import { isModuleEnabled } from "../../lib/modules";
 const AssetCreateModal = lazy(() => import("./AssetCreateModal").then((module) => ({ default: module.AssetCreateModal })));
 import type { AssetFormInitialValues } from "./AssetFormFields";
 
@@ -27,7 +28,8 @@ export function openGlobalAssetCreate(initialValues?: AssetFormInitialValues) {
 export function GlobalAssetCreate() {
   const society = useSociety();
   const { can } = usePermissions();
-  const canCreate = can("financials:write");
+  // A disabled Asset register cannot be written through the quick-create popup.
+  const canCreate = can("financials:write") && (!society || isModuleEnabled(society, "assets"));
   const [open, setOpen] = useState(false);
   const [initialValues, setInitialValues] = useState<AssetFormInitialValues | undefined>();
 

@@ -9,6 +9,7 @@ import { Drawer, Field } from "../components/ui";
 import { Briefcase, Plus } from "lucide-react";
 import { DatePicker } from "../components/DatePicker";
 import { Select } from "../components/Select";
+import { todayDateOnly } from "../../shared/dateOnly";
 
 /**
  * External service-provider register — lawyers, accountants, bankers and the
@@ -46,7 +47,7 @@ export function ServiceProvidersPage() {
   if (society === undefined) return <PageLoading />;
   if (society === null) return <SeedPrompt />;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
 
   const openNew = () => {
     if (!canWrite) return;
