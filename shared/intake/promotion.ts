@@ -3,7 +3,9 @@
  * meetingMinutes payload) that the existing import-session apply path writes
  * natively. Only accepted or edited fields carry values (see review.ts). Pure:
  * used by the portable `intake:promoteExtraction` mutation and the gates. */
-import { minutesPayloadFromExtraction, type IntakeExtractionResult } from "./bundle";
+import { CATEGORY, SECTION, minutesPayloadFromExtraction, type IntakeExtractionResult } from "./bundle";
+import { PROVIDER_EXCLUDED_CLASSES } from "./classify";
+import { redact } from "./privacy";
 import { applyReviews, isPromotedDecision, latestDecisions, patternOf, reviewFieldsForRecord, type AppliedReviews, type ReviewRow } from "./review";
 
 export type PromotionFile = {
@@ -54,28 +56,40 @@ export function mimeTypeForName(name: string): string | undefined {
 }
 
 /** The document-candidate payload for one source file. Deterministic per file so a
- * second promotion citing the same file reuses the document (import target identity). */
-export function sourceDocumentPayload(file: PromotionFile): Record<string, unknown> {
+ * second promotion citing the same file reuses the document (import target identity).
+ * Minutes sources keep the "Meeting Source" category; other classes use their register's
+ * category and section. Contact data in personal files is masked (length-preserving). */
+export function sourceDocumentPayload(file: PromotionFile, docClass?: string): Record<string, unknown> {
   const restricted = file.sensitivity === "restricted";
+  const minutes = !docClass || docClass === "meetingMinutes";
+  const masked = file.text && (file.sensitivity === "personal" || PROVIDER_EXCLUDED_CLASSES.has(docClass as any)) ? redact(file.text).text : file.text;
   return {
     externalId: file.fileKey,
     externalSystem: file.driveId ? "google-drive" : "local-folder",
     sourceExternalIds: [file.fileKey],
     title: file.name,
     fileName: file.name,
-    category: "Meeting Source",
-    sections: ["meetings"],
+    category: minutes ? "Meeting Source" : CATEGORY[docClass!] ?? "Other",
+    sections: [minutes ? "meetings" : SECTION[docClass!] ?? "archiveAccessions"],
     ...(file.mimeType ?? mimeTypeForName(file.name) ? { mimeType: file.mimeType ?? mimeTypeForName(file.name) } : {}),
     ...(file.sizeBytes !== undefined ? { fileSizeBytes: file.sizeBytes } : {}),
     ...(file.sha256 ? { sha256: file.sha256 } : {}),
     ...(file.url ? { url: file.url } : {}),
     ...(file.path ? { localPath: file.path } : {}),
-    ...(file.text && !restricted ? { extractedText: file.text.slice(0, 180000), extractionMethod: file.extractionMethod ?? "intake-extract" } : {}),
+    ...(masked && !restricted ? { extractedText: masked.slice(0, 180000), extractionMethod: file.extractionMethod ?? "intake-extract" } : {}),
     confidence: "Review",
     sensitivity: restricted || file.sensitivity === "personal" ? "restricted" : "standard",
-    tags: ["intake", "meeting-source"],
+    tags: minutes ? ["intake", "meeting-source"] : ["intake", docClass!],
     why: "Source file of a reviewed intake extraction",
   };
+}
+
+/** Drafts first, then other copies, then approved/signed; ties by file key. The order is
+ * the same whichever copy is promoted, so version rows stay identical across promotions
+ * of the same version cluster (a different order made them conflict). */
+const VERSION_RANK: Record<string, number> = { draft: 0, template: 0, script: 0, agenda: 0, unknown: 1, recorded: 1, approved: 2, signed: 3 };
+export function orderedVersionFiles<T extends { fileKey: string; recordStatus?: string }>(files: readonly T[]): T[] {
+  return [...files].sort((a, b) => (VERSION_RANK[a.recordStatus ?? "unknown"] ?? 1) - (VERSION_RANK[b.recordStatus ?? "unknown"] ?? 1) || a.fileKey.localeCompare(b.fileKey));
 }
 
 export function buildPromotionBundle(input: PromotionInput): PromotionBuild {
@@ -84,12 +98,12 @@ export function buildPromotionBundle(input: PromotionInput): PromotionBuild {
   const decisions = latestDecisions(input.reviews);
   const applied = applyReviews(extraction.record, decisions);
   const warnings: string[] = [];
-  const fields = reviewFieldsForRecord(extraction.record);
+  const fields = reviewFieldsForRecord(extraction.record, "meetingMinutes");
   const unreviewed = fields.filter((field) => !decisions.has(field.path)).length;
   if (unreviewed) warnings.push(`${unreviewed} unreviewed field${unreviewed === 1 ? " is" : "s are"} not promoted.`);
   const ownFile = input.files.find((file) => file.fileKey === extraction.fileKey);
   const sourceExternalIds = [...new Set([extraction.fileKey, ...input.files.map((file) => file.fileKey)])];
-  const versions = input.files.length > 1 ? input.files.map((file) => ({ fileKey: file.fileKey, name: file.name, recordStatus: file.recordStatus ?? "unknown" })) : undefined;
+  const versions = input.files.length > 1 ? orderedVersionFiles(input.files).map((file) => ({ fileKey: file.fileKey, name: file.name, recordStatus: file.recordStatus ?? "unknown" })) : undefined;
   const reviewed: IntakeExtractionResult = {
     fileId: extraction.fileKey,
     fileKey: extraction.fileKey,
@@ -161,7 +175,7 @@ export function buildPromotionBundle(input: PromotionInput): PromotionBuild {
       reviewOnly: false,
       note: "Created by promoting a reviewed intake extraction. Only reviewer-accepted fields are included.",
     },
-    documentMap: input.files.map(sourceDocumentPayload),
+    documentMap: input.files.map((file) => sourceDocumentPayload(file)),
     meetingMinutes: [payload],
   };
   return { bundle, payload, applied, sourceExternalIds, warnings };

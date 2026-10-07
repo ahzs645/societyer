@@ -23,16 +23,23 @@ import { insertRepresentationGapFromImport } from "./representationGaps";
 import {
   applyApprovedDocumentsPortable,
   applyApprovedMeetingsPortable,
+  applyApprovedSectionRecordsPortable,
   bulkSetStatusPortable,
   createFromBundlePortable,
   getPortable as getImportSessionPortable,
+  updateRecordPortable,
 } from "./importSessions";
 import { bodyKeyForMeeting } from "../meetingBody";
 import { buildPromotionBundle, defaultInfoTypeForPath, gapLocatorFrom, matchKey, type MergeTarget, type PromotionFile, type PromotionMode } from "../intake/promotion";
-import { bulkAcceptCandidates, entityGroups, formatFieldValue, isPromotedDecision, samplePreview, latestDecisions, linkedValue, nameOccurrences, nativeTargetForPath, primaryLocator, reviewFieldsForRecord, REVIEW_DECISIONS, type ReviewRow } from "../intake/review";
+import { buildClassPromotionBundle, CLASS_PROMOTION, classProvenanceTargets, directorMatchKey, RECORD_KIND_TABLE } from "../intake/promotionClasses";
+import { annotateFiscalYearEndChanges, deriveEmbeddedMinutes, linkPolicyAdoptions } from "../intake/classStages";
+import { bodyKeyFor } from "../intake/entities";
+import { normalizePersonKey } from "../intake/names";
+import { bulkAcceptCandidates, entityGroups, formatFieldValue, isPromotedDecision, samplePreview, latestDecisions, linkedValue, nameOccurrences, nativeTargetForPath, primaryLocator, requiredFieldsFor, reviewFieldsForRecord, REVIEW_DECISIONS, type ReviewRow } from "../intake/review";
 import { visibleDirectoryRows } from "./peopleDirectory";
 import type { DirectoryPerson, OfficeTerm } from "../intake/entities";
 import { reconcileExtractions } from "../intake/reconcile";
+import { reviewStatusAfterTransposition } from "../documentReviewStatus";
 import { buildImportBundle, coverageReport, type IntakeRunResult } from "../intake/bundle";
 
 const now = () => new Date().toISOString();
@@ -144,17 +151,17 @@ export async function undoReviews(ctx: PortableMutationCtx, { societyId, reviewI
 
 // ---------------------------------------------------------------- run-wide bulk accept
 
-export type BulkScopeArgs = { extractionId?: string; clusterKey?: string; body?: string; year?: string; docClass?: string };
+export type BulkScopeArgs = { extractionId?: string; clusterKey?: string; body?: string; year?: string; docClass?: string; /** Every open document of the run. */ all?: boolean };
 
 /** Unpromoted extractions of a run within a scope: one document, a version cluster, a body-year or a class. */
 async function scopedExtractions(ctx: PortableQueryCtx, societyId: string, runId: string, scope: BulkScopeArgs) {
   await getOwned(ctx, "intakeRuns", runId, societyId);
-  if (!scope || !Object.values(scope).some(Boolean)) throw new Error("Choose a document, cluster, body and year, or class.");
+  if (!scope || !Object.values(scope).some(Boolean)) throw new Error("Choose a document, cluster, body and year, class, or the whole run.");
   const rows = (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", runId)).collect()) as any[];
   const files = scope.clusterKey ? ((await ctx.db.query("intakeFiles").withIndex("by_run", (q) => q.eq("runId", runId)).collect()) as any[]) : [];
   const inCluster = new Set(files.filter((file) => file.clusterKey === scope.clusterKey).map((file) => String(file._id)));
   return rows.filter((row) => {
-    if (row.status === "promoted" || row.status === "rejected") return false;
+    if (row.status === "promoted" || row.status === "rejected" || row.status === "covered") return false;
     if (scope.extractionId && String(row._id) !== scope.extractionId) return false;
     if (scope.clusterKey && !inCluster.has(String(row.fileId))) return false;
     if (scope.docClass && row.docClass !== scope.docClass) return false;
@@ -168,7 +175,7 @@ async function bulkCandidatesFor(ctx: PortableQueryCtx, extractions: any[], thre
   const out: Array<{ extraction: any; field: ReturnType<typeof reviewFieldsForRecord>[number] }> = [];
   for (const extraction of extractions) {
     const decisions = latestDecisions(await reviewsFor(ctx, extraction._id));
-    for (const field of bulkAcceptCandidates(reviewFieldsForRecord(extraction.record ?? {}), decisions, extraction.docClass, {}, thresholds)) out.push({ extraction, field });
+    for (const field of bulkAcceptCandidates(reviewFieldsForRecord(extraction.record ?? {}, extraction.docClass), decisions, extraction.docClass, {}, thresholds)) out.push({ extraction, field });
   }
   return out;
 }
@@ -292,12 +299,14 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
   const extraction = await getOwned<any>(ctx, "intakeExtractions", args.extractionId, societyId);
   if (extraction.status === "promoted") throw new Error("This extraction was already promoted.");
   if (extraction.status === "rejected") throw new Error("This extraction was rejected; reopen it before promoting.");
+  if (extraction.status === "covered") throw new Error("A copy of this document was already promoted; choose \"Review separately\" to promote it on its own.");
   const run = await getOwned<any>(ctx, "intakeRuns", extraction.runId, societyId);
   const file = await getOwned<any>(ctx, "intakeFiles", extraction.fileId, societyId);
   if (file.sensitivity === "restricted") await requirePermissionPortable(ctx, societyId, "settings:write");
+  if (extraction.docClass !== "meetingMinutes") return promoteClassExtraction(ctx, societyId, extraction, run, file);
   const reviews = await reviewsFor(ctx, extraction._id);
   const decisions = latestDecisions(reviews);
-  const fields = reviewFieldsForRecord(extraction.record);
+  const fields = reviewFieldsForRecord(extraction.record, extraction.docClass);
   for (const field of fields.filter((candidate) => candidate.required)) {
     if (!isPromotedDecision(decisions.get(field.path)?.decision)) throw new Error(`Accept or edit the ${field.label.toLowerCase()} before promoting.`);
   }
@@ -330,6 +339,7 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
     sourceDocuments.push(compact({ fileKey, documentId: String(documentId), name: intakeFile?.name ?? fileKey, sha256: intakeFile?.sha256, mimeType: intakeFile?.mimeType, sizeBytes: intakeFile?.sizeBytes }) as any);
     const row = await ctx.db.query("intakeFiles").withIndex("by_run_file_key", (q) => q.eq("runId", extraction.runId).eq("fileKey", fileKey)).first() as any;
     if (row && !row.documentId) await ctx.db.patch(row._id, { documentId, updatedAtISO: now() });
+    await markSourceDocumentTransposed(ctx, documentId);
   }
 
   // Merging only fills blank minutes fields and keeps action items as observations;
@@ -428,11 +438,239 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
     gaps++;
   }
 
-  await ctx.db.patch(extraction._id, { status: "promoted", updatedAtISO: at });
+  const targets = [{ table: "meetings", id: meetingId, label: meeting?.title ?? "Meeting" }];
+  await ctx.db.patch(extraction._id, { status: "promoted", promotion: { sessionId, targets, atISO: at }, updatedAtISO: at });
+  const covered = await markClusterCopiesCovered(ctx, extraction, file, at);
   if (run.status === "extracted" || run.status === "created") await ctx.db.patch(run._id, { status: "reviewing", updatedAtISO: at });
   return {
-    meetingId, minutesId, sessionId, merged: Number(applied?.existing ?? 0) > 0, meetingTitle: meeting?.title,
+    meetingId, minutesId, sessionId, merged: Number(applied?.existing ?? 0) > 0, meetingTitle: meeting?.title, targets, covered,
     provenance: provenance.length, notLanded: notLandedPaths.length, notLandedPaths: notLandedPaths.slice(0, 50), gaps, sourceDocuments, warnings: build.warnings,
+  };
+}
+
+/** Other copies in the promoted file's version cluster (format copies, near duplicates, drafts of
+ * the same record) need no separate promotion: their source IDs are already on the record. They
+ * become "covered" (reopen one to promote it separately). Returns how many were covered. */
+async function markClusterCopiesCovered(ctx: PortableMutationCtx, extraction: any, file: any, at: string): Promise<number> {
+  if (!file.clusterKey) return 0;
+  const files = (await ctx.db.query("intakeFiles").withIndex("by_run", (q) => q.eq("runId", extraction.runId)).collect()) as any[];
+  const members = new Set(files.filter((row) => row.clusterKey === file.clusterKey && String(row._id) !== String(file._id)).map((row) => String(row._id)));
+  if (!members.size) return 0;
+  let covered = 0;
+  const dateOf = (row: any) => String(row.record?.date?.value?.iso ?? row.record?.meetingDate?.value?.iso ?? row.record?.periodEnd?.value?.iso ?? "");
+  for (const row of (await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", extraction.runId)).collect()) as any[]) {
+    if (!members.has(String(row.fileId)) || row.docClass !== extraction.docClass || !["pending_review", "in_review", "accepted"].includes(row.status)) continue;
+    // A copy states the same date; a cluster member with another date is a different record.
+    if (dateOf(row) && dateOf(extraction) && dateOf(row) !== dateOf(extraction)) continue;
+    await ctx.db.patch(row._id, { status: "covered", promotion: { coveredByExtractionId: extraction._id, coveredByFileKey: extraction.fileKey, atISO: at }, updatedAtISO: at });
+    covered++;
+  }
+  return covered;
+}
+
+const RECORD_KIND_FOR_COLLECTION: Record<string, string> = {
+  policies: "policy", bylawRuleSets: "bylawRuleSet", committees: "committee", directors: "director", organizationSeats: "organizationSeat", proxies: "proxy",
+  financialStatementImports: "financialStatementImport", budgetSnapshots: "budgetSnapshot", insurancePolicies: "insurancePolicy", grants: "grant", deadlines: "deadline",
+  filings: "filing", sourceEvidence: "sourceEvidence", transactionCandidates: "transactionCandidate", meetingMaterials: "meetingMaterial",
+};
+const TABLE_NOUN: Record<string, string> = {
+  policies: "Policy", bylawRuleSets: "Bylaw rule set", committees: "Committee", directors: "Director", organizationSeats: "Seat", proxies: "Proxy", financialStatementImports: "Financial statement",
+  budgetSnapshots: "Budget", insurancePolicies: "Insurance policy", grants: "Grant", deadlines: "Deadline", filings: "Filing", sourceEvidence: "Source evidence", transactionCandidates: "Transaction candidate",
+  meetingMaterials: "Meeting material", meetingMinutes: "Meeting",
+};
+const IDENTIFYING_FIELDS: Record<string, string> = { insurancePolicies: "the insurer or the policy number", directors: "the person's name", policies: "the title", filings: "the filing type and date", financialStatementImports: "the period end", budgetSnapshots: "the title or fiscal year", grants: "the title and funder", transactionCandidates: "the date and amount", meetingMinutes: "the meeting date and body" };
+
+/** The reviewed value of a top-level field (edited or accepted), or undefined. */
+function reviewedValue(extraction: any, decisions: Map<string, ReviewRow>, path: string): any {
+  const review = decisions.get(path);
+  if (!isPromotedDecision(review?.decision)) return undefined;
+  return review!.decision === "edit" ? review!.editedValue : extraction.record?.[path]?.value;
+}
+
+/** Promotion of a reviewed non-minutes extraction (agendas, policies, bylaws, people, filings,
+ * statements, budgets, insurance, grants, agreements, correspondence, invoices): the class's
+ * staging (bundleClasses) applied through the import-session handlers, with provenance rows. */
+async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: string, extraction: any, run: any, file: any) {
+  const docClass = String(extraction.docClass);
+  const spec = CLASS_PROMOTION[docClass];
+  if (!spec) throw new Error(`There is no native record type for ${docClass} documents yet; mark their facts as system gaps instead.`);
+  const agendaLike = ["agenda", "meetingPackage", "agmMaterial"].includes(docClass);
+  if (agendaLike) for (const permission of ["meetings:write", "minutes:write"] as const) await requirePermissionPortable(ctx, societyId, permission);
+  const reviews = await reviewsFor(ctx, extraction._id);
+  const decisions = latestDecisions(reviews);
+  for (const required of requiredFieldsFor(docClass, extraction.record)) {
+    if (!isPromotedDecision(decisions.get(required.path)?.decision)) throw new Error(`Accept or edit the ${required.label.toLowerCase()} before promoting.`);
+  }
+  const files = await Promise.all((await clusterFiles(ctx, extraction, file)).map((row) => promotionFile(ctx, row)));
+  const at = now();
+
+  // Context from the workspace: an existing meeting for an agenda, the adopting motion of a policy, directors on record.
+  let existingMeeting: { meetingId: string; date: string; title: string } | undefined;
+  if (agendaLike) {
+    const date = String(reviewedValue(extraction, decisions, "date")?.iso ?? reviewedValue(extraction, decisions, "meetingDate")?.iso ?? "");
+    const bodyKey = bodyKeyFor(String(reviewedValue(extraction, decisions, "bodyLabel") ?? reviewedValue(extraction, decisions, "body") ?? (docClass === "agmMaterial" ? "Annual General Meeting" : "")));
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const wanted = bodyKey === "board" ? "board" : bodyKey === "agm" || bodyKey === "members" ? "agm" : bodyKey === "sgm" ? "sgm" : "committee";
+      const meetings = ((await ctx.db.query("meetings").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) as any[]).filter((meeting) => String(meeting.scheduledAt ?? "").slice(0, 10) === date);
+      for (const meeting of meetings) {
+        const committee = meeting.committeeId ? await ctx.db.get<any>(meeting.committeeId, "committees") : null;
+        const key = bodyKeyForMeeting(meeting, committee);
+        if (key === wanted || key.startsWith(`${wanted}:`)) { existingMeeting = { meetingId: String(meeting._id), date, title: String(meeting.title ?? "Meeting") }; break; }
+      }
+    }
+  }
+  let policyAdoption: any;
+  if (docClass === "policy" || docClass === "bylaws") {
+    const minutes = ((await ctx.db.query("intakeExtractions").withIndex("by_run", (q) => q.eq("runId", extraction.runId)).collect()) as any[])
+      .filter((row) => row.docClass === "meetingMinutes")
+      .map((row) => ({ fileKey: row.fileKey, fileId: row.fileKey, docClass: row.docClass, record: row.record, unsupported: [], references: [] }));
+    const links = linkPolicyAdoptions([...minutes, { fileKey: extraction.fileKey, fileId: extraction.fileKey, docClass, record: extraction.record, unsupported: [], references: [] }] as any, run.reconciliation?.meetings ?? []);
+    policyAdoption = links.find((link) => link.from === extraction.fileKey);
+  }
+  const directors = (await allowed(ctx, societyId, "directors:read")) ? ((await ctx.db.query("directors").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) as any[]) : [];
+  const directorByKey = new Map(directors.map((row) => [directorMatchKey([row.firstName, row.lastName].filter(Boolean).join(" ")), row]));
+  const society = await ctx.db.get<any>(societyId, "societies");
+
+  const build = buildClassPromotionBundle({
+    extraction, reviews, files, runName: run.name,
+    context: { asOfISO: at, organizationName: society?.name, existingMeeting, policyAdoption, existingDirectorKeys: new Set(directorByKey.keys()) },
+  });
+
+  // Stage and apply through the import-session handlers (same transaction).
+  const sessionId = String(await createFromBundlePortable(ctx, { societyId, name: `Intake: ${file.name}`, bundle: build.bundle }));
+  // The reviewer's field-by-field decisions are the review the import path asks for before promotion.
+  const reviewNotes = `Reviewed field by field in the intake run "${run.name}" (${build.applied.promotedPaths.length} accepted field(s) with source locators) and promoted by the reviewer.`;
+  const stagedRecords = (((await getImportSessionPortable(ctx, { sessionId })) as any)?.records ?? []) as any[];
+  // The import contract drops records it cannot identify (an insurance policy with neither insurer nor policy number…):
+  // say so instead of reporting a promotion that created nothing.
+  for (const [collection, count] of Object.entries(build.collections)) {
+    const kind = collection === "meetingMinutes" ? "meetingMinutes" : RECORD_KIND_FOR_COLLECTION[collection];
+    if (kind && stagedRecords.filter((record) => record.recordKind === kind).length < count) {
+      throw new Error(`The ${(TABLE_NOUN[collection] ?? collection).toLowerCase()} could not be staged because an identifying field was not accepted (${IDENTIFYING_FIELDS[collection] ?? "its name or date"}). Accept or edit it and promote again.`);
+    }
+  }
+  for (const record of stagedRecords) await updateRecordPortable(ctx, { recordId: String(record._id), status: "Approved", reviewNotes });
+  await applyApprovedDocumentsPortable(ctx, { sessionId });
+  if (build.collections.meetingMinutes) await applyApprovedMeetingsPortable(ctx, { sessionId });
+  const sectionResult = await applyApprovedSectionRecordsPortable(ctx, { sessionId }) as any;
+  const session = await getImportSessionPortable(ctx, { sessionId }) as any;
+  if (sectionResult?.preflightBlocked || Object.keys(sectionResult?.byKind ?? {}).some((key) => key.endsWith(":blocked"))) {
+    const issues = (session?.records ?? []).map((record: any) => /Promotion blocked: ([^\n]+)/.exec(String(record.reviewNotes ?? ""))?.[1]).filter(Boolean).slice(0, 3);
+    throw new Error(`The ${spec.noun} could not be written: ${issues.join("; ") || "a staged record failed its checks"}. Nothing was promoted.`);
+  }
+
+  // What was created.
+  const created: Array<{ kind: string; table: string; id: string; payload: Record<string, any>; label: string }> = [];
+  const sourceDocuments: Array<{ fileKey: string; documentId: string; name: string; sha256?: string; mimeType?: string; sizeBytes?: number }> = [];
+  for (const record of session?.records ?? []) {
+    if (record.recordKind === "documentCandidate") {
+      const documentId = record.importedTargets?.documents;
+      const fileKey = record.payload?.externalId;
+      if (!documentId || !fileKey) continue;
+      const intakeFile = files.find((candidate) => candidate.fileKey === fileKey);
+      sourceDocuments.push(compact({ fileKey, documentId: String(documentId), name: intakeFile?.name ?? fileKey, sha256: intakeFile?.sha256, mimeType: intakeFile?.mimeType, sizeBytes: intakeFile?.sizeBytes }) as any);
+      const row = await ctx.db.query("intakeFiles").withIndex("by_run_file_key", (q) => q.eq("runId", extraction.runId).eq("fileKey", fileKey)).first() as any;
+      if (row && !row.documentId) await ctx.db.patch(row._id, { documentId, updatedAtISO: at });
+      await markSourceDocumentTransposed(ctx, documentId);
+    } else if (record.recordKind === "meetingMinutes" && record.importedTargets?.meetings?.meetingId) {
+      created.push({ kind: "meetingMinutes", table: "meetings", id: String(record.importedTargets.meetings.meetingId), payload: record.payload ?? {}, label: String(record.payload?.meetingTitle ?? "Meeting") });
+    } else if (RECORD_KIND_TABLE[record.recordKind] && record.importedTargets?.sections) {
+      const payload = record.payload ?? {};
+      created.push({ kind: record.recordKind, table: RECORD_KIND_TABLE[record.recordKind], id: String(record.importedTargets.sections), payload, label: String(payload.policyName ?? payload.fullName ?? payload.title ?? payload.insurer ?? payload.name ?? payload.organizationName ?? payload.label ?? payload.kind ?? payload.description ?? record.recordKind) });
+    }
+  }
+  const firstDocumentId = sourceDocuments.find((row) => row.fileKey === extraction.fileKey)?.documentId ?? sourceDocuments[0]?.documentId;
+
+  // An agenda or package of a meeting already on record: a meeting material of that meeting.
+  if (build.material) {
+    const existing = (await ctx.db.query("meetingMaterials").withIndex("by_meeting", (q) => q.eq("meetingId", build.material!.meetingId)).collect()) as any[];
+    const already = firstDocumentId ? existing.find((row) => String(row.documentId) === String(firstDocumentId)) : undefined;
+    const materialId = already?._id ?? (firstDocumentId ? await ctx.db.insert("meetingMaterials", compact({
+      societyId, meetingId: build.material.meetingId, documentId: firstDocumentId, agendaLabel: build.material.agendaLabel, label: build.material.label, order: existing.length,
+      requiredForMeeting: false, accessLevel: "board", availabilityStatus: "available", notes: `Linked by intake review (${spec.noun}); ${build.material.agendaItems.length} agenda item(s) as circulated.`, createdAtISO: at,
+    })) : undefined);
+    const meeting = await ctx.db.get<any>(build.material.meetingId, "meetings");
+    created.push({ kind: "meeting", table: "meetings", id: build.material.meetingId, payload: {}, label: String(meeting?.title ?? "Meeting") });
+    if (materialId) created.push({ kind: "meetingMaterial", table: "meetingMaterials", id: String(materialId), payload: {}, label: build.material.label });
+  }
+
+  // Directors already in the register: consent and observed terms are added to them.
+  for (const row of build.existingDirectors) {
+    const director = directorByKey.get(directorMatchKey(String(row.fullName ?? "")));
+    if (!director) continue;
+    await requirePermissionPortable(ctx, societyId, "directors:write");
+    // Consent on file, and the earliest observed term start (a 2021 consent before a 2025 filing).
+    const earliest = (Array.isArray(row.terms) ? row.terms : []).map((term: any) => clean(term.termStart, 10)).filter((value: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(value))).sort()[0];
+    const patch: Record<string, unknown> = {};
+    if (row.consentOnFile && !director.consentOnFile) patch.consentOnFile = true;
+    if (earliest && (!director.termStart || earliest < String(director.termStart))) patch.termStart = earliest;
+    if (Object.keys(patch).length) await ctx.db.patch(director._id, patch);
+    for (const term of Array.isArray(row.terms) ? row.terms : []) {
+      await ctx.db.insert("boardRoleAssignments", compact({
+        societyId, personName: String(row.fullName), personKey: normalizePersonKey(String(row.fullName)), directorId: director._id, memberId: director.memberId,
+        roleTitle: clean(term.position, 120) ?? "Director", roleType: "director", startDate: clean(term.termStart, 10) ?? clean(row.termStart, 10) ?? at.slice(0, 10), endDate: clean(term.termEnd, 10),
+        status: "Observed", confidence: "Review", sourceDocumentIds: firstDocumentId ? [firstDocumentId] : [], sourceExternalIds: Array.isArray(term.sourceExternalIds) ? term.sourceExternalIds : [extraction.fileKey],
+        importedFrom: "Intake review", notes: clean(term.notes, 500), createdAtISO: at,
+      }));
+    }
+    created.push({ kind: "director", table: "directors", id: String(director._id), payload: row, label: String(row.fullName) });
+  }
+
+  // Field provenance: one row per promoted field, on the record it landed on.
+  const { rows, notLanded } = classProvenanceTargets(docClass, extraction.record, build.applied.promotedPaths, created);
+  for (const row of rows) {
+    const review = decisions.get(row.sourceFieldPath)!;
+    const field = resolveFieldPath(extraction.record, row.sourceFieldPath);
+    const locator = primaryLocator(field, extraction.fileKey);
+    await ctx.db.insert("fieldProvenance", compact({
+      societyId, targetTable: row.targetTable, targetId: row.targetId, fieldPath: row.fieldPath.slice(0, 300), sourceFieldPath: row.sourceFieldPath.slice(0, 300), runId: extraction.runId, extractionId: extraction._id, fileKey: extraction.fileKey,
+      locator: compact({ fileId: clean(locator.fileId, 600), kind: locator.kind, blockIndex: locator.blockIndex, page: locator.page, sheet: clean(locator.sheet, 200), cell: clean(locator.cell, 40), charStart: locator.charStart, charEnd: locator.charEnd, quote: clean(locator.quote, 400) }),
+      value: review?.decision === "edit" ? review.editedValue : field?.value, decision: review?.decision ?? "accept", createdAtISO: at,
+    }));
+  }
+
+  // System gaps: the extractor's unsupported details, the class stage's gaps and reviewer "can't represent" gaps.
+  const main = created.find((target) => target.table !== "documents");
+  let gaps = 0;
+  for (const review of decisions.values()) {
+    const gapId = (review as any).gap?.gapId;
+    if (review.decision !== "cant_represent" || !gapId) continue;
+    const gap = await ctx.db.get<any>(String(gapId), "representationGaps");
+    if (gap && gap.societyId === societyId && !gap.affectedId && main) {
+      await ctx.db.patch(gap._id, { affectedTable: main.table, affectedId: main.id, updatedAtISO: at });
+      gaps++;
+    }
+  }
+  const existingKeys = new Set(((await ctx.db.query("representationGaps").withIndex("by_society", (q) => q.eq("societyId", societyId)).collect()) as any[]).map((row) => row.dedupeKey).filter(Boolean));
+  for (const [index, detail] of build.gaps.entries()) {
+    const dedupeKey = `intake:${extraction._id}:${detail.fromClassStage ? "class" : "unsupported"}:${index}`;
+    if (existingKeys.has(dedupeKey)) continue;
+    const affectedTable = String(detail.affectedTable ?? main?.table ?? "documents");
+    const affected = created.find((target) => target.table === affectedTable) ?? (affectedTable === "agreements" ? undefined : main);
+    if (detail.fromClassStage) {
+      const { fromClassStage: _ignored, status: _status, reviewHistory: _history, ...row } = detail as any;
+      await insertRepresentationGapFromImport(ctx, societyId, { ...row, origin: "intake", sourceTitle: file.name, ...(affected ? { affectedTable: affected.table, affectedId: affected.id } : {}), dedupeKey, sensitivity: file.sensitivity === "restricted" ? "restricted" : undefined }, { importSessionId: sessionId, sourceDocumentId: firstDocumentId });
+    } else {
+      const locators = (detail.locators ?? []) as any[];
+      const [proposedTargetTable, ...proposedField] = String(detail.suggestedTarget ?? "").split(".");
+      await insertRepresentationGapFromImport(ctx, societyId, {
+        infoType: detail.infoType ?? "other", reason: { no_field: "no_schema_field", no_table: "no_schema_field", no_relationship: "no_import_key", no_ui_edit: "no_ui_input", lossy_normalization: "import_dropped" }[String(detail.category)] ?? "no_schema_field",
+        origin: "intake", title: clean(detail.description, 240), sourceExternalId: extraction.fileKey, sourceTitle: file.name, locator: gapLocatorFrom(locators[0], file.sha256, file.path),
+        excerpt: locators[0]?.quote ?? detail.description, observedDate: detail.observedDate, bodyKey: extraction.record?.body?.value, affectedTable: affected?.table ?? affectedTable, ...(affected ? { affectedId: affected.id } : {}),
+        proposedTargetTable: clean(proposedTargetTable, 80), proposedField: clean(proposedField.join("."), 120), dedupeKey, sensitivity: file.sensitivity === "restricted" ? "restricted" : undefined, notes: detail.description,
+      }, { importSessionId: sessionId, sourceDocumentId: firstDocumentId });
+    }
+    gaps++;
+  }
+
+  const targets = created.filter((target, index) => created.findIndex((other) => other.table === target.table && other.id === target.id) === index).slice(0, 200).map((target) => ({ table: target.table, id: target.id, label: target.label.slice(0, 200) }));
+  await ctx.db.patch(extraction._id, { status: "promoted", promotion: { sessionId, targets, atISO: at }, updatedAtISO: at });
+  const covered = await markClusterCopiesCovered(ctx, extraction, file, at);
+  if (run.status === "extracted" || run.status === "created") await ctx.db.patch(run._id, { status: "reviewing", updatedAtISO: at });
+  const meetingId = created.find((target) => target.table === "meetings")?.id;
+  return {
+    docClass, sessionId, targets, covered, ...(meetingId ? { meetingId } : {}), merged: Boolean(build.material),
+    provenance: rows.length, notLanded: notLanded.length, notLandedPaths: notLanded.slice(0, 50), gaps, sourceDocuments, warnings: build.warnings,
   };
 }
 
@@ -458,7 +696,7 @@ export async function runSummaries(ctx: PortableQueryCtx, { societyId }: { socie
     const systemGaps = gapKeys ? gapKeys.filter((key) => ids.has(key.split(":")[1])).length : null;
     const promoted = extractions.filter((row) => row.status === "promoted");
     // Facts extracted (fields with a value) across the run; promotedFields ÷ extractedFields is the reviewed native coverage.
-    const extractedFields = extractions.reduce((sum, row) => sum + reviewFieldsForRecord(row.record ?? {}).filter((field) => field.field.value !== undefined && field.field.value !== null && field.field.status !== "not_stated").length, 0);
+    const extractedFields = extractions.reduce((sum, row) => sum + reviewFieldsForRecord(row.record ?? {}, row.docClass).filter((field) => field.field.value !== undefined && field.field.value !== null && field.field.status !== "not_stated").length, 0);
     let promotedFields = 0;
     for (const extraction of promoted) promotedFields += ((await ctx.db.query("fieldProvenance").withIndex("by_extraction", (q) => q.eq("extractionId", extraction._id)).collect()) as any[]).length;
     out.push({
@@ -481,8 +719,21 @@ export async function reconcileRun(ctx: PortableMutationCtx, { societyId, runId 
     const current = byFile.get(row.fileKey);
     if (!current || (current.engine === "deterministic" && row.engine !== "deterministic")) byFile.set(row.fileKey, row);
   }
-  const extractions = [...byFile.values()].map((row) => ({ fileKey: row.fileKey, fileId: row.fileKey, docClass: row.docClass, schemaVersion: row.schemaVersion, engine: row.engine, model: row.model, record: row.record, unsupported: row.unsupported ?? [], references: row.references ?? [], warnings: row.warnings, verification: row.verification }));
-  const { reconciled, carry, gaps } = reconcileExtractions(files, extractions);
+  const extractions: any[] = [...byFile.values()].map((row) => ({ fileKey: row.fileKey, fileId: row.fileKey, docClass: row.docClass, schemaVersion: row.schemaVersion, engine: row.engine, model: row.model, record: row.record, unsupported: row.unsupported ?? [], references: row.references ?? [], warnings: row.warnings, verification: row.verification }));
+  // Minutes embedded in packages are derived records (never stored): derive them again from the stored
+  // extracts, as the in-browser pipeline does, so hosted runs see the same meetings and record gaps.
+  for (const row of [...byFile.values()].filter((candidate) => ["agenda", "meetingPackage", "agmMaterial"].includes(candidate.docClass))) {
+    const extract = await ctx.db.query("intakeExtracts").withIndex("by_file", (q) => q.eq("fileId", row.fileId)).first() as any;
+    const file = files.find((candidate) => String(candidate._id) === String(row.fileId));
+    if (!extract?.text || !file) continue;
+    try {
+      extractions.push(...deriveEmbeddedMinutes(extractions.find((candidate) => candidate.fileKey === row.fileKey), { method: extract.method, methodVersion: extract.methodVersion, blocks: extract.blocks, text: extract.text, warnings: extract.warnings ?? [] } as any, file));
+    } catch {
+      // A truncated extract (very large package) cannot be split; its embedded minutes are skipped.
+    }
+  }
+  const fiscalChanges = annotateFiscalYearEndChanges(extractions);
+  const { reconciled, carry, gaps } = reconcileExtractions(files, extractions, { fiscalChanges });
   const clusters = (await ctx.db.query("intakeClusters").withIndex("by_run", (q) => q.eq("runId", runId)).collect()) as any[];
   const result: IntakeRunResult = {
     runId, name: run.name, sourceKind: run.sourceKind, sourceRoot: run.sourceRoot ?? "", startedAtISO: run.createdAtISO, engine: run.engine ?? { minutes: "deterministic" },
@@ -551,7 +802,7 @@ export async function linkNameAcrossRun(ctx: PortableMutationCtx, { societyId, r
   const items: ReviewItem[] = [];
   let touched = 0;
   for (const extraction of extractions) {
-    if (extraction.status === "promoted" || extraction.status === "rejected") continue;
+    if (extraction.status === "promoted" || extraction.status === "rejected" || extraction.status === "covered") continue;
     const decisions = latestDecisions(await reviewsFor(ctx, extraction._id));
     const occurrences = nameOccurrences(extraction.record ?? {}).filter((occurrence) => nameKey(occurrence.name) === wanted);
     if (!occurrences.length) continue;
@@ -634,4 +885,10 @@ export function landedValue(field: string, native: unknown, value: unknown, merg
       return Boolean(b) && (a === b || a.includes(b) || (!merged && b.includes(a)));
     }
   }
+}
+
+async function markSourceDocumentTransposed(ctx: PortableMutationCtx, documentId: unknown) {
+  const document = await ctx.db.get(documentId as any, "documents") as any;
+  const next = document ? reviewStatusAfterTransposition(document.reviewStatus) : undefined;
+  if (next) await ctx.db.patch(document._id, { reviewStatus: next });
 }

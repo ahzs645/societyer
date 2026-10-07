@@ -35,7 +35,9 @@ assert.equal(renderSections(sampleSections)[0].body[0], sampleSections[0].body[0
 
 // --- the real DOCX generator binds prose when context present ----------------
 // Build a synthetic packet carrying a grammar token in a section body.
-const basePacket = CORPORATION_DOCUMENT_PACKETS[0];
+// A token-free packet; preparation-only worksheets (listed first) now carry {org.name} tokens.
+const basePacket = CORPORATION_DOCUMENT_PACKETS.find((packet) => packet.key === "organize-corporation")!;
+assert.ok(basePacket && !/\{[#/a-z]/.test(JSON.stringify(basePacket)), "organize-corporation packet stays token-free");
 const tokenPacket = {
   ...basePacket,
   sections: [{ heading: "Resolution", body: ["{org.shortName}: adopted by {dir.count} director{dir.plural}."] }],

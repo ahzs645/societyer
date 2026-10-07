@@ -185,7 +185,6 @@ export function DocumentWorkbenchPage() {
         <ArrowLeft size={12} /> Documents
       </Link>
 
-      {document&&society&&<PersonRecordLinks societyId={society._id} recordTable="documents" recordId={document._id}/>}
       <PageHeader
         title={document.title}
         icon={<FileText size={16} />}
@@ -385,6 +384,8 @@ export function DocumentWorkbenchPage() {
           />
         </div>
       </div>
+      {/* Who the document names: below the document, not above its title. */}
+      {document && society && <PersonRecordLinks societyId={society._id} recordTable="documents" recordId={document._id} />}
     </div>
   );
 }

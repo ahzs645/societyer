@@ -9,6 +9,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSociety } from "../hooks/useSociety";
 import { PageHeader, PageLoading, SeedPrompt } from "./_helpers";
 import { Badge, Drawer, Field, Flag, InspectorNote } from "../components/ui";
+import { SourceProvenanceButton } from "../components/SourceProvenanceButton";
 import { directorProblems, directorTermLapsed } from "../../shared/registerValidation";
 import { CustomFieldsPanel } from "../components/CustomFieldsPanel";
 import { Select } from "../components/Select";
@@ -326,6 +327,7 @@ export function DirectorsPage() {
           </>
         }
       >
+        {selected?._id && <div style={{ marginBottom: 8 }}><SourceProvenanceButton table="directors" id={selected._id} /></div>}
         {selected && (
           <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             {selectedProblems.length > 0 && (

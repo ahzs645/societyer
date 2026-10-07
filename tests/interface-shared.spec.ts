@@ -323,7 +323,7 @@ test("saved view writes stay disabled for Member and Viewer while local sorting 
   await expect(page.locator(".record-table__row").first()).toBeVisible();
   for (const role of ["Member", "Viewer"]) {
     await openPicker();
-    await page.getByText(`Interface Table ${role}`, { exact: true }).click();
+    await page.getByRole("listbox", { name: "Acting user", exact: true }).getByText(`Interface Table ${role}`, { exact: true }).click();
     await closeNavigation();
     await expect(page.locator(".record-table__row").first()).toBeVisible();
     await page.locator(".record-table__header-row").getByRole("button", { name: "First name", exact: true }).click();

@@ -10,6 +10,7 @@ export default defineConfig({
     baseURL: "http://localhost:4175",
     headless: true,
     screenshot: "only-on-failure",
+    launchOptions: process.env.SOCIETYER_CHROMIUM_PATH ? { executablePath: process.env.SOCIETYER_CHROMIUM_PATH } : undefined,
   },
   webServer: {
     command: "VITE_RUNTIME_MODE=local-indexeddb VITE_E2E_TEST_HARNESS=1 VITE_LOCAL_WORKSPACE_ID=corporation-mvp-playwright npx vite --host 127.0.0.1 --port 4175 --strictPort",

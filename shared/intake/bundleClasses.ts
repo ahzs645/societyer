@@ -90,8 +90,9 @@ function consentEvidence(record: any, fileKey: string): Array<Record<string, unk
 }
 
 function meetingTitle(bodyKey: string, record: any, date: string): string {
-  const label = val(record.bodyLabel) ?? bodyFromText(bodyKey)?.label ?? "Meeting";
-  return `${label} meeting — ${date}`;
+  const label = String(val(record.bodyLabel) ?? bodyFromText(bodyKey)?.label ?? "Meeting");
+  // "Annual General Meeting meeting" reads badly: only add "meeting" when the label lacks it.
+  return `${label}${/\bmeeting$/i.test(label) ? "" : " meeting"} — ${date}`;
 }
 
 // ---------------------------------------------------------------- people & terms
