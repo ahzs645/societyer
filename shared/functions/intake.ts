@@ -11,6 +11,7 @@ import { requirePermissionPortable } from "./permissions";
 import { validateExtraction } from "../intake/schemas";
 import { isFieldValue, verifyRecord } from "../intake/verify";
 import type { IntakeBlock } from "../intake/blocks";
+import { hydrateProvenance, resolveFieldPath } from "../intake/provenance";
 
 const now = () => new Date().toISOString();
 const MAX_BLOCK_BYTES = 850_000;
@@ -192,7 +193,7 @@ export async function processingLog(ctx: PortableQueryCtx, { societyId, runId }:
 export async function provenanceForRecord(ctx: PortableQueryCtx, { societyId, targetTable, targetId }: { societyId: string; targetTable: string; targetId: string }) {
   await canRead(ctx, societyId);
   const rows = await ctx.db.query("fieldProvenance").withIndex("by_target", (q) => q.eq("targetTable", targetTable).eq("targetId", targetId)).collect();
-  return rows.filter((row: any) => row.societyId === societyId);
+  return hydrateProvenance(ctx, rows.filter((row: any) => row.societyId === societyId));
 }
 
 // ---------------------------------------------------------------- mutations
@@ -309,6 +310,8 @@ export async function saveExtraction(ctx: PortableMutationCtx, { societyId, runI
   const existing = (await ctx.db.query("intakeExtractions").withIndex("by_file", (q) => q.eq("fileId", file._id)).collect()).find((candidate: any) => candidate.engine === envelope.engine);
   if (existing) {
     if ((existing as any).status === "promoted") throw new Error("A promoted extraction cannot be replaced; start a new run.");
+    // Batch reviews read accepted values from the extraction itself: a reviewed record is never replaced underneath them.
+    if (await ctx.db.query("intakeFieldReviews").withIndex("by_extraction", (q) => q.eq("extractionId", existing._id)).first()) throw new Error("This extraction has reviewed fields; start a new run to extract it again.");
     await ctx.db.patch(existing._id, row);
     return existing._id;
   }
@@ -338,18 +341,7 @@ export async function appendProcessingLog(ctx: PortableMutationCtx, { societyId,
   return entries.length;
 }
 
-/** Resolves "motions[2].movedBy" against an extraction record; throws for unknown paths. */
-export function resolveFieldPath(record: unknown, fieldPath: string): any {
-  const parts = fieldPath.match(/[^.[\]]+|\[\d+\]/g) ?? [];
-  let node: any = record;
-  for (const part of parts) {
-    const key = part.startsWith("[") ? Number(part.slice(1, -1)) : part;
-    if (node === null || typeof node !== "object" || !(key in node)) throw new Error(`Unknown field path ${fieldPath}.`);
-    node = node[key as any];
-  }
-  if (!isFieldValue(node)) throw new Error(`${fieldPath} is not a reviewable field.`);
-  return node;
-}
+export { resolveFieldPath } from "../intake/provenance";
 
 export async function reviewField(ctx: PortableMutationCtx, args: { societyId: string; extractionId: string; fieldPath: string; decision: string; editedValue?: unknown; note?: string; gap?: { infoType?: string; suggestedTarget?: string; description?: string } }) {
   await canWrite(ctx, args.societyId);

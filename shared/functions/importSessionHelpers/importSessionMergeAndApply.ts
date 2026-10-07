@@ -72,6 +72,7 @@ import {
   parseJson,
   sourceNoteFor,
   summarizeRecords,
+  withCompactedRecords,
   titleForHistoryItem,
 } from "./importSessionMetadata";
 import {
@@ -2074,7 +2075,7 @@ async function patchSessionUpdatedAt(ctx: any, sessionId: string) {
     .filter(isImportRecord)
     .map(hydrateRecord)
     .filter((record: any) => record.sessionId === sessionId);
-  const summary = summarizeRecords(records);
+  const summary = withCompactedRecords(summarizeRecords(records), payload);
   await ctx.db.patch(sessionId, {
     content: JSON.stringify({ ...payload, summary, updatedAtISO: new Date().toISOString() }),
   });

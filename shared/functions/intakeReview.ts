@@ -20,6 +20,7 @@ import type { PortableMutationCtx, PortableQueryCtx } from "../portable/ctx";
 import { getOwned, principalUserId } from "./access";
 import { requirePermissionPortable } from "./permissions";
 import { resolveFieldPath } from "./intake";
+import { hydrateProvenance, provenanceRow, slimProvenance } from "../intake/provenance";
 import { insertRepresentationGapFromImport } from "./representationGaps";
 import {
   applyApprovedDocumentsPortable,
@@ -36,6 +37,7 @@ import { buildClassPromotionBundle, CLASS_PROMOTION, classProvenanceTargets, dir
 import { annotateFiscalYearEndChanges, deriveEmbeddedMinutes, linkPolicyAdoptions } from "../intake/classStages";
 import { bodyKeyFor } from "../intake/entities";
 import { normalizePersonKey } from "../intake/names";
+import { BATCH_FIELD_PATH, encodeFieldPaths, isBatchableAccept, planReviewCompaction } from "../intake/review";
 import { bulkAcceptCandidates, entityGroups, formatFieldValue, isPromotedDecision, samplePreview, latestDecisions, linkedValue, nameOccurrences, nativeTargetForPath, primaryLocator, requiredFieldsFor, reviewFieldsForRecord, REVIEW_DECISIONS, type ReviewRow } from "../intake/review";
 import { visibleDirectoryRows } from "./peopleDirectory";
 import type { DirectoryPerson, OfficeTerm } from "../intake/entities";
@@ -75,13 +77,45 @@ export async function reviewFields(ctx: PortableMutationCtx, { societyId, items 
   await canWrite(ctx, societyId);
   if (!Array.isArray(items) || !items.length) return { reviewIds: [], gapIds: [] };
   if (items.length > 1000) throw new Error("Review at most 1,000 fields per call.");
+  return writeReviews(ctx, societyId, items);
+}
+
+/** Writes review decisions (callers have checked settings:write and bounded the batch). */
+async function writeReviews(ctx: PortableMutationCtx, societyId: string, items: ReviewItem[]): Promise<{ reviewIds: string[]; gapIds: string[] }> {
+  if (!items.length) return { reviewIds: [], gapIds: [] };
   if (items.some((item) => item.decision === "cant_represent")) await requirePermissionPortable(ctx, societyId, "documents:write");
   const reviewerUserId = await principalUserId(ctx, societyId).catch(() => undefined);
   const extractions = new Map<string, any>();
   const reviewIds: string[] = [];
   const gapIds: string[] = [];
   const at = now();
+  // Plain accepts of several fields of one document with the same note (bulk accept, "accept as written
+  // everywhere") are one decision: one batch row lists the fields instead of one row per field, and does
+  // not copy values or locators the extraction already holds. Per-field decisions are unchanged.
+  const batchKey = (item: ReviewItem) => `${item.extractionId}\u0000${clean(item.note) ?? ""}`;
+  const batchable = new Map<string, ReviewItem[]>();
+  for (const item of items) if (isBatchableAccept(item)) batchable.set(batchKey(item), [...(batchable.get(batchKey(item)) ?? []), item]);
+  for (const [key, group] of batchable) if (group.length < 2) batchable.delete(key);
+  const batched = new Set<string>();
   for (const item of items) {
+    if (batchable.has(batchKey(item)) && isBatchableAccept(item)) {
+      const key = batchKey(item);
+      if (batched.has(key)) continue;
+      batched.add(key);
+      const group = batchable.get(key)!;
+      let extraction = extractions.get(item.extractionId);
+      if (!extraction) {
+        extraction = await getOwned<any>(ctx, "intakeExtractions", item.extractionId, societyId);
+        if (extraction.status === "promoted") throw new Error("Promoted extractions are final; review the native record instead.");
+        extractions.set(item.extractionId, extraction);
+      }
+      for (const member of group) resolveFieldPath(extraction.record, member.fieldPath);
+      reviewIds.push(await ctx.db.insert("intakeFieldReviews", compact({
+        societyId, runId: extraction.runId, extractionId: extraction._id, fieldPath: BATCH_FIELD_PATH, fieldPaths: encodeFieldPaths(group.map((member) => member.fieldPath)),
+        decision: "accept", note: clean(item.note), reviewerUserId, reviewedAtISO: at,
+      })));
+      continue;
+    }
     if (!REVIEW_DECISIONS.includes(item.decision as any)) throw new Error("Decision must be accept, edit, reject or cant_represent.");
     let extraction = extractions.get(item.extractionId);
     if (!extraction) {
@@ -227,9 +261,8 @@ export async function bulkAccept(ctx: PortableMutationCtx, { societyId, runId, s
   const taken = takeBulkBatch(all.map(({ extraction }) => String(extraction._id)), BULK_ACCEPT_BATCH_FIELDS);
   const candidates = all.filter(({ extraction }) => taken.has(String(extraction._id)));
   const items: ReviewItem[] = candidates.map(({ extraction, field }) => ({ extractionId: extraction._id, fieldPath: field.path, decision: "accept", note: "Bulk accepted (stated, span-verified, at or above the threshold)." }));
-  const result = items.length ? await reviewFields(ctx, { societyId, items: items.slice(0, 1000) }) : { reviewIds: [] as string[] };
-  const reviewIds = [...result.reviewIds];
-  for (let offset = 1000; offset < items.length; offset += 1000) reviewIds.push(...(await reviewFields(ctx, { societyId, items: items.slice(offset, offset + 1000) })).reviewIds);
+  // One batch review row per document (not one row per field).
+  const { reviewIds } = await writeReviews(ctx, societyId, items);
   return { reviewIds, fields: items.length, extractions: new Set(items.map((item) => item.extractionId)).size, remainingFields: all.length - candidates.length };
 }
 
@@ -434,10 +467,8 @@ export async function promoteExtraction(ctx: PortableMutationCtx, args: { societ
   }
   const at = now();
   for (const row of provenance) {
-    await ctx.db.insert("fieldProvenance", compact({
-      societyId, targetTable: row.targetTable, targetId: row.targetId, fieldPath: row.fieldPath.slice(0, 300), sourceFieldPath: row.sourceFieldPath?.slice(0, 300), runId: extraction.runId, extractionId: extraction._id, fileKey: extraction.fileKey,
-      locator: compact({ fileId: clean(row.locator.fileId, 600), kind: row.locator.kind, blockIndex: row.locator.blockIndex, page: row.locator.page, sheet: clean(row.locator.sheet, 200), cell: clean(row.locator.cell, 40), charStart: row.locator.charStart, charEnd: row.locator.charEnd, quote: clean(row.locator.quote, 400) }),
-      value: row.value, decision: row.decision, createdAtISO: at,
+    await ctx.db.insert("fieldProvenance", provenanceRow({
+      societyId, targetTable: row.targetTable, targetId: row.targetId, fieldPath: row.fieldPath, sourceFieldPath: row.sourceFieldPath, extraction, locator: row.locator, value: row.value, decision: row.decision, at,
     }));
   }
 
@@ -660,10 +691,9 @@ async function promoteClassExtraction(ctx: PortableMutationCtx, societyId: strin
     const review = decisions.get(row.sourceFieldPath)!;
     const field = resolveFieldPath(extraction.record, row.sourceFieldPath);
     const locator = primaryLocator(field, extraction.fileKey);
-    await ctx.db.insert("fieldProvenance", compact({
-      societyId, targetTable: row.targetTable, targetId: row.targetId, fieldPath: row.fieldPath.slice(0, 300), sourceFieldPath: row.sourceFieldPath.slice(0, 300), runId: extraction.runId, extractionId: extraction._id, fileKey: extraction.fileKey,
-      locator: compact({ fileId: clean(locator.fileId, 600), kind: locator.kind, blockIndex: locator.blockIndex, page: locator.page, sheet: clean(locator.sheet, 200), cell: clean(locator.cell, 40), charStart: locator.charStart, charEnd: locator.charEnd, quote: clean(locator.quote, 400) }),
-      value: review?.decision === "edit" ? review.editedValue : field?.value, decision: review?.decision ?? "accept", createdAtISO: at,
+    await ctx.db.insert("fieldProvenance", provenanceRow({
+      societyId, targetTable: row.targetTable, targetId: row.targetId, fieldPath: row.fieldPath, sourceFieldPath: row.sourceFieldPath, extraction, locator,
+      value: review?.decision === "edit" ? review.editedValue : field?.value, decision: review?.decision ?? "accept", at,
     }));
   }
 
@@ -717,7 +747,7 @@ export async function provenanceForExtraction(ctx: PortableQueryCtx, { societyId
   await canRead(ctx, societyId);
   await getOwned(ctx, "intakeExtractions", extractionId, societyId);
   const rows = (await ctx.db.query("fieldProvenance").withIndex("by_extraction", (q) => q.eq("extractionId", extractionId)).collect()) as any[];
-  return rows.filter((row) => row.societyId === societyId);
+  return hydrateProvenance(ctx, rows.filter((row) => row.societyId === societyId));
 }
 
 /** Native coverage per run: how many extractions/fields became native records. */
@@ -853,7 +883,7 @@ export async function linkNameAcrossRun(ctx: PortableMutationCtx, { societyId, r
         : { extractionId: extraction._id, fieldPath: occurrence.path, decision: "accept", note: `Accepted "${name}" as written (applied to all occurrences).` });
     }
   }
-  const result = items.length ? await reviewFields(ctx, { societyId, items }) : { reviewIds: [], gapIds: [] };
+  const result = await writeReviews(ctx, societyId, items);
   return { reviewIds: result.reviewIds, occurrences: items.length, extractions: touched };
 }
 
@@ -896,7 +926,7 @@ export async function provenanceForRecords(ctx: PortableQueryCtx, { societyId, t
   }
   const seesRestricted = await allowed(ctx, societyId, "settings:write");
   const seesContent = await allowed(ctx, societyId, "documents:read");
-  return rows.map((row) => {
+  return (await hydrateProvenance(ctx, rows)).map((row) => {
     const meta = names.get(`${row.runId}|${row.fileKey}`);
     const restricted = meta?.sensitivity === "restricted";
     // Quotes from restricted files are shown only to people who could read the file itself.

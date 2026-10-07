@@ -163,6 +163,32 @@ function summarizeRecords(records: any[]) {
   };
 }
 
+/**
+ * Applied records removed by "Compact applied records" (or an intake run's compaction) are summarized on
+ * the session (`compactedRecords.summary`) so its counts still include them.
+ */
+function withCompactedRecords(summary: ReturnType<typeof summarizeRecords>, session: any) {
+  const compacted = session?.compactedRecords?.summary;
+  if (!compacted || typeof compacted !== "object") return summary;
+  const add = (target: Record<string, number>, extra: unknown) => {
+    const out = { ...target };
+    if (extra && typeof extra === "object") for (const [key, value] of Object.entries(extra as Record<string, unknown>)) out[key] = (out[key] ?? 0) + (Number(value) || 0);
+    return out;
+  };
+  return {
+    ...summary,
+    total: summary.total + (Number(compacted.total) || 0),
+    byKind: add(summary.byKind, compacted.byKind),
+    byStatus: add(summary.byStatus, compacted.byStatus),
+    byTarget: add(summary.byTarget, compacted.byTarget),
+    riskCount: summary.riskCount + (Number(compacted.riskCount) || 0),
+    orgHistoryApplied: summary.orgHistoryApplied + (Number(compacted.orgHistoryApplied) || 0),
+    meetingsApplied: summary.meetingsApplied + (Number(compacted.meetingsApplied) || 0),
+    documentsApplied: summary.documentsApplied + (Number(compacted.documentsApplied) || 0),
+    sectionsApplied: summary.sectionsApplied + (Number(compacted.sectionsApplied) || 0),
+  };
+}
+
 function summaryForSession(session: any) {
   const summary = session?.summary;
   if (summary && typeof summary === "object" && Number.isFinite(Number(summary.total))) {
@@ -341,6 +367,7 @@ export {
   descriptionForRecord,
   titleForHistoryItem,
   summarizeRecords,
+  withCompactedRecords,
   summaryForSession,
   isPlainObject,
   summarizeFromSessionMetadata,

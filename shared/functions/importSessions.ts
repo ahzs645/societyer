@@ -53,6 +53,7 @@ import {
   normalizeMeetingMinutesPayload,
   structuredMinutesPatchFromPayload,
   summarizeRecords,
+  withCompactedRecords,
   summaryForSession,
   hydrateSession,
   hydrateRecord,
@@ -155,7 +156,7 @@ export async function listPortable(ctx: PortableQueryCtx, { societyId }: { socie
     const session = hydrateSession(doc);
     const summary = Number.isFinite(session.summary?.approvedUnapplied)
       ? summaryForSession(session)
-      : summarizeRecords(await sessionRecords(ctx, societyId, doc._id));
+      : withCompactedRecords(summarizeRecords(await sessionRecords(ctx, societyId, doc._id)), session);
     rows.push({
       ...session,
       summary,
@@ -180,7 +181,7 @@ export async function getPortable(ctx: PortableQueryCtx, { sessionId }: { sessio
   return {
     session: {
       ...hydrateSession(sessionDoc),
-      summary: records.length ? summarizeRecords(records) : summarizeFromSessionMetadata(hydrateSession(sessionDoc)),
+      summary: records.length || hydrateSession(sessionDoc).compactedRecords ? withCompactedRecords(summarizeRecords(records), hydrateSession(sessionDoc)) : summarizeFromSessionMetadata(hydrateSession(sessionDoc)),
     },
     records,
   };
@@ -417,6 +418,59 @@ export async function removeSessionPortable(ctx: PortableMutationCtx, { sessionI
   for (const record of records) await ctx.db.delete(record._id);
   await ctx.db.delete(sessionId);
   return { records: records.length, linkedDocuments: linkedDocuments.length, gaps: gaps.length };
+}
+
+/**
+ * Compacts a session whose records were applied: the staged copies of applied records (their JSON payloads,
+ * often with the full extracted text of a source file) are removed, and the session keeps a summary of what
+ * was applied and where it landed (`compactedRecords`). Pending, rejected, blocked or not-yet-applied
+ * records stay. Idempotency does not depend on the staged copies (`importTargets` remembers every applied
+ * record), so applying the same bundle again still reuses the existing targets.
+ */
+export async function compactAppliedRecordsPortable(ctx: PortableMutationCtx, { sessionId, maxRecords }: { sessionId: string; maxRecords?: number }) {
+  const session = await ctx.db.get<any>(sessionId);
+  if (!isImportSession(session)) return { removed: 0, kept: 0, remaining: 0 };
+  const societyId = String(session.societyId);
+  await requirePermissionPortable(ctx, societyId, "settings:write");
+  await requirePermissionPortable(ctx, societyId, "documents:write");
+  await requireDocumentAccess(ctx, sessionId, "manage");
+  const records = await sessionRecords(ctx, societyId, sessionId);
+  const appliedAll = records.filter((record: any) => record.status === "Approved" && record.importedTargets && Object.values(record.importedTargets).some(Boolean));
+  const limit = Math.max(1, Math.min(Number(maxRecords) || 2000, 5000));
+  const applied = appliedAll.slice(0, limit);
+  if (!applied.length) return { removed: 0, kept: records.length, remaining: 0 };
+  const payload = hydrateSession(session);
+  const previous = payload.compactedRecords ?? {};
+  const removedSummary = summarizeRecords(applied);
+  const add = (a: any, b: any) => {
+    const out: Record<string, number> = { ...(a ?? {}) };
+    for (const [key, value] of Object.entries(b ?? {})) out[key] = (out[key] ?? 0) + (Number(value) || 0);
+    return out;
+  };
+  const prior = previous.summary ?? {};
+  const summary = {
+    total: (Number(prior.total) || 0) + removedSummary.total,
+    byKind: add(prior.byKind, removedSummary.byKind), byStatus: add(prior.byStatus, removedSummary.byStatus), byTarget: add(prior.byTarget, removedSummary.byTarget),
+    riskCount: (Number(prior.riskCount) || 0) + removedSummary.riskCount,
+    orgHistoryApplied: (Number(prior.orgHistoryApplied) || 0) + removedSummary.orgHistoryApplied,
+    meetingsApplied: (Number(prior.meetingsApplied) || 0) + removedSummary.meetingsApplied,
+    documentsApplied: (Number(prior.documentsApplied) || 0) + removedSummary.documentsApplied,
+    sectionsApplied: (Number(prior.sectionsApplied) || 0) + removedSummary.sectionsApplied,
+  };
+  // Audit: what each removed record was and where it landed (bounded; the native records keep their own source links).
+  const targets = [...(Array.isArray(previous.targets) ? previous.targets : []), ...applied.map((record: any) => ({
+    recordKind: record.recordKind, title: cleanText(record.title)?.slice(0, 200), sourceExternalIds: (record.sourceExternalIds ?? []).slice(0, 5), importedTargets: record.importedTargets,
+  }))].slice(-2000);
+  const ids = new Set(applied.map((record: any) => String(record._id)));
+  const gaps = (await ctx.db.query("representationGaps").withIndex("by_society", (q: any) => q.eq("societyId", societyId)).collect()) as any[];
+  for (const gap of gaps) if (gap.importRecordId && ids.has(String(gap.importRecordId))) await ctx.db.patch(gap._id, { importRecordId: undefined });
+  for (const record of applied) await ctx.db.delete(record._id);
+  const atISO = new Date().toISOString();
+  await ctx.db.patch(sessionId, {
+    content: JSON.stringify({ ...payload, _id: undefined, _creationTime: undefined, compactedRecords: { atISO, removed: summary.total, summary, targets }, updatedAtISO: atISO }),
+  });
+  await patchSessionUpdatedAt(ctx, sessionId);
+  return { removed: applied.length, kept: records.length - applied.length, remaining: appliedAll.length - applied.length };
 }
 
 export async function applyApprovedToOrgHistoryPortable(ctx: PortableMutationCtx, { sessionId, recordIds }: { sessionId: string; recordIds?: string[] }) {

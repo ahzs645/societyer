@@ -3,6 +3,7 @@ import { mutation, query } from "./lib/untypedServer";
 import { v } from "convex/values";
 import * as handlers from "../shared/functions/intake";
 import * as review from "../shared/functions/intakeReview";
+import * as compaction from "../shared/functions/intakeCompaction";
 import { toPortableMutationCtx, toPortableQueryCtx } from "./lib/portable";
 
 const societyId = v.id("societies");
@@ -45,3 +46,7 @@ export const provenanceForRecords = authorizedQuery("intake:provenanceForRecords
 const bulkScope = v.object({ extractionId: v.optional(v.id("intakeExtractions")), clusterKey: v.optional(v.string()), body: v.optional(v.string()), year: v.optional(v.string()), docClass: v.optional(v.string()), all: v.optional(v.boolean()) });
 export const bulkAcceptPreview = authorizedQuery("intake:bulkAcceptPreview", query)({ args: { societyId, runId, scope: bulkScope }, returns: v.any(), handler: async (ctx, args) => review.bulkAcceptPreview(await toPortableQueryCtx(ctx), args) });
 export const bulkAccept = authorizedMutation("intake:bulkAccept", mutation)({ args: { societyId, runId, scope: bulkScope }, returns: v.any(), handler: async (ctx, args) => review.bulkAccept(await toPortableMutationCtx(ctx), args) });
+
+// Compaction after review and promotion (shared/functions/intakeCompaction.ts).
+export const compactionPlan = authorizedQuery("intake:compactionPlan", query)({ args: { societyId, runId }, returns: v.any(), handler: async (ctx, args) => compaction.compactionPlan(await toPortableQueryCtx(ctx), args) });
+export const compactRun = authorizedMutation("intake:compactRun", mutation)({ args: { societyId, runId, cursor: v.optional(v.union(v.null(), v.any())), budget: v.optional(v.number()) }, returns: v.any(), handler: async (ctx, args) => compaction.compactRun(await toPortableMutationCtx(ctx), args) });

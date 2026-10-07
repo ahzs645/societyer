@@ -17,6 +17,7 @@ import {
   backfillApprovedMeetingReferencesPortable,
   applyApprovedDocumentsPortable,
   applyApprovedSectionRecordsPortable,
+  compactAppliedRecordsPortable,
 } from "../shared/functions/importSessions";
 import {
   reviewQueuePortable,
@@ -157,6 +158,12 @@ export const applyApprovedSectionRecords = authorizedMutation("importSessions:ap
   args: { sessionId: v.id("documents"), recordIds: v.optional(v.array(v.id("documents"))) },
   returns: v.any(),
   handler: async (ctx, args) => applyApprovedSectionRecordsPortable(await toPortableMutationCtx(ctx), args),
+});
+
+export const compactAppliedRecords = authorizedMutation("importSessions:compactAppliedRecords", mutation)({
+  args: { sessionId: v.id("documents"), maxRecords: v.optional(v.number()) },
+  returns: v.any(),
+  handler: async (ctx, args) => compactAppliedRecordsPortable(await toPortableMutationCtx(ctx), args),
 });
 
 /* ------------------------- cross-session review queue ------------------------- */
